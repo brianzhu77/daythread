@@ -10,33 +10,53 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ReviewRouteImport } from './routes/review'
+import { Route as DayDateRouteImport } from './routes/day.$date'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReviewRoute = ReviewRouteImport.update({
+  id: '/review',
+  path: '/review',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DayDateRoute = DayDateRouteImport.update({
+  id: '/day/$date',
+  path: '/day/$date',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/review': typeof ReviewRoute
+  '/day/$date': typeof DayDateRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/review': typeof ReviewRoute
+  '/day/$date': typeof DayDateRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/review': typeof ReviewRoute
+  '/day/$date': typeof DayDateRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/review' | '/day/$date'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/review' | '/day/$date'
+  id: '__root__' | '/' | '/review' | '/day/$date'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ReviewRoute: typeof ReviewRoute
+  DayDateRoute: typeof DayDateRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +68,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/review': {
+      id: '/review'
+      path: '/review'
+      fullPath: '/review'
+      preLoaderRoute: typeof ReviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/day/$date': {
+      id: '/day/$date'
+      path: '/day/$date'
+      fullPath: '/day/$date'
+      preLoaderRoute: typeof DayDateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ReviewRoute: ReviewRoute,
+  DayDateRoute: DayDateRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

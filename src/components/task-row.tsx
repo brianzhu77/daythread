@@ -1,0 +1,136 @@
+import { useState } from 'react'
+import type { LocalDate, Task } from '../domain/types'
+import { anotherDayOptions, daysBetween, shortLabel, taskDateTag, weekday } from './dates'
+import { RowMenu, type MenuItem } from './row-menu'
+import { useWorkspace } from './use-day'
+
+/** The task actions shared by plan rows, the strip, Start the day and review step 1 (01 §2). */
+export function useTaskActions(today: LocalDate) {
+  const { run } = useWorkspace()
+
+  const markDone = (task: Task) => {
+    const done = task.status !== 'done'
+    return run({ type: 'task-status', taskId: task.id, status: done ? 'done' : 'open' }, r => ({
+      text: done ? 'Done' : 'Reopened',
+      undoOperationId: r.operationId,
+    }))
+  }
+
+  const planOn = (task: Task, date: LocalDate, section?: 'top3' | 'other') =>
+    run({ type: 'plan-task', taskId: task.id, date, section }, r => ({
+      text: date === today ? 'On today' : `Moved to ${shortLabel(date)}`,
+      undoOperationId: r.operationId,
+    }))
+
+  const notToday = (task: Task, date: LocalDate) =>
+    run({ type: 'not-today', taskId: task.id, date }, r => ({
+      text: notTodayText(task, date, today),
+      undoOperationId: r.operationId,
+    }))
+
+  const cancel = (task: Task) =>
+    run({ type: 'task-status', taskId: task.id, status: 'cancelled' }, r => ({ text: 'Cancelled', undoOperationId: r.operationId }))
+
+  return { markDone, planOn, notToday, cancel }
+}
+
+export function notTodayText(task: Task, date: LocalDate, today: LocalDate): string {
+  const head = date === today ? 'Not today — won’t carry over' : `Not on ${shortLabel(date)}`
+  return task.deadlineOn ? `${head} · due ${weekday(task.deadlineOn)} still tracked` : head
+}
+
+export function anotherDayItems(task: Task, today: LocalDate, planOn: (t: Task, d: LocalDate) => unknown): MenuItem[] {
+  return [
+    ...anotherDayOptions(today).map(o => ({ label: `${o.label} · ${shortLabel(o.date)}`, onSelect: () => planOn(task, o.date) })),
+    {
+      label: 'Pick date…',
+      onSelect: () => {
+        // Native date input keeps this tappable on iPhone without a custom calendar.
+        const input = document.createElement('input')
+        input.type = 'date'
+        input.min = today
+        input.style.position = 'fixed'
+        input.style.opacity = '0'
+        document.body.append(input)
+        input.addEventListener('change', () => {
+          if (input.value) planOn(task, input.value)
+          input.remove()
+        })
+        input.addEventListener('blur', () => setTimeout(() => input.remove(), 500))
+        input.showPicker?.()
+        input.focus()
+      },
+    },
+  ]
+}
+
+interface TaskRowProps {
+  task: Task
+  pageDate: LocalDate
+  today: LocalDate
+  /** Plan rows carry the day's placement; past pages are read-only for placement (01 §8a F06). */
+  variant: 'plan' | 'ref' | 'past'
+  section?: 'top3' | 'other'
+  onEditTitle?: (title: string) => void
+  onDeleteRow?: () => void
+}
+
+export function TaskRow({ task, pageDate, today, variant, section, onEditTitle, onDeleteRow }: TaskRowProps) {
+  const { markDone, planOn, notToday, cancel } = useTaskActions(today)
+  const [title, setTitle] = useState(task.title)
+  const done = task.status === 'done'
+  const cancelled = task.status === 'cancelled'
+  const tag = taskDateTag(task, today, pageDate)
+  const overdue = tag.startsWith('Was due') || (task.deadlineOn !== null && daysBetween(today, task.deadlineOn) < 0)
+
+  const groups =
+    variant === 'past'
+      ? [{ items: [{ label: 'Bring to today', onSelect: () => planOn(task, today) }] }]
+      : [
+          { title: 'Another day', items: anotherDayItems(task, today, planOn) },
+          {
+            items: [
+              { label: pageDate === today ? 'Not today' : `Not on ${shortLabel(pageDate)}`, onSelect: () => notToday(task, pageDate) },
+              section === 'top3'
+                ? { label: 'Move to Other', onSelect: () => planOn(task, pageDate, 'other') }
+                : { label: 'Move to Top 3', onSelect: () => planOn(task, pageDate, 'top3') },
+              { label: 'Cancel task', onSelect: () => cancel(task), danger: true },
+            ],
+          },
+        ]
+
+  return (
+    <div className={`task-row ${variant} ${done ? 'is-done' : ''} ${cancelled ? 'is-cancelled' : ''}`} data-task-id={task.id}>
+      <input
+        type="checkbox"
+        className="check"
+        checked={done}
+        disabled={cancelled}
+        aria-label={done ? `Reopen ${task.title}` : `Mark ${task.title} done`}
+        onChange={() => markDone(task)}
+      />
+      {onEditTitle && variant !== 'past' && !cancelled ? (
+        <input
+          className="task-title"
+          value={title}
+          aria-label="Task title"
+          onChange={e => setTitle(e.target.value)}
+          onBlur={() => title.trim() && title !== task.title && onEditTitle(title.trim())}
+          onKeyDown={e => {
+            if (e.key === 'Enter') e.currentTarget.blur()
+            // Deleting a whole plan row (empty title + Backspace) is Not today with Undo (01 §2, C3).
+            if (e.key === 'Backspace' && title === '' && onDeleteRow && variant === 'plan') {
+              e.preventDefault()
+              onDeleteRow()
+            }
+          }}
+        />
+      ) : (
+        <span className="task-title">{task.title}</span>
+      )}
+      {(cancelled || tag) && <span className={`tag ${overdue ? 'warn' : ''}`}>{cancelled ? 'Cancelled' : tag}</span>}
+      {variant === 'past' && <span className="tag quiet">Shown at current status</span>}
+      {!cancelled && <RowMenu label={`Actions for ${task.title}`} groups={groups} />}
+    </div>
+  )
+}
