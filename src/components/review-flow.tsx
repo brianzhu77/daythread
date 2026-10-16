@@ -287,11 +287,22 @@ function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspa
   const draft = page?.draft
   const reviewSaved = workspace.pages.find(x => x.type === 'daily' && x.date === date)?.reviewSaved
   const suggestions = (draft?.taskIds ?? []).filter(id => !p.removedSuggestions.includes(id)).map(id => workspace.tasks.find(t => t.id === id)).filter(t => t !== undefined)
-  const related = (draft?.materialIds ?? []).map(id => workspace.materials.find(m => m.id === id)).filter(m => m !== undefined).slice(0, 2)
+  // Removed tasks and Related items share one list of ids; both are saved together (save-draft).
+  const related = (draft?.materialIds ?? [])
+    .filter(id => !p.removedSuggestions.includes(id))
+    .map(id => workspace.materials.find(m => m.id === id))
+    .filter(m => m !== undefined)
+    .slice(0, 2)
   const plannedTomorrow = workspace.tasks.filter(t => t.plannedOn === tomorrow && t.status === 'open').length
 
   const draftFailed = Boolean(page?.draftError)
   const prepare = () => run({ type: 'generate-draft', date: tomorrow, outcome: simOutcome }, null)
+  const [saveFailed, setSaveFailed] = useState(false)
+  const save = async () => {
+    const receipt = await run({ type: 'save-draft', date: tomorrow, taskIds: suggestions.map(t => t!.id), materialIds: related.map(m => m!.id) }, null)
+    setSaveFailed(!receipt)
+    if (receipt) update({ tomorrowSaved: true })
+  }
 
   return (
     <section className="review-step" aria-labelledby="rs-tomorrow">
@@ -319,11 +330,22 @@ function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspa
               </button>
             </div>
           ))}
-          {related.length > 0 && (
-            <p className="quiet">Related for tomorrow: {related.map(m => displayTitle(m!.title, m!.url)).join(' · ')}</p>
+          {related.length > 0 && <p className="quiet">Related for tomorrow</p>}
+          {related.map(m => (
+            <div key={m!.id} className="card suggestion">
+              <span className="grow">{displayTitle(m!.title, m!.url)}</span>
+              <button type="button" className="ghost" aria-label={`Remove ${m!.title}`} onClick={() => update({ removedSuggestions: [...p.removedSuggestions, m!.id] })}>
+                Remove
+              </button>
+            </div>
+          ))}
+          {saveFailed && (
+            <p className="warn-line" role="alert">
+              Not saved — your choices are still here
+            </p>
           )}
-          <button type="button" className="primary wide" onClick={() => update({ tomorrowSaved: true })}>
-            Save for tomorrow
+          <button type="button" className="primary wide" onClick={save}>
+            {saveFailed ? 'Retry' : 'Save for tomorrow'}
           </button>
         </>
       )}
