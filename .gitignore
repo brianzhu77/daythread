@@ -7,3 +7,6 @@ dist/
 !.env.example
 .DS_Store
 *.tsbuildinfo
+
+# Private development data; never a cloud fallback
+.daythread-local/
