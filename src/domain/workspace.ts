@@ -285,9 +285,9 @@ export function getDayView(state: Workspace, day: string): DayView {
     .filter((p) => p.type === "daily" && p.date! < day)
     .sort((a, b) => b.date!.localeCompare(a.date!))[0];
   const previousIds = new Set(
-    previous?.sections.flatMap((s) =>
-      s.blocks.flatMap((b) => (b.taskId ? [b.taskId] : [])),
-    ) ?? [],
+    state.placements
+      .filter((placement) => placement.date === previous?.date && placement.state === 'included')
+      .map((placement) => placement.taskId),
   );
   const handoffTasks = openPool.filter(
     (t) => previousIds.has(t.id) && t.plannedOn !== day,
