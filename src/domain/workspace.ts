@@ -848,7 +848,11 @@ function execute(
       const ids = [...new Set(action.taskIds)];
       if (ids.some(id => !p.draft!.taskIds.includes(id)))
         throw new DomainError("Draft changed; reload suggestions");
+      const materials = [...new Set(action.materialIds)];
+      if (materials.some(id => !p.draft!.materialIds.includes(id)))
+        throw new DomainError("Related suggestions changed; reload draft");
       p.draft.taskIds = ids;
+      p.draft.materialIds = materials;
       return { message: "Suggestions saved for tomorrow; nothing scheduled", simulated: true };
     }
     case "generate-draft": {
