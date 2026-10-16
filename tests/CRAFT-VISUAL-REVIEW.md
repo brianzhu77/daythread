@@ -12,7 +12,7 @@ Executed and passed:
 - Long Chinese Task title: Enter saved without newline; textarea clientHeight=scrollHeight=176px, full content visible and persisted. No horizontal overflow (390px document and viewport).
 - Capture fixed bar: inspected real viewport at top/middle/bottom. At bottom Review entry ended at 684.4px and Capture began at 750.3px, leaving 65.9px. Content can be scrolled above the fixed bar; the earlier full-page screenshot overlap was not a final-content occlusion.
 - Dev controls collapse to a single line while local/simulated label remains visible; expanding exposes fixture/outcome controls.
-- Touch emulation: pointer:coarse=true, hover:hover=false; Task ⋯ opacity=1 without hovering. Tapping opened the menu. Keyboard fine-pointer access is supported by focus-within and was retained.
+- Touch emulation: pointer:coarse=true, hover:hover=false; Task ⋯ opacity=1 without hovering. Tapping opened the menu. CSS inspection retained focus-within for fine-pointer keyboard access; a dedicated keyboard-only navigation pass was not run.
 - Plan deletion: empty title/Backspace → Keep planned → Put back completed; Task remained available.
 - Capture: new Chinese input saved directly with simulated receipt. Simulated budget failure retained original input; switching outcome to success and Retry succeeded. Simulation controls were exercised after workspace hydration.
 - Review: opened from reminder URL, advanced to Saved items, Finish persisted reviewSaved=true; Lower priority and navigation to reflection worked. Reflection saved without becoming a Task.
