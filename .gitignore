@@ -10,3 +10,7 @@ dist/
 
 # Private development data; never a cloud fallback
 .daythread-local/
+
+# Third-party Craft reference screenshots (local study only)
+/refs/Craft ios Dec 2025/
+/refs/craft-contact-sheets/
