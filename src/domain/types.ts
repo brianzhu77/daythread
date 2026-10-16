@@ -240,6 +240,7 @@ export type Action =
       date: LocalDate;
       outcome?: "success" | "failure" | "budget" | "context";
     }
+  | { type: "save-draft"; date: LocalDate; taskIds: string[]; materialIds: string[] }
   | { type: "undo"; targetOperationId: string };
 export interface Command {
   operationId: string;

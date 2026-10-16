@@ -134,6 +134,7 @@ const action = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("discard-capture"), captureId: id }),
   z.object({ type: z.literal("generate-draft"), date: day, outcome }),
+  z.object({ type: z.literal("save-draft"), date: day, taskIds: z.array(id).max(3), materialIds: z.array(id).max(2) }),
   z.object({ type: z.literal("undo"), targetOperationId: id }),
   z.object({
     type: z.literal("keep-planned"),
