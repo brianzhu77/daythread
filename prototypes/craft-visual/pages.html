@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daythread · pages static mock (task #22)</title>
+<!-- Static mock only: sidebar page tree, page link card, a URL page. Not wired to data.
+     Tokens match src/styles.css on ui/craft-visual. Open with ?screen=page or ?screen=phone-tree. -->
+<style>
+:root {
+  --surface: #f6f6f8; --surface-hover: #efeff3; --ink: #1d1d1f; --ink-soft: #6b6b73; --ink-faint: #a3a3ab;
+  --line: #ececf0; --accent: #4a5bd8; --accent-soft: #eef0fd; --accent-ink: #3443b8;
+  --shadow-float: 0 1px 2px rgba(17,17,26,.04), 0 8px 28px rgba(17,17,26,.10);
+}
+* { box-sizing: border-box; }
+body { margin: 0; color: var(--ink); background: #fff; font: 17px/1.55 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+h1, h2, p { margin: 0; }
+.app { display: grid; grid-template-columns: 260px minmax(0, 1fr); min-height: 100vh; }
+
+/* Sidebar page tree */
+.sidebar { background: var(--surface); padding: 18px 10px; display: grid; align-content: start; gap: 2px; font-size: .9rem; }
+.brand { font-weight: 650; padding: 4px 10px 14px; }
+.search { margin: 0 4px 12px; padding: 7px 12px; border-radius: 10px; background: #fff; color: var(--ink-faint); box-shadow: 0 1px 2px rgba(17,17,26,.06); }
+.group { font-size: .7rem; font-weight: 600; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .08em; padding: 14px 10px 4px; }
+.node { display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 8px; border-radius: 8px; color: var(--ink-soft); }
+.node { white-space: nowrap; overflow: hidden; }
+.node .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.node:hover { background: var(--surface-hover); }
+.node.active { background: #fff; color: var(--ink); font-weight: 550; box-shadow: 0 1px 2px rgba(17,17,26,.06); }
+.twisty { width: 16px; text-align: center; color: var(--ink-faint); font-size: .95rem; flex: none; }
+.twisty.open { transform: rotate(90deg); }
+.glyph { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; font-size: .72rem; flex: none; background: #fff; color: var(--ink-soft); box-shadow: 0 0 0 1px var(--line); }
+.glyph.day { background: var(--accent-soft); color: var(--accent); box-shadow: none; }
+.glyph.url { background: #eaf6f0; color: #2c7a59; box-shadow: none; }
+.indent-1 { padding-left: 26px; } .indent-2 { padding-left: 44px; }
+.count { margin-left: auto; font-size: .74rem; color: var(--ink-faint); }
+
+/* Document */
+.doc { max-width: 700px; width: 100%; margin: 0 auto; padding: 48px 20px 80px; }
+.crumbs { font-size: .82rem; color: var(--ink-faint); display: flex; gap: 6px; align-items: center; margin-bottom: 18px; }
+.eyebrow { font-size: .78rem; font-weight: 600; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .08em; }
+h1 { font-size: 2.75rem; line-height: 1.1; letter-spacing: -.03em; font-weight: 750; }
+h2 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.02em; padding: 22px 0 6px; }
+.text { padding: 6px 0; }
+.row { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.check { width: 20px; height: 20px; border: 1.5px solid #c7c7cf; border-radius: 6px; flex: none; }
+.tag { font-size: .76rem; color: var(--ink-soft); background: var(--surface); border-radius: 999px; padding: 1px 9px; margin-left: auto; }
+
+/* Page link card: what a pasted URL becomes on the day page */
+.page-card { display: flex; align-items: center; gap: 12px; margin: 6px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 1px 2px rgba(17,17,26,.04); text-decoration: none; color: inherit; }
+.page-card:hover { border-color: #dcdce3; box-shadow: var(--shadow-float); }
+.page-card .icon { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: #eaf6f0; color: #2c7a59; font-weight: 700; flex: none; }
+.page-card .icon.plain { background: var(--surface); color: var(--ink-soft); }
+.page-card .title { font-weight: 600; }
+.page-card .meta { font-size: .8rem; color: var(--ink-faint); overflow-wrap: anywhere; }
+.page-card .chev { margin-left: auto; color: var(--ink-faint); }
+.page-card.inline { display: inline-flex; padding: 2px 10px 2px 4px; border-radius: 999px; gap: 6px; box-shadow: none; font-size: .95rem; }
+.page-card.inline .icon { width: 22px; height: 22px; border-radius: 999px; font-size: .7rem; }
+
+/* URL page */
+.props { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 4px 12px; margin: 18px 0 8px; font-size: .92rem; }
+.props dt { color: var(--ink-faint); padding: 5px 0; }
+.props dd { margin: 0; padding: 5px 8px; border-radius: 8px; overflow-wrap: anywhere; }
+.props dd:hover { background: var(--surface); }
+.props a { color: var(--accent); text-decoration: none; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { font-size: .82rem; background: var(--accent-soft); color: var(--accent-ink); border-radius: 999px; padding: 1px 10px; }
+.empty-body { color: #c4c4cb; padding: 12px 0; }
+.backlinks { margin-top: 32px; padding: 14px 16px; border-radius: 14px; background: var(--surface); }
+.backlinks .label { font-size: .7rem; font-weight: 600; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .08em; padding-bottom: 4px; }
+.backlinks .row { min-height: 36px; font-size: .92rem; }
+.backlinks .row span:last-child { color: var(--ink-faint); margin-left: auto; font-size: .82rem; }
+.state { display: inline-flex; align-items: center; gap: 4px; padding: 1px 10px; border-radius: 999px; background: #fdf2e7; color: #a8551b; font-weight: 550; font-size: .86rem; cursor: pointer; }
+.state .caret { font-size: .7rem; }
+.hint { font-size: .78rem; color: var(--ink-faint); margin-left: 6px; }
+.bl + .bl { border-top: 1px solid rgba(17,17,26,.06); }
+.why { margin: 0 0 8px 30px; font-size: .88rem; color: var(--ink-soft); }
+.note { position: fixed; right: 16px; bottom: 16px; max-width: 300px; font-size: .78rem; color: var(--ink-soft); background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; box-shadow: var(--shadow-float); }
+
+/* Phone: sidebar becomes a sheet opened from the top bar */
+.phone-bar { display: none; }
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .sidebar { display: none; }
+  .phone-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 0; font-weight: 650; font-size: .95rem; }
+  .phone-bar .menu { width: 36px; height: 36px; border-radius: 10px; background: var(--surface); display: grid; place-items: center; }
+  .doc { padding-top: 20px; }
+  h1 { font-size: 2.1rem; }
+  .props { grid-template-columns: minmax(0, 1fr); }
+  .props dt { padding-bottom: 0; }
+  .note { display: none; }
+  body.tree-open .sidebar { display: grid; position: fixed; inset: 0 64px 0 0; z-index: 5; box-shadow: var(--shadow-float); }
+  body.tree-open::after { content: ''; position: fixed; inset: 0; background: rgba(17,17,26,.18); z-index: 4; }
+}
+[data-screen] { display: none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" aria-label="Pages">
+    <div class="brand">Daythread</div>
+    <div class="search">Search pages</div>
+    <div class="node active" data-day><span class="twisty"></span><span class="glyph day">16</span>Today</div>
+    <div class="node"><span class="twisty"></span><span class="glyph">☾</span>Review<span class="count">tonight</span></div>
+    <div class="group">Days</div>
+    <div class="node"><span class="twisty open">›</span><span class="glyph day">Oct</span>October 2026<span class="count">16</span></div>
+    <div class="node indent-1"><span class="twisty"></span><span class="glyph day">15</span>Thu, Oct 15</div>
+    <div class="node indent-1"><span class="twisty"></span><span class="glyph day">14</span>Wed, Oct 14</div>
+    <div class="group">Pages</div>
+    <div class="node"><span class="twisty open">›</span><span class="glyph">◆</span>Rewind</div>
+    <div class="node indent-1"><span class="twisty open">›</span><span class="glyph">◆</span>APPX PR</div>
+    <div class="node indent-2" data-url><span class="twisty"></span><span class="glyph url">↗</span>Provider design doc</div>
+    <div class="node"><span class="twisty">›</span><span class="glyph">◆</span>Family</div>
+    <div class="node"><span class="twisty"></span><span class="glyph url">↗</span>Calm Technology<span class="count">new</span></div>
+    <div class="node"><span class="twisty open">›</span><span class="glyph">◆</span>Reading</div>
+    <div class="node indent-1"><span class="twisty"></span><span class="glyph">◆</span><span class="t">说明文档的长中文标题也应该在这里截断而不是撑开侧边栏</span></div>
+  </aside>
+
+  <main>
+    <div class="phone-bar"><span class="menu" aria-label="Pages">☰</span>Daythread<span style="width:36px"></span></div>
+
+    <!-- Screen 1: today, with a pasted URL turned into a page card -->
+    <article class="doc" data-screen="day">
+      <p class="eyebrow">Today</p>
+      <h1>Fri, Oct 16</h1>
+      <h2>TODO - Top 3</h2>
+      <div class="row"><span class="check"></span>Rewind - APPX PR - Provider<span class="tag">Due tomorrow</span></div>
+      <h2>Good Stuffs</h2>
+      <a class="page-card" href="?screen=page">
+        <span class="icon">↗</span>
+        <span><span class="title">Calm Technology</span><br><span class="meta">calmtech.com · new page · nothing written yet</span></span>
+        <span class="chev">›</span>
+      </a>
+      <a class="page-card" href="#">
+        <span class="icon plain">◆</span>
+        <span><span class="title">APPX PR</span><br><span class="meta">Rewind › APPX PR · 3 sub-pages</span></span>
+        <span class="chev">›</span>
+      </a>
+      <h2>Notes</h2>
+      <p class="text">Talked with Kevin about the provider split — see <a class="page-card inline" href="#"><span class="icon">↗</span>Provider design doc</a> before Monday.</p>
+    </article>
+
+    <!-- Screen 2: the URL page that a paste created -->
+    <article class="doc" data-screen="page">
+      <p class="crumbs">Pages <span>›</span> Calm Technology</p>
+      <h1>Calm Technology</h1>
+      <dl class="props">
+        <dt>URL</dt><dd><a href="#">https://calmtech.com/</a></dd>
+        <dt>Follow-up</dt><dd><span class="state">To sort <span class="caret">▾</span></span> <span class="hint">Keep watching · Lower priority · Done with it</span></dd>
+        <dt>Saved</dt><dd>Fri, Oct 16 · from today’s page</dd>
+      </dl>
+      <p class="empty-body">Write, or paste what you want to keep from this link…</p>
+      <section class="backlinks">
+        <p class="label">Linked from 2 days</p>
+        <div class="bl"><div class="row"><span class="glyph day">16</span><span>Fri, Oct 16 · Good Stuffs</span><span>Today</span></div>
+          <p class="why">“Good framing for the review reminder — calm, not nagging.”</p></div>
+        <div class="bl"><div class="row"><span class="glyph day">15</span><span>Thu, Oct 15 · Notes</span><span>Yesterday</span></div>
+          <p class="why">“Kevin mentioned this at lunch.”</p></div>
+      </section>
+    </article>
+  </main>
+</div>
+<p class="note">Static mock for review. Page tree, page cards and the URL page are not built; only the day page is implemented on <code>ui/craft-visual</code>.</p>
+<script>
+  const q = new URLSearchParams(location.search)
+  const screen = q.get('screen') === 'page' ? 'page' : 'day'
+  document.querySelector(`[data-screen="${screen}"]`).style.display = 'block'
+  if (q.get('tree') === 'open') document.body.classList.add('tree-open')
+</script>
+</body>
+</html>

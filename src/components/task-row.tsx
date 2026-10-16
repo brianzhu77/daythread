@@ -110,14 +110,19 @@ export function TaskRow({ task, pageDate, today, variant, section, onEditTitle, 
         onChange={() => markDone(task)}
       />
       {onEditTitle && variant !== 'past' && !cancelled ? (
-        <input
+        // A one-row textarea so long titles wrap instead of being cut off; Enter still commits.
+        <textarea
           className="task-title"
+          rows={1}
           value={title}
           aria-label="Task title"
-          onChange={e => setTitle(e.target.value)}
+          onChange={e => setTitle(e.target.value.replace(/\n/g, ' '))}
           onBlur={() => title.trim() && title !== task.title && onEditTitle(title.trim())}
           onKeyDown={e => {
-            if (e.key === 'Enter') e.currentTarget.blur()
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              e.currentTarget.blur()
+            }
             // Deleting a whole plan row (empty title + Backspace) is Not today with Undo (01 §2, C3).
             if (e.key === 'Backspace' && title === '' && onDeleteRow && variant === 'plan') {
               e.preventDefault()

@@ -31,10 +31,9 @@ function SampleBanner() {
       </p>
     )
   return (
-    <div className="banner" role="note">
-      <span>
-        Local only · saved on this Mac. Organizing and suggestions are simulated; no model is called.
-      </span>
+    <details className="banner" role="note">
+      <summary>Local only · AI simulated</summary>
+      <span>Saved on this Mac. Organizing and suggestions are simulated; no model is called.</span>
       <label className="sim-control">
         Next AI result
         <select value={simOutcome} onChange={e => setSimOutcome(e.target.value as SimOutcome)}>
@@ -49,7 +48,7 @@ function SampleBanner() {
           Add sample data
         </button>
       )}
-    </div>
+    </details>
   )
 }
 
