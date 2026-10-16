@@ -1,6 +1,6 @@
 # Local browser review (Ratchet, task #21)
 
-Status: DONE_WITH_CONCERNS for the executed paths; edited-draft persistence UI retest pending Jazz wiring.
+Status: DONE for the assigned local repository and phone-width paths. Historical pending items below are closed by the later verification sections. Cloud/model/real-device gaps remain explicitly unverified.
 
 Environment: independent test worktree, UI 2d89e56 plus domain fixes through 28a85d8; Chromium via browse, 390×844 viewport; Vite 127.0.0.1:3012 with separate /tmp/daythread-ratchet-browser.json. Sample button created the aged material. No cloud or model call, no real iPhone or notification delivery.
 
