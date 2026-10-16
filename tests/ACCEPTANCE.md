@@ -19,3 +19,9 @@ These tests can establish local domain behavior only. Database transactions/RLS,
 ## Initial executable baseline (4253b8f)
 
 Run with `node --test tests/*.test.ts` on Node 24.14.1. Sixteen assertions/cases currently yield 1 pass and 15 failures because the implementation explicitly throws `in progress`. The invalid-budget case passes merely because all inputs throw; it is not evidence of working validation. Re-run after the implementation lands. No assertions have been skipped to make the baseline green.
+
+## Independent run against implementation 0f352f5
+
+`node --test tests/*.test.ts`: 29 cases, 28 pass, 1 fails. Good Stuffs G01–G07 state behavior and mixed Capture stale-version/group confirmation cases were added; visual counts/phone fit and actual provider failure remain unverified.
+
+Confirmed regression: yesterday's five included commitments disappear from `handoffTasks` after presentation-only bulk deletion (expected 5, actual 0). `getDayView` builds `previousIds` from note blocks, so these records instead enter the older carry list, capped at 3. This contradicts the presentation-only deletion invariant and uncapped previous-day handoff. Use included placement/date identity for handoff membership; keep note-block extraction for prose Bring only. The final test in domain.test.ts is the reproduction. No author code modified by the reviewer.

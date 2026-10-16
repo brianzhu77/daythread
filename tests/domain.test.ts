@@ -151,3 +151,86 @@ test('stale proposal revision cannot be applied', () => {
     action: { type: 'apply-capture', captureId: 'capture-1', proposalRevision: 1 } }))
   assert.deepEqual(state, before)
 })
+
+test('G01/G02 material review starts after two days and caps at three', () => {
+  const s = setup(), page = s.day('2026-10-12'), sectionId = page.sections.find(x => x.kind === 'good-stuffs')!.id
+  for (let i = 0; i < 5; i++) s.run({ type: 'save-material', pageId: page.id, sectionId, url: `https://example.com/${i}`, title: `Item ${i}` })
+  assert.equal(getDayView(s.state, '2026-10-12').materialReview.length, 0)
+  assert.equal(getDayView(s.state, '2026-10-14').materialReview.length, 3)
+  s.run({ type: 'material-resurface', materialId: s.state.materials[0].id, enabled: false })
+  assert.ok(!getDayView(s.state, '2026-10-14').materialReview.some(m => m.id === s.state.materials[0].id))
+})
+test('G03/G04 watching returns in seven days; lower stays out; Undo restores', () => {
+  const s = setup(), page = s.day('2026-10-12'), sectionId = page.sections.find(x => x.kind === 'good-stuffs')!.id
+  s.run({ type: 'save-material', pageId: page.id, sectionId, url: 'https://example.com/a', title: 'A' })
+  const id = s.state.materials[0].id
+  s.run({ type: 'review-material', materialId: id, decision: 'watching', date: '2026-10-14' })
+  assert.equal(getDayView(s.state, '2026-10-15').materialReview.length, 0)
+  assert.equal(getDayView(s.state, '2026-10-21').materialReview.length, 1)
+  s.run({ type: 'review-material', materialId: id, decision: 'lower', date: '2026-10-21' }, 'lower')
+  assert.equal(getDayView(s.state, '2026-10-22').materialReview.length, 0)
+  s.run({ type: 'undo', targetOperationId: 'lower' })
+  assert.equal(s.state.materials[0].reviewState, 'watching')
+})
+test('G05 saving a Done URL reopens one Material and keeps both sources', () => {
+  const s = setup(), page = s.day(), sectionId = page.sections.find(x => x.kind === 'good-stuffs')!.id
+  const save: Action = { type: 'save-material', pageId: page.id, sectionId, url: 'https://example.com/a', title: 'A' }
+  s.run(save)
+  s.run({ type: 'review-material', materialId: s.state.materials[0].id, decision: 'done', date: today })
+  s.run(save)
+  assert.equal(s.state.materials.length, 1)
+  assert.equal(s.state.materials[0].reviewState, 'pending')
+  assert.equal(s.state.materials[0].sources.length, 2)
+})
+test('G06 Make task is idempotent even with a new transport operation ID', () => {
+  const s = setup(), page = s.day(), sectionId = page.sections.find(x => x.kind === 'good-stuffs')!.id
+  s.run({ type: 'save-material', pageId: page.id, sectionId, url: 'https://example.com/a', title: 'A' })
+  const action: Action = { type: 'review-material', materialId: s.state.materials[0].id, decision: 'task', date: today }
+  s.run(action); s.run(action)
+  assert.equal(s.state.tasks.length, 1)
+  assert.equal(s.state.tasks[0].plannedOn, null)
+  assert.equal(s.state.materials[0].taskId, s.state.tasks[0].id)
+  assert.equal(getDayView(s.state, future).materialReview.length, 0)
+})
+test('G07 skip affects only shown cards for three days and never saves review', () => {
+  const s = setup(), page = s.day('2026-10-12'), sectionId = page.sections.find(x => x.kind === 'good-stuffs')!.id
+  for (let i = 0; i < 5; i++) s.run({ type: 'save-material', pageId: page.id, sectionId, url: `https://example.com/${i}`, title: `Item ${i}` })
+  s.day('2026-10-14')
+  const shown = getDayView(s.state, '2026-10-14').materialReview.map(m => m.id)
+  s.run({ type: 'skip-material-review', materialIds: shown, date: '2026-10-14' })
+  assert.equal(getDayView(s.state, '2026-10-15').materialReview.length, 2)
+  assert.ok(getDayView(s.state, '2026-10-15').materialReview.every(m => !shown.includes(m.id)))
+  assert.equal(getDayView(s.state, '2026-10-17').materialReview.length, 3)
+  assert.equal(s.state.pages.find(p => p.date === '2026-10-14')!.reviewSaved, false)
+})
+test('mixed capture applies neither part on stale existing Task version', () => {
+  const s = setup(), task = s.add(), page = s.state.pages.find(p => p.date === today)!
+  s.run({ type: 'capture', pageId: page.id, text: 'New task and finish old task', updateTaskId: task.id })
+  const capture = s.state.captures[0]
+  assert.equal(s.state.tasks.length, 1)
+  s.run({ type: 'plan-task', taskId: task.id, date: future })
+  const before = structuredClone(s.state)
+  assert.throws(() => s.run({ type: 'apply-capture', captureId: capture.id, proposalRevision: 1 }))
+  assert.deepEqual(s.state, before)
+})
+test('mixed capture removal of mutation still waits; replay creates only one task', () => {
+  const s = setup(), task = s.add(), page = s.state.pages.find(p => p.date === today)!
+  s.run({ type: 'capture', pageId: page.id, text: 'New task and finish old task', updateTaskId: task.id })
+  const capture = s.state.captures[0], mutation = capture.proposals!.find(p => p.kind === 'update-task')!
+  s.run({ type: 'edit-capture', captureId: capture.id, proposalRevision: 1, title: 'New task', removeItemId: mutation.id })
+  assert.equal(s.state.tasks.length, 1)
+  assert.equal(s.state.captures[0].status, 'needs_confirmation')
+  const apply: Action = { type: 'apply-capture', captureId: capture.id, proposalRevision: 2 }
+  s.run(apply); s.run(apply)
+  assert.equal(s.state.tasks.length, 2)
+  assert.equal(s.state.tasks.find(t => t.id === task.id)!.status, 'open')
+})
+test('yesterday handoff survives presentation-only bulk deletion without capping five commitments', () => {
+  const s = setup()
+  for (let i = 0; i < 5; i++) s.add(yesterday, `Commitment ${i}`)
+  const page = s.state.pages.find(p => p.date === yesterday)!
+  const ids = page.sections.flatMap(x => x.blocks).filter(b => b.taskId).map(b => b.id)
+  s.run({ type: 'remove-blocks', pageId: page.id, blockIds: ids, bulk: true, today: yesterday })
+  s.day()
+  assert.equal(getDayView(s.state, today).handoffTasks.length, 5)
+})
