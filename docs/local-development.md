@@ -1,6 +1,6 @@
 # Local development
 
-The local backend implements pages, task placements and handoff, saved-material review, capture proposals, review progress, and simulated drafts. The UI is being integrated separately. Supabase, OpenRouter, authentication and reminders are not connected.
+The local backend implements pages, task placements and handoff, saved-material review, capture proposals, review progress, and simulated drafts. The integrated UI includes editable day sections, Start the day, capture receipts, Related and guided review. Supabase, OpenRouter, authentication and reminders are not connected.
 
 Use Node 24 (built with 24.14.1) and npm. Node's native TypeScript support runs the tests. Dependencies are pinned in package-lock.json.
 
@@ -30,6 +30,6 @@ Capture and draft generation are deterministic simulations, labeled as such in r
 
 ## Evidence and remaining work
 
-Domain and repository checks are in `tests/ACCEPTANCE.md`. The repository checks include process restart, duplicate requests and concurrent stale revisions. The TanStack HTTP boundary and integrated UI still need verification after the UI branch is merged. No real iPhone, cloud database, authentication, model, provider billing or deployment result is implied by local tests.
+Domain and repository checks are in `tests/ACCEPTANCE.md`; `tests/integration-regressions.test.ts` adds four checks for the integration fixes. The repository checks include process restart, duplicate requests and concurrent stale revisions. Independent Chromium checks at 390 × 844 are recorded in `tests/BROWSER-REVIEW.md`; these exercise the integrated server functions. Draft saving after removal and recovery from a save conflict are undergoing final review. No real iPhone, cloud database, authentication, model, provider billing or deployment result is implied by local tests.
 
 Product decisions are in docs/specs-v0.3, its Good Stuffs addendum and review threads. External setup and deployment remain subject to the separate setup proposal.
