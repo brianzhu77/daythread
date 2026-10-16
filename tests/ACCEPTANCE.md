@@ -29,3 +29,9 @@ Confirmed regression: yesterday's five included commitments disappear from `hand
 ## Regression verification against a598dc2
 
 Independent rerun: **29/29 pass**, zero skipped, Node 24.14.1. Inspected the six-line author diff: prior-day task identity now comes from included placements; prose Bring remains sourced from note blocks. The five-commitment presentation-deletion reproduction now retains all five in the handoff. This closes that defect. These are pure local domain checks; persistence, server validation, browser workflows, accounts, provider billing, and iPhone behavior are outside this result.
+
+## Local repository verification against 580a51e
+
+Added repository.test.ts. Full run **31/31 pass**. Executed against disposable temporary files: same operation replay leaves disk unchanged; reused identity with different action rejects; stale revision rejects without a disk change; two fresh child processes read exactly the saved workspace; concurrent same-revision calls yield one success and one rejection, and a later valid command still succeeds. Temporary directories are removed after tests. This tests the repository entry point, not the TanStack HTTP endpoint. Cross-process concurrent writers are unsupported by the explicitly single-process adapter and were not claimed safe.
+
+Pending UI run after Jazz integration: iPhone-width handoff → Capture → review; include aged Saved items and Related, card fit/buttons/menu, no saved-item counts, and Finish saving from the Saved items step. Actual iPhone and reminder behavior remain separate from viewport emulation.
