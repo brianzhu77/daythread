@@ -104,3 +104,50 @@ test('exact URL reuse keeps one Material and independent annotations', () => {
   assert.equal(s.state.materials.length, 1)
   assert.deepEqual(s.state.materials[0].sources.map(x => x.note).sort(), ['First context', 'Second context'])
 })
+
+test('current plan deletion pauses but bulk deletion only removes presentation', () => {
+  for (const bulk of [false, true]) {
+    const s = setup(), task = s.add(), page = s.state.pages.find(p => p.date === today)!
+    const block = page.sections.flatMap(x => x.blocks).find(b => b.taskId === task.id)!
+    s.run({ type: 'remove-blocks', pageId: page.id, blockIds: [block.id], bulk, today })
+    assert.equal(s.state.tasks[0].paused, !bulk)
+    assert.equal(s.state.tasks[0].deadlineOn, '2026-10-20')
+    if (bulk) assert.equal(s.state.tasks[0].plannedOn, today)
+  }
+})
+test('historical plan presentation deletion does not pause current task', () => {
+  const s = setup(), task = s.add(yesterday), page = s.state.pages.find(p => p.date === yesterday)!
+  const block = page.sections.flatMap(x => x.blocks).find(b => b.taskId === task.id)!
+  s.run({ type: 'plan-task', taskId: task.id, date: today })
+  s.run({ type: 'remove-blocks', pageId: page.id, blockIds: [block.id], bulk: false, today })
+  assert.equal(s.state.tasks[0].paused, false)
+  assert.equal(s.state.tasks[0].plannedOn, today)
+})
+test('undo of Not today restores original state rather than unconditional unpause', () => {
+  const s = setup(), task = s.add()
+  s.run({ type: 'not-today', taskId: task.id, date: today }, 'pause-original')
+  const before = structuredClone(s.state.tasks[0])
+  s.run({ type: 'not-today', taskId: task.id, date: today }, 'pause-again')
+  s.run({ type: 'undo', targetOperationId: 'pause-again' })
+  assert.equal(s.state.tasks[0].paused, before.paused)
+  assert.equal(s.state.tasks[0].plannedOn, before.plannedOn)
+})
+test('discarding a pending proposal leaves tasks unchanged and raw input retained', () => {
+  const state = createEmptyWorkspace()
+  state.captures.push({ id: 'capture-1', pageId: 'day-1', text: 'Change existing commitment',
+    status: 'needs_confirmation', proposalRevision: 1, simulated: true, proposedTitle: 'Changed title' })
+  const result = applyCommand(state, { operationId: 'discard', expectedRevision: 0,
+    action: { type: 'discard-capture', captureId: 'capture-1' } }).workspace
+  assert.equal(result.tasks.length, 0)
+  assert.equal(result.captures[0].text, 'Change existing commitment')
+  assert.equal(result.captures[0].status, 'discarded')
+})
+test('stale proposal revision cannot be applied', () => {
+  const state = createEmptyWorkspace()
+  state.captures.push({ id: 'capture-1', pageId: 'day-1', text: 'A commitment',
+    status: 'needs_confirmation', proposalRevision: 2, simulated: true, proposedTitle: 'Edited title' })
+  const before = structuredClone(state)
+  assert.throws(() => applyCommand(state, { operationId: 'apply-stale', expectedRevision: 0,
+    action: { type: 'apply-capture', captureId: 'capture-1', proposalRevision: 1 } }))
+  assert.deepEqual(state, before)
+})
