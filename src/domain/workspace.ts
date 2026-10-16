@@ -180,11 +180,16 @@ function place(
       section: target,
     });
   const p = ensureDay(state, day);
-  let found = false;
-  for (const s of p.sections)
-    for (const b of s.blocks)
-      if (b.kind === "task" && b.taskId === t.id) found = true;
-  if (!found)
+  // Only plan sections own arrangement rows; ordinary Notes references stay put.
+  let arrangement: NoteBlock | undefined;
+  for (const s of p.sections) {
+    if (s.kind !== "top3" && s.kind !== "other") continue;
+    const rows = s.blocks.filter(b => b.kind === "task" && b.taskId === t.id);
+    arrangement ??= rows[0];
+    s.blocks = s.blocks.filter(b => !(b.kind === "task" && b.taskId === t.id));
+  }
+  if (arrangement) ensureSection(p, target).blocks.push(arrangement);
+  else
     ensureSection(p, target).blocks.push({
       id: newId(),
       kind: "task",
@@ -599,12 +604,7 @@ function execute(
           const p = ensureDay(state, action.date),
             t = createTask(state, m.title, p, null);
           m.taskId = t.id;
-          ensureSection(p, "notes").blocks.push({
-            id: newId(),
-            kind: "task",
-            taskId: t.id,
-            text: t.title,
-          });
+
         }
         m.reviewState = "task";
         m.nextReviewOn = null;
@@ -743,6 +743,10 @@ function execute(
           : undefined,
         contextLine: "Simulated provider · no network request · no charge",
       });
+      if (!failure && !action.updateTaskId) {
+        execute(state, {type: "apply-capture", captureId: id, proposalRevision: 1});
+        return {message: "Simulated new item saved · Undo · no model called", entityId: id, simulated: true};
+      }
       return {
         message: failure
           ? `Simulated ${failure}; text saved`
@@ -837,6 +841,15 @@ function execute(
         entityId: c.taskId,
         simulated: true,
       };
+    }
+    case "save-draft": {
+      const p = ensureDay(state, action.date);
+      if (!p.draft) throw new DomainError("Prepare a draft before saving choices");
+      const ids = [...new Set(action.taskIds)];
+      if (ids.some(id => !p.draft!.taskIds.includes(id)))
+        throw new DomainError("Draft changed; reload suggestions");
+      p.draft.taskIds = ids;
+      return { message: "Suggestions saved for tomorrow; nothing scheduled", simulated: true };
     }
     case "generate-draft": {
       const p = ensureDay(state, action.date);
