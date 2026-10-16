@@ -46,7 +46,8 @@ function near(iso: LocalDate, today: LocalDate): string {
   const diff = daysBetween(today, iso)
   if (diff === 0) return 'today'
   if (diff === 1) return 'tomorrow'
-  if (diff > 1 && diff < 7) return weekday(iso)
+  // Stop at 5 days: 6 days ahead shares its weekday name with yesterday ("Due Thu" read as past).
+  if (diff > 1 && diff < 6) return weekday(iso)
   return shortLabel(iso)
 }
 
