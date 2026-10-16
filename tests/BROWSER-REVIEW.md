@@ -25,3 +25,9 @@ Pending:
 Normal Save for tomorrow persists two task IDs and zero material IDs after removing one task and the only Related item; receipt counts 2 task suggestions. Browser reload and independent file read retained those selections.
 
 Confirmed remaining defect: remove one task and Related, advance the repository revision with an independent add-text command, then save. The screen retains both edits and displays Not saved / Retry, but repeated Retry never recovers because wsRef retains the stale revision. Reported to Jazz (a7512693), Lead confirmed (9a04cce9). Pending fix: refresh latest workspace, intersect retained local selections with latest draft candidates, prompt about dropped candidates, require explicit save. No automatic replay or overwrite. This remains open; the normal path above does not close it.
+
+## d8051c4 conflict recovery, independently verified
+
+The remaining stale-save defect is closed. At 390×844, started with 3 task and 2 material candidates, removed one of each locally, then injected a second valid draft candidate set into the isolated dev file with an increased workspace revision. This deliberately changed both candidate sets, not just the version (fixture injection, not a real second device/model result).
+
+On save failure the screen loaded the newest draft, kept the two local removals, displayed one new Task and one new material as Updated on another device, and reported two formerly kept items no longer offered. Before explicit Retry, independent disk inspection still showed the second draft's 3/2 candidates: no automatic replay. Retry then persisted exactly the visible 2 Tasks and 1 new material; independent disk read and browser reload retained that result. The receipt counted 2 task suggestions. Screenshot evidence/conflict-390.png was inspected. The generic workspace refresh is shared by all commands in use-day.tsx; this browser check specifically exercised save-draft. No real device or external model claims.
