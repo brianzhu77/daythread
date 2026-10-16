@@ -18,13 +18,16 @@ interface Progress {
   acted: Record<string, string>
   removedSuggestions: string[]
   tomorrowSaved: boolean
+  /** What Brian saw when a save hit a conflict. Anything else in the latest draft is new to him. */
+  kept?: string[]
 }
 
 const blank: Progress = { reflection: null, acted: {}, removedSuggestions: [], tomorrowSaved: false }
 
-function useProgress(date: LocalDate): [Progress, (patch: Partial<Progress>) => void] {
+function useProgress(date: LocalDate): [Progress | null, (patch: Partial<Progress>) => void] {
   const key = `daythread.review.${date}`
-  const [p, setP] = useState<Progress>(blank)
+  // null until read from storage, so a resumed review never flashes its blank state.
+  const [p, setP] = useState<Progress | null>(null)
   useEffect(() => {
     const raw = localStorage.getItem(key)
     setP(raw ? { ...blank, ...JSON.parse(raw) } : blank)
@@ -33,7 +36,7 @@ function useProgress(date: LocalDate): [Progress, (patch: Partial<Progress>) => 
     p,
     patch =>
       setP(prev => {
-        const next = { ...prev, ...patch }
+        const next = { ...(prev ?? blank), ...patch }
         localStorage.setItem(key, JSON.stringify(next))
         return next
       }),
@@ -44,7 +47,7 @@ function useProgress(date: LocalDate): [Progress, (patch: Partial<Progress>) => 
 export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; today: LocalDate; fromReminder: boolean }) {
   const { run } = useWorkspace()
   const { view, workspace } = useDay(date)
-  const [p, update] = useProgress(date)
+  const [progress, update] = useProgress(date)
   const page = view?.page ?? null
   // The set of saved items is fixed when the step opens, so a decision doesn't pull in a fourth card.
   const [sortIds, setSortIds] = useState<string[] | null>(null)
@@ -55,7 +58,8 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
     if (page && !recorded) void run({ type: 'review-progress', date, step: 1, source: fromReminder ? 'reminder' : 'direct' }, null)
   }, [page, recorded, fromReminder, date, run])
 
-  if (!view || !workspace) return <p className="loading">Loading…</p>
+  if (!view || !workspace || !progress) return <p className="loading">Loading…</p>
+  const p = progress
   if (!page) return <p className="empty">There’s no page for {longLabel(date)} to review.</p>
 
   const current = stepById(page.reviewStep)
@@ -286,10 +290,15 @@ function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspa
   const page = workspace.pages.find(x => x.type === 'daily' && x.date === tomorrow)
   const draft = page?.draft
   const reviewSaved = workspace.pages.find(x => x.type === 'daily' && x.date === date)?.reviewSaved
-  const suggestions = (draft?.taskIds ?? []).filter(id => !p.removedSuggestions.includes(id)).map(id => workspace.tasks.find(t => t.id === id)).filter(t => t !== undefined)
+  // After a conflict: the latest draft with Brian's removals applied; new items are flagged and
+  // removable, vanished ones are reported. The next Save stores exactly what is on screen.
+  const allowed = (id: string) => !p.removedSuggestions.includes(id)
+  const isNew = (id: string) => Boolean(p.kept && !p.kept.includes(id))
+  const dropped = p.kept ? p.kept.filter(id => !draft?.taskIds.includes(id) && !draft?.materialIds.includes(id)).length : 0
+  const suggestions = (draft?.taskIds ?? []).filter(allowed).map(id => workspace.tasks.find(t => t.id === id)).filter(t => t !== undefined)
   // Removed tasks and Related items share one list of ids; both are saved together (save-draft).
   const related = (draft?.materialIds ?? [])
-    .filter(id => !p.removedSuggestions.includes(id))
+    .filter(allowed)
     .map(id => workspace.materials.find(m => m.id === id))
     .filter(m => m !== undefined)
     .slice(0, 2)
@@ -299,9 +308,12 @@ function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspa
   const prepare = () => run({ type: 'generate-draft', date: tomorrow, outcome: simOutcome }, null)
   const [saveFailed, setSaveFailed] = useState(false)
   const save = async () => {
-    const receipt = await run({ type: 'save-draft', date: tomorrow, taskIds: suggestions.map(t => t!.id), materialIds: related.map(m => m!.id) }, null)
+    const taskIds = suggestions.map(t => t!.id)
+    const materialIds = related.map(m => m!.id)
+    const receipt = await run({ type: 'save-draft', date: tomorrow, taskIds, materialIds }, null)
     setSaveFailed(!receipt)
-    if (receipt) update({ tomorrowSaved: true })
+    // On failure the workspace reloads; keep these choices and let Brian save again by hand.
+    update(receipt ? { tomorrowSaved: true, kept: undefined } : { kept: [...taskIds, ...materialIds] })
   }
 
   return (
@@ -324,7 +336,10 @@ function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspa
           <p className="quiet">Suggestions for Top 3. Remove any you don’t want.</p>
           {suggestions.map(t => (
             <div key={t!.id} className="card suggestion">
-              <span className="grow">{t!.title}</span>
+              <span className="grow">
+                {t!.title}
+                {isNew(t!.id) && <span className="tag quiet"> Updated on another device</span>}
+              </span>
               <button type="button" className="ghost" aria-label={`Remove ${t!.title}`} onClick={() => update({ removedSuggestions: [...p.removedSuggestions, t!.id] })}>
                 Remove
               </button>
@@ -333,7 +348,10 @@ function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspa
           {related.length > 0 && <p className="quiet">Related for tomorrow</p>}
           {related.map(m => (
             <div key={m!.id} className="card suggestion">
-              <span className="grow">{displayTitle(m!.title, m!.url)}</span>
+              <span className="grow">
+                {displayTitle(m!.title, m!.url)}
+                {isNew(m!.id) && <span className="tag quiet"> Updated on another device</span>}
+              </span>
               <button type="button" className="ghost" aria-label={`Remove ${m!.title}`} onClick={() => update({ removedSuggestions: [...p.removedSuggestions, m!.id] })}>
                 Remove
               </button>
@@ -342,6 +360,8 @@ function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspa
           {saveFailed && (
             <p className="warn-line" role="alert">
               Not saved — your choices are still here
+              {dropped > 0 && ` · ${dropped} suggestion${dropped === 1 ? ' is' : 's are'} no longer offered and ${dropped === 1 ? 'was' : 'were'} left out`}
+              . Check the list, then save again.
             </p>
           )}
           <button type="button" className="primary wide" onClick={save}>
