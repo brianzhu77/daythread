@@ -30,6 +30,6 @@ Capture and draft generation are deterministic simulations, labeled as such in r
 
 ## Evidence and remaining work
 
-Domain and repository checks are in `tests/ACCEPTANCE.md`; `tests/integration-regressions.test.ts` adds four checks for the integration fixes. The repository checks include process restart, duplicate requests and concurrent stale revisions. Independent Chromium checks at 390 × 844 are recorded in `tests/BROWSER-REVIEW.md`; these exercise the integrated server functions. Draft saving after removal and recovery from a save conflict are undergoing final review. No real iPhone, cloud database, authentication, model, provider billing or deployment result is implied by local tests.
+Domain and repository checks are in `tests/ACCEPTANCE.md`; `tests/integration-regressions.test.ts` adds four checks for the integration fixes. The repository checks include process restart, duplicate requests and concurrent stale revisions. Independent Chromium checks at 390 × 844 are recorded in `tests/BROWSER-REVIEW.md`; these exercise the integrated server functions. Draft saving after removal, reload, and explicit retry after a save conflict also passed that independent browser review. No real iPhone, cloud database, authentication, model, provider billing or deployment result is implied by local tests.
 
 Product decisions are in docs/specs-v0.3, its Good Stuffs addendum and review threads. External setup and deployment remain subject to the separate setup proposal.
