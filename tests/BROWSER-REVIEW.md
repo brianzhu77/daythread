@@ -19,3 +19,9 @@ Pending:
 - Jazz save-draft wiring: remove one task and one Related item, save, reload/next day and verify both stay removed; failed save preserves editable choices and Retry.
 - HTTP-level replay/schema rejection, actual iPhone keyboard/browser behavior, iOS reminder delivery, cloud auth/RLS, actual provider context/usage billing. Repository replay/stale/restart checks are recorded separately in ACCEPTANCE.md.
 - Pages/Upcoming, multiline semantic AI preview and [[ references are declared implementation gaps, not covered by this run.
+
+## 69cf3cb draft UI verification
+
+Normal Save for tomorrow persists two task IDs and zero material IDs after removing one task and the only Related item; receipt counts 2 task suggestions. Browser reload and independent file read retained those selections.
+
+Confirmed remaining defect: remove one task and Related, advance the repository revision with an independent add-text command, then save. The screen retains both edits and displays Not saved / Retry, but repeated Retry never recovers because wsRef retains the stale revision. Reported to Jazz (a7512693), Lead confirmed (9a04cce9). Pending fix: refresh latest workspace, intersect retained local selections with latest draft candidates, prompt about dropped candidates, require explicit save. No automatic replay or overwrite. This remains open; the normal path above does not close it.
