@@ -39,3 +39,28 @@
 00 SHA-256 `e2e31e4feb8c286ff3c88a9fab05e86091c0ab4cf8b483cc138a1522922db26c`、04 `cc0d9abe1ce0110521115838af8040bc10f448481ad84cf29cf359571450ed18` 已独立读取/比对，R03/A29与X02/X26修正关闭，无剩余阻断。交接f9e1dc7f，仅文档契约复核。
 
 03新增裸URLcapture作为明确保存的解释，与00/01已接受边界一致；新SHA-256 `a56f4f1bb99ef2369667bf2767e5fe29b98ff7ca9c3ea88eb20fda0e1a418b9d`，47796b1e交Wheeljack取代ca2fd0a8，待独立审查。
+
+## 03独立审查与02/05最终接口审查
+
+Wheeljack d4085d8a / docs/reviews/v0.3/wheeljack.md 已独立审03 a56f4f1bb99e，无文档阻断；其记录明确没有模型/预算/SQL实测。
+
+Ratchet完整读取02 27812227c86e、05 d2e0b08f103a，行为与03及refs裁定大体一致；9c4b57ef交作者三处修正：handoff_saved须与handoff_done命名/完成语义对齐；删除引用已不存在的“00 D06连续3天自动轮换”默认；Material同URL复用与不合并不同原文/来源需区分，对齐04 P14。待作者修后回验。
+
+未独立运行应用；骨架构建/类型/HTTP证据来自Wheeljack，不能算Ratchet自己的运行验证。此处交付为规格审查，不扩充为已完成应用QA。
+
+## 最终规格交叉复核 · 2026-10-16
+
+02/05修正已独立读取，handoff_done、手动开启轮换、完全相同URL复用Material且来源/备注独立均关闭；00/04对应最终修正回验通过。01已完整读取，无阻断；仅§7“steps1–3不需模型”建议限定“人工保存不依赖模型，步骤2capture整理仍调用”以免歧义（82601829，非阻断）。03由Wheeljack独立审查，无阻断。交接b148686d，task #17 in_review。
+
+此结论只覆盖当前规格内部契约与来源语义，不能用于宣称持久化、模型、预算、设备或提醒已运行通过。骨架运行证据由其作者单独报告。外部资源仍遵守当前setup授权。
+
+回验版本（此前哈希由下列取代）：
+- 00-scope.md: `25c216d9a9dcd35b8eb7c93d88bf11e4497d6664b721188b32dcd7833b4286ff`
+- 01-flows-and-ux.md: `81d5d3f8fd76ce54286e3e0771ec6102fa1520326e09e61647bc58b82764c763`
+- 02-domain-and-state.md: `32da82a332d6d93a1b1696b98e51cad02dd4c27a1b198bf080b17f801c88a4b4`
+- 03-ai-contract.md: `a56f4f1bb99ef2369667bf2767e5fe29b98ff7ca9c3ea88eb20fda0e1a418b9d`
+- 04-acceptance.md: `68e9703babb1582a6c040f1fd4918432bbf2db711af74fcc6a65bcc12dbe1f92`
+- 05-delivery.md: `303f1012d81b3c164b738f87e395456795ab64cfd5e1693cb0ca23f61643c0fb`
+- README.md: `1d9acd024c6f9947ddb2c03478e1632ded1a6bcd7ed5edd2935f979b7edec101`
+
+01最后措辞收尾已独立回验，sha256 `81d5d3f8fd76ce54286e3e0771ec6102fa1520326e09e61647bc58b82764c763`；§7与§8均区分人工保存不依赖模型、capture整理需模型。82601829关闭，无剩余文档事项。此哈希取代前列01版本。

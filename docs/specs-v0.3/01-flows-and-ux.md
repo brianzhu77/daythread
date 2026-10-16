@@ -132,7 +132,7 @@ Facts are computed from data (02). Events on that date, tasks planned for it, ta
 
 The open pool is every task that is `open`, not paused, and has no future planned date, including never-dated tasks. The rule lives in 02. This file defines only its views.
 
-1. **Continue?** shows up to 3 suggestions from pool tasks that were scheduled at least once, **excluding tasks from yesterday's page** (the Start the day card covers those) and tasks already placed today. It appears once the Start the day card is done or set aside. Rotation follows 02 (on only when the same 3 have shown for more than 3 days in a row; least recently shown first; never changes within a day). Row actions: **Today**, **Not today**, and **Another day ▾** in ⋯. A suggestion changes nothing until Brian acts.
+1. **Continue?** shows up to 3 suggestions from pool tasks that were scheduled at least once, **excluding tasks from yesterday's page** (the Start the day card covers those) and tasks already placed today. It appears once the Start the day card is done or set aside. Rotation is a trial parameter, off by default (00 D06). There is no automatic trigger: if the trial log shows the same 3 for more than 3 days in a row, the team switches it on by hand and notes it in the log (Lead ruling). Ordering rules live in 02. The set never changes within a day. Row actions: **Today**, **Not today**, and **Another day ▾** in ⋯. A suggestion changes nothing until Brian acts.
 2. **Still open · N · oldest X days** is collapsed by default and expands to the full pool, never-dated tasks labelled "Unscheduled". Each row offers **Today**, **Another day ▾**, **Not today**. Shown every day, even when N = 0 ("Nothing else open").
 3. **Upcoming → No date** shows the same pool as a list.
 
@@ -232,7 +232,7 @@ If the linked content alone is too large, **nothing is sent** and the input is k
 
 ## 6. Material and references (F04) [Design · C8, C9, C10]
 
-1. **Saving material.** A link pasted or typed in the material section becomes a saved material item, shown as that line with the page title once known and **Open**. Capture can also save material. Pages → New / Paste is for longer material and notes. Every item has **Don't resurface**. Shopping or other "not again" links are marked by Brian, not guessed from the URL.
+1. **Saving material.** A link pasted or typed in the material section becomes a saved material item, shown as that line with the page title once known and **Open**. Capture can also save material. Pages → New / Paste is for longer material and notes. Every item has **Don't resurface**. Saving a URL that is already saved reuses the same material item (02): the line shows "Saved before · Tue", and the new line's source and note stay its own. Nothing is merged or overwritten. Shopping or other "not again" links are marked by Brian, not guessed from the URL.
 2. **Referencing.** In any page, type `[[` (or the toolbar button on iPhone). Search covers page titles and text; the result inserts a **page reference**: title, short preview, **Open**. Opening goes to the top of the page. There is no promise to land on a passage.
 3. **Keeping a passage.** Copy it as a quote with a source link. The quote is independent text and keeps its wording.
 4. References show current content. A removed target shows "Original removed · Restore", position kept.
@@ -257,7 +257,7 @@ A short guided flow, opened from a reminder, designed for the iPhone first. Targ
 
 - **Review saved** is set when Brian's own input is saved: reaching the end of step 3, or tapping **Finish** on any step. This is what the trial's completion rate counts. Stopping before that is **partial**, and the next morning offers "Finish (1 min)" (§3.5).
 - **Tomorrow's draft ready** is set only when step 4 saves.
-- A failed draft (budget, context too large, model error) shows "Review saved · Tomorrow's suggestions couldn't be prepared — **Retry**". It never counts as a skipped review. Steps 1–3 never need the model.
+- A failed draft (budget, context too large, model error) shows "Review saved · Tomorrow's suggestions couldn't be prepared — **Retry**". It never counts as a skipped review. Saving Brian's own input in steps 1–3 never needs the model. Step 2's capture is still organized by the model (03); if that fails, the capture text is kept and `Review saved` is not blocked.
 - Retrying step 4 never re-applies step 1 or step 2 changes.
 
 Optional review lines, no badges: "Not today · 4 this week · Look" and the material line from §6.7.
@@ -281,7 +281,7 @@ The wording is a proposal for review. What each state promises the user is bindi
 | Linked context too large | `Too much linked material to send in one go (14 items). Nothing was sent.` Input kept | **Choose items** (leave some out for this run only) · **Try without links** |
 | Candidates as titles only | Context line adds `+ 18 saved items (titles only)`; Related reasons read `Might be useful` | — |
 | Daily budget close (≥ 80 %) | Once per day, in the receipt: `Most of today's AI budget is used.` | — |
-| Daily budget reached | `Today's AI budget is used up ($10). Your text is saved. You can retry once the budget resets.` Writing, task actions and review steps 1–3 keep working | **Retry** (enabled after the reset; nothing retries in the background) |
+| Daily budget reached | `Today's AI budget is used up ($10). Your text is saved. You can retry once the budget resets.` Writing, task actions and saving review steps 1–3 keep working; step 2 captures are saved but not organized | **Retry** (enabled after the reset; nothing retries in the background) |
 | AI group waiting | Card: `Waiting for you · N items · includes new items, saved together`. Strip: `N captures waiting · Review`, persists across days | **Apply all** · **Discard all** · per-row edit / × |
 | Group discarded | `Discarded · your text is kept` | **Organize again** |
 | Retry after a lost response | Shows the stored outcome; never applies twice | — |
