@@ -102,6 +102,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   font-size: .74rem;
   color: var(--ink-faint);
 }
+.banner summary { cursor: pointer; list-style: none; min-height: 28px; display: flex; align-items: center; }
+.banner summary::-webkit-details-marker { display: none; }
+.banner summary::after { content: '›'; margin-left: 6px; transition: transform .15s ease; }
+.banner[open] { padding-bottom: 6px; }
+.banner[open] summary { flex-basis: 100%; }
+.banner[open] summary::after { transform: rotate(90deg); }
 .banner .link { font-weight: 500; color: var(--ink-soft); }
 .banner.error { color: var(--danger); font-size: .85rem; }
 .sim-control { display: inline-flex; align-items: center; gap: 6px; }
@@ -211,10 +217,12 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
 
 /* Plan rows are plain lines with a checkbox; references sit on a soft chip,
    so the two stay visibly different without a heavy rail (01 §3.2). */
-.task-row { display: flex; align-items: center; gap: 0 10px; min-height: var(--tap); flex-wrap: nowrap; border-radius: var(--radius-sm); margin: 0 -8px; padding: 0 2px 0 8px; }
+.task-row { display: flex; align-items: flex-start; gap: 0 10px; min-height: var(--tap); flex-wrap: nowrap; border-radius: var(--radius-sm); margin: 0 -8px; padding: 0 2px 0 8px; }
 .task-row:hover { background: #fafafb; }
 .task-row .task-title { flex: 1 1 0; }
-.task-row .tag { flex: none; }
+.task-row .tag { flex: none; margin-top: 11px; }
+.task-row > .check { margin-top: 12px; }
+.task-row .row-menu { align-self: center; }
 .task-row.ref { background: var(--surface); margin: 3px -8px; }
 .task-row.ref .task-title { color: var(--ink-soft); }
 .task-row.past .task-title { color: var(--ink-soft); }
@@ -239,8 +247,8 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
 .check:hover:not(:disabled) { border-color: var(--accent); }
 .check:disabled { opacity: .4; cursor: default; }
 .task-title { flex: 1; min-width: 0; border: 0; background: none; padding: 9px 0; overflow-wrap: anywhere; }
-input.task-title { text-overflow: ellipsis; }
-input.task-title:focus { outline: none; }
+textarea.task-title { resize: none; field-sizing: content; min-height: 0; line-height: 1.45; font: inherit; overflow: hidden; }
+textarea.task-title:focus { outline: none; }
 .is-done .task-title { color: var(--ink-faint); text-decoration: line-through; text-decoration-color: #c7c7cf; }
 .is-cancelled .task-title { color: var(--ink-faint); }
 
@@ -423,8 +431,6 @@ input.task-title:focus { outline: none; }
 }
 
 @media (max-width: 599px) {
-  /* The dev note is long; on the phone keep only the controls. */
-  .banner > span { display: none; }
   .std-row .actions, .fact-row .actions { margin-left: 0; }
 }
 
@@ -450,3 +456,6 @@ input.task-title:focus { outline: none; }
   .notices { bottom: 24px; }
 }
 .tag:empty { display: none; }
+/* <details> ignores flex layout in some Safari versions, so lay its children out inline. */
+details.banner { display: block; }
+details.banner > :not(summary) { display: inline-flex; align-items: center; margin: 0 12px 2px 0; }

@@ -70,6 +70,11 @@ h2 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.02em; padding: 22px 
 .backlinks .label { font-size: .7rem; font-weight: 600; color: var(--ink-faint); text-transform: uppercase; letter-spacing: .08em; padding-bottom: 4px; }
 .backlinks .row { min-height: 36px; font-size: .92rem; }
 .backlinks .row span:last-child { color: var(--ink-faint); margin-left: auto; font-size: .82rem; }
+.state { display: inline-flex; align-items: center; gap: 4px; padding: 1px 10px; border-radius: 999px; background: #fdf2e7; color: #a8551b; font-weight: 550; font-size: .86rem; cursor: pointer; }
+.state .caret { font-size: .7rem; }
+.hint { font-size: .78rem; color: var(--ink-faint); margin-left: 6px; }
+.bl + .bl { border-top: 1px solid rgba(17,17,26,.06); }
+.why { margin: 0 0 8px 30px; font-size: .88rem; color: var(--ink-soft); }
 .note { position: fixed; right: 16px; bottom: 16px; max-width: 300px; font-size: .78rem; color: var(--ink-soft); background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; box-shadow: var(--shadow-float); }
 
 /* Phone: sidebar becomes a sheet opened from the top bar */
@@ -106,8 +111,8 @@ h2 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.02em; padding: 22px 
     <div class="node indent-1"><span class="twisty open">›</span><span class="glyph">◆</span>APPX PR</div>
     <div class="node indent-2" data-url><span class="twisty"></span><span class="glyph url">↗</span>Provider design doc</div>
     <div class="node"><span class="twisty">›</span><span class="glyph">◆</span>Family</div>
+    <div class="node"><span class="twisty"></span><span class="glyph url">↗</span>Calm Technology<span class="count">new</span></div>
     <div class="node"><span class="twisty open">›</span><span class="glyph">◆</span>Reading</div>
-    <div class="node indent-1"><span class="twisty"></span><span class="glyph url">↗</span>Calm Technology</div>
     <div class="node indent-1"><span class="twisty"></span><span class="glyph">◆</span><span class="t">说明文档的长中文标题也应该在这里截断而不是撑开侧边栏</span></div>
   </aside>
 
@@ -137,17 +142,20 @@ h2 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.02em; padding: 22px 
 
     <!-- Screen 2: the URL page that a paste created -->
     <article class="doc" data-screen="page">
-      <p class="crumbs">Reading <span>›</span> Calm Technology</p>
+      <p class="crumbs">Pages <span>›</span> Calm Technology</p>
       <h1>Calm Technology</h1>
       <dl class="props">
         <dt>URL</dt><dd><a href="#">https://calmtech.com/</a></dd>
+        <dt>Follow-up</dt><dd><span class="state">To sort <span class="caret">▾</span></span> <span class="hint">Keep watching · Lower priority · Done with it</span></dd>
         <dt>Saved</dt><dd>Fri, Oct 16 · from today’s page</dd>
       </dl>
       <p class="empty-body">Write, or paste what you want to keep from this link…</p>
       <section class="backlinks">
         <p class="label">Linked from 2 days</p>
-        <div class="row"><span class="glyph day">16</span><span>Fri, Oct 16 · Good Stuffs</span><span>Today</span></div>
-        <div class="row"><span class="glyph day">15</span><span>Thu, Oct 15 · Notes</span><span>Yesterday</span></div>
+        <div class="bl"><div class="row"><span class="glyph day">16</span><span>Fri, Oct 16 · Good Stuffs</span><span>Today</span></div>
+          <p class="why">“Good framing for the review reminder — calm, not nagging.”</p></div>
+        <div class="bl"><div class="row"><span class="glyph day">15</span><span>Thu, Oct 15 · Notes</span><span>Yesterday</span></div>
+          <p class="why">“Kevin mentioned this at lunch.”</p></div>
       </section>
     </article>
   </main>
