@@ -1,0 +1,12 @@
+{
+  "timezone": "America/Vancouver",
+  "today": "2026-10-16",
+  "yesterday": "2026-10-15",
+  "older": "2026-10-14",
+  "future": "2026-10-17",
+  "deadline": "2026-10-20",
+  "beforeMidnight": "2026-10-17T06:59:59.000Z",
+  "afterMidnight": "2026-10-17T07:00:01.000Z",
+  "dstBeforeFallback": "2026-11-01T08:59:59.000Z",
+  "dstAfterFallback": "2026-11-01T09:00:01.000Z"
+}
