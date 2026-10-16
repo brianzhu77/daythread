@@ -60,7 +60,8 @@ function CalendarDay({ date, today, page, tasks }: { date: LocalDate; today: Loc
         </Link>
       )}
       {tasks === null ? (
-        page ? null : <p className="quiet day-empty">No page for this day.</p>
+        // Without the history query an empty past day would read as "nothing was planned".
+        <p className="quiet day-empty">{page ? 'Task history not shown yet.' : 'No page for this day · task history not shown yet.'}</p>
       ) : tasks.length ? (
         <ul className="plain task-list">
           {tasks.map(t => (

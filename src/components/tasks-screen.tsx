@@ -35,8 +35,7 @@ export function TasksScreen({ view, today }: { view: TaskView; today: LocalDate 
       </nav>
 
       {view === 'today' && <TaskList tasks={day.planned} today={today} empty="Nothing planned for today." />}
-      {/* Interim: open, not paused, planned today or earlier or never. Tasks planned only for later days
-          are missing until the domain's Open query lands (feature map C2). */}
+      {/* Open per 02 §94: open, not paused, not planned after today (later days belong to Upcoming). */}
       {view === 'open' && <TaskList tasks={day.openPool} today={today} empty="No open tasks." />}
       {view === 'paused' && <TaskList tasks={day.paused} today={today} paused empty="Nothing set aside." />}
       {view === 'upcoming' &&
