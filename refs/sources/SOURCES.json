@@ -1,0 +1,263 @@
+{
+  "schema_version": 1,
+  "assembled_at_utc": "2026-10-15T18:59:59.398058+00:00",
+  "timezone": "America/Vancouver",
+  "intended_destination": "/Users/dogrod/Developer/daythread/refs",
+  "scope": "Two identified human chats plus four historical artifacts and current team configuration. Not a claim to recover every prior conversation.",
+  "sources": [
+    {
+      "kind": "session_extract",
+      "source_path": "/Users/dogrod/.codex/sessions/2026/10/13/rollout-2026-10-13T22-38-45-01a138eb-9293-75a2-afbf-d40443e51ba0.jsonl",
+      "session": {
+        "id": "01a138eb-9293-75a2-afbf-d40443e51ba0",
+        "cwd": "/Users/dogrod/Documents/Codex/2026-10-13/wo-j",
+        "timestamp": "2026-10-14T05:38:45.013Z"
+      },
+      "source_snapshot": {
+        "sha256": "94510b9987c1d68c0929b4d79e835922ce859b1c5c978aae6b23233d268a1a8e",
+        "bytes": 2252045
+      },
+      "export": "sources/discussion-2026-10-13.md",
+      "message_ids": [
+        "O-U01",
+        "O-A01",
+        "O-U02",
+        "O-A02",
+        "O-U03",
+        "O-A03",
+        "O-U04",
+        "O-A04",
+        "O-U05",
+        "O-A05",
+        "O-U06",
+        "O-A06",
+        "O-U07",
+        "O-A07",
+        "O-U08",
+        "O-A08",
+        "O-U09",
+        "O-U10",
+        "O-A09",
+        "O-U11",
+        "O-A10",
+        "O-U12",
+        "O-A11",
+        "O-U13",
+        "O-A12",
+        "O-U14",
+        "O-A13",
+        "O-U15",
+        "O-A14",
+        "O-U16",
+        "O-A15",
+        "O-U17",
+        "O-A16",
+        "O-U18",
+        "O-A17",
+        "O-U19",
+        "O-U20",
+        "O-A18"
+      ],
+      "first_utc": "2026-10-14T05:38:46.488Z",
+      "last_utc": "2026-10-14T18:12:55.188Z"
+    },
+    {
+      "kind": "session_extract",
+      "source_path": "/Users/dogrod/.codex/sessions/2026/10/15/rollout-2026-10-15T10-39-34-01a140a5-dd92-7f53-a528-5ad76f83fd7c.jsonl",
+      "session": {
+        "id": "01a140a5-dd92-7f53-a528-5ad76f83fd7c",
+        "cwd": "/Users/dogrod/Documents/Codex/2026-10-15/w",
+        "timestamp": "2026-10-15T17:39:34.429Z"
+      },
+      "source_snapshot": {
+        "sha256": "539b71f38b8675e0e31dafae0570b99e52e89e2a2631354245839a5552db4095",
+        "bytes": 2204201
+      },
+      "export": "sources/team-context-2026-10-15.md",
+      "message_ids": [
+        "C-U03",
+        "C-A02",
+        "C-U04",
+        "C-A03",
+        "C-U05",
+        "C-A04",
+        "C-U06",
+        "C-A05",
+        "C-U07",
+        "C-A06",
+        "C-U08"
+      ],
+      "first_utc": "2026-10-15T17:43:59.462Z",
+      "last_utc": "2026-10-15T18:55:27.949Z"
+    },
+    {
+      "kind": "historical_artifact_exact_copy",
+      "source_path": "/Users/dogrod/Documents/Codex/2026-10-13/wo-j/outputs/personal-app-discovery.md",
+      "copy": "history/personal-app-discovery.md",
+      "sha256": "d4cc2aa249c03562360e2de319c71cad6a443665958b2c0343c94ab1df98e002",
+      "bytes": 9881
+    },
+    {
+      "kind": "historical_artifact_exact_copy",
+      "source_path": "/Users/dogrod/Documents/Codex/2026-10-13/wo-j/outputs/product-stress-test.md",
+      "copy": "history/product-stress-test.md",
+      "sha256": "e01ad9c73d137b3d43d1267653401a8dac1cbb618b96c864766d3bf4deb5245b",
+      "bytes": 6039
+    },
+    {
+      "kind": "historical_artifact_exact_copy",
+      "source_path": "/Users/dogrod/Documents/Codex/2026-10-13/wo-j/outputs/mvp-validation-plan.md",
+      "copy": "history/mvp-validation-plan.md",
+      "sha256": "931c49191476bc3b21b263eb82f9f766cac1ae3a5518d0b2b356940523e75bad",
+      "bytes": 5711
+    },
+    {
+      "kind": "historical_artifact_exact_copy",
+      "source_path": "/Users/dogrod/Documents/Codex/2026-10-13/wo-j/outputs/mvp-v0.1.md",
+      "copy": "history/mvp-v0.1.md",
+      "sha256": "077e9c2f96ee6db155392a0bcd14f9ca767fa54a912a86efa3bc9a918292ef2e",
+      "bytes": 7266
+    },
+    {
+      "kind": "team_configuration_snapshot",
+      "source_path": "/Users/dogrod/Documents/Codex/2026-10-15/w/outputs/raft-agent-team.md",
+      "copy": "team/raft-agent-team.md",
+      "sha256": "950a5daeed38ba474e5530eb9c939a6882c5c73553f0c36ab03b8165fe6220b2",
+      "bytes": 12938
+    },
+    {
+      "kind": "team_configuration_snapshot",
+      "source_path": "/Users/dogrod/Documents/Codex/2026-10-15/w/outputs/daythread-agent-team.md",
+      "copy": "team/daythread-agent-team.md",
+      "sha256": "f9ac3c1c6b593eb00ff69b23013fd82620fb5f80b3c9428c32537fa86151d017",
+      "bytes": 6016
+    }
+  ],
+  "project_materials_observed": [
+    {
+      "path": "README.md",
+      "sha256": "bc2b21550fc99447306127fbc76b52a9254458442fae7258b792fcd546afb249",
+      "bytes": 2306
+    },
+    {
+      "path": "docs/reviews/round-1/BASELINE.sha256",
+      "sha256": "f3cca550f33d34d40f21c20f632880991a48f18756d95196e535ae5d84a87cea",
+      "bytes": 642
+    },
+    {
+      "path": "docs/reviews/round-1/README.md",
+      "sha256": "24185b17275abb2dabed0dd37e88827ad814daa6442e8a0f9a3570d8747a25e9",
+      "bytes": 2738
+    },
+    {
+      "path": "docs/reviews/round-1/SPECS-V0.2.sha256",
+      "sha256": "196d421d17e1a28e04e40d37d91758272b57bd9de4e565cf4474e7ffdec85f36",
+      "bytes": 688
+    },
+    {
+      "path": "docs/reviews/round-1/bumblebee-product.md",
+      "sha256": "bf41ede36fa12f99256dc91fab8aa26ed64868af7f4eb640d7159c52c67d2f29",
+      "bytes": 22549
+    },
+    {
+      "path": "docs/reviews/round-1/jazz-design.md",
+      "sha256": "ee6ede6a07bc29eedbae0c16e67254bbd8f4ed9ceb25613563395d0098b5dc20",
+      "bytes": 18256
+    },
+    {
+      "path": "docs/reviews/round-1/ratchet-review.md",
+      "sha256": "506414cc0fe3e8313e818780736e34264d64f6299472ad3fb8016c0c0ec4b4cf",
+      "bytes": 19228
+    },
+    {
+      "path": "docs/reviews/round-1/state-replay.md",
+      "sha256": "b85805bf4d0b5409820b9585d3c2de23f387bcbf84d73d3fbbe8ebf2baa68ca3",
+      "bytes": 12164
+    },
+    {
+      "path": "docs/reviews/round-1/synthesis.md",
+      "sha256": "8ee68b91bf7fe47a1678f02a514d698f30da57fce26fb9f409a1b5d1a806203a",
+      "bytes": 22932
+    },
+    {
+      "path": "docs/reviews/round-1/v0.2-review-ratchet.md",
+      "sha256": "1d99ae64a0a71cf4f75501c78dce0730e2fc7540e57e69da59dc35a48a7c7ba0",
+      "bytes": 3939
+    },
+    {
+      "path": "docs/reviews/round-1/wheeljack-engineering.md",
+      "sha256": "ef6037f9ffb296e58879771b41386dd7c42242b2e3c7facd06a2ccbbc942132d",
+      "bytes": 26126
+    },
+    {
+      "path": "docs/specs/00-scope.md",
+      "sha256": "1190cc44275da8f376db9c3ae483bac2f55aced1b3ca65ad31fe84a7ec78b377",
+      "bytes": 6358
+    },
+    {
+      "path": "docs/specs/01-flows-and-ux.md",
+      "sha256": "a18cd5e871d581d49d2c2b4d8bbde4087b6960e2d63909a3fe10cfbeb6bd80aa",
+      "bytes": 9810
+    },
+    {
+      "path": "docs/specs/02-domain-and-state.md",
+      "sha256": "706d202b1d50ea57bed143bafc10ccdab162fc2a86d46330db85e92478328238",
+      "bytes": 11789
+    },
+    {
+      "path": "docs/specs/03-ai-contract.md",
+      "sha256": "fa0005dd55528e095ec8193208f1c71b01ede9b2a18b2a52a57b5bf796307fbd",
+      "bytes": 8636
+    },
+    {
+      "path": "docs/specs/04-acceptance.md",
+      "sha256": "2cca44c538be04a2df8e392858b1ff985463eda650240f42a347dd7772954fe8",
+      "bytes": 10718
+    },
+    {
+      "path": "docs/specs/05-delivery.md",
+      "sha256": "6d76544d48aca55abfd329229432a214aed6d2c7de892788261243dff2c0998a",
+      "bytes": 11539
+    },
+    {
+      "path": "docs/specs-v0.2/00-scope.md",
+      "sha256": "1c18fc2e3072d75eb96af380fcfc4aa448758876574e30432696ea39feb11998",
+      "bytes": 16674
+    },
+    {
+      "path": "docs/specs-v0.2/01-flows-and-ux.md",
+      "sha256": "892da1ff4d398fdadf64511591243da0c2782bb0bed232879cd80363bbdae37f",
+      "bytes": 26026
+    },
+    {
+      "path": "docs/specs-v0.2/02-domain-and-state.md",
+      "sha256": "5197f796c5089f26d17ccfe6bd09f8d4e7808f38bda68cb40e894b28d9d101cc",
+      "bytes": 14427
+    },
+    {
+      "path": "docs/specs-v0.2/03-ai-contract.md",
+      "sha256": "38fdb244eefc6d531b5d12f338f1b9e430dd222873eb9c7161b1d0dbd9960eac",
+      "bytes": 11057
+    },
+    {
+      "path": "docs/specs-v0.2/04-acceptance.md",
+      "sha256": "6ab05264b796f1503c06c394f8ef1185cc3ebea08930666bcbcac07a61a47f24",
+      "bytes": 26816
+    },
+    {
+      "path": "docs/specs-v0.2/05-delivery.md",
+      "sha256": "41c49ee7549f57497c1d0ea43e54afa99caf0e9db93c8484a0c781e56b5e1deb",
+      "bytes": 7989
+    },
+    {
+      "path": "docs/specs-v0.2/README.md",
+      "sha256": "34fe2325abf3421e10a48cb7d6ede7f8e01863fe918c4a1f540c05845bfa6eef",
+      "bytes": 4078
+    }
+  ],
+  "excluded": [
+    "Raft agent-runner sessions: their injected user-role messages and inbox notices are not direct human statements; consult existing project review artifacts instead.",
+    "System/developer messages, tools, reasoning, intermediate progress and unrelated OAuth troubleshooting.",
+    "No earlier pre-2026-10-13 personalized Karpathy conversation was identified; references to it are not treated as recovered content."
+  ]
+}

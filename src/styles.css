@@ -1,0 +1,12 @@
+* { box-sizing: border-box; }
+body { margin: 0; color: #24352f; background: #f6f7f3; font-family: system-ui, sans-serif; line-height: 1.5; }
+main { width: min(100% - 2rem, 48rem); margin: 3rem auto; }
+h1 { font-size: clamp(1.8rem, 5vw, 2.8rem); line-height: 1.15; margin: .4rem 0 2rem; }
+h2 { font-size: 1.1rem; margin: 0; }
+p { margin: .5rem 0; }
+.eyebrow { font-weight: 650; }
+aside { padding: 1rem 1.25rem; border: 1px solid #cbd9cd; border-radius: .5rem; background: #edf3eb; margin-bottom: 1.5rem; }
+section { padding: 1.25rem 0; border-bottom: 1px solid #d9dfd7; }
+section p, footer { color: #58685f; font-size: .9rem; }
+footer { margin-top: 2rem; overflow-wrap: anywhere; }
+@media (max-width: 480px) { main { margin-top: 1.5rem; } }
