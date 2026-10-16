@@ -1,21 +1,18 @@
 import type { ReactNode } from 'react'
 import { Notices } from './notices'
+import { Navigation } from './navigation'
 import { WorkspaceProvider, isConflict, useWorkspace, type SimOutcome } from './use-day'
 
-/** App frame: top navigation, the sample-data banner, and undo notices. */
+/** App frame (craft-v1 §3): sidebar on laptop, bottom tabs and + on phone, dev banner, undo notices. */
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <WorkspaceProvider>
       <div className="app">
-        <header className="app-bar">
-          <a className="brand" href="/">Daythread</a>
-          <nav aria-label="Main">
-            <a href="/">Today</a>
-            <a href="/review">Review</a>
-          </nav>
-        </header>
-        <SampleBanner />
-        <main className="app-main">{children}</main>
+        <Navigation />
+        <div className="app-content">
+          <SampleBanner />
+          <main className="app-main">{children}</main>
+        </div>
         <Notices />
       </div>
     </WorkspaceProvider>

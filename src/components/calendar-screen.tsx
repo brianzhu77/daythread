@@ -1,0 +1,87 @@
+import { Link } from '@tanstack/react-router'
+import type { LocalDate, Page, Task } from '../domain/types'
+import { getDayView } from '../domain/workspace'
+import { addDays, fromIso, taskDateTag, weekday } from './dates'
+import { useWorkspace } from './use-day'
+
+// Days shown per screen; "Later" extends the list through the URL.
+const DAYS_SHOWN = 10
+
+/**
+ * Calendar tab (craft-v1 §5.4, feature map C2): one header per day, that day's page as a card,
+ * then its planned tasks. Browsing never creates a page; opening a day goes through /day/$date.
+ */
+export function CalendarScreen({ from, today }: { from: LocalDate; today: LocalDate }) {
+  const { workspace } = useWorkspace()
+  if (!workspace) return <p className="loading">Loading calendar…</p>
+  const days = Array.from({ length: DAYS_SHOWN }, (_, i) => addDays(from, i))
+
+  return (
+    <div className="list-screen">
+      <h1 className="large-title">Calendar</h1>
+      <nav className="pills" aria-label="Move through days">
+        <Link to="/calendar" search={{ date: addDays(from, -DAYS_SHOWN) }} className="pill">
+          Earlier
+        </Link>
+        <Link to="/calendar" search={{}} className="pill" aria-current={from === today ? 'page' : undefined}>
+          Today
+        </Link>
+        <Link to="/calendar" search={{ date: addDays(from, DAYS_SHOWN) }} className="pill">
+          Later
+        </Link>
+      </nav>
+      {days.map(d => {
+        const page = workspace.pages.find(p => p.type === 'daily' && p.date === d) ?? null
+        // Past days need the placements as they were that day (feature map K3); that query isn't in the domain yet.
+        const tasks = d >= today ? getDayView(workspace, d).planned : null
+        return <CalendarDay key={d} date={d} today={today} page={page} tasks={tasks} />
+      })}
+    </div>
+  )
+}
+
+function CalendarDay({ date, today, page, tasks }: { date: LocalDate; today: LocalDate; page: Page | null; tasks: Task[] | null }) {
+  const relative = date === today ? 'Today' : date === addDays(today, 1) ? 'Tomorrow' : date === addDays(today, -1) ? 'Yesterday' : null
+  const monthDay = fromIso(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const fullWeekday = fromIso(date).toLocaleDateString('en-US', { weekday: 'long' })
+  return (
+    <section className="calendar-day" aria-label={`${monthDay}, ${fullWeekday}`}>
+      <h2 className="day-header">
+        <Link to="/day/$date" params={{ date }}>
+          {monthDay}
+          {relative && <span className={`relative ${date === today ? 'is-today' : ''}`}> · {relative}</span>}
+          <span className="weekday"> · {fullWeekday}</span>
+        </Link>
+      </h2>
+      {page && (
+        <Link to="/day/$date" params={{ date }} className="note-card">
+          <strong>{relative ?? weekday(date)}</strong>
+          <span className="note-preview">{preview(page) || 'Empty page'}</span>
+        </Link>
+      )}
+      {tasks === null ? (
+        page ? null : <p className="quiet day-empty">No page for this day.</p>
+      ) : tasks.length ? (
+        <ul className="plain task-list">
+          {tasks.map(t => (
+            <li key={t.id} className="calendar-task">
+              <span className="check-mark" aria-hidden="true" />
+              <span className="task-title">{t.title}</span>
+              {taskDateTag(t, today) && <span className="tag">{taskDateTag(t, today)}</span>}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  )
+}
+
+/** First written lines of the page, for the card (task rows are listed below it). */
+function preview(page: Page): string {
+  return page.sections
+    .flatMap(s => s.blocks)
+    .filter(b => b.kind !== 'task' && b.text.trim())
+    .slice(0, 2)
+    .map(b => b.text.trim())
+    .join(' · ')
+}
