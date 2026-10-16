@@ -1,0 +1,21 @@
+# Local browser review (Ratchet, task #21)
+
+Status: DONE_WITH_CONCERNS for the executed paths; edited-draft persistence UI retest pending Jazz wiring.
+
+Environment: independent test worktree, UI 2d89e56 plus domain fixes through 28a85d8; Chromium via browse, 390×844 viewport; Vite 127.0.0.1:3012 with separate /tmp/daythread-ratchet-browser.json. Sample button created the aged material. No cloud or model call, no real iPhone or notification delivery.
+
+Executed:
+- Sample yesterday handoff: Keep moved the selected Task to today; Bring copied one material line; Done dismissed the handoff.
+- Capture: initial build required Apply for new input (known defect); after 71261d6/28a85d8 rerun, a new Chinese task saved immediately with simulated receipt and no Apply button.
+- Existing Tax return moved from Other to Top 3 after the domain fix. Page section inspection confirmed it under the Top 3 section.
+- Review opened with from=reminder. Saved items displayed one material saved four days earlier. All three choice buttons and the whole card fit the viewport. Make it a task and custom watching date were inside the ⋯ menu. No saved-material count appeared in the day/review screens inspected. Horizontal width was 390/390.
+- Finish directly on Saved items showed Review saved; independently read persisted reviewSaved=true from the local file.
+- After the fix, Make it a task created one Task, plannedOn=null and zero Task blocks anywhere. Receipt showed Task created · Unscheduled.
+- Prepare tomorrow showed simulated Top 3 choices and Related for tomorrow: calmtech.com. The Related line and save button fit the viewport. Screenshots inspected: evidence/saved-items-390.png, evidence/related-390.png.
+- No console errors observed in these flows.
+- Independent native rerun after domain fixes: 35/35 pass. Read author integration-regressions.test.ts; its four cases cover identity/reference preservation on Top 3 move, draft serialization, new-only versus mixed Capture, and unscheduled material conversion. These are domain tests despite the filename; they do not exercise HTTP.
+
+Pending:
+- Jazz save-draft wiring: remove one task and one Related item, save, reload/next day and verify both stay removed; failed save preserves editable choices and Retry.
+- HTTP-level replay/schema rejection, actual iPhone keyboard/browser behavior, iOS reminder delivery, cloud auth/RLS, actual provider context/usage billing. Repository replay/stale/restart checks are recorded separately in ACCEPTANCE.md.
+- Pages/Upcoming, multiline semantic AI preview and [[ references are declared implementation gaps, not covered by this run.
