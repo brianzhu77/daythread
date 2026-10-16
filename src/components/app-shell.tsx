@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Notices } from './notices'
-import { WorkspaceProvider, useWorkspace, type SimOutcome } from './use-day'
+import { WorkspaceProvider, isConflict, useWorkspace, type SimOutcome } from './use-day'
 
 /** App frame: top navigation, the sample-data banner, and undo notices. */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -60,7 +60,12 @@ export function SaveIndicator() {
   if (saveState === 'failed')
     return (
       <span className="save-state failed" role="alert">
-        {saveError?.startsWith('Cannot undo') ? 'Can’t undo — changed since' : 'Not saved — your changes are still here'} ·{' '}
+        {saveError?.startsWith('Cannot undo')
+          ? 'Can’t undo — changed since'
+          : isConflict(saveError)
+            ? 'Changed elsewhere — now showing the latest. Your edit wasn’t saved'
+            : 'Not saved — your changes are still here'}{' '}
+        ·{' '}
         <button type="button" className="link" onClick={retry}>
           Retry
         </button>

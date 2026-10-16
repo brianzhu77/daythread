@@ -22,6 +22,10 @@ export function newOperationId(): string {
 }
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
+
+export function isConflict(message: string | null): boolean {
+  return message !== null && /saved elsewhere|changed|cannot undo/i.test(message)
+}
 /** Which simulated provider outcome the next capture or draft uses (01 §9 item 6). */
 export type SimOutcome = 'success' | 'failure' | 'budget' | 'context'
 
@@ -107,9 +111,17 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           return result.receipt
         } catch (e) {
           // What the user typed stays on screen; the header shows the failure with Retry.
+          const message = e instanceof Error ? e.message : String(e)
           setSaveState('failed')
-          setSaveError(e instanceof Error ? e.message : String(e))
+          setSaveError(message)
           setLastFailed({ action, notice })
+          // Resync before any retry: a stale revision would otherwise fail forever. Screens keep
+          // their local edits and re-derive from the latest data; nothing is re-sent automatically.
+          try {
+            adopt(await transport.load())
+          } catch {
+            // Still offline; Retry will try the load again through the same path.
+          }
           return null
         }
       })
