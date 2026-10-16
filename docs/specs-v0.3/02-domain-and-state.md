@@ -98,13 +98,13 @@ Keep planned纠正单行删除时，先条件撤销暂放再只删呈现，同�
 5. 日期事实：active Event 日期=D；open Task planned_on=D、attention_on≤D 或 deadline 当日/过去。deadline 不受暂停和候选上限影响；暂停关注可折叠，真实截止不能因此隐藏。
 6. 同Task多种事实优先合一行，保留所有日期标签；已安排的项不在旁边再铺一次，但截止/关注标记仍可见。暂停截止项显示“已暂放今日安排，截止仍有效”。
 
-rotation 默认关；按 00 D06 的试验触发值，同三条建议连续重复超过3天时开启轮换，并记录最近展示信息。开启时在合格候选内按最近展示日升序（从未展示排先）、再沿用原稳定次序取3条；同一日刷新复用已选集合，不靠刷新轮换。该阈值仍是待试验默认，轮换不改变库存资格。数量可能增长是实际产品取舍，不靠藏掉库存假装消除了积压。
+rotation默认关闭，是试用参数。同样3条连续出现超过3天时，团队可以依据日志手动开启并记录，不在代码中自动触发。开启后的顺序可用最近展示日升序（从未展示先）、再沿用稳定次序，同日刷新复用集合。轮换不改库存资格。数量可能增长是实际产品取舍，不靠藏掉库存假装消除了积压。
 
 ## 早上交接与保留内容
 
 早上交接是主路径，不仅是跳review的补救。读取昨天（若漏天则最近有效日记）的全部仍open、未暂放、未在今天明确安排、无明确未来处理日事项，逐项Keep / Not today，可跳过，不能强迫清零。这里不受3条候选上限；更早日期的合格接续仍最多3条，并按Task ID排除已在交接展示的事项。连续漏天时根为最近有效日记，回执注明日期，不要求补写每一天。
 
-Keep任务更新同一Task planned_on=今天及placement，不复制Task。既有今天安排直接去重。未处理的交接项仍在库存，不能因“交接完成”被自动暂放。handoff_saved独立记录，不能仅看页面打开或有没有新页判断完成。
+Keep任务更新同一Task planned_on=今天及placement，不复制Task。既有今天安排直接去重。未处理的交接项仍在库存，不能因“交接完成”被自动暂放。handoff_done只在用户点击Done后记录；保存进度、打开页面、整体跳过或新页存在不等于完成，允许只处理部分后点击Done。
 
 Notes/Good Stuffs行可用户明确Keep到今天：普通文字/quote复制成新Block并保留source_block_id/source_page_id及来源日期；引用继续指向原目标；任务引用仍同Task。幂等键为workspace+目标日+来源Block+操作身份，重试同一次Keep不重复建Block；用户明确再次复制是新操作。源内容修改不回写已复制文字，目标软删除有占位。Good Stuffs行Keep复用资料身份，不新建同一资料副本。
 
@@ -130,13 +130,13 @@ Page/Block软删除后引用保留占位和目标ID，恢复后可用；删除�
 
 Good Stuffs区新增链接、或任意位置明确“保存资料”（capture裸URL视为明确保存），建立Material身份：ID、workspace、URL、可选Page正文、来源Block、resurface_enabled及rev。只有URL时content_state=link_only，不声称读过正文；尚无自动抓取。Notes普通链接、Task工作链接不自动升级，来源仍可用于该事项上下文。
 
-同一次保存/Keep按操作身份复用同Material；不做破坏性URL参数清洗或把所有同URL笔记自动合并。资料保存与推荐资格分开，“不再推荐”只改变resurface_enabled，资料和引用保留。购物用途不能靠模型/URL猜后删除。
+同一workspace内重复保存完全相同URL复用同一个Material身份；幂等重试/Keep也复用。每个来源Block、个人备注独立保留，不因复用资料身份覆盖或合并原笔记。不做破坏性URL参数清洗；只有明确相同的URL按此规则去重。资料保存与推荐资格分开，“不再推荐”只改变resurface_enabled，资料和引用保留。购物用途不能靠模型/URL猜后删除。
 
 推荐根为用户带入的过去Good Stuffs中允许推荐资料，10–20种子额外集可选，不扩展到全部历史库。全文/目录输入模式及真实内容可见性按03执行。
 
 ## Review与预算状态
 
-review_saved代表用户review输入/步骤进度已保存并点击Finish或完成约定步骤；draft_ready只表示建议生成成功，两者分开。预算不足/LLM失败不妨碍保存手工review。handoff_saved和review_saved分别记录，成功日由04定义，不能把技术失败记成用户没做review。
+review_saved代表用户review输入/步骤进度已保存并点击Finish或完成约定步骤；draft_ready只表示建议生成成功，两者分开。预算不足/LLM失败不妨碍保存手工review。handoff_done和review_saved分别记录，成功日由04定义，不能把技术失败记成用户没做review。
 
 预算账本按workspace+America/Vancouver自然日共享：settled/reserved与attempt身份，事务预留保守上界再外部调用，usage结算、未知费用保留预留、跨日不丢在途费用。10USD是模型日限额；供应商UTC daily key只兜底，详情以03为准。预算状态不能放浏览器各自计算，10USD不是每设备额度。
 
