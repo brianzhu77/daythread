@@ -411,7 +411,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // it, so a cancelled drag (Escape, which the page never sees as a keydown) would leave the line. Clear it on any
     // dragend, and on the first pointer move after a drag in case the handle was unmounted and dragend never came.
     const dropLineGone = () => { if (document.querySelector('.prosemirror-dropcursor-block')) editor.prosemirrorView.dom.dispatchEvent(new DragEvent('dragleave', { bubbles: true, relatedTarget: null })) }
-    const ended = () => { settle(); dropLineGone(); pickedIds.current = [] }
+    // Delayed so a drop can first show the line where the blocks landed.
+    const ended = () => { settle(); setTimeout(dropLineGone, 300); pickedIds.current = [] }
     document.addEventListener('pointerup', release)
     document.addEventListener('pointermove', dropLineGone)
     document.addEventListener('dragend', ended, true)
@@ -538,11 +539,20 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const ref = after ? (ids.includes(after) ? null : { id: after, placement: 'before' as const }) : last && !ids.includes(last) ? { id: last, placement: 'after' as const } : null
       editor.prosemirrorView.dragging = null
       // Stopping the drop also stops BlockNote's own cleanup of the line; a dragleave out of the editor removes it.
-      editor.prosemirrorView.dom.dispatchEvent(new DragEvent('dragleave', { bubbles: true, relatedTarget: null }))
+      setTimeout(() => editor.prosemirrorView.dom.dispatchEvent(new DragEvent('dragleave', { bubbles: true, relatedTarget: null })), 300)
       if (!ref) return
       const blocks = ids.map(id => editor.getBlock(id)).filter(b => b !== undefined)
       editor.prosemirrorView.dispatch(closeHistory(editor.prosemirrorState.tr))
       editor.transact(() => { editor.removeBlocks(ids); editor.insertBlocks(blocks as never, ref.id, ref.placement) })
+      // Show the line at the top of the moved blocks before it goes (Lead: the line is where it lands; a jump is fine).
+      // Measured a frame later, once the moved blocks have been laid out.
+      requestAnimationFrame(() => {
+        const line = document.querySelector<HTMLElement>('.prosemirror-dropcursor-block-horizontal')
+        const landed = editor.domElement?.querySelector(`[data-node-type="blockContainer"][data-id="${CSS.escape(ids[0]!)}"]`)
+        if (!line || !landed) return
+        const parent = (line.offsetParent ?? document.body) as HTMLElement
+        line.style.top = `${landed.getBoundingClientRect().top - parent.getBoundingClientRect().top + parent.scrollTop - line.offsetHeight / 2}px`
+      })
       // Editor spec: after a drop, a plain cursor at the end of the moved block's first line (a section's heading),
       // with focus back in the editor so ⌘Z undoes the move straight away.
       // The browser settles focus after the drop event, so place the caret once the drag has fully ended.
