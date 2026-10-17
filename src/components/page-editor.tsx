@@ -542,6 +542,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const blocks = ids.map(id => editor.getBlock(id)).filter(b => b !== undefined)
       editor.prosemirrorView.dispatch(closeHistory(editor.prosemirrorState.tr))
       editor.transact(() => { editor.removeBlocks(ids); editor.insertBlocks(blocks as never, ref.id, ref.placement) })
+      // Editor spec: after a drop, a plain cursor at the end of the moved block's first line (a section's heading),
+      // with focus back in the editor so ⌘Z undoes the move straight away.
+      // The browser settles focus after the drop event, so place the caret once the drag has fully ended.
+      setTimeout(() => { if (editor.getBlock(ids[0]!)) { editor.setTextCursorPosition(ids[0]!, 'end'); editor.focus() } }, 0)
     }}
     onKeyDownCapture={e => {
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
