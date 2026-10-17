@@ -70,6 +70,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     initial.current = { nodes, base: savedBase, recovered }
   }
   const [pastedChecklistIds, setPastedChecklistIds] = useState<string[]>(() => checklistIds(initial.current!.nodes))
+  // The blocks the handle press picked; the drop handler moves exactly these.
+  const pickedIds = useRef<string[]>([])
+  const extendedIds = useRef<string[]>([])
   const editor = useCreateBlockNote({ schema, dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     if (!data) return defaultPasteHandler()
@@ -358,8 +361,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       historyPending.current = false; setHistoryBusy(false); editor.isEditable = true; editor.focus()
     }
   }
-  function select(id: string) {
-    const range = sectionRange(nodes(), id)
+  function select(id: string, ids?: readonly string[]) {
+    const range = ids?.length ? nodes().filter(n => ids.includes(n.id)) : sectionRange(nodes(), id)
     selected.current = range.map(n => n.id)
     setSelectionLabel(range[0]?.type === 'heading' ? `'${inlineText(range[0].content)}' section selected` : range.length > 1 ? `${range.length} blocks selected` : 'Block selected')
     if (range.length > 1) editor.setSelection(range[0]!.id, range.at(-1)!.id)
@@ -400,14 +403,18 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   useEffect(() => {
     const clear = () => document.querySelectorAll('.is-picked').forEach(el => el.classList.remove('is-picked'))
     // ProseMirror doesn't redraw the browser selection while the editor is unfocused after a drop, so collapse both.
+    // The picked ids survive the drop event itself: the editor's drop handler below reads them after this capture.
     const settle = () => { clear(); requestAnimationFrame(() => { const { state } = editor.prosemirrorView; if (!state.selection.empty) editor.prosemirrorView.dispatch(state.tr.setSelection(TextSelection.near(state.selection.$to, -1))); const dom = window.getSelection(); if (dom && !dom.isCollapsed && editor.prosemirrorView.dom.contains(dom.focusNode)) dom.collapseToEnd() }) }
-    document.addEventListener('pointerup', clear)
-    document.addEventListener('dragend', settle, true)
+    // A press without a drag (a click) ends with pointerup; a drag ends with dragend. Either way the pick is spent.
+    const release = () => { clear(); pickedIds.current = [] }
+    const ended = () => { settle(); pickedIds.current = [] }
+    document.addEventListener('pointerup', release)
+    document.addEventListener('dragend', ended, true)
     document.addEventListener('drop', settle, true)
-    return () => { document.removeEventListener('pointerup', clear); document.removeEventListener('dragend', settle, true); document.removeEventListener('drop', settle, true) }
+    return () => { document.removeEventListener('pointerup', release); document.removeEventListener('dragend', ended, true); document.removeEventListener('drop', settle, true) }
   }, [editor])
-  const handleActions = useRef({ select }); handleActions.current = { select }
-  const Handle = useMemo(() => function StableHandle() { return <SectionSideMenu select={id => handleActions.current.select(id)} /> }, [])
+  const handleActions = useRef({ select, selected: () => selected.current }); handleActions.current = { select, selected: () => selected.current }
+  const Handle = useMemo(() => function StableHandle() { return <SectionSideMenu select={id => handleActions.current.select(id)} picked={pickedIds} extended={extendedIds} selectedIds={() => handleActions.current.selected()} /> }, [])
   function updateDrop(x: number, y: number) {
     const el = document.elementFromPoint(x, y)?.closest<HTMLElement>('.bn-block[data-id]')
     const id = el?.dataset.id
@@ -487,7 +494,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }
   return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
-    onMouseDownCapture={e => { if ((e.target as Element).closest('.bn-editor')) { selected.current = []; setSelectionLabel('') } }}
+    onMouseDownCapture={e => { const target = e.target as Element; if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') } }}
     onMouseUpCapture={e => {
       const target = e.target instanceof Element ? e.target : null
       const view = editor.prosemirrorView
@@ -509,6 +516,25 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }}
     onCompositionStartCapture={() => { composing.current = true; clearTimeout(timer.current) }}
     onCompositionEndCapture={() => { composing.current = false; requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
+    onDropCapture={e => {
+      // BlockNote can draw its drop line one block away from where ProseMirror drops (Ratchet task #49: line above
+      // "Renew", drop below it). Brian aims with the line, so the picked blocks go exactly where the line is drawn.
+      const ids = pickedIds.current, line = document.querySelector('.prosemirror-dropcursor-block-horizontal')
+      if (!ids.length || !line || !editor.prosemirrorView.dragging) return
+      e.preventDefault(); e.stopPropagation()
+      pickedIds.current = []
+      const y = line.getBoundingClientRect().top + line.getBoundingClientRect().height / 2
+      const rows = [...editor.prosemirrorView.dom.querySelectorAll<HTMLElement>(':scope > .bn-block-group > .bn-block-outer')]
+      const next = rows.find(row => { const r = row.getBoundingClientRect(); return y < r.top + r.height / 2 })
+      const after = next?.querySelector('[data-node-type="blockContainer"]')?.getAttribute('data-id') ?? null
+      const last = rows.at(-1)?.querySelector('[data-node-type="blockContainer"]')?.getAttribute('data-id') ?? null
+      const ref = after ? (ids.includes(after) ? null : { id: after, placement: 'before' as const }) : last && !ids.includes(last) ? { id: last, placement: 'after' as const } : null
+      editor.prosemirrorView.dragging = null
+      if (!ref) return
+      const blocks = ids.map(id => editor.getBlock(id)).filter(b => b !== undefined)
+      editor.prosemirrorView.dispatch(closeHistory(editor.prosemirrorState.tr))
+      editor.transact(() => { editor.removeBlocks(ids); editor.insertBlocks(blocks as never, ref.id, ref.placement) })
+    }}
     onKeyDownCapture={e => {
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
       if (historyPending.current) { e.preventDefault(); e.stopPropagation(); return }
@@ -602,18 +628,39 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
  * that follows moves and previews exactly what was tinted. A plain click selects the section for Delete instead of
  * opening BlockNote's block menu, whose Delete would bypass our planned-task rules.
  */
-function SectionSideMenu({ select }: { select(id: string): void }) {
+function SectionSideMenu({ select, picked, extended, selectedIds }: { select(id: string, ids?: readonly string[]): void; picked: { current: string[] }; extended: { current: string[] }; selectedIds(): string[] }) {
   const editor = useBlockNoteEditor()
   const Components = useComponentsContext()!
   const sideMenu = editor.getExtension(SideMenuExtension)!
   const block = useExtensionState(SideMenuExtension, { editor, selector: state => state?.block })
+  const lastRange = useRef<string[]>([])
   if (!block) return null
   // Press: only set the editor selection the native drag reads, and tint it. React state changes here would
   // re-render the editor mid-gesture and cancel the drag, so the section label waits for the click.
-  const pick = () => {
+  // Every press replaces the picked range with this block or section; Shift extends the previous one (Jazz).
+  const pick = (e: React.PointerEvent) => {
     sideMenu.freezeMenu()
-    const range = sectionRange(editor.document as unknown as EditorNode[], block.id)
+    const doc = editor.document as unknown as EditorNode[]
+    let range = sectionRange(doc, block.id)
+    // Shift-press extends what a click already selected. Browsers don't start a drag on a Shift-press, so the
+    // extended range is kept: the next plain press inside it drags the whole range; a press outside starts over.
+    const prior = picked.current.length ? picked.current : selectedIds()
+    if (e.shiftKey && prior.length) {
+      const indexes = [...prior, ...range.map(n => n.id)].map(id => doc.findIndex(n => n.id === id)).filter(i => i >= 0)
+      range = doc.slice(Math.min(...indexes), Math.max(...indexes) + 1)
+      extended.current = range.map(n => n.id)
+    } else if (extended.current.includes(block.id)) range = doc.filter(n => extended.current.includes(n.id))
+    else extended.current = []
+    lastRange.current = range.map(n => n.id)
+    picked.current = range.map(n => n.id)
     if (range.length > 1) editor.setSelection(range[0]!.id, range.at(-1)!.id)
+    else {
+      // A single block still needs its own selection, or the native drag carries the previous multi-block one.
+      let pos = -1
+      editor.prosemirrorState.doc.descendants((node, position) => { if (node.type.name === 'blockContainer' && node.attrs.id === block.id) pos = position })
+      if (pos >= 0) editor.prosemirrorView.dispatch(editor.prosemirrorState.tr.setSelection(NodeSelection.create(editor.prosemirrorState.doc, pos)))
+    }
+    document.querySelectorAll('.is-picked').forEach(el => el.classList.remove('is-picked'))
     for (const node of range)
       editor.domElement?.querySelector(`[data-node-type="blockContainer"][data-id="${CSS.escape(node.id)}"]`)?.classList.add('is-picked')
   }
@@ -624,7 +671,7 @@ function SectionSideMenu({ select }: { select(id: string): void }) {
         className="bn-button"
         draggable
         icon={<GripIcon />}
-        onClick={() => { select(block.id); sideMenu.unfreezeMenu() }}
+        onClick={() => { select(block.id, lastRange.current); sideMenu.unfreezeMenu() }}
         onDragStart={e => sideMenu.blockDragStart(e, block)}
         onDragEnd={() => { sideMenu.blockDragEnd(); sideMenu.unfreezeMenu() }}
       />
