@@ -736,3 +736,4 @@ body:has(.list-screen) { background: var(--bg-grouped); }
   .relative-day:not(.is-today) { display:none; }
   .day-head h1 { white-space:nowrap; }
 }
+.editor-drop-hint { position:fixed; z-index:130; pointer-events:none; max-width:300px; padding:6px 10px; border-radius:8px; background:var(--bg); color:var(--ink-2); box-shadow:0 4px 18px #0002; font-size:12px; }

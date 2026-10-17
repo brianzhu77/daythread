@@ -81,6 +81,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const [status, setStatus] = useState(initial.current.recovered ? 'Recovered unsaved draft' : '')
   const [failed, setFailed] = useState(initial.current.recovered)
   const [drop, setDrop] = useState<{ id: string; end: boolean; top: number } | null>(null)
+  const [dropHint, setDropHint] = useState<{ x: number; y: number; text: string } | null>(null)
   const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const [touchHandle, setTouchHandle] = useState<{ id: string; top: number } | null>(null)
   const [touchDragging, setTouchDragging] = useState(false)
@@ -285,6 +286,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const valid = !dragging.current.some(n => n.id === id) && (first.type !== 'heading' || atEnd || target?.type === 'heading' && Number(target.props?.level) <= Number(first.props?.level))
     const next = valid ? { id: id ?? '', end: atEnd, top: el ? (atEnd ? el.getBoundingClientRect().bottom : el.getBoundingClientRect().top) : y } : null
     dropRef.current = next; setDrop(next)
+    // Spec F5a: a heading that can't land among lower-level sections says why instead of failing silently.
+    const level = Number(first.props?.level ?? 1)
+    const blockedByLevel = !valid && first.type === 'heading' && target?.type === 'heading' && Number(target.props?.level ?? 1) > level
+    setDropHint(blockedByLevel ? { x, y, text: `Heading ${level} can't go inside a section · Turn into Heading ${Number(target!.props?.level ?? 2)}` } : null)
     if (y < 85) window.scrollBy(0, -20)
     else if (y > window.innerHeight - 120) window.scrollBy(0, 20)
     return valid
@@ -304,7 +309,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         el?.classList.add('just-moved'); setTimeout(() => el?.classList.remove('just-moved'), 600)
       }
     }
-    dragging.current = []; dropRef.current = null; setDrop(null); setTouchDragging(false)
+    dragging.current = []; dropRef.current = null; setDrop(null); setDropHint(null); setTouchDragging(false)
   }
   const [dock, setDock] = useState<HTMLElement | null>(null)
   useEffect(() => setDock(document.getElementById('editor-dock')), [])
@@ -371,7 +376,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     onDropCapture={e => {
       if (!dragging.current.length) return
       e.preventDefault(); e.stopPropagation(); commitDrag()
-    }} onDragEnd={() => { dragging.current = []; setDrop(null) }}>
+    }} onDragEnd={() => { dragging.current = []; setDrop(null); setDropHint(null) }}>
     <div className="editor-save-line" role="status">{status}{failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span>{selectionLabel}</span>}</div>
     <BlockNoteView editor={editor} theme={dark ? 'dark' : 'light'} sideMenu={false} slashMenu={false}>
       <SuggestionMenuController triggerCharacter="/" shouldOpen={() => !composing.current && editor.getTextCursorPosition().block.type !== 'task'} getItems={async query => {
@@ -392,14 +397,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}
       onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); dragging.current = sectionRange(nodes(), touchHandle.id); setTouchDragging(true) }}
       onPointerMove={e => { if (dragging.current.length && e.buttons) updateDrop(e.clientX - 35, e.clientY) }}
-      onPointerUp={e => { e.preventDefault(); if (!dropRef.current) { dragging.current = []; setTouchDragging(false); select(touchHandle.id) } else commitDrag() }}
-      onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null) }}>≡</button>}
+      onPointerUp={e => { e.preventDefault(); if (!dropRef.current) { dragging.current = []; setTouchDragging(false); setDropHint(null); select(touchHandle.id) } else commitDrag() }}
+      onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null); setDropHint(null) }}>≡</button>}
     <div className="editor-phone-toolbar" aria-label="Editor tools"><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('undo')} aria-label="Undo">↶</button><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('redo')} aria-label="Redo">↷</button><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }}>＋</button></div>
     {dock && createPortal(<>
       {selectionLabel && <div className="editor-selection-bar"><span>{selectionLabel}</span><button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>}
       {notice && <div className="editor-operation-notice" role="status"><span>{notice.text}</span><button onClick={() => { if (notice.fingerprint === JSON.stringify(editor.document)) void performHistory('undo'); setNotice(null) }}>Undo</button></div>}
     </>, dock)}
     {drop && <div className="editor-drop-line" style={{ top: drop.top }} />}
+    {dropHint && <div className="editor-drop-hint" role="status" style={{ left: dropHint.x + 16, top: dropHint.y + 14 }}>{dropHint.text}</div>}
   </div>
 }
 function EditorHandle({ select, dragStart }: { select(id: string): void; dragStart(id: string, e: React.DragEvent): void }) {
