@@ -55,6 +55,11 @@ function near(iso: LocalDate, today: LocalDate): string {
  * Plain-phrase tag with only the fields that are set (01 §2 "Date labels").
  * `pageDate` decides wording on other days' pages: never "Overdue" on a future page.
  */
+/** Red date tags mean exactly this (craft-v1 §4.5): the deadline is before today. Unfinished plans never count. */
+export function deadlinePassed(task: Task, today: LocalDate): boolean {
+  return task.deadlineOn !== null && daysBetween(today, task.deadlineOn) < 0
+}
+
 export function taskDateTag(task: Task, today: LocalDate, pageDate: LocalDate = today): string {
   const parts: string[] = []
   const due = task.deadlineOn

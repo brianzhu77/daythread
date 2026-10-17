@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { LocalDate, Task } from '../domain/types'
-import { anotherDayOptions, daysBetween, shortLabel, taskDateTag, weekday } from './dates'
+import { anotherDayOptions, shortLabel, weekday } from './dates'
+import { DateTag } from './date-tag'
 import { RowMenu, type MenuItem } from './row-menu'
 import { useWorkspace } from './use-day'
 
@@ -80,8 +81,6 @@ export function TaskRow({ task, pageDate, today, variant, section, onEditTitle, 
   const [title, setTitle] = useState(task.title)
   const done = task.status === 'done'
   const cancelled = task.status === 'cancelled'
-  const tag = taskDateTag(task, today, pageDate)
-  const overdue = tag.startsWith('Was due') || (task.deadlineOn !== null && daysBetween(today, task.deadlineOn) < 0)
 
   const groups =
     variant === 'past'
@@ -133,7 +132,7 @@ export function TaskRow({ task, pageDate, today, variant, section, onEditTitle, 
       ) : (
         <span className="task-title">{task.title}</span>
       )}
-      {(cancelled || tag) && <span className={`tag ${overdue ? 'warn' : ''}`}>{cancelled ? 'Cancelled' : tag}</span>}
+      <DateTag task={task} today={today} pageDate={pageDate} label={cancelled ? 'Cancelled' : undefined} />
       {variant === 'past' && <span className="tag quiet">Shown at current status</span>}
       {!cancelled && <RowMenu label={`Actions for ${task.title}`} groups={groups} />}
     </div>

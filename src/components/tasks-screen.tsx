@@ -1,7 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import type { LocalDate, Task } from '../domain/types'
 import { getDayView } from '../domain/workspace'
-import { addDays, longLabel, taskDateTag } from './dates'
+import { DateTag } from './date-tag'
+import { addDays, longLabel } from './dates'
 import { RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
 import { useDay, useWorkspace } from './use-day'
@@ -70,14 +71,12 @@ function TaskList({ tasks, today, paused = false, empty }: { tasks: Task[]; toda
 
 function ListTaskRow({ task, today, paused }: { task: Task; today: LocalDate; paused: boolean }) {
   const { markDone, planOn, notToday } = useTaskActions(today)
-  const tag = taskDateTag(task, today)
-  const overdue = tag.startsWith('Was due')
   const plannedToday = task.plannedOn === today
   return (
     <div className="task-row list" data-task-id={task.id}>
       <input type="checkbox" className="check" checked={task.status === 'done'} aria-label={`Mark ${task.title} done`} onChange={() => markDone(task)} />
       <span className="task-title">{task.title}</span>
-      {tag && <span className={`tag ${overdue ? 'warn' : ''}`}>{tag}</span>}
+      <DateTag task={task} today={today} />
       <RowMenu
         label={`Actions for ${task.title}`}
         groups={[

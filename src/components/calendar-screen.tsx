@@ -1,7 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import type { LocalDate, Page, Task } from '../domain/types'
 import { getDayView } from '../domain/workspace'
-import { addDays, fromIso, taskDateTag, weekday } from './dates'
+import { DateTag } from './date-tag'
+import { addDays, fromIso, weekday } from './dates'
 import { useWorkspace } from './use-day'
 
 // Days shown per screen; "Later" extends the list through the URL.
@@ -68,7 +69,7 @@ function CalendarDay({ date, today, page, tasks }: { date: LocalDate; today: Loc
             <li key={t.id} className="calendar-task">
               <span className="check-mark" aria-hidden="true" />
               <span className="task-title">{t.title}</span>
-              {taskDateTag(t, today) && <span className="tag">{taskDateTag(t, today)}</span>}
+              <DateTag task={t} today={today} />
             </li>
           ))}
         </ul>
