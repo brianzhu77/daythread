@@ -1,12 +1,12 @@
 import type { LocalDate } from '../domain/types'
-import { addDays, fromIso, longLabel } from './dates'
+import { longLabel } from './dates'
 import { CaptureBar, CaptureReceipts } from './capture'
 import { ContinuousPage } from './continuous-page'
 import { FactsStrip } from './facts-strip'
 import { StartTheDay, hasHandoffContent, useHandoffLater } from './start-the-day'
 import { SaveIndicator } from './app-shell'
 import { useDay, useWorkspace } from './use-day'
-import { ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon } from './icons'
+import { DayHeader } from './day-header'
 import { useEffect } from 'react'
 
 /** Today (and any other date): header, facts strip, Start the day, receipts, the page, capture. */
@@ -29,34 +29,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
 
   return (
     <div className="day-screen">
-      <header className="day-head">
-        <div className="day-title">
-          {/* Craft's daily-note title: "Tomorrow, Fri, Nov 28" (craft-v1 §5.1). */}
-          <h1>
-            {relativeDay(date, today) && <span className={`relative-day ${isToday ? 'is-today' : ''}`}>{relativeDay(date, today)}, </span>}
-            {longLabel(date)}
-          </h1>
-          <div className="day-subrow">
-          <label className="date-pill">
-            <span>{fromIso(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-            <ChevronDownIcon />
-            <input
-              type="date"
-              value={date}
-              aria-label="Go to date"
-              onChange={e => e.target.value && (window.location.href = `/day/${e.target.value}`)}
-            />
-          </label>
-          {!isToday && <a className="today-chip" href="/">Today</a>}
-          </div>
-        </div>
-        <nav className="day-nav" aria-label="Change day">
-          <a className="app-button icon" href={`/day/${addDays(date, -1)}`} aria-label="Previous day"><ArrowLeftIcon /></a>
-          {!isToday && <a className="app-button secondary chip-link" href="/">Back to today</a>}
-          <a className="app-button icon" href={`/day/${addDays(date, 1)}`} aria-label="Next day"><ArrowRightIcon /></a>
-        </nav>
-
-      </header>
+      <DayHeader date={date} today={today} />
 
       <div className="day-body">
         {showHandoff && <StartTheDay view={view} workspace={workspace} today={today} onLater={() => setLater(true)} />}
@@ -90,11 +63,4 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
 
     </div>
   )
-}
-
-function relativeDay(date: LocalDate, today: LocalDate): string | null {
-  if (date === today) return 'Today'
-  if (date === addDays(today, 1)) return 'Tomorrow'
-  if (date === addDays(today, -1)) return 'Yesterday'
-  return null
 }

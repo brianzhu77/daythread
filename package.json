@@ -20,6 +20,7 @@
     "@floating-ui/react": "0.27.20",
     "@heroui/react": "3.2.6",
     "@heroui/styles": "3.2.6",
+    "@internationalized/date": "3.12.4",
     "@tailwindcss/vite": "4.3.3",
     "@tanstack/react-router": "1.170.44",
     "@tanstack/react-start": "1.169.2",
