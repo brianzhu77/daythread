@@ -1,4 +1,4 @@
-import type { Transaction } from '@tiptap/pm/state'
+import { TextSelection, type Transaction } from '@tiptap/pm/state'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
@@ -289,7 +289,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // Spec F5a: a heading that can't land among lower-level sections says why instead of failing silently.
     const level = Number(first.props?.level ?? 1)
     const blockedByLevel = !valid && first.type === 'heading' && target?.type === 'heading' && Number(target.props?.level ?? 1) > level
-    setDropHint(blockedByLevel ? { x, y, text: `Heading ${level} can't go inside a section · Turn into Heading ${Number(target!.props?.level ?? 2)}` } : null)
+    setDropHint(blockedByLevel ? { x, y, text: `Heading ${level} holds the sections after it · Turn into Heading ${Number(target!.props?.level ?? 2)}` } : null)
     if (y < 85) window.scrollBy(0, -20)
     else if (y > window.innerHeight - 120) window.scrollBy(0, 20)
     return valid
@@ -338,6 +338,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return () => { off(); window.removeEventListener('scroll', update, true) }
   }, [editor])
   return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
+    onMouseUpCapture={() => requestAnimationFrame(() => {
+      // After the page is rewritten from outside (Put back, morning Done), the first click can leave ProseMirror's
+      // selection behind the browser's caret, so Enter splits the wrong block. Re-import a collapsed caret if they disagree.
+      const view = editor.prosemirrorView, dom = window.getSelection()
+      if (!dom?.isCollapsed || !dom.anchorNode || !view.dom.contains(dom.anchorNode)) return
+      const pos = view.posAtDOM(dom.anchorNode, dom.anchorOffset)
+      if (view.state.selection.empty && view.state.selection.from === pos) return
+      view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos)))
+    })}
     onCompositionStartCapture={() => { composing.current = true; clearTimeout(timer.current) }}
     onCompositionEndCapture={() => { composing.current = false; requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
     onKeyDownCapture={e => {
