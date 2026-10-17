@@ -46,7 +46,8 @@ function near(iso: LocalDate, today: LocalDate): string {
   const diff = daysBetween(today, iso)
   if (diff === 0) return 'today'
   if (diff === 1) return 'tomorrow'
-  if (diff > 1 && diff < 7) return weekday(iso)
+  // Stop at 5 days: 6 days ahead shares its weekday name with yesterday ("Due Thu" read as past).
+  if (diff > 1 && diff < 6) return weekday(iso)
   return shortLabel(iso)
 }
 
@@ -54,6 +55,11 @@ function near(iso: LocalDate, today: LocalDate): string {
  * Plain-phrase tag with only the fields that are set (01 §2 "Date labels").
  * `pageDate` decides wording on other days' pages: never "Overdue" on a future page.
  */
+/** Red date tags mean exactly this (craft-v1 §4.5): the deadline is before today. Unfinished plans never count. */
+export function deadlinePassed(task: Task, today: LocalDate): boolean {
+  return task.deadlineOn !== null && daysBetween(today, task.deadlineOn) < 0
+}
+
 export function taskDateTag(task: Task, today: LocalDate, pageDate: LocalDate = today): string {
   const parts: string[] = []
   const due = task.deadlineOn
