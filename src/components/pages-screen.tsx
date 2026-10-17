@@ -3,7 +3,7 @@ import { ContinuousPage } from './continuous-page'
 import { useWorkspace } from './use-day'
 export function PagesScreen() {
   const { workspace, run } = useWorkspace()
-  const [selected, setSelected] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string | null>(() => typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('page'))
   const p = workspace?.pages.find(p => p.id === selected)
   if (!workspace) return <p>Loading pages…</p>
   if (p) return <div className="list-screen"><button className="secondary" onClick={() => setSelected(null)}>‹ Pages</button><h1 className="large-title">{p.title}</h1><ContinuousPage page={p} workspace={workspace} /></div>

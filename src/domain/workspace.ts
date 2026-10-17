@@ -283,6 +283,7 @@ export function getDayView(state: Workspace, day: string): DayView {
         (p) => p.taskId === t.id && p.date === day && p.state === "excluded",
       ),
   );
+  planned.sort((a, b) => (state.placements.find(p => p.taskId === a.id && p.date === day)?.order ?? 1e9) - (state.placements.find(p => p.taskId === b.id && p.date === day)?.order ?? 1e9));
   const openPool = state.tasks.filter(
     (t) =>
       t.status === "open" && !t.paused && (!t.plannedOn || t.plannedOn <= day),
@@ -390,6 +391,8 @@ function execute(
         delete p.editorDeletions![blockId];
       }
       const previousBlocks = p.sections.flatMap(s => s.blocks);
+      p.editorBlockMetadata ??= {};
+      for (const block of previousBlocks) p.editorBlockMetadata[block.id] = structuredClone(block);
       for (const node of all) {
         if (node.type !== 'task' || state.tasks.some(t => t.id === node.props?.taskId)) continue;
         if (node.props?.taskId !== `editor-task:${node.id}` || previousBlocks.some(b => b.id === node.id)) throw new DomainError("Unknown Task identity");

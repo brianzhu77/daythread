@@ -50,7 +50,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const selected = useRef<string[]>([])
   const dragging = useRef<EditorNode[]>([])
   const [status, setStatus] = useState(initial.current.recovered ? 'Recovered unsaved draft' : '')
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState(initial.current.recovered)
   const [drop, setDrop] = useState<{ id: string; end: boolean; top: number } | null>(null)
   const [touchHandle, setTouchHandle] = useState<{ id: string; top: number } | null>(null)
   const [touchDragging, setTouchDragging] = useState(false)
@@ -144,6 +144,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (range.length > 1) editor.setSelection(range[0]!.id, range.at(-1)!.id)
     editor.focus()
   }
+  function deleteSelected() {
+    const ids = selected.current; selected.current = []
+    if (ids.length === 1 && nodes().find(n => n.id === ids[0])?.type === 'task') semanticDeletes.current.add(ids[0]!)
+    editor.prosemirrorView.dispatch(closeHistory(editor.prosemirrorState.tr))
+    editor.removeBlocks(ids)
+    setSelectionLabel(''); setStatus('Content removed · Undo with ⌘Z')
+  }
   function dragStart(id: string, e: React.DragEvent) {
     dragging.current = sectionRange(nodes(), id)
     selected.current = []
@@ -162,7 +169,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const id = el?.dataset.id
     const doc = nodes(), target = doc.find(n => n.id === id), first = dragging.current[0]
     if (!first) return
-    const atEnd = !el || y > el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2 && target?.id === doc.at(-1)?.id
+    const lastElement = document.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(doc.at(-1)?.id ?? '')}"]`)
+    const atEnd = !el && !!lastElement && y >= lastElement.getBoundingClientRect().bottom || !!el && y > el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2 && target?.id === doc.at(-1)?.id
     const valid = !dragging.current.some(n => n.id === id) && (first.type !== 'heading' || atEnd || target?.type === 'heading' && Number(target.props?.level) <= Number(first.props?.level))
     const next = valid ? { id: id ?? '', end: atEnd, top: el ? (atEnd ? el.getBoundingClientRect().bottom : el.getBoundingClientRect().top) : y } : null
     dropRef.current = next; setDrop(next)
@@ -200,12 +208,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     onKeyDownCapture={e => {
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.current.length) {
         e.preventDefault(); e.stopPropagation()
-        const ids = selected.current; selected.current = []
-        if (ids.length === 1 && nodes().find(n => n.id === ids[0])?.type === 'task') semanticDeletes.current.add(ids[0]!)
-        editor.prosemirrorView.dispatch(closeHistory(editor.prosemirrorState.tr))
-        editor.removeBlocks(ids)
-        setSelectionLabel(''); setStatus('Content removed · task arrangements kept · Undo with ⌘Z')
-      } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && editor.getTextCursorPosition().block.type === 'task' && !inlineText(editor.getTextCursorPosition().block.content)) {
+        deleteSelected()
+      } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && editor.prosemirrorState.selection.empty && editor.getTextCursorPosition().block.type === 'task' && !inlineText(editor.getTextCursorPosition().block.content)) {
         e.preventDefault(); e.stopPropagation(); const id = editor.getTextCursorPosition().block.id; semanticDeletes.current.add(id); editor.removeBlocks([id])
       } else if (!['Shift', 'Control', 'Meta', 'Alt'].includes(e.key)) { selected.current = []; setSelectionLabel('') }
     }}
@@ -218,7 +222,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (!dragging.current.length) return
       e.preventDefault(); e.stopPropagation(); commitDrag()
     }} onDragEnd={() => { dragging.current = []; setDrop(null) }}>
-    <div className="editor-save-line" role="status">{status}{failed && <button onClick={() => void flush()}>Retry saving</button>}{selectionLabel && <span>{selectionLabel}</span>}</div>
+    <div className="editor-save-line" role="status">{status}{failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span>{selectionLabel}</span>}</div>
     <BlockNoteView editor={editor} theme="light" sideMenu={false} slashMenu={false}>
       <SuggestionMenuController triggerCharacter="/" getItems={async query => {
         const defaults = getDefaultReactSlashMenuItems(editor).filter(item => ['Heading 1', 'Heading 2', 'Heading 3', 'Paragraph', 'Bullet List', 'Numbered List', 'Quote'].includes(item.title))
@@ -240,7 +244,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       onPointerUp={e => { e.preventDefault(); if (!dropRef.current) { dragging.current = []; setTouchDragging(false); select(touchHandle.id) } else commitDrag() }}
       onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null) }}>≡</button>}
     <div className="editor-phone-toolbar" aria-label="Editor tools"><button onPointerDown={e => e.preventDefault()} onClick={() => editor.undo()} aria-label="Undo">↶</button><button onPointerDown={e => e.preventDefault()} onClick={() => editor.redo()} aria-label="Redo">↷</button><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }}>＋</button></div>
-    {selectionLabel && <div className="editor-selection-bar"><span>{selectionLabel}</span><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.removeBlocks(selected.current); selected.current = []; setSelectionLabel('') }}>Delete</button></div>}
+    {selectionLabel && <div className="editor-selection-bar"><span>{selectionLabel}</span><button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>}
     {drop && <div className="editor-drop-line" style={{ top: drop.top }} />}
   </div>
 }

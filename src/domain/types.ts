@@ -32,6 +32,7 @@ export interface Page {
   sections: Section[];
   editorJSON?: string;
   editorSections?: string;
+  editorBlockMetadata?: Record<string, NoteBlock>;
   editorDeletions?: Record<string, { task: Task; placements: Placement[]; afterVersion: number; afterPlacements: Placement[] }>;
 
   reviewText: string;

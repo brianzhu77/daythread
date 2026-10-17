@@ -34,6 +34,7 @@ export function editorSeed(page: Page, workspace: Workspace): EditorNode[] {
       const node: EditorNode = prior ? { ...prior, content: inlineText(prior.content) === b.text ? prior.content : b.text }
         : b.taskId ? { id: b.id, type: 'task', props: { taskId: b.taskId, role: b.planRole ?? (s.kind === 'top3' || s.kind === 'other' ? 'plan' : 'reference') }, content: workspace.tasks.find(t => t.id === b.taskId)?.title ?? b.text }
         : b.eventId ? { id: b.id, type: 'paragraph', content: workspace.events.find(e => e.id === b.eventId)?.title ?? b.text }
+        : b.targetPageId ? { id: b.id, type: 'paragraph', content: [{ type: 'link', href: `/pages?page=${encodeURIComponent(b.targetPageId)}`, content: workspace.pages.find(p => p.id === b.targetPageId)?.title ?? b.text }] }
         : b.materialId ? { id: b.id, type: 'paragraph', content: [{ type: 'link', href: workspace.materials.find(m => m.id === b.materialId)?.url ?? '#', content: b.text }] }
         : { id: b.id, type: 'paragraph', content: b.text }
       result.push(node); mark(node)
@@ -53,7 +54,7 @@ export function sectionRange(nodes: readonly EditorNode[], id: string): EditorNo
 export function projectDocument(nodes: EditorNode[], page: Page, workspace: Workspace): Section[] {
   const ids = new Set<string>()
   const sections: Section[] = []
-  const old = new Map(page.sections.flatMap(s => s.blocks).map(b => [b.id, b]))
+  const old = new Map([...Object.values(page.editorBlockMetadata ?? {}), ...page.sections.flatMap(s => s.blocks)].map(b => [b.id, b]))
   let current: Section | undefined
   function visit(node: EditorNode) {
     if (!node.id || ids.has(node.id)) throw new Error('Duplicate editor block identity')
@@ -75,7 +76,15 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
         current.blocks.push({ id: node.id, kind: 'task', taskId: target.id, text: nextTitle, planRole: node.props?.role === 'plan' ? 'plan' : 'reference' })
       } else {
         const prior = old.get(node.id)
-        current.blocks.push({ ...prior, id: node.id, kind: prior?.kind ?? 'paragraph', text: inlineText(node.content) })
+        const value = inlineText(node.content)
+        if (prior?.eventId && prior.text !== value) {
+          const event = workspace.events.find(e => e.id === prior.eventId)
+          if (event) {
+            if (event.title !== prior.text && event.title !== value) throw new Error('Event changed elsewhere')
+            event.title = value
+          }
+        }
+        current.blocks.push({ ...prior, id: node.id, kind: prior?.kind ?? 'paragraph', text: value })
       }
     }
     node.children?.forEach(visit)
