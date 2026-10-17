@@ -32,9 +32,10 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
         <div className="day-title">
           {/* Craft's daily-note title: "Tomorrow, Fri, Nov 28" (craft-v1 §5.1). */}
           <h1>
-            {relativeDay(date, today) && <span className="relative-day">{relativeDay(date, today)}, </span>}
+            {relativeDay(date, today) && <span className={`relative-day ${isToday ? 'is-today' : ''}`}>{relativeDay(date, today)}, </span>}
             {longLabel(date)}
           </h1>
+          <div className="day-subrow">
           <label className="date-pill">
             <span>{fromIso(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
             <span aria-hidden="true">⌄</span>
@@ -45,6 +46,8 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
               onChange={e => e.target.value && (window.location.href = `/day/${e.target.value}`)}
             />
           </label>
+          {!isToday && <a className="today-chip" href="/">Today</a>}
+          </div>
         </div>
         <nav className="day-nav" aria-label="Change day">
           <a className="button icon" href={`/day/${addDays(date, -1)}`} aria-label="Previous day">←</a>

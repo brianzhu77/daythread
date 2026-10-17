@@ -726,3 +726,13 @@ body:has(.list-screen) { background: var(--bg-grouped); }
   .bottom-dock .editor-operation-notice { width:calc(100vw - 32px); }
   .continuous-editor.has-selection .editor-phone-toolbar { display:none; }
 }
+/* Phone header (Jazz, msg 5c8ba1ca): title and date pill each stay on one line; "Today" moves next to the pill. */
+.day-subrow { display:flex; align-items:center; gap:10px; }
+.date-pill { white-space:nowrap; }
+.today-chip { display:none; margin-top:10px; padding:4px 12px; border-radius:999px; background:var(--blue-soft); color:var(--blue-text); font-size:14px; font-weight:600; text-decoration:none; white-space:nowrap; }
+@media(max-width:599px) {
+  .day-nav .chip-link { display:none; }
+  .today-chip { display:inline-flex; }
+  .relative-day:not(.is-today) { display:none; }
+  .day-head h1 { white-space:nowrap; }
+}
