@@ -689,3 +689,19 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .editor-operation-notice { position:fixed;bottom:32px;left:calc(50% + 100px);transform:translateX(-50%);display:flex;align-items:center;gap:12px;max-width:min(90vw,600px);padding:12px 16px;border-radius:14px;background:var(--bg);color:var(--ink);box-shadow:0 5px 26px #0003;font-size:13px;z-index:120; }
 .editor-operation-notice button { border:0;background:transparent;color:var(--blue-text);padding:3px; }
 @media(max-width:700px) { .editor-operation-notice { top:12px;bottom:auto;left:50%;width:calc(100vw - 32px); } }
+
+/* Lead polish: the body starts right under the title block (editor spec §4). The save line floats
+   on the date row instead of reserving a row, so status changes never shift the document. */
+.editor-save-line { position:absolute; top:-30px; right:0; min-height:0; justify-content:flex-end; pointer-events:none; }
+.editor-save-line button { pointer-events:auto; }
+.continuous-editor .bn-editor { padding-top:0; }
+.continuous-editor { margin-top:2px; }
+.continuous-editor .bn-editor > .bn-block-group > .bn-block-outer:first-child .bn-block-content[data-content-type=heading] { padding-top:0; }
+.editor-date-tag { margin-left:auto; flex:none; }
+.editor-date-tag .tag { font-size:12px; }
+/* Desktop: + sits just outside the content column so it never covers right-aligned date tags; the phone tab bar owns + below 900px. */
+@media(max-width:899px) { .desktop-capture-plus { display:none; } }
+@media(min-width:900px) {
+  .desktop-capture-plus { right:max(24px, calc((100vw - 260px - var(--column)) / 2 - 68px)); bottom:32px; }
+  .sheet-handle { display:none; }
+}

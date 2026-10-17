@@ -10,6 +10,8 @@ import type { Page, Workspace } from '../domain/types'
 import { editorSeed, inlineText, pageContentKey, sectionRange, type EditorNode } from '../domain/editor-document'
 import { applyCommand } from '../domain/workspace'
 import { useWorkspace } from './use-day'
+import { DateTag } from './date-tag'
+import { todayIso } from './dates'
 
 const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' }, planDate: { default: '' } }, content: 'inline' }, {
   render: ({ block, contentRef }) => <EditorTask taskId={block.props.taskId} role={block.props.role} planDate={block.props.planDate} contentRef={contentRef} />,
@@ -22,9 +24,8 @@ function EditorTask({ taskId, role, planDate, contentRef }: { taskId: string; ro
     <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : 'Missing task'} checked={t?.status === 'done'} disabled={!t} onChange={() => t && void run({ type: 'task-status', taskId, status: t.status === 'done' ? 'open' : 'done' }, r => ({ text: t.status === 'done' ? 'Task reopened' : 'Task completed', undoOperationId: r.operationId }))} />
     <span ref={contentRef} className={`editor-task-title ${t?.status === 'done' ? 'task-done' : ''}`} data-placeholder="Untitled task" />
     {role === 'reference' && <span contentEditable={false} className="editor-reference-tag">Reference</span>}
-    {role === 'plan' && planDate && <span contentEditable={false} className="editor-plan-tag">{planDate}</span>}
     {role === 'reference' && t?.status === 'open' && <button className="editor-plan-action" contentEditable={false} onClick={() => void run({ type: 'plan-task', taskId, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }, r => ({ text: 'Planned for today', undoOperationId: r.operationId }))}>Plan for today</button>}
-    {t?.deadlineOn && <small contentEditable={false}>Due {t.deadlineOn}</small>}
+    {t && t.status === 'open' && <span contentEditable={false} className="editor-date-tag"><DateTag task={t} today={todayIso()} pageDate={planDate || todayIso()} /></span>}
   </div>
 }
 

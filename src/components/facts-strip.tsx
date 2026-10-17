@@ -67,7 +67,7 @@ export function FactsStrip({ view, workspace, date, today, handoffCollapsed, onR
 
       {isToday && (
         <div className="fact-pair">
-          <Disclosure summary={stillOpen.length ? `Still open · ${stillOpen.length} · oldest ${oldestDays(stillOpen, today)} days` : 'Nothing else open'}>
+          <Disclosure summary={stillOpen.length ? `Still open · ${stillOpen.length} · oldest ${oldestDays(stillOpen, today)} ${oldestDays(stillOpen, today) === 1 ? 'day' : 'days'}` : 'Nothing else open'}>
             {stillOpen.map(t => (
               <PoolRow key={t.id} task={t} today={today} />
             ))}
