@@ -28,7 +28,7 @@ function SampleBanner() {
   if (loadError)
     return (
       <p className="banner error" role="alert">
-        Couldn’t load your workspace · <button type="button" className="link" onClick={reload}>Retry</button>
+        Couldn’t load your workspace · <button type="button" className="app-link" onClick={reload}>Retry</button>
       </p>
     )
   // Developer controls. Hidden in normal builds so a real workspace can't pick up simulated outcomes or sample data;
@@ -48,7 +48,7 @@ function SampleBanner() {
         </select>
       </label>
       {import.meta.env.DEV && workspace && (
-        <button type="button" className="link" onClick={() => void addSampleData()}>
+        <button type="button" className="app-link" onClick={() => void addSampleData()}>
           Add sample data
         </button>
       )}
@@ -69,7 +69,7 @@ export function SaveIndicator() {
             ? 'Changed elsewhere — now showing the latest. Your edit wasn’t saved'
             : 'Not saved — your changes are still here'}{' '}
         ·{' '}
-        <button type="button" className="link" onClick={retry}>
+        <button type="button" className="app-link" onClick={retry}>
           Retry
         </button>
       </span>

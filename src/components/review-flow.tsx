@@ -109,7 +109,7 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
           ))}
         </ol>
         {!page.reviewSaved && (
-          <button type="button" className="link" onClick={() => saveReview(true)}>
+          <button type="button" className="app-link" onClick={() => saveReview(true)}>
             Finish
           </button>
         )}
@@ -202,9 +202,9 @@ function PlanCard({ task, date, today, acted, onActed }: { task: Task; date: Loc
     if (await fn()) onActed(label)
   }
   return (
-    <div className={`card plan-card ${acted ? 'acted' : ''}`}>
+    <div className={`app-card plan-card ${acted ? 'acted' : ''}`}>
       <p className="plan-title">
-        {task.title} <span className="tag">{taskDateTag(task, today, date)}</span>
+        {task.title} <span className="app-tag">{taskDateTag(task, today, date)}</span>
       </p>
       {acted ? (
         <p className="ok">{acted}</p>
@@ -229,7 +229,7 @@ function SortCard({ material, workspace, date, today }: { material: Material; wo
     run({ type: 'review-material', materialId: material.id, decision, date, nextReviewOn }, r => ({ text, undoOperationId: r.operationId }))
 
   return (
-    <div className="card sort-card">
+    <div className="app-card sort-card">
       <p className="sort-title">
         <a href={material.url} target="_blank" rel="noreferrer" onClick={() => void run({ type: 'open-material', materialId: material.id, date }, null)}>
           {displayTitle(material.title, material.url)}
@@ -322,7 +322,7 @@ function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspa
       {draftFailed && (
         <p className="warn-line" role="alert">
           {reviewSaved ? 'Review saved · ' : ''}Tomorrow’s suggestions couldn’t be prepared ·{' '}
-          <button type="button" className="link" onClick={prepare}>Retry</button>
+          <button type="button" className="app-link" onClick={prepare}>Retry</button>
         </p>
       )}
       {!draft && !draftFailed && (
@@ -335,10 +335,10 @@ function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspa
           {draft.simulated && <p className="sim">Simulated suggestions · no model was called</p>}
           <p className="quiet">Suggestions for Top 3. Remove any you don’t want.</p>
           {suggestions.map(t => (
-            <div key={t!.id} className="card suggestion">
+            <div key={t!.id} className="app-card suggestion">
               <span className="grow">
                 {t!.title}
-                {isNew(t!.id) && <span className="tag quiet"> Updated on another device</span>}
+                {isNew(t!.id) && <span className="app-tag quiet"> Updated on another device</span>}
               </span>
               <button type="button" className="ghost" aria-label={`Remove ${t!.title}`} onClick={() => update({ removedSuggestions: [...p.removedSuggestions, t!.id] })}>
                 Remove
@@ -347,10 +347,10 @@ function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspa
           ))}
           {related.length > 0 && <p className="quiet">Related for tomorrow</p>}
           {related.map(m => (
-            <div key={m!.id} className="card suggestion">
+            <div key={m!.id} className="app-card suggestion">
               <span className="grow">
                 {displayTitle(m!.title, m!.url)}
-                {isNew(m!.id) && <span className="tag quiet"> Updated on another device</span>}
+                {isNew(m!.id) && <span className="app-tag quiet"> Updated on another device</span>}
               </span>
               <button type="button" className="ghost" aria-label={`Remove ${m!.title}`} onClick={() => update({ removedSuggestions: [...p.removedSuggestions, m!.id] })}>
                 Remove
@@ -375,7 +375,7 @@ function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspa
             Tomorrow: {suggestions.length} suggestion{suggestions.length === 1 ? '' : 's'} saved
             {plannedTomorrow > 0 && ` · ${plannedTomorrow} planned`}
           </p>
-          <a className="button secondary" href="/">Back to today</a>
+          <a className="app-button secondary" href="/">Back to today</a>
         </div>
       )}
     </section>

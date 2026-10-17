@@ -100,7 +100,7 @@ function ReceiptCard({ capture, workspace, currentPageId }: { capture: Capture; 
   const organizeAgain = () => run({ type: 'capture', pageId: capture.pageId, text: capture.text, outcome: simOutcome }, null)
 
   return (
-    <section className={`card receipt status-${capture.status}`} aria-label="Capture result">
+    <section className={`app-card receipt status-${capture.status}`} aria-label="Capture result">
       <header className="card-head">
         <p className="receipt-source">
           {capture.status === 'applied' ? 'Saved from' : 'From'} “{capture.text.length > 60 ? `${capture.text.slice(0, 60)}…` : capture.text}”
@@ -150,10 +150,10 @@ function ReceiptCard({ capture, workspace, currentPageId }: { capture: Capture; 
         <ul className="proposals">
           {proposals.map(item => (
             <li key={item.id} className="proposal-row">
-              <span className="chip">✓ {kindLabel[item.kind]}</span>
+              <span className="app-chip">✓ {kindLabel[item.kind]}</span>
               <span className="grow">{item.kind === 'update-task' ? `${item.title} → ${item.status ?? 'done'}` : item.title}</span>
-              {item.kind === 'create-task' && <span className="tag">Unscheduled</span>}
-              {item.kind === 'create-material' && <span className="tag quiet">no body provided</span>}
+              {item.kind === 'create-task' && <span className="app-tag">Unscheduled</span>}
+              {item.kind === 'create-material' && <span className="app-tag quiet">no body provided</span>}
             </li>
           ))}
         </ul>
@@ -177,7 +177,7 @@ function ReceiptCard({ capture, workspace, currentPageId }: { capture: Capture; 
       {capture.status === 'discarded' && (
         <p>
           Discarded · your text is kept ·{' '}
-          <button type="button" className="link" onClick={organizeAgain}>
+          <button type="button" className="app-link" onClick={organizeAgain}>
             Organize again
           </button>
         </p>
@@ -185,7 +185,7 @@ function ReceiptCard({ capture, workspace, currentPageId }: { capture: Capture; 
 
       <p className="card-meta">
         {capture.contextLine && <span>{capture.contextLine} · </span>}
-        <button type="button" className="link" onClick={() => setShowOriginal(s => !s)}>
+        <button type="button" className="app-link" onClick={() => setShowOriginal(s => !s)}>
           {showOriginal ? 'Hide original' : 'Show original'}
         </button>
       </p>
@@ -199,7 +199,7 @@ function ProposalRow({ item, editable, removable, onEdit, onRemove }: { item: Pr
   const sign = item.kind === 'update-task' ? '~' : '+'
   return (
     <li className="proposal-row">
-      <span className="chip">
+      <span className="app-chip">
         {sign} {kindLabel[item.kind]}
       </span>
       {editable ? (
@@ -207,7 +207,7 @@ function ProposalRow({ item, editable, removable, onEdit, onRemove }: { item: Pr
       ) : (
         <span className="grow">{item.kind === 'update-task' ? `${item.title} → ${item.status ?? 'done'}` : item.title}</span>
       )}
-      {item.kind === 'create-material' && <span className="tag quiet">no body provided</span>}
+      {item.kind === 'create-material' && <span className="app-tag quiet">no body provided</span>}
       {removable && (
         <button type="button" className="icon" aria-label={`Remove ${item.title} from this group`} onClick={onRemove}>
           <CloseIcon />

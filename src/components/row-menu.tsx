@@ -42,7 +42,7 @@ export function RowMenu({ label, groups }: { label: string; groups: { title?: st
         ⋯
       </button>
       {open && (
-        <div className="menu" role="menu" id={id}>
+        <div className="app-menu" role="menu" id={id}>
           {groups.map((g, gi) => (
             <div key={gi} className="menu-group" role="group" aria-label={g.title}>
               {g.title && <p className="menu-title">{g.title}</p>}
@@ -70,7 +70,7 @@ export function RowMenu({ label, groups }: { label: string; groups: { title?: st
 
 export function Disclosure({ summary, children, defaultOpen = false }: { summary: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
   return (
-    <details className="disclosure" open={defaultOpen}>
+    <details className="app-disclosure" open={defaultOpen}>
       <summary>{summary}</summary>
       <div className="disclosure-body">{children}</div>
     </details>

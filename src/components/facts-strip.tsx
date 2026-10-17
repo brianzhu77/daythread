@@ -55,7 +55,7 @@ export function FactsStrip({ view, workspace, date, today, handoffCollapsed, onR
           {dueSoon.map(t => (
             <div key={t.id} className="fact-row">
               <span className="grow">{t.title}</span>
-              <span className={`tag ${t.paused ? 'quiet' : ''}`}>{t.paused ? `Not today · ${taskDateTag(t, today, date)}` : taskDateTag(t, today, date)}</span>
+              <span className={`app-tag ${t.paused ? 'quiet' : ''}`}>{t.paused ? `Not today · ${taskDateTag(t, today, date)}` : taskDateTag(t, today, date)}</span>
             </div>
           ))}
         </div>
@@ -94,7 +94,7 @@ function PoolRow({ task, today, paused = false }: { task: Task; today: LocalDate
   return (
     <div className="fact-row">
       <span className="grow">{task.title}</span>
-      <span className="tag">{taskDateTag(task, today)}</span>
+      <span className="app-tag">{taskDateTag(task, today)}</span>
       <span className="actions">
         <button type="button" className="secondary" onClick={() => planOn(task, today, 'other')}>
           {paused ? 'Bring back' : 'Today'}
@@ -116,7 +116,7 @@ function NotInNote({ tasks, date, today }: { tasks: Task[]; date: LocalDate; tod
     <div className="fact-block">
       <p className="fact-label">
         Planned · not in note ({tasks.length}) ·{' '}
-        <button type="button" className="link" onClick={async () => { for (const t of tasks) await planOn(t, date, 'other') }}>
+        <button type="button" className="app-link" onClick={async () => { for (const t of tasks) await planOn(t, date, 'other') }}>
           Put back
         </button>
       </p>
@@ -151,7 +151,7 @@ function RelatedLine({ view, workspace, date }: { view: DayView; workspace: Work
             {displayTitle(m!.title, m!.url)} <span className="quiet">— might be useful</span>
           </span>
           <span className="actions">
-            <a className="button secondary" href={m!.url} target="_blank" rel="noreferrer" onClick={() => void run({ type: 'open-material', materialId: m!.id, date }, null)}>
+            <a className="app-button secondary" href={m!.url} target="_blank" rel="noreferrer" onClick={() => void run({ type: 'open-material', materialId: m!.id, date }, null)}>
               Open
             </a>
             <button type="button" className="ghost" onClick={() => run({ type: 'dismiss-material', materialId: m!.id, date }, { text: 'Won’t show this today' })}>

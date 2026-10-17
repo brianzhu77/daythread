@@ -5,5 +5,5 @@ import { deadlinePassed, taskDateTag } from './dates'
 export function DateTag({ task, today, pageDate = today, label }: { task: Task; today: LocalDate; pageDate?: LocalDate; label?: string }) {
   const text = label ?? taskDateTag(task, today, pageDate)
   if (!text) return null
-  return <span className={`tag ${deadlinePassed(task, today) ? 'warn' : ''}`}>{text}</span>
+  return <span className={`app-tag ${deadlinePassed(task, today) ? 'warn' : ''}`}>{text}</span>
 }

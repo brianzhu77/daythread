@@ -51,9 +51,9 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
           </div>
         </div>
         <nav className="day-nav" aria-label="Change day">
-          <a className="button icon" href={`/day/${addDays(date, -1)}`} aria-label="Previous day"><ArrowLeftIcon /></a>
-          {!isToday && <a className="button secondary chip-link" href="/">Back to today</a>}
-          <a className="button icon" href={`/day/${addDays(date, 1)}`} aria-label="Next day"><ArrowRightIcon /></a>
+          <a className="app-button icon" href={`/day/${addDays(date, -1)}`} aria-label="Previous day"><ArrowLeftIcon /></a>
+          {!isToday && <a className="app-button secondary chip-link" href="/">Back to today</a>}
+          <a className="app-button icon" href={`/day/${addDays(date, 1)}`} aria-label="Next day"><ArrowRightIcon /></a>
         </nav>
 
       </header>

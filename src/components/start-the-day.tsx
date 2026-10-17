@@ -61,7 +61,7 @@ export function StartTheDay({ view, workspace, today, onLater }: { view: DayView
   }
 
   return (
-    <section className="card start-the-day" aria-labelledby="std-title">
+    <section className="app-card start-the-day" aria-labelledby="std-title">
       <header className="card-head">
         <h2 id="std-title">Start the day</h2>
         {page.draft?.simulated && <span className="sim">Simulated suggestions</span>}
@@ -93,7 +93,7 @@ export function StartTheDay({ view, workspace, today, onLater }: { view: DayView
                       }}
                     />
                     <span>{t!.title}</span>
-                    <span className="tag">{inTop3.has(t!.id) ? 'In Top 3' : taskDateTag(t!, today)}</span>
+                    <span className="app-tag">{inTop3.has(t!.id) ? 'In Top 3' : taskDateTag(t!, today)}</span>
                   </label>
                 </li>
               ))}
@@ -105,7 +105,7 @@ export function StartTheDay({ view, workspace, today, onLater }: { view: DayView
         ) : (
           <p className="line">
             {page.draftError ? 'Suggestions couldn’t be prepared' : 'No suggestions from last night'} ·{' '}
-            <button type="button" className="link" onClick={() => run({ type: 'generate-draft', date: today, outcome: simOutcome }, null)}>
+            <button type="button" className="app-link" onClick={() => run({ type: 'generate-draft', date: today, outcome: simOutcome }, null)}>
               {page.draftError ? 'Retry' : 'Draft my day'}
             </button>
           </p>
@@ -121,7 +121,7 @@ export function StartTheDay({ view, workspace, today, onLater }: { view: DayView
             {view.handoffTasks.map(t => (
               <li key={t.id} className="std-row">
                 <span className="grow">{t.title}</span>
-                <span className="tag">{taskDateTag(t, today)}</span>
+                <span className="app-tag">{taskDateTag(t, today)}</span>
                 <span className="actions">
                   <button type="button" className="secondary" onClick={() => planOn(t, today, 'other')}>Keep</button>
                   <button type="button" className="ghost" onClick={() => notToday(t, today)}>Not today</button>
@@ -151,7 +151,7 @@ export function StartTheDay({ view, workspace, today, onLater }: { view: DayView
                 <li key={block.id} className="std-row">
                   <span className="grow line-text">{material ? displayTitle(material.title, material.url) : block.text}</span>
                   {brought ? (
-                    <span className="tag quiet">Brought</span>
+                    <span className="app-tag quiet">Brought</span>
                   ) : (
                     <button
                       type="button"

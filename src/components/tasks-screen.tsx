@@ -92,7 +92,7 @@ function ListTaskRow({ task, today, paused, label }: { task: Task; today: LocalD
       <span className="task-title">{task.title}</span>
       <DateTag task={task} today={today} label={label} />
       {/* Upcoming keeps set-aside rows' dates (02 Not today) but they must not read as commitments; the Not today tab needs no marker. */}
-      {paused && label !== undefined && <span className="tag paused">Not today</span>}
+      {paused && label !== undefined && <span className="app-tag paused">Not today</span>}
       <RowMenu
         label={`Actions for ${task.title}`}
         groups={[

@@ -131,7 +131,7 @@ function BlockView({ block, page, section, workspace, today, isPast }: { block: 
       return (
         <div className="block event-row">
           <span className="event-title">{event?.title ?? block.text}</span>
-          {event?.time && <span className="tag">{event.time}</span>}
+          {event?.time && <span className="app-tag">{event.time}</span>}
         </div>
       )
     }
@@ -184,8 +184,8 @@ function MaterialLine({ block, workspace, fromTag, readOnly, today }: { block: N
       <a href={material.url} target="_blank" rel="noreferrer" className="material-title" onClick={() => void run({ type: 'open-material', materialId: material.id, date: today })}>
         {displayTitle(material.title, material.url)}
       </a>
-      {savedBefore && <span className="tag quiet">Saved before</span>}
-      {!material.resurface && <span className="tag quiet">Won’t be suggested</span>}
+      {savedBefore && <span className="app-tag quiet">Saved before</span>}
+      {!material.resurface && <span className="app-tag quiet">Won’t be suggested</span>}
       {fromTag}
       {!readOnly && (
         <RowMenu
