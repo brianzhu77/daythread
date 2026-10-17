@@ -99,3 +99,11 @@ test('tasks placed on a day go above the section\'s trailing empty rows', () => 
   const blocks = ws.pages[0]!.sections.find(s => s.kind === 'other')!.blocks
   assert.deepEqual(blocks.map(b => b.text), ['Reply to landlord', ''])
 })
+test('an image at the end of a section is content, so new rows go after it', () => {
+  let ws = run(createEmptyWorkspace(), { type: 'ensure-day', date: '2026-10-16' }); const p = ws.pages[0]!
+  const notes = p.sections.find(s => s.kind === 'notes')!
+  const doc = [...editorSeed(p, ws), { id: 'img', type: 'image', props: { url: 'https://example.com/a.png' } }]
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(p), document: JSON.stringify(doc) })
+  ws = run(ws, { type: 'add-text', pageId: p.id, sectionId: notes.id, text: 'After the picture' })
+  assert.deepEqual(ws.pages[0]!.sections.find(s => s.kind === 'notes')!.blocks.map(b => b.id === 'img' ? 'img' : b.text), ['img', 'After the picture'])
+})

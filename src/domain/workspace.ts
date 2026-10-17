@@ -1,4 +1,4 @@
-import { dayTemplate, pageContentKey, projectDocument, inlineText } from "./editor-document.ts";
+import { dayTemplate, pageContentKey, projectDocument, inlineText, type EditorNode } from "./editor-document.ts";
 import type {
   Command,
   CommandResult,
@@ -101,9 +101,20 @@ function ensureDay(state: Workspace, day: string): Page {
   return p;
 }
 // New rows go above a section's trailing empty lines, so the empty row ready for typing stays last.
-function appendBlock(s: Section, block: NoteBlock): void {
+// Emptiness comes from the editor document: an image or table also projects to a text-less paragraph block.
+function appendBlock(p: Page, s: Section, block: NoteBlock): void {
+  const nodes = new Map<string, EditorNode>();
+  const remember = (n: EditorNode) => { nodes.set(n.id, n); n.children?.forEach(remember); };
+  if (p.editorJSON) (JSON.parse(p.editorJSON) as EditorNode[]).forEach(remember);
+  const isEmptyRow = (b: NoteBlock) => {
+    if (b.kind !== "paragraph" || b.text.trim()) return false;
+    const node = nodes.get(b.id);
+    if (!node) return !p.editorJSON;
+    if (inlineText(node.content) || node.children?.length) return false;
+    return node.type === "paragraph" || (node.type === "task" && node.props?.taskId === `editor-task:${node.id}`);
+  };
   let at = s.blocks.length;
-  while (at > 0 && s.blocks[at - 1]!.kind === "paragraph" && !s.blocks[at - 1]!.text.trim()) at--;
+  while (at > 0 && isEmptyRow(s.blocks[at - 1]!)) at--;
   s.blocks.splice(at, 0, block);
 }
 function ensureSection(p: Page, kind: Section["kind"]): Section {
@@ -182,9 +193,9 @@ function place(
     arrangement ??= rows[0];
     s.blocks = s.blocks.filter(b => !(b.kind === "task" && b.taskId === t.id));
   }
-  if (arrangement) appendBlock(ensureSection(p, target), arrangement);
+  if (arrangement) appendBlock(p, ensureSection(p, target), arrangement);
   else
-    appendBlock(ensureSection(p, target), {
+    appendBlock(p, ensureSection(p, target), {
       id: newId(),
       kind: "task",
       taskId: t.id,
@@ -260,7 +271,7 @@ function saveMaterial(
     materialId: m.id,
     text: text(note) || title || url,
   };
-  appendBlock(s, b);
+  appendBlock(p, s, b);
   m.sources.push({ pageId: p.id, blockId: b.id, note: text(note) });
   return m;
 }
@@ -479,7 +490,7 @@ function execute(
         };
       }
       const b: NoteBlock = { id: newId(), kind: "paragraph", text: value };
-      appendBlock(s, b);
+      appendBlock(p, s, b);
       return { message: "Text saved", entityId: b.id };
     }
     case "edit-block": {
@@ -542,7 +553,7 @@ function execute(
         action.plannedOn === undefined ? p.date : action.plannedOn,
         action,
       );
-      appendBlock(s, { id: newId(), kind: "task", taskId: t.id, text: t.title });
+      appendBlock(p, s, { id: newId(), kind: "task", taskId: t.id, text: t.title });
       if (t.plannedOn)
         place(state, t, t.plannedOn, s.kind === "top3" ? "top3" : "other");
       return { message: "Task saved", entityId: t.id };
@@ -582,7 +593,7 @@ function execute(
         cancelled: false,
       };
       state.events.push(e);
-      appendBlock(ensureSection(p, "events"), {
+      appendBlock(p, ensureSection(p, "events"), {
         id: newId(),
         kind: "event",
         eventId: e.id,
@@ -621,7 +632,7 @@ function execute(
         sourcePageId: source.id,
         sourceBlockId: b.id,
       };
-      appendBlock(ensureSection(target, sourceSection.kind), copy);
+      appendBlock(target, ensureSection(target, sourceSection.kind), copy);
       return { message: "Brought to this day with source", entityId: copy.id };
     }
     case "handoff-done": {
@@ -756,7 +767,7 @@ function execute(
         targetPageId: target.id,
         text: target.title,
       };
-      appendBlock(section(p, action.sectionId), b);
+      appendBlock(p, section(p, action.sectionId), b);
       return { message: "Page reference saved", entityId: b.id };
     }
     case "capture": {
@@ -882,7 +893,7 @@ function execute(
       for (const proposal of c.proposals ?? []) {
         if (proposal.kind === "create-task") {
           const t = createTask(state, proposal.title, p, null);
-          appendBlock(ensureSection(p, "notes"), {
+          appendBlock(p, ensureSection(p, "notes"), {
             id: newId(),
             kind: "task",
             taskId: t.id,
