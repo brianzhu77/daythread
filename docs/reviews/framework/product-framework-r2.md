@@ -1,10 +1,10 @@
 # Daythread — Product Framework (r2)
 
-Export of Claude Doc `bd1b8179` at doc rev 68, 2026-10-17, author Bumblebee. Hand-copied from the doc for review; the doc is canonical. The diagram in section 3 is described in text here.
+Export of Claude Doc `bd1b8179` at doc rev 70, 2026-10-17, author Bumblebee. Hand-copied from the doc for review; the doc is canonical. The diagram in section 3 is described in text here.
 
 Daythread is a personal app where today's thread is the only page Brian needs to open to record his day. Behind it, all content is pages, and an AI layer turns past days into a knowledge base for review and for predicting what comes up on a later day.
 
-Every rule below carries one of three marks. **Settled** = Brian said it (thread `06469260`, msgs `c377e316`, `e83b0640`, `7c4e0cab`, `08a02686`). **Assumption** = the Lead's working assumption (msg `9ffbe94b`), which Brian may correct. **Open** = waiting for Brian (section 12). Nothing here is built yet beyond the v0.3 daily loop and the Craft-style UI on main.
+Every rule below carries one of three marks. **Settled** = Brian said it (thread `06469260`, msgs `c377e316`, `e83b0640`, `7c4e0cab`, `08a02686`, `e526eb12`). **Assumption** = the Lead's working assumption (msg `9ffbe94b`), which Brian may correct. **Open** = waiting for Brian (section 12). Nothing here is built yet beyond the v0.3 daily loop and the Craft-style UI on main.
 
 ## 1. Problem and user
 
@@ -36,10 +36,10 @@ Diagram (in the doc): left zone "Brian's content · highest weight" holds Day th
 | Kind | What it is | Created by | Who edits it | Example |
 | --- | --- | --- | --- | --- |
 | **Day thread** | One page per day; the day's record. Mostly a running record. Starts from a template of sections (plan, events, notes) that Brian edits freely | Opening the day | Brian only | Today: "saw a good recipe: …" |
-| **Your pages** | Brian's knowledge base, kept by hand | A saved link (by default), or a copy of an AI page | Brian only, except at creation (section 4) | A link page; "Recipes / Tomato soup" copied and edited |
+| **Your pages** | Brian's knowledge base, kept by hand | Brian by hand (new page in the tree, or `/page` inside any page), a saved link (by default), or a copy of an AI page | Brian only, except at creation (section 4) | A link page; "Recipes / Tomato soup" copied and edited |
 | **AI pages** | Pages the AI infers from threads and your pages, like Karpathy's LLM Wiki. Called Weave in the app (Settled, msg 08a02686) | Indexing (section 6) | The AI only; Brian copies one to change it | "Tomato soup recipe", built from the day it was noted |
 
-A saved link becomes one of **your pages**; everything else inferred becomes an **AI page**. Brian knows of no other case that should create a page of his yet. **Settled.** Whether tasks, people or meetings become pages: **Assumption**, tasks stay items (section 7).
+A saved link becomes one of **your pages**; everything else inferred becomes an **AI page**. Brian can also create pages by hand, in the tree or with /page inside any page, including a day thread (msg e526eb12). **Settled.** Whether tasks, people or meetings become pages: **Assumption**, tasks stay items (section 7).
 
 ## 4. Data weight and write permissions
 
