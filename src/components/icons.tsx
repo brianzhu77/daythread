@@ -67,3 +67,48 @@ export const SearchIcon = () => (
     <path d="m16 16 4 4" />
   </Icon>
 )
+
+// Control icons. Text glyphs such as ⌄ or ← sit on the font baseline and drift off-centre; these don't.
+export const ChevronDownIcon = () => (
+  <Icon size={14}>
+    <path d="m6 9 6 6 6-6" strokeWidth={2} />
+  </Icon>
+)
+
+export const ArrowLeftIcon = () => (
+  <Icon size={18}>
+    <path d="M19 12H5M11 6l-6 6 6 6" strokeWidth={2} />
+  </Icon>
+)
+
+export const ArrowRightIcon = () => (
+  <Icon size={18}>
+    <path d="M5 12h14M13 6l6 6-6 6" strokeWidth={2} />
+  </Icon>
+)
+
+export const CloseIcon = () => (
+  <Icon size={16}>
+    <path d="M6 6l12 12M18 6 6 18" strokeWidth={2} />
+  </Icon>
+)
+
+export const UndoIcon = () => (
+  <Icon size={20}>
+    <path d="M9 14 4 9l5-5" />
+    <path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />
+  </Icon>
+)
+
+export const RedoIcon = () => (
+  <Icon size={20}>
+    <path d="m15 14 5-5-5-5" />
+    <path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />
+  </Icon>
+)
+
+export const GripIcon = () => (
+  <Icon size={20}>
+    <path d="M5 8h14M5 12h14M5 16h14" />
+  </Icon>
+)

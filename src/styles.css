@@ -661,6 +661,8 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .document-pages { display:grid;gap:12px; }
 @media(max-width:700px) { .continuous-editor .bn-editor { padding-left:10px;padding-right:18px; } .continuous-editor { margin-inline:-8px; } }
 .editor-task-title { flex:1; min-width:40px; outline:none; }
+/* BlockNote's type-specific hints ignore focus; only the bullet being typed in shows one. */
+.continuous-editor .bn-editor .bn-block-content[data-content-type="bulletListItem"][data-is-empty-and-focused]:has(.ProseMirror-trailingBreak:only-child):after { content:"Write…"; }
 .continuous-editor [data-is-empty-and-focused] .editor-task-title:empty:before { content:attr(data-placeholder); color:var(--ink-3); pointer-events:none; }
 .continuous-editor .bn-block-content[data-content-type=heading] h2 { font-size:22px; line-height:1.35; font-weight:650; }
 .continuous-editor .bn-block-content[data-content-type=heading] h1 { font-size:28px; }

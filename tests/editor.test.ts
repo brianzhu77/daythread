@@ -66,7 +66,7 @@ test('a new day page opens with the template rows, carried tasks sit above them,
   let ws = fixture(); const p = ws.pages[0]!
   assert.equal(needsTemplateRows(p, p.date!), true)
   const doc = editorSeed(p, ws, { templateRows: true })
-  assert.deepEqual(doc.map(n => n.type), ['heading', 'task', 'task', 'heading', 'task', 'heading', 'paragraph', 'heading', 'paragraph', 'heading', 'paragraph'])
+  assert.deepEqual(doc.map(n => n.type), ['heading', 'task', 'task', 'heading', 'task', 'heading', 'bulletListItem', 'heading', 'bulletListItem', 'heading', 'bulletListItem'])
   assert.equal(doc[1]!.props?.taskId, ws.tasks[0]!.id)
   assert.equal(doc[2]!.props?.taskId, `editor-task:${doc[2]!.id}`)
   ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(p), document: JSON.stringify(doc) })
@@ -106,4 +106,11 @@ test('an image at the end of a section is content, so new rows go after it', () 
   ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(p), document: JSON.stringify(doc) })
   ws = run(ws, { type: 'add-text', pageId: p.id, sectionId: notes.id, text: 'After the picture' })
   assert.deepEqual(ws.pages[0]!.sections.find(s => s.kind === 'notes')!.blocks.map(b => b.id === 'img' ? 'img' : b.text), ['img', 'After the picture'])
+})
+test('text added to Notes goes above its empty template bullet', () => {
+  let ws = run(createEmptyWorkspace(), { type: 'ensure-day', date: '2026-10-16' }); const p = ws.pages[0]!
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(p), document: JSON.stringify(editorSeed(p, ws, { templateRows: true })) })
+  const notes = ws.pages[0]!.sections.find(s => s.kind === 'notes')!
+  ws = run(ws, { type: 'add-text', pageId: p.id, sectionId: notes.id, text: 'Captured thought' })
+  assert.deepEqual(ws.pages[0]!.sections.find(s => s.kind === 'notes')!.blocks.map(b => b.text), ['Captured thought', ''])
 })

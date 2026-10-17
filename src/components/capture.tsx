@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Capture, Page, ProposalItem, Workspace } from '../domain/types'
 import { longLabel } from './dates'
+import { CloseIcon } from './icons'
 import { useWorkspace } from './use-day'
 
 type BarState = 'idle' | 'sending' | 'failed'
@@ -209,7 +210,7 @@ function ProposalRow({ item, editable, removable, onEdit, onRemove }: { item: Pr
       {item.kind === 'create-material' && <span className="tag quiet">no body provided</span>}
       {removable && (
         <button type="button" className="icon" aria-label={`Remove ${item.title} from this group`} onClick={onRemove}>
-          ×
+          <CloseIcon />
         </button>
       )}
     </li>

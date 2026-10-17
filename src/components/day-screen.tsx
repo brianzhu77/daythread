@@ -6,6 +6,7 @@ import { FactsStrip } from './facts-strip'
 import { StartTheDay, hasHandoffContent, useHandoffLater } from './start-the-day'
 import { SaveIndicator } from './app-shell'
 import { useDay, useWorkspace } from './use-day'
+import { ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon } from './icons'
 import { useEffect } from 'react'
 
 /** Today (and any other date): header, facts strip, Start the day, receipts, the page, capture. */
@@ -38,7 +39,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
           <div className="day-subrow">
           <label className="date-pill">
             <span>{fromIso(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-            <span aria-hidden="true">⌄</span>
+            <ChevronDownIcon />
             <input
               type="date"
               value={date}
@@ -50,9 +51,9 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
           </div>
         </div>
         <nav className="day-nav" aria-label="Change day">
-          <a className="button icon" href={`/day/${addDays(date, -1)}`} aria-label="Previous day">←</a>
+          <a className="button icon" href={`/day/${addDays(date, -1)}`} aria-label="Previous day"><ArrowLeftIcon /></a>
           {!isToday && <a className="button secondary chip-link" href="/">Back to today</a>}
-          <a className="button icon" href={`/day/${addDays(date, 1)}`} aria-label="Next day">→</a>
+          <a className="button icon" href={`/day/${addDays(date, 1)}`} aria-label="Next day"><ArrowRightIcon /></a>
         </nav>
 
       </header>

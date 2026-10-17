@@ -111,7 +111,7 @@ function appendBlock(p: Page, s: Section, block: NoteBlock): void {
     const node = nodes.get(b.id);
     if (!node) return !p.editorJSON;
     if (inlineText(node.content) || node.children?.length) return false;
-    return node.type === "paragraph" || (node.type === "task" && node.props?.taskId === `editor-task:${node.id}`);
+    return node.type === "paragraph" || node.type === "bulletListItem" || (node.type === "task" && node.props?.taskId === `editor-task:${node.id}`);
   };
   let at = s.blocks.length;
   while (at > 0 && isEmptyRow(s.blocks[at - 1]!)) at--;

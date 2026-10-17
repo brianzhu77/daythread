@@ -1,3 +1,4 @@
+import { CloseIcon } from './icons'
 import { useWorkspace } from './use-day'
 
 /** Undo notices. Bottom of the screen, above the capture bar on iPhone. Never a modal. */
@@ -34,7 +35,7 @@ export function Notices() {
             </button>
           )}
           <button type="button" className="quiet" aria-label="Dismiss" onClick={() => dismiss(n.id)}>
-            ×
+            <CloseIcon />
           </button>
         </div>
       ))}

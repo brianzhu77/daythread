@@ -1,12 +1,12 @@
 import type { Page, Section, SectionKind, Workspace } from './types.ts'
 
 /** The default content of a new day page, like a Notion template: each heading and the empty rows under it. */
-export const dayTemplate: readonly { kind: SectionKind; title: string; rows: readonly ('task' | 'line')[] }[] = [
+export const dayTemplate: readonly { kind: SectionKind; title: string; rows: readonly ('task' | 'bullet')[] }[] = [
   { kind: 'top3', title: 'TODO - Top 3', rows: ['task'] },
   { kind: 'other', title: 'TODO - Other', rows: ['task'] },
-  { kind: 'events', title: 'Events', rows: ['line'] },
-  { kind: 'good-stuffs', title: 'Good Stuffs', rows: ['line'] },
-  { kind: 'notes', title: 'Notes', rows: ['line'] },
+  { kind: 'events', title: 'Events', rows: ['bullet'] },
+  { kind: 'good-stuffs', title: 'Good Stuffs', rows: ['bullet'] },
+  { kind: 'notes', title: 'Notes', rows: ['bullet'] },
 ]
 
 export interface EditorNode {
@@ -29,7 +29,7 @@ function templateRows(section: Section, page: Page): EditorNode[] {
     const id = `${section.id}:template:${i}`
     return row === 'task'
       ? { id, type: 'task', props: { taskId: `editor-task:${id}`, role: 'plan', planDate: page.date ?? '' }, content: '' }
-      : { id, type: 'paragraph', content: '' }
+      : { id, type: 'bulletListItem', content: '' }
   })
 }
 /**

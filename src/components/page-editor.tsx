@@ -14,6 +14,7 @@ import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange
 import { applyCommand } from '../domain/workspace'
 import { useWorkspace } from './use-day'
 import { DateTag } from './date-tag'
+import { GripIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { addDays, fromIso, todayIso } from './dates'
 
 const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' }, planDate: { default: '' } }, content: 'inline' }, {
@@ -67,7 +68,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     initial.current = { nodes, base: savedBase, recovered }
   }
   const [pastedChecklistIds, setPastedChecklistIds] = useState<string[]>(() => checklistIds(initial.current!.nodes))
-  const editor = useCreateBlockNote({ schema, placeholders: { default: 'Write…', emptyDocument: 'Write…' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  const editor = useCreateBlockNote({ schema, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     if (!data) return defaultPasteHandler()
     const insert = (blocks: EditorNode[]) => {
@@ -539,8 +540,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); dragging.current = sectionRange(nodes(), touchHandle.id); setTouchDragging(true) }}
       onPointerMove={e => { if (dragging.current.length && e.buttons) updateDrop(e.clientX - 35, e.clientY) }}
       onPointerUp={e => { e.preventDefault(); if (!dropRef.current) { dragging.current = []; setTouchDragging(false); setDropHint(null); select(touchHandle.id) } else commitDrag() }}
-      onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null); setDropHint(null) }}>≡</button>}
-    <div className="editor-phone-toolbar" aria-label="Editor tools"><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('undo')} aria-label="Undo">↶</button><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('redo')} aria-label="Redo">↷</button><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }}>＋</button></div>
+      onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null); setDropHint(null) }}><GripIcon /></button>}
+    <div className="editor-phone-toolbar" aria-label="Editor tools"><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('undo')} aria-label="Undo"><UndoIcon /></button><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('redo')} aria-label="Redo"><RedoIcon /></button><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }} aria-label="Insert block"><PlusIcon /></button></div>
     {dock && createPortal(<>
       {selectionLabel && <div className="editor-selection-bar"><span>{selectionLabel}</span><button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>}
     {pastedChecklistIds.length > 0 && <div className="editor-paste-notice" role="status">{pastedChecklistIds.length} checklist {pastedChecklistIds.length === 1 ? 'line' : 'lines'} · <button onClick={() => {
