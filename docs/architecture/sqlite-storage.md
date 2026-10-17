@@ -1,6 +1,6 @@
 # SQLite data layer — implementation proposal
 
-Status: proposed for Lead / Ratchet review, task #43. Based on Brian's request 45f574bf and Lead's constraints 85c5c603. Implementation branch `feat/sqlite-storage`, based on b2e541f. This does not change the running 3000/3001 environments.
+Status: approved design (Lead 86ebaa9a; Ratchet 3989c0a7), implementation in progress, task #43. Based on Brian's request 45f574bf and Lead's constraints 85c5c603. Implementation branch `feat/sqlite-storage`, based on b2e541f. This does not change the running 3000/3001 environments.
 
 ## Boundary and runtime
 
@@ -8,7 +8,7 @@ Keep `WorkspaceRepository.load(): Promise<Workspace>` and `execute(Command): Pro
 
 ## Tables
 
-Use normalized entity tables, not one workspace blob. Each has scalar columns corresponding to its entity's scalar fields. Nested data stays in JSON text columns. A `snapshot` column (`current` / `undo`) and compound primary key distinguish current entities from the single previous workspace required by the existing Undo contract. This avoids hiding a second whole-workspace blob in meta.
+Use normalized entity tables, not one workspace blob. Each has scalar columns corresponding to its entity's scalar fields. Nested data stays in JSON text columns. A `snapshot` column (`current` / `undo`) and compound primary key distinguish current entities from the single previous workspace required by the existing Undo contract. This avoids hiding a second whole-workspace blob in meta. It only preserves today’s single-step Undo contract; Supabase should replace this with operation-level inverse records, not copy snapshot partitions to Postgres.
 
 | Table | Key (after snapshot) | Nested JSON columns |
 | --- | --- | --- |
@@ -40,3 +40,25 @@ DAYTHREAD_LOG=debug enables structured one-line JSON on server and client. Serve
 ## Verification and handoff
 
 Adapter-independent contract suite: reopen persistence; same operation replay / changed fingerprint rejection; stale revision rejection; concurrent clients / independent-process contention; exception after partial SQL writes rolls back; recovery after failure. SQLite-specific tests: import round-trip (including optional fields, order, receipts, Undo), import only once, invalid import fails closed, source bytes unchanged, database layout rejection. Logs: default-off, debug metadata, same operation ID, no sentinel note text on success or failure. Existing full tests, typecheck, production build and a disposable-app smoke. Review by Ratchet before integration. Brian's editor trial and the existing merge constraint stay separate.
+
+Initialization is rechecked under the write lock. An initialized store with missing tables or incompatible metadata fails, never reimports. SQL failure tests must inject failure after an entity write. Lost-response retry keeps the original operationId; refresh has a separate correlation ID and may record the command that triggered it.
+
+## Running this branch
+
+```sh
+# Node 24+; choose disposable paths when reviewing this branch.
+npm install
+DAYTHREAD_SQLITE_PATH=/tmp/daythread-review/workspace.sqlite \
+DAYTHREAD_LOCAL_DATA_PATH=/tmp/daythread-review/workspace.json \
+DAYTHREAD_LOG=debug npm run dev -- --port 3043 --strictPort
+npm test
+npm run typecheck
+npm run build
+node scripts/sqlite-browser-smoke.mjs http://127.0.0.1:3043
+```
+
+The browser smoke deliberately simulates a committed save with its response lost and modifies a task; only point it at disposable data. The original JSON remains the pre-import copy; changes after import live only in SQLite. Do not restart an old JSON-only build against the old file and expect later SQLite edits to appear there. When copying an active database, use SQLite's backup mechanism; a raw main-file copy can omit WAL contents. This branch performs no live switch or cloud connection.
+
+`DAYTHREAD_LOG=debug` is the only toggle, evaluated on the server and delivered as a boolean with load responses. Browser logging updates on the next load/refresh. Save retry keeps its original operation ID when the action is unchanged; later edits get a new ID. Refresh IDs are separate, with triggerOperationId linking to the command. Runtime uses DatabaseSync as available in the tested Node 24.14.1 (SQLite 3.51.2); Node 24 still emits the SQLite experimental notice. See [Node 24 SQLite documentation](https://nodejs.org/docs/latest-v24.x/api/sqlite.html). The synchronous adapter is for this local personal app; no serverless deployment or large multi-user throughput is claimed.
+
+Author implementation and concrete check results: [SQLITE-STORAGE-REVIEW](../../tests/SQLITE-STORAGE-REVIEW.md). Independent review remains required before integration.
