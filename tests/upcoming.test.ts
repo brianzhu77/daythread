@@ -27,7 +27,7 @@ test('Upcoming merges same-task same-date facts and retains distinct dates indep
 })
 test('Upcoming preserves paused date facts, excludes done/cancelled/undated tasks and honors inclusive bounds', () => {
   const state = createEmptyWorkspace()
-  state.tasks = [task('paused', { paused: true, plannedOn: '2026-10-21', attentionOn: today, deadlineOn: '2026-10-22' }),
+  state.tasks = [task('paused', { paused: true, attentionOn: today, deadlineOn: '2026-10-22' }),
     task('done', { status: 'done', deadlineOn: today }), task('cancelled', { status: 'cancelled', deadlineOn: today }),
     task('undated'), task('past', { deadlineOn: '2026-10-15' })]
   assert.deepEqual(getUpcomingByDate(state, today, '2026-10-22').map(g => [g.date, g.tasks[0].task.id]),

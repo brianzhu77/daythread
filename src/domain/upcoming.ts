@@ -14,7 +14,7 @@ export interface UpcomingDay {
 /**
  * Date facts only: plannedOn=do, attentionOn=start, deadlineOn=due (01 §76).
  * One row per open Task per date; coincident fields share that row's kind tags.
- * Paused tasks retain start/due facts; their do date is not an active commitment.
+ * Pausing never hides a real deadline or silently clears any other date fact.
  * Bounds are inclusive. Omit `through` for all known dates after `from`, without
  * the UI prototype's 14-day cutoff. This query never creates pages/placements.
  */
@@ -33,7 +33,6 @@ export function getUpcomingByDate(
   for (const task of workspace.tasks) {
     if (task.status !== 'open') continue
     for (const [kind, field] of fields) {
-      if (task.paused && kind === 'do') continue
       const date = task[field]
       if (date === null || date < from || (through !== undefined && date > through)) continue
       let rows = days.get(date)
