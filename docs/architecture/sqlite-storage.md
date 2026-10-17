@@ -47,6 +47,8 @@ Initialization is rechecked under the write lock. An initialized store with miss
 
 ```sh
 # Node 24+; choose disposable paths when reviewing this branch.
+# Copy an existing JSON source to /tmp/daythread-review/workspace.json first.
+# For a genuinely empty workspace, omit DAYTHREAD_LOCAL_DATA_PATH entirely.
 npm install
 DAYTHREAD_SQLITE_PATH=/tmp/daythread-review/workspace.sqlite \
 DAYTHREAD_LOCAL_DATA_PATH=/tmp/daythread-review/workspace.json \
@@ -62,3 +64,10 @@ The browser smoke deliberately simulates a committed save with its response lost
 `DAYTHREAD_LOG=debug` is the only toggle, evaluated on the server and delivered as a boolean with load responses. Browser logging updates on the next load/refresh. Save retry keeps its original operation ID when the action is unchanged; later edits get a new ID. Refresh IDs are separate, with triggerOperationId linking to the command. Runtime uses DatabaseSync as available in the tested Node 24.14.1 (SQLite 3.51.2); Node 24 still emits the SQLite experimental notice. See [Node 24 SQLite documentation](https://nodejs.org/docs/latest-v24.x/api/sqlite.html). The synchronous adapter is for this local personal app; no serverless deployment or large multi-user throughput is claimed.
 
 Author implementation and concrete check results: [SQLITE-STORAGE-REVIEW](../../tests/SQLITE-STORAGE-REVIEW.md). Independent review remains required before integration.
+
+
+### Follow-up initialization safeguards
+
+An explicitly configured DAYTHREAD_LOCAL_DATA_PATH must exist for a fresh database; a typo fails before the database file is created. Only the default legacy path may be absent when starting a genuinely new empty workspace. After successful import the legacy source is not required for later launches. Initialization emits a single content-free info JSON line (imported + page count, or empty) even when debug is off.
+
+Known local-adapter limits: Workspace.timezone is currently fixed by the domain type to America/Vancouver; other timezones are rejected rather than silently rewritten. Each connection currently acquires an initialization/check write transaction before its read or command transaction. This prioritizes rechecking file replacement/corruption and simultaneous initialization; read-only loads may briefly wait behind a writer. An initialization cache with file-identity/schema invalidation is deferred; no multi-user read scalability is claimed.

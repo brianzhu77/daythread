@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, writeFile, readFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile, readFile, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
@@ -73,5 +73,17 @@ test('SQLite independent processes contend under one transaction; one stale writ
   const source=`import {SqliteWorkspaceRepository} from ${JSON.stringify(url)};const r=new SqliteWorkspaceRepository(process.argv[1]);try{await r.execute({operationId:process.argv[2],expectedRevision:0,action:{type:'ensure-day',date:'2026-10-17'}});process.exitCode=0}catch{process.exitCode=2}`
   const codes=await Promise.all(['a','b','c'].map(id=>new Promise<number|null>((resolve,reject)=>{const c=spawn(process.execPath,['--input-type=module','-e',source,f.path,id],{stdio:'ignore'});c.on('error',reject);c.on('exit',resolve)})))
   assert.deepEqual(codes.sort(),[0,2,2]);assert.equal((await f.create().load()).revision,1)
+ }finally{await f.cleanup()}
+})
+
+test('SQLite explicit missing import source fails before creating a database; only default-path mode permits empty initialization',async()=>{
+ const f=await fixture(),missing=join(f.dir,'typo-workspace.json')
+ try {
+  await assert.rejects(new SqliteWorkspaceRepository(f.path,missing).load(),{code:'ENOENT'})
+  await assert.rejects(stat(f.path),{code:'ENOENT'})
+  const allowed=new SqliteWorkspaceRepository(f.path,missing,{allowMissingLegacy:true})
+  assert.deepEqual(await allowed.load(),createEmptyWorkspace())
+  // After successful initialization the old import source is no longer a runtime dependency.
+  assert.deepEqual(await new SqliteWorkspaceRepository(f.path,missing).load(),createEmptyWorkspace())
  }finally{await f.cleanup()}
 })

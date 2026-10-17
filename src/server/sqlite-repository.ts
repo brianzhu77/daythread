@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite'
-import { mkdirSync, openSync, closeSync, readFileSync } from 'node:fs'
+import { mkdirSync, openSync, closeSync, readFileSync, existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
 import { applyCommand, createEmptyWorkspace } from '../domain/workspace.ts'
@@ -12,8 +12,15 @@ const applicationId = 0x44544852
 export class SqliteWorkspaceRepository implements WorkspaceRepository {
   private readonly path: string
   private readonly legacyPath?: string
-  constructor(path: string, legacyPath?: string) { this.path=resolve(path); this.legacyPath=legacyPath ? resolve(legacyPath):undefined }
+  private readonly allowMissingLegacy: boolean
+  constructor(path: string, legacyPath?: string, options: {allowMissingLegacy?: boolean} = {}) {
+    this.path=resolve(path); this.legacyPath=legacyPath ? resolve(legacyPath):undefined
+    this.allowMissingLegacy=options.allowMissingLegacy ?? false
+  }
   private open(operationId: string): DatabaseSync {
+    // A typo in an explicitly configured import source must fail before creating even an empty DB file.
+    // Initialization is still rechecked under BEGIN IMMEDIATE; an existing initialized DB needs no source.
+    if (this.legacyPath && !this.allowMissingLegacy && !existsSync(this.path)) readFileSync(this.legacyPath)
     mkdirSync(dirname(this.path),{recursive:true,mode:0o700})
     try { closeSync(openSync(this.path,'wx',0o600)) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
     const db = new DatabaseSync(this.path)
@@ -36,12 +43,13 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
         let source: Workspace = createEmptyWorkspace(), imported=false
         if (this.legacyPath) {
           try { source=JSON.parse(readFileSync(this.legacyPath,'utf8')) as Workspace; imported=true }
-          catch(error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+          catch(error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || !this.allowMissingLegacy) throw error }
         }
         writeWorkspace(db,undefined,source)
         if (!isDeepStrictEqual(readWorkspace(db),source)) throw new Error('Workspace import round-trip mismatch; source kept')
         db.exec(`PRAGMA application_id=${applicationId}`)
         db.exec('COMMIT')
+        console.info(JSON.stringify({level:'info',event:'storage.initialize',result:imported?'imported':'empty',pages:source.pages.length}))
         debugLog('storage.initialize',{operationId,afterRevision:source.revision,result:imported?'imported':'empty'})
       } else db.exec('COMMIT')
       db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL')

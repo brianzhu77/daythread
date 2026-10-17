@@ -37,3 +37,10 @@ Main copy directory: `/var/folders/54/kknm2fp14s1ft0h63zccl1t40000gn/T/daythread
 - Real iPhone/Safari/IME and Brian's continuous-editor acceptance remain separate and unverified here.
 - Editor changes are limited to diagnostic events and operation identity for retry; section, selection, paste, task semantic and drag logic are unchanged. Independent review should scrutinize save retry after committed-but-lost response and frontend command retries, because the prior transport created a new ID per retry.
 - Legacy JSON is a pre-import backup, not a live mirror; do not switch an old build back to it expecting SQLite edits. Copy an active SQLite database with its supported backup mechanism, not just the main file while WAL is active.
+
+
+## Follow-up: explicit missing import source (Lead 231a0b2b)
+
+The factory now distinguishes an explicit DAYTHREAD_LOCAL_DATA_PATH from the default path. An explicitly supplied missing source fails before creating the SQLite file. Only default-path fresh initialization may proceed without legacy JSON; successful initialized stores no longer depend on the old source. A content-free info JSON line always reports imported page count or empty initialization, independent of debug. A new regression test covers these three cases. Updated checks: 59/59 tests, typecheck and production build pass.
+
+Initialization remains checked under a write lock on each open; the extra locking cost and Vancouver-only Workspace timezone are explicitly documented limits. A cache was not added because safe invalidation on file replacement/layout damage needs separate treatment. These are nonblocking per Lead's review; no live data or service changed.
