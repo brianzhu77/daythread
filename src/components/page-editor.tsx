@@ -409,9 +409,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const release = () => { clear(); pickedIds.current = [] }
     const ended = () => { settle(); pickedIds.current = [] }
     document.addEventListener('pointerup', release)
+    // A cancelled drag (Escape) whose handle BlockNote already unmounted never gets dragend, so BlockNote's line
+    // would linger. Pointer events stop during a native drag, so the first one after it means the drag is over.
+    const dropLineGone = () => { if (document.querySelector('.prosemirror-dropcursor-block')) editor.prosemirrorView.dom.dispatchEvent(new DragEvent('dragleave', { bubbles: true, relatedTarget: null })) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') dropLineGone() }
+    document.addEventListener('pointermove', dropLineGone)
+    document.addEventListener('keydown', onKey)
     document.addEventListener('dragend', ended, true)
     document.addEventListener('drop', settle, true)
-    return () => { document.removeEventListener('pointerup', release); document.removeEventListener('dragend', ended, true); document.removeEventListener('drop', settle, true) }
+    return () => { document.removeEventListener('pointermove', dropLineGone); document.removeEventListener('keydown', onKey); document.removeEventListener('pointerup', release); document.removeEventListener('dragend', ended, true); document.removeEventListener('drop', settle, true) }
   }, [editor])
   const handleActions = useRef({ select, selected: () => selected.current }); handleActions.current = { select, selected: () => selected.current }
   const Handle = useMemo(() => function StableHandle() { return <SectionSideMenu select={id => handleActions.current.select(id)} picked={pickedIds} extended={extendedIds} selectedIds={() => handleActions.current.selected()} /> }, [])
@@ -530,6 +536,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const last = rows.at(-1)?.querySelector('[data-node-type="blockContainer"]')?.getAttribute('data-id') ?? null
       const ref = after ? (ids.includes(after) ? null : { id: after, placement: 'before' as const }) : last && !ids.includes(last) ? { id: last, placement: 'after' as const } : null
       editor.prosemirrorView.dragging = null
+      // Stopping the drop also stops BlockNote's own cleanup of the line; a dragleave out of the editor removes it.
+      editor.prosemirrorView.dom.dispatchEvent(new DragEvent('dragleave', { bubbles: true, relatedTarget: null }))
       if (!ref) return
       const blocks = ids.map(id => editor.getBlock(id)).filter(b => b !== undefined)
       editor.prosemirrorView.dispatch(closeHistory(editor.prosemirrorState.tr))
