@@ -709,3 +709,20 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 /* Phone: editing chrome appears only while the editor has focus (spec F1); body text lines up with the title. */
 .continuous-editor:not(:focus-within) :is(.editor-phone-toolbar, .editor-touch-handle) { display:none; }
 @media(max-width:700px) { .continuous-editor { margin-inline:0; } }
+/* Bottom dock (Jazz, msg ee8acaaa): selection bar at the bottom, notices stacked above it, never overlapping. */
+.bottom-dock { position:fixed; z-index:120; left:12px; right:12px; bottom:24px; display:flex; flex-direction:column-reverse; align-items:center; gap:8px; pointer-events:none; }
+.editor-dock { display:flex; flex-direction:column-reverse; align-items:center; gap:8px; }
+.editor-dock:empty { display:none; }
+.bottom-dock .notices { position:static; left:auto; right:auto; top:auto; bottom:auto; width:100%; }
+.bottom-dock .editor-selection-bar, .bottom-dock .editor-operation-notice { position:static; transform:none; left:auto; top:auto; bottom:auto; pointer-events:auto; }
+@media(min-width:900px) {
+  .bottom-dock { left:calc(260px + (100vw - 260px - var(--column)) / 2); right:auto; width:var(--column); }
+  .app-main { padding-bottom:120px; }
+}
+@media(max-width:899px) {
+  .bottom-dock { top:calc(10px + env(safe-area-inset-top)); bottom:auto; flex-direction:column; }
+  .bottom-dock .editor-dock { flex-direction:column; }
+  .bottom-dock .editor-selection-bar { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); }
+  .bottom-dock .editor-operation-notice { width:calc(100vw - 32px); }
+  .continuous-editor.has-selection .editor-phone-toolbar { display:none; }
+}

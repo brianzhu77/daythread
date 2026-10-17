@@ -13,7 +13,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           <SampleBanner />
           <main className="app-main">{children}</main>
         </div>
-        <Notices />
+        {/* One bottom dock so the editor's selection bar and every undo notice stack instead of overlapping. */}
+        <div className="bottom-dock">
+          <div id="editor-dock" className="editor-dock" />
+          <Notices />
+        </div>
       </div>
     </WorkspaceProvider>
   )

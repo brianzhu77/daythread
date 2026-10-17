@@ -1,5 +1,6 @@
 import type { Transaction } from '@tiptap/pm/state'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
 import { BlockNoteSchema, defaultBlockSpecs, docToBlocks, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
@@ -234,7 +235,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   function select(id: string) {
     const range = sectionRange(nodes(), id)
     selected.current = range.map(n => n.id)
-    setSelectionLabel(range.length > 1 ? `${inlineText(range[0]?.content)} · ${range.length - 1} blocks selected` : 'Block selected')
+    setSelectionLabel(range[0]?.type === 'heading' ? `'${inlineText(range[0].content)}' section selected` : range.length > 1 ? `${range.length} blocks selected` : 'Block selected')
     if (range.length > 1) editor.setSelection(range[0]!.id, range.at(-1)!.id)
     editor.focus()
   }
@@ -252,7 +253,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     else if (editor.document[0]) editor.setTextCursorPosition(editor.document[0].id, 'start')
     editor.focus()
     setSelectionLabel(''); setStatus('Content removed')
-    setNotice({ text: first?.type === 'heading' ? `Deleted '${inlineText(first.content)}' · ${plannedCount} planned tasks stay planned` : ids.length === 1 && first?.type === 'task' && first.props?.role === 'plan' ? 'Not today · deadline kept' : 'Content removed · tasks unchanged', fingerprint: JSON.stringify(editor.document) })
+    setNotice({ text: first?.type === 'heading' ? `Deleted '${inlineText(first.content)}'${plannedCount ? ` · ${plannedCount === 1 ? '1 planned task stays' : `${plannedCount} planned tasks stay`} planned` : ''}` : ids.length === 1 && first?.type === 'task' && first.props?.role === 'plan' ? 'Not today · deadline kept' : 'Content removed · tasks unchanged', fingerprint: JSON.stringify(editor.document) })
   }
   function dragStart(id: string, e: React.DragEvent) {
     dragging.current = sectionRange(nodes(), id)
@@ -298,6 +299,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     dragging.current = []; dropRef.current = null; setDrop(null); setTouchDragging(false)
   }
+  const [dock, setDock] = useState<HTMLElement | null>(null)
+  useEffect(() => setDock(document.getElementById('editor-dock')), [])
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     const update = () => setDark(media.matches)
@@ -322,7 +325,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     window.addEventListener('scroll', update, true)
     return () => { off(); window.removeEventListener('scroll', update, true) }
   }, [editor])
-  return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
+  return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onCompositionStartCapture={() => { composing.current = true; clearTimeout(timer.current) }}
     onCompositionEndCapture={() => { composing.current = false; requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
     onKeyDownCapture={e => {
@@ -378,14 +381,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       }} />
       <SideMenuController sideMenu={Handle} />
     </BlockNoteView>
-    {notice && <div className="editor-operation-notice" role="status"><span>{notice.text}</span><button onClick={() => { if (notice.fingerprint === JSON.stringify(editor.document)) void performHistory('undo'); setNotice(null) }}>Undo</button></div>}
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}
       onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); dragging.current = sectionRange(nodes(), touchHandle.id); setTouchDragging(true) }}
       onPointerMove={e => { if (dragging.current.length && e.buttons) updateDrop(e.clientX - 35, e.clientY) }}
       onPointerUp={e => { e.preventDefault(); if (!dropRef.current) { dragging.current = []; setTouchDragging(false); select(touchHandle.id) } else commitDrag() }}
       onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null) }}>≡</button>}
     <div className="editor-phone-toolbar" aria-label="Editor tools"><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('undo')} aria-label="Undo">↶</button><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('redo')} aria-label="Redo">↷</button><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }}>＋</button></div>
-    {selectionLabel && <div className="editor-selection-bar"><span>{selectionLabel}</span><button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>}
+    {dock && createPortal(<>
+      {selectionLabel && <div className="editor-selection-bar"><span>{selectionLabel}</span><button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>}
+      {notice && <div className="editor-operation-notice" role="status"><span>{notice.text}</span><button onClick={() => { if (notice.fingerprint === JSON.stringify(editor.document)) void performHistory('undo'); setNotice(null) }}>Undo</button></div>}
+    </>, dock)}
     {drop && <div className="editor-drop-line" style={{ top: drop.top }} />}
   </div>
 }
