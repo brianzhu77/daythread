@@ -611,6 +611,8 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
 .pill { flex: none; display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: 999px; background: var(--fill); color: var(--ink); text-decoration: none; font-size: 15px; font-weight: 500; }
 .pill[aria-current='page'] { background: var(--blue-soft); color: var(--blue-text); font-weight: 600; }
+/* Four task pills must fit a 375-390px phone uncut; narrower screens still scroll the row. */
+@media (max-width: 430px) { .pills { gap: 6px; } .pill { padding: 0 11px; } }
 .list-section { display: grid; gap: 4px; padding-top: 12px; }
 .list-header { font-size: 20px; font-weight: 600; }
 .task-list { gap: 0; }
