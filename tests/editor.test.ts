@@ -13,11 +13,10 @@ test('section boundary includes subordinate headings but stops at equal or highe
  const list = [{ id: 'intro', type: 'paragraph' }, { id: 'a', type: 'heading', props: { level: 2 } }, { id: 'child', type: 'heading', props: { level: 3 } }, { id: 'p', type: 'paragraph' }, { id: 'b', type: 'heading', props: { level: 2 } }]
  assert.deepEqual(sectionRange(list, 'a').map(x => x.id), ['a', 'child', 'p'])
 })
-test('the last section leaves the editor trailing empty paragraph in place but keeps its own blank lines', () => {
-  const list = [{ id: 'a', type: 'heading', props: { level: 2 } }, { id: 'p', type: 'paragraph', content: [{ type: 'text', text: 'x' }] }, { id: 'gap', type: 'paragraph', content: [] }, { id: 'q', type: 'paragraph', content: [{ type: 'text', text: 'y' }] }, { id: 'trail', type: 'paragraph', content: [] }]
-  assert.deepEqual(sectionRange(list, 'a').map(x => x.id), ['a', 'p', 'gap', 'q'])
-  const middle = [...list.slice(0, 3), { id: 'b', type: 'heading', props: { level: 2 } }]
-  assert.deepEqual(sectionRange(middle, 'a').map(x => x.id), ['a', 'p', 'gap'])
+test('a section owns its empty lines, including at the end of the document', () => {
+  const list = [{ id: 'a', type: 'heading', props: { level: 2 } }, { id: 'p', type: 'paragraph', content: [{ type: 'text', text: 'x' }] }, { id: 'gap', type: 'paragraph', content: [] }, { id: 'b', type: 'heading', props: { level: 2 } }, { id: 'blank', type: 'paragraph', content: [] }]
+  assert.deepEqual(sectionRange(list, 'a').map(x => x.id), ['a', 'p', 'gap'])
+  assert.deepEqual(sectionRange(list, 'b').map(x => x.id), ['b', 'blank'])
 })
 test('whole section deletion and restoration preserve task and placement; moved rows keep their role', () => {
  let ws = fixture(); const p = ws.pages[0]!, doc = editorSeed(p, ws), beforeTask = structuredClone(ws.tasks), beforePlacement = structuredClone(ws.placements)
@@ -85,4 +84,18 @@ test('template rows the user deletes stay deleted, and past or written pages nev
   assert.equal(needsTemplateRows(p, '2026-10-17'), false)
   const legacy = { ...saved, templateApplied: undefined }
   assert.equal(needsTemplateRows(legacy, saved.date!), false)
+})
+test('moving the last template section takes its empty line with it', () => {
+  const ws = run(createEmptyWorkspace(), { type: 'ensure-day', date: '2026-10-16' }); const p = ws.pages[0]!
+  const doc = editorSeed(p, ws, { templateRows: true })
+  const notes = p.sections.find(s => s.kind === 'notes')!.id
+  assert.deepEqual(sectionRange(doc, notes).map(n => n.id), [notes, `${notes}:template:0`])
+})
+test('tasks placed on a day go above the section\'s trailing empty rows', () => {
+  let ws = run(createEmptyWorkspace(), { type: 'ensure-day', date: '2026-10-16' }); const p = ws.pages[0]!
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(p), document: JSON.stringify(editorSeed(p, ws, { templateRows: true })) })
+  const other = ws.pages[0]!.sections.find(s => s.kind === 'other')!
+  ws = run(ws, { type: 'add-task', pageId: p.id, sectionId: other.id, title: 'Reply to landlord' })
+  const blocks = ws.pages[0]!.sections.find(s => s.kind === 'other')!.blocks
+  assert.deepEqual(blocks.map(b => b.text), ['Reply to landlord', ''])
 })

@@ -100,6 +100,12 @@ function ensureDay(state: Workspace, day: string): Page {
   }
   return p;
 }
+// New rows go above a section's trailing empty lines, so the empty row ready for typing stays last.
+function appendBlock(s: Section, block: NoteBlock): void {
+  let at = s.blocks.length;
+  while (at > 0 && s.blocks[at - 1]!.kind === "paragraph" && !s.blocks[at - 1]!.text.trim()) at--;
+  s.blocks.splice(at, 0, block);
+}
 function ensureSection(p: Page, kind: Section["kind"]): Section {
   let s = p.sections.find((s) => s.kind === kind);
   if (!s) {
@@ -176,9 +182,9 @@ function place(
     arrangement ??= rows[0];
     s.blocks = s.blocks.filter(b => !(b.kind === "task" && b.taskId === t.id));
   }
-  if (arrangement) ensureSection(p, target).blocks.push(arrangement);
+  if (arrangement) appendBlock(ensureSection(p, target), arrangement);
   else
-    ensureSection(p, target).blocks.push({
+    appendBlock(ensureSection(p, target), {
       id: newId(),
       kind: "task",
       taskId: t.id,
@@ -254,7 +260,7 @@ function saveMaterial(
     materialId: m.id,
     text: text(note) || title || url,
   };
-  s.blocks.push(b);
+  appendBlock(s, b);
   m.sources.push({ pageId: p.id, blockId: b.id, note: text(note) });
   return m;
 }
@@ -473,7 +479,7 @@ function execute(
         };
       }
       const b: NoteBlock = { id: newId(), kind: "paragraph", text: value };
-      s.blocks.push(b);
+      appendBlock(s, b);
       return { message: "Text saved", entityId: b.id };
     }
     case "edit-block": {
@@ -536,7 +542,7 @@ function execute(
         action.plannedOn === undefined ? p.date : action.plannedOn,
         action,
       );
-      s.blocks.push({ id: newId(), kind: "task", taskId: t.id, text: t.title });
+      appendBlock(s, { id: newId(), kind: "task", taskId: t.id, text: t.title });
       if (t.plannedOn)
         place(state, t, t.plannedOn, s.kind === "top3" ? "top3" : "other");
       return { message: "Task saved", entityId: t.id };
@@ -576,7 +582,7 @@ function execute(
         cancelled: false,
       };
       state.events.push(e);
-      ensureSection(p, "events").blocks.push({
+      appendBlock(ensureSection(p, "events"), {
         id: newId(),
         kind: "event",
         eventId: e.id,
@@ -615,7 +621,7 @@ function execute(
         sourcePageId: source.id,
         sourceBlockId: b.id,
       };
-      ensureSection(target, sourceSection.kind).blocks.push(copy);
+      appendBlock(ensureSection(target, sourceSection.kind), copy);
       return { message: "Brought to this day with source", entityId: copy.id };
     }
     case "handoff-done": {
@@ -750,7 +756,7 @@ function execute(
         targetPageId: target.id,
         text: target.title,
       };
-      section(p, action.sectionId).blocks.push(b);
+      appendBlock(section(p, action.sectionId), b);
       return { message: "Page reference saved", entityId: b.id };
     }
     case "capture": {
@@ -876,7 +882,7 @@ function execute(
       for (const proposal of c.proposals ?? []) {
         if (proposal.kind === "create-task") {
           const t = createTask(state, proposal.title, p, null);
-          ensureSection(p, "notes").blocks.push({
+          appendBlock(ensureSection(p, "notes"), {
             id: newId(),
             kind: "task",
             taskId: t.id,

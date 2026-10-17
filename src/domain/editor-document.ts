@@ -33,8 +33,9 @@ function templateRows(section: Section, page: Page): EditorNode[] {
   })
 }
 /**
- * A day page for today or later whose template rows have never been saved. Past pages open exactly as saved,
- * and pages saved before templates existed only get rows while nothing has been written in them.
+ * A day page for today or later whose template rows have never been saved. Past pages open exactly as saved.
+ * A page never opened in the editor (no editorJSON) gets the rows even if tasks were already placed on it,
+ * e.g. kept from yesterday; a page saved before templates existed only gets them while all sections are empty.
  */
 export function needsTemplateRows(page: Page, today: string): boolean {
   if (page.type !== 'daily' || page.templateApplied || !page.date || page.date < today) return false
@@ -80,8 +81,6 @@ export function sectionRange(nodes: readonly EditorNode[], id: string): EditorNo
   if (first.type !== 'heading') return [first]
   let end = start + 1
   while (end < nodes.length && !(nodes[end]!.type === 'heading' && Number(nodes[end]!.props?.level ?? 1) <= Number(first.props?.level ?? 1))) end++
-  // The editor keeps an empty trailing paragraph at the end of the document; it belongs to the page, not the last section.
-  if (end === nodes.length) while (end > start + 1 && isEmptyParagraph(nodes[end - 1]!)) end--
   return nodes.slice(start, end)
 }
 export function projectDocument(nodes: EditorNode[], page: Page, workspace: Workspace): Section[] {
