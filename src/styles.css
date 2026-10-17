@@ -661,6 +661,12 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .document-pages { display:grid;gap:12px; }
 @media(max-width:700px) { .continuous-editor .bn-editor { padding-left:10px;padding-right:18px; } .continuous-editor { margin-inline:-8px; } }
 .editor-task-title { flex:1; min-width:40px; outline:none; }
+/* Top-level bullets share the task rows' columns: the dot on the checkbox centre (23px), text where task text starts (45px).
+   Drawn as a circle, since a "•" glyph sits on the font baseline. Nested bullets keep BlockNote's markers. */
+.continuous-editor .bn-editor > .bn-block-group > .bn-block-outer > .bn-block > .bn-block-content[data-content-type="bulletListItem"]::before {
+  content:""; flex:none; width:45px; min-width:45px; padding:0; align-self:flex-start; height:var(--bullet-line, 24px);
+  background:radial-gradient(circle, currentColor 2.6px, transparent 3px) 20px 50% / 6px 6px no-repeat;
+}
 /* BlockNote's type-specific hints ignore focus; only the bullet being typed in shows one. */
 .continuous-editor .bn-editor .bn-block-content[data-content-type="bulletListItem"][data-is-empty-and-focused]:has(.ProseMirror-trailingBreak:only-child):after { content:"Write…"; }
 .continuous-editor [data-is-empty-and-focused] .editor-task-title:empty:before { content:attr(data-placeholder); color:var(--ink-3); pointer-events:none; }
