@@ -107,8 +107,15 @@ export const RedoIcon = () => (
   </Icon>
 )
 
-export const GripIcon = () => (
-  <Icon size={20}>
-    <path d="M5 8h14M5 12h14M5 16h14" />
+export const CheckboxIcon = () => (
+  <Icon size={18}>
+    <rect x="4" y="4" width="16" height="16" rx="4" />
   </Icon>
+)
+
+// The six-dot grip (⠿) people know from Notion and Craft; three lines would read as a menu.
+export const GripIcon = () => (
+  <svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true" fill="currentColor">
+    {[2, 8, 14].flatMap(y => [<circle key={`l${y}`} cx="2" cy={y} r="1.5" />, <circle key={`r${y}`} cx="8" cy={y} r="1.5" />])}
+  </svg>
 )

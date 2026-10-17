@@ -16,7 +16,7 @@ import { applyCommand } from '../domain/workspace'
 import { newOperationId, useWorkspace } from './use-day'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { GripIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
+import { CheckboxIcon, GripIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { addDays, fromIso, todayIso } from './dates'
 
 const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' }, planDate: { default: '' } }, content: 'inline' }, {
@@ -70,7 +70,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     initial.current = { nodes, base: savedBase, recovered }
   }
   const [pastedChecklistIds, setPastedChecklistIds] = useState<string[]>(() => checklistIds(initial.current!.nodes))
-  const editor = useCreateBlockNote({ schema, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  const editor = useCreateBlockNote({ schema, dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     if (!data) return defaultPasteHandler()
     const insert = (blocks: EditorNode[]) => {
@@ -392,10 +392,20 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       middleware: [offset(({ elements }) => {
         const blockId = editor.getExtension(SideMenuExtension)?.store.state?.block?.id
         const block = blockId ? editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(blockId)}"]`) : null
-        return block ? { crossAxis: firstLineCenter(block) - elements.reference.getBoundingClientRect().top - elements.floating.offsetHeight / 2 } : 0
+        return block ? { mainAxis: 4, crossAxis: firstLineCenter(block) - elements.reference.getBoundingClientRect().top - elements.floating.offsetHeight / 2 } : 4
       })],
     },
   }), [editor])
+  // Press-tint cleanup lives here, not in the side menu: BlockNote unmounts the side menu while a drag is in flight.
+  useEffect(() => {
+    const clear = () => document.querySelectorAll('.is-picked').forEach(el => el.classList.remove('is-picked'))
+    // ProseMirror doesn't redraw the browser selection while the editor is unfocused after a drop, so collapse both.
+    const settle = () => { clear(); requestAnimationFrame(() => { const { state } = editor.prosemirrorView; if (!state.selection.empty) editor.prosemirrorView.dispatch(state.tr.setSelection(TextSelection.near(state.selection.$to, -1))); const dom = window.getSelection(); if (dom && !dom.isCollapsed && editor.prosemirrorView.dom.contains(dom.focusNode)) dom.collapseToEnd() }) }
+    document.addEventListener('pointerup', clear)
+    document.addEventListener('dragend', settle, true)
+    document.addEventListener('drop', settle, true)
+    return () => { document.removeEventListener('pointerup', clear); document.removeEventListener('dragend', settle, true); document.removeEventListener('drop', settle, true) }
+  }, [editor])
   const handleActions = useRef({ select }); handleActions.current = { select }
   const Handle = useMemo(() => function StableHandle() { return <SectionSideMenu select={id => handleActions.current.select(id)} /> }, [])
   function updateDrop(x: number, y: number) {
@@ -546,7 +556,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const library = getDefaultReactSlashMenuItems(editor).filter(item => ['Heading 1', 'Heading 2', 'Heading 3', 'Paragraph', 'Bullet List', 'Numbered List', 'Quote'].includes(item.title)).map(item => headingHints[item.title] ? { ...item, subtext: headingHints[item.title] } : item)
         const first = suggested.map(title => library.find(item => item.title === title)!).map(item => ({ ...item, group: 'Suggested' }))
         const rest = library.filter(item => !suggested.includes(item.title))
-        const taskItem = { title: 'Task', subtext: 'Create a task, keeping its identity wherever it moves', aliases: ['todo', 'task', '任务'], group: 'Suggested', onItemClick: () => {
+        const taskItem = { title: 'Task', subtext: 'Checkbox that becomes a task', icon: <CheckboxIcon />, aliases: ['todo', 'task', '任务'], group: 'Suggested', onItemClick: () => {
           const currentBlock = editor.getTextCursorPosition().block
           const currentId = currentBlock.id
           const replaceCurrent = !inlineText(currentBlock.content) || inlineText(currentBlock.content) === '/'
@@ -597,13 +607,6 @@ function SectionSideMenu({ select }: { select(id: string): void }) {
   const Components = useComponentsContext()!
   const sideMenu = editor.getExtension(SideMenuExtension)!
   const block = useExtensionState(SideMenuExtension, { editor, selector: state => state?.block })
-  useEffect(() => {
-    const clear = () => document.querySelectorAll('.is-picked').forEach(el => el.classList.remove('is-picked'))
-    document.addEventListener('pointerup', clear)
-    document.addEventListener('dragend', clear)
-    document.addEventListener('drop', clear)
-    return () => { document.removeEventListener('pointerup', clear); document.removeEventListener('dragend', clear); document.removeEventListener('drop', clear) }
-  }, [])
   if (!block) return null
   // Press: only set the editor selection the native drag reads, and tint it. React state changes here would
   // re-render the editor mid-gesture and cancel the drag, so the section label waits for the click.

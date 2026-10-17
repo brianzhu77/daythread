@@ -813,7 +813,10 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 }
 
 /* Pressing the handle tints exactly the blocks the native drag will move (Brian #1). */
-.is-picked > :first-child { background: var(--bn-brand-soft); border-radius: 4px; }
+/* Tint the whole block box so consecutive rows join without white seams; hide text-selection boxes on top. */
+.is-picked { background: var(--bn-brand-soft); }
+.bn-block-outer:has(> .is-picked):has(+ .bn-block-outer > .is-picked) { margin-bottom: 0; }
+.is-picked ::selection { background: transparent; }
 /* While a section is pressed, the text selection behind the tint shouldn't raise the formatting bar. */
 .continuous-editor:has(.is-picked) .bn-formatting-toolbar { display: none; }
 /* The handle's press wrapper fills BlockNote's side menu so the button stays centred on the measured first line. */
