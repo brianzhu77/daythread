@@ -1,3 +1,13 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+/* Tailwind's preflight resets browser defaults the legacy screens relied on. Restore them in the base
+   layer so HeroUI components and utilities still win; drop each rule once its screen moves to HeroUI. */
+@layer base {
+  h1, h2, h3, h4, h5, h6 { font-weight: bold; }
+  input[type="checkbox"], input[type="radio"] { margin: 3px 3px 3px 4px; }
+}
+
 /* Daythread first slice. Phone first (390 px), laptop first for writing (01 §1).
    Visual system: docs/design/craft-v1.md (Craft v1). Tokens below follow its §2;
    the older names (--paper, --app-surface, --app-accent, ...) are aliases so component rules stay stable. */
