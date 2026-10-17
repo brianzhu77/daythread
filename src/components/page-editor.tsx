@@ -407,17 +407,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const settle = () => { clear(); requestAnimationFrame(() => { const { state } = editor.prosemirrorView; if (!state.selection.empty) editor.prosemirrorView.dispatch(state.tr.setSelection(TextSelection.near(state.selection.$to, -1))); const dom = window.getSelection(); if (dom && !dom.isCollapsed && editor.prosemirrorView.dom.contains(dom.focusNode)) dom.collapseToEnd() }) }
     // A press without a drag (a click) ends with pointerup; a drag ends with dragend. Either way the pick is spent.
     const release = () => { clear(); pickedIds.current = [] }
-    const ended = () => { settle(); pickedIds.current = [] }
-    document.addEventListener('pointerup', release)
-    // A cancelled drag (Escape) whose handle BlockNote already unmounted never gets dragend, so BlockNote's line
-    // would linger. Pointer events stop during a native drag, so the first one after it means the drag is over.
+    // BlockNote clears its drop line on dragend at the editor, but the handle that started the drag lives outside
+    // it, so a cancelled drag (Escape, which the page never sees as a keydown) would leave the line. Clear it on any
+    // dragend, and on the first pointer move after a drag in case the handle was unmounted and dragend never came.
     const dropLineGone = () => { if (document.querySelector('.prosemirror-dropcursor-block')) editor.prosemirrorView.dom.dispatchEvent(new DragEvent('dragleave', { bubbles: true, relatedTarget: null })) }
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') dropLineGone() }
+    const ended = () => { settle(); dropLineGone(); pickedIds.current = [] }
+    document.addEventListener('pointerup', release)
     document.addEventListener('pointermove', dropLineGone)
-    document.addEventListener('keydown', onKey)
     document.addEventListener('dragend', ended, true)
     document.addEventListener('drop', settle, true)
-    return () => { document.removeEventListener('pointermove', dropLineGone); document.removeEventListener('keydown', onKey); document.removeEventListener('pointerup', release); document.removeEventListener('dragend', ended, true); document.removeEventListener('drop', settle, true) }
+    return () => { document.removeEventListener('pointermove', dropLineGone); document.removeEventListener('pointerup', release); document.removeEventListener('dragend', ended, true); document.removeEventListener('drop', settle, true) }
   }, [editor])
   const handleActions = useRef({ select, selected: () => selected.current }); handleActions.current = { select, selected: () => selected.current }
   const Handle = useMemo(() => function StableHandle() { return <SectionSideMenu select={id => handleActions.current.select(id)} picked={pickedIds} extended={extendedIds} selectedIds={() => handleActions.current.selected()} /> }, [])
