@@ -33,7 +33,7 @@ function SampleBanner() {
     )
   return (
     <details className="banner" role="note">
-      <summary>Local only · AI simulated</summary>
+      <summary>{import.meta.env.VITE_TRIAL_BANNER ?? 'Local only · AI simulated'}</summary>
       <span>Saved on this Mac. Organizing and suggestions are simulated; no model is called.</span>
       <label className="sim-control">
         Next AI result
