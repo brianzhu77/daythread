@@ -31,6 +31,9 @@ function SampleBanner() {
         Couldn’t load your workspace · <button type="button" className="link" onClick={reload}>Retry</button>
       </p>
     )
+  // Developer controls. Hidden in normal builds so a real workspace can't pick up simulated outcomes or sample data;
+  // trial copies keep the banner so the "not your real workspace" line stays visible.
+  if (import.meta.env.VITE_DEV_MENU !== '1' && !import.meta.env.VITE_TRIAL_BANNER) return null
   return (
     <details className="banner" role="note">
       <summary>{import.meta.env.VITE_TRIAL_BANNER ?? 'Local only · AI simulated'}</summary>
