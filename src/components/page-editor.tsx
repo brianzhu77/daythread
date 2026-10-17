@@ -12,7 +12,8 @@ import '@blocknote/mantine/style.css'
 import type { Page, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, type EditorNode } from '../domain/editor-document'
 import { applyCommand } from '../domain/workspace'
-import { useWorkspace } from './use-day'
+import { newOperationId, useWorkspace } from './use-day'
+import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
 import { GripIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { addDays, fromIso, todayIso } from './dates'
@@ -184,6 +185,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }
   const stash = () => { try { localStorage.setItem(key, JSON.stringify({ base: base.current, document: JSON.stringify(nodes()) })) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
   const flushRef = useRef<() => Promise<void>>(async () => {})
+  const pendingSave = useRef<{ fingerprint: string; operationId: string } | null>(null)
   const flush = useCallback(async () => {
     if (!dirty.current || sending.current) return
     sending.current = true
@@ -192,13 +194,19 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     lastSent.current = document
     setStatus('Saving…')
     const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, today: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }
+    const fingerprint=JSON.stringify(action)
+    if (pendingSave.current?.fingerprint !== fingerprint) pendingSave.current={fingerprint,operationId:newOperationId()}
+    const operationId=pendingSave.current!.operationId
+    debugClient('editor.save.start',{operationId,pageId:page.id,beforeRevision:latestWorkspace.current.revision})
     const source = latestWorkspace.current
     let preview: Workspace
-    try { preview = applyCommand(source, { operationId: crypto.randomUUID(), expectedRevision: source.revision, action }).workspace }
-    catch (error) { sending.current = false; setFailed(true); setStatus(error instanceof Error ? error.message : 'Cannot save; draft kept'); return }
-    const result = await run(action)
+    try { preview = applyCommand(source, { operationId, expectedRevision: source.revision, action }).workspace }
+    catch (error) { debugClient('editor.save.rejected',{operationId,pageId:page.id,result:'conflict',error:error instanceof Error?error.name:'UnknownError'}); sending.current = false; setFailed(true); setStatus(error instanceof Error ? error.message : 'Cannot save; draft kept'); return }
+    const result = await run(action,undefined,operationId)
     sending.current = false
-    if (!result) { setFailed(true); setStatus('Not saved · your draft is kept on this device'); return }
+    if (!result) { debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true); setStatus('Not saved · your draft is kept on this device'); return }
+    pendingSave.current=null
+    debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
     for (const t of source.tasks) if (expectedTaskVersions.current.get(t.id) !== t.version) invalidHistoryTasks.current.add(t.id)
     for (const t of preview.tasks) if (source.tasks.find(old => old.id === t.id)?.version !== t.version) expectedTaskVersions.current.set(t.id, t.version)
     const savedPage = preview.pages.find(p => p.id === page.id)!
@@ -219,13 +227,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const taskId = String(c.block.props.taskId)
       const target = latestWorkspace.current.tasks.find(t => t.id === taskId)
       if (target && (invalidHistoryTasks.current.has(taskId) || expectedTaskVersions.current.get(taskId) !== target.version)) {
-        setStatus(`Can't undo: '${target.title}' changed since`); return false
+        debugClient('editor.undo.rejected',{operationId:newOperationId(),pageId:page.id,taskId,result:'version-conflict'}); setStatus(`Can't undo: '${target.title}' changed since`); return false
       }
     }
     for (const [blockId, effect] of Object.entries(latestPage.current.editorDeletions ?? {})) {
       if (!changes.some(c => c.type === 'insert' && c.block.id === blockId)) continue
       const target = latestWorkspace.current.tasks.find(t => t.id === effect.task.id)
-      if (!target || target.version !== effect.afterVersion) { setStatus(`Can't undo: '${target?.title ?? effect.task.title}' changed since`); return false }
+      if (!target || target.version !== effect.afterVersion) { debugClient('editor.undo.rejected',{operationId:newOperationId(),pageId:page.id,taskId:effect.task.id,result:'version-conflict'}); setStatus(`Can't undo: '${target?.title ?? effect.task.title}' changed since`); return false }
     }
     if (changes.some(c => c.source.type === 'redo')) {
       for (const c of changes) if (c.type === 'delete' && knownSemantic.current.has(c.block.id)) semanticDeletes.current.add(c.block.id)
@@ -251,10 +259,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // Our own save echoes back with the same document and sections projected from it. Anything else (Put back,
     // Keep from the morning hand-off, another tab) rewrote the page under us and the open editor must follow.
     if (page.editorJSON === lastSent.current && page.editorSections === JSON.stringify(page.sections)) return
-    if (dirty.current) { setFailed(true); setStatus('Page changed elsewhere · draft kept; copy it before reloading'); return }
+    if (dirty.current) { debugClient('editor.external-refresh',{operationId:newOperationId(),triggerOperationId:pendingSave.current?.operationId,pageId:page.id,result:'conflict'}); setFailed(true); setStatus('Page changed elsewhere · draft kept; copy it before reloading'); return }
     // Deferred: replacing blocks synchronously inside React's commit triggers a flushSync warning from BlockNote's views.
     queueMicrotask(() => {
       if (dirty.current || base.current === next) return
+      debugClient('editor.external-refresh',{operationId:newOperationId(),pageId:page.id,afterRevision:workspace.revision,result:'applied'})
       const selection = browserSelection()
       suppress.current = true
       editor.replaceBlocks(editor.document, editorSeed(page, workspace, { templateRows: needsTemplateRows(page, todayIso()) }) as never)
@@ -271,10 +280,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
 
   async function performHistory(direction: 'undo' | 'redo') {
     if (historyPending.current) return
+    const historyOperationId=newOperationId()
+    debugClient('editor.history.start',{operationId:historyOperationId,pageId:page.id,command:direction})
     let candidate: Transaction | null = null
     const command = direction === 'undo' ? historyUndo : historyRedo
     command(editor.prosemirrorState, tr => { candidate = tr })
-    if (!candidate) return
+    if (!candidate) { debugClient('editor.history.rejected',{operationId:historyOperationId,pageId:page.id,result:'unavailable'}); return }
     const transaction = candidate as Transaction
     const affected = new Set<string>()
     const collect = (doc: Transaction['doc'], from: number, to: number) => {
@@ -295,8 +306,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         || direction === 'redo' && [...knownSemantic.current].some(id => oldById.get(id)?.props?.taskId === taskId && !nextById.has(id))
         || Object.entries(latestPage.current.editorCreations ?? {}).some(([id, createdTask]) => createdTask === taskId && (oldById.get(id)?.type === 'task') !== (nextById.get(id)?.type === 'task'))
     })
-    if (!semantic) { historyGuardBypass.current = true; editor.prosemirrorView.dispatch(transaction); historyGuardBypass.current = false; return }
-
+    if (!semantic) { historyGuardBypass.current = true; editor.prosemirrorView.dispatch(transaction); historyGuardBypass.current = false; debugClient('editor.history.finish',{operationId:historyOperationId,pageId:page.id,result:'local'}); return }
     historyPending.current = true; setHistoryBusy(true); editor.isEditable = false
     clearTimeout(timer.current)
     try {
@@ -306,7 +316,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       }
       if (dirty.current) await flushRef.current()
       if (dirty.current) throw new Error('Reconnect and save before undoing a task change · text kept')
-      const current = await refresh()
+      const current = await refresh(historyOperationId)
       latestWorkspace.current = current
       const p = current.pages.find(p => p.id === page.id)!
       latestPage.current = p
@@ -316,8 +326,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const deleted = direction === 'redo' ? deepNodes(nodes()).filter(n => knownSemantic.current.has(n.id) && !remaining.has(n.id)).map(n => n.id) : []
       const historyTaskVersions = Object.fromEntries([...affected].map(id => [id, current.tasks.some(t => t.id === id) ? expectedTaskVersions.current.get(id) ?? -1 : 0]))
       const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deleted, historyTaskVersions, history: true, today: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }
-      const preview = applyCommand(current, { operationId: crypto.randomUUID(), expectedRevision: current.revision, action }).workspace
-      const receipt = await run(action)
+      const preview = applyCommand(current, { operationId: historyOperationId, expectedRevision: current.revision, action }).workspace
+      const receipt = await run(action,undefined,historyOperationId)
       if (!receipt) throw new Error("Can't undo: the page or task changed since · nothing restored")
       const saved = preview.pages.find(p => p.id === page.id)!
       latestPage.current = saved; latestWorkspace.current = preview; base.current = pageContentKey(saved)
@@ -328,7 +338,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       setPastedChecklistIds(checklistIds(nextDocument))
       historyGuardBypass.current = false; suppress.current = false
       dirty.current = false; localStorage.removeItem(key); setFailed(false); setStatus('Saved')
+      debugClient('editor.history.finish',{operationId:historyOperationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
     } catch (error) {
+      debugClient('editor.history.rejected',{operationId:historyOperationId,pageId:page.id,result:'error',error:error instanceof Error?error.name:'UnknownError'})
       setStatus(error instanceof Error ? error.message : 'Cannot verify task history · nothing restored')
     } finally {
       historyPending.current = false; setHistoryBusy(false); editor.isEditable = true; editor.focus()

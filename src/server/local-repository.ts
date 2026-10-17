@@ -1,10 +1,10 @@
 import { mkdir, open, readFile, rename, unlink } from "node:fs/promises";
-import { resolve, dirname } from "node:path";
+import { dirname } from "node:path";
 import { applyCommand, createEmptyWorkspace } from "../domain/workspace.ts";
 import type { Command, CommandResult, Workspace } from "../domain/types.ts";
 import type { WorkspaceRepository } from "./repository.ts";
 
-// Single-process, loopback-only development adapter. Not a Supabase implementation.
+// Legacy JSON adapter retained for migration diagnostics/tests only. The application factory uses SQLite.
 export class LocalWorkspaceRepository implements WorkspaceRepository {
   private tail: Promise<unknown> = Promise.resolve();
   private readonly filePath: string;
@@ -73,22 +73,4 @@ export class LocalWorkspaceRepository implements WorkspaceRepository {
       return result;
     });
   }
-}
-let repository: LocalWorkspaceRepository | undefined;
-export function getLocalRepository(): WorkspaceRepository {
-  if (process.env.DAYTHREAD_STORAGE !== "local")
-    throw new Error(
-      "Local development storage is not enabled. Configure DAYTHREAD_STORAGE=local for the local demo only.",
-    );
-  if (process.env.VERCEL || process.env.NETLIFY)
-    throw new Error(
-      "Local unauthenticated demo storage is disabled on hosting platforms",
-    );
-  repository ??= new LocalWorkspaceRepository(
-    resolve(
-      process.env.DAYTHREAD_LOCAL_DATA_PATH ??
-        ".daythread-local/workspace.json",
-    ),
-  );
-  return repository;
 }
