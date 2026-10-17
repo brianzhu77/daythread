@@ -816,3 +816,5 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .is-picked > :first-child { background: var(--bn-brand-soft); border-radius: 4px; }
 /* While a section is pressed, the text selection behind the tint shouldn't raise the formatting bar. */
 .continuous-editor:has(.is-picked) .bn-formatting-toolbar { display: none; }
+/* The handle's press wrapper fills BlockNote's side menu so the button stays centred on the measured first line. */
+.editor-handle { display: flex; align-items: center; height: 100%; }
