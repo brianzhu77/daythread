@@ -522,13 +522,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     onCompositionStartCapture={() => { composing.current = true; clearTimeout(timer.current) }}
     onCompositionEndCapture={() => { composing.current = false; requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
     onDropCapture={e => {
-      // BlockNote can draw its drop line one block away from where ProseMirror drops (Ratchet task #49: line above
-      // "Renew", drop below it). Brian aims with the line, so the picked blocks go exactly where the line is drawn.
-      const ids = pickedIds.current, line = document.querySelector('.prosemirror-dropcursor-block-horizontal')
-      if (!ids.length || !line || !editor.prosemirrorView.dragging) return
+      // Drops go to the row boundary under the pointer at release. BlockNote's line can lag the pointer when
+      // dragover events stop arriving (Ratchet task #49: a long drag stayed put, the line stuck near the start),
+      // and ProseMirror's own drop can land a block away from the line; the pointer is what Brian aims with, and
+      // a line that has caught up shows the same boundary.
+      const ids = pickedIds.current
+      if (!ids.length || !editor.prosemirrorView.dragging) return
       e.preventDefault(); e.stopPropagation()
       pickedIds.current = []
-      const y = line.getBoundingClientRect().top + line.getBoundingClientRect().height / 2
+      const y = e.clientY
       const rows = [...editor.prosemirrorView.dom.querySelectorAll<HTMLElement>(':scope > .bn-block-group > .bn-block-outer')]
       const next = rows.find(row => { const r = row.getBoundingClientRect(); return y < r.top + r.height / 2 })
       const after = next?.querySelector('[data-node-type="blockContainer"]')?.getAttribute('data-id') ?? null
