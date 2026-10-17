@@ -384,10 +384,11 @@ function execute(
       if (!Array.isArray(nodes) || nodes.length > 5000) throw new DomainError("Invalid editor document");
       const flat = (list: any[]): any[] => list.flatMap(n => [n, ...flat(n.children ?? [])]);
       const all = flat(nodes);
+      const pastedChecklists = new Set(flat(JSON.parse(p.editorJSON ?? '[]')).filter(n => n.type === 'sourceChecklist').map(n => n.id));
       const present = new Set(all.map(n => n.id));
       if (action.history) for (const [blockId, taskId] of Object.entries(p.editorCreations ?? {})) {
         const wasPresent = p.sections.some(s => s.blocks.some(b => b.id === blockId));
-        if (!wasPresent || present.has(blockId) && inlineText(all.find(n => n.id === blockId)?.content)) continue;
+        if (!wasPresent || present.has(blockId) && all.find(n => n.id === blockId)?.type === 'task' && inlineText(all.find(n => n.id === blockId)?.content)) continue;
         const otherReferences = state.pages.some(other => other.sections.some(s => s.blocks.some(b => b.taskId === taskId && (other.id !== p.id || b.id !== blockId))));
         if (otherReferences) throw new DomainError("Can't undo: new task is referenced elsewhere");
         state.tasks = state.tasks.filter(t => t.id !== taskId);
@@ -408,7 +409,10 @@ function execute(
       for (const node of all) {
         if (node.type !== 'task' || state.tasks.some(t => t.id === node.props?.taskId)) continue;
         if (!inlineText(node.content) && node.props?.taskId === `editor-task:${node.id}`) continue;
-        if (node.props?.taskId !== `editor-task:${node.id}` || previousBlocks.some(b => b.id === node.id && (b.kind !== 'paragraph' || b.text))) throw new DomainError("Unknown Task identity");
+        const existingContent = previousBlocks.some(b => b.id === node.id && (b.kind !== 'paragraph' || b.text));
+        // Only an imported checklist can become a Task while retaining a non-empty existing block ID.
+        const checklistConversion = pastedChecklists.has(node.id) && (node.props?.role === 'reference' || node.props?.role === 'plan' && Boolean(p.date));
+        if (node.props?.taskId !== `editor-task:${node.id}` || existingContent && !checklistConversion) throw new DomainError("Unknown Task identity");
         const planned = node.props.role === 'plan' ? p.date : null;
         const t = createTask(state, inlineText(node.content) || 'Untitled task', p, planned);
         t.id = node.props.taskId;

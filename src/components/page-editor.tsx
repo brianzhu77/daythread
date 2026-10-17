@@ -1,8 +1,9 @@
-import { TextSelection, type Transaction } from '@tiptap/pm/state'
+import { Fragment, Slice } from '@tiptap/pm/model'
+import { NodeSelection, TextSelection, type Transaction } from '@tiptap/pm/state'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
-import { BlockNoteSchema, defaultBlockSpecs, docToBlocks, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
+import { BlockNoteSchema, blockToNode, defaultBlockSpecs, docToBlocks, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
 import { createReactBlockSpec, getDefaultReactSlashMenuItems, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useCreateBlockNote, useExtensionState } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
@@ -15,9 +16,18 @@ import { DateTag } from './date-tag'
 import { todayIso } from './dates'
 
 const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' }, planDate: { default: '' } }, content: 'inline' }, {
+  toExternalHTML: ({ contentRef }) => <p ref={contentRef} />,
   render: ({ block, contentRef }) => <EditorTask taskId={block.props.taskId} role={block.props.role} planDate={block.props.planDate} contentRef={contentRef} />,
 })()
-const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task } })
+const sourceChecklist = createReactBlockSpec({ type: 'sourceChecklist', propSchema: { checked: { default: false } }, content: 'inline' }, {
+  render: ({ block, contentRef, editor }) => <div className="editor-source-checklist"><input contentEditable={false} type="checkbox" aria-label="Check imported item" checked={block.props.checked} onChange={() => editor.updateBlock(block, { props: { checked: !block.props.checked } })} /><span ref={contentRef} /></div>,
+  toExternalHTML: ({ block, contentRef }) => <p><span>{block.props.checked ? '☑ ' : '☐ '}</span><span ref={contentRef} /></p>,
+})()
+const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist } })
+const clipboardType = 'application/x-daythread-blocks'
+const cutTokens = new Set<string>()
+const deepNodes = (nodes: readonly EditorNode[]): EditorNode[] => nodes.flatMap(n => [n, ...deepNodes(n.children ?? [])])
+const checklistIds = (nodes: readonly EditorNode[]): string[] => deepNodes(nodes).filter(n => n.type === 'sourceChecklist').map(n => n.id)
 function EditorTask({ taskId, role, planDate, contentRef }: { taskId: string; role: string; planDate: string; contentRef: (node: HTMLElement | null) => void }) {
   const { workspace, run } = useWorkspace()
   const t = workspace?.tasks.find(t => t.id === taskId)
@@ -45,20 +55,52 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     try { const stored = JSON.parse(localStorage.getItem(key) ?? 'null'); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; recovered = true } } catch { /* fresh document */ }
     initial.current = { nodes, base: savedBase, recovered }
   }
+  const [pastedChecklistIds, setPastedChecklistIds] = useState<string[]>(() => checklistIds(initial.current!.nodes))
   const editor = useCreateBlockNote({ schema, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
-    const html = event.clipboardData?.getData('blocknote/html')
-    if (!html) return defaultPasteHandler()
-    const dom = new DOMParser().parseFromString(html, 'text/html')
-    const taskNodes = [...dom.querySelectorAll<HTMLElement>('[data-content-type="task"]')]
-    if (!taskNodes.length) return defaultPasteHandler()
-    for (const node of taskNodes) {
-      const id = node.getAttribute('data-task-id')
-      if (!latestWorkspace.current.tasks.some(t => t.id === id)) { node.setAttribute('data-content-type', 'paragraph'); node.removeAttribute('data-task-id') }
-      else { node.setAttribute('data-role', 'reference'); node.setAttribute('data-plan-date', '') }
+    const data = event.clipboardData
+    if (!data) return defaultPasteHandler()
+    const insert = (blocks: EditorNode[]) => {
+      // ProseMirror fits a block slice at the actual selection, preserving both sides of a split paragraph.
+      // Building the nodes directly also keeps each new Task's block ID and derived Task ID together.
+      const view = editor.prosemirrorView
+      const content = Fragment.fromArray(blocks.map(block => blockToNode(block as never, view.state.schema)))
+      view.dispatch(closeHistory(view.state.tr).replaceSelection(new Slice(content, 0, 0)).scrollIntoView())
     }
-    dom.querySelectorAll('[data-id]').forEach(node => node.removeAttribute('data-id'))
-    editor.pasteHTML(dom.body.innerHTML, true)
-    return true
+    const internal = data.getData(clipboardType)
+    if (internal) {
+      try {
+        const payload = JSON.parse(internal)
+        if (!Array.isArray(payload.blocks)) return defaultPasteHandler()
+        const moving = payload.cut && (cutTokens.has(payload.token) || localStorage.getItem(`daythread:cut:${payload.token}`) === JSON.stringify(payload.blocks))
+        const fresh = (node: EditorNode): EditorNode => {
+          const id = crypto.randomUUID()
+          return { ...node, id, ...(node.type === 'task' ? { props: moving && latestWorkspace.current.tasks.some(t => t.id === node.props?.taskId) ? node.props : { taskId: `editor-task:${id}`, role: 'reference', planDate: '' } } : {}), ...(node.children ? { children: node.children.map(fresh) } : {}) }
+        }
+        insert(payload.blocks.map(fresh))
+        if (payload.cut) { cutTokens.delete(payload.token); localStorage.removeItem(`daythread:cut:${payload.token}`) }
+        return true
+      } catch { setStatus('Could not paste these blocks · clipboard kept'); return true }
+    }
+    const html = data.getData('text/html')
+    const text = data.getData('text/markdown') || data.getData('text/plain')
+    // Parse external checklists before the normal typed-[] conversion can create Tasks.
+    if (html || /^\s*(?:[-*+]\s+)?\[[ xX]\]/m.test(text)) {
+      const blocks = (html ? editor.tryParseHTMLToBlocks(html) : editor.tryParseMarkdownToBlocks(text.replace(/^(\s*)(\[[ xX]\])/gm, '$1- $2'))) as unknown as EditorNode[]
+      const ids: string[] = []
+      const protect = (node: EditorNode): EditorNode => {
+        const id = crypto.randomUUID()
+        if (node.type === 'checkListItem') { ids.push(id); return { ...node, id, type: 'sourceChecklist', props: { checked: Boolean(node.props?.checked) }, children: node.children?.map(protect) } }
+        if (node.type === 'task') return { id, type: 'paragraph', content: node.content, children: node.children?.map(protect) }
+        return { ...node, id, children: node.children?.map(protect) }
+      }
+      const safe = blocks.map(protect)
+      if (ids.length) {
+        insert(safe)
+        setPastedChecklistIds(ids)
+        return true
+      }
+    }
+    return defaultPasteHandler()
   }, initialContent: (initial.current.nodes.length ? initial.current.nodes : [{ type: 'paragraph' }]) as never })
   const base = useRef(initial.current.base)
   const latestPage = useRef(page); latestPage.current = page
@@ -82,6 +124,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const [failed, setFailed] = useState(initial.current.recovered)
   const [drop, setDrop] = useState<{ id: string; end: boolean; top: number } | null>(null)
   const [dropHint, setDropHint] = useState<{ x: number; y: number; text: string } | null>(null)
+  const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 899px)').matches)
+  useEffect(() => { const media = window.matchMedia('(max-width: 899px)'); const update = () => setCompact(media.matches); media.addEventListener('change', update); return () => media.removeEventListener('change', update) }, [])
   const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const [touchHandle, setTouchHandle] = useState<{ id: string; top: number } | null>(null)
   const [touchDragging, setTouchDragging] = useState(false)
@@ -146,6 +190,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   useEffect(() => editor.onChange(() => {
     if (suppress.current) return
     setNotice(null)
+    setPastedChecklistIds(checklistIds(nodes()))
     const checklist = editor.document.find(b => b.type === 'checkListItem')
     if (checklist && !composing.current) editor.transact(tr => {
       editor.updateBlock(checklist.id, { type: 'task', props: { taskId: `editor-task:${checklist.id}`, role: insertionRole(checklist.id), planDate: insertionRole(checklist.id) === 'plan' ? page.date ?? '' : '' }, content: checklist.content } as never)
@@ -192,15 +237,17 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       })
     }
     for (const step of transaction.steps) step.getMap().forEach((from, to, nextFrom, nextTo) => { collect(transaction.before, from, to); collect(transaction.doc, nextFrom, nextTo) })
-    const oldNodes = nodes(), nextNodes = docToBlocks(transaction.doc) as unknown as EditorNode[]
+    const nextDocument = docToBlocks(transaction.doc) as unknown as EditorNode[]
+    const oldNodes = deepNodes(nodes()), nextNodes = deepNodes(nextDocument)
     const oldById = new Map(oldNodes.map(n => [n.id, n])), nextById = new Map(nextNodes.map(n => [n.id, n]))
     const semantic = [...affected].some(taskId => {
       const old = oldNodes.find(n => n.type === 'task' && n.props?.taskId === taskId)
       const next = nextNodes.find(n => n.type === 'task' && n.props?.taskId === taskId)
-      return old && next && inlineText(old.content) !== inlineText(next.content)
+      return !latestWorkspace.current.tasks.some(t => t.id === taskId) && [old, next].some(n => n?.props?.taskId === `editor-task:${n?.id}`)
+        || old && next && inlineText(old.content) !== inlineText(next.content)
         || Object.entries(latestPage.current.editorDeletions ?? {}).some(([id, effect]) => effect.task.id === taskId && nextById.has(id) && !oldById.has(id))
         || direction === 'redo' && [...knownSemantic.current].some(id => oldById.get(id)?.props?.taskId === taskId && !nextById.has(id))
-        || Object.entries(latestPage.current.editorCreations ?? {}).some(([id, createdTask]) => createdTask === taskId && oldById.has(id) !== nextById.has(id))
+        || Object.entries(latestPage.current.editorCreations ?? {}).some(([id, createdTask]) => createdTask === taskId && (oldById.get(id)?.type === 'task') !== (nextById.get(id)?.type === 'task'))
     })
     if (!semantic) { historyGuardBypass.current = true; editor.prosemirrorView.dispatch(transaction); historyGuardBypass.current = false; return }
 
@@ -219,8 +266,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       latestPage.current = p
       const document = JSON.stringify(docToBlocks(transaction.doc))
       const candidateNodes = JSON.parse(document) as EditorNode[]
-      const remaining = new Set(candidateNodes.map(n => n.id))
-      const deleted = direction === 'redo' ? nodes().filter(n => knownSemantic.current.has(n.id) && !remaining.has(n.id)).map(n => n.id) : []
+      const remaining = new Set(deepNodes(candidateNodes).map(n => n.id))
+      const deleted = direction === 'redo' ? deepNodes(nodes()).filter(n => knownSemantic.current.has(n.id) && !remaining.has(n.id)).map(n => n.id) : []
       const historyTaskVersions = Object.fromEntries([...affected].map(id => [id, current.tasks.some(t => t.id === id) ? expectedTaskVersions.current.get(id) ?? -1 : 0]))
       const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deleted, historyTaskVersions, history: true, today: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }
       const preview = applyCommand(current, { operationId: crypto.randomUUID(), expectedRevision: current.revision, action }).workspace
@@ -232,6 +279,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       lastSent.current = document
       suppress.current = true; historyGuardBypass.current = true
       editor.prosemirrorView.dispatch(transaction)
+      setPastedChecklistIds(checklistIds(nextDocument))
       historyGuardBypass.current = false; suppress.current = false
       dirty.current = false; localStorage.removeItem(key); setFailed(false); setStatus('Saved')
     } catch (error) {
@@ -245,6 +293,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     selected.current = range.map(n => n.id)
     setSelectionLabel(range[0]?.type === 'heading' ? `'${inlineText(range[0].content)}' section selected` : range.length > 1 ? `${range.length} blocks selected` : 'Block selected')
     if (range.length > 1) editor.setSelection(range[0]!.id, range.at(-1)!.id)
+    else if (range[0]) {
+      let pos = -1
+      editor.prosemirrorState.doc.descendants((node, position) => { if (node.type.name === 'blockContainer' && node.attrs.id === range[0]!.id) pos = position })
+      if (pos >= 0) editor.prosemirrorView.dispatch(editor.prosemirrorState.tr.setSelection(NodeSelection.create(editor.prosemirrorState.doc, pos)))
+    }
     editor.focus()
   }
   useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(null), 6000); return () => clearTimeout(timer) }, [notice])
@@ -337,16 +390,47 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     window.addEventListener('scroll', update, true)
     return () => { off(); window.removeEventListener('scroll', update, true) }
   }, [editor])
+  function copyBlocks(e: React.ClipboardEvent, cut: boolean) {
+    const selection = editor.prosemirrorState.selection
+    if (!selected.current.length && (selection.empty || selection instanceof TextSelection && selection.$from.sameParent(selection.$to))) return
+    const chosen = selected.current.length ? nodes().filter(n => selected.current.includes(n.id)) : null
+    const snapshot = chosen ? null : editor.getSelectionCutBlocks()
+    const blocks = chosen ?? snapshot!.blocks.map(block => {
+      // Copying just part of a Task title copies text, not the identity or the rest of its title.
+      return block.type === 'task' && (snapshot!.blockCutAtStart === block.id || snapshot!.blockCutAtEnd === block.id) ? { ...block, type: 'paragraph', props: {} } : block
+    }) as unknown as EditorNode[]
+    const token = crypto.randomUUID()
+    e.clipboardData.setData(clipboardType, JSON.stringify({ blocks, cut, token }))
+    e.clipboardData.setData('text/html', editor.blocksToHTMLLossy(blocks as never))
+    e.clipboardData.setData('text/plain', blocks.map(n => inlineText(n.content)).join('\n'))
+    e.preventDefault(); e.stopPropagation()
+    if (cut) {
+      cutTokens.add(token)
+      try { localStorage.setItem(`daythread:cut:${token}`, JSON.stringify(blocks)) } catch { /* same-tab move remains available */ }
+      editor.transact(tr => { closeHistory(tr); if (chosen) editor.removeBlocks(chosen.map(n => n.id)); else tr.deleteSelection() })
+      selected.current = []; setSelectionLabel('')
+    }
+  }
   return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
-    onMouseUpCapture={() => requestAnimationFrame(() => {
-      // After the page is rewritten from outside (Put back, morning Done), the first click can leave ProseMirror's
-      // selection behind the browser's caret, so Enter splits the wrong block. Re-import a collapsed caret if they disagree.
-      const view = editor.prosemirrorView, dom = window.getSelection()
-      if (!dom?.isCollapsed || !dom.anchorNode || !view.dom.contains(dom.anchorNode)) return
-      const pos = view.posAtDOM(dom.anchorNode, dom.anchorOffset)
-      if (view.state.selection.empty && view.state.selection.from === pos) return
-      view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos)))
-    })}
+    onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
+    onMouseDownCapture={e => { if ((e.target as Element).closest('.bn-editor')) { selected.current = []; setSelectionLabel('') } }}
+    onMouseUpCapture={e => {
+      const target = e.target instanceof Element ? e.target : null
+      const view = editor.prosemirrorView
+      // Only repair a plain click in editable text. Buttons, selection gestures, native drag and IME own their selections.
+      if (e.button !== 0 || e.detail !== 1 || !target || !view.dom.contains(target) || target.closest('[contenteditable="false"]') || composing.current || view.composing || dragging.current.length || historyPending.current) return
+      const doc = view.state.doc
+      requestAnimationFrame(() => {
+        if (view.isDestroyed || view.state.doc !== doc || composing.current || view.composing || dragging.current.length || historyPending.current) return
+        const dom = window.getSelection()
+        if (!dom?.isCollapsed || !dom.anchorNode || !view.dom.contains(dom.anchorNode)) return
+        const pos = view.posAtDOM(dom.anchorNode, dom.anchorOffset)
+        // A DOM caret on a non-text boundary must not turn a block selection into an invalid text selection.
+        if (!view.state.doc.resolve(pos).parent.inlineContent) return
+        if (view.state.selection.empty && view.state.selection.from === pos) return
+        view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos)))
+      })
+    }}
     onCompositionStartCapture={() => { composing.current = true; clearTimeout(timer.current) }}
     onCompositionEndCapture={() => { composing.current = false; requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
     onKeyDownCapture={e => {
@@ -375,7 +459,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         deleteSelected()
       } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && editor.prosemirrorState.selection.empty && editor.getTextCursorPosition().block.type === 'task' && !inlineText(editor.getTextCursorPosition().block.content)) {
         e.preventDefault(); e.stopPropagation(); const id = editor.getTextCursorPosition().block.id; semanticDeletes.current.add(id); editor.removeBlocks([id])
-      } else if (!['Shift', 'Control', 'Meta', 'Alt'].includes(e.key)) { selected.current = []; setSelectionLabel('') }
+      } else if (!['Shift', 'Control', 'Meta', 'Alt'].includes(e.key) && !((e.metaKey || e.ctrlKey) && ['c', 'x'].includes(e.key.toLowerCase()))) { selected.current = []; setSelectionLabel('') }
     }}
     onDragOverCapture={e => {
       if (!dragging.current.length) return
@@ -387,7 +471,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       e.preventDefault(); e.stopPropagation(); commitDrag()
     }} onDragEnd={() => { dragging.current = []; setDrop(null); setDropHint(null) }}>
     <div className="editor-save-line" role="status">{status}{failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span>{selectionLabel}</span>}</div>
-    <BlockNoteView editor={editor} theme={dark ? 'dark' : 'light'} sideMenu={false} slashMenu={false}>
+    <BlockNoteView editor={editor} theme={dark ? 'dark' : 'light'} formattingToolbar={!compact && !selectionLabel} sideMenu={false} slashMenu={false}>
       <SuggestionMenuController triggerCharacter="/" shouldOpen={() => !composing.current && editor.getTextCursorPosition().block.type !== 'task'} getItems={async query => {
         const headingHints: Record<string, string> = { 'Heading 1': 'Larger than the day sections', 'Heading 2': 'A section, like TODO - Top 3', 'Heading 3': 'Inside a section' }
         const defaults = getDefaultReactSlashMenuItems(editor).filter(item => ['Heading 1', 'Heading 2', 'Heading 3', 'Paragraph', 'Bullet List', 'Numbered List', 'Quote'].includes(item.title)).map(item => headingHints[item.title] ? { ...item, subtext: headingHints[item.title] } : item)
@@ -411,6 +495,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     <div className="editor-phone-toolbar" aria-label="Editor tools"><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('undo')} aria-label="Undo">↶</button><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('redo')} aria-label="Redo">↷</button><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }}>＋</button></div>
     {dock && createPortal(<>
       {selectionLabel && <div className="editor-selection-bar"><span>{selectionLabel}</span><button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>}
+    {pastedChecklistIds.length > 0 && <div className="editor-paste-notice" role="status">{pastedChecklistIds.length} checklist lines · <button onClick={() => {
+      editor.transact(tr => {
+        closeHistory(tr)
+        for (const id of pastedChecklistIds) {
+          const node = editor.getBlock(id)
+          if (node?.type === 'sourceChecklist') editor.updateBlock(id, { type: 'task', props: { taskId: `editor-task:${id}`, role: insertionRole(id), planDate: insertionRole(id) === 'plan' ? page.date ?? '' : '' }, content: node.content } as never)
+        }
+      })
+      setPastedChecklistIds([]); editor.focus()
+    }}>Turn into tasks</button></div>}
       {notice && <div className="editor-operation-notice" role="status"><span>{notice.text}</span><button onClick={() => { if (notice.fingerprint === JSON.stringify(editor.document)) void performHistory('undo'); setNotice(null) }}>Undo</button></div>}
     </>, dock)}
     {drop && <div className="editor-drop-line" style={{ top: drop.top }} />}

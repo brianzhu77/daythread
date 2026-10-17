@@ -737,3 +737,10 @@ body:has(.list-screen) { background: var(--bg-grouped); }
   .day-head h1 { white-space:nowrap; }
 }
 .editor-drop-hint { position:fixed; z-index:130; pointer-events:none; max-width:300px; padding:6px 10px; border-radius:8px; background:var(--bg); color:var(--ink-2); box-shadow:0 4px 18px #0002; font-size:12px; }
+
+/* The editor must not enlarge the mobile layout viewport through floating format controls. */
+@media(max-width:899px) { .continuous-editor { overflow-x:clip; } .editor-selection-bar { max-width:calc(100vw - 32px); } }
+.editor-source-checklist { display:flex; gap:8px; align-items:baseline; }
+.editor-source-checklist > span:last-child { flex:1; min-width:0; }
+.editor-paste-notice { display:flex; align-items:center; gap:12px; max-width:min(90vw,600px); padding:8px 12px; border-radius:14px; background:var(--bg); color:var(--ink-2); box-shadow:0 5px 26px #0003; font-size:13px; pointer-events:auto; }
+@media(max-width:899px) { .editor-paste-notice { width:calc(100vw - 32px); } }
