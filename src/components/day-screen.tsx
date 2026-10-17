@@ -51,7 +51,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
           {!isToday && <a className="button secondary chip-link" href="/">Back to today</a>}
           <a className="button icon" href={`/day/${addDays(date, 1)}`} aria-label="Next day">→</a>
         </nav>
-        <SaveIndicator />
+
       </header>
 
       <div className="day-body">
@@ -83,7 +83,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
         )}
       </div>
 
-      {page && <CaptureBar page={page} />}
+
     </div>
   )
 }

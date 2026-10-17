@@ -17,6 +17,11 @@ export function Navigation() {
   const path = useRouterState({ select: s => s.location.pathname })
   const [captureOpen, setCaptureOpen] = useState(false)
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') { event.preventDefault(); setCaptureOpen(true) } }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   return (
     <>
       <aside className="sidebar" aria-label="Navigation">
@@ -51,6 +56,7 @@ export function Navigation() {
         </button>
       </nav>
 
+      <button type="button" className="desktop-capture-plus" aria-label="Capture · ⌘J" onClick={() => setCaptureOpen(true)}><PlusIcon /></button>
       {captureOpen && <CaptureSheet onClose={() => setCaptureOpen(false)} />}
     </>
   )
@@ -74,7 +80,8 @@ function DayList({ path }: { path: string }) {
         </Link>
       ))}
       <p className="side-label">Pages</p>
-      <p className="side-note">Nested pages come with v0.4.</p>
+      {workspace?.pages.filter(p => p.type === 'document').map(p => <a className="side-row small" href={`/pages?page=${encodeURIComponent(p.id)}`} key={p.id}>{p.title}</a>)}
+      <Link className="side-row small" to="/pages">＋ New page</Link>
     </div>
   )
 }

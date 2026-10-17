@@ -14,3 +14,4 @@ dist/
 # Third-party Craft reference screenshots (local study only)
 /refs/Craft ios Dec 2025/
 /refs/craft-contact-sheets/
+.gstack/

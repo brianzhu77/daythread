@@ -51,6 +51,7 @@ interface WorkspaceContextValue {
   retry(): void
   dismiss(id: string): void
   reload(): void
+  refresh(): Promise<Workspace>
   addSampleData(): Promise<void>
 }
 
@@ -72,6 +73,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     wsRef.current = ws
     setWorkspace(ws)
   }, [])
+
+  const refresh = useCallback(async () => { const next = await transport.load(); adopt(next); return next }, [transport, adopt])
 
   const reload = useCallback(() => {
     setLoadError(null)
@@ -153,9 +156,10 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       retry,
       dismiss,
       reload,
+      refresh,
       addSampleData,
     }),
-    [workspace, loadError, saveState, saveError, notices, simOutcome, run, retry, dismiss, reload, addSampleData],
+    [workspace, loadError, saveState, saveError, notices, simOutcome, run, retry, dismiss, reload, refresh, addSampleData],
   )
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }

@@ -375,12 +375,24 @@ function execute(
   switch (action.type) {
     case "save-editor": {
       const p = page(state, action.pageId);
+      for (const [id, expected] of Object.entries(action.historyTaskVersions ?? {})) {
+        const current = state.tasks.find(t => t.id === id);
+        if ((current?.version ?? 0) !== expected) throw new DomainError(`Can't undo: '${current?.title ?? 'Task'}' changed since`);
+      }
       if (pageContentKey(p) !== action.expectedContent) throw new DomainError("Page changed elsewhere. Your editor draft is kept; reload or copy it before resolving.");
       const nodes = JSON.parse(action.document);
       if (!Array.isArray(nodes) || nodes.length > 5000) throw new DomainError("Invalid editor document");
       const flat = (list: any[]): any[] => list.flatMap(n => [n, ...flat(n.children ?? [])]);
       const all = flat(nodes);
       const present = new Set(all.map(n => n.id));
+      if (action.history) for (const [blockId, taskId] of Object.entries(p.editorCreations ?? {})) {
+        const wasPresent = p.sections.some(s => s.blocks.some(b => b.id === blockId));
+        if (!wasPresent || present.has(blockId) && inlineText(all.find(n => n.id === blockId)?.content)) continue;
+        const otherReferences = state.pages.some(other => other.sections.some(s => s.blocks.some(b => b.taskId === taskId && (other.id !== p.id || b.id !== blockId))));
+        if (otherReferences) throw new DomainError("Can't undo: new task is referenced elsewhere");
+        state.tasks = state.tasks.filter(t => t.id !== taskId);
+        state.placements = state.placements.filter(x => x.taskId !== taskId);
+      }
       // Undo of a semantic row deletion restores only its checked task and relations.
       for (const [blockId, effect] of Object.entries(p.editorDeletions ?? {})) {
         if (!present.has(blockId)) continue;
@@ -395,10 +407,13 @@ function execute(
       for (const block of previousBlocks) p.editorBlockMetadata[block.id] = structuredClone(block);
       for (const node of all) {
         if (node.type !== 'task' || state.tasks.some(t => t.id === node.props?.taskId)) continue;
-        if (node.props?.taskId !== `editor-task:${node.id}` || previousBlocks.some(b => b.id === node.id)) throw new DomainError("Unknown Task identity");
+        if (!inlineText(node.content) && node.props?.taskId === `editor-task:${node.id}`) continue;
+        if (node.props?.taskId !== `editor-task:${node.id}` || previousBlocks.some(b => b.id === node.id && (b.kind !== 'paragraph' || b.text))) throw new DomainError("Unknown Task identity");
         const planned = node.props.role === 'plan' ? p.date : null;
         const t = createTask(state, inlineText(node.content) || 'Untitled task', p, planned);
         t.id = node.props.taskId;
+        t.title = inlineText(node.content);
+        (p.editorCreations ??= {})[node.id] = t.id;
         if (planned) place(state, t, planned);
       }
       for (const singleDeleteId of action.singleDeleteIds ?? []) {

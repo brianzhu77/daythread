@@ -32,7 +32,7 @@ export function editorSeed(page: Page, workspace: Workspace): EditorNode[] {
       if (emitted.has(b.id)) continue
       const prior = byId.get(b.id)
       const node: EditorNode = prior ? { ...prior, content: inlineText(prior.content) === b.text ? prior.content : b.text }
-        : b.taskId ? { id: b.id, type: 'task', props: { taskId: b.taskId, role: b.planRole ?? (s.kind === 'top3' || s.kind === 'other' ? 'plan' : 'reference') }, content: workspace.tasks.find(t => t.id === b.taskId)?.title ?? b.text }
+        : b.taskId ? { id: b.id, type: 'task', props: { taskId: b.taskId, role: b.planRole ?? (s.kind === 'top3' || s.kind === 'other' ? 'plan' : 'reference'), planDate: page.date ?? '' }, content: workspace.tasks.find(t => t.id === b.taskId)?.title ?? b.text }
         : b.eventId ? { id: b.id, type: 'paragraph', content: workspace.events.find(e => e.id === b.eventId)?.title ?? b.text }
         : b.targetPageId ? { id: b.id, type: 'paragraph', content: [{ type: 'link', href: `/pages?page=${encodeURIComponent(b.targetPageId)}`, content: workspace.pages.find(p => p.id === b.targetPageId)?.title ?? b.text }] }
         : b.materialId ? { id: b.id, type: 'paragraph', content: [{ type: 'link', href: workspace.materials.find(m => m.id === b.materialId)?.url ?? '#', content: b.text }] }
@@ -66,6 +66,7 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
       if (!current) { current = { id: `intro:${page.id}`, kind: 'custom', title: '', blocks: [] }; sections.push(current) }
       if (node.type === 'task') {
         const target = workspace.tasks.find(t => t.id === node.props?.taskId)
+        if (!target && node.props?.taskId === `editor-task:${node.id}` && !inlineText(node.content)) { current.blocks.push({ id: node.id, kind: 'paragraph', text: '' }); return }
         if (!target) throw new Error('Task reference not found')
         const nextTitle = inlineText(node.content)
         const previous = old.get(node.id)

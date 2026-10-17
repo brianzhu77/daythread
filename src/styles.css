@@ -675,3 +675,17 @@ body:has(.list-screen) { background: var(--bg-grouped); }
  .editor-phone-toolbar button { min-width:40px;height:36px;background:transparent;color:var(--ink);border:0; }
 }
 .continuous-editor .bn-block-content[data-content-type=task] { border-left:2px solid var(--blue-soft); padding-left:8px; }
+.editor-reference-tag,.editor-plan-tag { font-size:11px;color:var(--ink-2);white-space:nowrap; }
+.editor-plan-action { background:transparent;color:var(--blue-text);border:0;font-size:12px;padding:2px 4px; }
+.continuous-editor .bn-block-content[data-content-type=task]:has(.editor-task[data-role=reference]) { border-left-color:transparent; }
+@media(max-width:700px) { .editor-task { flex-wrap:wrap;column-gap:8px; } .editor-task-title { min-width:130px; } .editor-plan-tag { display:none; } }
+.continuous-editor .bn-editor { padding-left:0; padding-right:0; }
+.editor-save-line { padding-left:0; }
+.desktop-capture-plus { display:flex;position:fixed;right:40px;bottom:32px;width:52px;height:52px;align-items:center;justify-content:center;border-radius:50%;background:var(--bg);border:0;box-shadow:0 5px 24px #0002;color:var(--ink);z-index:50; }
+.desktop-capture-plus svg { width:24px;height:24px; }
+@media(min-width:701px) { .sheet-scrim { align-items:center;justify-content:center; } .sheet { width:560px;max-height:80vh;border-radius:20px; } }
+@media(max-width:700px) { .desktop-capture-plus { display:none; } .continuous-editor .bn-editor { padding-left:0;padding-right:20px; } }
+.continuous-editor[aria-busy=true] { pointer-events:none; }
+.editor-operation-notice { position:fixed;bottom:32px;left:calc(50% + 100px);transform:translateX(-50%);display:flex;align-items:center;gap:12px;max-width:min(90vw,600px);padding:12px 16px;border-radius:14px;background:var(--bg);color:var(--ink);box-shadow:0 5px 26px #0003;font-size:13px;z-index:120; }
+.editor-operation-notice button { border:0;background:transparent;color:var(--blue-text);padding:3px; }
+@media(max-width:700px) { .editor-operation-notice { top:12px;bottom:auto;left:50%;width:calc(100vw - 32px); } }

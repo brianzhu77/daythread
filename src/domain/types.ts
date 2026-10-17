@@ -33,6 +33,7 @@ export interface Page {
   editorJSON?: string;
   editorSections?: string;
   editorBlockMetadata?: Record<string, NoteBlock>;
+  editorCreations?: Record<string, string>;
   editorDeletions?: Record<string, { task: Task; placements: Placement[]; afterVersion: number; afterPlacements: Placement[] }>;
 
   reviewText: string;
@@ -141,7 +142,7 @@ export interface Workspace {
   receipts: Record<string, Receipt>;
 }
 export type Action =
-  | { type: "save-editor"; pageId: string; expectedContent: string; document: string; singleDeleteIds?: string[]; today?: string }
+  | { type: "save-editor"; pageId: string; expectedContent: string; document: string; singleDeleteIds?: string[]; today?: string; historyTaskVersions?: Record<string, number>; history?: boolean }
   | { type: "ensure-day"; date: LocalDate }
   | { type: "rename-section"; pageId: string; sectionId: string; title: string }
   | { type: "add-section"; pageId: string; title: string }

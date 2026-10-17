@@ -1,6 +1,7 @@
+import type { Transaction } from '@tiptap/pm/state'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { closeHistory, isHistoryTransaction } from '@tiptap/pm/history'
-import { BlockNoteSchema, defaultBlockSpecs, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
+import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
+import { BlockNoteSchema, defaultBlockSpecs, docToBlocks, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
 import { createReactBlockSpec, getDefaultReactSlashMenuItems, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useCreateBlockNote, useExtensionState } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
@@ -10,22 +11,25 @@ import { editorSeed, inlineText, pageContentKey, sectionRange, type EditorNode }
 import { applyCommand } from '../domain/workspace'
 import { useWorkspace } from './use-day'
 
-const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' } }, content: 'inline' }, {
-  render: ({ block, contentRef }) => <EditorTask taskId={block.props.taskId} contentRef={contentRef} />,
+const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' }, planDate: { default: '' } }, content: 'inline' }, {
+  render: ({ block, contentRef }) => <EditorTask taskId={block.props.taskId} role={block.props.role} planDate={block.props.planDate} contentRef={contentRef} />,
 })()
 const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task } })
-function EditorTask({ taskId, contentRef }: { taskId: string; contentRef: (node: HTMLElement | null) => void }) {
+function EditorTask({ taskId, role, planDate, contentRef }: { taskId: string; role: string; planDate: string; contentRef: (node: HTMLElement | null) => void }) {
   const { workspace, run } = useWorkspace()
   const t = workspace?.tasks.find(t => t.id === taskId)
-  return <div className="editor-task">
-    <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : 'Missing task'} checked={t?.status === 'done'} disabled={!t} onChange={() => t && void run({ type: 'task-status', taskId, status: t.status === 'done' ? 'open' : 'done' })} />
+  return <div className="editor-task" data-role={role}>
+    <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : 'Missing task'} checked={t?.status === 'done'} disabled={!t} onChange={() => t && void run({ type: 'task-status', taskId, status: t.status === 'done' ? 'open' : 'done' }, r => ({ text: t.status === 'done' ? 'Task reopened' : 'Task completed', undoOperationId: r.operationId }))} />
     <span ref={contentRef} className={`editor-task-title ${t?.status === 'done' ? 'task-done' : ''}`} data-placeholder="Untitled task" />
+    {role === 'reference' && <span contentEditable={false} className="editor-reference-tag">Reference</span>}
+    {role === 'plan' && planDate && <span contentEditable={false} className="editor-plan-tag">{planDate}</span>}
+    {role === 'reference' && t?.status === 'open' && <button className="editor-plan-action" contentEditable={false} onClick={() => void run({ type: 'plan-task', taskId, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }, r => ({ text: 'Planned for today', undoOperationId: r.operationId }))}>Plan for today</button>}
     {t?.deadlineOn && <small contentEditable={false}>Due {t.deadlineOn}</small>}
   </div>
 }
 
 export function PageEditor({ page, workspace }: { page: Page; workspace: Workspace }) {
-  const { run } = useWorkspace()
+  const { run, refresh } = useWorkspace()
   const key = `daythread:editor:${page.id}`
   const initial = useRef<{ nodes: EditorNode[]; base: string; recovered: boolean } | null>(null)
   if (!initial.current) {
@@ -34,12 +38,29 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     try { const stored = JSON.parse(localStorage.getItem(key) ?? 'null'); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; recovered = true } } catch { /* fresh document */ }
     initial.current = { nodes, base: savedBase, recovered }
   }
-  const editor = useCreateBlockNote({ schema, initialContent: (initial.current.nodes.length ? initial.current.nodes : [{ type: 'paragraph' }]) as never })
+  const editor = useCreateBlockNote({ schema, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+    const html = event.clipboardData?.getData('blocknote/html')
+    if (!html) return defaultPasteHandler()
+    const dom = new DOMParser().parseFromString(html, 'text/html')
+    const taskNodes = [...dom.querySelectorAll<HTMLElement>('[data-content-type="task"]')]
+    if (!taskNodes.length) return defaultPasteHandler()
+    for (const node of taskNodes) {
+      const id = node.getAttribute('data-task-id')
+      if (!latestWorkspace.current.tasks.some(t => t.id === id)) { node.setAttribute('data-content-type', 'paragraph'); node.removeAttribute('data-task-id') }
+      else { node.setAttribute('data-role', 'reference'); node.setAttribute('data-plan-date', '') }
+    }
+    dom.querySelectorAll('[data-id]').forEach(node => node.removeAttribute('data-id'))
+    editor.pasteHTML(dom.body.innerHTML, true)
+    return true
+  }, initialContent: (initial.current.nodes.length ? initial.current.nodes : [{ type: 'paragraph' }]) as never })
   const base = useRef(initial.current.base)
   const latestPage = useRef(page); latestPage.current = page
   const latestWorkspace = useRef(workspace); latestWorkspace.current = workspace
   const dirty = useRef(initial.current.recovered)
   const sending = useRef(false)
+  const historyPending = useRef(false)
+  const historyGuardBypass = useRef(false)
+  const [historyBusy, setHistoryBusy] = useState(false)
   const lastSent = useRef('')
   const knownSemantic = useRef(new Set<string>())
   const expectedTaskVersions = useRef(new Map(workspace.tasks.map(t => [t.id, t.version])))
@@ -47,14 +68,17 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const suppress = useRef(false)
   const semanticDeletes = useRef(new Set<string>())
+  const composing = useRef(false)
   const selected = useRef<string[]>([])
   const dragging = useRef<EditorNode[]>([])
   const [status, setStatus] = useState(initial.current.recovered ? 'Recovered unsaved draft' : '')
   const [failed, setFailed] = useState(initial.current.recovered)
   const [drop, setDrop] = useState<{ id: string; end: boolean; top: number } | null>(null)
+  const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const [touchHandle, setTouchHandle] = useState<{ id: string; top: number } | null>(null)
   const [touchDragging, setTouchDragging] = useState(false)
   const dropRef = useRef<typeof drop>(null)
+  const [notice, setNotice] = useState<{ text: string; fingerprint: string } | null>(null)
   const [selectionLabel, setSelectionLabel] = useState('')
   const nodes = () => editor.document as unknown as EditorNode[]
   const insertionRole = (blockId: string) => {
@@ -91,7 +115,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }, [editor, key, page.id, run])
   flushRef.current = flush
   useEffect(() => editor.onBeforeChange(({ getChanges, tr }) => {
-    if (!isHistoryTransaction(tr)) return
+    if (historyGuardBypass.current || !isHistoryTransaction(tr)) return
     const changes = getChanges()
     if (!changes.some(c => c.source.type === 'undo' || c.source.type === 'redo')) return
     for (const c of changes) {
@@ -113,16 +137,18 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }), [editor])
   useEffect(() => editor.onChange(() => {
     if (suppress.current) return
+    setNotice(null)
     const checklist = editor.document.find(b => b.type === 'checkListItem')
-    if (checklist) editor.transact(tr => {
-      editor.updateBlock(checklist.id, { type: 'task', props: { taskId: `editor-task:${checklist.id}`, role: insertionRole(checklist.id) }, content: checklist.content } as never)
+    if (checklist && !composing.current) editor.transact(tr => {
+      editor.updateBlock(checklist.id, { type: 'task', props: { taskId: `editor-task:${checklist.id}`, role: insertionRole(checklist.id), planDate: insertionRole(checklist.id) === 'plan' ? page.date ?? '' : '' }, content: checklist.content } as never)
       tr.setMeta('addToHistory', false)
     })
     dirty.current = true; setFailed(false); setStatus('Unsaved changes')
     stash(); clearTimeout(timer.current)
-    timer.current = setTimeout(() => void flushRef.current(), 450)
+    if (!composing.current) timer.current = setTimeout(() => void flushRef.current(), 450)
   }), [editor])
   useEffect(() => {
+    if (historyPending.current) return
     const next = pageContentKey(page)
     if (next === base.current || page.editorJSON === lastSent.current) return
     if (dirty.current) { setFailed(true); setStatus('Page changed elsewhere · draft kept; copy it before reloading'); return }
@@ -137,6 +163,68 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return () => { clearTimeout(timer.current); if (dirty.current) stash(); window.removeEventListener('beforeunload', before) }
   }, [])
 
+  async function performHistory(direction: 'undo' | 'redo') {
+    if (historyPending.current) return
+    let candidate: Transaction | null = null
+    const command = direction === 'undo' ? historyUndo : historyRedo
+    command(editor.prosemirrorState, tr => { candidate = tr })
+    if (!candidate) return
+    const transaction = candidate as Transaction
+    const affected = new Set<string>()
+    const collect = (doc: Transaction['doc'], from: number, to: number) => {
+      doc.nodesBetween(Math.max(0, Math.min(from, doc.content.size)), Math.max(0, Math.min(to, doc.content.size)), node => {
+        if (node.type.name === 'task' && node.attrs.taskId) affected.add(String(node.attrs.taskId))
+      })
+    }
+    for (const step of transaction.steps) step.getMap().forEach((from, to, nextFrom, nextTo) => { collect(transaction.before, from, to); collect(transaction.doc, nextFrom, nextTo) })
+    const oldNodes = nodes(), nextNodes = docToBlocks(transaction.doc) as unknown as EditorNode[]
+    const oldById = new Map(oldNodes.map(n => [n.id, n])), nextById = new Map(nextNodes.map(n => [n.id, n]))
+    const semantic = [...affected].some(taskId => {
+      const old = oldNodes.find(n => n.type === 'task' && n.props?.taskId === taskId)
+      const next = nextNodes.find(n => n.type === 'task' && n.props?.taskId === taskId)
+      return old && next && inlineText(old.content) !== inlineText(next.content)
+        || Object.entries(latestPage.current.editorDeletions ?? {}).some(([id, effect]) => effect.task.id === taskId && nextById.has(id) && !oldById.has(id))
+        || direction === 'redo' && [...knownSemantic.current].some(id => oldById.get(id)?.props?.taskId === taskId && !nextById.has(id))
+        || Object.entries(latestPage.current.editorCreations ?? {}).some(([id, createdTask]) => createdTask === taskId && oldById.has(id) !== nextById.has(id))
+    })
+    if (!semantic) { historyGuardBypass.current = true; editor.prosemirrorView.dispatch(transaction); historyGuardBypass.current = false; return }
+
+    historyPending.current = true; setHistoryBusy(true); editor.isEditable = false
+    clearTimeout(timer.current)
+    try {
+      if (sending.current) {
+        for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
+        if (sending.current) throw new Error('Still saving · try Undo again shortly')
+      }
+      if (dirty.current) await flushRef.current()
+      if (dirty.current) throw new Error('Reconnect and save before undoing a task change · text kept')
+      const current = await refresh()
+      latestWorkspace.current = current
+      const p = current.pages.find(p => p.id === page.id)!
+      latestPage.current = p
+      const document = JSON.stringify(docToBlocks(transaction.doc))
+      const candidateNodes = JSON.parse(document) as EditorNode[]
+      const remaining = new Set(candidateNodes.map(n => n.id))
+      const deleted = direction === 'redo' ? nodes().filter(n => knownSemantic.current.has(n.id) && !remaining.has(n.id)).map(n => n.id) : []
+      const historyTaskVersions = Object.fromEntries([...affected].map(id => [id, current.tasks.some(t => t.id === id) ? expectedTaskVersions.current.get(id) ?? -1 : 0]))
+      const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deleted, historyTaskVersions, history: true, today: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }
+      const preview = applyCommand(current, { operationId: crypto.randomUUID(), expectedRevision: current.revision, action }).workspace
+      const receipt = await run(action)
+      if (!receipt) throw new Error("Can't undo: the page or task changed since · nothing restored")
+      const saved = preview.pages.find(p => p.id === page.id)!
+      latestPage.current = saved; latestWorkspace.current = preview; base.current = pageContentKey(saved)
+      for (const task of preview.tasks) if (current.tasks.find(t => t.id === task.id)?.version !== task.version) expectedTaskVersions.current.set(task.id, task.version)
+      lastSent.current = document
+      suppress.current = true; historyGuardBypass.current = true
+      editor.prosemirrorView.dispatch(transaction)
+      historyGuardBypass.current = false; suppress.current = false
+      dirty.current = false; localStorage.removeItem(key); setFailed(false); setStatus('Saved')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Cannot verify task history · nothing restored')
+    } finally {
+      historyPending.current = false; setHistoryBusy(false); editor.isEditable = true; editor.focus()
+    }
+  }
   function select(id: string) {
     const range = sectionRange(nodes(), id)
     selected.current = range.map(n => n.id)
@@ -144,12 +232,21 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (range.length > 1) editor.setSelection(range[0]!.id, range.at(-1)!.id)
     editor.focus()
   }
+  useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(null), 6000); return () => clearTimeout(timer) }, [notice])
   function deleteSelected() {
+    const before = nodes()
     const ids = selected.current; selected.current = []
+    const first = before.find(n => n.id === ids[0])
+    const above = before[before.findIndex(n => n.id === ids[0]) - 1]
+    const plannedCount = before.filter(n => ids.includes(n.id) && n.type === 'task' && n.props?.role === 'plan').length
     if (ids.length === 1 && nodes().find(n => n.id === ids[0])?.type === 'task') semanticDeletes.current.add(ids[0]!)
     editor.prosemirrorView.dispatch(closeHistory(editor.prosemirrorState.tr))
     editor.removeBlocks(ids)
-    setSelectionLabel(''); setStatus('Content removed · Undo with ⌘Z')
+    if (above && editor.getBlock(above.id)) editor.setTextCursorPosition(above.id, 'end')
+    else if (editor.document[0]) editor.setTextCursorPosition(editor.document[0].id, 'start')
+    editor.focus()
+    setSelectionLabel(''); setStatus('Content removed')
+    setNotice({ text: first?.type === 'heading' ? `Deleted '${inlineText(first.content)}' · ${plannedCount} planned tasks stay planned` : ids.length === 1 && first?.type === 'task' && first.props?.role === 'plan' ? 'Not today · deadline kept' : 'Content removed · tasks unchanged', fingerprint: JSON.stringify(editor.document) })
   }
   function dragStart(id: string, e: React.DragEvent) {
     dragging.current = sectionRange(nodes(), id)
@@ -188,6 +285,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         editor.prosemirrorView.dispatch(closeHistory(editor.prosemirrorState.tr))
         editor.replaceBlocks(editor.document, [...rest.slice(0, index), ...moving, ...rest.slice(index)] as never)
         editor.setTextCursorPosition(moving[0]!.id, 'end'); editor.focus()
+        setNotice({ text: `Moved '${inlineText(moving[0]!.content) || 'block'}'`, fingerprint: JSON.stringify(editor.document) })
         const el = document.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(moving[0]!.id)}"]`)
         el?.classList.add('just-moved'); setTimeout(() => el?.classList.remove('just-moved'), 600)
       }
@@ -195,17 +293,52 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     dragging.current = []; dropRef.current = null; setDrop(null); setTouchDragging(false)
   }
   useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const update = () => setDark(media.matches)
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+  useEffect(() => {
+    const blocks = editor.document
+    const firstHeading = blocks.findIndex(b => b.type === 'heading')
+    const nextHeading = blocks.findIndex((b, i) => i > firstHeading && b.type === 'heading')
+    const target = blocks[(nextHeading < 0 ? blocks.length : nextHeading) - 1] ?? blocks[0]
+    if (target) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
+  }, [editor])
+  useEffect(() => {
     const update = () => {
       const block = editor.getTextCursorPosition().block
       const el = document.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"]`)
-      if (el) setTouchHandle({ id: block.id, top: el.getBoundingClientRect().top })
+      if (el) { const top = el.getBoundingClientRect().top; setTouchHandle(previous => previous?.id === block.id && Math.abs(previous.top - top) < 0.5 ? previous : { id: block.id, top }) }
     }
-    const off = editor.onSelectionChange(update)
+    const off = editor.onSelectionChange(() => requestAnimationFrame(update))
     window.addEventListener('scroll', update, true)
     return () => { off(); window.removeEventListener('scroll', update, true) }
   }, [editor])
-  return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''}`} aria-label="Page editor"
+  return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
+    onCompositionStartCapture={() => { composing.current = true; clearTimeout(timer.current) }}
+    onCompositionEndCapture={() => { composing.current = false; requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
     onKeyDownCapture={e => {
+      if (e.nativeEvent.isComposing || e.keyCode === 229) return
+      if (historyPending.current) { e.preventDefault(); e.stopPropagation(); return }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.nativeEvent.isComposing) { e.preventDefault(); e.stopPropagation(); void performHistory(e.shiftKey ? 'redo' : 'undo'); return }
+      if (e.key === ' ' && !e.nativeEvent.isComposing && editor.getTextCursorPosition().block.type === 'task' && /^(?:#{1,3}|[-*>]|1\.|\[\])$/.test(editor.prosemirrorState.selection.$from.parent.textBetween(0, editor.prosemirrorState.selection.$from.parentOffset))) { e.preventDefault(); editor.insertInlineContent(' '); return }
+
+      if (e.key === 'Enter' && !e.nativeEvent.isComposing && editor.getTextCursorPosition().block.type === 'task' && editor.prosemirrorState.selection.empty) {
+        e.preventDefault(); e.stopPropagation()
+        const block = editor.getTextCursorPosition().block
+        const parent = editor.prosemirrorState.selection.$from.parent
+        const offset = editor.prosemirrorState.selection.$from.parentOffset
+        const left = parent.textBetween(0, offset), right = parent.textBetween(offset, parent.content.size)
+        if (!parent.textContent) { editor.updateBlock(block.id, { type: 'paragraph', content: '' }); return }
+        const id = crypto.randomUUID()
+        editor.transact(() => {
+          editor.updateBlock(block.id, { content: left } as never)
+          editor.insertBlocks([{ id, type: 'task', props: { ...block.props, taskId: `editor-task:${id}` }, content: right } as never], block.id, 'after')
+          editor.setTextCursorPosition(id, 'start')
+        })
+        return
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.current.length) {
         e.preventDefault(); e.stopPropagation()
         deleteSelected()
@@ -223,8 +356,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       e.preventDefault(); e.stopPropagation(); commitDrag()
     }} onDragEnd={() => { dragging.current = []; setDrop(null) }}>
     <div className="editor-save-line" role="status">{status}{failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span>{selectionLabel}</span>}</div>
-    <BlockNoteView editor={editor} theme="light" sideMenu={false} slashMenu={false}>
-      <SuggestionMenuController triggerCharacter="/" getItems={async query => {
+    <BlockNoteView editor={editor} theme={dark ? 'dark' : 'light'} sideMenu={false} slashMenu={false}>
+      <SuggestionMenuController triggerCharacter="/" shouldOpen={() => !composing.current && editor.getTextCursorPosition().block.type !== 'task'} getItems={async query => {
         const defaults = getDefaultReactSlashMenuItems(editor).filter(item => ['Heading 1', 'Heading 2', 'Heading 3', 'Paragraph', 'Bullet List', 'Numbered List', 'Quote'].includes(item.title))
         const taskItem = { title: 'Task', subtext: 'Create a task, keeping its identity wherever it moves', aliases: ['todo', 'task', '任务'], group: 'Basic', onItemClick: () => {
           const currentBlock = editor.getTextCursorPosition().block
@@ -232,18 +365,19 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           const replaceCurrent = !inlineText(currentBlock.content) || inlineText(currentBlock.content) === '/'
           const id = replaceCurrent ? currentId : crypto.randomUUID()
           const role = insertionRole(currentId)
-          insertOrUpdateBlockForSlashMenu(editor, { ...(replaceCurrent ? {} : { id }), type: 'task', props: { taskId: `editor-task:${id}`, role }, content: '' })
+          insertOrUpdateBlockForSlashMenu(editor, { ...(replaceCurrent ? {} : { id }), type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? page.date ?? '' : '' }, content: '' })
         } }
         return filterSuggestionItems([taskItem, ...defaults], query).slice(0, 8)
       }} />
       <SideMenuController sideMenu={Handle} />
     </BlockNoteView>
+    {notice && <div className="editor-operation-notice" role="status"><span>{notice.text}</span><button onClick={() => { if (notice.fingerprint === JSON.stringify(editor.document)) void performHistory('undo'); setNotice(null) }}>Undo</button></div>}
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}
       onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); dragging.current = sectionRange(nodes(), touchHandle.id); setTouchDragging(true) }}
       onPointerMove={e => { if (dragging.current.length && e.buttons) updateDrop(e.clientX - 35, e.clientY) }}
       onPointerUp={e => { e.preventDefault(); if (!dropRef.current) { dragging.current = []; setTouchDragging(false); select(touchHandle.id) } else commitDrag() }}
       onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null) }}>≡</button>}
-    <div className="editor-phone-toolbar" aria-label="Editor tools"><button onPointerDown={e => e.preventDefault()} onClick={() => editor.undo()} aria-label="Undo">↶</button><button onPointerDown={e => e.preventDefault()} onClick={() => editor.redo()} aria-label="Redo">↷</button><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }}>＋</button></div>
+    <div className="editor-phone-toolbar" aria-label="Editor tools"><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('undo')} aria-label="Undo">↶</button><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('redo')} aria-label="Redo">↷</button><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }}>＋</button></div>
     {selectionLabel && <div className="editor-selection-bar"><span>{selectionLabel}</span><button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>}
     {drop && <div className="editor-drop-line" style={{ top: drop.top }} />}
   </div>
