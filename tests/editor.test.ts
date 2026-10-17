@@ -50,13 +50,15 @@ test('editor stale save rejects atomically and new custom tasks get stable ident
 test('external checklists remain prose until conversion, and conversion history removes and restores only its new task', () => {
  let ws = fixture(); const p = ws.pages[0]!, doc = editorSeed(p, ws)
  const id = 'imported-checklist'
- doc.push({ id, type: 'sourceChecklist', props: { checked: false }, content: 'Call a new clinic' })
+ doc.push({ id, type: 'sourceChecklist', props: { checked: false }, content: 'Call a new clinic' }, { id: 'done-import', type: 'sourceChecklist', props: { checked: true }, content: 'Already completed' })
  const save = (nodes: unknown[], history = false) => { ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify(nodes), history }) }
  save(doc); assert.equal(ws.tasks.length, 1)
  const converted = doc.map(n => n.id === id ? { ...n, type: 'task', props: { taskId: `editor-task:${id}`, role: 'reference' } } : n)
  save(converted); assert.equal(ws.tasks.length, 2); assert.equal(ws.tasks[1]!.plannedOn, null)
  save(doc, true); assert.equal(ws.tasks.length, 1)
  save(converted, true); assert.equal(ws.tasks.length, 2); assert.equal(ws.tasks[1]!.id, `editor-task:${id}`)
+ assert.equal(JSON.parse(ws.pages[0]!.editorJSON!).find((n: { id: string }) => n.id === 'done-import').props.checked, true)
+ assert.ok(!ws.tasks.some(t => t.title === 'Already completed'))
  const bad = editorSeed(ws.pages[0]!, ws); bad.push({ id:'bad', type:'task',props:{ taskId:'foreign',role:'reference'},content:'Wrong identity' })
  assert.throws(() => save(bad), /Unknown Task identity/)
 })

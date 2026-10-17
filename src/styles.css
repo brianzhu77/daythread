@@ -744,3 +744,10 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .editor-source-checklist > span:last-child { flex:1; min-width:0; }
 .editor-paste-notice { display:flex; align-items:center; gap:12px; max-width:min(90vw,600px); padding:8px 12px; border-radius:14px; background:var(--bg); color:var(--ink-2); box-shadow:0 5px 26px #0003; font-size:13px; pointer-events:auto; }
 @media(max-width:899px) { .editor-paste-notice { width:calc(100vw - 32px); } }
+
+.editor-selection-bar { width:max-content; min-height:44px; }
+.editor-selection-bar > span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+.editor-selection-bar > button { flex:none; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; border:0; }
+.editor-selection-bar { padding-block:0; }
+.editor-selection-bar > button { min-height:44px; }

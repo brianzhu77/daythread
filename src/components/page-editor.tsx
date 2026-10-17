@@ -13,7 +13,7 @@ import { editorSeed, inlineText, pageContentKey, sectionRange, type EditorNode }
 import { applyCommand } from '../domain/workspace'
 import { useWorkspace } from './use-day'
 import { DateTag } from './date-tag'
-import { todayIso } from './dates'
+import { addDays, fromIso, todayIso } from './dates'
 
 const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' }, planDate: { default: '' } }, content: 'inline' }, {
   toExternalHTML: ({ contentRef }) => <p ref={contentRef} />,
@@ -27,7 +27,7 @@ const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task
 const clipboardType = 'application/x-daythread-blocks'
 const cutTokens = new Set<string>()
 const deepNodes = (nodes: readonly EditorNode[]): EditorNode[] => nodes.flatMap(n => [n, ...deepNodes(n.children ?? [])])
-const checklistIds = (nodes: readonly EditorNode[]): string[] => deepNodes(nodes).filter(n => n.type === 'sourceChecklist').map(n => n.id)
+const checklistIds = (nodes: readonly EditorNode[]): string[] => deepNodes(nodes).filter(n => n.type === 'sourceChecklist' && n.props?.checked !== true).map(n => n.id)
 function EditorTask({ taskId, role, planDate, contentRef }: { taskId: string; role: string; planDate: string; contentRef: (node: HTMLElement | null) => void }) {
   const { workspace, run } = useWorkspace()
   const t = workspace?.tasks.find(t => t.id === taskId)
@@ -87,14 +87,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (html || /^\s*(?:[-*+]\s+)?\[[ xX]\]/m.test(text)) {
       const blocks = (html ? editor.tryParseHTMLToBlocks(html) : editor.tryParseMarkdownToBlocks(text.replace(/^(\s*)(\[[ xX]\])/gm, '$1- $2'))) as unknown as EditorNode[]
       const ids: string[] = []
+      let hasChecklist = false
       const protect = (node: EditorNode): EditorNode => {
         const id = crypto.randomUUID()
-        if (node.type === 'checkListItem') { ids.push(id); return { ...node, id, type: 'sourceChecklist', props: { checked: Boolean(node.props?.checked) }, children: node.children?.map(protect) } }
+        if (node.type === 'checkListItem') { hasChecklist = true; if (!node.props?.checked) ids.push(id); return { ...node, id, type: 'sourceChecklist', props: { checked: Boolean(node.props?.checked) }, children: node.children?.map(protect) } }
         if (node.type === 'task') return { id, type: 'paragraph', content: node.content, children: node.children?.map(protect) }
         return { ...node, id, children: node.children?.map(protect) }
       }
       const safe = blocks.map(protect)
-      if (ids.length) {
+      if (hasChecklist) {
         insert(safe)
         setPastedChecklistIds(ids)
         return true
@@ -132,6 +133,37 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const dropRef = useRef<typeof drop>(null)
   const [notice, setNotice] = useState<{ text: string; fingerprint: string } | null>(null)
   const [selectionLabel, setSelectionLabel] = useState('')
+  // Browser selection can survive React node-view replacement while ProseMirror's selection moves elsewhere.
+  // Keep stable block IDs and inline offsets instead of positions tied to the replaced document.
+  function browserSelection() {
+    const dom = window.getSelection(), view = editor.prosemirrorView
+    if (!dom) return null
+    const point = (node: Node | null, offset: number) => {
+      if (!node || !view.dom.contains(node)) return null
+      const el = node instanceof Element ? node : node.parentElement
+      const inline = el?.closest('.bn-inline-content, .editor-task-title')
+      const id = el?.closest('[data-node-type="blockContainer"]')?.getAttribute('data-id')
+      if (!inline || !id || el?.closest('[contenteditable="false"]')) return null
+      const range = document.createRange(); range.selectNodeContents(inline); range.setEnd(node, offset)
+      return { id, offset: range.toString().length }
+    }
+    const anchor = point(dom.anchorNode, dom.anchorOffset), head = point(dom.focusNode, dom.focusOffset)
+    return anchor && head ? { anchor, head } : null
+  }
+  function restoreBrowserSelection(saved: ReturnType<typeof browserSelection>) {
+    if (!saved) return
+    const view = editor.prosemirrorView
+    const position = (point: { id: string; offset: number }) => {
+      let result: number | null = null
+      view.state.doc.descendants((node, pos) => {
+        if (node.type.name === 'blockContainer' && node.attrs.id === point.id && node.firstChild?.inlineContent) result = pos + 2 + Math.min(point.offset, node.firstChild.content.size)
+      })
+      return result
+    }
+    const anchor = position(saved.anchor), head = position(saved.head)
+    if (anchor === null || head === null || view.state.selection.anchor === anchor && view.state.selection.head === head) return
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, anchor, head)))
+  }
   const nodes = () => editor.document as unknown as EditorNode[]
   const insertionRole = (blockId: string) => {
     const preceding = nodes().slice(0, nodes().findIndex(n => n.id === blockId) + 1).reverse().find(n => n.type === 'heading')
@@ -211,8 +243,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // Deferred: replacing blocks synchronously inside React's commit triggers a flushSync warning from BlockNote's views.
     queueMicrotask(() => {
       if (dirty.current || base.current === next) return
+      const selection = browserSelection()
       suppress.current = true
       editor.replaceBlocks(editor.document, editorSeed(page, workspace) as never)
+      restoreBrowserSelection(selection)
       suppress.current = false
       base.current = next
     })
@@ -419,6 +453,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const view = editor.prosemirrorView
       // Only repair a plain click in editable text. Buttons, selection gestures, native drag and IME own their selections.
       if (e.button !== 0 || e.detail !== 1 || !target || !view.dom.contains(target) || target.closest('[contenteditable="false"]') || composing.current || view.composing || dragging.current.length || historyPending.current) return
+      // Repair now: an immediate Enter can arrive before requestAnimationFrame.
+      if (window.getSelection()?.isCollapsed) restoreBrowserSelection(browserSelection())
       const doc = view.state.doc
       requestAnimationFrame(() => {
         if (view.isDestroyed || view.state.doc !== doc || composing.current || view.composing || dragging.current.length || historyPending.current) return
@@ -470,7 +506,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (!dragging.current.length) return
       e.preventDefault(); e.stopPropagation(); commitDrag()
     }} onDragEnd={() => { dragging.current = []; setDrop(null); setDropHint(null) }}>
-    <div className="editor-save-line" role="status">{status}{failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span>{selectionLabel}</span>}</div>
+    <div className="editor-save-line" role="status">{status}{failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <BlockNoteView editor={editor} theme={dark ? 'dark' : 'light'} formattingToolbar={!compact && !selectionLabel} sideMenu={false} slashMenu={false}>
       <SuggestionMenuController triggerCharacter="/" shouldOpen={() => !composing.current && editor.getTextCursorPosition().block.type !== 'task'} getItems={async query => {
         const headingHints: Record<string, string> = { 'Heading 1': 'Larger than the day sections', 'Heading 2': 'A section, like TODO - Top 3', 'Heading 3': 'Inside a section' }
@@ -496,13 +532,19 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     {dock && createPortal(<>
       {selectionLabel && <div className="editor-selection-bar"><span>{selectionLabel}</span><button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>}
     {pastedChecklistIds.length > 0 && <div className="editor-paste-notice" role="status">{pastedChecklistIds.length} checklist lines · <button onClick={() => {
+      let count = 0, planned = 0
       editor.transact(tr => {
         closeHistory(tr)
         for (const id of pastedChecklistIds) {
           const node = editor.getBlock(id)
-          if (node?.type === 'sourceChecklist') editor.updateBlock(id, { type: 'task', props: { taskId: `editor-task:${id}`, role: insertionRole(id), planDate: insertionRole(id) === 'plan' ? page.date ?? '' : '' }, content: node.content } as never)
+          if (node?.type !== 'sourceChecklist' || node.props.checked) continue
+          const role = insertionRole(id)
+          editor.updateBlock(id, { type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? page.date ?? '' : '' }, content: node.content } as never)
+          count++; if (role === 'plan') planned++
         }
       })
+      const day = page.date === todayIso() ? 'today' : page.date === addDays(todayIso(), 1) ? 'tomorrow' : page.date ? fromIso(page.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''
+      if (count) setNotice({ text: `Made ${count} ${count === 1 ? 'task' : 'tasks'}${planned ? ` · ${planned < count ? `${planned} ` : ''}planned for ${day}` : ''}`, fingerprint: JSON.stringify(editor.document) })
       setPastedChecklistIds([]); editor.focus()
     }}>Turn into tasks</button></div>}
       {notice && <div className="editor-operation-notice" role="status"><span>{notice.text}</span><button onClick={() => { if (notice.fingerprint === JSON.stringify(editor.document)) void performHistory('undo'); setNotice(null) }}>Undo</button></div>}
