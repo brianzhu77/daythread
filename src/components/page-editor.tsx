@@ -1,14 +1,15 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
 import { NodeSelection, TextSelection, type Transaction } from '@tiptap/pm/state'
-import { type FC, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
 import { BlockNoteSchema, blockToNode, defaultBlockSpecs, docToBlocks, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
-import { createReactBlockSpec, getDefaultReactSlashMenuItems, type SideMenuProps, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useCreateBlockNote, useExtensionState } from '@blocknote/react'
-import { BlockNoteView } from '@blocknote/mantine'
+import { toast } from '@heroui/react'
+import { BasicTextStyleButton, BlockTypeSelect, CreateLinkButton, createReactBlockSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useExtensionState } from '@blocknote/react'
+import { BlockNoteView } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
-import '@blocknote/mantine/style.css'
+import '@blocknote/shadcn/style.css'
 import type { Page, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, type EditorNode } from '../domain/editor-document'
 import { applyCommand } from '../domain/workspace'
@@ -137,14 +138,25 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const [status, setStatus] = useState(initial.current.recovered ? 'Recovered unsaved draft' : '')
   const [failed, setFailed] = useState(initial.current.recovered)
   const [drop, setDrop] = useState<{ id: string; end: boolean; top: number } | null>(null)
-  const [dropHint, setDropHint] = useState<{ x: number; y: number; text: string } | null>(null)
   const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 899px)').matches)
   useEffect(() => { const media = window.matchMedia('(max-width: 899px)'); const update = () => setCompact(media.matches); media.addEventListener('change', update); return () => media.removeEventListener('change', update) }, [])
   const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const [touchHandle, setTouchHandle] = useState<{ id: string; top: number } | null>(null)
   const [touchDragging, setTouchDragging] = useState(false)
   const dropRef = useRef<typeof drop>(null)
-  const [notice, setNotice] = useState<{ text: string; fingerprint: string } | null>(null)
+  // Edit notices ("Deleted 'Notes' · Undo") are HeroUI toasts. Undo only applies while the document is still the
+  // one the notice describes; any later edit retires the notice.
+  const notice = useRef<{ key: string; fingerprint: string } | null>(null)
+  const closeNotice = () => { if (notice.current) toast.close(notice.current.key); notice.current = null }
+  const setNotice = ({ text, fingerprint }: { text: string; fingerprint: string }) => {
+    closeNotice()
+    const key = toast(text, {
+      timeout: 8000,
+      actionProps: { children: 'Undo', onPress: () => { if (notice.current?.key === key && fingerprint === JSON.stringify(editor.document)) void performHistory('undo'); closeNotice() } },
+      onClose: () => { if (notice.current?.key === key) notice.current = null },
+    })
+    notice.current = { key, fingerprint }
+  }
   const [selectionLabel, setSelectionLabel] = useState('')
   // Browser selection can survive React node-view replacement while ProseMirror's selection moves elsewhere.
   // Keep stable block IDs and inline offsets instead of positions tied to the replaced document.
@@ -241,7 +253,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }), [editor])
   useEffect(() => editor.onChange(() => {
     if (suppress.current) return
-    setNotice(null)
+    if (notice.current && notice.current.fingerprint !== JSON.stringify(editor.document)) closeNotice()
     setPastedChecklistIds(checklistIds(nodes()))
     const checklist = editor.document.find(b => b.type === 'checkListItem')
     if (checklist && !composing.current) editor.transact(tr => {
@@ -358,7 +370,6 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     editor.focus()
   }
-  useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(null), 6000); return () => clearTimeout(timer) }, [notice])
   function deleteSelected() {
     const before = nodes()
     const ids = selected.current; selected.current = []
@@ -374,19 +385,19 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     setSelectionLabel(''); setStatus('Content removed')
     setNotice({ text: first?.type === 'heading' ? `Deleted '${inlineText(first.content)}'${plannedCount ? ` · ${plannedCount === 1 ? '1 planned task stays' : `${plannedCount} planned tasks stay`} planned` : ''}` : ids.length === 1 && first?.type === 'task' && first.props?.role === 'plan' ? 'Not today · deadline kept' : 'Content removed · tasks unchanged', fingerprint: JSON.stringify(editor.document) })
   }
-  function dragStart(id: string, e: React.DragEvent) {
-    dragging.current = sectionRange(nodes(), id)
-    selected.current = []
-    e.dataTransfer.setData('application/x-daythread-blocks', id)
-    e.dataTransfer.effectAllowed = 'move'
-    const preview = document.createElement('div')
-    preview.className = 'section-drag-preview'
-    preview.textContent = `${inlineText(dragging.current[0]?.content) || 'Block'} · ${dragging.current.length - 1} lines`
-    document.body.append(preview); e.dataTransfer.setDragImage(preview, 12, 12)
-    setTimeout(() => preview.remove(), 0)
-  }
-  const handleActions = useRef({ select, dragStart }); handleActions.current = { select, dragStart }
-  const Handle = useMemo(() => function StableHandle() { return <EditorHandle select={id => handleActions.current.select(id)} dragStart={(id, e) => handleActions.current.dragStart(id, e)} /> }, [])
+  // BlockNote places its 30px side menu at the top of the block; our headings and task rows are taller than its
+  // defaults (up to 6.5px off when measured). Keep its positioning, nudged level with the hovered block's first line.
+  const sideMenuPosition = useMemo(() => ({
+    useFloatingOptions: {
+      middleware: [offset(({ elements }) => {
+        const blockId = editor.getExtension(SideMenuExtension)?.store.state?.block?.id
+        const block = blockId ? editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(blockId)}"]`) : null
+        return block ? { crossAxis: firstLineCenter(block) - elements.reference.getBoundingClientRect().top - elements.floating.offsetHeight / 2 } : 0
+      })],
+    },
+  }), [editor])
+  const handleActions = useRef({ select }); handleActions.current = { select }
+  const Handle = useMemo(() => function StableHandle() { return <SectionSideMenu select={id => handleActions.current.select(id)} /> }, [])
   function updateDrop(x: number, y: number) {
     const el = document.elementFromPoint(x, y)?.closest<HTMLElement>('.bn-block[data-id]')
     const id = el?.dataset.id
@@ -394,13 +405,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (!first) return
     const lastElement = document.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(doc.at(-1)?.id ?? '')}"]`)
     const atEnd = !el && !!lastElement && y >= lastElement.getBoundingClientRect().bottom || !!el && y > el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2 && target?.id === doc.at(-1)?.id
-    const valid = !dragging.current.some(n => n.id === id) && (first.type !== 'heading' || atEnd || target?.type === 'heading' && Number(target.props?.level) <= Number(first.props?.level))
+    const valid = !dragging.current.some(n => n.id === id)
     const next = valid ? { id: id ?? '', end: atEnd, top: el ? (atEnd ? el.getBoundingClientRect().bottom : el.getBoundingClientRect().top) : y } : null
     dropRef.current = next; setDrop(next)
-    // Spec F5a: a heading that can't land among lower-level sections says why instead of failing silently.
-    const level = Number(first.props?.level ?? 1)
-    const blockedByLevel = !valid && first.type === 'heading' && target?.type === 'heading' && Number(target.props?.level ?? 1) > level
-    setDropHint(blockedByLevel ? { x, y, text: `Heading ${level} holds the sections after it · Turn into Heading ${Number(target!.props?.level ?? 2)}` } : null)
     if (y < 85) window.scrollBy(0, -20)
     else if (y > window.innerHeight - 120) window.scrollBy(0, 20)
     return valid
@@ -416,11 +423,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         editor.replaceBlocks(editor.document, [...rest.slice(0, index), ...moving, ...rest.slice(index)] as never)
         editor.setTextCursorPosition(moving[0]!.id, 'end'); editor.focus()
         setNotice({ text: `Moved '${inlineText(moving[0]!.content) || 'block'}'`, fingerprint: JSON.stringify(editor.document) })
-        const el = document.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(moving[0]!.id)}"]`)
-        el?.classList.add('just-moved'); setTimeout(() => el?.classList.remove('just-moved'), 600)
       }
     }
-    dragging.current = []; dropRef.current = null; setDrop(null); setDropHint(null); setTouchDragging(false)
+    dragging.current = []; dropRef.current = null; setDrop(null); setTouchDragging(false)
   }
   const [dock, setDock] = useState<HTMLElement | null>(null)
   useEffect(() => setDock(document.getElementById('editor-dock')), [])
@@ -522,21 +527,26 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         e.preventDefault(); e.stopPropagation(); const id = editor.getTextCursorPosition().block.id; semanticDeletes.current.add(id); editor.removeBlocks([id])
       } else if (!['Shift', 'Control', 'Meta', 'Alt'].includes(e.key) && !((e.metaKey || e.ctrlKey) && ['c', 'x'].includes(e.key.toLowerCase()))) { selected.current = []; setSelectionLabel('') }
     }}
-    onDragOverCapture={e => {
-      if (!dragging.current.length) return
-      e.preventDefault(); e.stopPropagation()
-      e.dataTransfer.dropEffect = updateDrop(e.clientX, e.clientY) ? 'move' : 'none'
-    }}
-    onDropCapture={e => {
-      if (!dragging.current.length) return
-      e.preventDefault(); e.stopPropagation(); commitDrag()
-    }} onDragEnd={() => { dragging.current = []; setDrop(null); setDropHint(null) }}>
+    >
     <div className="editor-save-line" role="status">{status}{failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
-    <BlockNoteView editor={editor} theme={dark ? 'dark' : 'light'} formattingToolbar={!compact && !selectionLabel} sideMenu={false} slashMenu={false}>
+    <BlockNoteView editor={editor} theme={dark ? 'dark' : 'light'} formattingToolbar={false} sideMenu={false} slashMenu={false}>
+      {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
+      {!compact && !selectionLabel && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
+        <BlockTypeSelect key="blockTypeSelect" />
+        <BasicTextStyleButton key="bold" basicTextStyle="bold" />
+        <BasicTextStyleButton key="italic" basicTextStyle="italic" />
+        <BasicTextStyleButton key="underline" basicTextStyle="underline" />
+        <BasicTextStyleButton key="strike" basicTextStyle="strike" />
+        <CreateLinkButton key="createLink" />
+      </FormattingToolbar>} />}
       <SuggestionMenuController triggerCharacter="/" shouldOpen={() => !composing.current && editor.getTextCursorPosition().block.type !== 'task'} getItems={async query => {
-        const headingHints: Record<string, string> = { 'Heading 1': 'Larger than the day sections', 'Heading 2': 'A section, like TODO - Top 3', 'Heading 3': 'Inside a section' }
-        const defaults = getDefaultReactSlashMenuItems(editor).filter(item => ['Heading 1', 'Heading 2', 'Heading 3', 'Paragraph', 'Bullet List', 'Numbered List', 'Quote'].includes(item.title)).map(item => headingHints[item.title] ? { ...item, subtext: headingHints[item.title] } : item)
-        const taskItem = { title: 'Task', subtext: 'Create a task, keeping its identity wherever it moves', aliases: ['todo', 'task', '任务'], group: 'Basic', onItemClick: () => {
+        // Editor spec F13: heading hints in day-page terms; the items Brian uses most come first.
+        const headingHints: Record<string, string> = { 'Heading 1': 'Larger than day sections', 'Heading 2': 'Section', 'Heading 3': 'Inside a section' }
+        const suggested = ['Bullet List', 'Heading 2']
+        const library = getDefaultReactSlashMenuItems(editor).filter(item => ['Heading 1', 'Heading 2', 'Heading 3', 'Paragraph', 'Bullet List', 'Numbered List', 'Quote'].includes(item.title)).map(item => headingHints[item.title] ? { ...item, subtext: headingHints[item.title] } : item)
+        const first = suggested.map(title => library.find(item => item.title === title)!).map(item => ({ ...item, group: 'Suggested' }))
+        const rest = library.filter(item => !suggested.includes(item.title))
+        const taskItem = { title: 'Task', subtext: 'Create a task, keeping its identity wherever it moves', aliases: ['todo', 'task', '任务'], group: 'Suggested', onItemClick: () => {
           const currentBlock = editor.getTextCursorPosition().block
           const currentId = currentBlock.id
           const replaceCurrent = !inlineText(currentBlock.content) || inlineText(currentBlock.content) === '/'
@@ -544,15 +554,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           const role = insertionRole(currentId)
           insertOrUpdateBlockForSlashMenu(editor, { ...(replaceCurrent ? {} : { id }), type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? page.date ?? '' : '' }, content: '' })
         } }
-        return filterSuggestionItems([taskItem, ...defaults], query).slice(0, 8)
+        return filterSuggestionItems([taskItem, ...first, ...rest], query).slice(0, 8)
       }} />
-      <AlignedSideMenu handle={Handle} />
+      <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />
     </BlockNoteView>
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}
       onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); dragging.current = sectionRange(nodes(), touchHandle.id); setTouchDragging(true) }}
       onPointerMove={e => { if (dragging.current.length && e.buttons) updateDrop(e.clientX - 35, e.clientY) }}
-      onPointerUp={e => { e.preventDefault(); if (!dropRef.current) { dragging.current = []; setTouchDragging(false); setDropHint(null); select(touchHandle.id) } else commitDrag() }}
-      onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null); setDropHint(null) }}><GripIcon /></button>}
+      onPointerUp={e => { e.preventDefault(); if (!dropRef.current) { dragging.current = []; setTouchDragging(false); select(touchHandle.id) } else commitDrag() }}
+      onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null) }}><GripIcon /></button>}
     <div className="editor-phone-toolbar" aria-label="Editor tools"><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('undo')} aria-label="Undo"><UndoIcon /></button><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('redo')} aria-label="Redo"><RedoIcon /></button><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }} aria-label="Insert block"><PlusIcon /></button></div>
     {dock && createPortal(<>
       {selectionLabel && <div className="editor-selection-bar"><span>{selectionLabel}</span><button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>}
@@ -572,37 +582,49 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (count) setNotice({ text: `Made ${count} ${count === 1 ? 'task' : 'tasks'}${planned ? ` · ${planned < count ? `${planned} ` : ''}planned for ${day}` : ''}`, fingerprint: JSON.stringify(editor.document) })
       setPastedChecklistIds([]); editor.focus()
     }}>Turn into tasks</button></div>}
-      {notice && <div className="editor-operation-notice" role="status"><span>{notice.text}</span><button onClick={() => { if (notice.fingerprint === JSON.stringify(editor.document)) void performHistory('undo'); setNotice(null) }}>Undo</button></div>}
     </>, dock)}
     {drop && <div className="editor-drop-line" style={{ top: drop.top }} />}
-    {dropHint && <div className="editor-drop-hint" role="status" style={{ left: dropHint.x + 16, top: dropHint.y + 14 }}>{dropHint.text}</div>}
   </div>
 }
-// BlockNote shifts its side menu by offsets tuned to its own heading sizes, which our headings don't use.
-// Measure the hovered block instead so the handle sits level with its first line for every block type.
-function AlignedSideMenu({ handle }: { handle: FC<SideMenuProps> }) {
+/**
+ * BlockNote's side menu and native block drag, plus the one piece BlockNote lacks: pressing the handle selects the
+ * whole flat section (heading up to the next heading of the same or higher level) and tints it, so the native drag
+ * that follows moves and previews exactly what was tinted. A plain click selects the section for Delete instead of
+ * opening BlockNote's block menu, whose Delete would bypass our planned-task rules.
+ */
+function SectionSideMenu({ select }: { select(id: string): void }) {
   const editor = useBlockNoteEditor()
-  const options = useMemo(() => ({
-    useFloatingOptions: {
-      middleware: [offset(({ elements }) => {
-        // Read the hovered block at compute time; positioning runs before React re-renders with new state.
-        const blockId = editor.getExtension(SideMenuExtension)?.store.state?.block?.id
-        const block = blockId ? editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(blockId)}"]`) : null
-        if (!block) return 0
-        return { crossAxis: firstLineCenter(block) - elements.reference.getBoundingClientRect().top - elements.floating.offsetHeight / 2 }
-      })],
-    },
-  }), [editor])
-  return <SideMenuController sideMenu={handle} floatingUIOptions={options} />
-}
-function HandleIcon() {
-  return <svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true" fill="currentColor">{[2, 8, 14].flatMap(y => [<circle key={`l${y}`} cx="2" cy={y} r="1.5" />, <circle key={`r${y}`} cx="8" cy={y} r="1.5" />])}</svg>
-}
-function EditorHandle({ select, dragStart }: { select(id: string): void; dragStart(id: string, e: React.DragEvent): void }) {
-  const editor = useBlockNoteEditor()
+  const Components = useComponentsContext()!
+  const sideMenu = editor.getExtension(SideMenuExtension)!
   const block = useExtensionState(SideMenuExtension, { editor, selector: state => state?.block })
-  const pressed = useRef<string | null>(null)
-  const nativeDragging = useRef(false)
+  useEffect(() => {
+    const clear = () => document.querySelectorAll('.is-picked').forEach(el => el.classList.remove('is-picked'))
+    document.addEventListener('pointerup', clear)
+    document.addEventListener('dragend', clear)
+    document.addEventListener('drop', clear)
+    return () => { document.removeEventListener('pointerup', clear); document.removeEventListener('dragend', clear); document.removeEventListener('drop', clear) }
+  }, [])
   if (!block) return null
-  return <button className="editor-block-handle" draggable aria-label={block.type === 'heading' ? 'Select or drag section' : 'Select or drag block'} onPointerDown={() => { pressed.current = block.id; nativeDragging.current = false; editor.getExtension(SideMenuExtension)?.freezeMenu() }} onPointerUp={() => { if (!nativeDragging.current) select(pressed.current ?? block.id); setTimeout(() => editor.getExtension(SideMenuExtension)?.unfreezeMenu(), 0) }} onDragStart={e => { nativeDragging.current = true; dragStart(pressed.current ?? block.id, e) }} onDragEnd={() => editor.getExtension(SideMenuExtension)?.unfreezeMenu()}><HandleIcon /></button>
+  // Press: only set the editor selection the native drag reads, and tint it. React state changes here would
+  // re-render the editor mid-gesture and cancel the drag, so the section label waits for the click.
+  const pick = () => {
+    sideMenu.freezeMenu()
+    const range = sectionRange(editor.document as unknown as EditorNode[], block.id)
+    if (range.length > 1) editor.setSelection(range[0]!.id, range.at(-1)!.id)
+    for (const node of range)
+      editor.domElement?.querySelector(`[data-node-type="blockContainer"][data-id="${CSS.escape(node.id)}"]`)?.classList.add('is-picked')
+  }
+  return <SideMenu>
+    <span className="editor-handle" onPointerDownCapture={pick}>
+      <Components.SideMenu.Button
+        label={block.type === 'heading' ? 'Select or drag section' : 'Select or drag block'}
+        className="bn-button"
+        draggable
+        icon={<GripIcon />}
+        onClick={() => { select(block.id); sideMenu.unfreezeMenu() }}
+        onDragStart={e => sideMenu.blockDragStart(e, block)}
+        onDragEnd={() => { sideMenu.blockDragEnd(); sideMenu.unfreezeMenu() }}
+      />
+    </span>
+  </SideMenu>
 }

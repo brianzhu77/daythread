@@ -15,8 +15,8 @@
   },
   "dependencies": {
     "@blocknote/core": "0.56.0",
-    "@blocknote/mantine": "0.56.0",
     "@blocknote/react": "0.56.0",
+    "@blocknote/shadcn": "0.56.0",
     "@floating-ui/react": "0.27.20",
     "@heroui/react": "3.2.6",
     "@heroui/styles": "3.2.6",

@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { Toast } from '@heroui/react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { Notices } from './notices'
 import { Navigation } from './navigation'
 import { WorkspaceProvider, isConflict, useWorkspace, type SimOutcome } from './use-day'
@@ -18,9 +19,22 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div id="editor-dock" className="editor-dock" />
           <Notices />
         </div>
+        <EditToasts />
       </div>
     </WorkspaceProvider>
   )
+}
+
+/** Editor notices with Undo (HeroUI Toast): top on phones, where the keyboard covers the bottom; bottom on desktop. */
+function EditToasts() {
+  const [phone, setPhone] = useState(false)
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 599px)')
+    const update = () => setPhone(media.matches)
+    update(); media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+  return <Toast.Provider placement={phone ? 'top' : 'bottom'} />
 }
 
 function SampleBanner() {

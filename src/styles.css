@@ -1,6 +1,46 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
+/* BlockNote's shadcn menus are styled by our Tailwind. Map shadcn's roles onto HeroUI's by meaning, not by
+   name (Jazz, #daythread:4ee0dce9 d7645fac): the shared names accent and muted mean different things in the two
+   systems. Names HeroUI doesn't define point at editor-scoped variables; shared names are remapped only inside
+   .bn-shadcn. HeroUI's brand and text-muted colours are captured on :root before the editor scope changes them. */
+@source "../node_modules/@blocknote/shadcn/dist";
+@theme inline {
+  --color-popover: var(--bn-popover);
+  --color-popover-foreground: var(--bn-popover-foreground);
+  --color-card: var(--bn-popover);
+  --color-primary: var(--bn-brand);
+  --color-primary-foreground: var(--bn-brand-foreground);
+  --color-secondary: var(--bn-quiet);
+  --color-secondary-foreground: var(--bn-quiet-foreground);
+  --color-muted-foreground: var(--bn-text-muted);
+  --color-destructive: var(--bn-danger);
+  --color-input: var(--bn-input);
+  --color-ring: var(--bn-ring);
+}
+:root {
+  --bn-brand: var(--accent);
+  --bn-brand-foreground: var(--accent-foreground);
+  --bn-text-muted: var(--muted);
+  --bn-brand-soft: var(--accent-soft);
+}
+.bn-shadcn {
+  --bn-popover: var(--overlay);
+  --bn-popover-foreground: var(--overlay-foreground);
+  --bn-quiet: var(--default);
+  --bn-quiet-foreground: var(--default-foreground);
+  --bn-danger: var(--danger);
+  --bn-input: var(--field-border);
+  --bn-ring: var(--focus);
+  --accent: var(--default);
+  --accent-foreground: var(--default-foreground);
+  --muted: var(--default);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+}
+
 /* Tailwind's preflight resets browser defaults the legacy screens relied on. Restore them in the base
    layer so HeroUI components and utilities still win; drop each rule once its screen moves to HeroUI. */
 @layer base {
@@ -650,17 +690,14 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .continuous-editor { position:relative; min-height:52vh; padding:0 0 140px; }
 .continuous-editor .bn-container { --bn-font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:transparent; color:var(--ink); }
 .continuous-editor .bn-editor { padding:8px 24px 60px; background:transparent; color:var(--ink); font-size:16px; line-height:1.65; }
-.continuous-editor .bn-block-content[data-content-type=heading] { padding-top:22px; }
+/* Space above a section sits outside the block box, so BlockNote's own side menu lines up with the heading text. */
+.continuous-editor .bn-block-outer:has(> .bn-block > .bn-block-content[data-content-type=heading]) { margin-top:22px; }
 .editor-save-line { min-height:24px; font-size:12px; color:var(--ink-2); display:flex;gap:12px; align-items:center; padding-left:24px; }
 .editor-save-line button { padding:2px 8px; font-size:12px; }
 .editor-task { display:flex; align-items:center; gap:10px; min-height:32px; width:100%; }
 .editor-task input { width:18px;height:18px; flex:none; accent-color:var(--blue); }
 .editor-task small { margin-left:auto; font-size:12px; color:var(--ink-2); }
-.editor-block-handle { display:flex; align-items:center; justify-content:center; width:24px; height:24px; min-height:0; padding:0; border:0; border-radius:4px; background:transparent; color:var(--ink-3); cursor:grab; }
-.editor-block-handle:hover { background:var(--hover, #0000000d); color:var(--ink-2); }
-.editor-block-handle:active { cursor:grabbing; }
 .editor-drop-line { position:fixed; left:max(40px,calc((100vw - 760px)/2)); right:max(24px,calc((100vw - 760px)/2)); height:2px;background:#3484ed;pointer-events:none; z-index:100; }
-.section-drag-preview { position:fixed; top:-1000px; padding:12px 18px; border-radius:10px; background:var(--bg);color:var(--ink);box-shadow:0 8px 24px #0002; }
 .continuous-editor .bn-block-outer { transition:background-color 150ms; }
 .document-pages { display:grid;gap:12px; }
 @media(max-width:700px) { .continuous-editor .bn-editor { padding-left:10px;padding-right:18px; } .continuous-editor { margin-inline:-8px; } }
@@ -679,8 +716,6 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .continuous-editor .bn-block-content[data-content-type=heading] h3 { font-size:18px; }
 .editor-touch-handle,.editor-phone-toolbar { display:none; }
 .editor-selection-bar { position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:var(--bg);box-shadow:0 8px 32px #0002;border-radius:12px;padding:8px 12px;display:flex;gap:14px;align-items:center;z-index:100;font-size:13px; }
-.just-moved { animation:editor-settle 600ms ease-out; }
-@keyframes editor-settle { from { background:#dcecff; } to { background:transparent; } }
 .is-touch-drag .bn-block-outer:not(:has(> .bn-block > .bn-block-content[data-content-type=heading])) { display:none; }
 @media(max-width:700px) {
  .editor-touch-handle { display:flex;align-items:center;justify-content:center;position:fixed;right:12px;z-index:70;touch-action:none;border:0;padding:0;background:var(--bg);color:var(--ink-2);width:32px;height:44px;font-size:22px; }
@@ -699,9 +734,6 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 @media(min-width:701px) { .sheet-scrim { align-items:center;justify-content:center; } .sheet { width:560px;max-height:80vh;border-radius:20px; } }
 @media(max-width:700px) { .desktop-capture-plus { display:none; } .continuous-editor .bn-editor { padding-left:0;padding-right:20px; } }
 .continuous-editor[aria-busy=true] { pointer-events:none; }
-.editor-operation-notice { position:fixed;bottom:32px;left:calc(50% + 100px);transform:translateX(-50%);display:flex;align-items:center;gap:12px;max-width:min(90vw,600px);padding:12px 16px;border-radius:14px;background:var(--bg);color:var(--ink);box-shadow:0 5px 26px #0003;font-size:13px;z-index:120; }
-.editor-operation-notice button { border:0;background:transparent;color:var(--blue-text);padding:3px; }
-@media(max-width:700px) { .editor-operation-notice { top:12px;bottom:auto;left:50%;width:calc(100vw - 32px); } }
 
 /* Lead polish: the body starts right under the title block (editor spec §4). The save line floats
    on the date row instead of reserving a row, so status changes never shift the document. */
@@ -709,7 +741,7 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .editor-save-line button { pointer-events:auto; }
 .continuous-editor .bn-editor { padding-top:0; }
 .continuous-editor { margin-top:2px; }
-.continuous-editor .bn-editor > .bn-block-group > .bn-block-outer:first-child .bn-block-content[data-content-type=heading] { padding-top:0; }
+.continuous-editor .bn-editor > .bn-block-group > .bn-block-outer:first-child { margin-top:0; }
 .editor-date-tag { margin-left:auto; flex:none; }
 .editor-date-tag .app-tag { font-size:12px; }
 /* Desktop: + sits just outside the content column so it never covers right-aligned date tags; the phone tab bar owns + below 900px. */
@@ -727,7 +759,7 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .editor-dock { display:flex; flex-direction:column-reverse; align-items:center; gap:8px; }
 .editor-dock:empty { display:none; }
 .bottom-dock .notices { position:static; left:auto; right:auto; top:auto; bottom:auto; width:100%; }
-.bottom-dock .editor-selection-bar, .bottom-dock .editor-operation-notice { position:static; transform:none; left:auto; top:auto; bottom:auto; pointer-events:auto; }
+.bottom-dock .editor-selection-bar { position:static; transform:none; left:auto; top:auto; bottom:auto; pointer-events:auto; }
 @media(min-width:900px) {
   .bottom-dock { left:calc(260px + (100vw - 260px - var(--column)) / 2); right:auto; width:var(--column); }
   .app-main { padding-bottom:120px; }
@@ -736,7 +768,6 @@ body:has(.list-screen) { background: var(--bg-grouped); }
   .bottom-dock { top:calc(10px + env(safe-area-inset-top)); bottom:auto; flex-direction:column; }
   .bottom-dock .editor-dock { flex-direction:column; }
   .bottom-dock .editor-selection-bar { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); }
-  .bottom-dock .editor-operation-notice { width:calc(100vw - 32px); }
   .continuous-editor.has-selection .editor-phone-toolbar { display:none; }
 }
 /* Day header (Jazz f853703): the title is the date-picker trigger and keeps title typography;
@@ -755,7 +786,6 @@ body:has(.list-screen) { background: var(--bg-grouped); }
   .day-title-trigger .relative-day { grid-column: 1 / -1; font-size: 13px; line-height: 18px; font-weight: 600; }
   .day-title-trigger .relative-day-comma { display: none; }
 }
-.editor-drop-hint { position:fixed; z-index:130; pointer-events:none; max-width:300px; padding:6px 10px; border-radius:8px; background:var(--bg); color:var(--ink-2); box-shadow:0 4px 18px #0002; font-size:12px; }
 
 /* The editor must not enlarge the mobile layout viewport through floating format controls. */
 @media(max-width:899px) { .continuous-editor { overflow-x:clip; } .editor-selection-bar { max-width:calc(100vw - 32px); } }
@@ -781,3 +811,8 @@ body:has(.list-screen) { background: var(--bg-grouped); }
   .editor-task[data-role=reference] .editor-task-title { min-width:0; }
   .editor-task[data-role=reference] .editor-plan-action { margin-left:auto; white-space:nowrap; font-size:11px; }
 }
+
+/* Pressing the handle tints exactly the blocks the native drag will move (Brian #1). */
+.is-picked > :first-child { background: var(--bn-brand-soft); border-radius: 4px; }
+/* While a section is pressed, the text selection behind the tint shouldn't raise the formatting bar. */
+.continuous-editor:has(.is-picked) .bn-formatting-toolbar { display: none; }
