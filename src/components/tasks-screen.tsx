@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import type { LocalDate, Task } from '../domain/types'
 import { getUpcomingByDate, type UpcomingKind } from '../domain/upcoming'
 import { DateTag } from './date-tag'
-import { addDays, longLabel } from './dates'
+import { addDays, daysBetween, longLabel } from './dates'
 import { RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
 import { useDay, useWorkspace } from './use-day'
@@ -12,7 +12,14 @@ export type TaskView = (typeof taskViews)[number]
 
 const viewLabels: Record<TaskView, string> = { today: 'Today', upcoming: 'Upcoming', open: 'Open', paused: 'Not today' }
 
-const kindLabels: Record<UpcomingKind, string> = { do: 'Planned', start: 'Starts', due: 'Due' }
+const kindLabels: Record<UpcomingKind, string> = { do: 'Do', start: 'Start', due: 'Due' }
+
+/** 01 §76 order: Do, then Start · Due, except Due leads once the deadline is within 2 days. */
+function upcomingLabel(task: Readonly<Task>, kinds: readonly UpcomingKind[], today: LocalDate): string {
+  const dueFirst = task.deadlineOn !== null && daysBetween(today, task.deadlineOn) <= 2
+  const order: UpcomingKind[] = dueFirst ? ['do', 'due', 'start'] : ['do', 'start', 'due']
+  return order.filter(k => kinds.includes(k)).map(k => kindLabels[k]).join(' · ')
+}
 
 /**
  * Tasks tab (craft-v1 §5.2, feature map C2). Lists only; every list is read from the
@@ -55,7 +62,7 @@ function UpcomingList({ today }: { today: LocalDate }) {
       <ul className="plain task-list">
         {d.tasks.map(({ task, kinds }) => (
           <li key={task.id}>
-            <ListTaskRow task={task} today={today} paused={task.paused} label={[...kinds.map(k => kindLabels[k]), ...(task.paused ? ['Not today'] : [])].join(' · ')} />
+            <ListTaskRow task={task} today={today} paused={task.paused} label={upcomingLabel(task, kinds, today)} />
           </li>
         ))}
       </ul>
@@ -80,10 +87,12 @@ function ListTaskRow({ task, today, paused, label }: { task: Task; today: LocalD
   const { markDone, planOn, notToday } = useTaskActions(today)
   const plannedToday = task.plannedOn === today
   return (
-    <div className="task-row list" data-task-id={task.id}>
+    <div className={`task-row list ${paused ? 'is-paused' : ''}`} data-task-id={task.id}>
       <input type="checkbox" className="check" checked={task.status === 'done'} aria-label={`Mark ${task.title} done`} onChange={() => markDone(task)} />
       <span className="task-title">{task.title}</span>
       <DateTag task={task} today={today} label={label} />
+      {/* Upcoming keeps set-aside rows' dates (02 Not today) but they must not read as commitments; the Not today tab needs no marker. */}
+      {paused && label !== undefined && <span className="tag paused">Not today</span>}
       <RowMenu
         label={`Actions for ${task.title}`}
         groups={[
