@@ -742,7 +742,14 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 /* Day header (Jazz f853703): the title is the date-picker trigger and keeps title typography;
    on phones the relative day sits on its own line above the date so the title never wraps. */
 .day-title-trigger { height: auto; min-height: 0; padding: 0 6px; margin-left: -6px; font: inherit; letter-spacing: inherit; gap: 6px; white-space: nowrap; }
-.day-nav { gap: 8px; }
+/* Scaling a 28px title while its picker is open blurs the text. */
+.day-title-trigger, .day-title-trigger:active, .day-title-trigger[data-pressed=true] { transform: none; }
+.day-nav { gap: 4px; }
+.day-nav > :first-child { margin-right: 4px; }
+.day-head { margin-bottom: 20px; }
+/* The one deliberate deviation from HeroUI's defaults (Jazz): days after today haven't happened, they aren't
+   cancelled, so the header picker shows them dimmed without HeroUI's line-through. */
+.day-picker .calendar__cell[data-disabled=true] { text-decoration: none; }
 @media (max-width: 599px) {
   .day-title-trigger { display: inline-grid; grid-template-columns: auto auto; justify-items: start; align-items: center; column-gap: 6px; }
   .day-title-trigger .relative-day { grid-column: 1 / -1; font-size: 13px; line-height: 18px; font-weight: 600; }

@@ -1,4 +1,4 @@
-import { BUTTON_GROUP_CHILD, Button, ButtonGroup, Calendar, Popover, Tooltip } from '@heroui/react'
+import { Button, Calendar, Popover, Tooltip } from '@heroui/react'
 import { parseDate } from '@internationalized/date'
 import { useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -32,6 +32,7 @@ export function DayHeader({ date, today }: { date: LocalDate; today: LocalDate }
           <Popover.Content placement="bottom start">
             <Popover.Dialog aria-label="Choose a date">
               <Calendar
+                className="day-picker"
                 aria-label="Date"
                 value={parseDate(date)}
                 maxValue={parseDate(today)}
@@ -59,26 +60,27 @@ export function DayHeader({ date, today }: { date: LocalDate; today: LocalDate }
         <Button variant="secondary" className={isToday ? 'invisible' : undefined} onPress={() => go(today)}>
           Today
         </Button>
-        <ButtonGroup variant="secondary">
-          <Button isIconOnly aria-label="Previous day" onPress={() => go(addDays(date, -1))}>
-            <ArrowLeftIcon />
-          </Button>
-          {isToday ? (
-            // ButtonGroup only marks its direct children, so the button inside the tooltip is marked by hand.
-            <Tooltip delay={0}>
-              <Tooltip.Trigger>
-                <Button isIconOnly isDisabled aria-label="Next day" {...{ [BUTTON_GROUP_CHILD]: true }}>
+        <Button variant="secondary" isIconOnly aria-label="Previous day" onPress={() => go(addDays(date, -1))}>
+          <ArrowLeftIcon />
+        </Button>
+        {isToday ? (
+          // The tooltip trigger is the focusable control screen readers see; the disabled button inside is only visual.
+          <Tooltip delay={0}>
+            <Tooltip.Trigger aria-label="Next day" aria-disabled="true">
+              {/* HeroUI's Button drops aria-hidden, so a wrapper hides it. */}
+              <span aria-hidden="true" className="contents">
+                <Button variant="secondary" isIconOnly isDisabled>
                   <ArrowRightIcon />
                 </Button>
-              </Tooltip.Trigger>
-              <Tooltip.Content>Future days open from the Calendar</Tooltip.Content>
-            </Tooltip>
-          ) : (
-            <Button isIconOnly aria-label="Next day" onPress={() => go(addDays(date, 1))}>
-              <ArrowRightIcon />
-            </Button>
-          )}
-        </ButtonGroup>
+              </span>
+            </Tooltip.Trigger>
+            <Tooltip.Content>Future days open from the Calendar</Tooltip.Content>
+          </Tooltip>
+        ) : (
+          <Button variant="secondary" isIconOnly aria-label="Next day" onPress={() => go(addDays(date, 1))}>
+            <ArrowRightIcon />
+          </Button>
+        )}
       </nav>
     </header>
   )
