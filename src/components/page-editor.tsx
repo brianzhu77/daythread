@@ -157,12 +157,19 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   useEffect(() => {
     if (historyPending.current) return
     const next = pageContentKey(page)
-    if (next === base.current || page.editorJSON === lastSent.current) return
+    if (next === base.current) return
+    // Our own save echoes back with the same document and sections projected from it. Anything else (Put back,
+    // Keep from the morning hand-off, another tab) rewrote the page under us and the open editor must follow.
+    if (page.editorJSON === lastSent.current && page.editorSections === JSON.stringify(page.sections)) return
     if (dirty.current) { setFailed(true); setStatus('Page changed elsewhere · draft kept; copy it before reloading'); return }
-    suppress.current = true
-    editor.replaceBlocks(editor.document, editorSeed(page, workspace) as never)
-    suppress.current = false
-    base.current = next
+    // Deferred: replacing blocks synchronously inside React's commit triggers a flushSync warning from BlockNote's views.
+    queueMicrotask(() => {
+      if (dirty.current || base.current === next) return
+      suppress.current = true
+      editor.replaceBlocks(editor.document, editorSeed(page, workspace) as never)
+      suppress.current = false
+      base.current = next
+    })
   }, [page, editor, workspace])
   useEffect(() => {
     const before = (e: BeforeUnloadEvent) => { if (dirty.current) { stash(); e.preventDefault() } }
@@ -368,7 +375,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     <div className="editor-save-line" role="status">{status}{failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span>{selectionLabel}</span>}</div>
     <BlockNoteView editor={editor} theme={dark ? 'dark' : 'light'} sideMenu={false} slashMenu={false}>
       <SuggestionMenuController triggerCharacter="/" shouldOpen={() => !composing.current && editor.getTextCursorPosition().block.type !== 'task'} getItems={async query => {
-        const defaults = getDefaultReactSlashMenuItems(editor).filter(item => ['Heading 1', 'Heading 2', 'Heading 3', 'Paragraph', 'Bullet List', 'Numbered List', 'Quote'].includes(item.title))
+        const headingHints: Record<string, string> = { 'Heading 1': 'Larger than the day sections', 'Heading 2': 'A section, like TODO - Top 3', 'Heading 3': 'Inside a section' }
+        const defaults = getDefaultReactSlashMenuItems(editor).filter(item => ['Heading 1', 'Heading 2', 'Heading 3', 'Paragraph', 'Bullet List', 'Numbered List', 'Quote'].includes(item.title)).map(item => headingHints[item.title] ? { ...item, subtext: headingHints[item.title] } : item)
         const taskItem = { title: 'Task', subtext: 'Create a task, keeping its identity wherever it moves', aliases: ['todo', 'task', '任务'], group: 'Basic', onItemClick: () => {
           const currentBlock = editor.getTextCursorPosition().block
           const currentId = currentBlock.id
