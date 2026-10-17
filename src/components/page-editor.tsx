@@ -531,7 +531,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     <div className="editor-phone-toolbar" aria-label="Editor tools"><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('undo')} aria-label="Undo">↶</button><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('redo')} aria-label="Redo">↷</button><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }}>＋</button></div>
     {dock && createPortal(<>
       {selectionLabel && <div className="editor-selection-bar"><span>{selectionLabel}</span><button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>}
-    {pastedChecklistIds.length > 0 && <div className="editor-paste-notice" role="status">{pastedChecklistIds.length} checklist lines · <button onClick={() => {
+    {pastedChecklistIds.length > 0 && <div className="editor-paste-notice" role="status">{pastedChecklistIds.length} checklist {pastedChecklistIds.length === 1 ? 'line' : 'lines'} · <button onClick={() => {
       let count = 0, planned = 0
       editor.transact(tr => {
         closeHistory(tr)
