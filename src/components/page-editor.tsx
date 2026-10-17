@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { closeHistory } from '@tiptap/pm/history'
+import { closeHistory, isHistoryTransaction } from '@tiptap/pm/history'
 import { BlockNoteSchema, defaultBlockSpecs, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
 import { createReactBlockSpec, getDefaultReactSlashMenuItems, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useCreateBlockNote, useExtensionState } from '@blocknote/react'
@@ -90,7 +90,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     else localStorage.removeItem(key)
   }, [editor, key, page.id, run])
   flushRef.current = flush
-  useEffect(() => editor.onBeforeChange(({ getChanges }) => {
+  useEffect(() => editor.onBeforeChange(({ getChanges, tr }) => {
+    if (!isHistoryTransaction(tr)) return
     const changes = getChanges()
     if (!changes.some(c => c.source.type === 'undo' || c.source.type === 'redo')) return
     for (const c of changes) {
