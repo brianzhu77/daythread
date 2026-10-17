@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import type { LocalDate, Task } from '../domain/types'
-import { getDayView } from '../domain/workspace'
+import { getUpcomingByDate, type UpcomingKind } from '../domain/upcoming'
 import { DateTag } from './date-tag'
 import { addDays, longLabel } from './dates'
 import { RowMenu } from './row-menu'
@@ -12,8 +12,7 @@ export type TaskView = (typeof taskViews)[number]
 
 const viewLabels: Record<TaskView, string> = { today: 'Today', upcoming: 'Upcoming', open: 'Open', paused: 'Not today' }
 
-// How far Upcoming looks ahead until the domain offers a dated query of its own.
-const UPCOMING_DAYS = 14
+const kindLabels: Record<UpcomingKind, string> = { do: 'Planned', start: 'Starts', due: 'Due' }
 
 /**
  * Tasks tab (craft-v1 §5.2, feature map C2). Lists only; every list is read from the
@@ -39,21 +38,29 @@ export function TasksScreen({ view, today }: { view: TaskView; today: LocalDate 
       {/* Open per 02 §94: open, not paused, not planned after today (later days belong to Upcoming). */}
       {view === 'open' && <TaskList tasks={day.openPool} today={today} empty="No open tasks." />}
       {view === 'paused' && <TaskList tasks={day.paused} today={today} paused empty="Nothing set aside." />}
-      {view === 'upcoming' &&
-        (() => {
-          const days = Array.from({ length: UPCOMING_DAYS }, (_, i) => addDays(today, i + 1))
-            .map(d => ({ date: d, tasks: getDayView(workspace, d).planned }))
-            .filter(d => d.tasks.length)
-          if (!days.length) return <Empty text="Nothing planned for the next two weeks." />
-          return days.map(d => (
-            <section key={d.date} className="list-section">
-              <h2 className="list-header">{longLabel(d.date)}</h2>
-              <TaskList tasks={d.tasks} today={today} />
-            </section>
-          ))
-        })()}
+      {view === 'upcoming' && <UpcomingList today={today} />}
     </div>
   )
+}
+
+/** Upcoming per 01 §76: every date fact after today, one row per task per date, labelled by what falls due. */
+function UpcomingList({ today }: { today: LocalDate }) {
+  const { workspace } = useWorkspace()
+  if (!workspace) return null
+  const days = getUpcomingByDate(workspace, addDays(today, 1))
+  if (!days.length) return <Empty text="Nothing planned, starting or due after today." />
+  return days.map(d => (
+    <section key={d.date} className="list-section">
+      <h2 className="list-header">{longLabel(d.date)}</h2>
+      <ul className="plain task-list">
+        {d.tasks.map(({ task, kinds }) => (
+          <li key={task.id}>
+            <ListTaskRow task={task} today={today} paused={task.paused} label={[...kinds.map(k => kindLabels[k]), ...(task.paused ? ['Not today'] : [])].join(' · ')} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  ))
 }
 
 function TaskList({ tasks, today, paused = false, empty }: { tasks: Task[]; today: LocalDate; paused?: boolean; empty?: string }) {
@@ -69,14 +76,14 @@ function TaskList({ tasks, today, paused = false, empty }: { tasks: Task[]; toda
   )
 }
 
-function ListTaskRow({ task, today, paused }: { task: Task; today: LocalDate; paused: boolean }) {
+function ListTaskRow({ task, today, paused, label }: { task: Task; today: LocalDate; paused: boolean; label?: string }) {
   const { markDone, planOn, notToday } = useTaskActions(today)
   const plannedToday = task.plannedOn === today
   return (
     <div className="task-row list" data-task-id={task.id}>
       <input type="checkbox" className="check" checked={task.status === 'done'} aria-label={`Mark ${task.title} done`} onChange={() => markDone(task)} />
       <span className="task-title">{task.title}</span>
-      <DateTag task={task} today={today} />
+      <DateTag task={task} today={today} label={label} />
       <RowMenu
         label={`Actions for ${task.title}`}
         groups={[
