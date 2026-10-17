@@ -11,6 +11,7 @@ export interface NoteBlock {
   kind: "paragraph" | "task" | "event" | "material" | "reference";
   text: string;
   taskId?: string;
+  planRole?: "plan" | "reference";
   eventId?: string;
   materialId?: string;
   targetPageId?: string;
@@ -29,6 +30,10 @@ export interface Page {
   date: LocalDate | null;
   title: string;
   sections: Section[];
+  editorJSON?: string;
+  editorSections?: string;
+  editorDeletions?: Record<string, { task: Task; placements: Placement[]; afterVersion: number; afterPlacements: Placement[] }>;
+
   reviewText: string;
   reviewSaved: boolean;
   handoffDone: boolean;
@@ -67,6 +72,7 @@ export interface Placement {
   taskId: string;
   date: LocalDate;
   state: "included" | "excluded" | "moved";
+  order?: number;
   section: "top3" | "other";
 }
 export interface Material {
@@ -134,6 +140,7 @@ export interface Workspace {
   receipts: Record<string, Receipt>;
 }
 export type Action =
+  | { type: "save-editor"; pageId: string; expectedContent: string; document: string; singleDeleteIds?: string[]; today?: string }
   | { type: "ensure-day"; date: LocalDate }
   | { type: "rename-section"; pageId: string; sectionId: string; title: string }
   | { type: "add-section"; pageId: string; title: string }

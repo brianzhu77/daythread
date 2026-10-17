@@ -1,3 +1,4 @@
+import { pageContentKey, projectDocument, inlineText } from "./editor-document.ts";
 import type {
   Command,
   CommandResult,
@@ -371,6 +372,57 @@ function execute(
   action: Action,
 ): { message: string; entityId?: string; simulated?: boolean } {
   switch (action.type) {
+    case "save-editor": {
+      const p = page(state, action.pageId);
+      if (pageContentKey(p) !== action.expectedContent) throw new DomainError("Page changed elsewhere. Your editor draft is kept; reload or copy it before resolving.");
+      const nodes = JSON.parse(action.document);
+      if (!Array.isArray(nodes) || nodes.length > 5000) throw new DomainError("Invalid editor document");
+      const flat = (list: any[]): any[] => list.flatMap(n => [n, ...flat(n.children ?? [])]);
+      const all = flat(nodes);
+      const present = new Set(all.map(n => n.id));
+      // Undo of a semantic row deletion restores only its checked task and relations.
+      for (const [blockId, effect] of Object.entries(p.editorDeletions ?? {})) {
+        if (!present.has(blockId)) continue;
+        const current = task(state, effect.task.id);
+        if (current.version !== effect.afterVersion || JSON.stringify(state.placements.filter(x => x.taskId === current.id)) !== JSON.stringify(effect.afterPlacements)) throw new DomainError("Task changed after deletion; cannot undo safely");
+        Object.assign(current, effect.task, { version: current.version + 1 });
+        state.placements = state.placements.filter(x => x.taskId !== current.id).concat(effect.placements);
+        delete p.editorDeletions![blockId];
+      }
+      const previousBlocks = p.sections.flatMap(s => s.blocks);
+      for (const node of all) {
+        if (node.type !== 'task' || state.tasks.some(t => t.id === node.props?.taskId)) continue;
+        if (node.props?.taskId !== `editor-task:${node.id}` || previousBlocks.some(b => b.id === node.id)) throw new DomainError("Unknown Task identity");
+        const planned = node.props.role === 'plan' ? p.date : null;
+        const t = createTask(state, inlineText(node.content) || 'Untitled task', p, planned);
+        t.id = node.props.taskId;
+        if (planned) place(state, t, planned);
+      }
+      for (const singleDeleteId of action.singleDeleteIds ?? []) {
+       if (!present.has(singleDeleteId) && p.date === action.today) {
+        const b = previousBlocks.find(b => b.id === singleDeleteId);
+        const isPlan = b?.planRole === 'plan' || b?.planRole === undefined && p.sections.some(s => (s.kind === 'top3' || s.kind === 'other') && s.blocks.some(x => x.id === b?.id));
+        if (b?.taskId && isPlan) {
+          const t = task(state, b.taskId);
+          if (t.plannedOn === p.date) {
+            const beforeTask = structuredClone(t), beforePlacements = structuredClone(state.placements.filter(x => x.taskId === t.id));
+            pause(state, t, p.date!);
+            (p.editorDeletions ??= {})[b.id] = { task: beforeTask, placements: beforePlacements, afterVersion: t.version, afterPlacements: structuredClone(state.placements.filter(x => x.taskId === t.id)) };
+          }
+        }
+      }
+      }
+      p.sections = projectDocument(nodes, p, state);
+      const ordered = p.sections.flatMap(s => s.blocks).filter(b => b.kind === 'task' && b.planRole === 'plan');
+      ordered.forEach((b, order) => {
+        const relation = state.placements.find(x => x.taskId === b.taskId && x.date === p.date && x.state === 'included');
+        if (relation) relation.order = order;
+      });
+      p.editorJSON = action.document;
+      p.editorSections = JSON.stringify(p.sections);
+      return { message: "Page saved; task arrangements unchanged" };
+    }
+
     case "ensure-day": {
       const p = ensureDay(state, action.date);
       return { message: "Day opened", entityId: p.id };

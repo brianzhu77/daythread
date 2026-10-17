@@ -6,6 +6,7 @@ const body = z.string().max(100_000);
 const status = z.enum(["open", "done", "cancelled"]);
 const outcome = z.enum(["success", "failure", "budget", "context"]).optional();
 const action = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("save-editor"), pageId: id, expectedContent: z.string().max(2_000_000), document: z.string().max(1_000_000), singleDeleteIds: z.array(id).max(100).optional(), today: day.optional() }),
   z.object({ type: z.literal("ensure-day"), date: day }),
   z.object({
     type: z.literal("rename-section"),

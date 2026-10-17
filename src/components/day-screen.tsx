@@ -1,7 +1,7 @@
 import type { LocalDate } from '../domain/types'
 import { addDays, fromIso, longLabel } from './dates'
 import { CaptureBar, CaptureReceipts } from './capture'
-import { DayPage } from './day-page'
+import { ContinuousPage } from './continuous-page'
 import { FactsStrip } from './facts-strip'
 import { StartTheDay, hasHandoffContent, useHandoffLater } from './start-the-day'
 import { SaveIndicator } from './app-shell'
@@ -67,7 +67,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
         />
         {page && <CaptureReceipts page={page} workspace={workspace} />}
         {page ? (
-          <DayPage key={page.id} page={page} workspace={workspace} today={today} />
+          <ContinuousPage key={page.id} page={page} workspace={workspace} />
         ) : (
           <div className="empty">
             <p>No page for {longLabel(date)} yet.</p>
