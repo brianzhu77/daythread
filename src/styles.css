@@ -705,3 +705,7 @@ body:has(.list-screen) { background: var(--bg-grouped); }
   .desktop-capture-plus { right:max(24px, calc((100vw - 260px - var(--column)) / 2 - 68px)); bottom:32px; }
   .sheet-handle { display:none; }
 }
+@media(min-width:900px) { .editor-drop-line { left:calc(260px + (100vw - 260px - var(--column)) / 2); right:auto; width:var(--column); } }
+/* Phone: editing chrome appears only while the editor has focus (spec F1); body text lines up with the title. */
+.continuous-editor:not(:focus-within) :is(.editor-phone-toolbar, .editor-touch-handle) { display:none; }
+@media(max-width:700px) { .continuous-editor { margin-inline:0; } }

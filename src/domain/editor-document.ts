@@ -42,6 +42,9 @@ export function editorSeed(page: Page, workspace: Workspace): EditorNode[] {
   }
   return result
 }
+function isEmptyParagraph(node: EditorNode): boolean {
+  return node.type === 'paragraph' && !inlineText(node.content).trim() && !node.children?.length
+}
 export function sectionRange(nodes: readonly EditorNode[], id: string): EditorNode[] {
   const start = nodes.findIndex(n => n.id === id)
   if (start < 0) return []
@@ -49,6 +52,8 @@ export function sectionRange(nodes: readonly EditorNode[], id: string): EditorNo
   if (first.type !== 'heading') return [first]
   let end = start + 1
   while (end < nodes.length && !(nodes[end]!.type === 'heading' && Number(nodes[end]!.props?.level ?? 1) <= Number(first.props?.level ?? 1))) end++
+  // The editor keeps an empty trailing paragraph at the end of the document; it belongs to the page, not the last section.
+  if (end === nodes.length) while (end > start + 1 && isEmptyParagraph(nodes[end - 1]!)) end--
   return nodes.slice(start, end)
 }
 export function projectDocument(nodes: EditorNode[], page: Page, workspace: Workspace): Section[] {

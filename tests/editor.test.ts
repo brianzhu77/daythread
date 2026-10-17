@@ -13,6 +13,12 @@ test('section boundary includes subordinate headings but stops at equal or highe
  const list = [{ id: 'intro', type: 'paragraph' }, { id: 'a', type: 'heading', props: { level: 2 } }, { id: 'child', type: 'heading', props: { level: 3 } }, { id: 'p', type: 'paragraph' }, { id: 'b', type: 'heading', props: { level: 2 } }]
  assert.deepEqual(sectionRange(list, 'a').map(x => x.id), ['a', 'child', 'p'])
 })
+test('the last section leaves the editor trailing empty paragraph in place but keeps its own blank lines', () => {
+  const list = [{ id: 'a', type: 'heading', props: { level: 2 } }, { id: 'p', type: 'paragraph', content: [{ type: 'text', text: 'x' }] }, { id: 'gap', type: 'paragraph', content: [] }, { id: 'q', type: 'paragraph', content: [{ type: 'text', text: 'y' }] }, { id: 'trail', type: 'paragraph', content: [] }]
+  assert.deepEqual(sectionRange(list, 'a').map(x => x.id), ['a', 'p', 'gap', 'q'])
+  const middle = [...list.slice(0, 3), { id: 'b', type: 'heading', props: { level: 2 } }]
+  assert.deepEqual(sectionRange(middle, 'a').map(x => x.id), ['a', 'p', 'gap'])
+})
 test('whole section deletion and restoration preserve task and placement; moved rows keep their role', () => {
  let ws = fixture(); const p = ws.pages[0]!, doc = editorSeed(p, ws), beforeTask = structuredClone(ws.tasks), beforePlacement = structuredClone(ws.placements)
  const range = new Set(sectionRange(doc, p.sections[0]!.id).map(n => n.id))

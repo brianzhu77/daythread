@@ -6,7 +6,7 @@ import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
 import { createReactBlockSpec, getDefaultReactSlashMenuItems, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useCreateBlockNote, useExtensionState } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
 import '@blocknote/mantine/style.css'
-import type { Page, Workspace } from '../domain/types'
+import type { Page, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, pageContentKey, sectionRange, type EditorNode } from '../domain/editor-document'
 import { applyCommand } from '../domain/workspace'
 import { useWorkspace } from './use-day'
@@ -25,8 +25,13 @@ function EditorTask({ taskId, role, planDate, contentRef }: { taskId: string; ro
     <span ref={contentRef} className={`editor-task-title ${t?.status === 'done' ? 'task-done' : ''}`} data-placeholder="Untitled task" />
     {role === 'reference' && <span contentEditable={false} className="editor-reference-tag">Reference</span>}
     {role === 'reference' && t?.status === 'open' && <button className="editor-plan-action" contentEditable={false} onClick={() => void run({ type: 'plan-task', taskId, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }, r => ({ text: 'Planned for today', undoOperationId: r.operationId }))}>Plan for today</button>}
-    {t && t.status === 'open' && <span contentEditable={false} className="editor-date-tag"><DateTag task={t} today={todayIso()} pageDate={planDate || todayIso()} /></span>}
+    {t && t.status === 'open' && hasDateFacts(t) && <span contentEditable={false} className="editor-date-tag"><DateTag task={t} today={todayIso()} pageDate={planDate || todayIso()} /></span>}
   </div>
+}
+
+// Inside a document only real dates earn a chip; "Unscheduled" is list-screen vocabulary and would be noise here.
+function hasDateFacts(task: Task): boolean {
+  return Boolean(task.deadlineOn || task.attentionOn)
 }
 
 export function PageEditor({ page, workspace }: { page: Page; workspace: Workspace }) {
@@ -304,7 +309,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const firstHeading = blocks.findIndex(b => b.type === 'heading')
     const nextHeading = blocks.findIndex((b, i) => i > firstHeading && b.type === 'heading')
     const target = blocks[(nextHeading < 0 ? blocks.length : nextHeading) - 1] ?? blocks[0]
-    if (target) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
+    // Desktop opens ready to type; on touch screens focusing would raise the keyboard over a page that is read as often as written.
+    if (target && window.matchMedia('(pointer: fine)').matches) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
   }, [editor])
   useEffect(() => {
     const update = () => {
