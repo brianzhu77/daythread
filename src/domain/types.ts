@@ -31,6 +31,8 @@ export interface Page {
   title: string;
   sections: Section[];
   editorJSON?: string;
+  /** Set once the day template's starter rows have been saved, so rows the user deletes stay deleted. */
+  templateApplied?: boolean;
   editorSections?: string;
   editorBlockMetadata?: Record<string, NoteBlock>;
   editorCreations?: Record<string, string>;

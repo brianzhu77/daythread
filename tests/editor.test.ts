@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { applyCommand, createEmptyWorkspace } from '../src/domain/workspace.ts'
-import { editorSeed, pageContentKey, sectionRange } from '../src/domain/editor-document.ts'
+import { editorSeed, needsTemplateRows, pageContentKey, sectionRange } from '../src/domain/editor-document.ts'
 import type { Action, Workspace } from '../src/domain/types.ts'
 function run(ws: Workspace, action: Action) { return applyCommand(ws, { operationId: crypto.randomUUID(), expectedRevision: ws.revision, action }).workspace }
 function fixture() {
@@ -61,4 +61,28 @@ test('external checklists remain prose until conversion, and conversion history 
  assert.ok(!ws.tasks.some(t => t.title === 'Already completed'))
  const bad = editorSeed(ws.pages[0]!, ws); bad.push({ id:'bad', type:'task',props:{ taskId:'foreign',role:'reference'},content:'Wrong identity' })
  assert.throws(() => save(bad), /Unknown Task identity/)
+})
+
+test('a new day page opens with the template rows, carried tasks sit above them, and empty rows create no task', () => {
+  let ws = fixture(); const p = ws.pages[0]!
+  assert.equal(needsTemplateRows(p, p.date!), true)
+  const doc = editorSeed(p, ws, { templateRows: true })
+  assert.deepEqual(doc.map(n => n.type), ['heading', 'task', 'task', 'heading', 'task', 'heading', 'paragraph', 'heading', 'paragraph', 'heading', 'paragraph'])
+  assert.equal(doc[1]!.props?.taskId, ws.tasks[0]!.id)
+  assert.equal(doc[2]!.props?.taskId, `editor-task:${doc[2]!.id}`)
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(p), document: JSON.stringify(doc) })
+  assert.equal(ws.tasks.length, 1)
+  assert.equal(ws.pages[0]!.templateApplied, true)
+  assert.equal(needsTemplateRows(ws.pages[0]!, p.date!), false)
+})
+test('template rows the user deletes stay deleted, and past or written pages never get them', () => {
+  let ws = fixture(); const p = ws.pages[0]!
+  const withoutRows = editorSeed(p, ws, { templateRows: true }).filter(n => !n.id.includes(':template:'))
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(p), document: JSON.stringify(withoutRows) })
+  const saved = ws.pages[0]!
+  assert.equal(needsTemplateRows(saved, saved.date!), false)
+  assert.equal(editorSeed(saved, ws).some(n => n.id.includes(':template:')), false)
+  assert.equal(needsTemplateRows(p, '2026-10-17'), false)
+  const legacy = { ...saved, templateApplied: undefined }
+  assert.equal(needsTemplateRows(legacy, saved.date!), false)
 })

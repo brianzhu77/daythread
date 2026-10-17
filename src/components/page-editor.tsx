@@ -1,15 +1,16 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
 import { NodeSelection, TextSelection, type Transaction } from '@tiptap/pm/state'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type FC, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
 import { BlockNoteSchema, blockToNode, defaultBlockSpecs, docToBlocks, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
-import { createReactBlockSpec, getDefaultReactSlashMenuItems, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useCreateBlockNote, useExtensionState } from '@blocknote/react'
+import { createReactBlockSpec, getDefaultReactSlashMenuItems, type SideMenuProps, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useCreateBlockNote, useExtensionState } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/mantine'
+import { offset } from '@floating-ui/react'
 import '@blocknote/mantine/style.css'
 import type { Page, Task, Workspace } from '../domain/types'
-import { editorSeed, inlineText, pageContentKey, sectionRange, type EditorNode } from '../domain/editor-document'
+import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, type EditorNode } from '../domain/editor-document'
 import { applyCommand } from '../domain/workspace'
 import { useWorkspace } from './use-day'
 import { DateTag } from './date-tag'
@@ -32,8 +33,8 @@ function EditorTask({ taskId, role, planDate, contentRef }: { taskId: string; ro
   const { workspace, run } = useWorkspace()
   const t = workspace?.tasks.find(t => t.id === taskId)
   return <div className="editor-task" data-role={role}>
-    <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : 'Missing task'} checked={t?.status === 'done'} disabled={!t} onChange={() => t && void run({ type: 'task-status', taskId, status: t.status === 'done' ? 'open' : 'done' }, r => ({ text: t.status === 'done' ? 'Task reopened' : 'Task completed', undoOperationId: r.operationId }))} />
-    <span ref={contentRef} className={`editor-task-title ${t?.status === 'done' ? 'task-done' : ''}`} data-placeholder="Untitled task" />
+    <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={t?.status === 'done'} disabled={!t && !taskId.startsWith('editor-task:')} onChange={() => t && void run({ type: 'task-status', taskId, status: t.status === 'done' ? 'open' : 'done' }, r => ({ text: t.status === 'done' ? 'Task reopened' : 'Task completed', undoOperationId: r.operationId }))} />
+    <span ref={contentRef} className={`editor-task-title ${t?.status === 'done' ? 'task-done' : ''}`} data-placeholder="To do" />
     {role === 'reference' && <span contentEditable={false} className="editor-reference-tag">Reference</span>}
     {role === 'reference' && t?.status === 'open' && <button className="editor-plan-action" contentEditable={false} onClick={() => void run({ type: 'plan-task', taskId, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }, r => ({ text: 'Planned for today', undoOperationId: r.operationId }))}>Plan for today</button>}
     {t && t.status === 'open' && hasDateFacts(t) && <span contentEditable={false} className="editor-date-tag"><DateTag task={t} today={todayIso()} pageDate={planDate || todayIso()} /></span>}
@@ -45,18 +46,28 @@ function hasDateFacts(task: Task): boolean {
   return Boolean(task.deadlineOn || task.attentionOn)
 }
 
+const touchHandleSize = 44
+// Viewport y of the middle of a block's first line of text. Works for empty blocks and wrapped text alike,
+// since it reads the line box of the inline content rather than the rendered glyphs.
+function firstLineCenter(block: HTMLElement): number {
+  const inline = block.querySelector<HTMLElement>('.bn-inline-content') ?? block
+  const style = getComputedStyle(inline)
+  const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2
+  return inline.getBoundingClientRect().top + lineHeight / 2
+}
+
 export function PageEditor({ page, workspace }: { page: Page; workspace: Workspace }) {
   const { run, refresh } = useWorkspace()
   const key = `daythread:editor:${page.id}`
   const initial = useRef<{ nodes: EditorNode[]; base: string; recovered: boolean } | null>(null)
   if (!initial.current) {
     const base = pageContentKey(page)
-    let nodes = editorSeed(page, workspace), recovered = false, savedBase = base
+    let nodes = editorSeed(page, workspace, { templateRows: needsTemplateRows(page, todayIso()) }), recovered = false, savedBase = base
     try { const stored = JSON.parse(localStorage.getItem(key) ?? 'null'); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; recovered = true } } catch { /* fresh document */ }
     initial.current = { nodes, base: savedBase, recovered }
   }
   const [pastedChecklistIds, setPastedChecklistIds] = useState<string[]>(() => checklistIds(initial.current!.nodes))
-  const editor = useCreateBlockNote({ schema, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  const editor = useCreateBlockNote({ schema, placeholders: { default: 'Write…', emptyDocument: 'Write…' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     if (!data) return defaultPasteHandler()
     const insert = (blocks: EditorNode[]) => {
@@ -245,7 +256,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (dirty.current || base.current === next) return
       const selection = browserSelection()
       suppress.current = true
-      editor.replaceBlocks(editor.document, editorSeed(page, workspace) as never)
+      editor.replaceBlocks(editor.document, editorSeed(page, workspace, { templateRows: needsTemplateRows(page, todayIso()) }) as never)
       restoreBrowserSelection(selection)
       suppress.current = false
       base.current = next
@@ -410,7 +421,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const blocks = editor.document
     const firstHeading = blocks.findIndex(b => b.type === 'heading')
     const nextHeading = blocks.findIndex((b, i) => i > firstHeading && b.type === 'heading')
-    const target = blocks[(nextHeading < 0 ? blocks.length : nextHeading) - 1] ?? blocks[0]
+    const firstSection = blocks.slice(firstHeading + 1, nextHeading < 0 ? blocks.length : nextHeading)
+    const target = firstSection.find(b => !inlineText(b.content)) ?? blocks[(nextHeading < 0 ? blocks.length : nextHeading) - 1] ?? blocks[0]
     // Desktop opens ready to type; on touch screens focusing would raise the keyboard over a page that is read as often as written.
     if (target && window.matchMedia('(pointer: fine)').matches) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
   }, [editor])
@@ -418,7 +430,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const update = () => {
       const block = editor.getTextCursorPosition().block
       const el = document.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"]`)
-      if (el) { const top = el.getBoundingClientRect().top; setTouchHandle(previous => previous?.id === block.id && Math.abs(previous.top - top) < 0.5 ? previous : { id: block.id, top }) }
+      if (el) { const top = firstLineCenter(el) - touchHandleSize / 2; setTouchHandle(previous => previous?.id === block.id && Math.abs(previous.top - top) < 0.5 ? previous : { id: block.id, top }) }
     }
     const off = editor.onSelectionChange(() => requestAnimationFrame(update))
     window.addEventListener('scroll', update, true)
@@ -521,7 +533,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         } }
         return filterSuggestionItems([taskItem, ...defaults], query).slice(0, 8)
       }} />
-      <SideMenuController sideMenu={Handle} />
+      <AlignedSideMenu handle={Handle} />
     </BlockNoteView>
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}
       onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); dragging.current = sectionRange(nodes(), touchHandle.id); setTouchDragging(true) }}
@@ -553,11 +565,31 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     {dropHint && <div className="editor-drop-hint" role="status" style={{ left: dropHint.x + 16, top: dropHint.y + 14 }}>{dropHint.text}</div>}
   </div>
 }
+// BlockNote shifts its side menu by offsets tuned to its own heading sizes, which our headings don't use.
+// Measure the hovered block instead so the handle sits level with its first line for every block type.
+function AlignedSideMenu({ handle }: { handle: FC<SideMenuProps> }) {
+  const editor = useBlockNoteEditor()
+  const options = useMemo(() => ({
+    useFloatingOptions: {
+      middleware: [offset(({ elements }) => {
+        // Read the hovered block at compute time; positioning runs before React re-renders with new state.
+        const blockId = editor.getExtension(SideMenuExtension)?.store.state?.block?.id
+        const block = blockId ? editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(blockId)}"]`) : null
+        if (!block) return 0
+        return { crossAxis: firstLineCenter(block) - elements.reference.getBoundingClientRect().top - elements.floating.offsetHeight / 2 }
+      })],
+    },
+  }), [editor])
+  return <SideMenuController sideMenu={handle} floatingUIOptions={options} />
+}
+function HandleIcon() {
+  return <svg width="10" height="16" viewBox="0 0 10 16" aria-hidden="true" fill="currentColor">{[2, 8, 14].flatMap(y => [<circle key={`l${y}`} cx="2" cy={y} r="1.5" />, <circle key={`r${y}`} cx="8" cy={y} r="1.5" />])}</svg>
+}
 function EditorHandle({ select, dragStart }: { select(id: string): void; dragStart(id: string, e: React.DragEvent): void }) {
   const editor = useBlockNoteEditor()
   const block = useExtensionState(SideMenuExtension, { editor, selector: state => state?.block })
   const pressed = useRef<string | null>(null)
   const nativeDragging = useRef(false)
   if (!block) return null
-  return <button className="editor-block-handle" draggable aria-label={block.type === 'heading' ? 'Select or drag section' : 'Select or drag block'} onPointerDown={() => { pressed.current = block.id; nativeDragging.current = false; editor.getExtension(SideMenuExtension)?.freezeMenu() }} onPointerUp={() => { if (!nativeDragging.current) select(pressed.current ?? block.id); setTimeout(() => editor.getExtension(SideMenuExtension)?.unfreezeMenu(), 0) }} onDragStart={e => { nativeDragging.current = true; dragStart(pressed.current ?? block.id, e) }} onDragEnd={() => editor.getExtension(SideMenuExtension)?.unfreezeMenu()}>⠿</button>
+  return <button className="editor-block-handle" draggable aria-label={block.type === 'heading' ? 'Select or drag section' : 'Select or drag block'} onPointerDown={() => { pressed.current = block.id; nativeDragging.current = false; editor.getExtension(SideMenuExtension)?.freezeMenu() }} onPointerUp={() => { if (!nativeDragging.current) select(pressed.current ?? block.id); setTimeout(() => editor.getExtension(SideMenuExtension)?.unfreezeMenu(), 0) }} onDragStart={e => { nativeDragging.current = true; dragStart(pressed.current ?? block.id, e) }} onDragEnd={() => editor.getExtension(SideMenuExtension)?.unfreezeMenu()}><HandleIcon /></button>
 }

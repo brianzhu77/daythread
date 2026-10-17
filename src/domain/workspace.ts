@@ -1,4 +1,4 @@
-import { pageContentKey, projectDocument, inlineText } from "./editor-document.ts";
+import { dayTemplate, pageContentKey, projectDocument, inlineText } from "./editor-document.ts";
 import type {
   Command,
   CommandResult,
@@ -89,18 +89,10 @@ function ensureDay(state: Workspace, day: string): Page {
       reviewSaved: false,
       handoffDone: false,
       draft: null,
-      sections: (
-        ["top3", "other", "events", "good-stuffs", "notes"] as const
-      ).map((kind, i) => ({
+      sections: dayTemplate.map(({ kind, title }) => ({
         id: `${id}:${kind}`,
         kind,
-        title: [
-          "TODO - Top 3",
-          "TODO - Other",
-          "Events",
-          "Good Stuffs",
-          "Notes",
-        ][i]!,
+        title,
         blocks: [],
       })),
     };
@@ -114,12 +106,7 @@ function ensureSection(p: Page, kind: Section["kind"]): Section {
     s = {
       id: newId(),
       kind,
-      title:
-        kind === "top3"
-          ? "TODO - Top 3"
-          : kind === "other"
-            ? "TODO - Other"
-            : kind,
+      title: dayTemplate.find((t) => t.kind === kind)?.title ?? kind,
       blocks: [],
     };
     p.sections.push(s);
@@ -441,6 +428,7 @@ function execute(
         if (relation) relation.order = order;
       });
       p.editorJSON = action.document;
+      p.templateApplied = true;
       p.editorSections = JSON.stringify(p.sections);
       return { message: "Page saved; task arrangements unchanged" };
     }

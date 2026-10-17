@@ -1,4 +1,13 @@
-import type { Page, Section, Workspace } from './types.ts'
+import type { Page, Section, SectionKind, Workspace } from './types.ts'
+
+/** The default content of a new day page, like a Notion template: each heading and the empty rows under it. */
+export const dayTemplate: readonly { kind: SectionKind; title: string; rows: readonly ('task' | 'line')[] }[] = [
+  { kind: 'top3', title: 'TODO - Top 3', rows: ['task'] },
+  { kind: 'other', title: 'TODO - Other', rows: ['task'] },
+  { kind: 'events', title: 'Events', rows: ['line'] },
+  { kind: 'good-stuffs', title: 'Good Stuffs', rows: ['line'] },
+  { kind: 'notes', title: 'Notes', rows: ['line'] },
+]
 
 export interface EditorNode {
   id: string
@@ -13,8 +22,26 @@ export function inlineText(content: unknown): string {
   return content.map(c => typeof c === 'object' && c !== null ? ('text' in c ? String(c.text) : 'content' in c ? inlineText(c.content) : '') : '').join('')
 }
 export function pageContentKey(page: Page): string { return JSON.stringify([page.sections, page.editorJSON ?? null]) }
-export function editorSeed(page: Page, workspace: Workspace): EditorNode[] {
-  if (page.editorJSON && page.editorSections === JSON.stringify(page.sections)) return JSON.parse(page.editorJSON)
+// Template rows are empty; a task row keeps the `editor-task:` draft identity, so no Task exists until it has text.
+function templateRows(section: Section, page: Page): EditorNode[] {
+  const rows = dayTemplate.find(t => t.kind === section.kind)?.rows ?? []
+  return rows.map((row, i) => {
+    const id = `${section.id}:template:${i}`
+    return row === 'task'
+      ? { id, type: 'task', props: { taskId: `editor-task:${id}`, role: 'plan', planDate: page.date ?? '' }, content: '' }
+      : { id, type: 'paragraph', content: '' }
+  })
+}
+/**
+ * A day page for today or later whose template rows have never been saved. Past pages open exactly as saved,
+ * and pages saved before templates existed only get rows while nothing has been written in them.
+ */
+export function needsTemplateRows(page: Page, today: string): boolean {
+  if (page.type !== 'daily' || page.templateApplied || !page.date || page.date < today) return false
+  return !page.editorJSON || page.sections.every(s => s.blocks.length === 0)
+}
+export function editorSeed(page: Page, workspace: Workspace, options: { templateRows?: boolean } = {}): EditorNode[] {
+  if (!options.templateRows && page.editorJSON && page.editorSections === JSON.stringify(page.sections)) return JSON.parse(page.editorJSON)
   const previous: EditorNode[] = page.editorJSON ? JSON.parse(page.editorJSON) : []
   const byId = new Map<string, EditorNode>()
   const remember = (node: EditorNode) => { byId.set(node.id, node); node.children?.forEach(remember) }
@@ -39,6 +66,7 @@ export function editorSeed(page: Page, workspace: Workspace): EditorNode[] {
         : { id: b.id, type: 'paragraph', content: b.text }
       result.push(node); mark(node)
     }
+    if (options.templateRows) result.push(...templateRows(s, page))
   }
   return result
 }
