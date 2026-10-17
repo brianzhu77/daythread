@@ -32,7 +32,7 @@ const checklistIds = (nodes: readonly EditorNode[]): string[] => deepNodes(nodes
 function EditorTask({ taskId, role, planDate, contentRef }: { taskId: string; role: string; planDate: string; contentRef: (node: HTMLElement | null) => void }) {
   const { workspace, run } = useWorkspace()
   const t = workspace?.tasks.find(t => t.id === taskId)
-  return <div className="editor-task" data-role={role}>
+  return <div className="editor-task" data-role={role} data-draft={t ? undefined : true}>
     <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={t?.status === 'done'} disabled={!t && !taskId.startsWith('editor-task:')} onChange={() => t && void run({ type: 'task-status', taskId, status: t.status === 'done' ? 'open' : 'done' }, r => ({ text: t.status === 'done' ? 'Task reopened' : 'Task completed', undoOperationId: r.operationId }))} />
     <span ref={contentRef} className={`editor-task-title ${t?.status === 'done' ? 'task-done' : ''}`} data-placeholder="To do" />
     {role === 'reference' && <span contentEditable={false} className="editor-reference-tag">Reference</span>}

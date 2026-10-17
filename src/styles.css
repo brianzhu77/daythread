@@ -678,7 +678,7 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .continuous-editor .bn-block-content[data-content-type=task] { border-left:2px solid var(--blue-soft); padding-left:8px; }
 .editor-reference-tag,.editor-plan-tag { font-size:11px;color:var(--ink-2);white-space:nowrap; }
 .editor-plan-action { background:transparent;color:var(--blue-text);border:0;font-size:12px;padding:2px 4px; }
-.continuous-editor .bn-block-content[data-content-type=task]:has(.editor-task[data-role=reference]) { border-left-color:transparent; }
+.continuous-editor .bn-block-content[data-content-type=task]:has(.editor-task:is([data-role=reference],[data-draft])) { border-left-color:transparent; }
 @media(max-width:700px) { .editor-task { flex-wrap:wrap;column-gap:8px; } .editor-task-title { min-width:130px; } .editor-plan-tag { display:none; } }
 .continuous-editor .bn-editor { padding-left:0; padding-right:0; }
 .editor-save-line { padding-left:0; }
