@@ -2,7 +2,7 @@ import { Link, useRouterState } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { CaptureBar, CaptureReceipts } from './capture'
 import { longLabel, todayIso } from './dates'
-import { CalendarIcon, PagesIcon, PlusIcon, ReviewIcon, TasksIcon, TodayIcon } from './icons'
+import { CalendarIcon, PagesIcon, PlusIcon, ReviewIcon, TagsIcon, TasksIcon, TodayIcon } from './icons'
 import type { LocalDate, Page } from '../domain/types'
 import { useDay, useWorkspace } from './use-day'
 import { useCreatePage } from './pages-screen'
@@ -12,8 +12,9 @@ const destinations = [
   { to: '/', label: 'Today', Icon: TodayIcon, match: (path: string, today: LocalDate) => path === '/' || path === `/day/${today}` },
   { to: '/tasks', label: 'Tasks', Icon: TasksIcon, match: (path: string) => path.startsWith('/tasks') },
   { to: '/calendar', label: 'Calendar', Icon: CalendarIcon, match: (path: string) => path.startsWith('/calendar') },
-  // Tags is part of Pages (tags-r3), so its screens keep Pages highlighted.
-  { to: '/pages', label: 'Pages', Icon: PagesIcon, match: (path: string) => path.startsWith('/pages') || path.startsWith('/tags') },
+  { to: '/pages', label: 'Pages', Icon: PagesIcon, match: (path: string) => path.startsWith('/pages') },
+  // Tags is its own module beside Pages (Brian 77423ea0).
+  { to: '/tags', label: 'Tags', Icon: TagsIcon, match: (path: string) => path.startsWith('/tags'), phone: false },
 ] as const
 
 /** Sidebar on laptop, floating tab capsule + capture button on phone (craft-v1 §3). CSS picks one. */
@@ -50,7 +51,7 @@ export function Navigation() {
 
       <nav className="tab-bar" aria-label="Main">
         <div className="tab-capsule">
-          {destinations.map(({ to, label, Icon, match }) => (
+          {destinations.filter(d => !('phone' in d)).map(({ to, label, Icon, match }) => (
             <Link key={to} to={to} className="tab" aria-label={label} aria-current={match(path, today) ? 'page' : undefined}>
               <Icon />
             </Link>

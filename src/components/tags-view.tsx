@@ -16,7 +16,7 @@ function dayWord(date: LocalDate, today: LocalDate) {
   return date === today ? 'Today' : date === addDays(today, -1) ? 'Yesterday' : longLabel(date)
 }
 
-/** Every tag Brian has written, most recently used first. Reached from the Tags row on the Pages screen. */
+/** Every tag Brian has written, most recently used first. A main navigation destination of its own. */
 export function TagsScreen() {
   const { workspace } = useWorkspace()
   const [today] = useState(todayIso)
@@ -24,7 +24,6 @@ export function TagsScreen() {
   const tags = tagIndex(workspace)
   return (
     <div className="list-screen tags-screen">
-      <Link to="/pages" className="back-link">‹ Pages</Link>
       <h1 className="large-title">Tags</h1>
       {tags.length === 0 ? (
         // The only place the app explains tags and where one ends.
