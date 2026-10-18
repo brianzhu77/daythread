@@ -1,5 +1,5 @@
 import { Toast } from '@heroui/react'
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode } from 'react'
 import { Navigation } from './navigation'
 import { WorkspaceProvider, isConflict, useWorkspace, type SimOutcome } from './use-day'
 
@@ -23,16 +23,25 @@ export function AppShell({ children }: { children: ReactNode }) {
   )
 }
 
-/** Every notice with Undo, editor or not, is a HeroUI Toast: top on phones, where the keyboard covers the bottom; bottom on desktop. */
+/**
+ * Every notice with Undo, editor or not, is one HeroUI Toast style: text, one action on the same line, and ✕.
+ * A second action sits under the text. Bottom of the screen, above the phone tab bar (Jazz, step 2 review).
+ */
 function Toasts() {
-  const [phone, setPhone] = useState(false)
-  useEffect(() => {
-    const media = window.matchMedia('(max-width: 599px)')
-    const update = () => setPhone(media.matches)
-    update(); media.addEventListener('change', update)
-    return () => media.removeEventListener('change', update)
-  }, [])
-  return <Toast.Provider placement={phone ? 'top' : 'bottom'} />
+  return (
+    <Toast.Provider placement="bottom" className="app-toasts">
+      {({ toast: t }) => (
+        <Toast toast={t}>
+          <Toast.Content>
+            <Toast.Title>{t.content.title}</Toast.Title>
+            {t.content.description && <Toast.Description>{t.content.description}</Toast.Description>}
+          </Toast.Content>
+          {t.content.actionProps?.children && <Toast.ActionButton {...t.content.actionProps} />}
+          <Toast.CloseButton />
+        </Toast>
+      )}
+    </Toast.Provider>
+  )
 }
 
 function SampleBanner() {

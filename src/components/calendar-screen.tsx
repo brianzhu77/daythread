@@ -25,11 +25,8 @@ export function CalendarScreen({ from, today }: { from: LocalDate; today: LocalD
   return (
     <div className="list-screen">
       <h1 className="large-title">Calendar</h1>
-      {/* `Today ‹ ›` like the day header: links styled as HeroUI buttons, Today hidden (keeping its space) when already there. */}
+      {/* Earlier and Later never move; Today sits last, away from the aligned edge, and is hidden (keeping its space) when already there. */}
       <nav className="calendar-nav" aria-label="Move through days">
-        <Link to="/calendar" search={{}} className={`${secondary} ${from === today ? 'invisible' : ''}`} data-slot="button">
-          Today
-        </Link>
         <Link to="/calendar" search={{ date: addDays(from, -DAYS_SHOWN) }} className={secondary} data-slot="button">
           <ArrowLeftIcon />
           Earlier
@@ -37,6 +34,9 @@ export function CalendarScreen({ from, today }: { from: LocalDate; today: LocalD
         <Link to="/calendar" search={{ date: addDays(from, DAYS_SHOWN) }} className={secondary} data-slot="button">
           Later
           <ArrowRightIcon />
+        </Link>
+        <Link to="/calendar" search={{}} className={`${secondary} ${from === today ? 'invisible' : ''}`} data-slot="button">
+          Today
         </Link>
       </nav>
       {days.map(d => {
