@@ -423,7 +423,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return () => { document.removeEventListener('pointermove', dropLineGone); document.removeEventListener('pointerup', release); document.removeEventListener('dragend', ended, true); document.removeEventListener('drop', settle, true) }
   }, [editor])
   const handleActions = useRef({ select, selected: () => selected.current }); handleActions.current = { select, selected: () => selected.current }
-  const Handle = useMemo(() => function StableHandle() { return <SectionSideMenu select={id => handleActions.current.select(id)} picked={pickedIds} extended={extendedIds} selectedIds={() => handleActions.current.selected()} /> }, [])
+  const Handle = useMemo(() => function StableHandle() { return <SectionSideMenu select={(id, ids) => handleActions.current.select(id, ids)} picked={pickedIds} extended={extendedIds} selectedIds={() => handleActions.current.selected()} /> }, [])
   function updateDrop(x: number, y: number) {
     const el = document.elementFromPoint(x, y)?.closest<HTMLElement>('.bn-block[data-id]')
     const id = el?.dataset.id
