@@ -36,7 +36,7 @@ export function TagsScreen() {
             return (
               <li key={t.key}>
                 <Link to="/tags/$tag" params={{ tag: t.key }} className="card-row">
-                  <span className="card-row-title"><span className="tag-plain-mark">#</span>{t.tag}<span className="card-row-detail">{plural(t.occurrences.length, 'block')}{last ? ` · ${dayWord(last, today)}` : ''}</span></span>
+                  <span className="card-row-title wraps"><span className="tag-plain-mark">#</span>{t.tag}<span className="card-row-detail">{plural(t.occurrences.length, 'block')}{last ? ` · ${dayWord(last, today)}` : ''}</span></span>
                   <ChevronRightIcon />
                 </Link>
               </li>
