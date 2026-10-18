@@ -819,6 +819,10 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .card-row-detail { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--ink-2); }
 /* A tag name is Brian's own word: shown whole, wrapping if it must; only its detail line stays on one line. */
 .card-row-title.wraps { white-space: normal; overflow-wrap: anywhere; }
+/* Two-line rows (title + detail): tight leading so the pair reads as one item. */
+.card-row:has(.card-row-detail) { padding-block: 11px; }
+.card-row-title:has(> .card-row-detail) { line-height: 22px; }
+.card-row-title > .card-row-detail { margin-top: 1px; line-height: 18px; }
 /* In lists and titles a tag is a name, not the tinted word in a note: ink text with a grey mark. */
 .tag-plain-mark { color: var(--ink-3); }
 .tags-empty strong { color: var(--ink); font-weight: 600; }
