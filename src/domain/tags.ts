@@ -1,7 +1,8 @@
 import type { LocalDate, Workspace } from './types.ts'
 
 // Tags are plain text Brian writes (#daythread:e36141c5): `#` (or full-width `＃`) followed by one or more
-// characters, ending at whitespace or the end of the block. Nothing is stored; every reader derives tags from the
+// letters, digits, `_`, `-` or `/`, ending at anything else: whitespace, punctuation (so `#工作。` is the tag 工作),
+// symbols, or the end of the block. Nothing is stored; every reader derives tags from the
 // block text with the same rule, so the index can never disagree with what is on the page.
 export interface TagMatch { tag: string; start: number; end: number }
 export interface TagOccurrence { pageId: string; blockId: string; date: LocalDate | null; pageTitle: string; sectionTitle: string; taskId?: string; text: string }
@@ -9,6 +10,8 @@ export interface TagEntry { key: string; tag: string; occurrences: TagOccurrence
 
 const isMark = (c: string | undefined) => c === '#' || c === '＃'
 const isSpace = (c: string) => /\s/u.test(c)
+// Letters (any script, with their combining marks), digits, `_`, `-` and `/` (for nested names like #work/appx).
+const tagChar = /^[\p{L}\p{M}\p{N}_/-]$/u
 // The text before a `#` in the same word. A link's fragment (example.com/page#part) is not a tag; a domain needs a
 // letters-only last part, so a version like v1.2#note still has a tag.
 const urlPrefix = /^(?:[a-z][a-z\d+.-]*:\/\/|www\.|[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:\/|$))/iu
@@ -19,9 +22,12 @@ export function findTags(text: string): TagMatch[] {
   for (let i = 0; i < text.length; i++) {
     if (isSpace(text[i]!)) { wordStart = i + 1; continue }
     if (!isMark(text[i]) || urlPrefix.test(text.slice(wordStart, i))) continue
-    // Only whitespace ends a tag, so a later mark is part of it: "#工作#生活" is the one tag "工作#生活".
     let end = i + 1
-    while (end < text.length && !isSpace(text[end]!)) end++
+    while (end < text.length) {
+      const char = String.fromCodePoint(text.codePointAt(end)!)
+      if (!tagChar.test(char)) break
+      end += char.length
+    }
     if (end > i + 1) found.push({ tag: text.slice(i + 1, end), start: i, end })
     i = end - 1
   }
