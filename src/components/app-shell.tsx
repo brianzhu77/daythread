@@ -80,11 +80,13 @@ function SaveIndicator() {
   if (saveState !== 'failed' || failedAction === 'save-editor') return null
   return (
     <p className="banner save-failed" role="alert">
-      {saveError?.startsWith('Cannot undo')
-        ? 'Can’t undo — changed since'
-        : isConflict(saveError)
-          ? 'Changed elsewhere — now showing the latest. Your edit wasn’t saved'
-          : 'Not saved — your changes are still here'}{' '}
+      {failedAction === 'ensure-day'
+        ? 'Couldn’t create the page'
+        : saveError?.startsWith('Cannot undo')
+          ? 'Can’t undo — changed since'
+          : isConflict(saveError)
+            ? 'Changed elsewhere — now showing the latest. Your edit wasn’t saved'
+            : 'Not saved — your changes are still here'}{' '}
       ·{' '}
       <button type="button" className="app-link" onClick={retry}>
         Retry
