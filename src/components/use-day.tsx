@@ -49,6 +49,8 @@ interface WorkspaceContextValue {
   loadError: string | null
   saveState: SaveState
   saveError: string | null
+  /** The command that failed and Retry would resend, if any. */
+  failedAction: Action['type'] | null
   notices: Notice[]
   simOutcome: SimOutcome
   setSimOutcome(o: SimOutcome): void
@@ -164,6 +166,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       loadError,
       saveState,
       saveError,
+      failedAction: lastFailed?.action.type ?? null,
       notices,
       simOutcome,
       setSimOutcome,
@@ -174,7 +177,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       refresh,
       addSampleData,
     }),
-    [workspace, loadError, saveState, saveError, notices, simOutcome, run, retry, dismiss, reload, refresh, addSampleData],
+    [workspace, loadError, saveState, saveError, lastFailed, notices, simOutcome, run, retry, dismiss, reload, refresh, addSampleData],
   )
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }

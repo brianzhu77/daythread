@@ -49,9 +49,10 @@ export function FutureDayPrompt({ date, children }: { date: LocalDate; children:
   const { create, pending } = useCreateDay(date)
   const heading = `${longLabel(date)} hasn't happened yet`
   const confirm = async () => {
-    if (!(await create())) return
+    const created = await create()
+    // On failure the prompt closes so it doesn't cover the save-failure line and its Retry.
     setOpen(false)
-    void navigate({ to: '/day/$date', params: { date } })
+    if (created) void navigate({ to: '/day/$date', params: { date } })
   }
   const trigger = (
     <Button variant="ghost" className="future-day-trigger">
@@ -63,7 +64,7 @@ export function FutureDayPrompt({ date, children }: { date: LocalDate; children:
       <Button variant="tertiary" onPress={() => setOpen(false)}>
         Cancel
       </Button>
-      <Button variant="primary" isDisabled={pending} onPress={() => void confirm()}>
+      <Button variant="primary" isPending={pending} onPress={() => void confirm()}>
         Create page
       </Button>
     </>
@@ -110,7 +111,7 @@ export function FutureDayState({ date, today, tasks }: { date: LocalDate; today:
     <section className="future-day-state" aria-labelledby="future-day-heading">
       <h2 id="future-day-heading">{longLabel(date)} hasn't happened yet</h2>
       <p>There's no page for this day. You can start one now if you want to plan ahead.</p>
-      <Button variant="primary" isDisabled={pending} onPress={() => void create()}>
+      <Button variant="primary" isPending={pending} onPress={() => void create()}>
         Create page
       </Button>
       {tasks.length > 0 && (

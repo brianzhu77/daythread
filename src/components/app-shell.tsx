@@ -12,6 +12,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Navigation />
         <div className="app-content">
           <SampleBanner />
+          <SaveIndicator />
           <main className="app-main">{children}</main>
         </div>
         {/* One bottom dock so the editor's selection bar and every undo notice stack instead of overlapping. */}
@@ -70,27 +71,24 @@ function SampleBanner() {
   )
 }
 
-/** Per-page save state (01 §8): quiet while saving, persistent when it fails. Never a toast. */
-export function SaveIndicator() {
-  const { saveState, saveError, retry } = useWorkspace()
-  if (saveState === 'idle') return <span className="save-state" aria-live="polite" />
-  if (saveState === 'failed')
-    return (
-      <span className="save-state failed" role="alert">
-        {saveError?.startsWith('Cannot undo')
-          ? 'Can’t undo — changed since'
-          : isConflict(saveError)
-            ? 'Changed elsewhere — now showing the latest. Your edit wasn’t saved'
-            : 'Not saved — your changes are still here'}{' '}
-        ·{' '}
-        <button type="button" className="app-link" onClick={retry}>
-          Retry
-        </button>
-      </span>
-    )
+/**
+ * Save failures (01 §8), mounted once above every screen: persistent until Retry or the next successful save. Never a toast.
+ * Saving and saved stay silent here. Editor saves have their own "Retry saving / Copy draft" line, which owns that retry.
+ */
+function SaveIndicator() {
+  const { saveState, saveError, failedAction, retry } = useWorkspace()
+  if (saveState !== 'failed' || failedAction === 'save-editor') return null
   return (
-    <span className="save-state" aria-live="polite">
-      {saveState === 'saving' ? 'Saving…' : 'Saved'}
-    </span>
+    <p className="banner save-failed" role="alert">
+      {saveError?.startsWith('Cannot undo')
+        ? 'Can’t undo — changed since'
+        : isConflict(saveError)
+          ? 'Changed elsewhere — now showing the latest. Your edit wasn’t saved'
+          : 'Not saved — your changes are still here'}{' '}
+      ·{' '}
+      <button type="button" className="app-link" onClick={retry}>
+        Retry
+      </button>
+    </p>
   )
 }
