@@ -1,8 +1,7 @@
 import type { LocalDate, Workspace } from './types.ts'
 
 // Tags are plain text Brian writes (#daythread:e36141c5): `#` (or full-width `＃`) followed by one or more
-// letters, digits, `_`, `-` or `/`, ending at anything else: whitespace, punctuation (so `#工作。` is the tag 工作),
-// symbols, or the end of the block. Nothing is stored; every reader derives tags from the
+// characters, ending at whitespace, punctuation (so `#工作。` is the tag 工作), another `#`, or the end of the block. Nothing is stored; every reader derives tags from the
 // block text with the same rule, so the index can never disagree with what is on the page.
 export interface TagMatch { tag: string; start: number; end: number }
 export interface TagOccurrence { pageId: string; blockId: string; date: LocalDate | null; pageTitle: string; sectionTitle: string; taskId?: string; text: string }
@@ -10,8 +9,9 @@ export interface TagEntry { key: string; tag: string; occurrences: TagOccurrence
 
 const isMark = (c: string | undefined) => c === '#' || c === '＃'
 const isSpace = (c: string) => /\s/u.test(c)
-// Letters (any script, with their combining marks), digits, `_`, `-` and `/` (for nested names like #work/appx).
-const tagChar = /^[\p{L}\p{M}\p{N}_/-]$/u
+// Whitespace and Unicode punctuation end a tag (Lead 7b1bc740), except `_`, `-` and `/` (for nested names like
+// #work/appx). Everything else, emoji and symbols included, is tag text. `#` and `＃` are punctuation, so they end it.
+const endsTag = (c: string) => /^[\s\p{P}]$/u.test(c) && !'_-/'.includes(c)
 // The text before a `#` in the same word. A link's fragment (example.com/page#part) is not a tag; a domain needs a
 // letters-only last part, so a version like v1.2#note still has a tag.
 const urlPrefix = /^(?:[a-z][a-z\d+.-]*:\/\/|www\.|[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:\/|$))/iu
@@ -25,7 +25,7 @@ export function findTags(text: string): TagMatch[] {
     let end = i + 1
     while (end < text.length) {
       const char = String.fromCodePoint(text.codePointAt(end)!)
-      if (!tagChar.test(char)) break
+      if (endsTag(char)) break
       end += char.length
     }
     if (end > i + 1) found.push({ tag: text.slice(i + 1, end), start: i, end })
