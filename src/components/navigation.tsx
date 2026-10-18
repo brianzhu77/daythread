@@ -6,6 +6,7 @@ import { CalendarIcon, PagesIcon, PlusIcon, ReviewIcon, TasksIcon, TodayIcon } f
 import type { LocalDate, Page } from '../domain/types'
 import { useDay, useWorkspace } from './use-day'
 import { SidebarTags } from './tags-view'
+import { useCreatePage } from './pages-screen'
 
 // Highlight only where you are: Today is today's page, not any day (another day highlights its Days row, or nothing).
 const destinations = [
@@ -67,6 +68,15 @@ export function Navigation() {
   )
 }
 
+/**
+ * An action, not a destination: a link to /pages would be marked current (and look selected) on the Pages screen.
+ * The new page opens the same way the sidebar's page rows do.
+ */
+function NewPageRow() {
+  const createPage = useCreatePage()
+  return <button type="button" className="side-row small" onClick={async () => { const id = await createPage(); if (id) window.location.assign(`/pages?page=${encodeURIComponent(id)}`) }}>＋ New page</button>
+}
+
 /** Something was written or tracked on the page; a page created by opening or browsing a day has neither. */
 function hasContent(page: Page): boolean {
   return Boolean(page.reviewText.trim()) || page.sections.some(s => s.blocks.some(b => b.kind === 'task' || b.text.trim()))
@@ -94,7 +104,7 @@ function DayList({ path, today }: { path: string; today: LocalDate }) {
       ))}
       <p className="side-label">Pages</p>
       {workspace?.pages.filter(p => p.type === 'document').map(p => <a className="side-row small" href={`/pages?page=${encodeURIComponent(p.id)}`} key={p.id}>{p.title}</a>)}
-      <Link className="side-row small" to="/pages">＋ New page</Link>
+      <NewPageRow />
     </div>
   )
 }

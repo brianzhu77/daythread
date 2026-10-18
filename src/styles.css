@@ -526,6 +526,7 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .sidebar .brand { padding: 4px 10px 16px; }
 .sidebar-nav, .side-group { display: grid; gap: 2px; }
 .side-row { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 10px; border-radius: 10px; color: var(--ink-2); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+button.side-row { width: 100%; justify-content: flex-start; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
 .side-row svg { width: 19px; height: 19px; flex: none; }
 .side-row:hover { background: var(--fill); }
 .side-row[aria-current='page'] { background: var(--card); color: var(--ink); font-weight: 550; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
