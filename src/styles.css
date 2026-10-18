@@ -810,3 +810,5 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .calendar-nav > :last-child { margin-left: 4px; }
 /* When the "N other open tasks" line sits right above the page, the save line shares its row (Jazz, step 2 review). */
 .day-body:has(> .facts > .fact-pair:last-child) .editor-save-line { top:-48px; }
+/* HeroUI reveals the toast ✕ on hover only; phones have no hover, so it always shows. */
+.app-toasts .toast__close-button { opacity:1; pointer-events:auto; }
