@@ -17,17 +17,20 @@ const tagChar = /^[\p{L}\p{M}\p{N}_/-]$/u
 // A tag needs a letter or number (#_, #-, #/ are not tags) and can't be all decimal digits (#2026, #１２３ are plain
 // text); #v1, #1on1, #1-2 and #① are tags.
 const isTag = (tag: string) => /[\p{L}\p{N}]/u.test(tag) && !/^\p{Nd}+$/u.test(tag)
-// The text before a `#` in the same word. A link's fragment is not a tag: anywhere in that text a `scheme://` or
-// `www.` (so "(https://x.io/#a)" and "[doc](https://x.io/#a)" count), or, past any opening brackets or quotes, a
-// domain (example.com#x, "(example.com/soup#x"). A domain needs a letters-only last part, so v1.2#note keeps its tag.
-const inLink = (word: string) => /[a-z][a-z\d+.-]*:\/\/|www\./iu.test(word) || /^[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:\/|$)/iu.test(word.replace(/^[([<"'“‘（【「]+/u, ''))
+// The text a link could run through before a `#`: it starts after the last whitespace or non-ASCII character, since a
+// URL holds neither and Brian's Chinese sentences have no spaces ("资料在https://a.com，很有用#学习" keeps 学习). A link's
+// fragment is not a tag: anywhere in that text a `scheme://` or `www.` (so "(https://x.io/#a)" and
+// "[doc](https://x.io/#a)" count), or, past opening brackets or quotes, a domain (example.com#x, "(example.com#x").
+// A domain needs a letters-only last part, so v1.2#note keeps its tag.
+const inLink = (run: string) => /[a-z][a-z\d+.-]*:\/\/|www\./iu.test(run) || /^[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:\/|$)/iu.test(run.replace(/^[([<"']+/u, ''))
+const endsLink = (c: string) => isSpace(c) || c > '~'
 
 export function findTags(text: string): TagMatch[] {
   const found: TagMatch[] = []
-  let wordStart = 0
+  let linkStart = 0
   for (let i = 0; i < text.length; i++) {
-    if (isSpace(text[i]!)) { wordStart = i + 1; continue }
-    if (!isMark(text[i]) || inLink(text.slice(wordStart, i))) continue
+    if (!isMark(text[i])) { if (endsLink(text[i]!)) linkStart = i + 1; continue }
+    if (inLink(text.slice(linkStart, i))) continue
     let end = i + 1
     while (end < text.length) {
       const char = String.fromCodePoint(text.codePointAt(end)!)

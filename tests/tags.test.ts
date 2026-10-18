@@ -68,6 +68,11 @@ test('the # in a link is not a tag', () => {
   assert.deepEqual(tags('<https://x.io/#i>'), [])
   assert.deepEqual(tags('(example.com#x)'), [])
   assert.deepEqual(tags('(#tag) "#quoted"'), ['tag', 'quoted'])
+  // A link ends at whitespace or the first non-ASCII character, so Chinese text after it keeps its tags (Bumblebee 1dd88162).
+  assert.deepEqual(tags('资料在https://a.com，很有用#学习'), ['学习'])
+  assert.deepEqual(tags('https://x.io，#tag'), ['tag'])
+  assert.deepEqual(tags('https://x.io/a#b'), [])
+  assert.deepEqual(tags('看（https://x.io/#frag）#读书'), ['读书'])
   assert.deepEqual(tags('v1.2#note'), ['note'])
   assert.deepEqual(tags('1.5#x'), ['x'])
 })
