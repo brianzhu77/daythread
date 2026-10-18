@@ -810,7 +810,6 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .tag-group { border-radius: var(--app-radius); background: var(--card); overflow: hidden; }
 .tag-group li + li { border-top: 1px solid var(--line); }
 .tag-group-row { align-items: center; min-height: 44px; padding: 0 16px; color: inherit; text-decoration: none; }
-.tag-group-row:hover { background: var(--fill); }
 .tag-screen .large-title { margin: 0; }
 .tag-title-mark { color: var(--ink-3); }
 .tag-summary { margin: -8px 0 0; color: var(--ink-2); }
@@ -818,9 +817,11 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .tag-day { display: grid; gap: 2px; padding-top: 8px; }
 .tag-day-label { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink-2); }
 .tag-block { display: flex; align-items: flex-start; gap: 10px; width: calc(100% + 24px); min-height: 44px; padding: 10px 12px; margin-inline: -12px; border: 0; border-radius: 10px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
-.tag-block:hover { background: var(--fill); }
 .tag-block .check { flex: none; margin-top: 3px; }
 .tag-block-text { flex: 1; min-width: 0; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .tag-block-section { flex: none; color: var(--ink-3); font-size: 13px; padding-top: 2px; }
-@media (min-width: 900px) { .tag-back { display: none; } }
+/* Touch screens keep :hover after a tap, which would leave a row grey after going back. */
+@media (hover: hover) { .tag-group-row:hover, .tag-block:hover { background: var(--fill); } }
+/* On laptop the tag view is a page like a day, so it sits on white beside the grey sidebar. */
+@media (min-width: 900px) { .tag-back { display: none; } body:has(.tag-screen) { background: var(--bg-doc); } }
 @media (max-width: 899px) { .tag-block-section { display: none; } }
