@@ -557,7 +557,8 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
   -webkit-backdrop-filter: saturate(1.6) blur(20px);
   box-shadow: var(--shadow-float);
 }
-.tab { display: grid; place-items: center; width: 64px; height: 48px; border-radius: 999px; color: var(--ink); }
+/* Five tabs share the capsule: about 54px each at 390, never wider than 64 (Jazz). */
+.tab { display: grid; place-items: center; flex: 1; min-width: 0; max-width: 64px; height: 48px; border-radius: 999px; color: var(--ink); }
 .tab[aria-current='page'] { background: var(--fill); color: var(--blue); }
 .tab-plus { pointer-events: auto; flex: none; width: 60px; height: 60px; padding: 0; border-radius: 50%; background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); color: var(--ink); box-shadow: var(--shadow-float); }
 

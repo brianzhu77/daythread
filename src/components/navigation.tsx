@@ -13,8 +13,8 @@ const destinations = [
   { to: '/tasks', label: 'Tasks', Icon: TasksIcon, match: (path: string) => path.startsWith('/tasks') },
   { to: '/calendar', label: 'Calendar', Icon: CalendarIcon, match: (path: string) => path.startsWith('/calendar') },
   { to: '/pages', label: 'Pages', Icon: PagesIcon, match: (path: string) => path.startsWith('/pages') },
-  // Tags is its own module beside Pages (Brian 77423ea0).
-  { to: '/tags', label: 'Tags', Icon: TagsIcon, match: (path: string) => path.startsWith('/tags'), phone: false },
+  // Tags is its own module beside Pages on laptop and phone (Brian 77423ea0, bc661669).
+  { to: '/tags', label: 'Tags', Icon: TagsIcon, match: (path: string) => path.startsWith('/tags') },
 ] as const
 
 /** Sidebar on laptop, floating tab capsule + capture button on phone (craft-v1 §3). CSS picks one. */
@@ -51,7 +51,7 @@ export function Navigation() {
 
       <nav className="tab-bar" aria-label="Main">
         <div className="tab-capsule">
-          {destinations.filter(d => !('phone' in d)).map(({ to, label, Icon, match }) => (
+          {destinations.map(({ to, label, Icon, match }) => (
             <Link key={to} to={to} className="tab" aria-label={label} aria-current={match(path, today) ? 'page' : undefined}>
               <Icon />
             </Link>
