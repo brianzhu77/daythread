@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { findTags, tagIndex } from '../src/domain/tags.ts'
+import { findTags, tagIndex, lastUsed } from '../src/domain/tags.ts'
 import { applyCommand, createEmptyWorkspace } from '../src/domain/workspace.ts'
 import type { Action, Workspace } from '../src/domain/types.ts'
 function run(ws: Workspace, action: Action) { return applyCommand(ws, { operationId: crypto.randomUUID(), expectedRevision: ws.revision, action }).workspace }
@@ -97,9 +97,14 @@ test('tagIndex reads paragraph and task blocks, counts a block once per tag, and
   assert.deepEqual(index[0]!.occurrences.map(o => [o.date, o.text]), [['2026-10-17', 'Fix export bug #work'], ['2026-10-17', 'Lunch #Work #friends'], ['2026-10-16', 'Standup #work #work']])
   // Shown as last written on the newest page: "#Work" in Notes sits below the "#work" task row.
   assert.equal(index[0]!.tag, 'Work')
-  // Equal counts: the tag used most recently comes first.
-  ws = run(ws, { type: 'add-text', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), text: 'Old #archive' })
-  assert.deepEqual(tagIndex(ws).slice(1).map(t => t.key), ['friends', 'archive'])
+  // Most recently used first, whatever the count; on the same day more blocks come first.
+  ws = run(ws, { type: 'add-text', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), text: 'Old #archive #archive2' })
+  ws = run(ws, { type: 'add-text', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), text: 'Older #archive2' })
+  ws = run(ws, { type: 'ensure-day', date: '2026-10-18' })
+  ws = run(ws, { type: 'add-text', pageId: day('2026-10-18').id, sectionId: notes('2026-10-18'), text: 'Fresh #new' })
+  const recent = tagIndex(ws)
+  assert.deepEqual(recent.map(t => t.key), ['new', 'work', 'friends', 'archive2', 'archive'])
+  assert.deepEqual(recent.map(lastUsed), ['2026-10-18', '2026-10-17', '2026-10-17', '2026-10-16', '2026-10-16'])
   // Unicode compatibility forms fold into one tag (Lead 4ae06909): full-width letters, circled digits. "#1" is all
   // digits and "#㎏" starts with a symbol, so neither is a tag under the Obsidian rule.
   ws = run(ws, { type: 'add-text', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), text: '＃ｗｏｒｋ #① #1 #㎏ #kg' })

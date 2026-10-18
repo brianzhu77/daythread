@@ -66,7 +66,12 @@ export function tagIndex(workspace: Workspace): TagEntry[] {
       entry.occurrences.push({ pageId: page.id, blockId: block.id, date: page.date, pageTitle: page.title, sectionTitle: section.title, taskId: block.taskId, text: block.text })
     }
   }
-  const latest = (t: TagEntry) => t.occurrences[0]?.date ?? ''
+  // Most recently used first (Jazz/Bumblebee tags-r3): the order he'd pick a tag back up in. Ties: more blocks, then name.
   return [...byKey].map(([key, { tag, occurrences }]) => ({ key, tag, occurrences }))
-    .sort((a, b) => b.occurrences.length - a.occurrences.length || latest(b).localeCompare(latest(a)) || a.key.localeCompare(b.key))
+    .sort((a, b) => (lastUsed(b) ?? '').localeCompare(lastUsed(a) ?? '') || b.occurrences.length - a.occurrences.length || a.key.localeCompare(b.key))
+}
+
+/** The newest day a tag appears on; null when it is only on pages without a date. */
+export function lastUsed(entry: TagEntry): LocalDate | null {
+  return entry.occurrences[0]?.date ?? null
 }
