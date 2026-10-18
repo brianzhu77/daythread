@@ -1,9 +1,7 @@
-import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { ContinuousPage } from './continuous-page'
 import { ChevronRightIcon, PagesIcon, PlusIcon } from './icons'
 import { useWorkspace } from './use-day'
-import { tagIndex } from '../domain/tags'
 
 /** Asks for a title and creates a document page; resolves to its id, or null if cancelled. */
 export function useCreatePage() {
@@ -30,17 +28,11 @@ export function PagesScreen() {
         <h1 className="large-title">Pages</h1>
         <button type="button" className="round-add" aria-label="New page" onClick={async () => { const id = await createPage(); if (id) setSelected(id) }}><PlusIcon /></button>
       </div>
-      {/* Tags is a feature of Pages, not a list of every tag (Brian, tags-r3): one row, shown even with none yet. */}
-      <ul className="plain card-list">
-        <li><Link to="/tags" className="card-row"><span className="card-row-icon tags-icon">#</span><span className="card-row-title">Tags</span><span className="card-row-count">{tagIndex(workspace).length}</span><ChevronRightIcon /></Link></li>
-      </ul>
-      {documents.length > 0 && (
-        <section className="card-section">
-          <h2 className="card-section-label">Pages</h2>
-          <ul className="plain card-list">
-            {documents.map(p => <li key={p.id}><button type="button" className="card-row" onClick={() => setSelected(p.id)}><span className="card-row-icon"><PagesIcon /></span><span className="card-row-title">{p.title}</span><ChevronRightIcon /></button></li>)}
-          </ul>
-        </section>
+      {/* Pages lists only pages, flat (Brian 77423ea0); Tags is a navigation destination of its own. */}
+      {documents.length === 0 ? <p className="quiet">No pages yet. Tap + to start one.</p> : (
+        <ul className="plain card-list">
+          {documents.map(p => <li key={p.id}><button type="button" className="card-row" onClick={() => setSelected(p.id)}><span className="card-row-icon"><PagesIcon /></span><span className="card-row-title">{p.title}</span><ChevronRightIcon /></button></li>)}
+        </ul>
       )}
     </div>
   )

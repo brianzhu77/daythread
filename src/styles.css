@@ -804,7 +804,6 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .round-add svg { width: 20px; height: 20px; }
 .back-link { justify-self: start; color: var(--blue); text-decoration: none; }
 .card-section { display: grid; gap: 6px; padding-top: 4px; }
-.card-section-label { margin: 0; font-size: 13px; font-weight: 400; color: var(--ink-2); }
 .card-list { border-radius: var(--app-radius); background: var(--card); overflow: hidden; }
 /* Grid items default to their content's width; a long no-wrap title must ellipsize, not widen the card. */
 .card-list li { min-width: 0; }
