@@ -119,15 +119,18 @@ export function StartTheDay({ view, workspace, today, onLater }: { view: DayView
               </li>
             ))}
           </ul>
-          <button
-            type="button"
-            className="secondary"
-            onClick={async () => {
-              for (const t of view.handoffTasks) await planOn(t, today, 'other')
-            }}
-          >
-            Keep all
-          </button>
+          {/* With one task, Keep all would repeat Keep. */}
+          {view.handoffTasks.length > 1 && (
+            <button
+              type="button"
+              className="secondary"
+              onClick={async () => {
+                for (const t of view.handoffTasks) await planOn(t, today, 'other')
+              }}
+            >
+              Keep all
+            </button>
+          )}
         </div>
       )}
 
