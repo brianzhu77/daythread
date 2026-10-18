@@ -45,6 +45,8 @@ test('the # in a link is not a tag', () => {
   assert.deepEqual(tags('www.example.com#top'), [])
   assert.deepEqual(tags('example.com#top'), [])
   assert.deepEqual(tags('https://x.dev/a #reading'), ['reading'])
+  assert.deepEqual(tags('v1.2#note'), ['note'])
+  assert.deepEqual(tags('1.5#x'), ['x'])
 })
 
 test('match positions cover the mark and the tag, for the editor tint', () => {

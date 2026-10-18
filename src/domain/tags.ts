@@ -9,8 +9,9 @@ export interface TagEntry { key: string; tag: string; occurrences: TagOccurrence
 
 const isMark = (c: string | undefined) => c === '#' || c === '＃'
 const isSpace = (c: string) => /\s/u.test(c)
-// The text before a `#` in the same word. A link's fragment (example.com/page#part) is not a tag.
-const urlPrefix = /^(?:[a-z][a-z\d+.-]*:\/\/|www\.|[\w-]+(?:\.[\w-]+)+(?:\/|$))/iu
+// The text before a `#` in the same word. A link's fragment (example.com/page#part) is not a tag; a domain needs a
+// letters-only last part, so a version like v1.2#note still has a tag.
+const urlPrefix = /^(?:[a-z][a-z\d+.-]*:\/\/|www\.|[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:\/|$))/iu
 
 export function findTags(text: string): TagMatch[] {
   const found: TagMatch[] = []
