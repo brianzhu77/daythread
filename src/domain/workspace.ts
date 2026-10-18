@@ -97,6 +97,16 @@ function ensureDay(state: Workspace, day: string): Page {
       })),
     };
     state.pages.push(p);
+    // Planning stores only a placement (R9), so a new page shows what was already planned for its day (R5).
+    const planned = state.placements
+      .map((placement, index) => ({ placement, index }))
+      .filter(({ placement }) => placement.date === day && placement.state === "included")
+      .sort((a, b) => (a.placement.order ?? 1e9) - (b.placement.order ?? 1e9) || a.index - b.index);
+    for (const { placement } of planned) {
+      const t = state.tasks.find((t) => t.id === placement.taskId);
+      if (!t || t.status !== "open" || t.plannedOn !== day) continue;
+      appendBlock(p, ensureSection(p, placement.section), { id: newId(), kind: "task", taskId: t.id, text: t.title });
+    }
   }
   return p;
 }
@@ -184,7 +194,9 @@ function place(
       state: "included",
       section: target,
     });
-  const p = ensureDay(state, day);
+  // Planning never creates a day page; ensureDay renders this placement when the page is created.
+  const p = state.pages.find((p) => p.type === "daily" && p.date === day);
+  if (!p) return;
   // Only plan sections own arrangement rows; ordinary Notes references stay put.
   let arrangement: NoteBlock | undefined;
   for (const s of p.sections) {
