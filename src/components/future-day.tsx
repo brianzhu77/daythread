@@ -104,7 +104,7 @@ export function FutureDayPrompt({ date, children }: { date: LocalDate; children:
 }
 
 /** A future day opened by URL with no page yet (R7): no automatic creation, Create page plus what is planned. */
-export function FutureDayState({ date, today, planned }: { date: LocalDate; today: LocalDate; planned: Task[] }) {
+export function FutureDayState({ date, today, tasks }: { date: LocalDate; today: LocalDate; tasks: Task[] }) {
   const { create, pending } = useCreateDay(date)
   return (
     <section className="future-day-state" aria-labelledby="future-day-heading">
@@ -113,11 +113,11 @@ export function FutureDayState({ date, today, planned }: { date: LocalDate; toda
       <Button variant="primary" isDisabled={pending} onPress={() => void create()}>
         Create page
       </Button>
-      {planned.length > 0 && (
+      {tasks.length > 0 && (
         <div className="future-day-planned">
           <h3>Planned or due this day</h3>
           <ul className="plain task-list">
-            {planned.map(t => (
+            {tasks.map(t => (
               <li key={t.id} className="calendar-task">
                 <span className="check-mark" aria-hidden="true" />
                 <span className="task-title">{t.title}</span>

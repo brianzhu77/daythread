@@ -2,7 +2,7 @@
 // planning never creates a day page; creating one renders the placements already stored for that day.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { applyCommand, createEmptyWorkspace, getDayView } from '../src/domain/workspace.ts'
+import { applyCommand, createEmptyWorkspace, getCalendarTasks, getDayView } from '../src/domain/workspace.ts'
 import type { Action } from '../src/domain/types.ts'
 
 const today = '2026-10-17', future = '2026-10-21'
@@ -84,4 +84,19 @@ test('moving a task from today to a future day removes it from today without cre
   s.run({ type: 'plan-task', taskId: task.id, date: future })
   assert.equal(s.dayPages(future).length, 0)
   assert.ok(!getDayView(s.state, today).planned.some(t => t.id === task.id))
+})
+
+test('R4: Calendar lists planned tasks, then open tasks only due that day', () => {
+  const s = setup(), planned = s.add('Planned'), page = s.state.pages[0]
+  s.run({ type: 'plan-task', taskId: planned.id, date: future })
+  s.run({ type: 'add-task', pageId: page.id, sectionId: page.sections.find(x => x.kind === 'other')!.id, title: 'Due only', plannedOn: null, deadlineOn: future })
+  const dueOnly = s.state.tasks.at(-1)!
+  s.run({ type: 'add-task', pageId: page.id, sectionId: page.sections.find(x => x.kind === 'other')!.id, title: 'Due and done', plannedOn: null, deadlineOn: future })
+  s.run({ type: 'task-status', taskId: s.state.tasks.at(-1)!.id, status: 'done' })
+  assert.deepEqual(getCalendarTasks(s.state, future).map(t => t.title), ['Planned', 'Due only'])
+  assert.equal(dueOnly.plannedOn, null)
+  // Creating the page renders placements only; a due-only task stays off the page (R5).
+  s.run({ type: 'ensure-day', date: future })
+  assert.deepEqual(s.rows(future, 'other'), [planned.id])
+  assert.equal(s.dayPages(future).length, 1)
 })

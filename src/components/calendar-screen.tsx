@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import type { LocalDate, Page, Task } from '../domain/types'
-import { getDayView } from '../domain/workspace'
+import { getCalendarTasks } from '../domain/workspace'
 import { DateTag } from './date-tag'
 import { FutureDayPrompt } from './future-day'
 import { addDays, fromIso, weekday } from './dates'
@@ -36,7 +36,7 @@ export function CalendarScreen({ from, today }: { from: LocalDate; today: LocalD
       {days.map(d => {
         const page = workspace.pages.find(p => p.type === 'daily' && p.date === d) ?? null
         // Past days need the placements as they were that day (feature map K3); that query isn't in the domain yet.
-        const tasks = d >= today ? getDayView(workspace, d).planned : null
+        const tasks = d >= today ? getCalendarTasks(workspace, d) : null
         return <CalendarDay key={d} date={d} today={today} page={page} tasks={tasks} />
       })}
     </div>

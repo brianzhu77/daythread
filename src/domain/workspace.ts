@@ -287,6 +287,13 @@ function saveMaterial(
   m.sources.push({ pageId: p.id, blockId: b.id, note: text(note) });
   return m;
 }
+/** Calendar and future-day lists (rule R4): the day's planned tasks, then open tasks only due that day. */
+export function getCalendarTasks(state: Workspace, day: string): Task[] {
+  const planned = getDayView(state, day).planned;
+  const ids = new Set(planned.map((t) => t.id));
+  const due = state.tasks.filter((t) => t.status === "open" && t.deadlineOn === day && !ids.has(t.id));
+  return [...planned, ...due];
+}
 export function getDayView(state: Workspace, day: string): DayView {
   date(day);
   const current =
