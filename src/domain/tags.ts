@@ -12,9 +12,11 @@ const isMark = (c: string | undefined) => c === '#' || c === '＃'
 const isSpace = (c: string) => /\s/u.test(c)
 // Obsidian's rule, Brian's choice (#daythread:e36141c5 5b496134): a tag is Unicode letters, numbers, `_`, `-` and
 // `/` (for nested names like #work/appx). Any other character ends it: whitespace, punctuation, symbols, emoji, `#`.
-const tagChar = /^[\p{L}\p{N}_/-]$/u
-// All decimal digits is plain text (#2026, #１２３), not a tag; #v1, #1on1 and #① are tags.
-const allDigits = /^\p{Nd}+$/u
+// Combining marks stay with their letter, so a decomposed é or Thai and Hindi words are not cut (Bumblebee 8cf3d2a0).
+const tagChar = /^[\p{L}\p{M}\p{N}_/-]$/u
+// A tag needs a letter or number (#_, #-, #/ are not tags) and can't be all decimal digits (#2026, #１２３ are plain
+// text); #v1, #1on1, #1-2 and #① are tags.
+const isTag = (tag: string) => /[\p{L}\p{N}]/u.test(tag) && !/^\p{Nd}+$/u.test(tag)
 // The text before a `#` in the same word. A link's fragment (example.com/page#part) is not a tag; a domain needs a
 // letters-only last part, so a version like v1.2#note still has a tag.
 const urlPrefix = /^(?:[a-z][a-z\d+.-]*:\/\/|www\.|[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:\/|$))/iu
@@ -32,7 +34,7 @@ export function findTags(text: string): TagMatch[] {
       end += char.length
     }
     const tag = text.slice(i + 1, end)
-    if (tag && !allDigits.test(tag)) found.push({ tag, start: i, end })
+    if (isTag(tag)) found.push({ tag, start: i, end })
     i = end - 1
   }
   return found

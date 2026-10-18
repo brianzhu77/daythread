@@ -16,6 +16,10 @@ test('a tag is # and the letters, digits, _, - or / after it', () => {
   // All digits is not a tag; digits with a letter, or a circled number, are.
   assert.deepEqual(tags('#1 priority #2026 #１２３'), [])
   assert.deepEqual(tags('#v1 #1on1 #①'), ['v1', '1on1', '①'])
+  // A tag needs a letter or number; combining marks stay inside it.
+  assert.deepEqual(tags('#_ #- #/ C#/.NET'), [])
+  assert.deepEqual(tags('#1-2 #a_ #work/'), ['1-2', 'a_', 'work/'])
+  assert.deepEqual(tags('#cafe\u0301 #ภาษาไทย #हिंदी'), ['cafe\u0301', 'ภาษาไทย', 'हिंदी'])
   assert.deepEqual(tags('line one #a\nline two #b'), ['a', 'b'])
 })
 
