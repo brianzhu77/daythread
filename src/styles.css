@@ -99,34 +99,8 @@
   --tap: 44px;
   --capture-h: 64px;
   --column: 700px;
-  color-scheme: light dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-grouped: #141414;
-    --bg-doc: #141414;
-    --card: #222222;
-    --fill: #232227;
-    --fill-soft: #1c1c1e;
-    --tag-bg: #26262a;
-    --ink: #f2f2f7;
-    --ink-2: #a1a1a6;
-    --ink-3: #7c7c80;
-    --line: #2c2c2e;
-    --check: #48484a;
-    --blue-soft: #0a2540;
-    --blue-text: #7fb2ff;
-    --today: #9d7cf0;
-    --red: #ff6369;
-    --placeholder: #5a5a5e;
-    --warn: #f0a868;
-    --warn-soft: #3a2614;
-    --sim: #b9a6f2;
-    --sim-soft: #2a2140;
-    --toast-bg: rgba(58, 58, 60, .96);
-    --glass: rgba(40, 40, 42, .86);
-  }
+  /* Light only until dark mode is designed: HeroUI's dark theme was never wired up (step 3 review). */
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }

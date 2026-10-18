@@ -143,7 +143,6 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const [drop, setDrop] = useState<{ id: string; end: boolean; top: number } | null>(null)
   const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 899px)').matches)
   useEffect(() => { const media = window.matchMedia('(max-width: 899px)'); const update = () => setCompact(media.matches); media.addEventListener('change', update); return () => media.removeEventListener('change', update) }, [])
-  const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const [touchHandle, setTouchHandle] = useState<{ id: string; top: number } | null>(null)
   const [touchDragging, setTouchDragging] = useState(false)
   const dropRef = useRef<typeof drop>(null)
@@ -453,12 +452,6 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const [dock, setDock] = useState<HTMLElement | null>(null)
   useEffect(() => setDock(document.getElementById('editor-dock')), [])
   useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const update = () => setDark(media.matches)
-    media.addEventListener('change', update)
-    return () => media.removeEventListener('change', update)
-  }, [])
-  useEffect(() => {
     const blocks = editor.document
     const firstHeading = blocks.findIndex(b => b.type === 'heading')
     const nextHeading = blocks.findIndex((b, i) => i > firstHeading && b.type === 'heading')
@@ -588,7 +581,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }}
     >
     <div className="editor-save-line" role="status">{status}{failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
-    <BlockNoteView editor={editor} theme={dark ? 'dark' : 'light'} formattingToolbar={false} sideMenu={false} slashMenu={false}>
+    <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
       {!compact && !selectionLabel && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
         <BlockTypeSelect key="blockTypeSelect" />
