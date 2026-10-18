@@ -5,7 +5,6 @@ import { longLabel, todayIso } from './dates'
 import { CalendarIcon, PagesIcon, PlusIcon, ReviewIcon, TasksIcon, TodayIcon } from './icons'
 import type { LocalDate, Page } from '../domain/types'
 import { useDay, useWorkspace } from './use-day'
-import { SidebarTags } from './tags-view'
 import { useCreatePage } from './pages-screen'
 
 // Highlight only where you are: Today is today's page, not any day (another day highlights its Days row, or nothing).
@@ -13,7 +12,8 @@ const destinations = [
   { to: '/', label: 'Today', Icon: TodayIcon, match: (path: string, today: LocalDate) => path === '/' || path === `/day/${today}` },
   { to: '/tasks', label: 'Tasks', Icon: TasksIcon, match: (path: string) => path.startsWith('/tasks') },
   { to: '/calendar', label: 'Calendar', Icon: CalendarIcon, match: (path: string) => path.startsWith('/calendar') },
-  { to: '/pages', label: 'Pages', Icon: PagesIcon, match: (path: string) => path.startsWith('/pages') },
+  // Tags is part of Pages (tags-r3), so its screens keep Pages highlighted.
+  { to: '/pages', label: 'Pages', Icon: PagesIcon, match: (path: string) => path.startsWith('/pages') || path.startsWith('/tags') },
 ] as const
 
 /** Sidebar on laptop, floating tab capsule + capture button on phone (craft-v1 §3). CSS picks one. */
@@ -46,7 +46,6 @@ export function Navigation() {
           </Link>
         </nav>
         <DayList path={path} today={today} />
-        <SidebarTags path={path} />
       </aside>
 
       <nav className="tab-bar" aria-label="Main">

@@ -1,7 +1,10 @@
+import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { ContinuousPage } from './continuous-page'
+import { ChevronRightIcon, PagesIcon, PlusIcon } from './icons'
 import { useWorkspace } from './use-day'
-import { TagList } from './tags-view'
+import { tagIndex } from '../domain/tags'
+
 /** Asks for a title and creates a document page; resolves to its id, or null if cancelled. */
 export function useCreatePage() {
   const { run } = useWorkspace()
@@ -20,5 +23,25 @@ export function PagesScreen() {
   const p = workspace?.pages.find(p => p.id === selected)
   if (!workspace) return <p>Loading pages…</p>
   if (p) return <div className="list-screen"><button className="secondary" onClick={() => setSelected(null)}>‹ Pages</button><h1 className="large-title">{p.title}</h1><ContinuousPage page={p} workspace={workspace} /></div>
-  return <div className="list-screen"><h1 className="large-title">Pages</h1><div className="document-pages">{workspace.pages.filter(p => p.type === 'document').map(p => <button className="secondary" key={p.id} onClick={() => setSelected(p.id)}>{p.title}</button>)}</div><button className="secondary" onClick={async () => { const id = await createPage(); if (id) setSelected(id) }}>＋ New page</button><TagList workspace={workspace} /></div>
+  const documents = workspace.pages.filter(p => p.type === 'document')
+  return (
+    <div className="list-screen">
+      <div className="title-row">
+        <h1 className="large-title">Pages</h1>
+        <button type="button" className="round-add" aria-label="New page" onClick={async () => { const id = await createPage(); if (id) setSelected(id) }}><PlusIcon /></button>
+      </div>
+      {/* Tags is a feature of Pages, not a list of every tag (Brian, tags-r3): one row, shown even with none yet. */}
+      <ul className="plain card-list">
+        <li><Link to="/tags" className="card-row"><span className="card-row-icon tags-icon">#</span><span className="card-row-title">Tags</span><span className="card-row-count">{tagIndex(workspace).length}</span><ChevronRightIcon /></Link></li>
+      </ul>
+      {documents.length > 0 && (
+        <section className="card-section">
+          <h2 className="card-section-label">Pages</h2>
+          <ul className="plain card-list">
+            {documents.map(p => <li key={p.id}><button type="button" className="card-row" onClick={() => setSelected(p.id)}><span className="card-row-icon"><PagesIcon /></span><span className="card-row-title">{p.title}</span><ChevronRightIcon /></button></li>)}
+          </ul>
+        </section>
+      )}
+    </div>
+  )
 }

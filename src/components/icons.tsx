@@ -75,6 +75,12 @@ export const ChevronDownIcon = () => (
   </Icon>
 )
 
+export const ChevronRightIcon = () => (
+  <Icon size={14}>
+    <path d="m9 6 6 6-6 6" strokeWidth={2} />
+  </Icon>
+)
+
 export const ArrowLeftIcon = () => (
   <Icon size={18}>
     <path d="M19 12H5M11 6l-6 6 6 6" strokeWidth={2} />

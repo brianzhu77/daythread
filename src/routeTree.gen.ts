@@ -15,6 +15,7 @@ import { Route as PagesRouteImport } from './routes/pages'
 import { Route as ReviewRouteImport } from './routes/review'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as DayDateRouteImport } from './routes/day.$date'
+import { Route as TagsIndexRouteImport } from './routes/tags.index'
 import { Route as TagsTagRouteImport } from './routes/tags.$tag'
 
 const IndexRoute = IndexRouteImport.update({
@@ -47,6 +48,11 @@ const DayDateRoute = DayDateRouteImport.update({
   path: '/day/$date',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TagsIndexRoute = TagsIndexRouteImport.update({
+  id: '/tags/',
+  path: '/tags/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TagsTagRoute = TagsTagRouteImport.update({
   id: '/tags/$tag',
   path: '/tags/$tag',
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/tasks': typeof TasksRoute
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
+  '/tags/': typeof TagsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/tasks': typeof TasksRoute
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
+  '/tags': typeof TagsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   '/tasks': typeof TasksRoute
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
+  '/tags/': typeof TagsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/day/$date'
     | '/tags/$tag'
+    | '/tags/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/day/$date'
     | '/tags/$tag'
+    | '/tags'
   id:
     | '__root__'
     | '/'
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | '/tasks'
     | '/day/$date'
     | '/tags/$tag'
+    | '/tags/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,6 +131,7 @@ export interface RootRouteChildren {
   TasksRoute: typeof TasksRoute
   DayDateRoute: typeof DayDateRoute
   TagsTagRoute: typeof TagsTagRoute
+  TagsIndexRoute: typeof TagsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -165,6 +178,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DayDateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tags/': {
+      id: '/tags/'
+      path: '/tags'
+      fullPath: '/tags/'
+      preLoaderRoute: typeof TagsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tags/$tag': {
       id: '/tags/$tag'
       path: '/tags/$tag'
@@ -183,6 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   TasksRoute: TasksRoute,
   DayDateRoute: DayDateRoute,
   TagsTagRoute: TagsTagRoute,
+  TagsIndexRoute: TagsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

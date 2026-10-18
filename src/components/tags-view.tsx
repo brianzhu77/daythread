@@ -1,52 +1,50 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { tagIndex, type TagEntry, type TagOccurrence } from '../domain/tags'
-import type { Workspace } from '../domain/types'
-import { longLabel } from './dates'
+import { useState } from 'react'
+import { lastUsed, tagIndex, type TagEntry, type TagOccurrence } from '../domain/tags'
+import type { LocalDate } from '../domain/types'
+import { addDays, fromIso, longLabel, todayIso } from './dates'
+import { ChevronRightIcon } from './icons'
 import { TagText } from './tag-text'
 import { useWorkspace } from './use-day'
 
-const sidebarLimit = 8
-
-export function TagName({ tag }: { tag: string }) {
+function TagName({ tag }: { tag: string }) {
   return <><span className="tag-mark">#</span><span className="tag-ink">{tag}</span></>
 }
 
-/** Shown until Brian writes his first tag: the only place the app explains tags and the space rule. */
-function TagsEmpty() {
-  return <div className="tags-empty"><p>No tags yet</p><p className="tags-hint">Type # and a word anywhere in a note, like <TagName tag="work" />. A tag ends at a space or punctuation.</p></div>
+/** "Today" / "Yesterday" / "Thu, Oct 16": when a tag was last used. */
+function dayWord(date: LocalDate, today: LocalDate) {
+  return date === today ? 'Today' : date === addDays(today, -1) ? 'Yesterday' : longLabel(date)
 }
 
-/** The sidebar's Tags group (laptop), below Pages. */
-export function SidebarTags({ path }: { path: string }) {
+/** Every tag Brian has written, most recently used first. Reached from the Tags row on the Pages screen. */
+export function TagsScreen() {
   const { workspace } = useWorkspace()
-  if (!workspace) return null
+  const [today] = useState(todayIso)
+  if (!workspace) return <p className="loading">Loading tags…</p>
   const tags = tagIndex(workspace)
   return (
-    <div className="side-group">
-      <p className="side-label">Tags</p>
-      {tags.length === 0 && <TagsEmpty />}
-      {tags.slice(0, sidebarLimit).map(t => (
-        <Link key={t.key} to="/tags/$tag" params={{ tag: t.key }} className="side-row small tag-row" aria-current={path === `/tags/${encodeURIComponent(t.key)}` ? 'page' : undefined}>
-          <span className="tag-row-name"><TagName tag={t.tag} /></span><span className="tag-row-count">{t.occurrences.length}</span>
-        </Link>
-      ))}
-      {tags.length > sidebarLimit && <Link to="/pages" className="side-row small">All tags ›</Link>}
-    </div>
-  )
-}
-
-/** Every tag, as a grouped list on the Pages screen (the phone's way in, and "All tags" on laptop). */
-export function TagList({ workspace }: { workspace: Workspace }) {
-  const tags = tagIndex(workspace)
-  return (
-    <section className="tag-list">
-      <h2 className="side-label">Tags</h2>
-      {tags.length === 0 ? <TagsEmpty /> : (
-        <ul className="plain tag-group">
-          {tags.map(t => <li key={t.key}><Link to="/tags/$tag" params={{ tag: t.key }} className="tag-group-row"><span className="tag-row-name"><TagName tag={t.tag} /></span><span className="tag-row-count">{t.occurrences.length}</span></Link></li>)}
+    <div className="list-screen tags-screen">
+      <Link to="/pages" className="back-link">‹ Pages</Link>
+      <h1 className="large-title">Tags</h1>
+      {tags.length === 0 ? (
+        // The only place the app explains tags and where one ends.
+        <div className="empty-box tags-empty"><span className="tags-empty-mark" aria-hidden="true">#</span><strong>No tags yet</strong><p>Type # and a word anywhere in a note, like <TagName tag="work" />. A tag ends at a space or punctuation.</p></div>
+      ) : (
+        <ul className="plain card-list">
+          {tags.map(t => {
+            const last = lastUsed(t)
+            return (
+              <li key={t.key}>
+                <Link to="/tags/$tag" params={{ tag: t.key }} className="card-row">
+                  <span className="card-row-title"><span className="tag-plain-mark">#</span>{t.tag}<span className="card-row-detail">{plural(t.occurrences.length, 'block')}{last ? ` · ${dayWord(last, today)}` : ''}</span></span>
+                  <ChevronRightIcon />
+                </Link>
+              </li>
+            )
+          })}
         </ul>
       )}
-    </section>
+    </div>
   )
 }
 
@@ -54,22 +52,24 @@ export function TagList({ workspace }: { workspace: Workspace }) {
 export function TagScreen({ tagKey }: { tagKey: string }) {
   const { workspace } = useWorkspace()
   const navigate = useNavigate()
+  const [today] = useState(todayIso)
   if (!workspace) return <p className="loading">Loading tags…</p>
   const entry = tagIndex(workspace).find(t => t.key === tagKey)
-  const back = <Link to="/pages" className="tag-back">‹ Pages</Link>
-  if (!entry) return <div className="list-screen tag-screen">{back}<h1 className="large-title">#{tagKey}</h1><p className="quiet">No blocks have this tag any more.</p></div>
-  const groups = groupByPage(entry)
+  const back = <Link to="/tags" className="back-link">‹ Tags</Link>
+  if (!entry) return <div className="list-screen tag-screen">{back}<h1 className="large-title"><span className="tag-plain-mark">#</span>{tagKey}</h1><p className="quiet">No blocks have this tag any more.</p></div>
   const days = new Set(entry.occurrences.map(o => o.date).filter(Boolean)).size
   const open = (o: TagOccurrence) => void navigate({ href: o.date ? `/day/${o.date}?block=${encodeURIComponent(o.blockId)}` : `/pages?page=${encodeURIComponent(o.pageId)}&block=${encodeURIComponent(o.blockId)}` })
   return (
     <div className="list-screen tag-screen">
       {back}
-      <h1 className="large-title"><span className="tag-title-mark">#</span>{entry.tag}</h1>
-      <p className="tag-summary">{plural(entry.occurrences.length, 'block')}{days ? ` · ${plural(days, 'day')}` : ''}</p>
-      {groups.map(g => (
-        <section key={g.pageId} className="tag-day">
-          <h2 className="tag-day-label">{g.label}</h2>
-          <ul className="plain">
+      <div>
+        <h1 className="large-title"><span className="tag-plain-mark">#</span>{entry.tag}</h1>
+        <p className="tag-summary">{plural(entry.occurrences.length, 'block')}{days ? ` · ${plural(days, 'day')}` : ''}</p>
+      </div>
+      {groupByPage(entry).map(g => (
+        <section key={g.pageId} className="card-section">
+          <h2 className="tag-day-label">{g.date ? <DayHeading date={g.date} today={today} /> : g.title}</h2>
+          <ul className="plain card-list">
             {g.occurrences.map(o => {
               const task = o.taskId ? workspace.tasks.find(t => t.id === o.taskId) : undefined
               return (
@@ -89,12 +89,21 @@ export function TagScreen({ tagKey }: { tagKey: string }) {
   )
 }
 
+/** "Today Sun, Oct 18" / "Thu Oct 16": the day word in ink, the date in grey, as in the mock. */
+function DayHeading({ date, today }: { date: LocalDate; today: LocalDate }) {
+  const relative = date === today ? 'Today' : date === addDays(today, -1) ? 'Yesterday' : null
+  const d = fromIso(date)
+  return relative
+    ? <><strong>{relative}</strong> <span>{longLabel(date)}</span></>
+    : <><strong>{d.toLocaleDateString('en-US', { weekday: 'short' })}</strong> <span>{d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></>
+}
+
 function groupByPage(entry: TagEntry) {
-  const groups: { pageId: string; label: string; occurrences: TagOccurrence[] }[] = []
+  const groups: { pageId: string; date: LocalDate | null; title: string; occurrences: TagOccurrence[] }[] = []
   for (const o of entry.occurrences) {
     const last = groups.at(-1)
     if (last?.pageId === o.pageId) last.occurrences.push(o)
-    else groups.push({ pageId: o.pageId, label: o.date ? longLabel(o.date) : o.pageTitle, occurrences: [o] })
+    else groups.push({ pageId: o.pageId, date: o.date, title: o.pageTitle, occurrences: [o] })
   }
   return groups
 }

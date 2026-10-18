@@ -643,7 +643,6 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-task small { margin-left:auto; font-size:12px; color:var(--ink-2); }
 .editor-drop-line { position:fixed; left:max(40px,calc((100vw - 760px)/2)); right:max(24px,calc((100vw - 760px)/2)); height:2px;background:#3484ed;pointer-events:none; z-index:100; }
 .continuous-editor .bn-block-outer { transition:background-color 150ms; }
-.document-pages { display:grid;gap:12px; }
 @media(max-width:700px) { .continuous-editor .bn-editor { padding-left:10px;padding-right:18px; } .continuous-editor { margin-inline:-8px; } }
 .editor-task-title { flex:1; min-width:40px; outline:none; }
 /* Top-level bullets share the task rows' columns: the dot on the checkbox centre (23px), text where task text starts (45px).
@@ -798,31 +797,38 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 @keyframes block-flash { from { background: var(--blue-soft); } to { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { .block-flash { animation: none; background: var(--blue-soft); } }
 
-/* Tags group (sidebar on laptop, Pages screen on phone) and the tag view. */
-.tag-row, .tag-group-row { display: flex; justify-content: space-between; gap: 8px; }
-.tag-row-name { overflow: hidden; text-overflow: ellipsis; }
-.tag-row-count { color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.tags-empty { padding: 2px 10px; font-size: 13px; line-height: 1.45; white-space: normal; }
-.tags-empty p { margin: 0; }
-.tags-empty p:first-child { color: var(--ink); }
-.tags-hint { color: var(--ink-2); }
-.tag-list { display: grid; gap: 4px; padding-top: 12px; }
-.tag-list .side-label { margin: 0; padding-left: 16px; }
-.tag-group { border-radius: var(--app-radius); background: var(--card); overflow: hidden; }
-.tag-group li + li { border-top: 1px solid var(--line); }
-.tag-group-row { align-items: center; min-height: 44px; padding: 0 16px; color: inherit; text-decoration: none; }
+/* Grouped cards (Pages, Tags, one tag): white rows on the grouped grey, like Tasks and Calendar (tags-r3). */
+.title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.round-add { display: grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: var(--fill); color: var(--ink); cursor: pointer; }
+.round-add svg { width: 20px; height: 20px; }
+.back-link { justify-self: start; color: var(--blue); text-decoration: none; }
+.card-section { display: grid; gap: 6px; padding-top: 4px; }
+.card-section-label { margin: 0; padding-left: 4px; font-size: 13px; font-weight: 400; color: var(--ink-2); }
+.card-list { border-radius: var(--app-radius); background: var(--card); overflow: hidden; }
+/* Grid items default to their content's width; a long no-wrap title must ellipsize, not widen the card. */
+.card-list li { min-width: 0; }
+.card-list li + li { border-top: 1px solid var(--line); }
+.card-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 16px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.card-row > svg { flex: none; color: var(--ink-3); }
+.card-row-icon { display: grid; place-items: center; flex: none; width: 22px; color: var(--ink-3); }
+.card-row-icon svg { width: 19px; height: 19px; }
+.tags-icon { font-size: 18px; }
+.card-row-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-row-count { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.card-row-detail { display: block; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: var(--ink-2); }
+/* In lists and titles a tag is a name, not the tinted word in a note: ink text with a grey mark. */
+.tag-plain-mark { color: var(--ink-3); }
+.tags-empty strong { color: var(--ink); font-weight: 600; }
+.tags-empty p { margin: 0; max-width: 32ch; line-height: 1.45; }
+.tags-empty-mark { font-size: 30px; line-height: 1; color: var(--ink-3); }
 .tag-screen .large-title { margin: 0; }
-.tag-title-mark { color: var(--ink-3); }
-.tag-summary { margin: -8px 0 0; color: var(--ink-2); }
-.tag-back { color: var(--blue); text-decoration: none; }
-.tag-day { display: grid; gap: 2px; padding-top: 8px; }
-.tag-day-label { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink-2); }
-.tag-block { display: flex; align-items: flex-start; gap: 10px; width: calc(100% + 24px); min-height: 44px; padding: 10px 12px; margin-inline: -12px; border: 0; border-radius: 10px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.tag-summary { margin: 0; color: var(--ink-2); }
+.tag-day-label { margin: 0; padding: 8px 0 0 4px; font-size: 20px; font-weight: 600; letter-spacing: -.01em; }
+.tag-day-label span { color: var(--ink-2); font-weight: 400; }
+.tag-block { display: flex; align-items: flex-start; gap: 10px; width: 100%; white-space: normal; min-height: 48px; padding: 12px 16px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .tag-block .check { flex: none; margin-top: 3px; }
 .tag-block-text { flex: 1; min-width: 0; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .tag-block-section { flex: none; color: var(--ink-3); font-size: 13px; padding-top: 2px; }
 /* Touch screens keep :hover after a tap, which would leave a row grey after going back. */
-@media (hover: hover) { .tag-group-row:hover, .tag-block:hover { background: var(--fill); } }
-/* On laptop the tag view is a page like a day, so it sits on white beside the grey sidebar. */
-@media (min-width: 900px) { .tag-back { display: none; } body:has(.tag-screen) { background: var(--bg-doc); } }
+@media (hover: hover) { .card-row:hover, .tag-block:hover { background: var(--fill-soft); } }
 @media (max-width: 899px) { .tag-block-section { display: none; } }
