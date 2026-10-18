@@ -160,6 +160,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     notice.current = { key, fingerprint }
   }
   const [selectionLabel, setSelectionLabel] = useState('')
+  const selectionFocus = useRef<HTMLDivElement>(null)
   // Browser selection can survive React node-view replacement while ProseMirror's selection moves elsewhere.
   // Keep stable block IDs and inline offsets instead of positions tied to the replaced document.
   function browserSelection() {
@@ -370,7 +371,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       editor.prosemirrorState.doc.descendants((node, position) => { if (node.type.name === 'blockContainer' && node.attrs.id === range[0]!.id) pos = position })
       if (pos >= 0) editor.prosemirrorView.dispatch(editor.prosemirrorState.tr.setSelection(NodeSelection.create(editor.prosemirrorState.doc, pos)))
     }
-    editor.focus()
+    // Keyboard focus waits outside the editable text, and the browser's text selection is cleared (the editor keeps
+    // its own), so neither typing nor an input method has anywhere to replace the selected blocks.
+    selectionFocus.current?.focus()
+    window.getSelection()?.removeAllRanges()
   }
   function deleteSelected() {
     const before = nodes()
@@ -572,6 +576,21 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         })
         return
       }
+      // A handle selection is for moving and deleting, not typing (editor spec §1, design 4a45305): printable keys
+      // do nothing, Enter goes into the heading's text, Escape lets go. Arrows, copy, cut and undo work as before.
+      if (selected.current.length && !e.metaKey && !e.ctrlKey) {
+        if (e.key === 'Enter' || e.key === 'Escape') {
+          e.preventDefault(); e.stopPropagation()
+          const first = selected.current[0]!
+          selected.current = []; extendedIds.current = []; setSelectionLabel('')
+          document.querySelectorAll('.is-picked').forEach(el => el.classList.remove('is-picked'))
+          if (editor.getBlock(first)) editor.setTextCursorPosition(first, 'end')
+          editor.focus()
+          return
+        }
+        if (e.key.length === 1) { e.preventDefault(); e.stopPropagation(); return }
+        if (e.key.startsWith('Arrow')) editor.focus()
+      }
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.current.length) {
         e.preventDefault(); e.stopPropagation()
         deleteSelected()
@@ -580,6 +599,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       } else if (!['Shift', 'Control', 'Meta', 'Alt'].includes(e.key) && !((e.metaKey || e.ctrlKey) && ['c', 'x'].includes(e.key.toLowerCase()))) { selected.current = []; setSelectionLabel('') }
     }}
     >
+    <div ref={selectionFocus} tabIndex={-1} className="sr-only" aria-label={selectionLabel || undefined} />
     <div className="editor-save-line" role="status">{status}{failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
