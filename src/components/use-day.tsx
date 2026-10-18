@@ -1,5 +1,6 @@
 // The only place screens touch data: loadWorkspace()/runCommand() on the local server
 // (src/server/functions.ts). getDayView is a pure read of the loaded workspace.
+import { Button, toast } from '@heroui/react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Action, DayView, LocalDate, Receipt, Workspace } from '../domain/types'
 import { getDayView } from '../domain/workspace'
@@ -34,14 +35,14 @@ export function isConflict(message: string | null): boolean {
 /** Which simulated provider outcome the next capture or draft uses (01 §9 item 6). */
 export type SimOutcome = 'success' | 'failure' | 'budget' | 'context'
 
+/** A HeroUI toast after a command: Undo while the domain's single undo slot still holds it, plus an optional extra action. */
 export interface Notice {
-  id: string
   text: string
   undoOperationId?: string
   extra?: { label: string; run: () => void }
 }
 
-type NoticeSpec = Omit<Notice, 'id'> | null
+type NoticeSpec = Notice | null
 type NoticeArg = NoticeSpec | ((r: Receipt) => NoticeSpec)
 
 interface WorkspaceContextValue {
@@ -51,12 +52,10 @@ interface WorkspaceContextValue {
   saveError: string | null
   /** The command that failed and Retry would resend, if any. */
   failedAction: Action['type'] | null
-  notices: Notice[]
   simOutcome: SimOutcome
   setSimOutcome(o: SimOutcome): void
   run(action: Action, notice?: NoticeArg, operationId?: string): Promise<Receipt | null>
   retry(): void
-  dismiss(id: string): void
   reload(): void
   refresh(triggerOperationId?: string): Promise<Workspace>
   addSampleData(): Promise<void>
@@ -70,7 +69,6 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
   const [lastFailed, setLastFailed] = useState<{ action: Action; notice?: NoticeArg; operationId: string } | null>(null)
-  const [notices, setNotices] = useState<Notice[]>([])
   const [simOutcome, setSimOutcome] = useState<SimOutcome>('success')
   // Commands are applied one at a time against the latest revision.
   const wsRef = useRef<Workspace | null>(null)
@@ -101,12 +99,34 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     return () => clearTimeout(t)
   }, [saveState])
 
-  const dismiss = useCallback((id: string) => setNotices(n => n.filter(x => x.id !== id)), [])
+  // Open toasts that offer Undo, by toast key. The domain keeps one undo slot, so a later change retires them.
+  const undoToasts = useRef(new Map<string, string>())
+  const retireStaleUndo = useCallback((ws: Workspace) => {
+    for (const [key, operationId] of undoToasts.current)
+      if (ws.undo?.operationId !== operationId) toast.close(key)
+  }, [])
 
-  const push = useCallback((spec: Omit<Notice, 'id'>) => {
-    const id = newOperationId()
-    setNotices(list => [...list.slice(-2), { ...spec, id }])
-    setTimeout(() => setNotices(list => list.filter(x => x.id !== id)), 8000)
+  const runRef = useRef<WorkspaceContextValue['run'] | null>(null)
+  const push = useCallback((spec: Notice) => {
+    const { text, undoOperationId, extra } = spec
+    const close = () => toast.close(key)
+    const undo = undoOperationId && {
+      children: 'Undo',
+      onPress: () => {
+        close()
+        if (wsRef.current?.undo?.operationId === undoOperationId)
+          void runRef.current?.({ type: 'undo', targetOperationId: undoOperationId }, { text: 'Undone' })
+      },
+    }
+    const other = extra && { children: extra.label, onPress: () => { close(); extra.run() } }
+    // A toast has one action button; when there are two, the extra one sits under the text.
+    const key: string = toast(text, {
+      timeout: 8000,
+      actionProps: undo || other || undefined,
+      description: undo && other ? <Button size="sm" variant="ghost" className="toast-extra" onPress={other.onPress}>{other.children}</Button> : undefined,
+      onClose: () => undoToasts.current.delete(key),
+    })
+    if (undoOperationId) undoToasts.current.set(key, undoOperationId)
   }, [])
 
   const run = useCallback(
@@ -121,6 +141,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         try {
           const result = await transport.run(current, action, operationId)
           adopt(result.workspace)
+          retireStaleUndo(result.workspace)
           debugClient('command.response',{...fields,afterRevision:result.workspace.revision,elapsedMs:performance.now()-started,result:'ok'})
           setSaveState('saved')
           setSaveError(null)
@@ -148,8 +169,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       queue.current = job.catch(() => undefined)
       return job
     },
-    [transport, adopt, push, refresh],
+    [transport, adopt, push, refresh, retireStaleUndo],
   )
+  runRef.current = run
 
   const retry = useCallback(() => {
     if (lastFailed) { debugClient('command.retry',{operationId:lastFailed.operationId,command:lastFailed.action.type}); void run(lastFailed.action, lastFailed.notice, lastFailed.operationId) }
@@ -167,17 +189,15 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       saveState,
       saveError,
       failedAction: lastFailed?.action.type ?? null,
-      notices,
       simOutcome,
       setSimOutcome,
       run,
       retry,
-      dismiss,
       reload,
       refresh,
       addSampleData,
     }),
-    [workspace, loadError, saveState, saveError, lastFailed, notices, simOutcome, run, retry, dismiss, reload, refresh, addSampleData],
+    [workspace, loadError, saveState, saveError, lastFailed, simOutcome, run, retry, reload, refresh, addSampleData],
   )
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }

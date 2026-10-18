@@ -1,6 +1,5 @@
 import { Toast } from '@heroui/react'
 import { type ReactNode, useEffect, useState } from 'react'
-import { Notices } from './notices'
 import { Navigation } from './navigation'
 import { WorkspaceProvider, isConflict, useWorkspace, type SimOutcome } from './use-day'
 
@@ -15,19 +14,17 @@ export function AppShell({ children }: { children: ReactNode }) {
           <SaveIndicator />
           <main className="app-main">{children}</main>
         </div>
-        {/* One bottom dock so the editor's selection bar and every undo notice stack instead of overlapping. */}
         <div className="bottom-dock">
           <div id="editor-dock" className="editor-dock" />
-          <Notices />
         </div>
-        <EditToasts />
+        <Toasts />
       </div>
     </WorkspaceProvider>
   )
 }
 
-/** Editor notices with Undo (HeroUI Toast): top on phones, where the keyboard covers the bottom; bottom on desktop. */
-function EditToasts() {
+/** Every notice with Undo, editor or not, is a HeroUI Toast: top on phones, where the keyboard covers the bottom; bottom on desktop. */
+function Toasts() {
   const [phone, setPhone] = useState(false)
   useEffect(() => {
     const media = window.matchMedia('(max-width: 599px)')
