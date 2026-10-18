@@ -145,6 +145,25 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const [failed, setFailed] = useState(initial.current.recovered)
   const [drop, setDrop] = useState<{ id: string; end: boolean; top: number } | null>(null)
   const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 899px)').matches)
+  // Opened from a tag (?block=id): bring that block into view and tint it briefly. Nothing is focused, so a phone
+  // keyboard stays down. The parameter is dropped once shown, so a refresh doesn't replay it; until then a remount
+  // (the page loading under the editor) still finds it.
+  const [jumpTo] = useState(() => typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('block'))
+  useEffect(() => {
+    const id = jumpTo
+    if (!id) return
+    let frame = 0, tries = 0, timer: ReturnType<typeof setTimeout> | undefined
+    const find = () => {
+      const el = editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(id)}"]`)
+      if (!el) { if (++tries < 120) frame = requestAnimationFrame(find); return }
+      const url = new URL(window.location.href); url.searchParams.delete('block'); window.history.replaceState(window.history.state, '', url)
+      el.scrollIntoView({ block: 'center' })
+      el.classList.add('block-flash')
+      timer = setTimeout(() => el.classList.remove('block-flash'), 1600)
+    }
+    frame = requestAnimationFrame(find)
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer) }
+  }, [editor, jumpTo])
   useEffect(() => { const media = window.matchMedia('(max-width: 899px)'); const update = () => setCompact(media.matches); media.addEventListener('change', update); return () => media.removeEventListener('change', update) }, [])
   const [touchHandle, setTouchHandle] = useState<{ id: string; top: number } | null>(null)
   const [touchDragging, setTouchDragging] = useState(false)
@@ -465,8 +484,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const firstSection = blocks.slice(firstHeading + 1, nextHeading < 0 ? blocks.length : nextHeading)
     const target = firstSection.find(b => !inlineText(b.content)) ?? blocks[(nextHeading < 0 ? blocks.length : nextHeading) - 1] ?? blocks[0]
     // Desktop opens ready to type; on touch screens focusing would raise the keyboard over a page that is read as often as written.
-    if (target && window.matchMedia('(pointer: fine)').matches) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
-  }, [editor])
+    // Arriving at a block from a tag focuses nothing, so the view stays on that block.
+    if (target && !jumpTo && window.matchMedia('(pointer: fine)').matches) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
+  }, [editor, jumpTo])
   useEffect(() => {
     const update = () => {
       const block = editor.getTextCursorPosition().block

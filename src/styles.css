@@ -792,3 +792,35 @@ body:has(.list-screen) { background: var(--bg-grouped); }
    labels and links). The mark is fainter so the word reads first. */
 .tag-ink { color: var(--tag-ink); }
 .tag-mark { color: color-mix(in srgb, var(--tag-ink) 55%, transparent); }
+
+.block-flash { animation: block-flash 1.5s ease-out; border-radius: 6px; }
+@keyframes block-flash { from { background: var(--blue-soft); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .block-flash { animation: none; background: var(--blue-soft); } }
+
+/* Tags group (sidebar on laptop, Pages screen on phone) and the tag view. */
+.tag-row, .tag-group-row { display: flex; justify-content: space-between; gap: 8px; }
+.tag-row-name { overflow: hidden; text-overflow: ellipsis; }
+.tag-row-count { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.tags-empty { padding: 2px 10px; font-size: 13px; line-height: 1.45; white-space: normal; }
+.tags-empty p { margin: 0; }
+.tags-empty p:first-child { color: var(--ink); }
+.tags-hint { color: var(--ink-2); }
+.tag-list { display: grid; gap: 4px; padding-top: 12px; }
+.tag-list .side-label { margin: 0; padding-left: 16px; }
+.tag-group { border-radius: var(--app-radius); background: var(--card); overflow: hidden; }
+.tag-group li + li { border-top: 1px solid var(--line); }
+.tag-group-row { align-items: center; min-height: 44px; padding: 0 16px; color: inherit; text-decoration: none; }
+.tag-group-row:hover { background: var(--fill); }
+.tag-screen .large-title { margin: 0; }
+.tag-title-mark { color: var(--ink-3); }
+.tag-summary { margin: -8px 0 0; color: var(--ink-2); }
+.tag-back { color: var(--blue); text-decoration: none; }
+.tag-day { display: grid; gap: 2px; padding-top: 8px; }
+.tag-day-label { margin: 0; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.tag-block { display: flex; align-items: flex-start; gap: 10px; width: calc(100% + 24px); min-height: 44px; padding: 10px 12px; margin-inline: -12px; border: 0; border-radius: 10px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.tag-block:hover { background: var(--fill); }
+.tag-block .check { flex: none; margin-top: 3px; }
+.tag-block-text { flex: 1; min-width: 0; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.tag-block-section { flex: none; color: var(--ink-3); font-size: 13px; padding-top: 2px; }
+@media (min-width: 900px) { .tag-back { display: none; } }
+@media (max-width: 899px) { .tag-block-section { display: none; } }

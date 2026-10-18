@@ -4,7 +4,7 @@ import type { LocalDate, Workspace } from './types.ts'
 // characters, ending at whitespace or the end of the block. Nothing is stored; every reader derives tags from the
 // block text with the same rule, so the index can never disagree with what is on the page.
 export interface TagMatch { tag: string; start: number; end: number }
-export interface TagOccurrence { pageId: string; blockId: string; date: LocalDate | null; pageTitle: string; text: string }
+export interface TagOccurrence { pageId: string; blockId: string; date: LocalDate | null; pageTitle: string; sectionTitle: string; taskId?: string; text: string }
 export interface TagEntry { key: string; tag: string; occurrences: TagOccurrence[] }
 
 const isMark = (c: string | undefined) => c === '#' || c === '＃'
@@ -31,22 +31,26 @@ export function findTags(text: string): TagMatch[] {
 /** "Work", "work" and full-width "ｗｏｒｋ" are one tag. */
 export const tagKey = (tag: string) => tag.normalize('NFKC').toLowerCase()
 
-/** Every tag in paragraph and task blocks, most used first; each block counts once per tag. */
+/** Every tag in paragraph and task blocks, most used first (then most recently used); each block counts once per tag. */
 export function tagIndex(workspace: Workspace): TagEntry[] {
-  const byKey = new Map<string, { tag: string; occurrences: TagOccurrence[] }>()
+  const byKey = new Map<string, { tag: string; page: string; occurrences: TagOccurrence[] }>()
   const pages = [...workspace.pages].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
   for (const page of pages) for (const section of page.sections) for (const block of section.blocks) {
     if (block.kind !== 'paragraph' && block.kind !== 'task') continue
     const seen = new Set<string>()
     for (const { tag } of findTags(block.text)) {
       const key = tagKey(tag)
-      // Pages are read newest first, so the first form seen is the one Brian used most recently.
-      const entry = byKey.get(key) ?? { tag, occurrences: [] }
+      // Shown as written most recently (Jazz, b842c6d3): pages are read newest first, and on that newest page
+      // a lower block counts as later, so the last form on the first page that has the tag wins.
+      const entry = byKey.get(key) ?? { tag, page: page.id, occurrences: [] }
+      if (entry.page === page.id) entry.tag = tag
       byKey.set(key, entry)
       if (seen.has(key)) continue
       seen.add(key)
-      entry.occurrences.push({ pageId: page.id, blockId: block.id, date: page.date, pageTitle: page.title, text: block.text })
+      entry.occurrences.push({ pageId: page.id, blockId: block.id, date: page.date, pageTitle: page.title, sectionTitle: section.title, taskId: block.taskId, text: block.text })
     }
   }
-  return [...byKey].map(([key, entry]) => ({ key, ...entry })).sort((a, b) => b.occurrences.length - a.occurrences.length || a.key.localeCompare(b.key))
+  const latest = (t: TagEntry) => t.occurrences[0]?.date ?? ''
+  return [...byKey].map(([key, { tag, occurrences }]) => ({ key, tag, occurrences }))
+    .sort((a, b) => b.occurrences.length - a.occurrences.length || latest(b).localeCompare(latest(a)) || a.key.localeCompare(b.key))
 }

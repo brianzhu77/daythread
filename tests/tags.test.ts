@@ -64,10 +64,14 @@ test('tagIndex reads paragraph and task blocks, counts a block once per tag, and
   ws = run(ws, { type: 'add-task', pageId: day('2026-10-17').id, sectionId: day('2026-10-17').sections[0]!.id, title: 'Fix export bug #work' })
   const index = tagIndex(ws)
   assert.deepEqual(index.map(t => [t.key, t.occurrences.length]), [['work', 3], ['friends', 1]])
+  assert.deepEqual([index[0]!.occurrences[0]!.sectionTitle, Boolean(index[0]!.occurrences[0]!.taskId)], [day('2026-10-17').sections[0]!.title, true])
   // Newest day first, page order within a day; the task row counts like any other block.
   assert.deepEqual(index[0]!.occurrences.map(o => [o.date, o.text]), [['2026-10-17', 'Fix export bug #work'], ['2026-10-17', 'Lunch #Work #friends'], ['2026-10-16', 'Standup #work #work']])
-  // The newest block writes "#work"; the same day's "#Work" comes after it in page order.
-  assert.equal(index[0]!.tag, 'work')
+  // Shown as last written on the newest page: "#Work" in Notes sits below the "#work" task row.
+  assert.equal(index[0]!.tag, 'Work')
+  // Equal counts: the tag used most recently comes first.
+  ws = run(ws, { type: 'add-text', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), text: 'Old #archive' })
+  assert.deepEqual(tagIndex(ws).slice(1).map(t => t.key), ['friends', 'archive'])
   // Section titles are not read.
   ws = run(ws, { type: 'rename-section', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), title: 'Notes #heading' })
   assert.equal(tagIndex(ws).some(t => t.key === 'heading'), false)

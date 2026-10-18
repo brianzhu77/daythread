@@ -15,6 +15,7 @@ import { Route as PagesRouteImport } from './routes/pages'
 import { Route as ReviewRouteImport } from './routes/review'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as DayDateRouteImport } from './routes/day.$date'
+import { Route as TagsTagRouteImport } from './routes/tags.$tag'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -46,6 +47,11 @@ const DayDateRoute = DayDateRouteImport.update({
   path: '/day/$date',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TagsTagRoute = TagsTagRouteImport.update({
+  id: '/tags/$tag',
+  path: '/tags/$tag',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -54,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/review': typeof ReviewRoute
   '/tasks': typeof TasksRoute
   '/day/$date': typeof DayDateRoute
+  '/tags/$tag': typeof TagsTagRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +69,7 @@ export interface FileRoutesByTo {
   '/review': typeof ReviewRoute
   '/tasks': typeof TasksRoute
   '/day/$date': typeof DayDateRoute
+  '/tags/$tag': typeof TagsTagRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,12 +79,27 @@ export interface FileRoutesById {
   '/review': typeof ReviewRoute
   '/tasks': typeof TasksRoute
   '/day/$date': typeof DayDateRoute
+  '/tags/$tag': typeof TagsTagRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/calendar' | '/pages' | '/review' | '/tasks' | '/day/$date'
+  fullPaths:
+    | '/'
+    | '/calendar'
+    | '/pages'
+    | '/review'
+    | '/tasks'
+    | '/day/$date'
+    | '/tags/$tag'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/calendar' | '/pages' | '/review' | '/tasks' | '/day/$date'
+  to:
+    | '/'
+    | '/calendar'
+    | '/pages'
+    | '/review'
+    | '/tasks'
+    | '/day/$date'
+    | '/tags/$tag'
   id:
     | '__root__'
     | '/'
@@ -85,6 +108,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/tasks'
     | '/day/$date'
+    | '/tags/$tag'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -94,6 +118,7 @@ export interface RootRouteChildren {
   ReviewRoute: typeof ReviewRoute
   TasksRoute: typeof TasksRoute
   DayDateRoute: typeof DayDateRoute
+  TagsTagRoute: typeof TagsTagRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -140,6 +165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DayDateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tags/$tag': {
+      id: '/tags/$tag'
+      path: '/tags/$tag'
+      fullPath: '/tags/$tag'
+      preLoaderRoute: typeof TagsTagRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -150,6 +182,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReviewRoute: ReviewRoute,
   TasksRoute: TasksRoute,
   DayDateRoute: DayDateRoute,
+  TagsTagRoute: TagsTagRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
