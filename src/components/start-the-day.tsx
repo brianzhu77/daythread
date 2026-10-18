@@ -2,7 +2,6 @@ import { useState } from 'react'
 import type { DayView, LocalDate, Page, Workspace } from '../domain/types'
 import { taskDateTag, weekday } from './dates'
 import { useTaskActions } from './task-row'
-import { displayTitle } from './day-page'
 import { useWorkspace } from './use-day'
 
 export function previousDailyPage(workspace: Workspace, date: LocalDate): Page | undefined {
@@ -25,16 +24,8 @@ export function useHandoffLater(date: LocalDate): [boolean, (v: boolean) => void
 }
 
 export function hasHandoffContent(view: DayView): boolean {
-  return Boolean(view.page?.draft?.taskIds.length || view.handoffTasks.length || view.handoffBlocks.length)
-}
-
-/** Lines Brian may pick from the previous page; brought ones stay listed as "Brought" (01 §3.5). */
-function pickableLines(prev: Page | undefined, today: Page) {
-  if (!prev) return []
-  const brought = new Set(today.sections.flatMap(s => s.blocks).filter(b => b.sourcePageId === prev.id).map(b => b.sourceBlockId))
-  return prev.sections
-    .filter(s => s.kind === 'good-stuffs' || s.kind === 'notes')
-    .flatMap(s => s.blocks.filter(b => !b.taskId && b.text.trim()).map(block => ({ pageId: prev.id, block, brought: brought.has(block.id) })))
+  // Only tasks and suggestions; the previous page's Notes lines are no longer offered (rules doc, visible controls).
+  return Boolean(view.page?.draft?.taskIds.length || view.handoffTasks.length)
 }
 
 /** Morning hand-off (01 §3.5). Skipping is normal; nothing here needs clearing. */
@@ -51,7 +42,6 @@ export function StartTheDay({ view, workspace, today, onLater }: { view: DayView
   // Suggestions start ticked; Brian unticks what he doesn't want, then adds (nothing changes until then).
   const [unpicked, setUnpicked] = useState<Set<string>>(new Set())
   const picked = new Set(draftTasks.filter(t => !inTop3.has(t!.id) && !unpicked.has(t!.id)).map(t => t!.id))
-  const lines = pickableLines(prev, page)
 
   const addPicked = async () => {
     for (const id of picked) {
@@ -138,38 +128,6 @@ export function StartTheDay({ view, workspace, today, onLater }: { view: DayView
           >
             Keep all
           </button>
-        </div>
-      )}
-
-      {lines.length > 0 && (
-        <div className="std-group">
-          <h3>From {prevDay}’s page</h3>
-          <ul className="plain">
-            {lines.map(({ pageId, block, brought }) => {
-              const material = block.materialId ? workspace.materials.find(m => m.id === block.materialId) : undefined
-              return (
-                <li key={block.id} className="std-row">
-                  <span className="grow line-text">{material ? displayTitle(material.title, material.url) : block.text}</span>
-                  {brought ? (
-                    <span className="app-tag quiet">Brought</span>
-                  ) : (
-                    <button
-                      type="button"
-                      className="secondary"
-                      onClick={() =>
-                        run({ type: 'keep-block', sourcePageId: pageId, blockId: block.id, targetDate: today }, r => ({
-                          text: 'Brought to today',
-                          undoOperationId: r.operationId,
-                        }))
-                      }
-                    >
-                      Bring to today
-                    </button>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
         </div>
       )}
 
