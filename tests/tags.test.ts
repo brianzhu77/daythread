@@ -72,6 +72,12 @@ test('tagIndex reads paragraph and task blocks, counts a block once per tag, and
   // Equal counts: the tag used most recently comes first.
   ws = run(ws, { type: 'add-text', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), text: 'Old #archive' })
   assert.deepEqual(tagIndex(ws).slice(1).map(t => t.key), ['friends', 'archive'])
+  // Unicode compatibility forms fold into one tag (Lead 4ae06909): full-width letters, circled digits, unit signs.
+  ws = run(ws, { type: 'add-text', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), text: '＃ｗｏｒｋ #① #1 #㎏ #kg' })
+  const folded = tagIndex(ws)
+  assert.equal(folded.find(t => t.key === 'work')!.occurrences.length, 4)
+  assert.deepEqual(['1', 'kg'].map(k => folded.find(t => t.key === k)?.occurrences.length), [1, 1])
+  assert.equal(folded.some(t => t.key === '①' || t.key === '㎏'), false)
   // Section titles are not read.
   ws = run(ws, { type: 'rename-section', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), title: 'Notes #heading' })
   assert.equal(tagIndex(ws).some(t => t.key === 'heading'), false)
