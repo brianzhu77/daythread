@@ -82,7 +82,7 @@ test('match positions cover the mark and the tag, for the editor tint', () => {
   assert.deepEqual(findTags('今天#工作'), [{ tag: '工作', start: 2, end: 5 }])
 })
 
-test('tagIndex reads paragraph and task blocks, counts a block once per tag, and groups case-insensitively under the latest form', () => {
+test('tagIndex reads paragraph and task blocks, counts a block once per tag, and groups case-insensitively under the first-written form', () => {
   let ws = run(createEmptyWorkspace(), { type: 'ensure-day', date: '2026-10-16' })
   ws = run(ws, { type: 'ensure-day', date: '2026-10-17' })
   const day = (date: string) => ws.pages.find(p => p.date === date)!
@@ -95,8 +95,8 @@ test('tagIndex reads paragraph and task blocks, counts a block once per tag, and
   assert.deepEqual([index[0]!.occurrences[0]!.sectionTitle, Boolean(index[0]!.occurrences[0]!.taskId)], [day('2026-10-17').sections[0]!.title, true])
   // Newest day first, page order within a day; the task row counts like any other block.
   assert.deepEqual(index[0]!.occurrences.map(o => [o.date, o.text]), [['2026-10-17', 'Fix export bug #work'], ['2026-10-17', 'Lunch #Work #friends'], ['2026-10-16', 'Standup #work #work']])
-  // Shown as last written on the newest page: "#Work" in Notes sits below the "#work" task row.
-  assert.equal(index[0]!.tag, 'Work')
+  // Shown as first written: the oldest day's top block. Writing "#Work" later doesn't rename it.
+  assert.equal(index[0]!.tag, 'work')
   // Most recently used first, whatever the count; on the same day more blocks come first.
   ws = run(ws, { type: 'add-text', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), text: 'Old #archive #archive2' })
   ws = run(ws, { type: 'add-text', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), text: 'Older #archive2' })
@@ -112,6 +112,17 @@ test('tagIndex reads paragraph and task blocks, counts a block once per tag, and
   assert.equal(folded.find(t => t.key === 'work')!.occurrences.length, 4)
   assert.deepEqual(['1', 'kg'].map(k => folded.find(t => t.key === k)?.occurrences.length), [1, 1])
   assert.equal(folded.some(t => t.key === '①' || t.key === '㎏'), false)
+  // The oldest day decides even when it's written last; on that day the top block wins.
+  ws = run(ws, { type: 'add-text', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), text: 'Kickoff #FRIENDS' })
+  ws = run(ws, { type: 'add-text', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), text: 'Later #Friends' })
+  assert.equal(tagIndex(ws).find(t => t.key === 'friends')!.tag, 'FRIENDS')
+  // Pages without a date count as older than every day, the earliest created oldest of all.
+  ws = run(ws, { type: 'create-document', title: 'Ideas', body: 'First #Kickoff' })
+  ws = run(ws, { type: 'create-document', title: 'Later doc', body: 'Then #KICKOFF' })
+  ws = run(ws, { type: 'add-text', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), text: 'Day #kickoff' })
+  const kickoff = tagIndex(ws).find(t => t.key === 'kickoff')!
+  assert.equal(kickoff.tag, 'Kickoff')
+  assert.deepEqual(kickoff.occurrences.map(o => o.pageTitle).slice(1), ['Later doc', 'Ideas'])
   // Section titles are not read.
   ws = run(ws, { type: 'rename-section', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), title: 'Notes #heading' })
   assert.equal(tagIndex(ws).some(t => t.key === 'heading'), false)

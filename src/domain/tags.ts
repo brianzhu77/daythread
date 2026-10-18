@@ -50,16 +50,19 @@ export const tagKey = (tag: string) => tag.normalize('NFKC').toLowerCase()
 /** Every tag in paragraph and task blocks, most used first (then most recently used); each block counts once per tag. */
 export function tagIndex(workspace: Workspace): TagEntry[] {
   const byKey = new Map<string, { tag: string; page: string; occurrences: TagOccurrence[] }>()
-  const pages = [...workspace.pages].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))
+  // Newest first: day pages by date, then pages without a date, most recently created first (pages are stored in
+  // creation order). Reading this order backwards gives the oldest occurrence.
+  const pages = workspace.pages.map((page, created) => ({ page, created }))
+    .sort((a, b) => (b.page.date ?? '').localeCompare(a.page.date ?? '') || b.created - a.created).map(p => p.page)
   for (const page of pages) for (const section of page.sections) for (const block of section.blocks) {
     if (block.kind !== 'paragraph' && block.kind !== 'task') continue
     const seen = new Set<string>()
     for (const { tag } of findTags(block.text)) {
       const key = tagKey(tag)
-      // Shown as written most recently (Jazz, b842c6d3): pages are read newest first, and on that newest page
-      // a lower block counts as later, so the last form on the first page that has the tag wins.
+      // Shown as first written, as Obsidian does (Ratchet c392d45, Jazz/Bumblebee b842c6d3): pages are read newest
+      // first with undated pages last, so the first form on the last page that has the tag wins.
       const entry = byKey.get(key) ?? { tag, page: page.id, occurrences: [] }
-      if (entry.page === page.id) entry.tag = tag
+      if (entry.page !== page.id) Object.assign(entry, { tag, page: page.id })
       byKey.set(key, entry)
       if (seen.has(key)) continue
       seen.add(key)
