@@ -115,7 +115,7 @@ export function FutureDayState({ date, today, planned }: { date: LocalDate; toda
       </Button>
       {planned.length > 0 && (
         <div className="future-day-planned">
-          <h3>Already planned for this day</h3>
+          <h3>Planned or due this day</h3>
           <ul className="plain task-list">
             {planned.map(t => (
               <li key={t.id} className="calendar-task">

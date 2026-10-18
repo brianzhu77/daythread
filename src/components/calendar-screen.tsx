@@ -66,10 +66,11 @@ function CalendarDay({ date, today, page, tasks }: { date: LocalDate; today: Loc
           </Link>
         )}
       </h2>
-      {page && (
+      {/* A page with nothing written gets no card: the date links to it and its tasks are listed below. */}
+      {page && preview(page) && (
         <Link to="/day/$date" params={{ date }} className="note-card">
           <strong>{relative ?? weekday(date)}</strong>
-          <span className="note-preview">{preview(page) || 'Empty page'}</span>
+          <span className="note-preview">{preview(page)}</span>
         </Link>
       )}
       {tasks === null ? (
