@@ -6,6 +6,7 @@ import { addDays, daysBetween, longLabel } from './dates'
 import { RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
 import { useDay, useWorkspace } from './use-day'
+import { TagText } from './tag-text'
 
 export const taskViews = ['today', 'upcoming', 'open', 'paused'] as const
 export type TaskView = (typeof taskViews)[number]
@@ -89,7 +90,7 @@ function ListTaskRow({ task, today, paused, label }: { task: Task; today: LocalD
   return (
     <div className={`task-row list ${paused ? 'is-paused' : ''}`} data-task-id={task.id}>
       <input type="checkbox" className="check" checked={task.status === 'done'} aria-label={`Mark ${task.title} done`} onChange={() => markDone(task)} />
-      <span className="task-title">{task.title}</span>
+      <span className="task-title"><TagText text={task.title} /></span>
       <DateTag task={task} today={today} label={label} />
       {/* Upcoming keeps set-aside rows' dates (02 Not today) but they must not read as commitments; the Not today tab needs no marker. */}
       {paused && label !== undefined && <span className="app-tag paused">Not today</span>}

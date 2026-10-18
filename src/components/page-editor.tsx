@@ -18,6 +18,7 @@ import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
 import { CheckboxIcon, GripIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { addDays, fromIso, todayIso } from './dates'
+import { tagDecorations } from './tag-decorations'
 
 const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' }, planDate: { default: '' } }, content: 'inline' }, {
   toExternalHTML: ({ contentRef }) => <p ref={contentRef} />,
@@ -73,7 +74,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // The blocks the handle press picked; the drop handler moves exactly these.
   const pickedIds = useRef<string[]>([])
   const extendedIds = useRef<string[]>([])
-  const editor = useCreateBlockNote({ schema, dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  const latestPage = useRef(page); latestPage.current = page
+  // Event and link rows keep their own kind on the page; the tag index reads only paragraph and task text.
+  const tagCounts = useCallback((id: string) => { const kind = latestPage.current.sections.flatMap(s => s.blocks).find(b => b.id === id)?.kind; return !kind || kind === 'paragraph' || kind === 'task' }, [])
+  const editor = useCreateBlockNote({ schema, extensions: [tagDecorations(tagCounts)], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     if (!data) return defaultPasteHandler()
     const insert = (blocks: EditorNode[]) => {
@@ -121,7 +125,6 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return defaultPasteHandler()
   }, initialContent: (initial.current.nodes.length ? initial.current.nodes : [{ type: 'paragraph' }]) as never })
   const base = useRef(initial.current.base)
-  const latestPage = useRef(page); latestPage.current = page
   const latestWorkspace = useRef(workspace); latestWorkspace.current = workspace
   const dirty = useRef(initial.current.recovered)
   const sending = useRef(false)

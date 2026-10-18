@@ -4,6 +4,7 @@ import { anotherDayOptions, shortLabel, weekday } from './dates'
 import { DateTag } from './date-tag'
 import { RowMenu, type MenuItem } from './row-menu'
 import { useWorkspace } from './use-day'
+import { TagText } from './tag-text'
 
 /** The task actions shared by plan rows, the strip, Start the day and review step 1 (01 §2). */
 export function useTaskActions(today: LocalDate) {
@@ -130,7 +131,7 @@ export function TaskRow({ task, pageDate, today, variant, section, onEditTitle, 
           }}
         />
       ) : (
-        <span className="task-title">{task.title}</span>
+        <span className="task-title"><TagText text={task.title} /></span>
       )}
       <DateTag task={task} today={today} pageDate={pageDate} label={cancelled ? 'Cancelled' : undefined} />
       {variant === 'past' && <span className="app-tag quiet">Shown at current status</span>}
