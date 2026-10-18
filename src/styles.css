@@ -67,7 +67,7 @@
   --blue: #0a84ff;
   --blue-pressed: #0172d9;
   --blue-soft: #e7f3ff;
-  --tag-ink: #357479;
+  --tag-ink: var(--ink-2); /* Brian: no teal (9fe0c2f3); the secondary-text grey, not blue, which means a link (Jazz) */
   --blue-text: #2a599b;
   --today: #5b91db;
   --red: #e5484d;
@@ -789,7 +789,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* HeroUI reveals the toast ✕ on hover only; phones have no hover, so it always shows. */
 .app-toasts .toast__close-button { opacity:1; pointer-events:auto; }
 
-/* Tags: Brian's own #words, tinted but otherwise plain body text (no fill, border or underline: those mean
+/* Tags: Brian's own #words, a quieter grey but otherwise plain body text (no fill, border or underline: those mean
    labels and links). The mark is fainter so the word reads first. */
 .tag-ink { color: var(--tag-ink); }
 .tag-mark { color: color-mix(in srgb, var(--tag-ink) 55%, transparent); }
