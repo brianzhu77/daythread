@@ -1,5 +1,5 @@
 import type { DayView, LocalDate, Task, Workspace } from '../domain/types'
-import { daysBetween, shortLabel, taskDateTag } from './dates'
+import { shortLabel, taskDateTag } from './dates'
 import { Disclosure, RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
 import { useWorkspace } from './use-day'
@@ -65,13 +65,16 @@ export function FactsStrip({ view, workspace, date, today, handoffCollapsed, onR
 
       {isToday && <RelatedLine view={view} workspace={workspace} date={date} />}
 
-      {isToday && (
+      {/* Shown only when there is something to open: a link announcing nothing is noise (date navigation rules, controls). */}
+      {isToday && (stillOpen.length > 0 || view.paused.length > 0) && (
         <div className="fact-pair">
-          <Disclosure summary={stillOpen.length ? `Still open · ${stillOpen.length} · oldest ${oldestDays(stillOpen, today)} ${oldestDays(stillOpen, today) === 1 ? 'day' : 'days'}` : 'Nothing else open'}>
-            {stillOpen.map(t => (
-              <PoolRow key={t.id} task={t} today={today} />
-            ))}
-          </Disclosure>
+          {stillOpen.length > 0 && (
+            <Disclosure summary={`${stillOpen.length} other open task${stillOpen.length === 1 ? '' : 's'}`}>
+              {stillOpen.map(t => (
+                <PoolRow key={t.id} task={t} today={today} />
+              ))}
+            </Disclosure>
+          )}
           {view.paused.length > 0 && (
             <Disclosure summary={`Not today · ${view.paused.length}`}>
               {view.paused.map(t => (
@@ -83,10 +86,6 @@ export function FactsStrip({ view, workspace, date, today, handoffCollapsed, onR
       )}
     </div>
   )
-}
-
-function oldestDays(tasks: Task[], today: LocalDate): number {
-  return Math.max(0, ...tasks.map(t => daysBetween(t.lastPlannedOn ?? t.createdOn, today)))
 }
 
 function PoolRow({ task, today, paused = false }: { task: Task; today: LocalDate; paused?: boolean }) {

@@ -464,36 +464,6 @@ textarea.task-title:focus { outline: none; }
 .failed-line { display: grid; gap: 6px; color: var(--app-danger); }
 .original { margin: 0; padding: 8px 12px; border-left: 3px solid var(--line); color: var(--ink-soft); white-space: pre-wrap; }
 
-/* ---------- Notices ---------- */
-.notices {
-  position: fixed;
-  z-index: 25;
-  left: 12px;
-  right: 12px;
-  bottom: calc(var(--capture-h) + 16px + env(safe-area-inset-bottom));
-  display: grid;
-  gap: 6px;
-  justify-items: center;
-  pointer-events: none;
-}
-.notice {
-  pointer-events: auto;
-  max-width: 520px;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 4px 4px 16px;
-  background: var(--toast-bg);
-  color: var(--toast-ink);
-  border-radius: 14px;
-  box-shadow: var(--shadow-float);
-  font-size: .9rem;
-}
-.notice span { flex: 1; }
-.notice button { color: #64b5ff; font-weight: 600; }
-.notice .quiet { color: #8e8e96; }
-
 /* ---------- Review ---------- */
 .review { display: grid; gap: 16px; padding-top: 8px; }
 .review-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -558,7 +528,6 @@ textarea.task-title:focus { outline: none; }
   .day-screen .capture-bar textarea { background: none; border-radius: 14px; }
   .day-screen .capture-bar textarea:focus { box-shadow: none; }
   .day-screen .capture-bar button { border-radius: 12px; }
-  .notices { bottom: 24px; }
 }
 .app-tag:empty { display: none; }
 /* <details> ignores flex layout in some Safari versions, so lay its children out inline. */
@@ -619,7 +588,6 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 /* Phone: capture lives behind + (craft-v1 §5.3); notices move to the top, clear of the tab bar. */
 @media (max-width: 899px) {
   .day-screen > .capture-bar { display: none; }
-  .notices { top: calc(10px + env(safe-area-inset-top)); bottom: auto; }
   .step-foot { bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
 
@@ -758,7 +726,6 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .bottom-dock { position:fixed; z-index:120; left:12px; right:12px; bottom:24px; display:flex; flex-direction:column-reverse; align-items:center; gap:8px; pointer-events:none; }
 .editor-dock { display:flex; flex-direction:column-reverse; align-items:center; gap:8px; }
 .editor-dock:empty { display:none; }
-.bottom-dock .notices { position:static; left:auto; right:auto; top:auto; bottom:auto; width:100%; }
 .bottom-dock .editor-selection-bar { position:static; transform:none; left:auto; top:auto; bottom:auto; pointer-events:auto; }
 @media(min-width:900px) {
   .bottom-dock { left:calc(260px + (100vw - 260px - var(--column)) / 2); right:auto; width:var(--column); }

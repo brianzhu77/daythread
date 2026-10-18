@@ -3,10 +3,12 @@ import { useEffect, useRef, useState } from 'react'
 import { CaptureBar, CaptureReceipts } from './capture'
 import { longLabel, todayIso } from './dates'
 import { CalendarIcon, PagesIcon, PlusIcon, ReviewIcon, TasksIcon, TodayIcon } from './icons'
+import type { LocalDate, Page } from '../domain/types'
 import { useDay, useWorkspace } from './use-day'
 
+// Highlight only where you are: Today is today's page, not any day (another day highlights its Days row, or nothing).
 const destinations = [
-  { to: '/', label: 'Today', Icon: TodayIcon, match: (path: string) => path === '/' || path.startsWith('/day/') },
+  { to: '/', label: 'Today', Icon: TodayIcon, match: (path: string, today: LocalDate) => path === '/' || path === `/day/${today}` },
   { to: '/tasks', label: 'Tasks', Icon: TasksIcon, match: (path: string) => path.startsWith('/tasks') },
   { to: '/calendar', label: 'Calendar', Icon: CalendarIcon, match: (path: string) => path.startsWith('/calendar') },
   { to: '/pages', label: 'Pages', Icon: PagesIcon, match: (path: string) => path.startsWith('/pages') },
@@ -15,6 +17,7 @@ const destinations = [
 /** Sidebar on laptop, floating tab capsule + capture button on phone (craft-v1 §3). CSS picks one. */
 export function Navigation() {
   const path = useRouterState({ select: s => s.location.pathname })
+  const [today] = useState(todayIso)
   const [captureOpen, setCaptureOpen] = useState(false)
 
   useEffect(() => {
@@ -30,7 +33,7 @@ export function Navigation() {
         </Link>
         <nav className="sidebar-nav" aria-label="Main">
           {destinations.map(({ to, label, Icon, match }) => (
-            <Link key={to} to={to} className="side-row" aria-current={match(path) ? 'page' : undefined}>
+            <Link key={to} to={to} className="side-row" aria-current={match(path, today) ? 'page' : undefined}>
               <Icon />
               {label}
             </Link>
@@ -40,13 +43,13 @@ export function Navigation() {
             Review
           </Link>
         </nav>
-        <DayList path={path} />
+        <DayList path={path} today={today} />
       </aside>
 
       <nav className="tab-bar" aria-label="Main">
         <div className="tab-capsule">
           {destinations.map(({ to, label, Icon, match }) => (
-            <Link key={to} to={to} className="tab" aria-label={label} aria-current={match(path) ? 'page' : undefined}>
+            <Link key={to} to={to} className="tab" aria-label={label} aria-current={match(path, today) ? 'page' : undefined}>
               <Icon />
             </Link>
           ))}
@@ -62,18 +65,26 @@ export function Navigation() {
   )
 }
 
-/** Daily pages that exist, newest first: the sidebar's Days group (craft-v1 §3.2). */
-function DayList({ path }: { path: string }) {
+/** Something was written or tracked on the page; a page created by opening or browsing a day has neither. */
+function hasContent(page: Page): boolean {
+  return Boolean(page.reviewText.trim()) || page.sections.some(s => s.blocks.some(b => b.kind === 'task' || b.text.trim()))
+}
+
+/**
+ * The sidebar's Days group (craft-v1 §3.2): past days with content, newest first.
+ * Today is the first nav item, and future pages open from the Calendar.
+ */
+function DayList({ path, today }: { path: string; today: LocalDate }) {
   const { workspace } = useWorkspace()
-  const days = (workspace?.pages ?? [])
-    .filter(p => p.type === 'daily' && p.date)
+  if (!workspace) return null
+  const days = workspace.pages
+    .filter(p => p.type === 'daily' && p.date && p.date < today && hasContent(p))
     .map(p => p.date!)
     .sort((a, b) => b.localeCompare(a))
     .slice(0, 14)
-  if (!days.length) return null
   return (
     <div className="side-group">
-      <p className="side-label">Days</p>
+      {days.length > 0 && <p className="side-label">Days</p>}
       {days.map(d => (
         <Link key={d} to="/day/$date" params={{ date: d }} className="side-row small" aria-current={path === `/day/${d}` ? 'page' : undefined}>
           {longLabel(d)}
