@@ -1,13 +1,16 @@
+import { buttonVariants } from '@heroui/react'
 import { Link } from '@tanstack/react-router'
 import type { LocalDate, Page, Task } from '../domain/types'
 import { getCalendarTasks } from '../domain/workspace'
 import { DateTag } from './date-tag'
+import { ArrowLeftIcon, ArrowRightIcon } from './icons'
 import { FutureDayPrompt } from './future-day'
 import { addDays, fromIso, weekday } from './dates'
 import { useWorkspace } from './use-day'
 
 // Days shown per screen; "Later" extends the list through the URL.
 const DAYS_SHOWN = 10
+const secondary = buttonVariants({ variant: 'secondary' })
 
 /**
  * Calendar tab (craft-v1 §5.4, feature map C2): one header per day, that day's page as a card,
@@ -22,15 +25,18 @@ export function CalendarScreen({ from, today }: { from: LocalDate; today: LocalD
   return (
     <div className="list-screen">
       <h1 className="large-title">Calendar</h1>
-      <nav className="pills" aria-label="Move through days">
-        <Link to="/calendar" search={{ date: addDays(from, -DAYS_SHOWN) }} className="pill">
-          Earlier
-        </Link>
-        <Link to="/calendar" search={{}} className="pill" aria-current={from === today ? 'page' : undefined}>
+      {/* `Today ‹ ›` like the day header: links styled as HeroUI buttons, Today hidden (keeping its space) when already there. */}
+      <nav className="calendar-nav" aria-label="Move through days">
+        <Link to="/calendar" search={{}} className={`${secondary} ${from === today ? 'invisible' : ''}`} data-slot="button">
           Today
         </Link>
-        <Link to="/calendar" search={{ date: addDays(from, DAYS_SHOWN) }} className="pill">
+        <Link to="/calendar" search={{ date: addDays(from, -DAYS_SHOWN) }} className={secondary} data-slot="button">
+          <ArrowLeftIcon />
+          Earlier
+        </Link>
+        <Link to="/calendar" search={{ date: addDays(from, DAYS_SHOWN) }} className={secondary} data-slot="button">
           Later
+          <ArrowRightIcon />
         </Link>
       </nav>
       {days.map(d => {

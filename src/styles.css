@@ -806,3 +806,5 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .future-day-planned h3 { font-size: 13px; font-weight: 600; color: var(--muted); }
 /* Save failures stay on screen above every page until Retry or the next successful save (01 §8). */
 .banner.save-failed { position: sticky; top: 0; z-index: 20; padding: 8px 20px; background: var(--bg-grouped); color: var(--app-danger); font-size: .85rem; font-weight: 550; }
+.calendar-nav { display: flex; align-items: center; gap: 4px; }
+.calendar-nav > :first-child { margin-right: 4px; }
