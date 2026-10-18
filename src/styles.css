@@ -821,3 +821,19 @@ body:has(.list-screen) { background: var(--bg-grouped); }
 .continuous-editor:has(.is-picked) .bn-formatting-toolbar { display: none; }
 /* The handle's press wrapper fills BlockNote's side menu so the button stays centred on the measured first line. */
 .editor-handle { display: flex; align-items: center; height: 100%; }
+
+/* Future days without a page (date navigation rules R4, R7). HeroUI variables only. */
+.calendar-day.is-future .day-header, .calendar-day.is-future .day-header .relative, .calendar-day.is-future .day-header .weekday { color: var(--muted); }
+.calendar-day.is-future .calendar-task { color: var(--muted); }
+.calendar-day.is-future .check-mark { border-color: var(--separator); }
+.future-day-trigger { display: inline-block; height: auto; min-height: 0; padding: 0 6px; margin-left: -6px; font: inherit; letter-spacing: inherit; color: inherit; justify-content: start; white-space: normal; text-align: left; }
+.future-day-trigger, .future-day-trigger:active, .future-day-trigger[data-pressed=true] { transform: none; }
+.future-day-popover { max-width: 320px; }
+.future-day-popover [slot=title] { font-size: 15px; font-weight: 600; }
+.future-day-popover p { margin: 4px 0 12px; font-size: 14px; color: var(--muted); }
+.future-day-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.future-day-state { display: grid; justify-items: center; gap: 12px; margin-top: 24px; padding: 28px 20px; border: 1px dashed var(--separator); border-radius: var(--radius); text-align: center; }
+.future-day-state h2 { font-size: 20px; font-weight: 700; }
+.future-day-state > p { color: var(--muted); }
+.future-day-planned { justify-self: stretch; display: grid; gap: 4px; margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--separator); text-align: left; }
+.future-day-planned h3 { font-size: 13px; font-weight: 600; color: var(--muted); }

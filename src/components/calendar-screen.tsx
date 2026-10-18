@@ -2,6 +2,7 @@ import { Link } from '@tanstack/react-router'
 import type { LocalDate, Page, Task } from '../domain/types'
 import { getDayView } from '../domain/workspace'
 import { DateTag } from './date-tag'
+import { FutureDayPrompt } from './future-day'
 import { addDays, fromIso, weekday } from './dates'
 import { useWorkspace } from './use-day'
 
@@ -11,6 +12,7 @@ const DAYS_SHOWN = 10
 /**
  * Calendar tab (craft-v1 §5.4, feature map C2): one header per day, that day's page as a card,
  * then its planned tasks. Browsing never creates a page; opening a day goes through /day/$date.
+ * A future day without a page is greyed and asks before creating it (date navigation rules R4).
  */
 export function CalendarScreen({ from, today }: { from: LocalDate; today: LocalDate }) {
   const { workspace } = useWorkspace()
@@ -45,14 +47,24 @@ function CalendarDay({ date, today, page, tasks }: { date: LocalDate; today: Loc
   const relative = date === today ? 'Today' : date === addDays(today, 1) ? 'Tomorrow' : date === addDays(today, -1) ? 'Yesterday' : null
   const monthDay = fromIso(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   const fullWeekday = fromIso(date).toLocaleDateString('en-US', { weekday: 'long' })
+  const unopened = date > today && !page
+  const title = (
+    <>
+      {monthDay}
+      {relative && <span className={`relative ${date === today ? 'is-today' : ''}`}> · {relative}</span>}
+      <span className="weekday"> · {fullWeekday}</span>
+    </>
+  )
   return (
-    <section className="calendar-day" aria-label={`${monthDay}, ${fullWeekday}`}>
+    <section className={`calendar-day ${unopened ? 'is-future' : ''}`} aria-label={`${monthDay}, ${fullWeekday}`}>
       <h2 className="day-header">
-        <Link to="/day/$date" params={{ date }}>
-          {monthDay}
-          {relative && <span className={`relative ${date === today ? 'is-today' : ''}`}> · {relative}</span>}
-          <span className="weekday"> · {fullWeekday}</span>
-        </Link>
+        {unopened ? (
+          <FutureDayPrompt date={date}>{title}</FutureDayPrompt>
+        ) : (
+          <Link to="/day/$date" params={{ date }}>
+            {title}
+          </Link>
+        )}
       </h2>
       {page && (
         <Link to="/day/$date" params={{ date }} className="note-card">

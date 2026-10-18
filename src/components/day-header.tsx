@@ -8,12 +8,14 @@ import { ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon } from './icons'
 
 /**
  * Day title that opens a date picker, and `Today ‹ ›` (date navigation rules R2, R3; Jazz's HeroUI note f853703).
- * Navigation stops at today: future days open only from the Calendar, so nothing here can create a future page.
+ * Arrows move only up to today (R2): future days open from the Calendar, so nothing here can create a future page.
  */
 export function DayHeader({ date, today }: { date: LocalDate; today: LocalDate }) {
   const navigate = useNavigate()
   const [pickerOpen, setPickerOpen] = useState(false)
   const isToday = date === today
+  // A future page opened from the Calendar or a URL is also a stop: › never walks further ahead.
+  const atLatest = date >= today
   const relative = relativeDay(date, today)
   const go = (target: LocalDate) => {
     if (target === today) void navigate({ to: '/' })
@@ -63,7 +65,7 @@ export function DayHeader({ date, today }: { date: LocalDate; today: LocalDate }
         <Button variant="secondary" isIconOnly aria-label="Previous day" onPress={() => go(addDays(date, -1))}>
           <ArrowLeftIcon />
         </Button>
-        {isToday ? (
+        {atLatest ? (
           // The tooltip trigger is the focusable control screen readers see; the disabled button inside is only visual.
           <Tooltip delay={0}>
             <Tooltip.Trigger aria-label="Next day" aria-disabled="true">
