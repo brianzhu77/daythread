@@ -17,16 +17,17 @@ const tagChar = /^[\p{L}\p{M}\p{N}_/-]$/u
 // A tag needs a letter or number (#_, #-, #/ are not tags) and can't be all decimal digits (#2026, #１２３ are plain
 // text); #v1, #1on1, #1-2 and #① are tags.
 const isTag = (tag: string) => /[\p{L}\p{N}]/u.test(tag) && !/^\p{Nd}+$/u.test(tag)
-// The text before a `#` in the same word. A link's fragment (example.com/page#part) is not a tag; a domain needs a
-// letters-only last part, so a version like v1.2#note still has a tag.
-const urlPrefix = /^(?:[a-z][a-z\d+.-]*:\/\/|www\.|[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:\/|$))/iu
+// The text before a `#` in the same word. A link's fragment is not a tag: anywhere in that text a `scheme://` or
+// `www.` (so "(https://x.io/#a)" and "[doc](https://x.io/#a)" count), or, past any opening brackets or quotes, a
+// domain (example.com#x, "(example.com/soup#x"). A domain needs a letters-only last part, so v1.2#note keeps its tag.
+const inLink = (word: string) => /[a-z][a-z\d+.-]*:\/\/|www\./iu.test(word) || /^[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:\/|$)/iu.test(word.replace(/^[([<"'“‘（【「]+/u, ''))
 
 export function findTags(text: string): TagMatch[] {
   const found: TagMatch[] = []
   let wordStart = 0
   for (let i = 0; i < text.length; i++) {
     if (isSpace(text[i]!)) { wordStart = i + 1; continue }
-    if (!isMark(text[i]) || urlPrefix.test(text.slice(wordStart, i))) continue
+    if (!isMark(text[i]) || inLink(text.slice(wordStart, i))) continue
     let end = i + 1
     while (end < text.length) {
       const char = String.fromCodePoint(text.codePointAt(end)!)

@@ -62,6 +62,12 @@ test('the # in a link is not a tag', () => {
   assert.deepEqual(tags('www.example.com#top'), [])
   assert.deepEqual(tags('example.com#top'), [])
   assert.deepEqual(tags('https://x.dev/a #reading'), ['reading'])
+  // Brackets, Markdown links and quotes around a link don't hide it (Lead cf9f2b80).
+  assert.deepEqual(tags('(https://example.com/#intro)'), [])
+  assert.deepEqual(tags('[doc](https://example.com/#intro)'), [])
+  assert.deepEqual(tags('<https://x.io/#i>'), [])
+  assert.deepEqual(tags('(example.com#x)'), [])
+  assert.deepEqual(tags('(#tag) "#quoted"'), ['tag', 'quoted'])
   assert.deepEqual(tags('v1.2#note'), ['note'])
   assert.deepEqual(tags('1.5#x'), ['x'])
 })
