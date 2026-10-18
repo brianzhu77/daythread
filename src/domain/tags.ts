@@ -1,17 +1,20 @@
 import type { LocalDate, Workspace } from './types.ts'
 
-// Tags are plain text Brian writes (#daythread:e36141c5): `#` (or full-width `＃`) followed by one or more
-// characters, ending at whitespace, punctuation (so `#工作。` is the tag 工作), another `#`, or the end of the block. Nothing is stored; every reader derives tags from the
-// block text with the same rule, so the index can never disagree with what is on the page.
+// Tags are plain text Brian writes (#daythread:e36141c5): `#` (or full-width `＃`) followed by the tag characters
+// below, ending at the first other character (so `#工作。` is the tag 工作) or the end of the block. Nothing is
+// stored; every reader derives tags from the block text with the same rule, so the index can never disagree with
+// what is on the page.
 export interface TagMatch { tag: string; start: number; end: number }
 export interface TagOccurrence { pageId: string; blockId: string; date: LocalDate | null; pageTitle: string; sectionTitle: string; taskId?: string; text: string }
 export interface TagEntry { key: string; tag: string; occurrences: TagOccurrence[] }
 
 const isMark = (c: string | undefined) => c === '#' || c === '＃'
 const isSpace = (c: string) => /\s/u.test(c)
-// Whitespace and Unicode punctuation end a tag (Lead 7b1bc740), except `_`, `-` and `/` (for nested names like
-// #work/appx). Everything else, emoji and symbols included, is tag text. `#` and `＃` are punctuation, so they end it.
-const endsTag = (c: string) => /^[\s\p{P}]$/u.test(c) && !'_-/'.includes(c)
+// Obsidian's rule, Brian's choice (#daythread:e36141c5 5b496134): a tag is Unicode letters, numbers, `_`, `-` and
+// `/` (for nested names like #work/appx). Any other character ends it: whitespace, punctuation, symbols, emoji, `#`.
+const tagChar = /^[\p{L}\p{N}_/-]$/u
+// All decimal digits is plain text (#2026, #１２３), not a tag; #v1, #1on1 and #① are tags.
+const allDigits = /^\p{Nd}+$/u
 // The text before a `#` in the same word. A link's fragment (example.com/page#part) is not a tag; a domain needs a
 // letters-only last part, so a version like v1.2#note still has a tag.
 const urlPrefix = /^(?:[a-z][a-z\d+.-]*:\/\/|www\.|[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:\/|$))/iu
@@ -25,10 +28,11 @@ export function findTags(text: string): TagMatch[] {
     let end = i + 1
     while (end < text.length) {
       const char = String.fromCodePoint(text.codePointAt(end)!)
-      if (endsTag(char)) break
+      if (!tagChar.test(char)) break
       end += char.length
     }
-    if (end > i + 1) found.push({ tag: text.slice(i + 1, end), start: i, end })
+    const tag = text.slice(i + 1, end)
+    if (tag && !allDigits.test(tag)) found.push({ tag, start: i, end })
     i = end - 1
   }
   return found

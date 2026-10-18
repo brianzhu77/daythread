@@ -13,7 +13,7 @@ export function TagName({ tag }: { tag: string }) {
 
 /** Shown until Brian writes his first tag: the only place the app explains tags and the space rule. */
 function TagsEmpty() {
-  return <div className="tags-empty"><p>No tags yet</p><p className="tags-hint">Type # and a word anywhere in a note, like <TagName tag="work" />. A space ends the tag.</p></div>
+  return <div className="tags-empty"><p>No tags yet</p><p className="tags-hint">Type # and a word anywhere in a note, like <TagName tag="work" />. A tag ends at a space or punctuation.</p></div>
 }
 
 /** The sidebar's Tags group (laptop), below Pages. */

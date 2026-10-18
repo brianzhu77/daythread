@@ -13,7 +13,9 @@ test('a tag is # and the letters, digits, _, - or / after it', () => {
   // Text runs on until a space or punctuation, so a Chinese sentence still needs one.
   assert.deepEqual(tags('今天 #工作很忙'), ['工作很忙'])
   assert.deepEqual(tags('#work_log #to-do #work/appx'), ['work_log', 'to-do', 'work/appx'])
-  assert.deepEqual(tags('#1 priority'), ['1'])
+  // All digits is not a tag; digits with a letter, or a circled number, are.
+  assert.deepEqual(tags('#1 priority #2026 #１２３'), [])
+  assert.deepEqual(tags('#v1 #1on1 #①'), ['v1', '1on1', '①'])
   assert.deepEqual(tags('line one #a\nline two #b'), ['a', 'b'])
 })
 
@@ -30,7 +32,7 @@ test('a bare # is not a tag: heading shorthand, C#, and a lone mark', () => {
   assert.deepEqual(tags('# # #'), [])
 })
 
-test('punctuation and a further # end a tag; symbols and emoji do not (Lead 62818cbd, 4a8e6d57, 7b1bc740)', () => {
+test('anything but letters, numbers, _, - and / ends a tag (Obsidian rule, Brian 5b496134)', () => {
   assert.deepEqual(tags('今天#工作很忙，晚上 跑步'), ['工作很忙'])
   assert.deepEqual(tags('#工作。'), ['工作'])
   assert.deepEqual(tags('#工作，今天很忙。'), ['工作'])
@@ -42,9 +44,10 @@ test('punctuation and a further # end a tag; symbols and emoji do not (Lead 6281
   assert.deepEqual(tags('##deep'), ['deep'])
   assert.deepEqual(tags('#a #b'), ['a', 'b'])
   assert.deepEqual(tags('C#开发'), ['开发'])
-  // Punctuation right after # gives no tag; a symbol or emoji is tag text.
-  assert.deepEqual(tags('#。 #! #，'), [])
-  assert.deepEqual(tags('#🙂 #a+b #㎏'), ['🙂', 'a+b', '㎏'])
+  // Punctuation, a symbol or an emoji right after # gives no tag; inside a tag it ends the tag.
+  assert.deepEqual(tags('#。 #! #， #🙂 #㎏'), [])
+  assert.deepEqual(tags('#a+b #foo—bar #ok🙂'), ['a', 'foo', 'ok'])
+  assert.deepEqual(tags('(#tag) #tag, #foo_bar-baz'), ['tag', 'tag', 'foo_bar-baz'])
   // Characters outside the basic plane are read whole.
   assert.deepEqual(tags('#𠮷野家'), ['𠮷野家'])
 })
@@ -82,7 +85,8 @@ test('tagIndex reads paragraph and task blocks, counts a block once per tag, and
   // Equal counts: the tag used most recently comes first.
   ws = run(ws, { type: 'add-text', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), text: 'Old #archive' })
   assert.deepEqual(tagIndex(ws).slice(1).map(t => t.key), ['friends', 'archive'])
-  // Unicode compatibility forms fold into one tag (Lead 4ae06909): full-width letters, circled digits, unit signs.
+  // Unicode compatibility forms fold into one tag (Lead 4ae06909): full-width letters, circled digits. "#1" is all
+  // digits and "#㎏" starts with a symbol, so neither is a tag under the Obsidian rule.
   ws = run(ws, { type: 'add-text', pageId: day('2026-10-16').id, sectionId: notes('2026-10-16'), text: '＃ｗｏｒｋ #① #1 #㎏ #kg' })
   const folded = tagIndex(ws)
   assert.equal(folded.find(t => t.key === 'work')!.occurrences.length, 4)
