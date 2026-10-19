@@ -35,6 +35,12 @@ This follows Bumblebee's grounding check (b842c6d3, abee294e). Ratchet's caution
 
 - An item that fails the server's check **isn't auto-applied.** It sits in the same receipt, in a **"Needs a look"** group above the saved items, as a waiting row with **Save** and **Remove** on the row. Editing the flagged field and then tapping Save saves it.
 - The row shows why, as an amber chip (`--warn` colours, 12 px) placed before the date chip: **"Time not in your text"**, **"Link not in your text"**, **"Title not in your text"**, **"Task not in your text"** (for an update) or **"Date missing"** (his text has a date word such as 明天, 周五, 月底, next Mon or 11/2, but the item has no date; Bumblebee, b842c6d3). **This applies to Tasks, Events and Updates that change a date (update with a new date) only** (Ratchet: C15 runs 2–3 lost the date only on the update). A Saved link or Note may have no date, so it never gets this hold (Ratchet #67 found Luna C5#1, a dateless link, wrongly held). **"Date unclear"** (Bumblebee, after Ratchet's dateRole finding C13): a task has a date but no role (do / start / due), so the app can't tell "do it Tuesday" from "due Tuesday". It's held the same way, **for new tasks only**. An update with a date and no role is read as a new do-date ("moved to"): it already waits for Apply, and its row shows "Do Tue, Oct 20", so he confirms or changes the role there without a reason chip (Roadbuster's offline data: C13 updates never carry a role, and a chip there would be wrong every time). Tapping the date chip offers **Do · Start · Due** above the date list. A date that is present but wrong isn't held. The receipt shows the date so he can spot it.
+- **How each flag is fixed on the row** (Ratchet, b842c6d3 ef42ebaa):
+  - *Time not in your text* (event): the event's date chip menu has a third group, **TIME**, under DAY: the current time with a check, **"No time"** (keeps the day, all-day event), and **"Set time…"**, which turns the chip into an inline `<input type="time">` (Enter or blur saves, Esc reverts). Choosing "No time" or a new time clears the flag.
+  - *Date missing* / *Date unclear*: the date chip's KIND OF DATE and DAY groups (already built). Picking a day, or a role, clears the flag.
+  - *Title not in your text* / *Task not in your text*: tap the title to edit, or Remove.
+  - *Link not in your text*: Remove (a saved link's URL isn't edited here).
+  - In every menu, the current role, day and time carry a check mark.
 - When every item is saved or removed, the group disappears. The receipt header reads "Saved from …" once nothing is waiting, and "1 waiting for you · from …" while something is.
 - The saved items in the same capture are unaffected: they're already saved, with Undo.
 
@@ -68,7 +74,7 @@ An error with **no generation id and no cost** (500, timeout, lost connection, 4
 
 ## Updates to existing tasks (unchanged rule, clearer row)
 
-The row reads **"[Update] Fix export bug → done"** and stays in the waiting state with Apply / Discard. The chip uses `--blue-soft` so it's clearly different from the new items above it. This was where the probe's "APPX update instead of a new Cairn task" happened, and it's already safe because nothing applies without Brian.
+The row reads **"[Update] Fix export bug → done"** and stays in the waiting state with Apply / Discard. An update that moves a date shows the target as the **same date chip** as a saved task, **"[Update] Fix export bug → [Do Tue, Oct 20]"**, and tapping it opens the same KIND OF DATE / DAY menu, so he can change the role or day before Apply. "→ done" has no chip. After Apply the row keeps the chip (read-only) and gets ⋯. The chip uses `--blue-soft` so it's clearly different from the new items above it. This was where the probe's "APPX update instead of a new Cairn task" happened, and it's already safe because nothing applies without Brian.
 
 ## Copy
 

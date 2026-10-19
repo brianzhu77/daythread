@@ -32,12 +32,14 @@ Plus the six status states: no key, key rejected, other model error, paused on a
 ## Needs a look
 
 - [ ] Reason chip is amber (`--warn`), 12 px, before the date chip. The copy is exactly: Time not in your text · Link not in your text · Title not in your text · Task not in your text · Date missing · Date unclear.
+- [ ] An event flagged "Time not in your text": its date menu has TIME with "No time" and "Set time…"; either clears the flag. Every menu checks the current role, day and time.
 - [ ] The row has Save and Remove. Nothing in this group is saved until Save.
 - [ ] After fixing the flagged field and tapping Save, the row moves to the saved list and the chip disappears.
 - [ ] Header reads "1 waiting for you · from …" while something waits, and "Saved from …" when nothing does.
 
 ## Updates
 
+- [ ] A date-moving update shows its target as a date chip; tapping it changes role and day before Apply.
 - [ ] The update row uses the `--blue-soft` chip "Update", reads "Fix export bug → Do Tue, Oct 20" (or "→ done"), and waits for Apply / Discard. There's no reason chip just because the role was missing.
 
 ## Undo and failure
