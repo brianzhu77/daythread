@@ -67,7 +67,7 @@ Mock: `prototypes/pages-trash/index.html` (`?only=t1|t2|t3|t4|p1|p2|p3`). Static
 
 ## 5. Restore (T3, P3)
 
-- **Back where it was:** same parent, same subtree, placed at the end of the parent's children (no manual sibling order until B14). Notice: "Restored to {parent} · Open". Stay on the Trash
+- **Back where it was:** same parent, same subtree. Its place among siblings isn't promised until B14 (after a rollback re-upgrade it's last). Notice: "Restored to {parent} · Open". Stay on the Trash
   screen (the row leaves); Open goes to the page. From the banner (§4) the page just becomes editable in place,
   with the same notice minus Open.
 - **Old parent gone or in trash:** restored to top level. Notice: "Restored {title} to Pages · {parent} is in
