@@ -161,5 +161,9 @@ test('budget used up: text kept, nothing sent', async () => {
 })
 
 test('the browser cannot send the server-only capture actions', () => {
-  for (const type of ['capture-for-model', 'organized-capture', 'model-failed']) assert.equal(commandSchema.safeParse({ type }).success, false)
+  const command = (action: object) => ({ operationId: 'op', expectedRevision: 0, action })
+  assert.equal(commandSchema.safeParse(command({ type: 'capture', pageId: 'p', text: 'x' })).success, true) // the check can pass
+  assert.equal(commandSchema.safeParse(command({ type: 'capture-for-model', pageId: 'p', text: 'x', model: 'm' })).success, false)
+  assert.equal(commandSchema.safeParse(command({ type: 'organized-capture', captureId: 'c', revision: 1, model: 'm', mode: 'auto', proposals: [], unreadable: 0, contextLine: '' })).success, false)
+  assert.equal(commandSchema.safeParse(command({ type: 'model-failed', captureId: 'c', revision: 1, failure: 'failure', error: 'x' })).success, false)
 })

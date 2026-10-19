@@ -131,8 +131,10 @@ test('after a restart, an attempt still marked in flight becomes unknown and kee
 })
 
 test('the browser cannot send ledger operations: they are not commands', () => {
+  const command = (action: object) => ({ operationId: 'op', expectedRevision: 0, action })
+  assert.equal(commandSchema.safeParse(command({ type: 'discard-capture', captureId: 'c' })).success, true) // the check can pass
   for (const type of ['reserve-model-attempt', 'record-model-result', 'reconcile-model-attempt'])
-    assert.equal(commandSchema.safeParse({ type }).success, false)
+    assert.equal(commandSchema.safeParse(command({ type, attemptId: 'a1', captureId: 'c', revision: 1, actualUsd: 0 })).success, false)
 })
 
 test('rollback 3 → 2 keeps the ledger (and a JSON copy); rolling forward again finds the same spend', async () => {
