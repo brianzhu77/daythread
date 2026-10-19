@@ -18,7 +18,7 @@ export class ModelError extends Error {
   constructor(message: string, kind: ModelErrorKind, raw: string | null = null, costUsd: number | null = null) { super(message); this.kind = kind; this.raw = raw; this.costUsd = costUsd }
 }
 
-export async function callStructured<T>(config: ModelConfig, messages: { role: string; content: string }[], schema: { name: string; strict: boolean; schema: unknown }, options: { maxTokens?: number; timeoutMs?: number; signal?: AbortSignal } = {}): Promise<ModelCall<T>> {
+export async function callStructured<T>(config: ModelConfig, messages: { role: string; content: string }[], schema: { name: string; strict: boolean; schema: unknown }, options: { maxTokens?: number; timeoutMs?: number; signal?: AbortSignal; reasoning?: boolean } = {}): Promise<ModelCall<T>> {
   const timeout = AbortSignal.timeout(options.timeoutMs ?? 30_000)
   let response: Response
   try {
@@ -32,6 +32,8 @@ export async function callStructured<T>(config: ModelConfig, messages: { role: s
         provider: { require_parameters: true },
         max_tokens: options.maxTokens ?? 1200,
         usage: { include: true },
+        // Reasoning models spend output tokens thinking; when that hits max_tokens the answer comes back empty.
+        ...(options.reasoning === false ? { reasoning: { enabled: false } } : {}),
       }),
     })
   } catch (error) {
@@ -43,6 +45,7 @@ export async function callStructured<T>(config: ModelConfig, messages: { role: s
     throw new ModelError(`Model request failed (${response.status})`, kind)
   }
   const raw = body?.choices?.[0]?.message?.content ?? ''
+  if (body?.choices?.[0] && (body.choices[0] as { finish_reason?: string }).finish_reason === 'length') throw new ModelError('Model ran out of output tokens', 'invalid-output', raw, typeof body?.usage?.cost === 'number' ? body.usage.cost : null)
   let value: T
   try { value = JSON.parse(raw) as T } catch { throw new ModelError('Model returned text that is not JSON', 'invalid-output', raw, typeof body?.usage?.cost === 'number' ? body.usage.cost : null) }
   return { value, raw, generationId: body?.id ?? null, costUsd: typeof body?.usage?.cost === 'number' ? body.usage.cost : null, promptTokens: body?.usage?.prompt_tokens ?? 0, completionTokens: body?.usage?.completion_tokens ?? 0 }

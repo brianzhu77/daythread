@@ -8,7 +8,9 @@ import { callStructured, modelConfig, ModelError } from '../src/server/model/ope
 import { captureItems, captureMessages, captureSchema, type CaptureAnswer, type CaptureItem, type CaptureRawAnswer } from '../src/server/model/capture-prompt.ts'
 import { morningMessages, morningSchema, type MorningAnswer } from '../src/server/model/morning-prompt.ts'
 
-const out = process.argv[2] ?? '/tmp/model-probe', cap = Number(process.argv[3] ?? 0.5), runs = 3, maxTokens = 1200
+const out = process.argv[2] ?? '/tmp/model-probe', cap = Number(process.argv[3] ?? 0.5), runs = 3
+// PROBE_MAX_TOKENS / PROBE_REASONING=off select the variant being measured; both are recorded in the summary.
+const maxTokens = Number(process.env.PROBE_MAX_TOKENS ?? 1200), reasoning = process.env.PROBE_REASONING === 'off' ? false : undefined
 mkdirSync(out, { recursive: true })
 const config = modelConfig(); if (!config) throw new Error('OPENROUTER_API_KEY / OPENROUTER_MODEL not set')
 const models = await (await fetch('https://openrouter.ai/api/v1/models', { headers: { Authorization: `Bearer ${config.apiKey}` } })).json() as { data: { id: string; pricing: { prompt: string; completion: string; overrides?: { prompt: string; completion: string }[] } }[] }
@@ -24,9 +26,10 @@ async function call<T>(caseId: string, run: number, messages: { role: string; co
   if (spent + bound > cap) throw new Error(`Stopped before ${caseId}#${run}: spent ${spent.toFixed(5)} + worst case ${bound.toFixed(5)} > cap ${cap}`)
   calls++
   try {
-    const r = await callStructured<T>(config!, messages, schema, { maxTokens })
+    const started = performance.now()
+    const r = await callStructured<T>(config!, messages, schema, { maxTokens, reasoning, timeoutMs: 60_000 })
     spent += r.costUsd ?? bound
-    appendFileSync(log, JSON.stringify({ caseId, run, ok: true, costUsd: r.costUsd, countedUsd: r.costUsd ?? bound, generationId: r.generationId, promptTokens: r.promptTokens, completionTokens: r.completionTokens, raw: r.raw }) + '\n')
+    appendFileSync(log, JSON.stringify({ caseId, run, ok: true, ms: Math.round(performance.now() - started), costUsd: r.costUsd, countedUsd: r.costUsd ?? bound, generationId: r.generationId, promptTokens: r.promptTokens, completionTokens: r.completionTokens, raw: r.raw }) + '\n')
     return r.value
   } catch (error) {
     const known = error instanceof ModelError ? error.costUsd : null
@@ -85,7 +88,10 @@ for (const c of capture) {
   for (let run = 1; run <= runs; run++) {
     const raw = await call<CaptureRawAnswer>(c.id, run, captureMessages(c.text, ctx), captureSchema(ctx.openTasks.map(t => t.id)))
     const a: CaptureAnswer | null = raw ? { items: captureItems(raw) } : null
-    results[c.id]!.checks.push(a ? c.check(a) : null); results[c.id]!.outputs.push(a ? JSON.stringify(a.items) : '(failed)')
+    const check = a ? c.check(a) : null
+    // Invented content (critical 2): a link that isn't in what Brian typed.
+    if (check && a!.items.some(i => i.kind === 'material' && !c.text.includes(i.url))) check.critical.push('invented URL')
+    results[c.id]!.checks.push(check); results[c.id]!.outputs.push(a ? JSON.stringify(a.items) : '(failed)')
   }
 }
 for (const l of lines) results[l.id] = { checks: [], outputs: [] }
@@ -100,7 +106,8 @@ const rows = Object.entries(results).map(([id, r]) => {
   return { id, good, correct: good >= 2, flips: good > 0 && good < runs, critical: crit, outputs: r.outputs }
 })
 const correct = rows.filter(r => r.correct).length, criticalLines = rows.filter(r => r.critical.length).length
-const summary = { model: config.model, calls, spentUsd: Number(spent.toFixed(6)), correct, of: rows.length, criticalLines, pass: correct >= 16 && criticalLines <= 1 }
+const latencies = (await import('node:fs')).readFileSync(log, 'utf8').trim().split('\n').map(l => JSON.parse(l)).filter(l => l.ok).map(l => l.ms as number).sort((a, b) => a - b)
+const summary = { model: config.model, maxTokens, reasoning: reasoning === false ? 'off' : 'default', calls, failedCalls: calls - latencies.length, medianMs: latencies[Math.floor(latencies.length / 2)], p90Ms: latencies[Math.floor(latencies.length * 0.9)], spentUsd: Number(spent.toFixed(6)), correct, of: rows.length, criticalLines, pass: correct >= 16 && criticalLines <= 1 }
 writeFileSync(join(out, 'results.json'), JSON.stringify({ summary, rows }, null, 2))
 console.log(JSON.stringify(summary))
 for (const r of rows) console.log(`${r.id}\t${r.good}/${runs}\t${r.correct ? 'ok' : 'WRONG'}${r.flips ? ' (flips)' : ''}${r.critical.length ? `\tCRITICAL: ${r.critical.join(', ')}` : ''}`)
