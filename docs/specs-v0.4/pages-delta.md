@@ -65,6 +65,8 @@ sharing, templates, Notion import.
   its own descendants. Moving keeps the page ID, so every reference and "Linked from" entry stays
   valid. Moving applies on tap with Undo.
 - Sibling order is manual (drag); new children go to the end.
+  Step B (2026-10-19) builds only the "new children and moved pages go to the end" part, using
+  the existing page order; no sibling-order field and no drag reorder yet.
 
 ### N-3 Pasting a URL [Brian, details Design]
 
@@ -144,7 +146,11 @@ Typing a URL inside a sentence never does:
   - Trashing the referencing page shows its entry as "(removed)". Restoring it brings back only
     references whose cards still exist on it.
   - Moving either page changes neither record.
-- The parent is shown as a breadcrumb, not as a "Linked from" entry.
+- Being the parent is not a reference. The parent relation alone never adds a "Linked from" entry;
+  the parent appears in the breadcrumb. A real card on the parent page is a reference like any
+  other, so the parent is listed when it holds a card and drops out when that card is deleted.
+  Moving the child therefore never changes its "Linked from" list (Lead ruling, 2026-10-19, on
+  Ratchet's question in Step B).
 
 ### N-6 Good Stuffs follow-up and "Related" become per page [Design]
 
