@@ -1,0 +1,7 @@
+(node:15712) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+after bring 3 lines from Sun
+▾
+PASS real data Bring+Undo restores before state
+PASS actual edited-after-Bring Undo refuses, keeps copy and new words
+Done while save fails { handoffDone: true, cardCount: 0, unsavedPersisted: false }

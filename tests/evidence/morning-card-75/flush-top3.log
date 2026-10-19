@@ -1,0 +1,11 @@
+(node:15203) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+top3 [
+  'First top task',
+  'Second top task',
+  'Third typed task',
+  'Suggested add task'
+]
+other []
+strip Added to TODO - Top 3
+Undo

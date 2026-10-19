@@ -1,0 +1,4 @@
+(node:14902) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS Bring tag + material reuse/source unchanged; real save-editor deletion strict dedup; candidate→old960d5d4 actual editor save→candidate dedup/material/task preservation, no script
