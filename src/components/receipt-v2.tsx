@@ -200,7 +200,9 @@ function EditableTitle({ title, editable, onSave }: { title: string; editable: b
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(title)
   if (!editable) return <span className="receipt-title">{title}</span>
-  if (!editing) return <button type="button" className="receipt-title as-text" onClick={() => { setValue(title); setEditing(true) }}>{title}</button>
+  const start = () => { setValue(title); setEditing(true) }
+  // A span, not a <button>: Chromium ignores line-clamp inside buttons, so long titles were cut to one line.
+  if (!editing) return <span role="button" tabIndex={0} className="receipt-title as-text" onClick={start} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); start() } }}>{title}</span>
   const done = (save: boolean) => { setEditing(false); if (save && value.trim() && value.trim() !== title) onSave(value.trim()) }
   return <input className="receipt-title" autoFocus value={value} aria-label="Item title" onChange={e => setValue(e.target.value)} onBlur={() => done(true)}
     onKeyDown={e => { if (e.nativeEvent.isComposing) return; if (e.key === 'Enter') { e.preventDefault(); done(true) } else if (e.key === 'Escape') { e.preventDefault(); done(false) } }} />
