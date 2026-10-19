@@ -6,7 +6,7 @@ after that (tags on Oct 18). Brian's latest message overrides this file; update 
 
 ## Count
 
-**Built: 11 of 19** (as of `960d5d4`, live on 3000, 2026-10-19).
+**Built: 12 of 19** (as of `5193991`, live on 3000, 2026-10-19).
 
 Every status update to Brian quotes this line. Count rule: a row counts as built only when it is live on 3000
 **and** has passed review (Ratchet's acceptance task linked in Evidence). "Partial" counts as not built.
@@ -42,7 +42,7 @@ Group B is listed for tracking only and never counts toward M.
 | A1b | Nesting shown and managed: Subpages list, sidebar tree, Move, breadcrumb | 3596b765; v0.4 N-2, N-9 | built | 960d5d4 live 2026-10-19 (Lead fbfa9390); Ratchet #73 (docs/reviews/pages-tree-ratchet.md, re-checked on a copy of Brian's real data), Jazz design pass. Pages screen lists pages under days ("In your days"). Move is Move to… only, drag is B14. Delete with children is A4 (N-7). Known limit: Linked from order (B15) |
 | A2 | Paste a URL → page with the URL as a property; one page per URL | 3596b765, e83b0640; v0.4 N-1, N-3, N-4 | missing | Page.type = daily/document only |
 | A3 | "Linked from" back to the day on every page | 3596b765; v0.4 N-5 | built | 960d5d4 live 2026-10-19, Ratchet #73. Real references only; the breadcrumb parent is not repeated; today shows as "Today" |
-| A4 | Delete a page to trash and restore it, with its subpages | v0.4 N-7 | missing | — |
+| A4 | Delete a page to trash and restore it, with its subpages | v0.4 N-7 | missing | next round (Lead 3600952d): data plan first, needs a page column + first migration since layout 3, rollback script |
 | A9 | `[[` page reference; quote with source | v0.3 scope 4, 01 §6.2 | missing | `insert-reference` has no caller |
 | A11 | Block-level references | c5c9142e #1 | missing | moved to Later by the team without asking; build or ask Brian |
 
@@ -58,14 +58,14 @@ Group B is listed for tracking only and never counts toward M.
 
 | ID | Item | Source | Status | Evidence |
 |---|---|---|---|---|
-| A8 | Morning card per v05 design (merged suggestions with reason, Undo) + Bring to today for plain lines | 7c4e0cab (O4=b), 78871f09 | building | feat/morning-card from b63eb4e (Lead e602d3b1), morning-card-build.md §11 steps 1-2. "From your notes" proposals (step 3) moved to A6b: they need the real model |
+| A8 | Morning card per v05 design (merged suggestions with reason, Undo) + Bring to today for plain lines | 7c4e0cab (O4=b), 78871f09 | built | 5193991 live 2026-10-19 (Lead 3600952d); Ratchet #75 (docs/reviews/morning-card-ratchet.md, copy of Brian's real data), Jazz design pass. Text and link lines only; a brought line stays brought after its copy is deleted, Undo re-offers it; every card write saves the editor first. "From your notes" proposals are in A6b. Not tested: real iPhone with Chinese input |
 
 Count: M = D1–D6 + A1a, A1b, A2–A5, A6a, A6b, A7–A9, A11, A12 = 19. A10 (drag preview) is settled inside D5, not a separate row.
 A1 was split into A1a/A1b on 2026-10-19 when `/page` shipped (same sources, no scope change), so M went 17 → 18.
 A6 was split into A6a/A6b on 2026-10-19 when capture went live on the real model (same sources, no scope change), so M went 18 → 19.
 A8's proposals for text lines moved to A6b on 2026-10-19 (they need the real model; same sources); M unchanged.
 A1b dropped "delete with children" on 2026-10-19 because A4 already covers it (N-7, trash and restore with subpages); M unchanged.
-N = D1–D6 + A5 + A1a, A1b, A3 + A6a = 11.
+N = D1–D6 + A5 + A1a, A1b, A3 + A6a + A8 = 12.
 
 ## B. In our own specs, Brian never named them (tracked, not counted)
 
