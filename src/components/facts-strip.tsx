@@ -12,12 +12,14 @@ interface Props {
   today: LocalDate
   /** Shown as a collapsed line when Start the day was set aside with Later. */
   handoffCollapsed: boolean
+  /** Rows waiting in the collapsed morning card (morning card §8, Later). */
+  handoffCount: number
   onReopenHandoff: () => void
   handoffSettled: boolean
 }
 
 /** Computed facts above the page, never page text (01 §3.2, §3.3, §3.4). No counts to clear. */
-export function FactsStrip({ view, workspace, date, today, handoffCollapsed, onReopenHandoff, handoffSettled }: Props) {
+export function FactsStrip({ view, workspace, date, today, handoffCollapsed, handoffCount, onReopenHandoff, handoffSettled }: Props) {
   const isToday = date === today
   const pageTaskIds = new Set(view.page?.sections.flatMap(s => s.blocks).map(b => b.taskId).filter(Boolean))
   const dueSoon = view.attention.filter(t => !pageTaskIds.has(t.id))
@@ -30,7 +32,7 @@ export function FactsStrip({ view, workspace, date, today, handoffCollapsed, onR
     <div className="facts" aria-label="Facts for this day">
       {isToday && handoffCollapsed && (
         <button type="button" className="fact-line link-line" onClick={onReopenHandoff}>
-          Start the day ▸
+          Suggestions · {handoffCount} ▸
         </button>
       )}
 

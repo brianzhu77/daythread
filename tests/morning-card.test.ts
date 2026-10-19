@@ -143,3 +143,42 @@ test('a copy deleted later is not offered again; event and page-card lines are n
   assert.equal(offered().includes('n1'), false)
   assert.throws(() => bring(ws, 'n1'), /Already brought/)
 })
+
+// Tasks group (§3, §6): Add all is one operation; a full Top 3 sends the rest to the plan list.
+function withTasks(n: number) {
+  let ws = ok(createEmptyWorkspace(), { type: 'ensure-day', date: '2026-10-19' })
+  const p = day(ws, '2026-10-19')
+  for (let i = 0; i < n; i++) ws = ok(ws, { type: 'add-task', pageId: p.id, sectionId: p.sections.find(s => s.kind === 'notes')!.id, title: `t${i}` } as Action)
+  return ws
+}
+const planned = (ws: Workspace, kind: 'top3' | 'other') => day(ws, '2026-10-19').sections.filter(s => s.kind === kind).flatMap(s => s.blocks).filter(b => b.kind === 'task').map(b => ws.tasks.find(t => t.id === b.taskId)!.title)
+
+test('Add all tasks plans every row in one operation; one Undo takes them all back', () => {
+  let ws = withTasks(3)
+  const [a, b, c] = ws.tasks
+  const before = structuredClone(ws)
+  const r = run(ws, { type: 'plan-tasks', date: '2026-10-19', items: [{ taskId: a!.id, section: 'top3' }, { taskId: b!.id, section: 'other' }, { taskId: c!.id, section: 'top3' }] })
+  ws = r.workspace
+  assert.deepEqual(planned(ws, 'top3'), ['t0', 't2']); assert.deepEqual(planned(ws, 'other'), ['t1'])
+  ws = ok(ws, { type: 'undo', targetOperationId: r.receipt.operationId })
+  assert.deepEqual(ws.tasks, before.tasks); assert.deepEqual(ws.placements, before.placements); assert.deepEqual(day(ws, '2026-10-19').sections, day(before, '2026-10-19').sections)
+  assert.throws(() => run(ws, { type: 'plan-tasks', date: '2026-10-19', items: [{ taskId: a!.id, section: 'top3' }, { taskId: a!.id, section: 'other' }] }), /twice/)
+})
+
+test('with Top 3 full, the next Top 3 row goes to the plan list', () => {
+  let ws = withTasks(5)
+  ws = ok(ws, { type: 'plan-tasks', date: '2026-10-19', items: ws.tasks.map(t => ({ taskId: t.id, section: 'top3' as const })) })
+  assert.deepEqual(planned(ws, 'top3'), ['t0', 't1', 't2']); assert.deepEqual(planned(ws, 'other'), ['t3', 't4'])
+})
+
+test('a removed plan section comes back at the top, in template order', () => {
+  let ws = withTasks(2)
+  ws = edit(ws, '2026-10-19', doc => {
+    const drop = new Set(day(ws, '2026-10-19').sections.filter(s => s.kind === 'top3' || s.kind === 'other').map(s => s.id))
+    return doc.filter(n => !drop.has(n.id) && !(n.type === 'task' && String(n.props?.taskId).startsWith('editor-task:')))
+  })
+  assert.equal(day(ws, '2026-10-19').sections.some(s => s.kind === 'top3' || s.kind === 'other'), false)
+  ws = ok(ws, { type: 'plan-task', taskId: ws.tasks[0]!.id, date: '2026-10-19', section: 'other' })
+  ws = ok(ws, { type: 'plan-task', taskId: ws.tasks[1]!.id, date: '2026-10-19', section: 'top3' })
+  assert.deepEqual(day(ws, '2026-10-19').sections.slice(0, 2).map(s => s.kind), ['top3', 'other'])
+})

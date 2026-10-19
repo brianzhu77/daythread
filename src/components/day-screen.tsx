@@ -5,17 +5,18 @@ import { CaptureBar, CaptureReceipts } from './capture'
 import { ContinuousPage } from './continuous-page'
 import { LinkedFrom, Subpages } from './page-tree'
 import { FactsStrip } from './facts-strip'
-import { StartTheDay, hasHandoffContent, useHandoffLater } from './start-the-day'
+import { StartTheDay, hasHandoffContent, taskSuggestions, useHandoffLater } from './start-the-day'
 import { useDay, useWorkspace } from './use-day'
 import { DayHeader } from './day-header'
 import { FutureDayState } from './future-day'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 /** Today (and any other date): header, facts strip, Start the day, receipts, the page, capture. */
 export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }) {
   const { run } = useWorkspace()
   const { view, workspace } = useDay(date)
   const [later, setLater] = useHandoffLater(date)
+  const [handoffBusy, setHandoffBusy] = useState(false)
   const page = view?.page ?? null
 
   // Opening today or a past date creates its page from the template; no model call happens on open (01 §3.1).
@@ -38,7 +39,8 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
     )
 
   const isToday = date === today
-  const showHandoff = isToday && page && !page.handoffDone && !later && hasHandoffContent(view)
+  // The card stays while an Undo strip shows, even after its last row was added (morning card §6).
+  const showHandoff = isToday && page && !page.handoffDone && !later && (hasHandoffContent(view, workspace, today) || handoffBusy)
   const handoffSettled = !showHandoff
 
   return (
@@ -47,13 +49,14 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
       {page && <LinkedFrom page={page} workspace={workspace} />}
 
       <div className="day-body">
-        {showHandoff && <StartTheDay view={view} workspace={workspace} today={today} onLater={() => setLater(true)} />}
+        {showHandoff && <StartTheDay view={view} workspace={workspace} today={today} onLater={() => setLater(true)} onBusy={setHandoffBusy} />}
         <FactsStrip
           view={view}
           workspace={workspace}
           date={date}
           today={today}
-          handoffCollapsed={isToday && Boolean(page && !page.handoffDone && later && hasHandoffContent(view))}
+          handoffCollapsed={isToday && Boolean(page && !page.handoffDone && later && hasHandoffContent(view, workspace, today))}
+          handoffCount={taskSuggestions(view, workspace, today).length + view.handoffBlocks.length}
           onReopenHandoff={() => setLater(false)}
           handoffSettled={handoffSettled}
         />

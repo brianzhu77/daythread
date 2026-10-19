@@ -139,7 +139,10 @@ function ensureSection(p: Page, kind: Section["kind"]): Section {
       title: dayTemplate.find((t) => t.kind === kind)?.title ?? kind,
       blocks: [],
     };
-    p.sections.push(s);
+    // A plan section that was removed comes back at the top, in template order (morning card §6).
+    if (kind === "top3") p.sections.unshift(s);
+    else if (kind === "other") p.sections.splice(p.sections.findIndex((x) => x.kind === "top3") + 1, 0, s);
+    else p.sections.push(s);
   }
   return s;
 }
@@ -216,6 +219,11 @@ function place(
       taskId: t.id,
       text: t.title,
     });
+}
+/** Top 3 holds three tasks on that day's page. */
+export function top3Full(state: Workspace, day: string): boolean {
+  const p = state.pages.find((x) => x.type === "daily" && x.date === day);
+  return (p?.sections.filter((s) => s.kind === "top3").flatMap((s) => s.blocks).filter((b) => b.kind === "task" && b.taskId).length ?? 0) >= 3;
 }
 function pause(state: Workspace, t: Task, day: string) {
   date(day);
@@ -350,7 +358,12 @@ function untouchedLineMaterial(m: Material, blockId: string, previous: EditorNod
 function bringable(b: NoteBlock): boolean {
   return !b.taskId && !b.eventId && b.kind !== "reference" && !b.targetPageId && Boolean(b.text.trim());
 }
-/** Today holds, or once held, a copy of that line (block metadata keeps deleted blocks, Undo restores it whole). */
+/**
+ * Today holds, or once held, a copy of that line. "Once held" depends on save-editor keeping a deleted block in
+ * `editorBlockMetadata` (it never prunes it); if that ever changes, a deleted copy's line is offered again. The test
+ * "a copy deleted later is not offered again" deletes through save-editor, so it fails if that behaviour changes.
+ * Undo restores the whole page from before, metadata included, so the line is offered again.
+ */
 function wasBrought(today: Page, sourcePageId: string, sourceBlockId: string): boolean {
   return [...today.sections.flatMap((s) => s.blocks), ...Object.values(today.editorBlockMetadata ?? {})]
     .some((b) => b.sourcePageId === sourcePageId && b.sourceBlockId === sourceBlockId);
@@ -895,6 +908,19 @@ function execute(
         throw new DomainError("Restore task before planning");
       place(state, t, action.date, action.section);
       return { message: `Planned for ${action.date}`, entityId: t.id };
+    }
+    case "plan-tasks": {
+      // Morning card "Add all tasks": every row to its own section in one operation, so its Undo is whole. A full
+      // Top 3 sends the rest to the plan list, as one + would.
+      const ids = new Set<string>();
+      for (const item of action.items) {
+        const t = task(state, item.taskId);
+        if (t.status !== "open") throw new DomainError("Restore task before planning");
+        if (ids.has(t.id)) throw new DomainError("Task listed twice");
+        ids.add(t.id);
+        place(state, t, action.date, item.section === "top3" && top3Full(state, action.date) ? "other" : item.section);
+      }
+      return { message: `Added ${action.items.length} tasks` };
     }
     case "not-today": {
       pause(state, task(state, action.taskId), action.date);

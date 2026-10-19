@@ -1004,3 +1004,22 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .two-line .card-row { min-height: 56px; }
 .card-row-detail { font-size: 13px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-hint { color: var(--ink-2); }
+
+/* Morning card (Jazz docs/design/morning-card-build.md §2) */
+.mc-group { display: grid; gap: 0; padding-top: 16px; }
+.mc-label { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .05em; }
+.mc-list li + li { border-top: 1px solid var(--line); }
+.mc-row { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 4px 0; }
+.mc-add { display: grid; place-items: center; flex: none; width: 44px; height: 44px; min-height: 0; margin: 0 -6px; padding: 0; border: 0; background: none; cursor: pointer; }
+.mc-add span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--fill); color: var(--ink); font-size: 20px; line-height: 1; }
+.mc-add:hover span { background: #e4e3ec; }
+.mc-text { display: grid; flex: 1; min-width: 0; }
+.mc-title-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.mc-title { flex: 1; min-width: 0; font-size: 17px; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.mc-reason { font-size: 13px; line-height: 18px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-strip { display: flex; align-items: center; gap: 10px; min-height: 52px; padding-left: 38px; color: var(--ink-2); font-size: 15px; animation: mc-in .18s ease-out; }
+.mc-strip.refused { color: var(--warn); }
+@keyframes mc-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .mc-strip { animation: none; } }
+.mc-add-all { justify-self: start; margin-top: 4px; }
+.mc-lines-toggle { justify-self: start; min-height: 44px; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; }

@@ -21,6 +21,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { addDays, fromIso, todayIso } from './dates'
 import { tagDecorations } from './tag-decorations'
+import { registerEditorFlush } from './editor-flush'
 
 const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' }, planDate: { default: '' } }, content: 'inline' }, {
   toExternalHTML: ({ contentRef }) => <p ref={contentRef} />,
@@ -312,6 +313,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     else localStorage.removeItem(key)
   }, [editor, key, page.id, run])
   flushRef.current = flush
+  useEffect(() => registerEditorFlush(page.id, async () => {
+    clearTimeout(timer.current)
+    for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
+    if (dirty.current) await flushRef.current()
+    for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
+    return !dirty.current
+  }), [page.id])
   useEffect(() => editor.onBeforeChange(({ getChanges, tr }) => {
     if (historyGuardBypass.current || !isHistoryTransaction(tr)) return
     const changes = getChanges()
