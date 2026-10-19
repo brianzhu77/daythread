@@ -58,7 +58,12 @@ Mock: `prototypes/pages-trash/index.html` (`?only=t1|t2|t3|t4|p1|p2|p3`). Static
 - Breadcrumb row: "Trash" (opens the Trash screen).
 - A banner above the title: bin icon, "In trash · was in {old parent}", **Restore** on the right.
 - Its Subpages list still shows and opens the trashed subpages, which show the same banner with
-  "In trash · deleted with {top page}"; their Restore restores the whole delete (one unit).
+  "In trash · deleted with {top page}".
+- **Restore granularity (N-7, Ratchet):** Restore on a subpage's banner restores **that subpage and its own subtree**
+  (only members still in that delete). Its parent is still in trash, so it goes to top level with
+  "Restored {title} to Pages · {parent} is in trash". Restore on the top page's banner or its Trash row restores
+  **what's left** of that delete; members restored earlier stay where they are now (not moved, not duplicated).
+  The Trash row keeps its place and its "with {n} subpages" count drops accordingly.
 
 ## 5. Restore (T3, P3)
 
@@ -80,6 +85,8 @@ Mock: `prototypes/pages-trash/index.html` (`?only=t1|t2|t3|t4|p1|p2|p3`). Static
 4. Open the trashed page from its card → read-only, banner, Subpages open the trashed children with their banner.
 5. Restore from the Trash row → back under the old parent; notice + Open.
 6. Delete child, then parent separately; restore the child alone → top level, notice names the parent.
+6b. Delete parent with child in one go; restore only the child from its banner (top level), move it somewhere,
+    then restore the parent's row → parent comes back under its old parent, the child stays where it was moved.
 7. A task inside a trashed page still shows on Tasks; its source reads "(removed)".
 8. Brian's real data copy: delete 韩国大酱汤 (under Sun, Oct 18), see "In your days" drop it and #recipe no longer list its lines (the tag disappears if it has no other uses), restore → back under
    Sun, Oct 18. 390 and 1280.
