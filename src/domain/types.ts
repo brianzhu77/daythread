@@ -102,15 +102,20 @@ export interface Capture {
   id: string;
   pageId: string;
   text: string;
-  status: "needs_confirmation" | "applied" | "discarded" | "failed";
+  /** "organizing": text saved, the model's answer not yet recorded (feat/model step 1). */
+  status: "organizing" | "needs_confirmation" | "applied" | "discarded" | "failed";
   contextLine?: string;
   error?: string;
   failure?: "failure" | "budget" | "context";
   proposals?: ProposalItem[];
   proposalRevision: number;
-  simulated: true;
+  simulated: boolean;
   proposedTitle: string;
   taskId?: string;
+  /** The model that organized this capture (absent when simulated). */
+  model?: string;
+  /** The captureMode in force when the result was recorded. */
+  mode?: "auto" | "confirm";
 }
 export interface ProposalItem {
   id: string;

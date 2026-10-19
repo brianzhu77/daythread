@@ -9,7 +9,7 @@ const tasks = { id:'text',title:'text',status:'text',version:'number',plannedOn:
 const placements = { taskId:'text',date:'text',state:'text',order:'number',section:'text' } satisfies Fields<Placement>
 const events = { id:'text',title:'text',date:'text',time:'text',cancelled:'boolean' } satisfies Fields<Event>
 const materials = { id:'text',url:'text',title:'text',body:'text',savedOn:'text',reviewState:'text',nextReviewOn:'text',resurface:'boolean',lastDecisionOn:'text',skippedUntil:'text',taskId:'text',openedOn:'json',dismissedOn:'json',decisions:'json',sources:'json' } satisfies Fields<Material>
-const captures = { id:'text',pageId:'text',text:'text',status:'text',contextLine:'text',error:'text',failure:'text',proposals:'json',proposalRevision:'number',simulated:'boolean',proposedTitle:'text',taskId:'text' } satisfies Fields<Capture>
+const captures = { id:'text',pageId:'text',text:'text',status:'text',contextLine:'text',error:'text',failure:'text',proposals:'json',proposalRevision:'number',simulated:'boolean',proposedTitle:'text',taskId:'text',model:'text',mode:'text' } satisfies Fields<Capture>
 const receipts = { operationId:'text',message:'text',entityId:'text',simulated:'boolean',fingerprint:'text' } satisfies Fields<Receipt>
 const specs = [
   { name:'pages',fields:pages,keys:['id'] },{ name:'tasks',fields:tasks,keys:['id'] },
@@ -26,7 +26,18 @@ const columnType = (kind: Kind) => kind === 'number' || kind === 'boolean' ? 'IN
 // fresh database and an upgraded one end up identical after the later migrations run.
 const addedColumns: readonly { table: typeof specs[number]['name']; column: string; kind: Kind }[] = [
   { table: 'pages', column: 'parentId', kind: 'text' },
+  { table: 'captures', column: 'model', kind: 'text' },
+  { table: 'captures', column: 'mode', kind: 'text' },
 ]
+/**
+ * The model budget ledger (03 E3). Deliberately outside the current/undo snapshot scheme: Undo restores a whole
+ * workspace copy, and must never bring back yesterday's spend. Amounts are integer micro-USD.
+ */
+export const modelAttemptsTable = `CREATE TABLE IF NOT EXISTS model_attempts (
+  id TEXT PRIMARY KEY, captureId TEXT, revision INTEGER, day TEXT NOT NULL,
+  reservedMicros INTEGER NOT NULL, actualMicros INTEGER, state TEXT NOT NULL CHECK(state IN ('reserved','unknown','settled','not-sent')),
+  generationId TEXT, model TEXT, createdAt TEXT NOT NULL, settledAt TEXT, note TEXT) STRICT`
+const modelAttemptColumns = ['id','captureId','revision','day','reservedMicros','actualMicros','state','generationId','model','createdAt','settledAt','note']
 // Each function runs once, in order, inside the adapter's initialization transaction.
 export const sqliteMigrations: readonly ((db: DatabaseSync) => void)[] = [db => {
   db.exec('CREATE TABLE meta (snapshot TEXT PRIMARY KEY CHECK(snapshot IN (\'current\',\'undo\')), schemaVersion INTEGER NOT NULL, revision INTEGER NOT NULL, timezone TEXT NOT NULL, undoOperationId TEXT, undoRevision INTEGER) STRICT')
@@ -38,6 +49,11 @@ export const sqliteMigrations: readonly ((db: DatabaseSync) => void)[] = [db => 
   // pages-delta N-2: the page a page was created in. Existing rows read as top level.
   const { table, column, kind } = addedColumns[0]!
   db.exec(`ALTER TABLE ${table} ADD COLUMN ${quote(column)} ${columnType(kind)}`)
+}, db => {
+  // feat/model step 1: which model organized a capture and in which mode, plus the budget ledger. The ledger table
+  // may already exist: a rollback to layout 2 keeps it, so today's spend survives a round trip.
+  for (const { table, column, kind } of addedColumns.slice(1, 3)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${quote(column)} ${columnType(kind)}`)
+  db.exec(modelAttemptsTable)
 }]
 
 const workspaceFields = {schemaVersion:true,revision:true,timezone:true,pages:true,tasks:true,placements:true,events:true,materials:true,captures:true,receipts:true,undo:true} satisfies Record<keyof Workspace,boolean>
@@ -139,6 +155,8 @@ export function verifySqliteLayout(db: DatabaseSync): void {
     const primary=actual.filter(c=>Number(c.pk)>0).sort((a,b)=>Number(a.pk)-Number(b.pk)).map(c=>c.name)
     if (JSON.stringify(primary)!==JSON.stringify(['snapshot',...spec.keys])) throw new Error('Incompatible entity primary key')
   }
+  const ledger=db.prepare('PRAGMA table_info(model_attempts)').all().map(c=>c.name)
+  if (JSON.stringify(ledger)!==JSON.stringify(modelAttemptColumns)) throw new Error('Incompatible model ledger layout')
   const meta=db.prepare('PRAGMA table_info(meta)').all().map(c=>c.name)
   if (JSON.stringify(meta)!==JSON.stringify(['snapshot','schemaVersion','revision','timezone','undoOperationId','undoRevision'])) throw new Error('Incompatible workspace metadata layout')
 }

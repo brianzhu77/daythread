@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 import { DatabaseSync } from 'node:sqlite'
 import { SqliteWorkspaceRepository } from '../src/server/sqlite-repository.ts'
+import { sqliteMigrations } from '../src/server/sqlite-mapping.ts'
 import { createEmptyWorkspace,applyCommand } from '../src/domain/workspace.ts'
 import { repositoryContract } from './repository-contract.ts'
 import type { Workspace, Page, Task, Event, Placement, Material, Capture, Receipt } from '../src/domain/types.ts'
@@ -93,14 +94,14 @@ test('SQLite layout 1 (no parentId) upgrades in place; old pages stay top level 
   let repo=f.create(), ws=await repo.load()
   ws=(await repo.execute({operationId:'doc',expectedRevision:ws.revision,action:{type:'create-document',title:'Old page',body:''}})).workspace
   // Recreate the layout an existing store has before this change.
-  let db=new DatabaseSync(f.path);db.exec('ALTER TABLE pages DROP COLUMN parentId');db.exec('PRAGMA user_version=1');db.close()
+  let db=new DatabaseSync(f.path);db.exec('ALTER TABLE pages DROP COLUMN parentId');db.exec('ALTER TABLE captures DROP COLUMN model');db.exec('ALTER TABLE captures DROP COLUMN mode');db.exec('PRAGMA user_version=1');db.close()
   repo=f.create(); ws=await repo.load()
   assert.equal(ws.pages[0]!.parentId,undefined)
   ws=(await repo.execute({operationId:'sub',expectedRevision:ws.revision,action:{type:'create-document',title:'',body:'',pageId:'child',parentId:ws.pages[0]!.id}})).workspace
   ws=await f.create().load()
   assert.equal(ws.pages.find(p=>p.id==='child')!.parentId,ws.pages[0]!.id)
   db=new DatabaseSync(f.path)
-  assert.equal(Number(db.prepare('PRAGMA user_version').get()!.user_version),2)
+  assert.equal(Number(db.prepare('PRAGMA user_version').get()!.user_version),sqliteMigrations.length)
   assert.ok(db.prepare('PRAGMA table_info(pages)').all().some(c=>c.name==='parentId'))
   db.close()
  }finally{await f.cleanup()}
@@ -116,7 +117,10 @@ test('rollback script: a store with a subpage and its card goes back to layout 1
   const p=ws.pages.find(x=>x.id===day.id)!, doc=[...editorSeed(p,ws),{id:'card1',type:'pageLink',props:{pageId:'child'}}]
   ws=(await repo.execute({operationId:'card',expectedRevision:ws.revision,action:{type:'save-editor',pageId:p.id,expectedContent:pageContentKey(p),document:JSON.stringify(doc)}})).workspace
   const before=ws.pages.length
-  const out=await new Promise<string>((ok,fail)=>{const c=spawn(process.execPath,['scripts/sqlite-rollback-parent-id.ts',f.path]);let s='';c.stdout.on('data',d=>s+=d);c.stderr.on('data',d=>s+=d);c.on('exit',code=>code===0?ok(s):fail(new Error(s)))})
+  const script=(name:string)=>new Promise<string>((ok,fail)=>{const c=spawn(process.execPath,[name,f.path]);let s='';c.stdout.on('data',d=>s+=d);c.stderr.on('data',d=>s+=d);c.on('exit',code=>code===0?ok(s):fail(new Error(s)))})
+  // Rollbacks run newest first: layout 3 → 2 (model ledger), then 2 → 1 (parentId).
+  await script('scripts/sqlite-rollback-model.ts')
+  const out=await script('scripts/sqlite-rollback-parent-id.ts')
   assert.match(out,/Layout 2 → 1\. 1 subpage now top level; [12] page cards? \(all snapshots\) now links/)
   const db=new DatabaseSync(f.path)
   assert.equal(Number(db.prepare('PRAGMA user_version').get()!.user_version),1)

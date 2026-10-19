@@ -13,6 +13,7 @@ const db = new DatabaseSync(path)
 try {
   db.exec('BEGIN IMMEDIATE')
   const version = Number(db.prepare('PRAGMA user_version').get()!.user_version)
+  if (version === 3) throw new Error('Layout 3: run scripts/sqlite-rollback-model.ts first; nothing changed')
   if (version !== 2) throw new Error(`Expected layout 2, found ${version}; nothing changed`)
   const children = Number(db.prepare("SELECT count(*) AS n FROM pages WHERE snapshot='current' AND parentId IS NOT NULL").get()!.n)
   type Node = { id: string; type: string; props?: Record<string, unknown>; content?: unknown; children?: Node[] }

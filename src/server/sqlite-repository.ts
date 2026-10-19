@@ -2,11 +2,12 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, openSync, closeSync, readFileSync, existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
-import { applyCommand, createEmptyWorkspace } from '../domain/workspace.ts'
+import { applyCommand, createEmptyWorkspace, DomainError } from '../domain/workspace.ts'
 import type { Command, CommandResult, Workspace } from '../domain/types.ts'
 import type { WorkspaceRepository } from './repository.ts'
 import { readWorkspace, sqliteMigrations, writeWorkspace, verifySqliteLayout } from './sqlite-mapping.ts'
 import { commandLogFields, debugLog, logOperationId } from './debug-log.ts'
+import { markInterrupted, readAttempts, reconcileAttempt, reserveAttempt, settleAttempt, type ModelAttempt, type ReserveInput, type SettleInput } from './model-ledger.ts'
 
 const applicationId = 0x44544852
 export class SqliteWorkspaceRepository implements WorkspaceRepository {
@@ -68,6 +69,44 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
     } catch(error) { try {db?.exec('ROLLBACK')} catch {} debugLog('storage.load',{operationId,elapsedMs:performance.now()-started,result:'error',error:error instanceof Error?error.name:'UnknownError'}); throw error }
     finally { db?.close() }
   }
+  /** Runs `fn` in one BEGIN IMMEDIATE transaction; nothing it wrote survives an error. */
+  private transact<T>(operationId: string, fn: (db: DatabaseSync) => T): T {
+    let db: DatabaseSync | undefined
+    try {
+      db = this.open(operationId); db.exec('BEGIN IMMEDIATE')
+      const value = fn(db)
+      db.exec('COMMIT')
+      return value
+    } catch (error) { try { db?.exec('ROLLBACK') } catch {} throw error }
+    finally { db?.close() }
+  }
+  /** The ledger is server-only; the browser gets `modelStatus` instead. */
+  async modelAttempts(): Promise<ModelAttempt[]> { return this.transact(crypto.randomUUID(), readAttempts) }
+  async reserveModelAttempt(input: ReserveInput): Promise<ModelAttempt> { return this.transact(input.id, db => reserveAttempt(db, input)) }
+  /**
+   * Settles an attempt and, in the same transaction, applies the workspace command its result implies. A command the
+   * domain refuses (the capture moved on) leaves the settlement in place and applies nothing; any other failure rolls
+   * back both, so a charge and its applied items never come apart.
+   */
+  async recordModelResult(input: SettleInput, command?: Command, options: { failAfterWrite?: boolean } = {}): Promise<{ attempt: ModelAttempt; result?: CommandResult; refused?: string }> {
+    return this.transact(input.attemptId, db => {
+      const attempt = settleAttempt(db, input)
+      let result: CommandResult | undefined, refused: string | undefined
+      if (command) {
+        const current = readWorkspace(db)
+        if (!current) throw new Error('Workspace missing')
+        try { result = applyCommand(current, command) } catch (error) {
+          if (!(error instanceof DomainError)) throw error
+          refused = error.message
+        }
+        if (result && result.workspace.revision !== current.revision) writeWorkspace(db, current, result.workspace)
+      }
+      if (options.failAfterWrite) throw new Error('injected failure after write') // test hook for the atomicity check
+      return { attempt, result, refused }
+    })
+  }
+  async markInterruptedModelAttempts(now: string): Promise<number> { return this.transact(crypto.randomUUID(), db => markInterrupted(db, now)) }
+  async reconcileModelAttempt(attemptId: string, amount: number | 'worst-case', now: string): Promise<ModelAttempt> { return this.transact(attemptId, db => reconcileAttempt(db, attemptId, amount, now)) }
   async execute(command: Command): Promise<CommandResult> {
     const started=performance.now(),fields=commandLogFields(command); let db:DatabaseSync|undefined
     debugLog('command.start',fields)
