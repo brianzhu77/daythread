@@ -42,7 +42,7 @@ Group B is listed for tracking only and never counts toward M.
 | A1b | Nesting shown and managed: Subpages list, sidebar tree, Move, breadcrumb | 3596b765; v0.4 N-2, N-9 | built | 960d5d4 live 2026-10-19 (Lead fbfa9390); Ratchet #73 (docs/reviews/pages-tree-ratchet.md, re-checked on a copy of Brian's real data), Jazz design pass. Pages screen lists pages under days ("In your days"). Move is Move to… only, drag is B14. Delete with children is A4 (N-7). Known limit: Linked from order (B15) |
 | A2 | Paste a URL → page with the URL as a property; one page per URL | 3596b765, e83b0640; v0.4 N-1, N-3, N-4 | missing | Page.type = daily/document only |
 | A3 | "Linked from" back to the day on every page | 3596b765; v0.4 N-5 | built | 960d5d4 live 2026-10-19, Ratchet #73. Real references only; the breadcrumb parent is not repeated; today shows as "Today" |
-| A4 | Delete a page to trash and restore it, with its subpages | v0.4 N-7 | missing | next round (Lead 3600952d): data plan first, needs a page column + first migration since layout 3, rollback script |
+| A4 | Delete a document page to trash and restore it, with its subpages | v0.4 N-7 | missing | next round (Lead 3600952d, scope 5598fdab): document pages only, including ones under day pages; day pages can't be deleted (B16). Needs a page column + first migration since layout 3, rollback script; data plan first |
 | A9 | `[[` page reference; quote with source | v0.3 scope 4, 01 §6.2 | missing | `insert-reference` has no caller |
 | A11 | Block-level references | c5c9142e #1 | missing | moved to Later by the team without asking; build or ask Brian |
 
@@ -63,6 +63,7 @@ Group B is listed for tracking only and never counts toward M.
 Count: M = D1–D6 + A1a, A1b, A2–A5, A6a, A6b, A7–A9, A11, A12 = 19. A10 (drag preview) is settled inside D5, not a separate row.
 A1 was split into A1a/A1b on 2026-10-19 when `/page` shipped (same sources, no scope change), so M went 17 → 18.
 A6 was split into A6a/A6b on 2026-10-19 when capture went live on the real model (same sources, no scope change), so M went 18 → 19.
+A4 narrowed to document pages on 2026-10-19 (Lead 5598fdab); deleting daily pages is B16. M unchanged.
 A8's proposals for text lines moved to A6b on 2026-10-19 (they need the real model; same sources); M unchanged.
 A1b dropped "delete with children" on 2026-10-19 because A4 already covers it (N-7, trash and restore with subpages); M unchanged.
 N = D1–D6 + A5 + A1a, A1b, A3 + A6a + A8 = 12.
@@ -86,6 +87,7 @@ N = D1–D6 + A5 + A1a, A1b, A3 + A6a + A8 = 12.
 | B13 | Capture receipt follow-ups after Step 1 (receipt-v2-design-check.md, Lead 85852c23): (1) no-key capture still shows the v1 receipt; (3) an older receipt shows its capture-time date, should show the task's current date; (4) a held row saved without fixing keeps its reason chip, drop it on Save; (5) inline refusal copy: "Task changed; not applied" → "Task changed since · not applied", "… not found" → "Item no longer exists" (Bumblebee 77b32429) | Jazz design check acdfa91 | missing (after Step 1 deploy) |
 | B14 | Sidebar tree drag: move a page by dragging it, and manual sibling order by drag (N-2 lines 64, 67) | pages-delta N-2; Lead c000dc41, dd5e347 | missing (left out of Step B; Move to… covers moving) |
 | B15 | Linked from: document entries ordered by when the reference was made (N-5 "newest first"); today they follow page order, so a move reshuffles them. Needs a stored time on reference blocks (column + migration); do it in the same round as A9 `[[` references | pages-delta N-5; Lead 4b587c39 + 6bea449 ruling, Roadbuster 97171952 | missing (known limit of Step B, not an N09 failure) |
+| B16 | Delete a daily page with its subpages; hand-off still counts its placements, its prose isn't offered for Bring, "(removed)" sources, P12 restore on reopening the date (N-7 lines 180-186) | pages-delta N-7, 04 P12; Lead 5598fdab | missing (left out of A4; touches the morning card) |
 
 ## C. Open questions for Brian
 
