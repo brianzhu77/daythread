@@ -37,7 +37,7 @@ started. `/page` is one visible symptom of that.
 | 15 | Future days: no page; › disabled after today; calendar future greyed; create only from Calendar with warning (2d30b162 #4) | date rules R2-R7 | **built** | day-header.tsx:11-74, future-day.tsx, calendar-screen.tsx:18 | n/a |
 | 16 | "Back to Today" not between the arrows (2d30b162 #3) | Jazz f853703 | **built** (Today button, hidden on today) | day-header.tsx:62 | n/a. Jazz checks the look |
 | 17 | Page = markdown-like editor; delete a whole section; drag a heading moves its section (9ec597fb) | editor-interaction spec | **built** per Ratchet/Lead runs; Jazz re-checks F-list | page-editor.tsx | n/a |
-| 18 | Drag: highlight what's lifted + thumbnail preview card instead of "Blocks x lines" (2d30b162 #1) | editor-interaction spec | **Jazz to confirm on screen**; I found press-tint code, no custom drag image | page-editor.tsx:427-466 | n/a |
+| 18 | Drag: highlight what's lifted + thumbnail preview card instead of "Blocks x lines" (2d30b162 #1) | task #48 (Brian approved 2026-10-17 21:59Z): native drag, press highlight, real-content preview | **built**: press tint + BlockNote's real-content drag preview; the custom "N lines" card was removed on purpose (corrected after Ratchet f5c319f3) | page-editor.tsx:427-466; Ratchet task #49 | n/a |
 | 19 | Template like Notion: TODO has empty `- [ ]`, other sections bullets, no per-section custom placeholders (65eaa340, f5da955a, 2d30b162 #2) | editor spec | **built** (bulletListItem default) | editor-document.ts:32; `templateApplied` | Jazz confirms on screen |
 | 20 | Block-level query and reference like Notion (c5c9142e #1) | pages-delta §4 lists "block-level references" as **Later** | **partial**: only Task references | types.ts:11 `reference` kind is task-only | **Team only.** He asked on Oct 18; "Later" was our call |
 | 21 | Tags: block-level, Obsidian rule, low-key UI, own module on both devices (c5c9142e #2, c11a5935, 5b496134, fad0b8c2 #4, 77423ea0, bc661669) | tags spec | **built** | 5c6f165 .. 24a1b4b | n/a |
@@ -62,8 +62,7 @@ Ordered by how directly they hit what he asked for:
 4. **#5 Weave pages, minimal browse + copy**. Depends on 3.
 5. **#8 / #9 AI morning draft and capture sorting**. The structure is built and the AI part is simulated. Depends on 3.
 6. **#20 block-level references**. We put it in "Later" ourselves after he asked. Either build it or ask him.
-7. **#18 drag thumbnail preview**. Jazz to confirm.
-8. **#27 TRMNL** and **#12 his iOS reminder**: one-line confirms, no build.
+7. **#27 TRMNL** and **#12 his iOS reminder**: one-line confirms, no build.
 
 ## Process cause (for the Lead, not for Brian's list)
 
