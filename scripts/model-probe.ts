@@ -5,7 +5,7 @@
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { callStructured, modelConfig, ModelError } from '../src/server/model/openrouter.ts'
-import { captureMessages, captureSchema, type CaptureAnswer, type CaptureItem } from '../src/server/model/capture-prompt.ts'
+import { captureItems, captureMessages, captureSchema, type CaptureAnswer, type CaptureItem, type CaptureRawAnswer } from '../src/server/model/capture-prompt.ts'
 import { morningMessages, morningSchema, type MorningAnswer } from '../src/server/model/morning-prompt.ts'
 
 const out = process.argv[2] ?? '/tmp/model-probe', cap = Number(process.argv[3] ?? 0.5), runs = 3, maxTokens = 1200
@@ -19,7 +19,7 @@ const peak = (k: 'prompt' | 'completion') => Math.max(Number(pricing[k]), ...(pr
 const worstCase = (messages: { content: string }[]) => messages.reduce((n, m) => n + m.content.length, 0) * peak('prompt') + maxTokens * peak('completion')
 let spent = 0, calls = 0
 const log = join(out, 'calls.jsonl'); writeFileSync(log, '')
-async function call<T>(caseId: string, run: number, messages: { role: string; content: string }[], schema: typeof captureSchema | typeof morningSchema) {
+async function call<T>(caseId: string, run: number, messages: { role: string; content: string }[], schema: { name: string; strict: boolean; schema: unknown }) {
   const bound = worstCase(messages)
   if (spent + bound > cap) throw new Error(`Stopped before ${caseId}#${run}: spent ${spent.toFixed(5)} + worst case ${bound.toFixed(5)} > cap ${cap}`)
   calls++
@@ -29,8 +29,9 @@ async function call<T>(caseId: string, run: number, messages: { role: string; co
     appendFileSync(log, JSON.stringify({ caseId, run, ok: true, costUsd: r.costUsd, countedUsd: r.costUsd ?? bound, generationId: r.generationId, promptTokens: r.promptTokens, completionTokens: r.completionTokens, raw: r.raw }) + '\n')
     return r.value
   } catch (error) {
-    spent += bound // unknown outcome: count the worst case, never zero
-    appendFileSync(log, JSON.stringify({ caseId, run, ok: false, countedUsd: bound, error: error instanceof ModelError ? `${error.kind}: ${error.message}` : String(error) }) + '\n')
+    const known = error instanceof ModelError ? error.costUsd : null
+    spent += known ?? bound // unknown outcome: count the worst case, never zero
+    appendFileSync(log, JSON.stringify({ caseId, run, ok: false, costUsd: known, countedUsd: known ?? bound, error: error instanceof ModelError ? `${error.kind}: ${error.message}` : String(error), raw: error instanceof ModelError ? error.raw : null }) + '\n')
     return null
   }
 }
@@ -82,7 +83,8 @@ const results: Record<string, { checks: (Check | null)[]; outputs: string[] }> =
 for (const c of capture) {
   results[c.id] = { checks: [], outputs: [] }
   for (let run = 1; run <= runs; run++) {
-    const a = await call<CaptureAnswer>(c.id, run, captureMessages(c.text, ctx), captureSchema)
+    const raw = await call<CaptureRawAnswer>(c.id, run, captureMessages(c.text, ctx), captureSchema(ctx.openTasks.map(t => t.id)))
+    const a: CaptureAnswer | null = raw ? { items: captureItems(raw) } : null
     results[c.id]!.checks.push(a ? c.check(a) : null); results[c.id]!.outputs.push(a ? JSON.stringify(a.items) : '(failed)')
   }
 }

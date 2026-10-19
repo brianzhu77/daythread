@@ -12,7 +12,10 @@ export function modelConfig(env: NodeJS.ProcessEnv = process.env): ModelConfig |
 export type ModelErrorKind = 'auth' | 'limit' | 'unavailable' | 'invalid-output' | 'timeout'
 export class ModelError extends Error {
   readonly kind: ModelErrorKind
-  constructor(message: string, kind: ModelErrorKind) { super(message); this.kind = kind }
+  /** What the model actually sent, when there was an answer (kept for audits; never logged by default). */
+  readonly raw: string | null
+  readonly costUsd: number | null
+  constructor(message: string, kind: ModelErrorKind, raw: string | null = null, costUsd: number | null = null) { super(message); this.kind = kind; this.raw = raw; this.costUsd = costUsd }
 }
 
 export async function callStructured<T>(config: ModelConfig, messages: { role: string; content: string }[], schema: { name: string; strict: boolean; schema: unknown }, options: { maxTokens?: number; timeoutMs?: number; signal?: AbortSignal } = {}): Promise<ModelCall<T>> {
@@ -41,6 +44,6 @@ export async function callStructured<T>(config: ModelConfig, messages: { role: s
   }
   const raw = body?.choices?.[0]?.message?.content ?? ''
   let value: T
-  try { value = JSON.parse(raw) as T } catch { throw new ModelError('Model returned text that is not JSON', 'invalid-output') }
+  try { value = JSON.parse(raw) as T } catch { throw new ModelError('Model returned text that is not JSON', 'invalid-output', raw, typeof body?.usage?.cost === 'number' ? body.usage.cost : null) }
   return { value, raw, generationId: body?.id ?? null, costUsd: typeof body?.usage?.cost === 'number' ? body.usage.cost : null, promptTokens: body?.usage?.prompt_tokens ?? 0, completionTokens: body?.usage?.completion_tokens ?? 0 }
 }

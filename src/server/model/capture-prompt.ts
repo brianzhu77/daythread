@@ -21,34 +21,41 @@ export interface CaptureAnswer { items: CaptureItem[] }
 
 const nullable = (type: string, extra: Record<string, unknown> = {}) => ({ type: [type, 'null'], ...extra })
 const date = { pattern: '^\\d{4}-\\d{2}-\\d{2}$' }
-const item = (kind: string, properties: Record<string, unknown>) => ({
-  type: 'object', additionalProperties: false,
-  required: ['kind', ...Object.keys(properties)],
-  properties: { kind: { type: 'string', const: kind }, ...properties },
-})
 
-/** Strict JSON schema for OpenRouter `response_format` (every field required; absence is `null`). */
-export const captureSchema = {
-  name: 'capture',
-  strict: true,
-  schema: {
-    type: 'object', additionalProperties: false, required: ['items'],
-    properties: {
-      items: {
-        type: 'array',
-        items: {
-          anyOf: [
-            item('task', { title: { type: 'string' }, date: nullable('string', date), dateRole: nullable('string', { enum: ['do', 'due', null] }), detail: nullable('string') }),
-            item('event', { title: { type: 'string' }, date: nullable('string', date), time: nullable('string', { pattern: '^\\d{2}:\\d{2}$' }), partOfDay: nullable('string', { enum: ['morning', 'afternoon', 'evening', null] }) }),
-            item('note', { text: { type: 'string' } }),
-            item('material', { url: { type: 'string' }, note: nullable('string'), followUpDate: nullable('string', date) }),
-            item('update', { taskId: { type: 'string' }, markDone: { type: 'boolean' }, newDate: nullable('string', date), dateRole: nullable('string', { enum: ['do', 'due', null] }), detail: nullable('string') }),
-          ],
-        },
-      },
-    },
-  },
-} as const
+/**
+ * Strict JSON schema for OpenRouter `response_format`: one flat item shape with a `kind` enum (fields that don't
+ * apply are null), and task ids limited to the open tasks actually sent, so an update can't point at nothing.
+ */
+export function captureSchema(openTaskIds: readonly string[]) {
+  const fields = {
+    kind: { type: 'string', enum: ['task', 'event', 'note', 'material', 'update'] },
+    title: nullable('string'), text: nullable('string'), detail: nullable('string'),
+    date: nullable('string', date), dateRole: nullable('string', { enum: ['do', 'due', null] }),
+    time: nullable('string', { pattern: '^\\d{2}:\\d{2}$' }), partOfDay: nullable('string', { enum: ['morning', 'afternoon', 'evening', null] }),
+    url: nullable('string'), note: nullable('string'), followUpDate: nullable('string', date),
+    taskId: openTaskIds.length ? nullable('string', { enum: [...openTaskIds, null] }) : { type: 'null' },
+    markDone: nullable('boolean'), newDate: nullable('string', date),
+  }
+  return {
+    name: 'capture', strict: true,
+    schema: { type: 'object', additionalProperties: false, required: ['items'], properties: { items: { type: 'array', items: { type: 'object', additionalProperties: false, required: Object.keys(fields), properties: fields } } } },
+  }
+}
+type FlatItem = { kind: CaptureItem['kind']; title: string | null; text: string | null; detail: string | null; date: string | null; dateRole: 'do' | 'due' | null; time: string | null; partOfDay: 'morning' | 'afternoon' | 'evening' | null; url: string | null; note: string | null; followUpDate: string | null; taskId: string | null; markDone: boolean | null; newDate: string | null }
+/** Narrows the flat answer to typed items; an item missing what its kind needs is dropped, never guessed. */
+export function captureItems(answer: { items: FlatItem[] }): CaptureItem[] {
+  return answer.items.flatMap((i): CaptureItem[] => {
+    switch (i.kind) {
+      case 'task': return i.title ? [{ kind: 'task', title: i.title, date: i.date, dateRole: i.date ? i.dateRole : null, detail: i.detail }] : []
+      case 'event': return i.title ? [{ kind: 'event', title: i.title, date: i.date, time: i.time, partOfDay: i.partOfDay }] : []
+      case 'note': return i.text ?? i.title ? [{ kind: 'note', text: (i.text ?? i.title)! }] : []
+      case 'material': return i.url ? [{ kind: 'material', url: i.url, note: i.note, followUpDate: i.followUpDate }] : []
+      case 'update': return i.taskId ? [{ kind: 'update', taskId: i.taskId, markDone: !!i.markDone, newDate: i.newDate, dateRole: i.newDate ? i.dateRole : null, detail: i.detail }] : []
+      default: return []
+    }
+  })
+}
+export type CaptureRawAnswer = { items: FlatItem[] }
 
 export function captureMessages(text: string, ctx: CaptureContext) {
   const tasks = ctx.openTasks.length
