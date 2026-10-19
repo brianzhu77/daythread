@@ -92,6 +92,40 @@ test('moving a page carries its subtree, and Undo puts it back where it was', ()
   assert.deepEqual(ids(pageAncestors(ws, 'C')), [today, 'A', 'B'])
 })
 
+test('a replayed move applies once, a stale one is refused, and a refusal writes nothing', () => {
+  let { ws } = tree()
+  const command = { operationId: 'move-c', expectedRevision: ws.revision, action: { type: 'move-page', pageId: 'C', parentId: 'T' } as Action }
+  ws = applyCommand(ws, command).workspace
+  const replay = applyCommand(ws, command).workspace
+  assert.equal(replay.revision, ws.revision); assert.deepEqual(replay.pages, ws.pages)
+  assert.throws(() => applyCommand(ws, { ...command, operationId: 'late', expectedRevision: ws.revision - 1 }), /Saved elsewhere/)
+  const frozen = JSON.stringify(ws)
+  assert.throws(() => run(ws, { type: 'move-page', pageId: 'A', parentId: 'B' }), /into itself/)
+  assert.equal(JSON.stringify(ws), frozen)
+})
+
+test('a deep chain with identical titles: identity is the id', () => {
+  let ws = createEmptyWorkspace()
+  ws = ok(ws, { type: 'create-document', title: 'Same', body: '', pageId: 'p0' })
+  for (let i = 1; i < 60; i++) ws = ok(ws, { type: 'create-document', title: 'Same', body: '', pageId: `p${i}`, parentId: `p${i - 1}` })
+  assert.equal(pageAncestors(ws, 'p59').length, 59)
+  assert.equal(subtreeIds(ws, 'p0').size, 60)
+  assert.throws(() => run(ws, { type: 'move-page', pageId: 'p0', parentId: 'p59' }), /into itself/)
+  ws = ok(ws, { type: 'move-page', pageId: 'p30', parentId: null })
+  assert.deepEqual(ids(pageAncestors(ws, 'p59')), Array.from({ length: 29 }, (_, i) => `p${i + 30}`))
+})
+
+test('undoing a card deletion brings the source back into Linked from', () => {
+  let { ws } = tree()
+  ws = save(ws, 'T', doc => [...doc, card('t1', 'B'), card('t2', 'B')])
+  ws = save(ws, 'T', doc => doc.filter(n => n.id !== 't1'))
+  assert.deepEqual(sources(ws, 'B'), [['T', false], ['A', true]])
+  const r = run(ws, { type: 'save-editor', pageId: 'T', expectedContent: pageContentKey(page(ws, 'T')), document: JSON.stringify(editorSeed(page(ws, 'T'), ws).filter(n => n.id !== 't2')) })
+  assert.deepEqual(sources(r.workspace, 'B'), [['A', true]])
+  ws = ok(r.workspace, { type: 'undo', targetOperationId: r.receipt.operationId })
+  assert.deepEqual(sources(ws, 'B'), [['T', false], ['A', true]])
+})
+
 test('a page can move under a day page, and from one day page to another', () => {
   let { ws, today } = tree()
   ws = ok(ws, { type: 'ensure-day', date: '2026-10-18' })
