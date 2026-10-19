@@ -1,0 +1,5 @@
+(node:7827) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+True empty state passed in initial run before fixture creation
+PASS roots plus day group, future first, no false empty or sidebar hint
+PASS same-page1280→390→1280 folds/unfolds without reload
