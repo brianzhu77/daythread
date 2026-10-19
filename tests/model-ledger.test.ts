@@ -225,3 +225,21 @@ test('Lead c8706da8: a real result without a cost is applied once, counted at wo
     assert.equal(a!.state, 'settled'); assert.equal(a!.actualUsd, 0.0003)
   } finally { await s.cleanup() }
 })
+
+test('Lead: cost and result are judged separately; the same result later with its real cost settles the cost and replays', async () => {
+  const s = await store()
+  try {
+    await reserve(s.repo, 'a1', s.captureId, 0.004)
+    const ws = await s.repo.load(), page = ws.pages[0]!
+    const result = { operationId: 'r1', expectedRevision: ws.revision, action: { type: 'add-task' as const, pageId: page.id, sectionId: page.sections[0]!.id, title: 'Cost later' } }
+    await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: null, generationId: 'gen-1', now }, result)
+    const later = await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0003, generationId: 'gen-1', now }, { ...result, operationId: 'r2' })
+    assert.equal(later.attempt.state, 'settled'); assert.equal(later.attempt.actualUsd, 0.0003)
+    assert.equal(later.result!.receipt.operationId, 'r1')
+    assert.equal((await s.repo.load()).tasks.filter(t => t.title === 'Cost later').length, 1)
+    // Cost check: a different amount on a settled attempt is refused even with the same result.
+    await assert.rejects(s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0009, generationId: 'gen-1', now }, result), /different values/)
+    // Result check: a different result is refused even with the same cost.
+    await assert.rejects(s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0003, generationId: 'gen-1', now }, { ...result, action: { ...result.action, title: 'Other' } }), /different result/)
+  } finally { await s.cleanup() }
+})

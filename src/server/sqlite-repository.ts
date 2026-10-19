@@ -99,8 +99,9 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
       // so calls stay paused until it's reconciled. Never settled as null or zero (Lead c8706da8).
       if (input.actualUsd === null) db.prepare("UPDATE model_attempts SET note=? WHERE id=?").run('result recorded without a cost; counted at worst case until reconciled', input.attemptId)
       // One attempt, one result: the same result again replays the first receipt; a different one is refused.
-      // Fingerprint = what it applies + what it cost + which generation (Lead d25b6c28).
-      const fingerprint = sha256(JSON.stringify([command ? command.action : null, input.actualUsd, input.generationId]))
+      // Fingerprint = the business result only: what it applies + which generation (Lead, after d25b6c28). Cost is a
+      // ledger field checked separately by settleAttempt, and may be filled in later without touching the result.
+      const fingerprint = sha256(JSON.stringify([command ? command.action : null, input.generationId]))
       const earlier = bindResult(db, input.attemptId, fingerprint, command?.operationId ?? null)
       if (earlier !== null) {
         const current = readWorkspace(db)
