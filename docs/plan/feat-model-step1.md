@@ -38,6 +38,17 @@
 | Brian edits, discards or deletes the capture while the call runs | Revision or status mismatch: the result is stored for audit, never applied; the budget is still settled |
 | His original text | Stored by `capture` before any call; no model path writes to `Capture.text`; edits make a new revision |
 
+### Ratchet's plan constraints (81a1eb86), and how the plan meets each
+
+| Constraint | Plan |
+| --- | --- |
+| A timeout or crash may leave **no generation id**, so automatic `/generation` recovery can't be promised | An `unknown` attempt without a generation id stays blocking. `scripts/model-reconcile.ts <attemptId> <usd>` settles it with the amount from OpenRouter's activity page, or with `--worst-case`, which settles at the reserved upper bound. **Never at zero.** Until then the receipt says "Model paused · a charge needs checking". |
+| **Rollback must not lose the ledger** (it would reset today's spend) | The rollback script **keeps** `model_attempts`: the previous build only verifies the tables it knows, which the round trip checks rather than assumes. Migration 2 uses `CREATE TABLE IF NOT EXISTS`, so rolling forward picks the same rows back up. The rollback script also writes the ledger to a JSON file next to the database as a second copy. The round trip asserts that today's spent and unknown attempts are the same after rollback and after rolling forward again. While a store is on the previous build, it makes no paid calls (the previous build has none). |
+| **`record-model-result` and `reserve-model-attempt` must be server-only** | Both are left out of `commandSchema`, the schema the browser's `runCommand` validates against, so the browser can't send them. The orchestrator applies them through the repository on the server. A test sends them through `runCommand` and expects a rejection. |
+| **Price reservation must cover the whole request** | The worst case uses the UTF-8 byte length of the full request body (messages, schema, context) as an upper bound on input tokens (tokens ≤ bytes), times the highest input rate, plus 4000 × the highest output rate. |
+| **A repeated result with different values** must not settle or apply twice | The first record for an `attemptId` wins. A repeat with identical input returns the same receipt; a repeat with different values is refused and logged. Cost is settled once (`settleBudget` already refuses to overwrite). |
+| **Invalid items must not silently disappear** | An item the app can't validate isn't dropped from view. The receipt shows "1 part couldn't be read · your text is kept" with the original text, and the capture keeps a `partial` flag. Nothing invalid is applied. |
+
 ## 3. Mapping model items to app changes
 
 | Model item | App proposal | Applied as |
@@ -53,7 +64,7 @@
 - **New `model_attempts` table:** id, capture id, revision, day, reserved, actual, state, generation id, model, created/settled times. This is the stored form of `BudgetLedger`.
 - **Captures:** new columns `model` (text) and `mode` (text). `simulated` becomes a real boolean instead of the literal `true`. Proposals (already JSON) gain `date`, `dateRole`, `time`, `note`, `flags`.
 - **Workspace setting:** `captureMode`, default `confirm`.
-- **Migration 2** adds the table and columns (migration 0 and 1 stay frozen). **`scripts/sqlite-rollback-model.ts`** goes back 3 → 2: it turns captures still `organizing` into `failed` with their text kept, and drops the new table and columns. Ratchet tests the round trip as for /page, including the previous build opening the result.
+- **Migration 2** adds the table (`IF NOT EXISTS`) and columns (migration 0 and 1 stay frozen). **`scripts/sqlite-rollback-model.ts`** goes back 3 → 2: it turns captures still `organizing` into `failed` with their text kept, drops the new capture columns, and **keeps `model_attempts`** plus a JSON copy (see Ratchet's constraints above). Ratchet tests the round trip as for /page, including the previous build opening the result and the ledger surviving.
 
 ## 5. Key and fallback
 
