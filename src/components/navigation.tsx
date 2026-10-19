@@ -38,7 +38,8 @@ export function Navigation() {
         </Link>
         <nav className="sidebar-nav" aria-label="Main">
           {destinations.map(({ to, label, Icon, match }) => (
-            <Link key={to} to={to} className="side-row" aria-current={match(path, today) ? 'page' : undefined}>
+            // An open page is highlighted in the tree, so the sidebar's Pages row is only current on the list itself.
+            <Link key={to} to={to} className="side-row" aria-current={match(path, today) && !(to === '/pages' && openPageId) ? 'page' : undefined}>
               <Icon />
               {label}
             </Link>

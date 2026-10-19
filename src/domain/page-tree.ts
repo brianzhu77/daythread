@@ -1,4 +1,4 @@
-import type { Page, Workspace } from "./types";
+import type { LocalDate, Page, Workspace } from "./types";
 
 // pages-delta N-2 / N-5 step B: the page tree and "Linked from". The tree is each page's own parentId; sibling order
 // is the workspace's page order, so a page that is created or moved lands at the end of its new siblings.
@@ -78,4 +78,27 @@ export function linkedFrom(ws: Workspace, pageId: string): LinkedFromEntry[] {
   const days = sources.filter((p) => p.type === "daily").sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
   const documents = sources.filter((p) => p.type !== "daily").reverse();
   return [...days, ...documents].map((page) => ({ page, isParent: page.id === parentId }));
+}
+
+/** Something was written or tracked on the page; a page created by opening or browsing a day has neither. */
+function hasContent(page: Page): boolean {
+  return Boolean(page.reviewText.trim()) || page.sections.some((s) => s.blocks.some((b) => b.kind === "task" || b.text.trim()));
+}
+
+/**
+ * The sidebar's Days group (layout §1), newest first: this month's days (today always) plus future days, then earlier
+ * months by month. A past day is listed when it has content or subpages. A future day is listed only when it has
+ * subpages or holds the open page (Lead 4eac80fd), so a page moved under it stays reachable from the tree; future days
+ * are otherwise still opened from the Calendar.
+ */
+export function sidebarDays(ws: Workspace, today: LocalDate, activeId: string | null): { recent: Page[]; earlier: Map<string, Page[]> } {
+  const active = new Set(activeId ? [activeId, ...pageAncestors(ws, activeId).map((p) => p.id)] : []);
+  const listed = (p: Page) =>
+    p.date === today || active.has(p.id) || childPages(ws, p.id).length > 0 || (p.date! < today && hasContent(p));
+  const days = ws.pages.filter((p) => p.type === "daily" && p.date && listed(p)).sort((a, b) => b.date!.localeCompare(a.date!));
+  const month = today.slice(0, 7);
+  const recent = days.filter((p) => p.date! >= today || p.date!.startsWith(month));
+  const earlier = new Map<string, Page[]>();
+  for (const p of days) if (!recent.includes(p)) earlier.set(p.date!.slice(0, 7), [...(earlier.get(p.date!.slice(0, 7)) ?? []), p]);
+  return { recent, earlier };
 }

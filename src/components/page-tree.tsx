@@ -1,7 +1,7 @@
 import { Modal, SearchField } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { childPages, linkedFrom, moveTargets, pageAncestors, parentOf, subtreeIds } from '../domain/page-tree'
+import { childPages, linkedFrom, moveTargets, pageAncestors, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { longLabel, todayIso } from './dates'
 import { ChevronRightIcon, PagesIcon } from './icons'
@@ -336,11 +336,6 @@ function useExpanded(activeChain: string[]) {
   return { expanded, toggle }
 }
 
-/** Something was written or tracked on the page; a page created by opening or browsing a day has neither. */
-function hasContent(page: Page): boolean {
-  return Boolean(page.reviewText.trim()) || page.sections.some(s => s.blocks.some(b => b.kind === 'task' || b.text.trim()))
-}
-
 const monthName = (ym: string, today: LocalDate) => {
   const d = new Date(`${ym}-01T12:00:00`)
   return ym.slice(0, 4) === today.slice(0, 4) ? d.toLocaleDateString('en-US', { month: 'long' }) : `${ym.slice(0, 4)} · ${d.toLocaleDateString('en-US', { month: 'long' })}`
@@ -391,12 +386,7 @@ export function SidebarTree({ workspace, activeId, today, newPageRow }: { worksp
     )
   }
 
-  const days = workspace.pages.filter(p => p.type === 'daily' && p.date && p.date <= today && (p.date === today || hasContent(p) || childPages(workspace, p.id).length > 0))
-    .sort((a, b) => b.date!.localeCompare(a.date!))
-  const month = today.slice(0, 7)
-  const thisMonth = days.filter(p => p.date === today || p.date!.startsWith(month))
-  const earlier = new Map<string, Page[]>()
-  for (const p of days) if (!thisMonth.includes(p)) earlier.set(p.date!.slice(0, 7), [...(earlier.get(p.date!.slice(0, 7)) ?? []), p])
+  const { recent: thisMonth, earlier } = sidebarDays(workspace, today, activeId)
   const roots = childPages(workspace, null)
   return (
     <div className="side-group" ref={listRef}>

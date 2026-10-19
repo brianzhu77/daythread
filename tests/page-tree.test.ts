@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { applyCommand, createEmptyWorkspace } from '../src/domain/workspace.ts'
 import { editorSeed, pageContentKey, type EditorNode } from '../src/domain/editor-document.ts'
-import { childPages, linkedFrom, moveRefusal, moveTargets, pageAncestors, subtreeIds } from '../src/domain/page-tree.ts'
+import { childPages, sidebarDays, linkedFrom, moveRefusal, moveTargets, pageAncestors, subtreeIds } from '../src/domain/page-tree.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import type { Action, Workspace } from '../src/domain/types.ts'
 import { mkdtemp } from 'node:fs/promises'
@@ -197,4 +197,32 @@ test('SQLite keeps a move, the new sibling order and its Undo across a reopen; n
   ws = await new SqliteWorkspaceRepository(path).load()
   assert.deepEqual(ids(childPages(ws, 'P')), ['R', 'S'])
   assert.deepEqual(ids(childPages(ws, null)), ['P', 'Q'])
+})
+
+test('a page moved under a future day stays in the sidebar Days, before today, with that day as its ancestor', () => {
+  let { ws, today } = tree()
+  ws = ok(ws, { type: 'ensure-day', date: '2026-10-22' })
+  ws = ok(ws, { type: 'ensure-day', date: '2026-10-25' })
+  ws = ok(ws, { type: 'ensure-day', date: '2026-09-30' })
+  ws = save(ws, dayId(ws, '2026-09-30'), doc => [...doc, { id: 'n', type: 'paragraph', content: [{ type: 'text', text: 'old note', styles: {} }] } as EditorNode])
+  const future = dayId(ws, '2026-10-22')
+  const listed = (active: string | null) => {
+    const { recent, earlier } = sidebarDays(ws, '2026-10-19', active)
+    return [recent.map(p => p.date), [...earlier].map(([m, list]) => [m, list.map(p => p.date)])]
+  }
+  // Future days without subpages are not listed (they open from the Calendar).
+  assert.deepEqual(listed(null), [['2026-10-19'], [['2026-09', ['2026-09-30']]]])
+  ws = ok(ws, { type: 'move-page', pageId: 'C', parentId: future })
+  assert.deepEqual(listed(null), [['2026-10-22', '2026-10-19'], [['2026-09', ['2026-09-30']]]])
+  assert.deepEqual(ids(childPages(ws, future)), ['C'])
+  assert.deepEqual(ids(pageAncestors(ws, 'C')), [future], 'the sidebar expands this chain when C is open')
+  // An empty future day that is open itself is listed while it's open.
+  assert.deepEqual(listed(dayId(ws, '2026-10-25'))[0], ['2026-10-25', '2026-10-22', '2026-10-19'])
+  // A past day whose only content is a subpage is listed too.
+  ws = ok(ws, { type: 'ensure-day', date: '2026-10-12' })
+  ws = ok(ws, { type: 'create-document', title: 'Only child', body: '', pageId: 'only', parentId: dayId(ws, '2026-10-12') })
+  assert.deepEqual(listed(null)[0], ['2026-10-22', '2026-10-19', '2026-10-12'])
+  // Moving the last subpage away takes the future day out again.
+  ws = ok(ws, { type: 'move-page', pageId: 'C', parentId: today })
+  assert.deepEqual(listed(null)[0], ['2026-10-19', '2026-10-12'])
 })
