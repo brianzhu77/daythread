@@ -152,3 +152,10 @@ I'll provide a static mock of states M1–M4 for Brian if the Lead wants one bef
 4. **Proposal `+` and pages:** a proposal whose source line is a page card isn't proposed (a card isn't a to-do).
 5. **Acceptance addition:** every check in §10 also runs on an isolated copy of Brian's real database (built app or
    own Vite `cacheDir`, no shared cache), at 390 and 1280, before the build is called done.
+6. **Add all tasks → one strip** (Bumblebee, after 192d655). Add all is one operation, so it gets one strip that
+   replaces the whole Tasks group (same muted style, 5 s, then the group collapses):
+   - one destination: **"Added {n} to {Section} · Undo"**, e.g. "Added 3 to TODO - Other · Undo";
+   - mixed: **"Added {a} to {Section A} · {b} to {Section B} · Undo"**, e.g.
+     "Added 2 to TODO - Top 3 · 1 to TODO - Other · Undo" (this also covers Top 3 filling up part way);
+   - Undo removes all of them, or is refused whole ("Can't undo · edited since").
+   Single-row `+` keeps its per-row strip.
