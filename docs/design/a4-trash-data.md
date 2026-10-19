@@ -57,22 +57,32 @@ Today's build (5193991) refuses any newer layout (`version > sqliteMigrations.le
 layout") and checks page columns exactly. It doesn't refuse extra tables (`verifySqliteLayout` checks known tables
 only).
 
-**`scripts/rollback-layout-4.mjs`**, in one transaction:
-1. Refuses unless `user_version` is 4.
-2. Copies the file to a backup.
-3. Moves the **current** trashed rows out of `pages` into `held_trash_l4`. Only-in-undo copies are dropped with Undo.
-4. Deletes every `undo` row and the undo meta.
-5. Drops the two columns and sets `user_version=3`.
-6. Checks the layout-3 columns, then commits.
-7. Prints the held pages.
+**`scripts/rollback-layout-4.mjs`**:
+1. Run only with the app stopped. It refuses unless the file has the Daythread `application_id`,
+   `user_version` 4, and exactly the layout-4 tables and columns.
+2. **Backup:** a consistent copy with SQLite's `VACUUM INTO` (or the backup API) next to the file, never a plain
+   file copy under WAL. If the backup fails or doesn't read back, it stops before touching anything.
+3. **One transaction** for the rest; any error or check failure rolls back everything.
+   1. Move the **current** trashed rows out of `pages` into `held_trash_l4`, with their full `present`, and with
+      `anchor` = the id of the nearest live page before them in the stored order (null = first). Rows that exist
+      only in the undo snapshot are dropped along with Undo.
+   2. **Live rows:** remove `trashedAt`/`trashId` from `present` (a page restored by the new build may still list
+      them).
+   3. Delete every `undo` row and the undo meta.
+   4. Drop the two columns, set `user_version=3`, and check the exact layout-3 columns.
+4. Print the held pages and the backup path.
 
 **While the old build runs:** trashed pages are hidden, and nothing written is lost.
 
-**Migration 4 on re-upgrade:**
-1. Adds the columns.
-2. If `held_trash_l4` exists, refuses (keeping the database as is) when any held id exists again as a page.
-3. Otherwise inserts the held rows back after the existing positions, then drops the table.
-4. The batches, `parentId` and `present` come back as they were.
+**Migration 4 on re-upgrade (code, in the initialization transaction):**
+1. Add the columns.
+2. If `held_trash_l4` exists: refuse, keeping the database as is, when any held id exists again as a page.
+3. Otherwise put each held row back **right after its `anchor`**, or after the nearest held row before it with
+   the same anchor, and renumber `position`. If the anchor page is gone (today's build can't delete pages, so only
+   by hand), it goes last. So the stored order, and with it the sibling order a restore returns to, is the one from
+   before the downgrade.
+4. Drop the table.
+5. Running it a second time finds no held table and only adds nothing.
 
 **Tried on a copy of Brian's database** (`tests/evidence/a4-plan/rollback-roundtrip.ts`, raw SQL for the script
 and the migration):
@@ -85,7 +95,8 @@ and the migration):
 | Today's build, built app, 1280 and 390: Today, Oct 18 (its card to the held page), Pages, Tasks, Tags, Calendar | no error screen, no console errors |
 | Migration 4 again | 佛卡夏披萨 back in the trash with batch `op1`; "韩国大酱汤 v2" kept |
 
-Not covered yet: the real migration code, the script file, and a held id appearing again (refusal path).
+Not covered yet: the real migration code and the script file; the anchor order; `present` on live rows the new
+build restored; a held id appearing again (refusal); the backup.
 
 ## 5. Checks for Ratchet
 
@@ -96,7 +107,13 @@ Not covered yet: the real migration code, the script file, and a held id appeari
    - **same-batch delete → restore only a child → move it → restore the batch: the child doesn't move**;
    - a day page refused;
    - tags, Linked from and every list in §3 hide and then show again.
-3. Rollback round trip with the real script and migration: create, delete, restore a child alone → downgrade →
-   today's build edits and undoes → re-upgrade. Also: a held id appearing again → migration refused, database kept.
+3. Rollback round trip with the real script and migration:
+   - the sequence: create, delete, restore a child alone, **edit a restored page** → downgrade → today's build edits
+     and undoes → re-upgrade;
+   - expected: held pages back in the trash in their old order; content, tasks and the cost ledger unchanged;
+   - a new Undo works after the cleared one;
+   - running the migration and the script twice;
+   - a held id appearing again → migration refused, database kept;
+   - a failed backup → script stops with nothing changed.
 4. On a copy of Brian's data: delete 韩国大酱汤, and #recipe no longer lists it; restore puts it back under Sun, Oct 18,
    with its card and tag.
