@@ -6,7 +6,7 @@ after that (tags on Oct 18). Brian's latest message overrides this file; update 
 
 ## Count
 
-**Built: 8 of 18** (as of `c8fb28a`, live on 3000, 2026-10-19).
+**Built: 8 of 18** (as of `ca4c4ca`, live on 3000, 2026-10-19 15:34Z).
 
 Every status update to Brian quotes this line. Count rule: a row counts as built only when it is live on 3000
 **and** has passed review (Ratchet's acceptance task linked in Evidence). "Partial" counts as not built.
@@ -50,7 +50,7 @@ Group B is listed for tracking only and never counts toward M.
 
 | ID | Item | Source | Status | Evidence |
 |---|---|---|---|---|
-| A6 | Real model (OpenRouter, 10 USD/day cap) behind capture, Draft my day, review suggestions, Related | O-U18, 7a55cbbf D-C, c377e316 | partial | simulated provider only; **Brian yes (9f3f3f82); Step 1: (a) 33e1d38 Ratchet #68 + (b) 25dc72a Ratchet #69 reviewed; (c) receipt UI building**; probe weak (accepted risk; step 0 recount 6522522: 6 critical calls of 45 on his model, Luna also weak). Context: capture = his text + open tasks (step 1); one hop of linked pages + previous daily page in step 2 (Draft my day / proposals); transitive later, Brian told |
+| A6 | Real model (OpenRouter, 10 USD/day cap) behind capture, Draft my day, review suggestions, Related | O-U18, 7a55cbbf D-C, c377e316 | partial | capture live on the real model: ca4c4ca 2026-10-19 (Step 1 a 33e1d38 Ratchet #68, b 25dc72a #69, c ca4c4ca #70 + design check acdfa91; smoke 7/7). Still simulated: Draft my day, review suggestions, Related (Step 2). Probe weak, accepted risk (Brian yes 9f3f3f82). Context: capture = his text + open tasks; one hop of linked pages + previous daily page in Step 2; transitive later, Brian told |
 | A7 | Indexing at plan/review into Weave pages; browse; copy to your pages; corrections in a thread fix the next run | 06469260, c377e316, 08a02686 | missing | waits on A6; layout A chosen (C2); context: Step 2 (one hop + previous daily page) |
 
 ### Part 4 · Predictions: yesterday's unfinished + items scheduled for today
