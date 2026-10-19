@@ -105,3 +105,30 @@ test('SQLite layout 1 (no parentId) upgrades in place; old pages stay top level 
   db.close()
  }finally{await f.cleanup()}
 })
+test('rollback script: a store with a subpage and its card goes back to layout 1 with no pageLink left anywhere',async()=>{
+ const f=await fixture()
+ try {
+  const repo=f.create(); let ws=await repo.load()
+  ws=(await repo.execute({operationId:'day',expectedRevision:ws.revision,action:{type:'ensure-day',date:'2026-10-18'}})).workspace
+  const day=ws.pages[0]!
+  ws=(await repo.execute({operationId:'sub',expectedRevision:ws.revision,action:{type:'create-document',title:'Trip ideas',body:'',pageId:'child',parentId:day.id}})).workspace
+  const { editorSeed, pageContentKey } = await import('../src/domain/editor-document.ts')
+  const p=ws.pages.find(x=>x.id===day.id)!, doc=[...editorSeed(p,ws),{id:'card1',type:'pageLink',props:{pageId:'child'}}]
+  ws=(await repo.execute({operationId:'card',expectedRevision:ws.revision,action:{type:'save-editor',pageId:p.id,expectedContent:pageContentKey(p),document:JSON.stringify(doc)}})).workspace
+  const before=ws.pages.length
+  const out=await new Promise<string>((ok,fail)=>{const c=spawn(process.execPath,['scripts/sqlite-rollback-parent-id.ts',f.path]);let s='';c.stdout.on('data',d=>s+=d);c.stderr.on('data',d=>s+=d);c.on('exit',code=>code===0?ok(s):fail(new Error(s)))})
+  assert.match(out,/Layout 2 → 1\. 1 subpage now top level; [12] page cards? \(all snapshots\) now links/)
+  const db=new DatabaseSync(f.path)
+  assert.equal(Number(db.prepare('PRAGMA user_version').get()!.user_version),1)
+  assert.equal(db.prepare('PRAGMA table_info(pages)').all().some(c=>c.name==='parentId'),false)
+  for (const row of db.prepare('SELECT * FROM pages').all()) assert.equal(JSON.stringify(row).includes('pageLink')||JSON.stringify(row).includes('parentId'),false)
+  const dayRow=db.prepare("SELECT editorJSON FROM pages WHERE snapshot='current' AND id=?").get(day.id)!
+  assert.ok(String(dayRow.editorJSON).includes('Trip ideas'))
+  assert.equal(Number(db.prepare("SELECT count(*) n FROM pages WHERE snapshot='current'").get()!.n),before)
+  db.close()
+  // Rolling forward again (this build reopens it as layout 2) keeps everything, the old card as a reference.
+  const again=await f.create().load()
+  assert.equal(again.pages.length,before)
+  assert.equal(again.pages.find(x=>x.id===day.id)!.sections.flatMap(s=>s.blocks).find(b=>b.id==='card1')!.targetPageId,'child')
+ }finally{await f.cleanup()}
+})

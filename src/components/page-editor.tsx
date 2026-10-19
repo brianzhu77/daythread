@@ -1,6 +1,6 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
 import { NodeSelection, TextSelection, type Transaction } from '@tiptap/pm/state'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
 import { BlockNoteSchema, blockToNode, defaultBlockSpecs, docToBlocks, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
@@ -33,7 +33,7 @@ const sourceChecklist = createReactBlockSpec({ type: 'sourceChecklist', propSche
 // pages-delta N-2 / Jazz f69dd341-era spec: a page card is one quiet row (icon, title, ›) that drags, deletes and
 // undoes as a single block. It only points at the page; removing it never removes the page.
 const pageLink = createReactBlockSpec({ type: 'pageLink', propSchema: { pageId: { default: '' } }, content: 'none' }, {
-  render: ({ block }) => <PageCard pageId={block.props.pageId} />,
+  render: ({ block }) => <PageCard pageId={block.props.pageId} cardId={block.id} />,
   toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Page</a></p>,
 })()
 const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink } })
@@ -53,14 +53,46 @@ function EditorTask({ taskId, role, planDate, contentRef }: { taskId: string; ro
   </div>
 }
 
-function PageCard({ pageId }: { pageId: string }) {
-  const { workspace } = useWorkspace()
+/**
+ * Marks the card in this page's own history entry, so the browser's Back lands on it (scrolled to and tinted
+ * by the jump-to-block path) instead of the top of a long page.
+ */
+function rememberCard(cardId: string) {
+  const url = new URL(window.location.href); url.searchParams.set('block', cardId)
+  window.history.replaceState(window.history.state, '', url)
+}
+/**
+ * Pages whose `/page` create hasn't been confirmed yet, by page id. Browser-only state: the card is saved like any
+ * block, and the page id is fixed, so retrying (by us or from the card) can only ever confirm that one page.
+ */
+type PendingPage = { state: 'creating' | 'failed'; parentId: string; retry: () => void }
+const pendingPages = new Map<string, PendingPage>()
+const pendingListeners = new Set<() => void>()
+let pendingVersion = 0
+function setPending(pageId: string, value: PendingPage | null) {
+  if (value) pendingPages.set(pageId, value); else pendingPages.delete(pageId)
+  pendingVersion++; pendingListeners.forEach(l => l())
+}
+function usePendingVersion() {
+  return useSyncExternalStore(l => { pendingListeners.add(l); return () => pendingListeners.delete(l) }, () => pendingVersion, () => 0)
+}
+function PageCard({ pageId, cardId }: { pageId: string; cardId: string }) {
+  const { workspace, run } = useWorkspace()
   const navigate = useNavigate()
+  usePendingVersion()
   const target = workspace?.pages.find(p => p.id === pageId)
-  return <button type="button" contentEditable={false} className="editor-page-card" onClick={() => void navigate({ to: '/pages', search: { page: pageId } })}>
+  // A saved card whose page never got created (e.g. the tab closed during a failed create) can still be retried:
+  // its parent is the page the card is saved on, and the id is the card's own.
+  const savedOn = target || pendingPages.has(pageId) ? undefined : workspace?.pages.find(p => p.sections.some(s => s.blocks.some(b => b.id === cardId)))
+  const pending: PendingPage | undefined = target ? undefined : pendingPages.get(pageId)
+    ?? (savedOn ? { state: 'failed', parentId: savedOn.id, retry: () => void run({ type: 'create-document', title: '', body: '', pageId, parentId: savedOn.id }) } : undefined)
+  return <button type="button" contentEditable={false} className="editor-page-card" disabled={pending?.state === 'creating'}
+    onClick={() => { if (pending) { if (pending.state === 'failed') pending.retry(); return } rememberCard(cardId); void navigate({ to: '/pages', search: { page: pageId } }) }}>
     <span className="editor-page-card-icon"><PagesIcon /></span>
-    <span className={`editor-page-card-title ${target?.title ? '' : 'untitled'}`}>{target ? displayPageTitle(target) : 'Page not found'}</span>
-    <ChevronRightIcon />
+    <span className={`editor-page-card-title ${target?.title ? '' : 'untitled'}`}>{target ? displayPageTitle(target) : pending ? 'Untitled' : 'Page not found'}</span>
+    {pending?.state === 'creating' ? <span className="editor-page-card-spinner" aria-label="Creating page" />
+      : pending?.state === 'failed' ? <span className="editor-page-card-failed">Not created · Retry</span>
+      : <ChevronRightIcon />}
   </button>
 }
 
@@ -172,17 +204,20 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   useEffect(() => {
     const id = jumpTo
     if (!id) return
-    let frame = 0, tries = 0, timer: ReturnType<typeof setTimeout> | undefined
+    let frame = 0, tries = 0, timer: ReturnType<typeof setTimeout> | undefined, settle: ReturnType<typeof setTimeout> | undefined
     const find = () => {
       const el = editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(id)}"]`)
       if (!el) { if (++tries < 120) frame = requestAnimationFrame(find); return }
       const url = new URL(window.location.href); url.searchParams.delete('block'); window.history.replaceState(window.history.state, '', url)
       el.scrollIntoView({ block: 'center' })
+      // The page can still be growing as the editor lays out (and a client-side navigation may restore scroll after
+      // this runs), so check again once things settle and bring the block back into view if it drifted out.
+      settle = setTimeout(() => { const r = el.getBoundingClientRect(); if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ block: 'center' }) }, 350)
       el.classList.add('block-flash')
       timer = setTimeout(() => el.classList.remove('block-flash'), 1600)
     }
     frame = requestAnimationFrame(find)
-    return () => { cancelAnimationFrame(frame); clearTimeout(timer) }
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); clearTimeout(settle) }
   }, [editor, jumpTo])
   useEffect(() => { const media = window.matchMedia('(max-width: 899px)'); const update = () => setCompact(media.matches); media.addEventListener('change', update); return () => media.removeEventListener('change', update) }, [])
   const [touchHandle, setTouchHandle] = useState<{ id: string; top: number } | null>(null)
@@ -270,7 +305,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     base.current = pageContentKey(savedPage)
     deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
     dirty.current = JSON.stringify(editor.document) !== document
-    setFailed(false); setStatus(dirty.current ? 'Saving…' : 'Saved')
+    // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
+    const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
+    setFailed(false); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
     if (dirty.current) { stash(); timer.current = setTimeout(() => void flushRef.current(), 300) }
     else localStorage.removeItem(key)
   }, [editor, key, page.id, run])
@@ -335,21 +372,34 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return () => { clearTimeout(timer.current); if (dirty.current) stash(); window.removeEventListener('beforeunload', before) }
   }, [])
 
-  /** `/page`: card first (id chosen here), then the page, then save the card before leaving for the new page. */
+  /**
+   * `/page`: the card goes in at once with a page id chosen here, then the page is created under that id. A failed or
+   * lost reply never removes the card: the same id is retried (a page the server already made is just confirmed),
+   * and after that the card offers Retry (Ratchet #64, Jazz). The new page opens only once card and page both exist.
+   */
   async function createSubpage() {
     const pageId = crypto.randomUUID()
     insertOrUpdateBlockForSlashMenu(editor, { type: 'pageLink', props: { pageId } } as never)
     const cardId = editor.document.find(b => (b.props as { pageId?: string }).pageId === pageId)?.id
-    const created = await run({ type: 'create-document', title: '', body: '', pageId, parentId: page.id })
-    if (!created) {
-      if (cardId && editor.getBlock(cardId)) editor.removeBlocks([cardId])
-      setStatus("Couldn't create the page · nothing changed")
-      return
+    await confirmSubpage(pageId, cardId, true)
+  }
+  async function confirmSubpage(pageId: string, cardId: string | undefined, open: boolean) {
+    const retry = () => void confirmSubpage(pageId, cardId, false)
+    setPending(pageId, { state: 'creating', parentId: page.id, retry })
+    let created = false
+    for (let attempt = 0; attempt < 3 && !created; attempt++) {
+      if (cardId && !editor.getBlock(cardId)) { setPending(pageId, null); return } // card undone: abandon
+      created = Boolean(await run({ type: 'create-document', title: '', body: '', pageId, parentId: page.id }))
+        || latestWorkspace.current.pages.some(p => p.id === pageId)
     }
+    if (!created) { setPending(pageId, { state: 'failed', parentId: page.id, retry }); setStatus('Page not created · card kept, tap it to retry'); return }
+    setPending(pageId, null)
     clearTimeout(timer.current)
     for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
     if (dirty.current) await flushRef.current()
-    if (dirty.current) { setStatus('Page created · card not saved yet, try again from here'); return }
+    if (!open || !cardId || !editor.getBlock(cardId)) return
+    if (dirty.current) { setStatus('Page created · card not saved yet; it opens from the card once saved'); return }
+    rememberCard(cardId)
     void navigate({ to: '/pages', search: { page: pageId, focus: 'title' } })
   }
   async function performHistory(direction: 'undo' | 'redo') {

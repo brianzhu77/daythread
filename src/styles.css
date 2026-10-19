@@ -596,6 +596,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 
 /* ---------- List screens: Tasks, Calendar, Pages ---------- */
 .list-screen { display: grid; gap: 12px; padding-top: 24px; }
+/* An open page is a document: white like a day page, not the grouped grey of lists (Jazz). */
+.doc-screen { display: grid; gap: 12px; padding-top: 24px; }
+.doc-screen > .back-link { display: block; max-width: 100%; min-height: 44px; line-height: 44px; margin: -12px 0 -12px; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A title can be one unbroken word (a long page name or tag); break it rather than widen the screen. */
 .large-title { font-size: 34px; line-height: 41px; font-weight: 700; letter-spacing: -.02em; overflow-wrap: anywhere; }
 .pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
@@ -647,6 +650,10 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-page-card-icon svg { width: 18px; height: 18px; }
 .editor-page-card-title { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .editor-page-card > svg { flex: none; color: var(--ink-3); }
+.editor-page-card:disabled { cursor: default; color: inherit; }
+.editor-page-card-spinner { flex: none; width: 14px; height: 14px; border: 1.5px solid var(--ink-3); border-right-color: transparent; border-radius: 50%; animation: page-card-spin .8s linear infinite; }
+@keyframes page-card-spin { to { transform: rotate(360deg); } }
+.editor-page-card-failed { flex: none; font-size: 13px; color: var(--app-danger); }
 .untitled { color: var(--ink-3); }
 .page-title-field { outline: none; cursor: text; }
 .page-title-field:empty::before { content: attr(data-placeholder); color: var(--ink-3); }
