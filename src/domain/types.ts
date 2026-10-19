@@ -266,6 +266,7 @@ export type Action =
   | { type: "material-resurface"; materialId: string; enabled: boolean }
   | { type: "create-document"; title: string; body: string; pageId?: string; parentId?: string }
   | { type: "rename-page"; pageId: string; title: string }
+  | { type: "move-page"; pageId: string; parentId: string | null }
   | { type: "relink-material-lines" }
   | {
       type: "insert-reference";

@@ -1,4 +1,5 @@
 import { dayTemplate, pageContentKey, projectDocument, inlineText, type EditorNode } from "./editor-document.ts";
+import { moveRefusal } from "./page-tree.ts";
 import type {
   Command,
   CommandResult,
@@ -1066,6 +1067,18 @@ function execute(
       if (p.type !== "document") throw new DomainError("Day pages are named by their date");
       p.title = text(action.title, 1000).trim();
       return { message: "Page renamed", entityId: p.id };
+    }
+    case "move-page": {
+      // N-2: the page keeps its id, so every card and Linked from entry stays valid; it goes to the end of its new
+      // siblings. References are untouched. Undo is the generic one.
+      const refusal = moveRefusal(state, action.pageId, action.parentId);
+      if (refusal) throw new DomainError(refusal);
+      const index = state.pages.findIndex((p) => p.id === action.pageId);
+      const [moved] = state.pages.splice(index, 1);
+      if (action.parentId) moved!.parentId = action.parentId;
+      else delete moved!.parentId;
+      state.pages.push(moved!);
+      return { message: action.parentId ? "Page moved" : "Moved to top level", entityId: moved!.id };
     }
     case "relink-material-lines": {
       // One-off repair for pages written while the editor skipped the material rule; safe to repeat.
