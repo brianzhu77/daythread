@@ -6,7 +6,7 @@ after that (tags on Oct 18). Brian's latest message overrides this file; update 
 
 ## Count
 
-**Built: 8 of 18** (as of `ca4c4ca`, live on 3000, 2026-10-19 15:34Z).
+**Built: 9 of 19** (as of `ca4c4ca`, live on 3000, 2026-10-19 15:34Z).
 
 Every status update to Brian quotes this line. Count rule: a row counts as built only when it is live on 3000
 **and** has passed review (Ratchet's acceptance task linked in Evidence). "Partial" counts as not built.
@@ -50,7 +50,8 @@ Group B is listed for tracking only and never counts toward M.
 
 | ID | Item | Source | Status | Evidence |
 |---|---|---|---|---|
-| A6 | Real model (OpenRouter, 10 USD/day cap) behind capture, Draft my day, review suggestions, Related | O-U18, 7a55cbbf D-C, c377e316 | partial | capture live on the real model: ca4c4ca 2026-10-19 (Step 1 a 33e1d38 Ratchet #68, b 25dc72a #69, c ca4c4ca #70 + design check acdfa91; smoke 7/7). Still simulated: Draft my day, review suggestions, Related (Step 2). Probe weak, accepted risk (Brian yes 9f3f3f82). Context: capture = his text + open tasks; one hop of linked pages + previous daily page in Step 2; transitive later, Brian told |
+| A6a | Real model (OpenRouter, 10 USD/day cap) behind capture: auto-save with receipt, grounding holds, edit/Undo all | O-U18, 7a55cbbf D-C, c377e316 | built | ca4c4ca live 2026-10-19 15:34Z; Step 1 a 33e1d38 Ratchet #68, b 25dc72a #69, c Ratchet #70 (docs/reviews/model-receipt-ratchet.md) + design check acdfa91; smoke 7/7. Probe weak, accepted risk (Brian yes 9f3f3f82). Context: his text + open tasks |
+| A6b | Real model behind Draft my day, review suggestions, Related | O-U18, 7a55cbbf D-C, c377e316 | missing | still simulated; Step 2. Context: one hop of linked pages + previous daily page; transitive later, Brian told |
 | A7 | Indexing at plan/review into Weave pages; browse; copy to your pages; corrections in a thread fix the next run | 06469260, c377e316, 08a02686 | missing | waits on A6; layout A chosen (C2); context: Step 2 (one hop + previous daily page) |
 
 ### Part 4 · Predictions: yesterday's unfinished + items scheduled for today
@@ -59,9 +60,10 @@ Group B is listed for tracking only and never counts toward M.
 |---|---|---|---|---|
 | A8 | Morning card per v05 design (merged suggestions with reason, proposals for text lines, Undo) + Bring to today for plain lines | 7c4e0cab (O4=b), 78871f09 | partial | old Keep / Keep all card; plain lines dropped by team rule (start-the-day.tsx:27); unblocked (C5 yes) |
 
-Count: M = D1–D6 + A1a, A1b, A2–A9, A11, A12 = 18. A10 (drag preview) is settled inside D5, not a separate row.
+Count: M = D1–D6 + A1a, A1b, A2–A5, A6a, A6b, A7–A9, A11, A12 = 19. A10 (drag preview) is settled inside D5, not a separate row.
 A1 was split into A1a/A1b on 2026-10-19 when `/page` shipped (same sources, no scope change), so M went 17 → 18.
-N = D1–D6 + A5 + A1a = 8.
+A6 was split into A6a/A6b on 2026-10-19 when capture went live on the real model (same sources, no scope change), so M went 18 → 19.
+N = D1–D6 + A5 + A1a + A6a = 9.
 
 ## B. In our own specs, Brian never named them (tracked, not counted)
 
