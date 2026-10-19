@@ -48,7 +48,7 @@ This follows Bumblebee's grounding check (b842c6d3, abee294e). Ratchet's caution
 | No key | header tag **"Simulated · no model key"**, same grey `sim` tag as today | one muted line under the field, the same text, until a key is added |
 | Key rejected (HTTP 401/403) | **"Model key rejected · text saved"** in `--warn` text, with **Retry** (Bumblebee: the one failure he can fix himself, in `.env.local`) | the same muted line under the field, until a call succeeds |
 | Other model error | **"Model unavailable · text saved"** in `--warn` text, with **Retry** (same attempt rules as Roadbuster §2) | no line; the receipt carries it |
-| Paused: a cost couldn't be confirmed (an earlier call's cost is unknown; Roadbuster plan §2) | **"Model paused · a cost couldn't be confirmed · text saved"** in `--warn` text, **no Retry** (a Retry would pause again until the charge is settled with `scripts/model-reconcile.ts`) | the same muted line under the field on every capture until the charge is settled, because every capture stays paused until then |
+| Paused: a cost couldn't be confirmed (an earlier call has a generation id but its cost can't be found; Lead ruling b842c6d3 33ae4578) | **"Model paused · a cost couldn't be confirmed · text saved"** in `--warn` text, **no Retry** (a Retry would pause again until the charge is settled) | the same muted line under the field on every capture until the charge is settled, because every capture stays paused until then |
 | Budget used up | **"Today's model budget is used up · text saved"** in `--warn` text, no Retry until tomorrow | no line |
 
 - His text is always the first thing on the receipt, in every state, so "saved" is visible before anything else.
@@ -63,6 +63,8 @@ If the model returns an item the server rejects (bad shape, unknown task id, inv
 If **every** item fails, there's no empty receipt. It shows the "Other model error" state instead: **"Model unavailable · text saved"** with Retry (Bumblebee, b842c6d3 9dde2c4c).
 
 **Cost.** The receipt doesn't show a cost normally. When the provider's cost for this capture is unknown (an error with no cost or generation id), the header adds a muted **"Cost unknown"** tag in `--ink-3` after the status tag. Never show "$0" or "nothing charged" for an unknown cost.
+
+An error with **no generation id and no cost** (500, timeout, lost connection, 402, 429) doesn't pause anything: the app records the worst-case amount as an estimate and carries on (Lead ruling 33ae4578). That capture shows "Model unavailable · text saved" with Retry plus "Cost unknown", and the next capture works normally. Only two states pause: the "Paused" row above (a generation id whose cost can't be found) and "Budget used up". "Cost unknown" goes away if the real cost arrives later.
 
 ## Updates to existing tasks (unchanged rule, clearer row)
 
