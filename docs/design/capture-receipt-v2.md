@@ -34,11 +34,11 @@ Footer: **Undo all** (one step, the whole capture), then the existing "Show orig
 This follows Bumblebee's grounding check (b842c6d3, abee294e). Ratchet's caution applies: a passed check isn't proof that the item is right, and it has to be tested on its own.
 
 - An item that fails the server's check **isn't auto-applied.** It sits in the same receipt, in a **"Needs a look"** group above the saved items, as a waiting row with **Save** and **Remove** on the row. Editing the flagged field and then tapping Save saves it.
-- The row shows why, as an amber chip (`--warn` colours, 12 px) placed before the date chip: **"Time not in your text"**, **"Link not in your text"**, **"Title not in your text"** or **"Task not in your text"** (for an update).
+- The row shows why, as an amber chip (`--warn` colours, 12 px) placed before the date chip: **"Time not in your text"**, **"Link not in your text"**, **"Title not in your text"**, **"Task not in your text"** (for an update) or **"Date missing"** (his text has a date word such as 明天, 周五, 月底, next Mon or 11/2, but the item has no date; Bumblebee, b842c6d3).
 - When every item is saved or removed, the group disappears. The receipt header reads "Saved from …" once nothing is waiting, and "1 waiting for you · from …" while something is.
 - The saved items in the same capture are unaffected: they're already saved, with Undo.
 
-**Eng (Roadbuster):** the check result per item, `flags: ('time-not-in-text' | 'url-not-in-text' | 'title-not-grounded' | 'task-not-named')[]`, stored with the capture. Plus `edit-capture-item` (title, type, date), `save-capture-item` and `remove-capture-item`, each with its own receipt so Undo works.
+**Eng (Roadbuster):** the check result per item, `flags: ('time-not-in-text' | 'url-not-in-text' | 'title-not-grounded' | 'task-not-named' | 'date-missing')[]`, stored with the capture. Plus `edit-capture-item` (title, type, date), `save-capture-item` and `remove-capture-item`, each with its own receipt so Undo works.
 
 ## Updates to existing tasks (unchanged rule, clearer row)
 
@@ -46,7 +46,7 @@ The row reads **"[Update] Fix export bug → done"** and stays in the waiting st
 
 ## Copy
 
-Task · Event · Saved link · Note · Update · No date · Needs a look · Save · Time not in your text · Link not in your text · Title not in your text · Task not in your text · {n} waiting for you · Remove · Open · Undo all · Show original · Can't undo · edited since. Bumblebee owns final wording.
+Task · Event · Saved link · Note · Update · No date · Needs a look · Save · Time not in your text · Link not in your text · Title not in your text · Task not in your text · Date missing · {n} waiting for you · Remove · Open · Undo all · Show original · Can't undo · edited since. Bumblebee owns final wording.
 
 ## Acceptance (Ratchet)
 
