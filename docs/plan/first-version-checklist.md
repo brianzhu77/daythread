@@ -6,7 +6,7 @@ after that (tags on Oct 18). Brian's latest message overrides this file; update 
 
 ## Count
 
-**Built: 6 of 17** (as of main `24a1b4b`, live on 3000, 2026-10-19).
+**Built: 7 of 17** (as of main `7f0de2d`, live on 3000, 2026-10-19).
 
 Every status update to Brian quotes this line. Count rule: a row counts as built only when it is live on 3000
 **and** has passed review (Ratchet's acceptance task linked in Evidence). "Partial" counts as not built.
@@ -32,7 +32,7 @@ Group B is listed for tracking only and never counts toward M.
 | D5 | Block editor like Notion/Craft: delete whole section, drag a heading with its section, native drag preview | 9ec597fb, 2d30b162 #1, task #48 | built | Ratchet #49; A10 settled here |
 | D6 | Tags: Obsidian rule, low-key colour, own entry on laptop and phone | c11a5935, 5b496134, fad0b8c2, 77423ea0, bc661669 | built | 5c6f165 … 24a1b4b; Ratchet #62, #63 |
 | A12 | Plan-row actions on the day page itself (Not today / Another day / Cancel) | v0.3 scope 5, 01 §9.2 | partial | only in menus on Tasks, facts strip, hand-off, review |
-| A5 | A link written under Good Stuffs becomes a saved item for follow-up | 0f106fa5; v0.3 P14 | regressed | fix/goodstuffs-material (Roadbuster), Ratchet #66 |
+| A5 | A link written under Good Stuffs becomes a saved item for follow-up (incl. titled links) | 0f106fa5; v0.3 P14 | built | 7f0de2d live 2026-10-19; Ratchet #66 (docs/reviews/goodstuffs-editor-ratchet.md) |
 
 ### Part 2 · Your pages, with saved links as link pages
 
@@ -59,7 +59,7 @@ Group B is listed for tracking only and never counts toward M.
 | A8 | Morning card per v05 design (merged suggestions with reason, proposals for text lines, Undo) + Bring to today for plain lines | 7c4e0cab (O4=b), 78871f09 | partial | old Keep / Keep all card; plain lines dropped by team rule (start-the-day.tsx:27); unblocked (C5 yes) |
 
 Count: M = D1–D6 + A1–A9, A11, A12 = 17. A10 (drag preview) is settled inside D5, not a separate row.
-N = D1–D6 = 6.
+N = D1–D6 + A5 = 7.
 
 ## B. In our own specs, Brian never named them (tracked, not counted)
 
