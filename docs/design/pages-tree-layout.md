@@ -92,8 +92,8 @@ Order: nav (Today · Tasks · Calendar · Pages · Tags · Review), then **Days*
 
 ## 6. Phone (P1–P4)
 
-- **Pages screen:** top level only, as now, plus a child count in `--ink-3` before the › on rows that have
-  subpages. No tree on the phone.
+- **Pages screen:** see §8 (top level plus "In your days"). Rows with subpages show a child count in `--ink-3`
+  before the ›. No tree on the phone.
 - **Way down:** the page's Subpages list. **Way up:** the breadcrumb (the parent crumb is Back).
 - **Move:** ⋯ → Move to… as a sheet (P4). No drag.
 
@@ -106,3 +106,25 @@ Checks worth adding to the step B acceptance (design view):
 4. Subpages appears on a daily page with a child, and disappears when the last child moves away.
 5. Move dialog never lists the page or its descendants; current parent shows as Current and can't be picked.
 6. Undo after Move restores breadcrumb, tree and both Subpages lists.
+
+## 8. Pages screen and sidebar when pages live in days (rev 2, after the 6d3560c rollback)
+
+Most pages are made with `/page` on a day page, so most of Brian's pages have a day as parent. "Top level only"
+showed him "No pages yet" while he had two pages. Fixed for desktop and phone alike:
+
+- **Pages screen = two groups.**
+  1. Top-level pages, as now (card list, child counts). No header. Left out entirely if there are none.
+  2. **In your days**: header in the existing list-header style (20px, 600). Under it, one block per day that has
+     subpages, newest date first: a small label with the day ("Today", "Sun, Oct 18"; 13px, 600, `--ink-2`,
+     same as other small labels), then a card list of that day's **direct** subpages with child counts.
+     Tapping the day label opens the day page; tapping a row opens the page.
+  - Deeper pages are reached through their parent's Subpages, as everywhere else.
+  - Future days with subpages are included, sorted with the rest by date (newest first, so they come first).
+- **Empty state** ("No pages yet. Tap + to start one.") only when there is **no document page at all**.
+- **+ on the Pages screen** still makes a top-level page.
+- **Sidebar PAGES group:** if there are no top-level pages but some pages sit in days, show one muted row,
+  "{n} pages in your days" (singular "1 page in your days"), 14px `--ink-2`, linking to the Pages screen. Then
+  "＋ New page" as now. When there are top-level pages, no extra row (the Days tree already shows the rest).
+- **Acceptance (design):** on a copy of Brian's real data (2 pages under Sun, Oct 18, none top level): Pages
+  shows "In your days › Sun, Oct 18 › 韩国大酱汤 / 佛卡夏披萨", no empty line; sidebar shows "2 pages in your
+  days". Check at 1280 and 390.
