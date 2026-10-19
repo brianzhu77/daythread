@@ -14,9 +14,10 @@ const config = { apiKey: 'test-key', model: 'fake/model', baseUrl: 'https://fake
 const now = () => new Date('2026-10-19T16:00:00Z') // Mon 2026-10-19 09:00 Vancouver
 type Item = Record<string, unknown>
 const flat = (i: Item) => ({ kind: 'task', title: null, text: null, detail: null, date: null, dateRole: null, time: null, partOfDay: null, url: null, note: null, followUpDate: null, taskId: null, markDone: null, newDate: null, ...i })
-function fakeProvider(answer: (body: { messages: { content: string }[] }) => Item[] | 'timeout' | number | Response, opts: { cost?: number | null; calls?: { n: number } } = {}): typeof fetch {
+function fakeProvider(answer: (body: { messages: { content: string }[] }) => Item[] | 'timeout' | number | Response, opts: { cost?: number | null; calls?: { n: number }; generation?: () => Response } = {}): typeof fetch {
   return (async (url: string | URL, init?: RequestInit) => {
     if (String(url).endsWith('/models')) return Response.json({ data: [{ id: 'fake/model', pricing: { prompt: '0.0000003', completion: '0.0000012' } }] })
+    if (String(url).includes('/generation?id=')) return opts.generation ? opts.generation() : new Response('{}', { status: 404 })
     if (opts.calls) opts.calls.n++
     const body = JSON.parse(String(init!.body))
     const a = answer(body)
@@ -167,7 +168,7 @@ test('an HTTP error never proves nothing was charged: a reported cost is kept; a
   for (const [response, state, cost] of cases) {
     const s = await store('call dentist')
     try {
-      assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => response.clone()), now }, s.captureId), 'failed')
+      assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => response.clone()), now, lookupDelaysMs: [0] }, s.captureId), 'failed')
       const c = await capture(s.repo, s.captureId)
       assert.equal(c.error, response.status === 401 ? 'Model key rejected · text saved' : 'Model unavailable · text saved')
       const [a] = await s.repo.modelAttempts()
@@ -202,6 +203,42 @@ test('a model capture without a valid capture time is refused', async () => {
     const ws = await s.repo.load()
     for (const capturedAt of [undefined, 'yesterday'])
       await assert.rejects(s.repo.execute({ operationId: `bad-${capturedAt}`, expectedRevision: ws.revision, action: { type: 'capture-for-model', pageId: ws.pages[0]!.id, text: 'x', model: 'fake/model', capturedAt } as never }), /Capture time missing/)
+  } finally { await s.cleanup() }
+})
+
+// The /generation lookup: an unknown cost (a generation id, no cost) is asked for before the model stays paused.
+const errorWithId = () => Response.json({ id: 'gen-err', error: { message: 'upstream failed' } }, { status: 502 })
+test('a generation id without a cost is looked up: OpenRouter\'s total_cost settles it and the model isn\'t paused', async () => {
+  const s = await store('call dentist')
+  try {
+    const lookups: string[] = []
+    const fetchImpl = fakeProvider(() => errorWithId(), { generation: () => (lookups.push('x'), Response.json({ data: { id: 'gen-err', total_cost: 0.0004 } })) })
+    assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl, now, lookupDelaysMs: [0] }, s.captureId), 'failed')
+    const [a] = await s.repo.modelAttempts()
+    assert.equal(a!.state, 'settled'); assert.equal(a!.actualUsd, 0.0004); assert.equal(a!.note, 'settled from OpenRouter /generation'); assert.equal(lookups.length, 1)
+    const c = await capture(s.repo, s.captureId)
+    assert.equal(c.error, 'Model unavailable · text saved') // the capture itself still failed; only the cost is known now
+    const next = await s.repo.execute({ operationId: 'cap2', expectedRevision: (await s.repo.load()).revision, action: { type: 'capture-for-model', pageId: c.pageId, text: 'buy milk', model: 'fake/model', capturedAt: now().toISOString() } })
+    assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => [{ kind: 'task', title: 'buy milk' }]), now }, next.receipt.entityId!), 'organized')
+  } finally { await s.cleanup() }
+})
+
+test('a lookup that keeps failing leaves it unknown and paused; a later capture looks again and runs once the cost is there', async () => {
+  const s = await store('call dentist')
+  try {
+    let tries = 0
+    await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => errorWithId(), { generation: () => (tries++, new Response('{}', { status: 404 })) }), now, lookupDelaysMs: [0, 0, 0] }, s.captureId)
+    assert.equal(tries, 3); assert.equal((await s.repo.modelAttempts()).find(a => a.generationId === 'gen-err')!.state, 'unknown')
+    const c = await capture(s.repo, s.captureId)
+    const add = async (op: string) => (await s.repo.execute({ operationId: op, expectedRevision: (await s.repo.load()).revision, action: { type: 'capture-for-model', pageId: c.pageId, text: 'buy milk', model: 'fake/model', capturedAt: now().toISOString() } })).receipt.entityId!
+    // Still no cost, and nonsense values don't count: paused.
+    for (const generation of [() => new Response('{}', { status: 404 }), () => Response.json({ data: { total_cost: -1 } }), () => Response.json({ data: { total_cost: '0.0004' } })])
+      assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => [{ kind: 'task', title: 'buy milk' }], { generation }), now }, await add(`p-${Math.random()}`)), 'paused')
+    assert.equal((await s.repo.modelAttempts()).find(a => a.generationId === 'gen-err')!.state, 'unknown')
+    // OpenRouter now has it: the next capture's lookup settles it and that capture runs.
+    const id = await add('later')
+    assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => [{ kind: 'task', title: 'buy milk' }], { generation: () => Response.json({ data: { total_cost: 0.0004 } }) }), now }, id), 'organized')
+    assert.equal((await s.repo.modelAttempts()).find(a => a.generationId === 'gen-err')!.actualUsd, 0.0004)
   } finally { await s.cleanup() }
 })
 

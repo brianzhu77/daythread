@@ -8,7 +8,7 @@ import { join } from 'node:path'
 // capture is touched (the receipt hiding the button is only the second layer).
 test('server Retry is refused while the model is paused; the capture keeps its revision', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'daythread-service-'))
-  Object.assign(process.env, { DAYTHREAD_STORAGE: 'sqlite', DAYTHREAD_SQLITE_PATH: join(dir, 'w.sqlite'), OPENROUTER_API_KEY: 'fake', OPENROUTER_MODEL: 'fake/model' })
+  Object.assign(process.env, { DAYTHREAD_STORAGE: 'sqlite', DAYTHREAD_SQLITE_PATH: join(dir, 'w.sqlite'), OPENROUTER_API_KEY: 'fake', OPENROUTER_MODEL: 'fake/model', OPENROUTER_BASE_URL: 'http://127.0.0.1:9/api/v1' })
   try {
     const { getRepository } = await import('../src/server/storage.ts')
     const { SqliteWorkspaceRepository } = await import('../src/server/sqlite-repository.ts')

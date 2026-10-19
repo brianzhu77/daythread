@@ -7,6 +7,7 @@ import { SqliteWorkspaceRepository } from '../sqlite-repository.ts'
 import { costUnknownCaptureIds, modelStatus } from '../model-ledger.ts'
 import { modelConfig, type ModelConfig } from './openrouter.ts'
 import { organizeCapture } from './organize.ts'
+import { recoverUnknownCosts } from './cost-lookup.ts'
 
 let envLoaded = false
 /**
@@ -30,9 +31,15 @@ function sqlite(): SqliteWorkspaceRepository {
   if (!(repository instanceof SqliteWorkspaceRepository)) throw new Error('The model needs the SQLite store')
   return repository
 }
-/** Once per server process: attempts left in flight by a previous process have an unknown outcome. */
+/**
+ * Once per server process: attempts a previous process left in flight become estimated; unknown costs (a generation
+ * id, no cost) are looked up once in the background, so a pause from before a restart can lift on its own.
+ */
 function ready(): Promise<void> {
-  recovered ??= sqlite().markInterruptedModelAttempts(new Date().toISOString()).then(() => undefined)
+  recovered ??= sqlite().markInterruptedModelAttempts(new Date().toISOString()).then(() => {
+    const c = config()
+    if (c) void recoverUnknownCosts(sqlite(), c).catch(() => undefined)
+  })
   return recovered
 }
 export function captureMode(): 'auto' | 'confirm' {

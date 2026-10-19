@@ -5,6 +5,7 @@ import type { SqliteWorkspaceRepository } from '../sqlite-repository.ts'
 import { captureMessages, captureSchema, readCaptureAnswer, type CaptureItem } from './capture-prompt.ts'
 import { groundItem } from './grounding.ts'
 import { callStructured, ModelError, requestBody, type ModelConfig } from './openrouter.ts'
+import { recoverUnknownCosts } from './cost-lookup.ts'
 import { modelPrice, worstCaseUsd } from './pricing.ts'
 import { dailyCapUsd, sha256 } from '../model-ledger.ts'
 
@@ -49,6 +50,8 @@ export interface OrganizeDeps {
   fetchImpl?: typeof fetch
   now?: () => Date
   timeoutMs?: number
+  /** Waits before each /generation lookup of a cost that didn't come back (default 1 s, 3 s, 10 s; each lookup at most 10 s). */
+  lookupDelaysMs?: readonly number[]
 }
 export type OrganizeOutcome = 'organized' | 'failed' | 'stale' | 'paused' | 'no-price'
 
@@ -58,6 +61,14 @@ const vancouver = (d: Date) => {
 }
 
 export async function organizeCapture(deps: OrganizeDeps, captureId: string): Promise<OrganizeOutcome> {
+  const outcome = await organizeOnce(deps, captureId)
+  // A generation id came back without a cost: ask OpenRouter for it before leaving the model paused.
+  const attemptId = (await deps.repository.modelAttempts()).find(a => a.captureId === captureId && a.state === 'unknown')?.id
+  if (attemptId) await recoverUnknownCosts(deps.repository, deps.config, { fetchImpl: deps.fetchImpl, now: deps.now, attemptId, delaysMs: deps.lookupDelaysMs ?? [1000, 3000, 10_000] })
+  return outcome
+}
+
+async function organizeOnce(deps: OrganizeDeps, captureId: string): Promise<OrganizeOutcome> {
   const { repository, config } = deps, now = deps.now ?? (() => new Date())
   const ws = await repository.load()
   const capture = ws.captures.find(c => c.id === captureId)
@@ -84,10 +95,17 @@ export async function organizeCapture(deps: OrganizeDeps, captureId: string): Pr
   if (!price) { await fail('failure', 'Model price unavailable · text saved, nothing sent'); return 'no-price' }
   const upperBoundUsd = worstCaseUsd(body, maxOutputTokens, price)
   const attemptId = `organize:${captureId}:${revision}`
+  const reserve = () => repository.reserveModelAttempt({ id: attemptId, captureId, revision, day: spendDay, upperBoundUsd, model: config.model, requestHash: sha256(body), now: now().toISOString(), capUsd: dailyCapUsd() })
   try {
     // A second run for the same capture revision finds the reservation already there and sends nothing.
-    const { replayed } = await repository.reserveModelAttempt({ id: attemptId, captureId, revision, day: spendDay, upperBoundUsd, model: config.model, requestHash: sha256(body), now: now().toISOString(), capUsd: dailyCapUsd() })
-    if (replayed) return 'stale'
+    let reserved
+    try { reserved = await reserve() } catch (error) {
+      // Paused by an unknown cost: one short lookup (3 s) first; if OpenRouter now reports it, the pause lifts and this
+      // capture runs, otherwise it's refused as before (Lead 2bae3aeb).
+      if (!/in-flight or unknown/.test(error instanceof Error ? error.message : '') || !(await recoverUnknownCosts(repository, config, { fetchImpl: deps.fetchImpl, now: deps.now, timeoutMs: 3000 }))) throw error
+      reserved = await reserve()
+    }
+    if (reserved.replayed) return 'stale'
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (/Daily budget reached/.test(message)) { await fail('budget', "Today's model budget is used up · text saved"); return 'paused' }

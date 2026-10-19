@@ -11,6 +11,8 @@
 //                                    the charge is estimated at the upper bound, the next capture runs normally
 //   "paused: …"                      provider error with a generation id but no cost → the charge is unknown and the model
 //                                    pauses: this and later captures show "Model paused · a cost couldn't be confirmed · text saved"
+//   "lookup: …"                      provider error with a generation id but no cost; GET /generation then reports its
+//                                    cost (0.0003), so the charge settles and the model is not paused
 //   "error-cost: …"                  provider error that reports its cost (500 + generation id + usage.cost) →
 //                                    "Model unavailable · text saved", cost settled, the model is not paused
 //   "malformed: …"                   every item has a field of the wrong type → "Model unavailable · text saved", cost settled
@@ -34,9 +36,12 @@ const fixture = (openTaskId) => [
   ...(openTaskId ? [{ kind: 'update', taskId: openTaskId, markDone: false, newDate: day(1), dateRole: null }] : []), // 6
   { kind: 'task', title: 'Pay rent', date: '2026-02-31', dateRole: 'due' },              // 7 rejected (no such date)
 ]
+const lookedUp = new Set()
 createServer(async (req, res) => {
   const chunks = []; for await (const c of req) chunks.push(c)
   const send = (status, body) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)) }
+  // /generation knows the cost only of generations made by "lookup:"; any other id is 404 (as for "paused:").
+  if (req.url.includes('/generation?id=')) { const id = new URL(req.url, 'http://x').searchParams.get('id'); return lookedUp.has(id) ? send(200, { data: { id, total_cost: 0.0003 } }) : send(404, { error: { message: 'not found' } }) }
   if (req.url.endsWith('/models')) return send(200, { data: [{ id: 'fake/model', pricing: { prompt: '0.0000003', completion: '0.0000012' } }] })
   if (!req.url.endsWith('/chat/completions')) return send(404, {})
   const body = JSON.parse(Buffer.concat(chunks).toString() || '{}')
@@ -44,6 +49,7 @@ createServer(async (req, res) => {
   if (text.startsWith('timeout:')) return
   if (text.startsWith('http401:')) return send(401, { error: { message: 'bad key' } })
   if (text.startsWith('http500:')) return send(500, { error: { message: 'provider error' } })
+  if (text.startsWith('lookup:')) { const id = `gen-lookup-${Date.now()}`; lookedUp.add(id); return send(500, { id, error: { message: 'upstream failed after generation' } }) }
   if (text.startsWith('paused:')) return send(500, { id: `gen-${Date.now()}`, error: { message: 'upstream failed after generation' } })
   if (text.startsWith('error-cost:')) return send(500, { id: `gen-${Date.now()}`, error: { message: 'upstream failed after generation' }, usage: { cost: 0.0002 } })
   if (text.startsWith('malformed:')) return send(200, { id: `gen-${Date.now()}`, choices: [{ message: { content: JSON.stringify({ items: [flat({ title: 23 })] }) }, finish_reason: 'stop' }], usage: { cost: 0.0002 } })

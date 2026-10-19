@@ -7,7 +7,7 @@ import type { Command, CommandResult, Workspace } from '../domain/types.ts'
 import type { WorkspaceRepository } from './repository.ts'
 import { readWorkspace, sqliteMigrations, writeWorkspace, verifySqliteLayout } from './sqlite-mapping.ts'
 import { commandLogFields, debugLog, logOperationId } from './debug-log.ts'
-import { bindResult, sha256, markInterrupted, readAttempts, reconcileAttempt, reserveAttempt, settleAttempt, type ModelAttempt, type ReserveInput, type SettleInput } from './model-ledger.ts'
+import { bindResult, sha256, markInterrupted, readAttempts, reconcileAttempt, reserveAttempt, settleAttempt, type AttemptState, type ModelAttempt, type ReserveInput, type SettleInput } from './model-ledger.ts'
 
 const applicationId = 0x44544852
 export class SqliteWorkspaceRepository implements WorkspaceRepository {
@@ -122,7 +122,7 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
     })
   }
   async markInterruptedModelAttempts(now: string): Promise<number> { return this.transact(crypto.randomUUID(), db => markInterrupted(db, now)) }
-  async reconcileModelAttempt(attemptId: string, amount: number | 'worst-case', now: string): Promise<ModelAttempt> { return this.transact(attemptId, db => reconcileAttempt(db, attemptId, amount, now)) }
+  async reconcileModelAttempt(attemptId: string, amount: number | 'worst-case', now: string, note?: string, from?: readonly AttemptState[]): Promise<ModelAttempt> { return this.transact(attemptId, db => reconcileAttempt(db, attemptId, amount, now, note, from)) }
   async execute(command: Command): Promise<CommandResult> {
     const started=performance.now(),fields=commandLogFields(command); let db:DatabaseSync|undefined
     debugLog('command.start',fields)

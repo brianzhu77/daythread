@@ -98,13 +98,14 @@ export function markInterrupted(db: DatabaseSync, now: string): number {
 }
 
 /** Manual settlement of an unknown or estimated charge: an amount read from OpenRouter, or the reserved worst case. Never an implicit zero. */
-export function reconcileAttempt(db: DatabaseSync, attemptId: string, amount: number | 'worst-case', now: string): ModelAttempt {
+/** `from`: the states it may settle (the /generation lookup passes only 'unknown'). */
+export function reconcileAttempt(db: DatabaseSync, attemptId: string, amount: number | 'worst-case', now: string, note?: string, from: readonly AttemptState[] = ['unknown', 'estimated']): ModelAttempt {
   const attempt = readAttempts(db).find(a => a.id === attemptId)
   if (!attempt) throw new Error('Unknown model attempt')
-  if (attempt.state !== 'unknown' && attempt.state !== 'estimated') throw new Error(`Attempt is ${attempt.state}, not unknown or estimated`)
+  if (!from.includes(attempt.state)) throw new Error(`Attempt is ${attempt.state}, not ${from.join(' or ')}`)
   const actual = amount === 'worst-case' ? attempt.reservedUsd : amount
   if (!Number.isFinite(actual) || actual < 0) throw new Error('Reconcile amount must be a non-negative number of USD')
-  return settleAttempt(db, { attemptId, actualUsd: actual, generationId: null, now, note: amount === 'worst-case' ? 'reconciled at worst case' : 'reconciled by hand' })
+  return settleAttempt(db, { attemptId, actualUsd: actual, generationId: null, now, note: note ?? (amount === 'worst-case' ? 'reconciled at worst case' : 'reconciled by hand') })
 }
 
 /** Captures with a charge not yet confirmed: their receipt says "Cost unknown" until the real cost arrives (Jazz 4e8c2f1). */
