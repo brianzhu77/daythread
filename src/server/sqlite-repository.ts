@@ -82,7 +82,7 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
   }
   /** The ledger is server-only; the browser gets `modelStatus` instead. */
   async modelAttempts(): Promise<ModelAttempt[]> { return this.transact(crypto.randomUUID(), readAttempts) }
-  async reserveModelAttempt(input: ReserveInput): Promise<ModelAttempt> { return this.transact(input.id, db => reserveAttempt(db, input)) }
+  async reserveModelAttempt(input: ReserveInput): Promise<{ attempt: ModelAttempt; replayed: boolean }> { return this.transact(input.id, db => reserveAttempt(db, input)) }
   /**
    * Settles an attempt and, in the same transaction, applies the workspace command its result implies. A command the
    * domain refuses (the capture moved on) leaves the settlement in place and applies nothing; any other failure rolls

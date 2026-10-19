@@ -39,7 +39,8 @@ export function toBudgetLedger(attempts: ModelAttempt[]): BudgetLedger {
 }
 
 export interface ReserveInput { id: string; captureId: string; revision: number; day: string; upperBoundUsd: number; model: string; requestHash: string; now: string }
-export function reserveAttempt(db: DatabaseSync, input: ReserveInput): ModelAttempt {
+/** `replayed` = this id was already reserved with the same request: the caller must not send it again. */
+export function reserveAttempt(db: DatabaseSync, input: ReserveInput): { attempt: ModelAttempt; replayed: boolean } {
   const attempts = readAttempts(db)
   const existing = attempts.find(a => a.id === input.id)
   // Same attempt id and the same whole request: a replay, no new reservation. Anything else under that id is refused
@@ -47,12 +48,12 @@ export function reserveAttempt(db: DatabaseSync, input: ReserveInput): ModelAtte
   if (existing) {
     if (existing.captureId !== input.captureId || existing.revision !== input.revision || existing.day !== input.day || existing.model !== input.model || existing.requestHash !== input.requestHash || micros(existing.reservedUsd) !== micros(input.upperBoundUsd))
       throw new Error('Attempt identity reused with different input')
-    return existing
+    return { attempt: existing, replayed: true }
   }
   reserveBudget(toBudgetLedger(attempts), input.id, input.day, input.upperBoundUsd)
   db.prepare('INSERT INTO model_attempts (id,captureId,revision,day,reservedMicros,actualMicros,state,generationId,model,createdAt,settledAt,note,resultFingerprint,resultOperationId,requestHash) VALUES (?,?,?,?,?,NULL,?,NULL,?,?,NULL,NULL,NULL,NULL,?)')
     .run(input.id, input.captureId, input.revision, input.day, micros(input.upperBoundUsd), 'reserved', input.model, input.now, input.requestHash)
-  return readAttempts(db).find(a => a.id === input.id)!
+  return { attempt: readAttempts(db).find(a => a.id === input.id)!, replayed: false }
 }
 
 export interface SettleInput { attemptId: string; actualUsd: number | null; generationId: string | null; now: string; note?: string }

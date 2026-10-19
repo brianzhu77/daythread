@@ -117,14 +117,28 @@ export interface Capture {
   /** The captureMode in force when the result was recorded. */
   mode?: "auto" | "confirm";
 }
+export type GroundingFlag = "title-not-grounded" | "time-not-in-text" | "url-not-in-text" | "task-not-named" | "date-missing" | "date-role-missing";
 export interface ProposalItem {
   id: string;
-  kind: "create-task" | "create-material" | "update-task";
+  kind: "create-task" | "create-material" | "update-task" | "create-event" | "add-note";
   title: string;
   url?: string;
   taskId?: string;
   expectedVersion?: number;
   status?: Task["status"];
+  /** Model path: the date and what it means (do = planned, due = deadline, start = attention). */
+  date?: LocalDate | null;
+  dateRole?: "do" | "due" | "start" | null;
+  time?: string | null;
+  partOfDay?: "morning" | "afternoon" | "evening" | null;
+  /** His words on a saved link or a task's detail. */
+  note?: string | null;
+  /** Grounding: why this item waits for him instead of saving on its own. */
+  flags?: GroundingFlag[];
+  /** "applied" once it exists; "removed" if he took it out. Absent = waiting. */
+  state?: "applied" | "removed";
+  /** The task/event/material this proposal created. */
+  entityId?: string;
 }
 export interface Receipt {
   operationId: string;
@@ -150,6 +164,14 @@ export interface Workspace {
   captures: Capture[];
   receipts: Record<string, Receipt>;
 }
+/**
+ * Server-only actions (feat/model step 1). They are not in `commandSchema`, so the browser's runCommand can't send
+ * them; the server's model orchestrator applies them through the repository.
+ */
+export type ServerAction =
+  | { type: "capture-for-model"; pageId: string; text: string; model: string }
+  | { type: "organized-capture"; captureId: string; revision: number; model: string; mode: "auto" | "confirm"; proposals: ProposalItem[]; unreadable: number; contextLine: string }
+  | { type: "model-failed"; captureId: string; revision: number; failure: "failure" | "budget" | "context"; error: string };
 export type Action =
   | { type: "save-editor"; pageId: string; expectedContent: string; document: string; singleDeleteIds?: string[]; today?: string; historyTaskVersions?: Record<string, number>; history?: boolean }
   | { type: "ensure-day"; date: LocalDate }
@@ -265,7 +287,7 @@ export type Action =
 export interface Command {
   operationId: string;
   expectedRevision: number;
-  action: Action;
+  action: Action | ServerAction;
 }
 export interface CommandResult {
   workspace: Workspace;

@@ -11,6 +11,8 @@ import type {
   NoteBlock,
   Action,
   ProposalItem,
+  ServerAction,
+  Capture,
 } from "./types.ts";
 export class DomainError extends Error {}
 export function createEmptyWorkspace(): Workspace {
@@ -480,9 +482,62 @@ export function getDayView(state: Workspace, day: string): DayView {
     materialReview,
   };
 }
+/**
+ * Applies one proposal of a capture and marks it applied. Dates follow their role: do = planned (placed on that day),
+ * due = deadline, start = attention. Events need a date; a dated update moves or re-dates the existing task.
+ */
+function applyProposal(state: Workspace, c: Capture, p: Page, proposal: ProposalItem): void {
+  switch (proposal.kind) {
+    case "create-task": {
+      const role = proposal.date ? proposal.dateRole ?? "do" : null;
+      const t = createTask(state, proposal.title, p, null, {
+        deadlineOn: role === "due" ? proposal.date : null,
+        attentionOn: role === "start" ? proposal.date : null,
+      });
+      if (role === "do" && proposal.date) place(state, t, proposal.date);
+      appendBlock(p, ensureSection(p, "notes"), { id: newId(), kind: "task", taskId: t.id, text: t.title });
+      c.taskId ??= t.id;
+      proposal.entityId = t.id;
+      break;
+    }
+    case "create-event": {
+      if (!proposal.date) throw new DomainError("An event needs a date");
+      const r = execute(state, { type: "add-event", pageId: p.id, title: proposal.title, date: proposal.date, ...(proposal.time ? { time: proposal.time } : {}) } as Action);
+      proposal.entityId = r.entityId;
+      break;
+    }
+    case "add-note": {
+      const id = newId();
+      appendBlock(p, ensureSection(p, "notes"), { id, kind: "paragraph", text: text(proposal.title) });
+      proposal.entityId = id;
+      break;
+    }
+    case "create-material": {
+      const m = saveMaterial(state, p, ensureSection(p, "good-stuffs"), proposal.url!, proposal.title, "", proposal.note ?? "");
+      proposal.entityId = m.id;
+      break;
+    }
+    case "update-task": {
+      const t = task(state, proposal.taskId!);
+      if (proposal.expectedVersion !== undefined && t.version !== proposal.expectedVersion) throw new DomainError("Task changed; not applied");
+      if (proposal.status) t.status = proposal.status;
+      if (proposal.date) {
+        // An update's date without a role is a move to that day (Lead 6ea38307).
+        const role = proposal.dateRole ?? "do";
+        if (role === "do") place(state, t, proposal.date);
+        else if (role === "due") t.deadlineOn = proposal.date;
+        else t.attentionOn = proposal.date;
+      }
+      t.version++;
+      proposal.entityId = t.id;
+      break;
+    }
+  }
+  proposal.state = "applied";
+}
 function execute(
   state: Workspace,
-  action: Action,
+  action: Action | ServerAction,
 ): { message: string; entityId?: string; simulated?: boolean } {
   switch (action.type) {
     case "save-editor": {
@@ -1012,7 +1067,7 @@ function execute(
         return {
           message: "Already applied",
           entityId: c.taskId,
-          simulated: true,
+          simulated: c.simulated,
         };
       if (
         c.status !== "needs_confirmation" ||
@@ -1020,42 +1075,78 @@ function execute(
       )
         throw new DomainError("Capture proposal changed");
       const p = page(state, c.pageId);
-      for (const proposal of c.proposals ?? [])
+      const waiting = (c.proposals ?? []).filter((x) => !x.state);
+      for (const proposal of waiting)
         if (
           proposal.kind === "update-task" &&
           task(state, proposal.taskId!).version !== proposal.expectedVersion
         )
           throw new DomainError("Task changed; mixed group not applied");
-      for (const proposal of c.proposals ?? []) {
-        if (proposal.kind === "create-task") {
-          const t = createTask(state, proposal.title, p, null);
-          appendBlock(p, ensureSection(p, "notes"), {
-            id: newId(),
-            kind: "task",
-            taskId: t.id,
-            text: t.title,
-          });
-          c.taskId = t.id;
-        } else if (proposal.kind === "create-material")
-          saveMaterial(
-            state,
-            p,
-            ensureSection(p, "good-stuffs"),
-            proposal.url!,
-            proposal.title,
-          );
-        else if (proposal.kind === "update-task") {
-          const t = task(state, proposal.taskId!);
-          t.status = proposal.status ?? "done";
-          t.version++;
-        }
-      }
+      for (const proposal of waiting) applyProposal(state, c, p, proposal);
       c.status = "applied";
       return {
-        message: "Simulated proposal applied; new tasks are unscheduled",
+        message: c.simulated
+          ? "Simulated proposal applied; new tasks are unscheduled"
+          : "Saved",
         entityId: c.taskId,
-        simulated: true,
+        simulated: c.simulated,
       };
+    }
+    // ---- feat/model step 1: server-only actions (not in commandSchema) ----
+    case "capture-for-model": {
+      // His words are saved before any model call (03 §6); the result is recorded later by organized-capture.
+      const p = page(state, action.pageId);
+      const id = newId();
+      state.captures.push({
+        id,
+        pageId: p.id,
+        text: text(action.text),
+        status: "organizing",
+        proposalRevision: 1,
+        simulated: false,
+        model: action.model,
+        proposedTitle: action.text.trim(),
+        proposals: [],
+        contextLine: "Organizing…",
+      });
+      return { message: "Saved · organizing", entityId: id };
+    }
+    case "organized-capture": {
+      const c = requireValue(state.captures.find((c) => c.id === action.captureId), "Capture");
+      // A capture that moved on (edited, discarded, already organized) never takes a late result (03 §6).
+      if (c.status !== "organizing" || c.proposalRevision !== action.revision)
+        throw new DomainError("Capture moved on; result not applied");
+      const p = page(state, c.pageId);
+      c.proposals = structuredClone(action.proposals);
+      c.model = action.model;
+      c.mode = action.mode;
+      c.contextLine = action.contextLine;
+      c.error = action.unreadable
+        ? `${action.unreadable} part${action.unreadable === 1 ? " wasn't" : "s weren't"} saved as ${action.unreadable === 1 ? "an item" : "items"}`
+        : undefined;
+      // auto: new items that pass grounding save now; updates and held items wait. confirm: everything waits.
+      if (action.mode === "auto")
+        for (const proposal of c.proposals)
+          if (proposal.kind !== "update-task" && !proposal.flags?.length) applyProposal(state, c, p, proposal);
+      const waiting = c.proposals.some((x) => !x.state);
+      c.status = waiting ? "needs_confirmation" : "applied";
+      const saved = c.proposals.filter((x) => x.state === "applied").length;
+      return {
+        message: waiting
+          ? `${saved ? `${saved} saved · ` : ""}${c.proposals.filter((x) => !x.state).length} waiting for you`
+          : `${saved} saved`,
+        entityId: c.id,
+      };
+    }
+    case "model-failed": {
+      const c = requireValue(state.captures.find((c) => c.id === action.captureId), "Capture");
+      if (c.status !== "organizing" || c.proposalRevision !== action.revision)
+        throw new DomainError("Capture moved on; result not applied");
+      c.status = "failed";
+      c.failure = action.failure;
+      c.error = action.error;
+      c.contextLine = "Not organized · your text is kept";
+      return { message: action.error, entityId: c.id };
     }
     case "save-draft": {
       const p = ensureDay(state, action.date);

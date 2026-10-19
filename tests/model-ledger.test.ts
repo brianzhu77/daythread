@@ -28,7 +28,7 @@ test('one paid call in flight; settling frees the next; a replayed reservation i
   try {
     await reserve(s.repo, 'a1', s.captureId)
     await assert.rejects(reserve(s.repo, 'a2', s.captureId), /in-flight or unknown/)
-    assert.equal((await reserve(s.repo, 'a1', s.captureId)).id, 'a1')
+    assert.equal((await reserve(s.repo, 'a1', s.captureId)).replayed, true)
     await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0002, generationId: 'gen-1', now })
     await reserve(s.repo, 'a2', s.captureId)
     assert.equal((await s.repo.modelAttempts()).length, 2)
@@ -185,7 +185,7 @@ test('Ratchet #68: reusing a reservation id with another capture, revision or mo
     const base = { id: 'a1', captureId: s.captureId, revision: 1, day: '2026-10-19', upperBoundUsd: 0.005, model: 'deepseek/deepseek-v4.1-flash-1017', requestHash: 'req-1', now }
     for (const change of [{ captureId: 'other' }, { revision: 2 }, { model: 'openai/gpt-5.6-luna' }, { requestHash: 'req-2' }, { upperBoundUsd: 0.006 }, { day: '2026-10-20' }])
       await assert.rejects(s.repo.reserveModelAttempt({ ...base, ...change }), /identity reused with different input/)
-    assert.equal((await s.repo.reserveModelAttempt(base)).id, 'a1')
+    assert.equal((await s.repo.reserveModelAttempt(base)).attempt.id, 'a1')
     assert.equal((await s.repo.modelAttempts()).length, 1)
   } finally { await s.cleanup() }
 })

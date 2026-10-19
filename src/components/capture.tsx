@@ -8,7 +8,7 @@ type BarState = 'idle' | 'sending' | 'failed'
 
 /** "I'm speaking" (01 §4). The text is saved first; organizing follows. Bottom of the screen on iPhone. */
 export function CaptureBar({ page, placeholder = 'Capture… e.g. “Fri: submit materials, start Wed”' }: { page: Page; placeholder?: string }) {
-  const { run, simOutcome } = useWorkspace()
+  const { submitCapture, simOutcome } = useWorkspace()
   const [text, setText] = useState('')
   const [state, setState] = useState<BarState>('idle')
 
@@ -16,8 +16,8 @@ export function CaptureBar({ page, placeholder = 'Capture… e.g. “Fri: submit
     const value = text.trim()
     if (!value || state === 'sending') return
     setState('sending')
-    const receipt = await run({ type: 'capture', pageId: page.id, text: value, outcome: simOutcome }, null)
-    if (receipt) {
+    const saved = await submitCapture(page.id, value, simOutcome)
+    if (saved) {
       setText('')
       setState('idle')
     } else {
@@ -83,6 +83,8 @@ const kindLabel: Record<ProposalItem['kind'], string> = {
   'create-task': 'Task',
   'create-material': 'Material',
   'update-task': 'Change',
+  'create-event': 'Event',
+  'add-note': 'Note',
 }
 
 const failureCopy: Record<NonNullable<Capture['failure']>, string> = {
@@ -92,12 +94,13 @@ const failureCopy: Record<NonNullable<Capture['failure']>, string> = {
 }
 
 function ReceiptCard({ capture, workspace, currentPageId }: { capture: Capture; workspace: Workspace; currentPageId: string }) {
-  const { run, simOutcome } = useWorkspace()
+  const { run, submitCapture, simOutcome } = useWorkspace()
   const [showOriginal, setShowOriginal] = useState(false)
   const proposals = capture.proposals ?? []
   const mixed = proposals.some(p => p.kind === 'update-task')
   const fromPage = workspace.pages.find(p => p.id === capture.pageId)
-  const organizeAgain = () => run({ type: 'capture', pageId: capture.pageId, text: capture.text, outcome: simOutcome }, null)
+  // A fresh capture of the same words; a retry of the same capture (new revision) comes with the receipt UI (c).
+  const organizeAgain = () => submitCapture(capture.pageId, capture.text, simOutcome)
 
   return (
     <section className={`app-card receipt status-${capture.status}`} aria-label="Capture result">

@@ -4,7 +4,7 @@ import { Button, toast } from '@heroui/react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Action, DayView, LocalDate, Receipt, Workspace } from '../domain/types'
 import { getDayView } from '../domain/workspace'
-import { loadWorkspace, runCommand } from '../server/functions'
+import { loadWorkspace, runCommand, submitCapture as submitCaptureFn } from '../server/functions'
 import { configureDebug, debugClient } from '../lib/debug'
 import { sampleActions } from './fixture'
 import { todayIso } from './dates'
@@ -14,10 +14,14 @@ export interface Transport {
   run(workspace: Workspace, action: Action, operationId?: string): Promise<{ workspace: Workspace; receipt: Receipt }>
 }
 
+/** What the server says about the model (feat/model step 1); "simulated" means no key, so captures stay simulated. */
+export interface ModelInfo { state: 'simulated' | 'ready' | 'paused' | 'budget-used'; model: string | null; mode: 'auto' | 'confirm' }
+let latestModel: ModelInfo = { state: 'simulated', model: null, mode: 'auto' }
 const serverTransport: Transport = {
   load: async (operationId = newOperationId(), triggerOperationId) => {
     const response=await loadWorkspace({data:{operationId,triggerOperationId}})
     configureDebug(response.debug)
+    if (response.model) latestModel = response.model
     return response.workspace
   },
   run: (workspace, action, operationId = newOperationId()) => runCommand({ data: { operationId, expectedRevision: workspace.revision, action } }),
@@ -59,6 +63,10 @@ interface WorkspaceContextValue {
   reload(): void
   refresh(triggerOperationId?: string): Promise<Workspace>
   addSampleData(): Promise<void>
+  /** The model's state from the last load. */
+  model: ModelInfo
+  /** Saves a capture: through the model when it's set up, otherwise the simulated capture. False = not saved. */
+  submitCapture(pageId: string, text: string, outcome?: SimOutcome): Promise<boolean>
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
@@ -177,6 +185,30 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     if (lastFailed) { debugClient('command.retry',{operationId:lastFailed.operationId,command:lastFailed.action.type}); void run(lastFailed.action, lastFailed.notice, lastFailed.operationId) }
   }, [lastFailed, run])
 
+  const [model, setModel] = useState<ModelInfo>(latestModel)
+  useEffect(() => { setModel(latestModel) }, [workspace])
+  const submitCapture = useCallback(async (pageId: string, text: string, outcome?: SimOutcome) => {
+    if (latestModel.state === 'simulated') return Boolean(await run({ type: 'capture', pageId, text, ...(outcome ? { outcome } : {}) }, null))
+    // His words are saved by the server before any model call; organizing then continues there.
+    const job = queue.current.then(async () => {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try { const r = await submitCaptureFn({ data: { operationId: newOperationId(), pageId, text } }); await refresh(); return r.captureId !== null || r.info.state !== 'simulated' }
+        catch (error) { if (attempt === 1 || !/Saved elsewhere/.test(error instanceof Error ? error.message : '')) return false; await refresh() }
+      }
+      return false
+    })
+    queue.current = job.catch(() => undefined)
+    return job
+  }, [run, refresh])
+  // While a capture is still being organized, follow it (the model answers in a few seconds; stop after ~90 s).
+  const polls = useRef(0)
+  useEffect(() => {
+    if (!workspace?.captures.some(c => c.status === 'organizing')) { polls.current = 0; return }
+    if (polls.current >= 75) return
+    const t = setTimeout(() => { polls.current++; void refresh().catch(() => undefined) }, 1200)
+    return () => clearTimeout(t)
+  }, [workspace, refresh])
+
   const addSampleData = useCallback(async () => {
     for (const action of sampleActions(todayIso())) if (!(await run(action))) return
     push({ text: 'Sample data added' })
@@ -196,8 +228,10 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       reload,
       refresh,
       addSampleData,
+      model,
+      submitCapture,
     }),
-    [workspace, loadError, saveState, saveError, lastFailed, simOutcome, run, retry, reload, refresh, addSampleData],
+    [workspace, loadError, saveState, saveError, lastFailed, simOutcome, run, retry, reload, refresh, addSampleData, model, submitCapture],
   )
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }
