@@ -1,6 +1,6 @@
 # Model Step 1(b), independent review task #69
 
-Candidate 7116c33. **Changes required.** No paid model calls or production writes.
+Final candidate **25dc72a: PASS for Step 1(b)**. Original 7116c33 blockers below are closed by supplements. No paid model calls or production writes.
 
 Confirmed: valid JSON containing task.title=23 crashes grounding with TypeError after a paid response; capture remains organizing and ledger reserved despite a known cost. HTTP500 with explicit generation ID and usage.cost=0.002 is forced to settled actual=0 and a false no-charge note. boundaries.mjs/log reproduces both against isolated real SQLite stores.
 
@@ -25,3 +25,11 @@ A capture written Sunday23:59 and organized Monday09:00 sends Sunday23:59 as mod
 Concurrent single-send and discard-during-flight paths pass again. Independent full suite: 146 passed, 4 TODO, no failures/skips. Source and scripts match4527871 (94a5721 code plus fake-provider switches). Initial actual HTTP rejection, env and startup-recovery checks carry forward; runtime boundary source unchanged.
 
 Lead subsequently changed the error-accounting contract to a nonblocking estimated ledger state (message18363844). This version does not implement that new rule, so final #69 acceptance remains pending the next candidate's estimated-path and roundtrip checks. No receipt UI or paid provider acceptance is implied.
+
+## Final25dc72a: estimated accounting passes
+
+Actual orchestration against a fake HTTP500/no-usage response leaves actualUsd and settledAt empty, sets estimated, counts the reservation in today's spend, and does not pause. The next capture sends a provider request and saves normally. Reconciling the estimate to a reported cost changes only the ledger: the complete workspace is unchanged and no task is duplicated; a settled attempt cannot be reconciled again.
+
+Settled, estimated and generation-backed unknown rows survive downgrade, old c8fb28a repository load and forward byte-for-byte. An unknown row cannot be unpaused by subsequently omitting its generation ID. A9.8 estimate plus0.3 reservation is rejected against the10 cap. These are executed assertions in estimated.mjs/log, not inferred from author tests. Final full suite:148 passed,4 TODO, no failures/skips (152 total). The earlier runtime-validation, capturedAt, HTTP-boundary and concurrency results carry forward.
+
+No paid calls, production writes or active reviewer servers. Receipt UI/same-capture Retry and generation-cost lookup remain separate work. The capturedAt emergency-rollback loss is a documented limitation; it does not invalidate normal persisted capture-time semantics.

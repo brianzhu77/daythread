@@ -1,0 +1,8 @@
+(node:30458) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS HTTP500 without usage is estimated/actual-empty and counts reservation; next actual organize sends/applies normally
+PASS real cost reconciliation changes ledger only, no workspace/application change; settled cannot reconcile again
+PASS settled/estimated/unknown survive downgrade-old-load-forward identically; losing generation ID does not unpause unknown
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS 9.8 estimated plus 0.3 reserve exceeds cap and is refused
