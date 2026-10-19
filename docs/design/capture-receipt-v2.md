@@ -53,13 +53,17 @@ This follows Bumblebee's grounding check (b842c6d3, abee294e). Ratchet's caution
 - No red: none of these lose data. Red stays for "Not created" style failures that need an action to avoid losing something.
 - The morning card uses the same header tag for proposals in the same states.
 
+## Items the app couldn't use
+
+If the model returns an item the server rejects (bad shape, unknown task id, invalid date), it never just disappears (Ratchet, b842c6d3 81a1eb86). The receipt adds one muted line above the footer: **"1 part of your text wasn't organized · Show original"**. "Show original" opens his text, which is always kept, so he can capture that part again or type it into the page. It isn't red: nothing he wrote is lost.
+
 ## Updates to existing tasks (unchanged rule, clearer row)
 
 The row reads **"[Update] Fix export bug → done"** and stays in the waiting state with Apply / Discard. The chip uses `--blue-soft` so it's clearly different from the new items above it. This was where the probe's "APPX update instead of a new Cairn task" happened, and it's already safe because nothing applies without Brian.
 
 ## Copy
 
-Task · Event · Saved link · Note · Update · No date · Needs a look · Save · Time not in your text · Link not in your text · Title not in your text · Task not in your text · Date missing · Date unclear · Do · Start · Due · {n} waiting for you · Remove · Open · Undo all · Show original · Can't undo · edited since. Bumblebee owns final wording.
+Task · Event · Saved link · Note · Update · No date · Needs a look · Save · Time not in your text · Link not in your text · Title not in your text · Task not in your text · Date missing · Date unclear · Do · Start · Due · {n} waiting for you · {n} part(s) of your text wasn't organized · Remove · Open · Undo all · Show original · Can't undo · edited since. Bumblebee owns final wording.
 
 ## Acceptance (Ratchet)
 
