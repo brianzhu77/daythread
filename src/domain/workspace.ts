@@ -329,8 +329,10 @@ function lineNote(node: EditorNode | undefined, text: string, url: string): stri
   return rest.trim().replace(/^[\s\-–—:·|,]+/, "").trim();
 }
 /** Created by this line's save and never acted on or annotated: the only Material the editor may re-key. */
-function untouchedLineMaterial(m: Material, blockId: string): boolean {
-  return m.id === `material:${blockId}` && m.sources.length === 1 && m.sources[0]!.blockId === blockId && !m.sources[0]!.note
+function untouchedLineMaterial(m: Material, blockId: string, previous: EditorNode | undefined): boolean {
+  // The title is still the one this line's link gave it, so nobody has renamed the item since.
+  const lineTitle = previous ? lineLink(previous, inlineText(previous.content))?.title : undefined;
+  return m.id === `material:${blockId}` && m.title === (lineTitle ?? m.url) && m.sources.length === 1 && m.sources[0]!.blockId === blockId && !m.sources[0]!.note
     && m.reviewState === "pending" && m.resurface && !m.body && m.nextReviewOn === null && m.lastDecisionOn === null
     && !m.skippedUntil && !m.taskId && !m.openedOn?.length && !m.dismissedOn?.length && !m.decisions?.length;
 }
@@ -341,15 +343,15 @@ function untouchedLineMaterial(m: Material, blockId: string): boolean {
  * Saves are debounced while Brian types, so an untouched Material follows its line from one URL to the next
  * (re-keyed); words added to the line become that save's note, and a deleted line leaves the Material alone.
  */
-function linkMaterialLines(state: Workspace, p: Page, nodes: readonly EditorNode[]) {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
+function linkMaterialLines(state: Workspace, p: Page, nodes: readonly EditorNode[], previousNodes: readonly EditorNode[] = nodes) {
+  const byId = new Map(nodes.map((n) => [n.id, n])), previousById = new Map(previousNodes.map((n) => [n.id, n]));
   for (const s of p.sections) {
     if (s.kind !== "good-stuffs") continue;
     for (const b of s.blocks) {
       const node = byId.get(b.id), link = lineLink(node, b.text);
       const m = b.kind === "material" ? state.materials.find((m) => m.id === b.materialId) : undefined;
       if (m) {
-        if (link && untouchedLineMaterial(m, b.id)) {
+        if (link && untouchedLineMaterial(m, b.id, previousById.get(b.id))) {
           if (link.url === m.url) { m.title = text(link.title, 1000); continue; }
           const owner = state.materials.find((x) => x.url === link.url);
           if (!owner) { m.url = link.url; m.title = text(link.title, 1000); continue; }
@@ -545,7 +547,7 @@ function execute(
       }
       }
       p.sections = projectDocument(nodes, p, state);
-      linkMaterialLines(state, p, all);
+      linkMaterialLines(state, p, all, flat(JSON.parse(p.editorJSON ?? "[]")));
       const ordered = p.sections.flatMap(s => s.blocks).filter(b => b.kind === 'task' && b.planRole === 'plan');
       ordered.forEach((b, order) => {
         const relation = state.placements.find(x => x.taskId === b.taskId && x.date === p.date && x.state === 'included');

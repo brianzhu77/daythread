@@ -174,3 +174,11 @@ test('relink-material-lines also finds titled links in the saved editor document
   ws = run(ws, { type: 'relink-material-lines' })
   assert.equal(ws.materials.length, 1); assert.equal(ws.materials[0]!.title, 'xx')
 })
+
+test('Ratchet #66: an item whose title was changed elsewhere is not re-keyed or retitled by the line', () => {
+  let ws = saveWith(day(), 'good-stuffs', [textLine('g1', 'https://example.com/a')])
+  ws = structuredClone(ws); ws.materials[0]!.title = 'User title'
+  ws = editLine(ws, 'g1', textLine('g1', 'https://example.com/b'))
+  assert.equal(ws.materials.length, 1)
+  assert.equal(ws.materials[0]!.url, 'https://example.com/a'); assert.equal(ws.materials[0]!.title, 'User title')
+})
