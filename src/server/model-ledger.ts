@@ -1,13 +1,20 @@
 // Stored form of the model budget ledger (03 E3) and the rules around it. Pure helpers here; the SQLite repository
 // runs them inside its own transactions. Amounts on disk are integer micro-USD; BudgetLedger works in USD.
 import type { DatabaseSync } from 'node:sqlite'
+import { createHash } from 'node:crypto'
 import { reserveBudget, settleBudget, type BudgetLedger } from '../domain/budget.ts'
+
+export const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
 
 export type AttemptState = 'reserved' | 'unknown' | 'settled' | 'not-sent'
 export interface ModelAttempt {
   id: string; captureId: string | null; revision: number | null; day: string
   reservedUsd: number; actualUsd: number | null; state: AttemptState
   generationId: string | null; model: string | null; createdAt: string; settledAt: string | null; note: string | null
+  /** Binds the attempt to the one result it produced (Ratchet #68): the command it applied, or "none". */
+  resultFingerprint: string | null; resultOperationId: string | null
+  /** Hash of the exact request body sent for this attempt. */
+  requestHash: string | null
 }
 const micros = (usd: number) => Math.ceil(usd * 1_000_000)
 const usd = (m: number) => m / 1_000_000
@@ -19,6 +26,8 @@ export function readAttempts(db: DatabaseSync): ModelAttempt[] {
     state: String(r.state) as AttemptState, generationId: r.generationId === null ? null : String(r.generationId),
     model: r.model === null ? null : String(r.model), createdAt: String(r.createdAt), settledAt: r.settledAt === null ? null : String(r.settledAt),
     note: r.note === null ? null : String(r.note),
+    resultFingerprint: r.resultFingerprint === null ? null : String(r.resultFingerprint), resultOperationId: r.resultOperationId === null ? null : String(r.resultOperationId),
+    requestHash: r.requestHash === null ? null : String(r.requestHash),
   }))
 }
 /** A charge above its reservation stops further calls until someone looks (03 E3 point 7). */
@@ -29,15 +38,20 @@ export function toBudgetLedger(attempts: ModelAttempt[]): BudgetLedger {
   }
 }
 
-export interface ReserveInput { id: string; captureId: string; revision: number; day: string; upperBoundUsd: number; model: string; now: string }
+export interface ReserveInput { id: string; captureId: string; revision: number; day: string; upperBoundUsd: number; model: string; requestHash: string; now: string }
 export function reserveAttempt(db: DatabaseSync, input: ReserveInput): ModelAttempt {
   const attempts = readAttempts(db)
   const existing = attempts.find(a => a.id === input.id)
-  // Same attempt id and same input: a replay, no new reservation (reserveBudget refuses a different input).
+  // Same attempt id and the same whole request: a replay, no new reservation. Anything else under that id is refused
+  // (Ratchet #68: day and amount alone weren't enough).
+  if (existing) {
+    if (existing.captureId !== input.captureId || existing.revision !== input.revision || existing.day !== input.day || existing.model !== input.model || existing.requestHash !== input.requestHash || micros(existing.reservedUsd) !== micros(input.upperBoundUsd))
+      throw new Error('Attempt identity reused with different input')
+    return existing
+  }
   reserveBudget(toBudgetLedger(attempts), input.id, input.day, input.upperBoundUsd)
-  if (existing) return existing
-  db.prepare('INSERT INTO model_attempts (id,captureId,revision,day,reservedMicros,actualMicros,state,generationId,model,createdAt,settledAt,note) VALUES (?,?,?,?,?,NULL,?,NULL,?,?,NULL,NULL)')
-    .run(input.id, input.captureId, input.revision, input.day, micros(input.upperBoundUsd), 'reserved', input.model, input.now)
+  db.prepare('INSERT INTO model_attempts (id,captureId,revision,day,reservedMicros,actualMicros,state,generationId,model,createdAt,settledAt,note,resultFingerprint,resultOperationId,requestHash) VALUES (?,?,?,?,?,NULL,?,NULL,?,?,NULL,NULL,NULL,NULL,?)')
+    .run(input.id, input.captureId, input.revision, input.day, micros(input.upperBoundUsd), 'reserved', input.model, input.now, input.requestHash)
   return readAttempts(db).find(a => a.id === input.id)!
 }
 
@@ -81,4 +95,19 @@ export function modelStatus(attempts: ModelAttempt[], day: string, capUsd = 10):
   const spent = attempts.filter(a => a.day === day && a.state !== 'not-sent').reduce((s, a) => s + (a.actualUsd ?? a.reservedUsd), 0)
   if (ledger.breached || attempts.some(a => a.state === 'unknown')) return { state: 'paused', spentTodayUsd: spent }
   return { state: spent >= capUsd ? 'budget-used' : 'ready', spentTodayUsd: spent }
+}
+
+/**
+ * The result an attempt produced, bound once (Ratchet #68). Returns the operation id of the first result when the same
+ * result comes again, and refuses a different one; null means this is the first result for the attempt.
+ */
+export function bindResult(db: DatabaseSync, attemptId: string, fingerprint: string, operationId: string | null): string | null {
+  const attempt = readAttempts(db).find(a => a.id === attemptId)
+  if (!attempt) throw new Error('Unknown model attempt')
+  if (attempt.resultFingerprint !== null) {
+    if (attempt.resultFingerprint !== fingerprint) throw new Error('Model attempt already settled with a different result')
+    return attempt.resultOperationId ?? 'none'
+  }
+  db.prepare('UPDATE model_attempts SET resultFingerprint=?, resultOperationId=? WHERE id=?').run(fingerprint, operationId, attemptId)
+  return null
 }

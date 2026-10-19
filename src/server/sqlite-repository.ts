@@ -7,7 +7,7 @@ import type { Command, CommandResult, Workspace } from '../domain/types.ts'
 import type { WorkspaceRepository } from './repository.ts'
 import { readWorkspace, sqliteMigrations, writeWorkspace, verifySqliteLayout } from './sqlite-mapping.ts'
 import { commandLogFields, debugLog, logOperationId } from './debug-log.ts'
-import { markInterrupted, readAttempts, reconcileAttempt, reserveAttempt, settleAttempt, type ModelAttempt, type ReserveInput, type SettleInput } from './model-ledger.ts'
+import { bindResult, sha256, markInterrupted, readAttempts, reconcileAttempt, reserveAttempt, settleAttempt, type ModelAttempt, type ReserveInput, type SettleInput } from './model-ledger.ts'
 
 const applicationId = 0x44544852
 export class SqliteWorkspaceRepository implements WorkspaceRepository {
@@ -92,6 +92,15 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
     return this.transact(input.attemptId, db => {
       const attempt = settleAttempt(db, input)
       let result: CommandResult | undefined, refused: string | undefined
+      // One attempt, one result: the same result again replays the first receipt; a different one is refused.
+      // Fingerprint = what it applies + what it cost + which generation (Lead d25b6c28).
+      const fingerprint = sha256(JSON.stringify([command ? command.action : null, input.actualUsd, input.generationId]))
+      const earlier = bindResult(db, input.attemptId, fingerprint, command?.operationId ?? null)
+      if (earlier !== null) {
+        const current = readWorkspace(db)
+        const receipt = earlier === 'none' ? undefined : current?.receipts[earlier]
+        return { attempt, ...(receipt && current ? { result: { workspace: current, receipt } } : {}), ...(command && !receipt ? { refused: 'Result already recorded for this attempt' } : {}) }
+      }
       if (command) {
         const current = readWorkspace(db)
         if (!current) throw new Error('Workspace missing')

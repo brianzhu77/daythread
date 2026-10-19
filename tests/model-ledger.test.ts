@@ -20,7 +20,7 @@ async function store() {
 }
 const now = '2026-10-19T17:00:00.000Z'
 const reserve = (repo: SqliteWorkspaceRepository, id: string, captureId: string, upperBoundUsd = 0.005, day = '2026-10-19') =>
-  repo.reserveModelAttempt({ id, captureId, revision: 1, day, upperBoundUsd, model: 'deepseek/deepseek-v4.1-flash-1017', now })
+  repo.reserveModelAttempt({ id, captureId, revision: 1, day, upperBoundUsd, model: 'deepseek/deepseek-v4.1-flash-1017', requestHash: 'req-1', now })
 const run = (path: string, script: string) => new Promise<string>((ok, fail) => { const c = spawn(process.execPath, [script, path]); let s = ''; c.stdout.on('data', d => s += d); c.stderr.on('data', d => s += d); c.on('exit', code => code === 0 ? ok(s) : fail(new Error(s))) })
 
 test('one paid call in flight; settling frees the next; a replayed reservation is no new charge', async () => {
@@ -158,5 +158,34 @@ test('rollback 3 → 2 keeps the ledger (and a JSON copy); rolling forward again
     assert.equal((await again.load()).captures[0]!.status, 'failed')
     assert.deepEqual(await again.modelAttempts(), before)
     assert.equal(modelStatus(before, '2026-10-19').state, 'paused')
+  } finally { await s.cleanup() }
+})
+
+test('Ratchet #68: one attempt, one result; a different result under any operation id is refused, the same one replays', async () => {
+  const s = await store()
+  try {
+    await reserve(s.repo, 'a1', s.captureId)
+    const ws = await s.repo.load(), page = ws.pages[0]!
+    const first = { operationId: 'op-1', expectedRevision: ws.revision, action: { type: 'add-task' as const, pageId: page.id, sectionId: page.sections[0]!.id, title: 'First result' } }
+    const done = await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0002, generationId: 'gen-1', now }, first)
+    const different = { operationId: 'op-2', expectedRevision: done.result!.workspace.revision, action: { ...first.action, title: 'Different result' } }
+    await assert.rejects(s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0002, generationId: 'gen-1', now }, different), /different result/)
+    await assert.rejects(s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0002, generationId: 'gen-other', now }, first), /different/)
+    const again = await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0002, generationId: 'gen-1', now }, { ...first, operationId: 'op-3' })
+    assert.equal(again.result!.receipt.operationId, 'op-1')
+    const titles = (await s.repo.load()).tasks.map(t => t.title)
+    assert.deepEqual(titles.filter(t => /result/.test(t)), ['First result'])
+  } finally { await s.cleanup() }
+})
+
+test('Ratchet #68: reusing a reservation id with another capture, revision or model is refused, not replayed', async () => {
+  const s = await store()
+  try {
+    await reserve(s.repo, 'a1', s.captureId)
+    const base = { id: 'a1', captureId: s.captureId, revision: 1, day: '2026-10-19', upperBoundUsd: 0.005, model: 'deepseek/deepseek-v4.1-flash-1017', requestHash: 'req-1', now }
+    for (const change of [{ captureId: 'other' }, { revision: 2 }, { model: 'openai/gpt-5.6-luna' }, { requestHash: 'req-2' }, { upperBoundUsd: 0.006 }, { day: '2026-10-20' }])
+      await assert.rejects(s.repo.reserveModelAttempt({ ...base, ...change }), /identity reused with different input/)
+    assert.equal((await s.repo.reserveModelAttempt(base)).id, 'a1')
+    assert.equal((await s.repo.modelAttempts()).length, 1)
   } finally { await s.cleanup() }
 })

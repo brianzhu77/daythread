@@ -36,8 +36,9 @@ const addedColumns: readonly { table: typeof specs[number]['name']; column: stri
 export const modelAttemptsTable = `CREATE TABLE IF NOT EXISTS model_attempts (
   id TEXT PRIMARY KEY, captureId TEXT, revision INTEGER, day TEXT NOT NULL,
   reservedMicros INTEGER NOT NULL, actualMicros INTEGER, state TEXT NOT NULL CHECK(state IN ('reserved','unknown','settled','not-sent')),
-  generationId TEXT, model TEXT, createdAt TEXT NOT NULL, settledAt TEXT, note TEXT) STRICT`
-const modelAttemptColumns = ['id','captureId','revision','day','reservedMicros','actualMicros','state','generationId','model','createdAt','settledAt','note']
+  generationId TEXT, model TEXT, createdAt TEXT NOT NULL, settledAt TEXT, note TEXT,
+  resultFingerprint TEXT, resultOperationId TEXT, requestHash TEXT) STRICT`
+const modelAttemptColumns = ['id','captureId','revision','day','reservedMicros','actualMicros','state','generationId','model','createdAt','settledAt','note','resultFingerprint','resultOperationId','requestHash']
 // Each function runs once, in order, inside the adapter's initialization transaction.
 export const sqliteMigrations: readonly ((db: DatabaseSync) => void)[] = [db => {
   db.exec('CREATE TABLE meta (snapshot TEXT PRIMARY KEY CHECK(snapshot IN (\'current\',\'undo\')), schemaVersion INTEGER NOT NULL, revision INTEGER NOT NULL, timezone TEXT NOT NULL, undoOperationId TEXT, undoRevision INTEGER) STRICT')
