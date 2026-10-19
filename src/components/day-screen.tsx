@@ -3,6 +3,7 @@ import { getCalendarTasks } from '../domain/workspace'
 import { longLabel } from './dates'
 import { CaptureBar, CaptureReceipts } from './capture'
 import { ContinuousPage } from './continuous-page'
+import { LinkedFrom, Subpages } from './page-tree'
 import { FactsStrip } from './facts-strip'
 import { StartTheDay, hasHandoffContent, useHandoffLater } from './start-the-day'
 import { useDay, useWorkspace } from './use-day'
@@ -43,6 +44,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
   return (
     <div className="day-screen">
       <DayHeader date={date} today={today} />
+      {page && <LinkedFrom page={page} workspace={workspace} />}
 
       <div className="day-body">
         {showHandoff && <StartTheDay view={view} workspace={workspace} today={today} onLater={() => setLater(true)} />}
@@ -57,7 +59,10 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
         />
         {page && <CaptureReceipts page={page} workspace={workspace} />}
         {page ? (
-          <ContinuousPage key={page.id} page={page} workspace={workspace} />
+          <>
+            <ContinuousPage key={page.id} page={page} workspace={workspace} />
+            <Subpages page={page} workspace={workspace} />
+          </>
         ) : (
           <div className="empty">
             <p>No page for {longLabel(date)} yet.</p>

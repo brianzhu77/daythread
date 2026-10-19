@@ -910,3 +910,84 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
   .receipt-v2 .row-menu:has(> .chip-button) > .app-menu { left: 0; right: auto; }
 }
 .receipt-refusal { margin: 4px 0 0; font-size: 13px; color: var(--ink-2); }
+
+/* Pages step B (Jazz docs/design/pages-tree-layout.md cfc7b92): sidebar tree, breadcrumb, Linked from, Subpages, Move to… */
+.tree { display: grid; gap: 1px; }
+.tree-row { display: flex; align-items: center; width: 100%; min-height: 30px; height: auto; padding: 0 4px 0 calc(var(--depth, 0) * 16px); border: 0; border-radius: 10px; background: none; color: var(--ink-2); font: inherit; font-size: 14px; text-align: left; }
+.tree-row:hover, .tree-row:focus-within { background: var(--fill); }
+.tree-row[aria-current='page'] { background: var(--card); color: var(--ink); font-weight: 550; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+.disclose { display: grid; place-items: center; width: 22px; height: 30px; min-height: 0; flex: none; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--ink-3); cursor: pointer; }
+.disclose:hover { color: var(--ink); }
+.disclose svg { width: 12px; height: 12px; transition: transform .15s; }
+.disclose[aria-expanded='true'] svg, .tree-row.month[aria-expanded='true'] .disclose svg { transform: rotate(90deg); }
+.disclose.none { visibility: hidden; }
+.tree-title { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; min-height: 30px; color: inherit; text-decoration: none; }
+.tree-title svg { width: 16px; height: 16px; flex: none; color: var(--ink-3); }
+.tree-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-row.month { cursor: pointer; font-size: 13px; font-weight: 550; }
+.tree-acts { display: none; gap: 2px; }
+.tree-row:hover .tree-acts, .tree-row:focus-within .tree-acts { display: flex; }
+.tree-acts button { display: grid; place-items: center; width: 24px; height: 24px; min-height: 0; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--ink-2); font: inherit; font-size: 15px; line-height: 1; cursor: pointer; }
+.tree-acts button:hover { background: rgba(0, 0, 0, .06); color: var(--ink); }
+@media (hover: none) { .tree-acts { display: none !important; } }
+
+.doc-screen > .crumbs { margin: -12px 0 -14px; }
+.crumbs { display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 44px; font-size: 14px; color: var(--ink-2); }
+.crumbs-path { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; overflow: hidden; }
+.crumb { display: inline-flex; align-items: center; min-height: 44px; min-width: 0; max-width: 220px; padding: 0 6px; border: 0; border-radius: 8px; background: none; color: var(--ink-2); font: inherit; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.crumbs-path > :first-child { margin-left: -6px; }
+.crumbs-path.measuring > *, .crumbs-path.folded > :not(.crumb-last) { flex-shrink: 0; }
+.crumbs-path.measuring { overflow: hidden; }
+.doc-screen { grid-template-columns: minmax(0, 1fr); }
+.crumb:hover { background: var(--fill); color: var(--ink); }
+.crumbs-path .row-menu { display: flex; }
+.crumb-sep { display: grid; place-items: center; flex: none; color: var(--ink-3); }
+.crumb-sep svg { width: 11px; height: 11px; }
+.page-more { display: grid; place-items: center; width: 44px; height: 44px; margin-right: -10px; border: 0; border-radius: 10px; background: none; color: var(--ink-2); font-size: 20px; letter-spacing: 1px; cursor: pointer; }
+.page-more:hover { background: var(--fill); }
+.crumbs .row-menu .app-menu { right: 0; left: auto; }
+.crumbs-path .row-menu .app-menu { left: 0; right: auto; }
+
+.page-head { display: grid; gap: 8px; }
+.linked-from { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0; font-size: 14px; color: var(--ink-2); }
+.day-screen > .linked-from { margin-top: 4px; }
+.linked-from-label { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-3); }
+.linked-from a { display: inline-flex; align-items: center; min-height: 28px; padding: 0 8px; border-radius: 7px; background: var(--fill); color: var(--ink); font-size: 13px; font-weight: 500; text-decoration: none; }
+.linked-from a:hover { background: #e4e3ec; }
+.linked-from-more { padding: 0 4px; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; }
+
+/* The editor's bottom room moves below the list, so the list isn't pushed far down (layout §4). */
+.continuous-editor:has(+ .subpages) { min-height: 0; padding-bottom: 0; }
+.subpages { margin-top: 36px; padding: 14px 0 140px; border-top: 1px solid var(--line); }
+.subpages-title { margin: 0 0 4px; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.subpages-title span { color: var(--ink-3); font-weight: 500; }
+.subpages li, .tree li { min-width: 0; }
+.subpage-row { display: flex; align-items: center; gap: 8px; min-height: 40px; margin: 0 -8px; padding: 0 8px; border-radius: 8px; color: var(--ink); text-decoration: none; }
+.subpage-row:hover { background: var(--fill); }
+.subpage-row svg { flex: none; color: var(--ink-3); }
+.subpage-row > svg:first-child { width: 18px; height: 18px; }
+.subpage-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subpage-count { font-size: 13px; color: var(--ink-3); }
+@media (max-width: 599px) { .subpage-row { min-height: 44px; } }
+
+.move-dialog.is-sheet { margin: 0; }
+.move-dialog:not(.is-sheet) { width: 480px; max-width: calc(100vw - 32px); margin-top: 110px; }
+.move-dialog .sheet-handle { margin: 0 auto 10px; }
+.move-head { display: flex; align-items: center; justify-content: space-between; min-height: 36px; margin-bottom: 8px; }
+.move-head h2 { margin: 0; font-size: 17px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.move-list { display: grid; margin-top: 8px; max-height: 60vh; overflow-y: auto; }
+.move-group { margin: 0; padding: 12px 10px 4px; font-size: 12px; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .05em; }
+.move-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 4px 10px; border: 0; border-radius: 10px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.move-row:hover, .move-row.active { background: var(--fill); }
+.move-row-icon { display: grid; place-items: center; flex: none; color: var(--ink-3); }
+.move-row-text { display: grid; flex: 1; min-width: 0; }
+.move-row-text > span, .move-row-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.move-row-text small { font-size: 12.5px; color: var(--ink-3); }
+.move-row-text small.refused { color: var(--warn, #a8551b); }
+.move-row-text mark { background: none; color: var(--ink); font-weight: 650; }
+.move-row.current { color: var(--ink-3); cursor: default; }
+.move-row.current:hover { background: none; }
+.move-row-tag { font-size: 12px; color: var(--ink-3); }
+.move-refused { margin: 0; padding: 10px; font-size: 14px; color: var(--warn); }
+.move-empty, .move-note { margin: 0; padding: 12px 10px; font-size: 14px; color: var(--ink-2); }
+.move-note { font-size: 13px; color: var(--ink-3); }

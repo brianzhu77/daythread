@@ -1,12 +1,12 @@
 import { Link, useRouterState } from '@tanstack/react-router'
+import { rememberOpened, SidebarTree, useToday } from './page-tree'
 import { useEffect, useRef, useState } from 'react'
 import { CaptureBar, CaptureReceipts } from './capture'
-import { longLabel, todayIso } from './dates'
+import { todayIso } from './dates'
 import { CalendarIcon, PagesIcon, PlusIcon, ReviewIcon, TagsIcon, TasksIcon, TodayIcon } from './icons'
-import type { LocalDate, Page } from '../domain/types'
+import type { LocalDate } from '../domain/types'
 import { useDay, useWorkspace } from './use-day'
 import { useCreatePage } from './pages-screen'
-import { displayPageTitle } from './page-title'
 
 // Highlight only where you are: Today is today's page, not any day (another day highlights its Days row, or nothing).
 const destinations = [
@@ -21,7 +21,8 @@ const destinations = [
 /** Sidebar on laptop, floating tab capsule + capture button on phone (craft-v1 §3). CSS picks one. */
 export function Navigation() {
   const path = useRouterState({ select: s => s.location.pathname })
-  const [today] = useState(todayIso)
+  const openPageId = useRouterState({ select: s => (s.location.search as { page?: string }).page })
+  const today = useToday()
   const [captureOpen, setCaptureOpen] = useState(false)
 
   useEffect(() => {
@@ -47,7 +48,7 @@ export function Navigation() {
             Review
           </Link>
         </nav>
-        <DayList path={path} today={today} />
+        <PageGroups path={path} openPageId={openPageId} today={today} />
       </aside>
 
       <nav className="tab-bar" aria-label="Main">
@@ -78,36 +79,14 @@ function NewPageRow() {
   return <button type="button" className="side-row small" onClick={async () => { const id = await createPage(); if (id) window.location.assign(`/pages?page=${encodeURIComponent(id)}`) }}>＋ New page</button>
 }
 
-/** Something was written or tracked on the page; a page created by opening or browsing a day has neither. */
-function hasContent(page: Page): boolean {
-  return Boolean(page.reviewText.trim()) || page.sections.some(s => s.blocks.some(b => b.kind === 'task' || b.text.trim()))
-}
-
-/**
- * The sidebar's Days group (craft-v1 §3.2): past days with content, newest first.
- * Today is the first nav item, and future pages open from the Calendar.
- */
-function DayList({ path, today }: { path: string; today: LocalDate }) {
+/** The page on screen: a day page by its date (`/` is today), or the page opened in Pages. */
+function PageGroups({ path, openPageId, today }: { path: string; openPageId?: string; today: LocalDate }) {
   const { workspace } = useWorkspace()
+  const date = path === '/' ? today : path.match(/^\/day\/(\d{4}-\d{2}-\d{2})$/)?.[1]
+  const activeId = (date ? workspace?.pages.find(p => p.type === 'daily' && p.date === date)?.id : path.startsWith('/pages') ? openPageId : undefined) ?? null
+  useEffect(() => { if (activeId) rememberOpened(activeId) }, [activeId])
   if (!workspace) return null
-  const days = workspace.pages
-    .filter(p => p.type === 'daily' && p.date && p.date < today && hasContent(p))
-    .map(p => p.date!)
-    .sort((a, b) => b.localeCompare(a))
-    .slice(0, 14)
-  return (
-    <div className="side-group">
-      {days.length > 0 && <p className="side-label">Days</p>}
-      {days.map(d => (
-        <Link key={d} to="/day/$date" params={{ date: d }} className="side-row small" aria-current={path === `/day/${d}` ? 'page' : undefined}>
-          {longLabel(d)}
-        </Link>
-      ))}
-      <p className="side-label">Pages</p>
-      {workspace?.pages.filter(p => p.type === 'document').map(p => <a className="side-row small" href={`/pages?page=${encodeURIComponent(p.id)}`} key={p.id}>{displayPageTitle(p)}</a>)}
-      <NewPageRow />
-    </div>
-  )
+  return <SidebarTree workspace={workspace} activeId={activeId} today={today} newPageRow={<NewPageRow />} />
 }
 
 /** Phone capture (craft-v1 §5.3): a bottom sheet with the cursor already in the field. */
