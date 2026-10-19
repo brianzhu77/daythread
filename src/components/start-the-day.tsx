@@ -61,6 +61,7 @@ function sectionName(page: Page, kind: 'top3' | 'other'): string {
 }
 
 type Strip = { text: string; undo?: string; refused?: boolean }
+const allKey = 'task:all'
 const stripMs = 5000
 
 /** Morning hand-off (01 §3.5). Skipping is normal; nothing here needs clearing. */
@@ -113,15 +114,14 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
     if (receipt) showStrip(key, { text, undo: receipt.operationId })
   })
   const addAll = () => guarded(async () => {
-    // Each row's own strip, worked out before the command fills Top 3 (the domain applies the same overflow rule).
+    // One strip for the whole Add all, as it is one operation with one Undo (Bumblebee b82493ff, Jazz 446d101 §12.6). Destinations are
+    // worked out before the command fills Top 3; the domain applies the same overflow rule.
     let top3Count = page.sections.filter(s => s.kind === 'top3').flatMap(s => s.blocks).filter(b => b.kind === 'task' && b.taskId).length
-    const texts = tasks.map(s => {
-      const full = s.section === 'top3' && top3Count >= 3
-      if (s.section === 'top3' && !full) top3Count++
-      return full ? `Top 3 is full · added to ${other}` : `Added to ${s.section === 'top3' ? top3 : other}`
-    })
+    let toTop3 = 0, toOther = 0
+    for (const s of tasks) if (s.section === 'top3' && top3Count < 3) { top3Count++; toTop3++ } else toOther++
+    const text = toTop3 && toOther ? `Added ${toTop3} to ${top3} · ${toOther} to ${other}` : `Added ${toTop3 + toOther} to ${toTop3 ? top3 : other}`
     const receipt = await run({ type: 'plan-tasks', date: today, items: tasks.map(s => ({ taskId: s.task.id, section: s.section })) }, null)
-    if (receipt) tasks.forEach((s, i) => showStrip(`task:${s.task.id}`, { text: texts[i]!, undo: receipt.operationId }))
+    if (receipt) showStrip(allKey, { text, undo: receipt.operationId })
   })
   const bring = (line: { pageId: string; block: NoteBlock }) => guarded(async () => {
     const receipt = await run({ type: 'bring-line', date: today, sourcePageId: line.pageId, sourceBlockId: line.block.id }, null)
@@ -133,7 +133,7 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
     // An Undo after a later change is refused whole (§6); the strip says so, then goes.
     if (refused) showStrip(key, { text: 'Can’t undo · edited since', refused: true }, 3000)
     else {
-      // Add all is one operation: every strip it made goes with it.
+      // The undone strip goes; any other strip of the same operation would go with it.
       setStrips(s => new Map([...s].filter(([, strip]) => strip.undo !== operationId)))
     }
   })
@@ -190,10 +190,10 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
       )}
       {!hasPlanSection && tasks.length > 0 && <p className="line quiet">Adding creates a {top3} section at the top</p>}
 
-      {(taskKeys.length > 0 || noTasksLine) && (
+      {(taskKeys.length > 0 || strips.has(allKey) || noTasksLine) && (
         <div className="mc-group">
           <h3 className="mc-label">Tasks</h3>
-          {taskKeys.length > 0 ? <ul className="plain mc-list">{taskKeys.map(row)}</ul> : noTasksLine}
+          {taskKeys.length > 0 || strips.has(allKey) ? <ul className="plain mc-list">{strips.has(allKey) && row(allKey)}{taskKeys.map(row)}</ul> : noTasksLine}
           {tasks.length >= 2 && <button type="button" className="app-link mc-add-all" onClick={() => void addAll()}>Add all tasks</button>}
         </div>
       )}
