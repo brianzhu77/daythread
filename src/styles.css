@@ -947,6 +947,11 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .page-more:hover { background: var(--fill); }
 .crumbs .row-menu .app-menu { right: 0; left: auto; }
 .crumbs-path .row-menu .app-menu { left: 0; right: auto; }
+/* Folded crumbs already fit (the last one ellipsizes itself), so the path mustn't clip the "…" menu (Jazz). */
+.crumbs-path.folded { overflow: visible; }
+.crumbs-path .app-menu { width: max-content; max-width: min(320px, calc(100vw - 120px)); }
+.crumbs-path .app-menu .menu-group { min-width: 0; }
+.crumbs-path .app-menu button { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; color: var(--ink); }
 
 .page-head { display: grid; gap: 8px; }
 .linked-from { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 0; font-size: 14px; color: var(--ink-2); }
