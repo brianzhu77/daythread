@@ -92,6 +92,9 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
     return this.transact(input.attemptId, db => {
       const attempt = settleAttempt(db, input)
       let result: CommandResult | undefined, refused: string | undefined
+      // No cost and no result = "outcome not known yet" (timeout, lost reply). That binds nothing, so the real result
+      // arriving later is recorded normally (Ratchet #68 fixed-identity).
+      if (input.actualUsd === null && !command) return { attempt }
       // One attempt, one result: the same result again replays the first receipt; a different one is refused.
       // Fingerprint = what it applies + what it cost + which generation (Lead d25b6c28).
       const fingerprint = sha256(JSON.stringify([command ? command.action : null, input.actualUsd, input.generationId]))

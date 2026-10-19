@@ -189,3 +189,20 @@ test('Ratchet #68: reusing a reservation id with another capture, revision or mo
     assert.equal((await s.repo.modelAttempts()).length, 1)
   } finally { await s.cleanup() }
 })
+
+test('Ratchet #68: an "unknown" record after a timeout binds nothing; the real late result is then recorded and applied once', async () => {
+  const s = await store()
+  try {
+    await reserve(s.repo, 'a1', s.captureId)
+    await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: null, generationId: null, now })
+    assert.equal((await s.repo.modelAttempts())[0]!.state, 'unknown')
+    const ws = await s.repo.load(), page = ws.pages[0]!
+    const late = { operationId: 'late', expectedRevision: ws.revision, action: { type: 'add-task' as const, pageId: page.id, sectionId: page.sections[0]!.id, title: 'Late result' } }
+    const r = await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0002, generationId: 'gen-1', now }, late)
+    assert.equal(r.attempt.state, 'settled'); assert.equal(r.result!.receipt.operationId, 'late')
+    // The same late result again replays; a different one is now refused.
+    assert.equal((await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0002, generationId: 'gen-1', now }, { ...late, operationId: 'again' })).result!.receipt.operationId, 'late')
+    await assert.rejects(s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0002, generationId: 'gen-1', now }, { ...late, operationId: 'x', action: { ...late.action, title: 'Other' } }), /different result/)
+    assert.equal((await s.repo.load()).tasks.filter(t => /result|Other/.test(t.title)).length, 1)
+  } finally { await s.cleanup() }
+})
