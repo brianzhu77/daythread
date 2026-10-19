@@ -46,7 +46,8 @@ This follows Bumblebee's grounding check (b842c6d3, abee294e). Ratchet's caution
 |---|---|---|
 | Model working | header tag "Organizing…" in `--ink-2` with the 14 px spinner; his text shows at once as the header quote | Save button returns to normal right away; he can keep capturing |
 | No key | header tag **"Simulated · no model key"**, same grey `sim` tag as today | one muted line under the field, the same text, until a key is added |
-| Key rejected / model error | **"Model unavailable · text saved"** in `--warn` text, with **Retry** (same attempt rules as Roadbuster §2) | no line; the receipt carries it |
+| Key rejected (HTTP 401/403) | **"Model key rejected · text saved"** in `--warn` text, with **Retry** (Bumblebee: the one failure he can fix himself, in `.env.local`) | the same muted line under the field, until a call succeeds |
+| Other model error | **"Model unavailable · text saved"** in `--warn` text, with **Retry** (same attempt rules as Roadbuster §2) | no line; the receipt carries it |
 | Budget used up | **"Today's model budget is used up · text saved"** in `--warn` text, no Retry until tomorrow | no line |
 
 - His text is always the first thing on the receipt, in every state, so "saved" is visible before anything else.

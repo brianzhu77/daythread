@@ -11,7 +11,7 @@ Spec: `docs/design/capture-receipt-v2.md` at 76774f7. I check on my own copy of 
 6. an update to an existing task with a new date and no role (→ shows "Do …", waits for Apply),
 7. one item the server rejects (→ "1 part wasn't saved as an item").
 
-Plus the four status states: no key, key rejected, budget used up, and Organizing… while waiting.
+Plus the five status states: no key, key rejected, other model error, budget used up, and Organizing… while waiting.
 
 ## Layout
 
@@ -49,7 +49,8 @@ Plus the four status states: no key, key rejected, budget used up, and Organizin
 
 - [ ] Organizing…: grey tag with a 14 px spinner, and the capture field is free again at once.
 - [ ] No key: grey "Simulated · no model key", plus the same muted line under the capture field.
-- [ ] Key rejected / model error: "Model unavailable · text saved" in `--warn`, with Retry.
+- [ ] Key rejected (401/403): "Model key rejected · text saved" in `--warn`, with Retry, plus the muted line under the capture field.
+- [ ] Other model error: "Model unavailable · text saved" in `--warn`, with Retry.
 - [ ] Budget used up: "Today's model budget is used up · text saved" in `--warn`, with no Retry.
 - [ ] Nothing in any status state is red.
 
