@@ -1,0 +1,14 @@
+(node:28794) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS partial cost 0.002 state settled captured Sunday23:59/spendMonday; original text kept
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS non-list cost 0.002 state settled captured Sunday23:59/spendMonday; original text kept
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS 500-no-usage cost null state unknown captured Sunday23:59/spendMonday; original text kept
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS 500-generation-no-cost cost null state unknown captured Sunday23:59/spendMonday; original text kept
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS 401 cost 0 state settled captured Sunday23:59/spendMonday; original text kept
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS 401-with-cost cost 0.002 state settled captured Sunday23:59/spendMonday; original text kept

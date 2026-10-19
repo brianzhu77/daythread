@@ -1,0 +1,6 @@
+(node:27030) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+prepared reserved attempt for real process restart
+(node:27233) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS real server restart + HTTP load marks reserved unknown and returns paused model status; no API key field

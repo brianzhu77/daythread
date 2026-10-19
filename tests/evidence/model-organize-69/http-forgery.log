@@ -1,0 +1,9 @@
+(node:26234) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+reserve-model-attempt 200 {"t":10,"i":0,"p":{"k":["error"],"v":[{"t":25,"i":1,"s":{"message":{"t":1,"s":"[\\n  {\\n    \\\"code\\\": \\\"invalid_union\\\",\\n    \\\"errors\\\": [],\\n    \\\"note\\\": \\\"
+record-model-result 200 {"t":10,"i":0,"p":{"k":["error"],"v":[{"t":25,"i":1,"s":{"message":{"t":1,"s":"[\\n  {\\n    \\\"code\\\": \\\"invalid_union\\\",\\n    \\\"errors\\\": [],\\n    \\\"note\\\": \\\"
+reconcile-model-attempt 200 {"t":10,"i":0,"p":{"k":["error"],"v":[{"t":25,"i":1,"s":{"message":{"t":1,"s":"[\\n  {\\n    \\\"code\\\": \\\"invalid_union\\\",\\n    \\\"errors\\\": [],\\n    \\\"note\\\": \\\"
+capture-for-model 200 {"t":10,"i":0,"p":{"k":["error"],"v":[{"t":25,"i":1,"s":{"message":{"t":1,"s":"[\\n  {\\n    \\\"code\\\": \\\"invalid_union\\\",\\n    \\\"errors\\\": [],\\n    \\\"note\\\": \\\"
+organized-capture 200 {"t":10,"i":0,"p":{"k":["error"],"v":[{"t":25,"i":1,"s":{"message":{"t":1,"s":"[\\n  {\\n    \\\"code\\\": \\\"invalid_union\\\",\\n    \\\"errors\\\": [],\\n    \\\"note\\\": \\\"
+model-failed 200 {"t":10,"i":0,"p":{"k":["error"],"v":[{"t":25,"i":1,"s":{"message":{"t":1,"s":"[\\n  {\\n    \\\"code\\\": \\\"invalid_union\\\",\\n    \\\"errors\\\": [],\\n    \\\"note\\\": \\\"
+PASS actual HTTP rejects all six internal actions without DB changes; valid same-envelope command succeeds

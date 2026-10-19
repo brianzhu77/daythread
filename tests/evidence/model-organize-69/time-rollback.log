@@ -1,0 +1,4 @@
+(node:29049) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS capture time persists reload; rollback drops time/model/mode coherently; old repository reads original text; forward preserves unknown ledger. Rollback intentionally loses time (documented limitation).

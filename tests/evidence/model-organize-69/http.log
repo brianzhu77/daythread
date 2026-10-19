@@ -1,0 +1,42 @@
+(node:26145) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Daythread
+Today
+Tasks
+Calendar
+Pages
+Tags
+Review
+
+PAGES
+
+＋ New page
+Today,
+Mon, Oct 19
+TODO - Top 3
+
+
+TODO - Other
+
+
+Events
+
+
+
+
+Good Stuffs
+
+
+
+
+Notes
+
+
+
+
+Review today
+inputs [
+  { tag: 'INPUT', placeholder: null },
+  { tag: 'INPUT', placeholder: null }
+]
+posts [{"url":"http://127.0.0.1:3280/_serverFn/eyJmaWxlIjoiL3NyYy9zZXJ2ZXIvZnVuY3Rpb25zLnRzP3Rzcy1zZXJ2ZXJmbi1zcGxpdCIsImV4cG9ydCI6InJ1bkNvbW1hbmRfY3JlYXRlU2VydmVyRm5faGFuZGxlciJ9","body":"{\"t\":{\"t\":10,\"i\":0,\"p\":{\"k\":[\"data\"],\"v\":[{\"t\":10,\"i\":1,\"p\":{\"k\":[\"operationId\",\"expectedRevision\",\"action\"],\"v\":[{\"t\":1,\"s\":\"227fe74f-8cdd-4eef-839f-79ff096d70f8\"},{\"t\":0,\"s\":0},{\"t\":10,\"i\":2,\"p\":{\"k\":[\"type\",\"date\"],\"v\":[{\"t\":1,\"s\":\"ensure-day\"},{\"t\":1,\"s\":\"2026-10-19\"}]},\"o\":0}]},\"o\":0}]},\"o\":0},\"f\":127,\"m\":[]}","headers":{"sec-ch-ua-platform":"\"macOS\"","referer":"http://127.0.0.1:3280/","sec-ch-ua":"\"Not:A-Brand\";v=\"99\", \"HeadlessChrome\";v=\"145\", \"Chromium\";v=\"145\"","sec-ch-ua-mobile":"?0","user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/145.0.7632.6 Safari/537.36","accept":"application/x-tss-framed, application/x-ndjson, application/json","content-type":"application/json","x-tsr-serverfn":"true"}}]
