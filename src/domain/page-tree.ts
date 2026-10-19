@@ -102,3 +102,16 @@ export function sidebarDays(ws: Workspace, today: LocalDate, activeId: string | 
   for (const p of days) if (!recent.includes(p)) earlier.set(p.date!.slice(0, 7), [...(earlier.get(p.date!.slice(0, 7)) ?? []), p]);
   return { recent, earlier };
 }
+
+/**
+ * Pages made inside day pages (`/page` on a day, the main way pages are made), grouped by day, newest day first; each
+ * day's direct subpages in sibling order. The Pages screen lists them under "In your days" (Lead 02cbc559), so a page
+ * whose parent is a day is never missing from Pages. Deeper pages are reached through their Subpages.
+ */
+export function pagesInDays(ws: Workspace): { day: Page; pages: Page[] }[] {
+  return ws.pages
+    .filter((p) => p.type === "daily" && p.date)
+    .sort((a, b) => b.date!.localeCompare(a.date!))
+    .map((day) => ({ day, pages: childPages(ws, day.id) }))
+    .filter((g) => g.pages.length > 0);
+}

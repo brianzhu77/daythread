@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { applyCommand, createEmptyWorkspace } from '../src/domain/workspace.ts'
 import { editorSeed, pageContentKey, type EditorNode } from '../src/domain/editor-document.ts'
-import { childPages, sidebarDays, linkedFrom, moveRefusal, moveTargets, pageAncestors, subtreeIds } from '../src/domain/page-tree.ts'
+import { childPages, pagesInDays, sidebarDays, linkedFrom, moveRefusal, moveTargets, pageAncestors, subtreeIds } from '../src/domain/page-tree.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import type { Action, Workspace } from '../src/domain/types.ts'
 import { mkdtemp } from 'node:fs/promises'
@@ -232,4 +232,21 @@ test('a page moved under a future day stays in the sidebar Days, before today, w
   // Moving the last subpage away takes the future day out again.
   ws = ok(ws, { type: 'move-page', pageId: 'C', parentId: today })
   assert.deepEqual(listed(null)[0], ['2026-10-19', '2026-10-12'])
+})
+
+test('pages made in day pages are grouped by day for the Pages screen, newest day first', () => {
+  let ws = ok(createEmptyWorkspace(), { type: 'ensure-day', date: '2026-10-18' })
+  ws = ok(ws, { type: 'ensure-day', date: '2026-10-19' })
+  ws = ok(ws, { type: 'ensure-day', date: '2026-10-17' })
+  const d18 = dayId(ws, '2026-10-18'), d19 = dayId(ws, '2026-10-19')
+  // Brian's case: no top-level pages, two pages made with /page in the Oct 18 page.
+  ws = ok(ws, { type: 'create-document', title: 'Doenjang jjigae', body: '', pageId: 'soup', parentId: d18 })
+  ws = ok(ws, { type: 'create-document', title: 'Focaccia', body: '', pageId: 'bread', parentId: d18 })
+  assert.deepEqual(childPages(ws, null), [])
+  assert.deepEqual(pagesInDays(ws).map(g => [g.day.date, ids(g.pages)]), [['2026-10-18', ['soup', 'bread']]])
+  ws = ok(ws, { type: 'create-document', title: 'Grandchild', body: '', pageId: 'g', parentId: 'soup' })
+  ws = ok(ws, { type: 'create-document', title: 'Later', body: '', pageId: 'later', parentId: d19 })
+  assert.deepEqual(pagesInDays(ws).map(g => [g.day.date, ids(g.pages)]), [['2026-10-19', ['later']], ['2026-10-18', ['soup', 'bread']]])
+  ws = ok(ws, { type: 'move-page', pageId: 'later', parentId: null })
+  assert.deepEqual(pagesInDays(ws).map(g => g.day.date), ['2026-10-18'])
 })

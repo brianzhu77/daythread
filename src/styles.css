@@ -996,3 +996,11 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .move-refused { margin: 0; padding: 10px; font-size: 14px; color: var(--warn); }
 .move-empty, .move-note { margin: 0; padding: 12px 10px; font-size: 14px; color: var(--ink-2); }
 .move-note { font-size: 13px; color: var(--ink-3); }
+
+/* Pages screen: pages made inside day pages (Lead 02cbc559, Jazz 41ff03b §8). */
+.pages-in-days { display: grid; gap: 10px; }
+.card-list + .pages-in-days { margin-top: 22px; }
+.card-row-text { display: grid; flex: 1; min-width: 0; }
+.two-line .card-row { min-height: 56px; }
+.card-row-detail { font-size: 13px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.side-hint { color: var(--ink-2); }

@@ -1,8 +1,9 @@
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { ContinuousPage } from './continuous-page'
 import { displayPageTitle, PageTitleField } from './page-title'
-import { childPages } from '../domain/page-tree'
-import { LinkedFrom, PageHeaderRow, Subpages } from './page-tree'
+import { childPages, pagesInDays, parentOf } from '../domain/page-tree'
+import type { Page, Workspace } from '../domain/types'
+import { LinkedFrom, PageHeaderRow, pageLabel, Subpages, useToday } from './page-tree'
 import { ChevronRightIcon, PagesIcon, PlusIcon } from './icons'
 import { useWorkspace } from './use-day'
 
@@ -22,6 +23,7 @@ export function PagesScreen() {
   const createPage = useCreatePage()
   const search = useSearch({ from: '/pages' })
   const navigate = useNavigate()
+  const today = useToday()
   const setSelected = (page: string | null) => void navigate({ to: '/pages', search: page ? { page } : {} })
   const p = workspace?.pages.find(p => p.id === search.page)
   if (!workspace) return <p>Loading pages…</p>
@@ -32,8 +34,10 @@ export function PagesScreen() {
     </div>
     <ContinuousPage page={p} workspace={workspace} />
     <Subpages page={p} workspace={workspace} /></div>
-  // Top level only; a page's children are its Subpages list (layout §6).
+  // Top-level pages, then pages made inside day pages by day (Lead 02cbc559); deeper pages are reached through each
+  // page's Subpages list (layout §6).
   const documents = childPages(workspace, null)
+  const inDays = pagesInDays(workspace)
   return (
     <div className="list-screen">
       <div className="title-row">
@@ -41,11 +45,38 @@ export function PagesScreen() {
         <button type="button" className="round-add" aria-label="New page" onClick={async () => { const id = await createPage(); if (id) setSelected(id) }}><PlusIcon /></button>
       </div>
       {/* Pages lists only pages (Brian 77423ea0); Tags is a navigation destination of its own. */}
-      {documents.length === 0 ? <p className="quiet">No pages yet. Tap + to start one.</p> : (
-        <ul className="plain card-list">
-          {documents.map(p => <li key={p.id}><button type="button" className="card-row" onClick={() => setSelected(p.id)}><span className="card-row-icon"><PagesIcon /></span><span className={`card-row-title ${p.title ? '' : 'untitled'}`}>{displayPageTitle(p)}</span>{childPages(workspace, p.id).length > 0 && <span className="subpage-count">{childPages(workspace, p.id).length}</span>}<ChevronRightIcon /></button></li>)}
-        </ul>
+      {documents.length === 0 && inDays.length === 0 && <p className="quiet">No pages yet. Tap + to start one.</p>}
+      {documents.length > 0 && <PageRows pages={documents} workspace={workspace} onOpen={setSelected} />}
+      {inDays.length > 0 && (
+        <section className="pages-in-days" aria-label="In your days">
+          <h2 className="list-header">In your days</h2>
+          {/* One list, the title first and its day as a quiet second line (Jazz 41ff03b §8, Bumblebee). */}
+          <PageRows pages={inDays.flatMap(g => g.pages)} workspace={workspace} onOpen={setSelected} detail={p => pageLabel(parentOf(workspace, p)!, today)} />
+        </section>
       )}
     </div>
+  )
+}
+
+function PageRows({ pages, workspace, onOpen, detail }: { pages: Page[]; workspace: Workspace; onOpen: (id: string) => void; detail?: (p: Page) => string }) {
+  return (
+    <ul className={`plain card-list ${detail ? 'two-line' : ''}`}>
+      {pages.map(p => {
+        const n = childPages(workspace, p.id).length
+        return (
+          <li key={p.id}>
+            <button type="button" className="card-row" onClick={() => onOpen(p.id)}>
+              <span className="card-row-icon"><PagesIcon /></span>
+              <span className="card-row-text">
+                <span className={`card-row-title ${p.title ? '' : 'untitled'}`}>{displayPageTitle(p)}</span>
+                {detail && <span className="card-row-detail">{detail(p)}</span>}
+              </span>
+              {n > 0 && <span className="subpage-count">{n}</span>}
+              <ChevronRightIcon />
+            </button>
+          </li>
+        )
+      })}
+    </ul>
   )
 }

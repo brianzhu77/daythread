@@ -1,7 +1,7 @@
 import { Modal, SearchField } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { childPages, linkedFrom, moveTargets, pageAncestors, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
+import { childPages, linkedFrom, moveTargets, pageAncestors, pagesInDays, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { longLabel, todayIso } from './dates'
 import { ChevronRightIcon, PagesIcon } from './icons'
@@ -410,8 +410,16 @@ export function SidebarTree({ workspace, activeId, today, newPageRow }: { worksp
       </ul>
       <p className="side-label">Pages</p>
       <ul className="plain tree" role="tree" aria-label="Pages">{roots.map(p => row(p, 0))}</ul>
+      {/* Pages made in day pages sit under their day above; with no top-level pages, say where they are. */}
+      {roots.length === 0 && <DayPagesHint workspace={workspace} />}
       {newPageRow}
       {moving && <MovePageDialog page={moving} onClose={() => setMoving(null)} />}
     </div>
   )
+}
+
+function DayPagesHint({ workspace }: { workspace: Workspace }) {
+  const n = pagesInDays(workspace).reduce((sum, g) => sum + g.pages.length, 0)
+  if (n === 0) return null
+  return <PageLink className="side-row small side-hint" href="/pages">{n} page{n === 1 ? '' : 's'} in your days</PageLink>
 }
