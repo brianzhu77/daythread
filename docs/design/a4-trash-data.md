@@ -33,8 +33,8 @@
 - `restore-batch { trashId }`: the batch's **remaining** members, from the Trash row or the top page's banner.
   Pages restored earlier stay where they are now and aren't duplicated.
 - **Where a restored page goes:** every restored page whose parent isn't coming back with it goes under its old
-  `parentId` if that page is live, otherwise to top level, **last among its new siblings** (Jazz d5789c6,
-  Bumblebee 1bb9cfaa; there's no manual order until B14). Pages restored with their parent keep their order under it. A day parent is always live, so 韩国大酱汤 goes back
+  `parentId` if that page is live, otherwise to top level. Its place among siblings isn't promised until B14 (Jazz
+  f6316c0): a normal restore leaves the row where it is in the stored order; after a rollback re-upgrade it's last. A day parent is always live, so 韩国大酱汤 goes back
   under Sun, Oct 18.
 - **What never changes:** tasks, placements, events, materials, references and the cost ledger.
 
@@ -103,7 +103,7 @@ id appearing again (refusal); the backup.
    - N08–N12, N16, N22;
    - delete a child, then its parent: two batches;
    - **same-batch delete → restore only a child → move it → restore the batch: the child doesn't move**;
-   - a restored page is last among its siblings; pages restored with their parent keep their order under it;
+   - a restored page is under the right parent (its place among siblings isn't checked until B14);
    - a day page refused;
    - tags, Linked from and every list in §3 hide and then show again.
 3. Rollback round trip with the real script and migration:
