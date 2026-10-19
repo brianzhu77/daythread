@@ -58,13 +58,17 @@ This follows Bumblebee's grounding check (b842c6d3, abee294e). Ratchet's caution
 
 If the model returns an item the server rejects (bad shape, unknown task id, invalid date), it never just disappears (Ratchet, b842c6d3 81a1eb86). The receipt adds one muted line above the footer: **"1 part wasn't saved as an item · See your text"** (plural: "{n} parts weren't saved as items · See your text"; Bumblebee copy). "See your text" opens his text, which is always kept, so he can capture that part again or type it into the page. It isn't red: nothing he wrote is lost.
 
+If **every** item fails, there's no empty receipt. It shows the "Other model error" state instead: **"Model unavailable · text saved"** with Retry (Bumblebee, b842c6d3 9dde2c4c).
+
+**Cost.** The receipt doesn't show a cost normally. When the provider's cost for this capture is unknown (an error with no cost or generation id), the header adds a muted **"Cost unknown"** tag in `--ink-3` after the status tag. Never show "$0" or "nothing charged" for an unknown cost.
+
 ## Updates to existing tasks (unchanged rule, clearer row)
 
 The row reads **"[Update] Fix export bug → done"** and stays in the waiting state with Apply / Discard. The chip uses `--blue-soft` so it's clearly different from the new items above it. This was where the probe's "APPX update instead of a new Cairn task" happened, and it's already safe because nothing applies without Brian.
 
 ## Copy
 
-Task · Event · Saved link · Note · Update · No date · Needs a look · Save · Time not in your text · Link not in your text · Title not in your text · Task not in your text · Date missing · Date unclear · Do · Start · Due · {n} waiting for you · 1 part wasn't saved as an item · {n} parts weren't saved as items · See your text · Remove · Open · Undo all · Show original · Can't undo · edited since. Bumblebee owns final wording.
+Task · Event · Saved link · Note · Update · No date · Needs a look · Save · Time not in your text · Link not in your text · Title not in your text · Task not in your text · Date missing · Date unclear · Do · Start · Due · {n} waiting for you · 1 part wasn't saved as an item · {n} parts weren't saved as items · See your text · Remove · Open · Undo all · Show original · Can't undo · edited since · Cost unknown. Bumblebee owns final wording.
 
 ## Acceptance (Ratchet)
 

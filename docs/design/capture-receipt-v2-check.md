@@ -51,6 +51,8 @@ Plus the five status states: no key, key rejected, other model error, budget use
 - [ ] No key: grey "Simulated · no model key", plus the same muted line under the capture field.
 - [ ] Key rejected (401/403): "Model key rejected · text saved" in `--warn`, with Retry, plus the muted line under the capture field.
 - [ ] Other model error: "Model unavailable · text saved" in `--warn`, with Retry.
+- [ ] Every item rejected: no empty receipt; it shows "Model unavailable · text saved" with Retry.
+- [ ] Unknown cost: muted "Cost unknown" tag in the header. "$0" or "nothing charged" never appears.
 - [ ] Budget used up: "Today's model budget is used up · text saved" in `--warn`, with no Retry.
 - [ ] Nothing in any status state is red.
 
