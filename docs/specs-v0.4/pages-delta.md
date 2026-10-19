@@ -148,9 +148,12 @@ Typing a URL inside a sentence never does:
   - Moving either page changes neither record.
 - Being the parent is not a reference. The parent relation alone never adds a "Linked from" entry;
   the parent appears in the breadcrumb. A real card on the parent page is a reference like any
-  other, so the parent is listed when it holds a card and drops out when that card is deleted.
-  Moving the child therefore never changes its "Linked from" list (Lead ruling, 2026-10-19, on
-  Ratchet's question in Step B).
+  other and is stored as one; moving either page never changes the reference records.
+- Display: the page shown in the breadcrumb as the parent is never repeated in "Linked from",
+  whatever other entries exist. Every referencing page is therefore visible in exactly one place.
+  After a move the old parent leaves the breadcrumb and, if it still holds a card, appears in
+  "Linked from". (Lead ruling 2026-10-19 in Step B: data rule from Ratchet, display rule from
+  Jazz and Bumblebee.)
 
 ### N-6 Good Stuffs follow-up and "Related" become per page [Design]
 
