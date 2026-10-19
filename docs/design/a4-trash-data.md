@@ -33,7 +33,8 @@
 - `restore-batch { trashId }`: the batch's **remaining** members, from the Trash row or the top page's banner.
   Pages restored earlier stay where they are now and aren't duplicated.
 - **Where a restored page goes:** every restored page whose parent isn't coming back with it goes under its old
-  `parentId` if that page is live, otherwise to top level. A day parent is always live, so 韩国大酱汤 goes back
+  `parentId` if that page is live, otherwise to top level, **last among its new siblings** (Jazz d5789c6,
+  Bumblebee 1bb9cfaa; there's no manual order until B14). Pages restored with their parent keep their order under it. A day parent is always live, so 韩国大酱汤 goes back
   under Sun, Oct 18.
 - **What never changes:** tasks, placements, events, materials, references and the cost ledger.
 
@@ -63,9 +64,8 @@ only).
 2. **Backup:** a consistent copy with SQLite's `VACUUM INTO` (or the backup API) next to the file, never a plain
    file copy under WAL. If the backup fails or doesn't read back, it stops before touching anything.
 3. **One transaction** for the rest; any error or check failure rolls back everything.
-   1. Move the **current** trashed rows out of `pages` into `held_trash_l4`, with their full `present`, and with
-      `anchor` = the id of the nearest live page before them in the stored order (null = first). Rows that exist
-      only in the undo snapshot are dropped along with Undo.
+   1. Move the **current** trashed rows out of `pages` into `held_trash_l4`, with their full `present`. Rows that
+      exist only in the undo snapshot are dropped along with Undo.
    2. **Live rows:** remove `trashedAt`/`trashId` from `present` (a page restored by the new build may still list
       them).
    3. Delete every `undo` row and the undo meta.
@@ -77,10 +77,8 @@ only).
 **Migration 4 on re-upgrade (code, in the initialization transaction):**
 1. Add the columns.
 2. If `held_trash_l4` exists: refuse, keeping the database as is, when any held id exists again as a page.
-3. Otherwise put each held row back **right after its `anchor`**, or after the nearest held row before it with
-   the same anchor, and renumber `position`. If the anchor page is gone (today's build can't delete pages, so only
-   by hand), it goes last. So the stored order, and with it the sibling order a restore returns to, is the one from
-   before the downgrade.
+3. Otherwise put the held rows back after the existing positions, in their own order. Same parent and batch; the
+   position doesn't matter, because a restore puts the page last among its siblings anyway (below).
 4. Drop the table.
 5. Running it a second time finds no held table and only adds nothing.
 
@@ -95,8 +93,8 @@ and the migration):
 | Today's build, built app, 1280 and 390: Today, Oct 18 (its card to the held page), Pages, Tasks, Tags, Calendar | no error screen, no console errors |
 | Migration 4 again | 佛卡夏披萨 back in the trash with batch `op1`; "韩国大酱汤 v2" kept |
 
-Not covered yet: the real migration code and the script file; the anchor order; `present` on live rows the new
-build restored; a held id appearing again (refusal); the backup.
+Not covered yet: the real migration code and the script file; `present` on live rows the new build restored; a held
+id appearing again (refusal); the backup.
 
 ## 5. Checks for Ratchet
 
@@ -105,12 +103,14 @@ build restored; a held id appearing again (refusal); the backup.
    - N08–N12, N16, N22;
    - delete a child, then its parent: two batches;
    - **same-batch delete → restore only a child → move it → restore the batch: the child doesn't move**;
+   - a restored page is last among its siblings; pages restored with their parent keep their order under it;
    - a day page refused;
    - tags, Linked from and every list in §3 hide and then show again.
 3. Rollback round trip with the real script and migration:
    - the sequence: create, delete, restore a child alone, **edit a restored page** → downgrade → today's build edits
      and undoes → re-upgrade;
-   - expected: held pages back in the trash in their old order; content, tasks and the cost ledger unchanged;
+   - expected: held pages back in the trash with their batch and parent; content, tasks and the cost ledger
+     unchanged;
    - a new Undo works after the cleared one;
    - running the migration and the script twice;
    - a held id appearing again → migration refused, database kept;
