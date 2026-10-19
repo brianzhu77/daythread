@@ -91,7 +91,7 @@ export async function organizeCapture(deps: OrganizeDeps, captureId: string): Pr
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (/Daily budget reached/.test(message)) { await fail('budget', "Today's model budget is used up · text saved"); return 'paused' }
-    if (/in-flight or unknown/.test(message)) { await fail('failure', 'Model paused · a charge needs checking · text saved'); return 'paused' }
+    if (/in-flight or unknown/.test(message)) { await fail('failure', "Model paused · a cost couldn't be confirmed · text saved"); return 'paused' }
     throw error
   }
 
@@ -104,11 +104,12 @@ export async function organizeCapture(deps: OrganizeDeps, captureId: string): Pr
     const message = e?.kind === 'auth' ? 'Model key rejected · text saved' : e?.httpStatus ? 'Model unavailable · text saved' : "Couldn't organize · text saved"
     // A reported cost is what was charged, whatever the HTTP status (Ratchet #69): settled at that amount.
     if (e?.costUsd != null) return fail('failure', message, { id: attemptId, cost: e.costUsd, generationId: e.generationId })
-    // A generation without a cost: something may have been charged. Unknown, so calls pause until it's reconciled.
+    // A generation without a cost: it can be looked up, so it's unknown and calls pause until it's reconciled.
     if (e?.generationId) return fail('failure', message, { id: attemptId, cost: null, generationId: e.generationId })
     // A rejected key (401/403) is refused at authentication, before any generation: zero, with the reason (Lead 99d98c1f).
     if (e?.httpStatus === 401 || e?.httpStatus === 403) return fail('failure', message, { id: attemptId, cost: 0, generationId: null, note: `provider refused before routing (HTTP ${e.httpStatus}); no generation id or cost reported` })
-    // Anything else (timeout, lost connection, other HTTP errors with no usage) may still have been charged: unknown.
+    // Anything else (timeout, lost connection, other HTTP errors with no usage) may still have been charged, and there is
+    // no id to look it up by: estimated at the reservation, calls go on (Lead 33ae4578).
     await repository.recordModelResult({ attemptId, actualUsd: null, generationId: null, now: now().toISOString() })
     return fail('failure', e?.kind === 'timeout' ? 'Model took too long · text saved' : e?.httpStatus ? message : "Couldn't reach the model · text saved")
   }

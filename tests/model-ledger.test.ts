@@ -45,17 +45,54 @@ test('10 USD per Vancouver day: spent + this call\'s worst case may not pass the
   } finally { await s.cleanup() }
 })
 
-test('a missing cost stays unknown and blocks; reconcile takes an amount or the worst case, never zero by default', async () => {
+test('Lead 33ae4578: no generation id and no cost → estimated at the reservation; counted against the day, calls go on', async () => {
   const s = await store()
   try {
     await reserve(s.repo, 'a1', s.captureId, 0.004)
     await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: null, generationId: null, now })
+    const [a] = await s.repo.modelAttempts()
+    assert.equal(a!.state, 'estimated'); assert.equal(a!.actualUsd, null); assert.equal(a!.settledAt, null)
+    const status = modelStatus(await s.repo.modelAttempts(), '2026-10-19')
+    assert.equal(status.state, 'ready'); assert.equal(status.spentTodayUsd, 0.004)
+    await reserve(s.repo, 'a2', s.captureId)
+    // The estimate counts against the cap like a real charge.
+    const t = await store()
+    try {
+      await reserve(t.repo, 'big', t.captureId, 9.8)
+      await t.repo.recordModelResult({ attemptId: 'big', actualUsd: null, generationId: null, now })
+      await assert.rejects(reserve(t.repo, 'next', t.captureId, 0.3), /Daily budget reached/)
+    } finally { await t.cleanup() }
+  } finally { await s.cleanup() }
+})
+
+test('a generation id without a cost stays unknown and blocks; reconcile takes an amount or the worst case, never zero by default', async () => {
+  const s = await store()
+  try {
+    await reserve(s.repo, 'a1', s.captureId, 0.004)
+    await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: null, generationId: 'gen-1', now })
     assert.equal((await s.repo.modelAttempts())[0]!.state, 'unknown')
     assert.equal(modelStatus(await s.repo.modelAttempts(), '2026-10-19').state, 'paused')
     await assert.rejects(reserve(s.repo, 'a2', s.captureId), /in-flight or unknown/)
+    // Losing the id on a later record doesn't turn it into an estimate.
+    await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: null, generationId: null, now })
+    assert.equal((await s.repo.modelAttempts())[0]!.state, 'unknown')
     const settled = await s.repo.reconcileModelAttempt('a1', 'worst-case', now)
     assert.equal(settled.actualUsd, 0.004); assert.equal(settled.state, 'settled')
     await reserve(s.repo, 'a2', s.captureId)
+  } finally { await s.cleanup() }
+})
+
+test('an estimate is replaced by the real cost (ledger only) or reconciled by hand; a settled attempt can\'t be reconciled', async () => {
+  const s = await store()
+  try {
+    await reserve(s.repo, 'a1', s.captureId, 0.004)
+    await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: null, generationId: null, now })
+    const real = await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0007, generationId: 'gen-1', now })
+    assert.equal(real.attempt.state, 'settled'); assert.equal(real.attempt.actualUsd, 0.0007); assert.equal(real.result, undefined)
+    await assert.rejects(s.repo.reconcileModelAttempt('a1', 0.001, now), /not unknown or estimated/)
+    await reserve(s.repo, 'a2', s.captureId, 0.004)
+    await s.repo.recordModelResult({ attemptId: 'a2', actualUsd: null, generationId: null, now })
+    assert.equal((await s.repo.reconcileModelAttempt('a2', 0.0009, now)).actualUsd, 0.0009)
   } finally { await s.cleanup() }
 })
 
@@ -121,12 +158,14 @@ test('a result the domain refuses (the capture moved on) is still paid for, and 
   } finally { await s.cleanup() }
 })
 
-test('after a restart, an attempt still marked in flight becomes unknown and keeps blocking', async () => {
+test('after a restart, an attempt still marked in flight never got a reply: estimated, and calls go on', async () => {
   const s = await store()
   try {
     await reserve(s.repo, 'a1', s.captureId)
     assert.equal(await new SqliteWorkspaceRepository(s.path).markInterruptedModelAttempts(now), 1)
-    assert.equal((await s.repo.modelAttempts())[0]!.state, 'unknown')
+    assert.equal((await s.repo.modelAttempts())[0]!.state, 'estimated')
+    assert.equal(modelStatus(await s.repo.modelAttempts(), '2026-10-19').state, 'ready')
+    await reserve(s.repo, 'a2', s.captureId)
   } finally { await s.cleanup() }
 })
 
@@ -144,15 +183,18 @@ test('rollback 3 → 2 keeps the ledger (and a JSON copy); rolling forward again
     await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0003, generationId: 'gen-1', now })
     await reserve(s.repo, 'a2', s.captureId, 0.004)
     await s.repo.recordModelResult({ attemptId: 'a2', actualUsd: null, generationId: null, now })
+    await reserve(s.repo, 'a3', s.captureId, 0.004)
+    await s.repo.recordModelResult({ attemptId: 'a3', actualUsd: null, generationId: 'gen-3', now })
     const before = await s.repo.modelAttempts()
+    assert.deepEqual(before.map(a => a.state), ['settled', 'estimated', 'unknown'])
     // Step (b) creates "organizing" captures; here one is set directly to stand for a call cut off by the rollback.
     const setup = new DatabaseSync(s.path); setup.prepare("UPDATE captures SET status='organizing'").run(); setup.close()
     const out = await run(s.path, 'scripts/sqlite-rollback-model.ts')
-    assert.match(out, /Layout 3 → 2\. 1 capture marked failed \(text kept\); ledger kept \(2 attempts\)/)
+    assert.match(out, /Layout 3 → 2\. 1 capture marked failed \(text kept\); ledger kept \(3 attempts\)/)
     const db = new DatabaseSync(s.path)
     assert.equal(Number(db.prepare('PRAGMA user_version').get()!.user_version), 2)
     assert.equal(db.prepare('PRAGMA table_info(captures)').all().some(c => c.name === 'model' || c.name === 'mode'), false)
-    assert.equal(Number(db.prepare('SELECT count(*) n FROM model_attempts').get()!.n), 2)
+    assert.equal(Number(db.prepare('SELECT count(*) n FROM model_attempts').get()!.n), 3)
     for (const row of db.prepare('SELECT * FROM captures').all()) assert.equal(JSON.stringify(row).includes('"model"') || JSON.stringify(row).includes('"mode"'), false)
     assert.equal(db.prepare("SELECT status, text FROM captures WHERE snapshot='current'").get()!.text, 'call dentist')
     db.close()
@@ -192,12 +234,12 @@ test('Ratchet #68: reusing a reservation id with another capture, revision or mo
   } finally { await s.cleanup() }
 })
 
-test('Ratchet #68: an "unknown" record after a timeout binds nothing; the real late result is then recorded and applied once', async () => {
+test('Ratchet #68: an "estimated" record after a timeout binds nothing; the real late result is then recorded and applied once', async () => {
   const s = await store()
   try {
     await reserve(s.repo, 'a1', s.captureId)
     await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: null, generationId: null, now })
-    assert.equal((await s.repo.modelAttempts())[0]!.state, 'unknown')
+    assert.equal((await s.repo.modelAttempts())[0]!.state, 'estimated')
     const ws = await s.repo.load(), page = ws.pages[0]!
     const late = { operationId: 'late', expectedRevision: ws.revision, action: { type: 'add-task' as const, pageId: page.id, sectionId: page.sections[0]!.id, title: 'Late result' } }
     const r = await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0002, generationId: 'gen-1', now }, late)

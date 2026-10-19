@@ -92,16 +92,16 @@ test('parts that can\'t be read are counted and shown, never applied', async () 
   } finally { await s.cleanup() }
 })
 
-test('timeout: text kept, capture failed, the charge stays unknown and the model pauses', async () => {
+test('timeout: text kept, capture failed, the charge is estimated at the reservation and the next capture still runs', async () => {
   const s = await store('call dentist')
   try {
     assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => 'timeout'), now }, s.captureId), 'failed')
     const c = await capture(s.repo, s.captureId)
     assert.equal(c.status, 'failed'); assert.equal(c.text, 'call dentist'); assert.match(c.error!, /took too long/)
-    assert.equal((await s.repo.modelAttempts())[0]!.state, 'unknown')
+    const [a] = await s.repo.modelAttempts()
+    assert.equal(a!.state, 'estimated'); assert.equal(a!.actualUsd, null)
     const next = await s.repo.execute({ operationId: 'cap2', expectedRevision: (await s.repo.load()).revision, action: { type: 'capture-for-model', pageId: c.pageId, text: 'buy milk', model: 'fake/model', capturedAt: now().toISOString() } })
-    assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => [{ kind: 'task', title: 'buy milk' }]), now }, next.receipt.entityId!), 'paused')
-    assert.match((await capture(s.repo, next.receipt.entityId!)).error!, /a charge needs checking/)
+    assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => [{ kind: 'task', title: 'buy milk' }]), now }, next.receipt.entityId!), 'organized')
   } finally { await s.cleanup() }
 })
 
@@ -155,11 +155,12 @@ test('a date role outside do/due is dropped, so the task waits as "Date unclear"
   } finally { await s.cleanup() }
 })
 
-test('an HTTP error never proves nothing was charged: a reported cost is kept, a generation without one stays unknown', async () => {
-  const cases: [Response, 'settled' | 'unknown', number | null][] = [
+test('an HTTP error never proves nothing was charged: a reported cost is kept; a generation without one is unknown and pauses; neither is estimated', async () => {
+  const cases: [Response, 'settled' | 'unknown' | 'estimated', number | null][] = [
     [Response.json({ id: 'gen-err', error: { message: 'upstream failed' }, usage: { cost: 0.002 } }, { status: 500 }), 'settled', 0.002],
     [Response.json({ id: 'gen-err', error: { message: 'upstream failed' } }, { status: 502 }), 'unknown', null],
-    [Response.json({ error: { message: 'provider error' } }, { status: 500 }), 'unknown', null],
+    [Response.json({ error: { message: 'provider error' } }, { status: 500 }), 'estimated', null],
+    [Response.json({ error: { message: 'no credits' } }, { status: 402 }), 'estimated', null],
     [Response.json({ id: 'gen-err', error: { message: 'bad key' }, usage: { cost: 0.001 } }, { status: 401 }), 'settled', 0.001],
   ]
   for (const [response, state, cost] of cases) {
@@ -171,10 +172,9 @@ test('an HTTP error never proves nothing was charged: a reported cost is kept, a
       const [a] = await s.repo.modelAttempts()
       assert.equal(a!.state, state); assert.equal(a!.actualUsd, cost)
       assert.doesNotMatch(a!.note ?? '', /nothing charged/)
-      if (state === 'unknown') {
-        const next = await s.repo.execute({ operationId: 'cap2', expectedRevision: (await s.repo.load()).revision, action: { type: 'capture-for-model', pageId: c.pageId, text: 'buy milk', model: 'fake/model', capturedAt: now().toISOString() } })
-        assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => [{ kind: 'task', title: 'buy milk' }]), now }, next.receipt.entityId!), 'paused')
-      }
+      const next = await s.repo.execute({ operationId: 'cap2', expectedRevision: (await s.repo.load()).revision, action: { type: 'capture-for-model', pageId: c.pageId, text: 'buy milk', model: 'fake/model', capturedAt: now().toISOString() } })
+      assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => [{ kind: 'task', title: 'buy milk' }]), now }, next.receipt.entityId!), state === 'unknown' ? 'paused' : 'organized')
+      if (state === 'unknown') assert.equal((await capture(s.repo, next.receipt.entityId!)).error, "Model paused · a cost couldn't be confirmed · text saved")
     } finally { await s.cleanup() }
   }
 })

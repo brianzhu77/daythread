@@ -3,7 +3,12 @@ export interface BudgetAttempt {
   day: string;
   reserved: number;
   actual: number | null;
-  state: "reserved" | "unknown" | "settled" | "not-sent";
+  /**
+   * "estimated": no generation id and no cost came back, so the reservation (a true upper bound) is counted and calls go
+   * on; the actual stays empty until a real cost arrives. "unknown": a generation id exists but its cost doesn't, which
+   * pauses calls (Lead 33ae4578).
+   */
+  state: "reserved" | "unknown" | "estimated" | "settled" | "not-sent";
 }
 export interface BudgetLedger {
   attempts: BudgetAttempt[];
@@ -67,6 +72,7 @@ export function settleBudget(
   }
   if (attempt.state === "not-sent")
     throw new Error("Unsent attempt cannot be charged");
+  if (actual === null && attempt.state === "estimated") return next;
   attempt.actual = actual;
   attempt.state = actual === null ? "unknown" : "settled";
   if (actual !== null && units(actual) > units(attempt.reserved))

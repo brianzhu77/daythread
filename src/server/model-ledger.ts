@@ -6,7 +6,7 @@ import { reserveBudget, settleBudget, type BudgetLedger } from '../domain/budget
 
 export const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
 
-export type AttemptState = 'reserved' | 'unknown' | 'settled' | 'not-sent'
+export type AttemptState = 'reserved' | 'unknown' | 'estimated' | 'settled' | 'not-sent'
 export interface ModelAttempt {
   id: string; captureId: string | null; revision: number | null; day: string
   reservedUsd: number; actualUsd: number | null; state: AttemptState
@@ -72,23 +72,36 @@ export function settleAttempt(db: DatabaseSync, input: SettleInput): ModelAttemp
       throw new Error('Model attempt already settled with different values')
     return attempt
   }
-  if (attempt.state === 'unknown' && input.actualUsd === null) return attempt
+  if (input.actualUsd === null) {
+    // No cost. With a generation id the charge can still be looked up: "unknown", calls pause. Without one there is
+    // nothing to look up: "estimated" at the reservation, an upper bound, and calls go on (Lead 33ae4578). Never zero.
+    const state = input.generationId ?? attempt.generationId ? 'unknown' : 'estimated'
+    if (attempt.state === state) return attempt
+    if (attempt.state === 'unknown') return attempt // an id was seen once; losing it later doesn't lift the pause
+    db.prepare('UPDATE model_attempts SET state=?, generationId=COALESCE(?, generationId), note=COALESCE(?, note) WHERE id=?')
+      .run(state, input.generationId, input.note ?? (state === 'estimated' ? 'no generation id or cost; counted at the reserved upper bound' : null), attempt.id)
+    return readAttempts(db).find(a => a.id === attempt.id)!
+  }
   settleBudget(toBudgetLedger(attempts), attempt.id, input.actualUsd)
+  // A real cost replaces an estimate or an unknown: only the ledger changes; the result is bound separately.
   db.prepare('UPDATE model_attempts SET actualMicros=?, state=?, generationId=COALESCE(?, generationId), settledAt=?, note=COALESCE(?, note) WHERE id=?')
-    .run(input.actualUsd === null ? null : micros(input.actualUsd), input.actualUsd === null ? 'unknown' : 'settled', input.generationId, input.actualUsd === null ? null : input.now, input.note ?? null, attempt.id)
+    .run(micros(input.actualUsd), 'settled', input.generationId, input.now, input.note ?? null, attempt.id)
   return readAttempts(db).find(a => a.id === attempt.id)!
 }
 
-/** After a restart nothing is in flight any more: a still-reserved attempt has an unknown outcome and keeps blocking. */
+/**
+ * After a restart nothing is in flight any more. A still-reserved attempt never got a reply, so it has no generation id
+ * and no cost: estimated at its reservation, and calls go on (Lead 33ae4578).
+ */
 export function markInterrupted(db: DatabaseSync, now: string): number {
-  return Number(db.prepare("UPDATE model_attempts SET state='unknown', note=COALESCE(note, ?) WHERE state='reserved'").run(`interrupted before ${now}`).changes)
+  return Number(db.prepare("UPDATE model_attempts SET state='estimated', note=COALESCE(note, ?) WHERE state='reserved'").run(`interrupted before ${now}; counted at the reserved upper bound`).changes)
 }
 
-/** Manual settlement of an unknown charge: an amount read from OpenRouter, or the reserved worst case. Never an implicit zero. */
+/** Manual settlement of an unknown or estimated charge: an amount read from OpenRouter, or the reserved worst case. Never an implicit zero. */
 export function reconcileAttempt(db: DatabaseSync, attemptId: string, amount: number | 'worst-case', now: string): ModelAttempt {
   const attempt = readAttempts(db).find(a => a.id === attemptId)
   if (!attempt) throw new Error('Unknown model attempt')
-  if (attempt.state !== 'unknown') throw new Error(`Attempt is ${attempt.state}, not unknown`)
+  if (attempt.state !== 'unknown' && attempt.state !== 'estimated') throw new Error(`Attempt is ${attempt.state}, not unknown or estimated`)
   const actual = amount === 'worst-case' ? attempt.reservedUsd : amount
   if (!Number.isFinite(actual) || actual < 0) throw new Error('Reconcile amount must be a non-negative number of USD')
   return settleAttempt(db, { attemptId, actualUsd: actual, generationId: null, now, note: amount === 'worst-case' ? 'reconciled at worst case' : 'reconciled by hand' })

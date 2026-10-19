@@ -7,8 +7,10 @@
 //                                    titled saved link · invented time · lost date · dated update with no role
 //                                    (capture "Tax Return" first so that open task exists) · one item the server rejects
 //   "http401: …"                     key rejected (401) → "Model key rejected · text saved"
-//   "http500: …"                     provider error with no usage (500) → the charge is unknown, so the model pauses:
-//                                    "Model paused · a charge needs checking · text saved"
+//   "http500: …"                     provider error with no generation id and no usage (500) → "Model unavailable · text saved";
+//                                    the charge is estimated at the upper bound, the next capture runs normally
+//   "paused: …"                      provider error with a generation id but no cost → the charge is unknown and the model
+//                                    pauses: this and later captures show "Model paused · a cost couldn't be confirmed · text saved"
 //   "error-cost: …"                  provider error that reports its cost (500 + generation id + usage.cost) →
 //                                    "Model unavailable · text saved", cost settled, the model is not paused
 //   "malformed: …"                   every item has a field of the wrong type → "Model unavailable · text saved", cost settled
@@ -42,6 +44,7 @@ createServer(async (req, res) => {
   if (text.startsWith('timeout:')) return
   if (text.startsWith('http401:')) return send(401, { error: { message: 'bad key' } })
   if (text.startsWith('http500:')) return send(500, { error: { message: 'provider error' } })
+  if (text.startsWith('paused:')) return send(500, { id: `gen-${Date.now()}`, error: { message: 'upstream failed after generation' } })
   if (text.startsWith('error-cost:')) return send(500, { id: `gen-${Date.now()}`, error: { message: 'upstream failed after generation' }, usage: { cost: 0.0002 } })
   if (text.startsWith('malformed:')) return send(200, { id: `gen-${Date.now()}`, choices: [{ message: { content: JSON.stringify({ items: [flat({ title: 23 })] }) }, finish_reason: 'stop' }], usage: { cost: 0.0002 } })
   if (text.startsWith('slow:')) await new Promise(r => setTimeout(r, 20_000))

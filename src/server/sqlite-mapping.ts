@@ -36,7 +36,7 @@ const addedColumns: readonly { table: typeof specs[number]['name']; column: stri
  */
 export const modelAttemptsTable = `CREATE TABLE IF NOT EXISTS model_attempts (
   id TEXT PRIMARY KEY, captureId TEXT, revision INTEGER, day TEXT NOT NULL,
-  reservedMicros INTEGER NOT NULL, actualMicros INTEGER, state TEXT NOT NULL CHECK(state IN ('reserved','unknown','settled','not-sent')),
+  reservedMicros INTEGER NOT NULL, actualMicros INTEGER, state TEXT NOT NULL CHECK(state IN ('reserved','unknown','estimated','settled','not-sent')),
   generationId TEXT, model TEXT, createdAt TEXT NOT NULL, settledAt TEXT, note TEXT,
   resultFingerprint TEXT, resultOperationId TEXT, requestHash TEXT) STRICT`
 const modelAttemptColumns = ['id','captureId','revision','day','reservedMicros','actualMicros','state','generationId','model','createdAt','settledAt','note','resultFingerprint','resultOperationId','requestHash']
