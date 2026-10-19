@@ -40,6 +40,19 @@ This follows Bumblebee's grounding check (b842c6d3, abee294e). Ratchet's caution
 
 **Eng (Roadbuster):** the check result per item, `flags: ('time-not-in-text' | 'url-not-in-text' | 'title-not-grounded' | 'task-not-named' | 'date-missing')[]`, stored with the capture. Plus `edit-capture-item` (title, type, date), `save-capture-item` and `remove-capture-item`, each with its own receipt so Undo works.
 
+## Model status states (wording from Roadbuster's step 1 plan §1, 8577d8e)
+
+| State | Receipt | Capture bar / sheet |
+|---|---|---|
+| Model working | header tag "Organizing…" in `--ink-2` with the 14 px spinner; his text shows at once as the header quote | Save button returns to normal right away; he can keep capturing |
+| No key | header tag **"Simulated · no model key"**, same grey `sim` tag as today | one muted line under the field, the same text, until a key is added |
+| Key rejected / model error | **"Model unavailable · text saved"** in `--warn` text, with **Retry** (same attempt rules as Roadbuster §2) | no line; the receipt carries it |
+| Budget used up | **"Today's model budget is used up · text saved"** in `--warn` text, no Retry until tomorrow | no line |
+
+- His text is always the first thing on the receipt, in every state, so "saved" is visible before anything else.
+- No red: none of these lose data. Red stays for "Not created" style failures that need an action to avoid losing something.
+- The morning card uses the same header tag for proposals in the same states.
+
 ## Updates to existing tasks (unchanged rule, clearer row)
 
 The row reads **"[Update] Fix export bug → done"** and stays in the waiting state with Apply / Discard. The chip uses `--blue-soft` so it's clearly different from the new items above it. This was where the probe's "APPX update instead of a new Cairn task" happened, and it's already safe because nothing applies without Brian.
