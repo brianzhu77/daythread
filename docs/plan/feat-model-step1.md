@@ -1,7 +1,7 @@
 # feat/model step 1 · capture through the model — plan for review
 
 - Author: Roadbuster · 2026-10-19 · status: **plan, not built**. Nothing here runs a paid call or changes the database until the Lead and Ratchet have reviewed it.
-- Inputs: 03 AI contract; probe results `docs/validation/model-quality-probe-run-2026-10-19.md` rev 2 (**Weak**: 6 of 45 calls with a critical error on Brian's model); Jazz `docs/design/capture-receipt-v2.md` (aa967ab, including "Date missing"); Lead rulings (b842c6d3: confirm-first as a switchable default, grounding as a separate safety net, one hop of linked context, persisted budget with a rollback script).
+- Inputs: 03 AI contract; probe results `docs/validation/model-quality-probe-run-2026-10-19.md` rev 2 (**Weak**: 6 of 45 calls with a critical error on Brian's model); Jazz `docs/design/capture-receipt-v2.md` (76774f7: Date missing for task/event/update, Date unclear for new tasks, role on the date chip, model status states, unreadable parts); Lead rulings (b842c6d3: confirm-first as a switchable default, grounding as a separate safety net, one hop of linked context, persisted budget with a rollback script).
 - **Brian's answer is pending** (Lead asked yes / wait, 1deebf03). No step 1 code until he answers. If "yes", the default is `auto` (his earlier C5 choice); otherwise `confirm`. Either way it's one setting, so his answer changes a value, not the code.
 
 ## 1. What changes for Brian
@@ -20,9 +20,9 @@
    1. Loads the workspace. Stops if the capture is gone, discarded, at another revision, or already has an attempt in flight.
    2. Builds the request: the text, captured-at time, today's page, open tasks, and **one hop** of linked context (the subpages behind cards on today's page, and saved items whose source line is on today's page). The manifest line says "Linked pages: one level".
    3. Price: cached `/models` price for the model, refreshed at most daily. **Unknown or stale price = no call.** Worst case = input size × the highest rate the route can charge + 4000 output tokens × the highest completion rate.
-   4. **`reserve-model-attempt`** (command): uses the existing `reserveBudget` on a stored ledger. One paid call in flight per workspace, 10 USD per Vancouver day, an unknown charge blocks further calls (03 E3). The `attemptId` is unique, so a replay is no new reservation.
+   4. **`reserve-model-attempt`** (repository operation, server only; see "The ledger lives outside the workspace snapshot"): uses the existing `reserveBudget` on the stored ledger. One paid call in flight per workspace, 10 USD per Vancouver day, an unknown charge blocks further calls (03 E3). The `attemptId` is unique, so a replay is no new reservation.
    5. Calls OpenRouter: 60 s timeout, `max_tokens` 4000, the flat schema with task ids limited to the open tasks sent. A `length` stop counts as a failed answer.
-   6. **`record-model-result`** (command), with `attemptId`, the cost or null, the generation id, and the items or a failure kind:
+   6. **`record-model-result`** (repository operation plus, where needed, a server-only workspace command in the same transaction), with `attemptId`, the cost or null, the generation id, and the items or a failure kind:
       - Settles the budget. A missing cost stays "unknown" and blocks the next call until reconciled.
       - If the capture's revision changed, it was discarded, or another attempt took over: the result is kept for audit but never applied (03 §6).
       - Otherwise: validates every item (shape, task ids, real dates; anything invalid is dropped, never guessed), runs `groundItem` on each, stores the proposals with their flags, and then applies according to `captureMode`.
@@ -66,6 +66,14 @@
 - **Workspace setting:** `captureMode`, default `confirm`.
 - **Migration 2** adds the table (`IF NOT EXISTS`) and columns (migration 0 and 1 stay frozen). **`scripts/sqlite-rollback-model.ts`** goes back 3 → 2: it turns captures still `organizing` into `failed` with their text kept, drops the new capture columns, and **keeps `model_attempts`** plus a JSON copy (see Ratchet's constraints above). Ratchet tests the round trip as for /page, including the previous build opening the result and the ledger surviving.
 
+### The ledger lives outside the workspace snapshot
+
+Undo restores a whole "before" copy of the workspace (`Workspace.undo.before`), and the repository keeps a `current` and an `undo` snapshot. If the budget ledger were part of the workspace, an Undo would put back yesterday's spend and erase a real charge. So `model_attempts` is **not** a workspace collection:
+
+- It's its own table, outside the `current` / `undo` snapshot scheme. Undo, Keep planned and every other command leave it untouched.
+- `reserve-model-attempt` and `record-model-result` are repository operations, not workspace commands. Each runs in one `BEGIN IMMEDIATE` transaction. Where a result also changes the workspace (proposals and auto-applied items), the ledger update and the workspace command commit in **the same transaction**, so a settled charge and its applied items can't come apart.
+- The browser never sees or sends ledger operations. It gets a read-only "model status" (simulated / ready / paused for a charge check / budget used up) from the load call.
+
 ## 5. Key and fallback
 
 - The server loads `.env.local` explicitly at start (`process.loadEnvFile`, only if the file exists), because `vite preview` doesn't put it into `process.env`. The key is never sent to the browser or logged.
@@ -87,7 +95,7 @@
 
 A wrong date that *is* present is left to the receipt, which now shows it (Jazz v2).
 
-## 7. Receipt (Jazz v2, aa967ab)
+## 7. Receipt (Jazz v2, 76774f7)
 
 New commands: `edit-capture-item` (title, type, date), `save-capture-item`, `remove-capture-item`, `undo-capture` (whole capture, refused if anything was edited since). The UI follows Jazz's rows, chips and copy.
 
