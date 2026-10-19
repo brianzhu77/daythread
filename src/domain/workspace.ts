@@ -299,40 +299,81 @@ function findOrCreateMaterial(
   }
   return m;
 }
-const bareUrl = (value: string): string | null => {
+const httpUrl = (value: string): string | null => {
   const v = value.trim();
   if (!/^https?:\/\/\S+$/.test(v)) return null;
   try { new URL(v); return v; } catch { return null; }
 };
+type InlinePart = { type?: string; href?: string; content?: unknown; text?: string };
 /**
- * Editor path of 01 §6.1 / P14: a URL alone on a line in the material section (Good Stuffs, by kind, so a
- * renamed heading still counts) becomes a saved Material, as add-text did. Saves are debounced while Brian
- * types, so a Material this line created and nobody has touched yet follows the line: it is re-keyed or
- * dropped when the URL changes. Once it has a decision, a second source or a title, it keeps its identity.
+ * The link a line holds when it holds nothing else: a bare URL, or one titled link such as Brian's
+ * `[xx](url)` with only spaces around it. A sentence containing a link doesn't count.
  */
-function linkMaterialLines(state: Workspace, p: Page) {
+function lineLink(node: EditorNode | undefined, text: string): { url: string; title: string } | null {
+  const parts = Array.isArray(node?.content) ? (node!.content as InlinePart[]) : [];
+  const links = parts.filter((c) => c?.type === "link");
+  const onlyLink = links.length === 1 && parts.every((c) => c === links[0] || (c?.type === "text" && !String(c.text ?? "").trim()));
+  if (onlyLink) {
+    const url = httpUrl(String(links[0]!.href ?? ""));
+    if (url) return { url, title: inlineText(links[0]!.content).trim() || url };
+  }
+  const url = httpUrl(text);
+  return url ? { url, title: url } : null;
+}
+/** Brian's words on a saved line, without the link itself: the note for that save (04 P14). */
+function lineNote(node: EditorNode | undefined, text: string, url: string): string {
+  const parts = Array.isArray(node?.content) ? (node!.content as InlinePart[]) : [];
+  const rest = parts.some((c) => c?.type === "link" && c.href === url)
+    ? parts.filter((c) => !(c?.type === "link" && c.href === url)).map((c) => inlineText([c])).join("")
+    : text.split(url).join("");
+  return rest.trim().replace(/^[\s\-–—:·|,]+/, "").trim();
+}
+/** Created by this line's save and never acted on or annotated: the only Material the editor may re-key. */
+function untouchedLineMaterial(m: Material, blockId: string): boolean {
+  return m.id === `material:${blockId}` && m.sources.length === 1 && m.sources[0]!.blockId === blockId && !m.sources[0]!.note
+    && m.reviewState === "pending" && m.resurface && !m.body && m.nextReviewOn === null && m.lastDecisionOn === null
+    && !m.skippedUntil && !m.taskId && !m.openedOn?.length && !m.dismissedOn?.length && !m.decisions?.length;
+}
+/**
+ * Editor path of 01 §6.1 / P14: a link alone on a line in the material section (Good Stuffs, by kind, so a
+ * renamed heading still counts) becomes a saved Material, as add-text did. Saving never deletes a Material
+ * that holds anything beyond a URL the line itself typed.
+ * Saves are debounced while Brian types, so an untouched Material follows its line from one URL to the next
+ * (re-keyed); words added to the line become that save's note, and a deleted line leaves the Material alone.
+ */
+function linkMaterialLines(state: Workspace, p: Page, nodes: readonly EditorNode[]) {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
   for (const s of p.sections) {
     if (s.kind !== "good-stuffs") continue;
     for (const b of s.blocks) {
-      const url = bareUrl(b.text);
-      if (b.kind === "material" && b.materialId) {
-        const m = state.materials.find((m) => m.id === b.materialId);
-        const provisional = m && m.sources.length === 1 && m.sources[0]!.blockId === b.id && m.title === m.url
-          && m.reviewState === "pending" && !(m.decisions ?? []).length;
-        if (!provisional || m.url === url) continue;
-        state.materials = state.materials.filter((x) => x !== m);
-        b.kind = "paragraph";
-        delete b.materialId;
+      const node = byId.get(b.id), link = lineLink(node, b.text);
+      const m = b.kind === "material" ? state.materials.find((m) => m.id === b.materialId) : undefined;
+      if (m) {
+        if (link && untouchedLineMaterial(m, b.id)) {
+          if (link.url === m.url) { m.title = text(link.title, 1000); continue; }
+          const owner = state.materials.find((x) => x.url === link.url);
+          if (!owner) { m.url = link.url; m.title = text(link.title, 1000); continue; }
+          // The URL is already saved: this line becomes another save of it. `m` carries nothing but the
+          // half-typed URL, so it goes rather than leaving a second, empty item in the sort step.
+          state.materials = state.materials.filter((x) => x !== m);
+          b.materialId = owner.id;
+          owner.sources.push({ pageId: p.id, blockId: b.id, note: "" });
+          continue;
+        }
+        const source = m.sources.find((x) => x.blockId === b.id);
+        if (source) source.note = text(lineNote(node, b.text, m.url));
+        continue;
       }
-      if (b.kind !== "paragraph" || !url) continue;
+      if (b.kind !== "paragraph" || !link) continue;
       // Derived from the block, like `editor-task:` ids, so the browser's save preview and the server agree.
-      const m = findOrCreateMaterial(state, p, url, url, "", `material:${b.id}`);
+      const saved = findOrCreateMaterial(state, p, link.url, link.title, "", `material:${b.id}`);
       b.kind = "material";
-      b.materialId = m.id;
-      if (!m.sources.some((x) => x.blockId === b.id)) m.sources.push({ pageId: p.id, blockId: b.id, note: "" });
+      b.materialId = saved.id;
+      if (!saved.sources.some((x) => x.blockId === b.id)) saved.sources.push({ pageId: p.id, blockId: b.id, note: "" });
     }
   }
 }
+const flatNodes = (list: readonly EditorNode[]): EditorNode[] => list.flatMap((n) => [n, ...flatNodes(n.children ?? [])]);
 /** Calendar and future-day lists (rule R4): the day's planned tasks, then open tasks only due that day. */
 export function getCalendarTasks(state: Workspace, day: string): Task[] {
   const planned = getDayView(state, day).planned;
@@ -504,7 +545,7 @@ function execute(
       }
       }
       p.sections = projectDocument(nodes, p, state);
-      linkMaterialLines(state, p);
+      linkMaterialLines(state, p, all);
       const ordered = p.sections.flatMap(s => s.blocks).filter(b => b.kind === 'task' && b.planRole === 'plan');
       ordered.forEach((b, order) => {
         const relation = state.placements.find(x => x.taskId === b.taskId && x.date === p.date && x.state === 'included');
@@ -826,10 +867,12 @@ function execute(
     }
     case "relink-material-lines": {
       // One-off repair for pages written while the editor skipped the material rule; safe to repeat.
-      const before = state.materials.length;
-      for (const p of state.pages) linkMaterialLines(state, p);
-      const added = state.materials.length - before;
-      return { message: added ? `Saved ${added} link${added === 1 ? "" : "s"} from Good Stuffs` : "No unsaved Good Stuffs links" };
+      const before = JSON.stringify([state.materials, state.pages]), count = state.materials.length;
+      for (const p of state.pages) linkMaterialLines(state, p, flatNodes(JSON.parse(p.editorJSON ?? "[]")));
+      // Writing nothing keeps the revision, so a tab Brian has open doesn't see "Page changed elsewhere".
+      if (JSON.stringify([state.materials, state.pages]) === before) throw new DomainError("No unsaved Good Stuffs links; nothing written");
+      const added = state.materials.length - count;
+      return { message: `Saved ${added} link${added === 1 ? "" : "s"} from Good Stuffs` };
     }
     case "insert-reference": {
       const p = page(state, action.pageId),
