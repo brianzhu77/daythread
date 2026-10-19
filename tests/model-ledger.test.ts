@@ -206,3 +206,22 @@ test('Ratchet #68: an "unknown" record after a timeout binds nothing; the real l
     assert.equal((await s.repo.load()).tasks.filter(t => /result|Other/.test(t.title)).length, 1)
   } finally { await s.cleanup() }
 })
+
+test('Lead c8706da8: a real result without a cost is applied once, counted at worst case, and stays to be reconciled', async () => {
+  const s = await store()
+  try {
+    await reserve(s.repo, 'a1', s.captureId, 0.004)
+    const ws = await s.repo.load(), page = ws.pages[0]!
+    const result = { operationId: 'r1', expectedRevision: ws.revision, action: { type: 'add-task' as const, pageId: page.id, sectionId: page.sections[0]!.id, title: 'No-cost result' } }
+    await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: null, generationId: 'gen-1', now }, result)
+    let [a] = await s.repo.modelAttempts()
+    assert.equal(a!.state, 'unknown'); assert.match(a!.note!, /worst case until reconciled/)
+    assert.equal(modelStatus([a!], '2026-10-19').spentTodayUsd, 0.004)
+    assert.equal(modelStatus([a!], '2026-10-19').state, 'paused')
+    // Replaying it applies nothing new; reconciling settles the real amount.
+    await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: null, generationId: 'gen-1', now }, { ...result, operationId: 'r2' })
+    assert.equal((await s.repo.load()).tasks.filter(t => t.title === 'No-cost result').length, 1)
+    ;[a] = [await s.repo.reconcileModelAttempt('a1', 0.0003, now)]
+    assert.equal(a!.state, 'settled'); assert.equal(a!.actualUsd, 0.0003)
+  } finally { await s.cleanup() }
+})

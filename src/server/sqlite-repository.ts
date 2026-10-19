@@ -95,6 +95,9 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
       // No cost and no result = "outcome not known yet" (timeout, lost reply). That binds nothing, so the real result
       // arriving later is recorded normally (Ratchet #68 fixed-identity).
       if (input.actualUsd === null && !command) return { attempt }
+      // A real result without a cost: applied once, counted at the worst case (the reservation), and left "unknown"
+      // so calls stay paused until it's reconciled. Never settled as null or zero (Lead c8706da8).
+      if (input.actualUsd === null) db.prepare("UPDATE model_attempts SET note=? WHERE id=?").run('result recorded without a cost; counted at worst case until reconciled', input.attemptId)
       // One attempt, one result: the same result again replays the first receipt; a different one is refused.
       // Fingerprint = what it applies + what it cost + which generation (Lead d25b6c28).
       const fingerprint = sha256(JSON.stringify([command ? command.action : null, input.actualUsd, input.generationId]))
