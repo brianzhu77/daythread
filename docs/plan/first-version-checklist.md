@@ -6,7 +6,7 @@ after that (tags on Oct 18). Brian's latest message overrides this file; update 
 
 ## Count
 
-**Built: 9 of 19** (as of `cd3c494`, live on 3000, 2026-10-19 22:03Z).
+**Built: 11 of 19** (as of `960d5d4`, live on 3000, 2026-10-19).
 
 Every status update to Brian quotes this line. Count rule: a row counts as built only when it is live on 3000
 **and** has passed review (Ratchet's acceptance task linked in Evidence). "Partial" counts as not built.
@@ -39,9 +39,9 @@ Group B is listed for tracking only and never counts toward M.
 | ID | Item | Source | Status | Evidence |
 |---|---|---|---|---|
 | A1a | `/` → Page inside any page (day pages included): page card at the cursor, parent recorded, opens with the cursor in an editable title, Back returns to the card | e526eb12, 155a107d; v0.4 N-2 | built | c8fb28a live 2026-10-19; Ratchet #64 (docs/reviews/page-slash-ratchet.md) |
-| A1b | Nesting shown and managed: Subpages list, sidebar tree, Move, breadcrumb | 3596b765; v0.4 N-2, N-9 | building | step B on feat/pages-tree from cd3c494 (Lead b56155fb); parentId already stored since c8fb28a. Delete with children is A4 (N-7), not this row. Move is Move to… only; the row counts as built without drag (Lead c000dc41), drag is B14 |
+| A1b | Nesting shown and managed: Subpages list, sidebar tree, Move, breadcrumb | 3596b765; v0.4 N-2, N-9 | built | 960d5d4 live 2026-10-19 (Lead fbfa9390); Ratchet #73 (docs/reviews/pages-tree-ratchet.md, re-checked on a copy of Brian's real data), Jazz design pass. Pages screen lists pages under days ("In your days"). Move is Move to… only, drag is B14. Delete with children is A4 (N-7). Known limit: Linked from order (B15) |
 | A2 | Paste a URL → page with the URL as a property; one page per URL | 3596b765, e83b0640; v0.4 N-1, N-3, N-4 | missing | Page.type = daily/document only |
-| A3 | "Linked from" back to the day on every page | 3596b765; v0.4 N-5 | building | step B with A1b (Lead b56155fb); lists actual references only, parent goes in the breadcrumb |
+| A3 | "Linked from" back to the day on every page | 3596b765; v0.4 N-5 | built | 960d5d4 live 2026-10-19, Ratchet #73. Real references only; the breadcrumb parent is not repeated; today shows as "Today" |
 | A4 | Delete a page to trash and restore it, with its subpages | v0.4 N-7 | missing | — |
 | A9 | `[[` page reference; quote with source | v0.3 scope 4, 01 §6.2 | missing | `insert-reference` has no caller |
 | A11 | Block-level references | c5c9142e #1 | missing | moved to Later by the team without asking; build or ask Brian |
@@ -64,7 +64,7 @@ Count: M = D1–D6 + A1a, A1b, A2–A5, A6a, A6b, A7–A9, A11, A12 = 19. A10 (d
 A1 was split into A1a/A1b on 2026-10-19 when `/page` shipped (same sources, no scope change), so M went 17 → 18.
 A6 was split into A6a/A6b on 2026-10-19 when capture went live on the real model (same sources, no scope change), so M went 18 → 19.
 A1b dropped "delete with children" on 2026-10-19 because A4 already covers it (N-7, trash and restore with subpages); M unchanged.
-N = D1–D6 + A5 + A1a + A6a = 9.
+N = D1–D6 + A5 + A1a, A1b, A3 + A6a = 11.
 
 ## B. In our own specs, Brian never named them (tracked, not counted)
 
