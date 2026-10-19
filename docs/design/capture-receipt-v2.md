@@ -34,7 +34,7 @@ Footer: **Undo all** (one step, the whole capture), then the existing "Show orig
 This follows Bumblebee's grounding check (b842c6d3, abee294e). Ratchet's caution applies: a passed check isn't proof that the item is right, and it has to be tested on its own.
 
 - An item that fails the server's check **isn't auto-applied.** It sits in the same receipt, in a **"Needs a look"** group above the saved items, as a waiting row with **Save** and **Remove** on the row. Editing the flagged field and then tapping Save saves it.
-- The row shows why, as an amber chip (`--warn` colours, 12 px) placed before the date chip: **"Time not in your text"**, **"Link not in your text"**, **"Title not from your text"** or **"Task not named"** (for an update).
+- The row shows why, as an amber chip (`--warn` colours, 12 px) placed before the date chip: **"Time not in your text"**, **"Link not in your text"**, **"Title not in your text"** or **"Task not in your text"** (for an update).
 - When every item is saved or removed, the group disappears. The receipt header reads "Saved from …" once nothing is waiting, and "1 waiting for you · from …" while something is.
 - The saved items in the same capture are unaffected: they're already saved, with Undo.
 
@@ -46,7 +46,7 @@ The row reads **"[Update] Fix export bug → done"** and stays in the waiting st
 
 ## Copy
 
-Task · Event · Saved link · Note · Update · No date · Needs a look · Save · Time not in your text · Link not in your text · Title not from your text · Task not named · {n} waiting for you · Remove · Open · Undo all · Show original · Can't undo · edited since. Bumblebee owns final wording.
+Task · Event · Saved link · Note · Update · No date · Needs a look · Save · Time not in your text · Link not in your text · Title not in your text · Task not in your text · {n} waiting for you · Remove · Open · Undo all · Show original · Can't undo · edited since. Bumblebee owns final wording.
 
 ## Acceptance (Ratchet)
 
