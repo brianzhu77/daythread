@@ -80,7 +80,7 @@ for that day**; most other screens are document tooling.
 | Toggle block | #57–#60 | **Copy** | Collapsible block. | — |
 | Checklist / task list block | #84, #343 | **Adapt** | Current rule (= Craft): a checkbox row (`[]`, `/task`) is a task everywhere; in plan sections it is also that day's placement. Proposal C4 (a) would make it a plain checklist line on ordinary pages. | 00 D02; 01 §4.2 (§3 C4) |
 | Block selection: swipe to select, Style / Actions / Assistant / Delete bar | #33, #69, #247 | **Adapt** | Style / Actions / Delete. No Assistant. Delete follows D05 (whole plan row = Not today; bulk = text only). | 00 D05; 04 A19, A34 |
-| Block action sheet: Copy, Cut, Duplicate, Share & Export, **Move to Daily Note**, More | #255 | **Adapt** | Labels by kind, no generic "Move": prose line → **Bring to today**; task row → **Plan today** (Keep); page card → **Bring to today** adds a reference to the same page. Copy / Duplicate of a task row make references to the **same** task; a new independent task needs **Duplicate task**. Plus Cut, Make task, Open. | 00 D05, D07; 02 §109; v0.4 N-4 (§3 C6) |
+| Block action sheet: Copy, Cut, Duplicate, Share & Export, **Move to Daily Note**, More | #255 | **Adapt** | Labels by kind, no generic "Move": prose line → **Bring to today**; task row → **Plan today** (Keep); page card → **Bring to today** adds a reference to the same page. ~~Copy / Duplicate of a task row make references to the **same** task; a new independent task needs **Duplicate task**.~~ *Changed 2026-10-17 (Lead msg `29e1dd88`): copy/paste of a task row makes a new unplanned task; cut/paste moves the same task; editor spec F19.* Plus Cut, Make task, Open. | 00 D05, D07; 02 §109; v0.4 N-4 (§3 C6) |
 | Remind me (20 min, 1 h, 3 h, tomorrow, next week, custom, save for later) | #250–#253 | **Skip** | Only the evening review reminder exists in v1. | 00 scope |
 | Page ⋯: Page Style, Text Size, Spelling, Find in Page, Table of Contents, AI Assistant, View, Star, Move to…, Delete | #281 | **Adapt** | Find in Page, **Move to…** (v0.4 N-2), Delete (v0.4 N-7), Page info. Others: Skip or Later. | v0.4 N-2, N-7 |
 | Move document to (folder list) | #282–#283 | **Adapt** | Move to… lists pages (tree search), never into a page's own descendants. | v0.4 N-2 |
@@ -139,6 +139,9 @@ are choices for Brian (via the Lead); the rest keep the accepted rule and only b
   **same** task on today, clears the pause, keeps deadline and attention date; a page card's Bring
   reuses the page ID, adds a reference, never changes its parent or follow-up state. A retried
   request never makes a second copy; a deliberate second Bring does. (00 D05, D07; 02 §109; v0.4.)
+  *Changed 2026-10-17 (Lead msg `29e1dd88`):* copying a task row (⌘C / Copy) no longer references
+  the same task; it pastes as a new unplanned task. Cut then paste moves the same task. A future
+  explicit "Copy reference" covers showing one task in two places. See editor spec F19.
 - **C7 · Folders.** Craft has folders plus subpages. v0.4 has pages only. **Keep v0.4;** top-level
   pages look like Craft's folder rows.
 - **C8 · Smart Link fetch.** Craft fetches title and image. Brian said fill by hand for now
