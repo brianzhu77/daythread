@@ -47,7 +47,7 @@
 | **`record-model-result` and `reserve-model-attempt` must be server-only** | Both are left out of `commandSchema`, the schema the browser's `runCommand` validates against, so the browser can't send them. The orchestrator applies them through the repository on the server. A test sends them through `runCommand` and expects a rejection. |
 | **Price reservation must cover the whole request** | The worst case uses the UTF-8 byte length of the full request body (messages, schema, context) as an upper bound on input tokens (tokens ≤ bytes), times the highest input rate, plus 4000 × the highest output rate. |
 | **A repeated result with different values** must not settle or apply twice | The first record for an `attemptId` wins. A repeat with identical input returns the same receipt; a repeat with different values is refused and logged. Cost is settled once (`settleBudget` already refuses to overwrite). |
-| **Invalid items must not silently disappear** | An item the app can't validate isn't dropped from view. The receipt shows "1 part couldn't be read · your text is kept" with the original text, and the capture keeps a `partial` flag. Nothing invalid is applied. |
+| **Invalid items must not silently disappear** | An item the app can't validate isn't dropped from view. The receipt follows Jazz 69c1b86 with Bumblebee's copy: "1 part wasn't saved as an item · See your text", and the capture keeps a `partial` flag. Nothing invalid is applied. |
 
 ## 3. Mapping model items to app changes
 
