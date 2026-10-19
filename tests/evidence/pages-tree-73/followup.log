@@ -1,0 +1,12 @@
+(node:4930) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+days Thu, Oct 22
+C
+Destination renamed by old build
+这是一个很长的中文祖先页面名字用于菜单测试
+Deep target
+Today
+Sun, Oct 18
+PASS future ancestor visible+expanded before Today; past child-only day reachable; Pages nav not selected
+PASS390 hidden ancestor menu visible/hit-testable/click navigates to Destination renamed by old build width 269.65625
+pageerrors []

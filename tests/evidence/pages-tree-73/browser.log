@@ -1,0 +1,8 @@
+(node:2636) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+crumb Today
+A
+B
+PASS sidebar + child parentId A, no card added, no structural Linked from
+PASS actual Move+Undo updates breadcrumb and old-parent Linked from
+PASS phone Move sheet/cancel/no horizontal overflow/no pageerrors

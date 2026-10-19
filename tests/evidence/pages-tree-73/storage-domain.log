@@ -1,0 +1,5 @@
+(node:2377) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS candidate move→old cd3c494 load+rename→candidate reload: hierarchy, references, tasks and ledger retained; layout3 no migration/rollback script
+PASS cycle refusals atomic; move and Undo exact page recovery; fixture ready /tmp/ratchet-tree73.sqlite
