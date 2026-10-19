@@ -120,6 +120,8 @@ function appendBlock(p: Page, s: Section, block: NoteBlock): void {
   const remember = (n: EditorNode) => { nodes.set(n.id, n); n.children?.forEach(remember); };
   if (p.editorJSON) (JSON.parse(p.editorJSON) as EditorNode[]).forEach(remember);
   const isEmptyRow = (b: NoteBlock) => {
+    // A starter task row saved before it had text: its draft identity, no Task behind it (Jazz 985b009b).
+    if (b.kind === "task" && b.taskId === `editor-task:${b.id}` && !b.text.trim()) return true;
     if (b.kind !== "paragraph" || b.text.trim()) return false;
     const node = nodes.get(b.id);
     if (!node) return !p.editorJSON;

@@ -61,6 +61,8 @@ interface WorkspaceContextValue {
   simOutcome: SimOutcome
   setSimOutcome(o: SimOutcome): void
   run(action: Action, notice?: NoticeArg, operationId?: string, options?: RunOptions): Promise<Receipt | null>
+  /** The workspace as of the last command or load, before React re-renders: what a command just did. */
+  latest(): Workspace | null
   retry(): void
   reload(): void
   refresh(triggerOperationId?: string): Promise<Workspace>
@@ -235,9 +237,11 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     push({ text: 'Sample data added' })
   }, [run, push])
 
+  const latest = useCallback(() => wsRef.current, [])
   const value = useMemo(
     () => ({
       workspace,
+      latest,
       loadError,
       saveState,
       saveError,
@@ -253,7 +257,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       submitCapture,
       retryCapture,
     }),
-    [workspace, loadError, saveState, saveError, lastFailed, simOutcome, run, retry, reload, refresh, addSampleData, model, submitCapture, retryCapture],
+    [workspace, latest, loadError, saveState, saveError, lastFailed, simOutcome, run, retry, reload, refresh, addSampleData, model, submitCapture, retryCapture],
   )
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }

@@ -1006,7 +1006,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .side-hint { color: var(--ink-2); }
 
 /* Morning card (Jazz docs/design/morning-card-build.md §2) */
-.mc-group { display: grid; gap: 0; padding-top: 16px; }
+.mc-group { display: grid; gap: 0; padding-top: 4px; }
 .mc-label { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .05em; }
 .mc-list li + li { border-top: 1px solid var(--line); }
 .mc-row { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 4px 0; }

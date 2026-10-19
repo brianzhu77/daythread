@@ -182,3 +182,55 @@ test('a removed plan section comes back at the top, in template order', () => {
   ws = ok(ws, { type: 'plan-task', taskId: ws.tasks[1]!.id, date: '2026-10-19', section: 'top3' })
   assert.deepEqual(day(ws, '2026-10-19').sections.slice(0, 2).map(s => s.kind), ['top3', 'other'])
 })
+
+// Ratchet #75: Top 3 has two tasks; he types a third into its empty row and taps + on a suggestion right away. The
+// editor's save lands first, so the server sees a full Top 3 and sends the suggestion to the plan list.
+test('a + after typing the third Top 3 row goes to the plan list; Top 3 stays at three', () => {
+  let ws = ok(createEmptyWorkspace(), { type: 'ensure-day', date: '2026-10-19' })
+  const top3Id = day(ws, '2026-10-19').sections.find(s => s.kind === 'top3')!.id
+  const row = (id: string, title: string): EditorNode => ({ id, type: 'task', props: { taskId: `editor-task:${id}`, role: 'plan', planDate: '2026-10-19' }, content: title })
+  ws = edit(ws, '2026-10-19', doc => { const at = doc.findIndex(n => n.id === top3Id); return [...doc.slice(0, at + 1), row('a', 'one'), row('b', 'two'), ...doc.slice(at + 1)] })
+  const p = day(ws, '2026-10-19')
+  ws = ok(ws, { type: 'add-task', pageId: p.id, sectionId: p.sections.find(s => s.kind === 'notes')!.id, title: 'suggested' } as Action)
+  const suggested = ws.tasks.find(t => t.title === 'suggested')!
+  // The save of the typed third row, then the card's command.
+  ws = edit(ws, '2026-10-19', doc => doc.map(n => n.type === 'task' && n.id.includes(':top3:template:') ? { ...n, content: 'three' } : n))
+  assert.deepEqual(planned(ws, 'top3'), ['one', 'two', 'three'])
+  ws = ok(ws, { type: 'plan-tasks', date: '2026-10-19', items: [{ taskId: suggested.id, section: 'top3' }] })
+  assert.deepEqual(planned(ws, 'top3'), ['one', 'two', 'three'])
+  assert.deepEqual(planned(ws, 'other'), ['suggested'])
+})
+
+test('planned tasks go before the section\'s empty starter row, from the card and from plan-task alike', () => {
+  // Two tasks made on Sunday, then today's page opened once so its starter rows are saved, as on Brian's page.
+  let ws = ok(createEmptyWorkspace(), { type: 'ensure-day', date: '2026-10-18' })
+  const sun = day(ws, '2026-10-18')
+  for (const title of ['t0', 't1']) ws = ok(ws, { type: 'add-task', pageId: sun.id, sectionId: sun.sections.find(s => s.kind === 'notes')!.id, title } as Action)
+  ws = ok(ws, { type: 'ensure-day', date: '2026-10-19' })
+  ws = edit(ws, '2026-10-19', doc => doc)
+  const order = (kind: 'top3' | 'other') => {
+    const s = day(ws, '2026-10-19').sections.find(x => x.kind === kind)!
+    return s.blocks.map(b => ws.tasks.find(t => t.id === b.taskId)?.title ?? (b.text || '∅'))
+  }
+  assert.deepEqual(order('other'), ['∅'])
+  ws = ok(ws, { type: 'plan-tasks', date: '2026-10-19', items: [{ taskId: ws.tasks[0]!.id, section: 'other' }] })
+  ws = ok(ws, { type: 'plan-task', taskId: ws.tasks[1]!.id, date: '2026-10-19', section: 'top3' })
+  assert.deepEqual(order('other'), ['t0', '∅'])
+  assert.deepEqual(order('top3'), ['t1', '∅'])
+  // The editor document shows the same order.
+  const doc = editorSeed(day(ws, '2026-10-19'), ws).map(n => n.type === 'heading' ? `#${inlineText(n.content)}` : inlineText(n.content) || '∅')
+  assert.deepEqual(doc.slice(0, 6), ['#TODO - Top 3', 't1', '∅', '#TODO - Other', 't0', '∅'])
+})
+
+test('the stored shape on Brian\'s page (a starter task row saved as an empty draft task) also stays last', () => {
+  let ws = ok(createEmptyWorkspace(), { type: 'ensure-day', date: '2026-10-18' })
+  const sun = day(ws, '2026-10-18')
+  ws = ok(ws, { type: 'add-task', pageId: sun.id, sectionId: sun.sections.find(s => s.kind === 'notes')!.id, title: 'Water plants' } as Action)
+  ws = ok(ws, { type: 'ensure-day', date: '2026-10-19' })
+  ws = edit(ws, '2026-10-19', doc => doc)
+  // As read from his database: { kind: 'task', taskId: 'editor-task:<id>', text: '' } in TODO - Other.
+  const other = day(ws, '2026-10-19').sections.find(s => s.kind === 'other')!
+  other.blocks = other.blocks.map(b => b.text ? b : { id: b.id, kind: 'task', taskId: `editor-task:${b.id}`, text: '', planRole: 'plan' })
+  ws = ok(ws, { type: 'plan-tasks', date: '2026-10-19', items: [{ taskId: ws.tasks.find(t => t.title === 'Water plants')!.id, section: 'other' }] })
+  assert.deepEqual(day(ws, '2026-10-19').sections.find(s => s.kind === 'other')!.blocks.map(b => b.text || '∅'), ['Water plants', '∅'])
+})

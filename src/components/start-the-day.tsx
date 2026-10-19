@@ -2,12 +2,12 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { dayTemplate } from '../domain/editor-document'
 import type { DayView, LocalDate, NoteBlock, Page, Task, Workspace } from '../domain/types'
-import { weekday } from './dates'
+import { shortLabel, weekday } from './dates'
 import { DateTag } from './date-tag'
 import { flushEditor } from './editor-flush'
 import { RowMenu } from './row-menu'
 import { TagText } from './tag-text'
-import { anotherDayItems, useTaskActions } from './task-row'
+import { anotherDayItems, notTodayText } from './task-row'
 import { useWorkspace } from './use-day'
 
 // Morning card (Jazz docs/design/morning-card-build.md, §12 at 5f05fc2): one Tasks group with a reason per row, a
@@ -66,8 +66,7 @@ const stripMs = 5000
 
 /** Morning hand-off (01 §3.5). Skipping is normal; nothing here needs clearing. */
 export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view: DayView; workspace: Workspace; today: LocalDate; onLater: () => void; onBusy: (busy: boolean) => void }) {
-  const { run, simOutcome } = useWorkspace()
-  const { planOn, notToday } = useTaskActions(today)
+  const { run: runUnsaved, latest, simOutcome } = useWorkspace()
   const navigate = useNavigate()
   const page = view.page!
   const prev = previousDailyPage(workspace, today)
@@ -90,53 +89,62 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
     setStrips(s => new Map(s).set(key, strip))
     timers.current.set(key, setTimeout(() => setStrips(s => { const next = new Map(s); next.delete(key); return next }), ms))
   }
-  /** Saves what he typed on today's page first; a failed save stops the action and his draft stays (Lead 5f3615d0). */
-  const guarded = async (action: () => Promise<unknown>) => {
+  /**
+   * Every write on this card goes through here, never `run` directly: it saves what he typed on today's page first,
+   * and does nothing if that save fails, so his draft stays and the card changes nothing (Lead 5f3615d0, 764b1887).
+   * Screen-only state (Later, expanding lines) doesn't need it.
+   */
+  const write: typeof runUnsaved = async (action, notice, operationId, options) => {
     setWorking(n => n + 1); onBusy(true)
-    try { if (await flushEditor(page.id)) await action() } finally { setWorking(n => n - 1) }
+    try { return (await flushEditor(page.id)) ? await runUnsaved(action, notice, operationId, options) : null } finally { setWorking(n => n - 1) }
   }
 
   const top3 = sectionName(page, 'top3'), other = sectionName(page, 'other')
   const hasPlanSection = page.sections.some(s => s.kind === 'top3' || s.kind === 'other')
-  const top3Full = () => page.sections.filter(s => s.kind === 'top3').flatMap(s => s.blocks).filter(b => b.kind === 'task' && b.taskId).length >= 3
-  const addedText = (section: 'top3' | 'other', created: boolean) => {
-    if (created) return `Added · ${section === 'top3' ? top3 : other} section created`
-    if (section === 'top3' && top3Full()) return `Top 3 is full · added to ${other}`
-    return `Added to ${section === 'top3' ? top3 : other}`
+  /** Which plan section each task is in on today's page right now. */
+  const placedIn = (taskIds: string[]) => {
+    const today_ = latest()?.pages.find(p => p.id === page.id)
+    return taskIds.map(id => today_?.sections.find(s => (s.kind === 'top3' || s.kind === 'other') && s.blocks.some(b => b.taskId === id))?.kind as 'top3' | 'other' | undefined)
   }
+  const planSectionExists = (kind: 'top3' | 'other') => Boolean(latest()?.pages.find(p => p.id === page.id)?.sections.some(s => s.kind === kind))
 
-  const add = (s: TaskSuggestion) => guarded(async () => {
-    const key = `task:${s.task.id}`
-    const created = !page.sections.some(x => x.kind === (s.section === 'top3' && !top3Full() ? 'top3' : 'other'))
-    const text = addedText(s.section, created)
-    const section = s.section === 'top3' && top3Full() ? 'other' : s.section
-    const receipt = await run({ type: 'plan-task', taskId: s.task.id, date: today, section }, null)
-    if (receipt) showStrip(key, { text, undo: receipt.operationId })
-  })
-  const addAll = () => guarded(async () => {
-    // One strip for the whole Add all, as it is one operation with one Undo (Bumblebee b82493ff, Jazz 446d101 §12.6). Destinations are
-    // worked out before the command fills Top 3; the domain applies the same overflow rule.
-    let top3Count = page.sections.filter(s => s.kind === 'top3').flatMap(s => s.blocks).filter(b => b.kind === 'task' && b.taskId).length
-    let toTop3 = 0, toOther = 0
-    for (const s of tasks) if (s.section === 'top3' && top3Count < 3) { top3Count++; toTop3++ } else toOther++
+  // The server decides where each task goes (a full Top 3 sends it to the plan list), and the strip says where it
+  // actually went, read after the command; nothing is worked out from the page as it was before typing was saved
+  // (Ratchet #75, Lead 51b3c990).
+  const add = async (s: TaskSuggestion) => {
+    const hadSection = { top3: planSectionExists('top3'), other: planSectionExists('other') }
+    const receipt = await write({ type: 'plan-tasks', date: today, items: [{ taskId: s.task.id, section: s.section }] }, null)
+    if (!receipt) return
+    const placed = placedIn([s.task.id])[0] ?? s.section
+    const name = placed === 'top3' ? top3 : other
+    const text = !hadSection[placed] ? `Added · ${name} section created`
+      : s.section === 'top3' && placed === 'other' ? `Top 3 is full · added to ${other}` : `Added to ${name}`
+    showStrip(`task:${s.task.id}`, { text, undo: receipt.operationId })
+  }
+  const addAll = async () => {
+    // One strip for the whole Add all, as it is one operation with one Undo (Bumblebee b82493ff, Jazz 446d101 §12.6).
+    const ids = tasks.map(s => s.task.id)
+    const receipt = await write({ type: 'plan-tasks', date: today, items: tasks.map(s => ({ taskId: s.task.id, section: s.section })) }, null)
+    if (!receipt) return
+    const placed = placedIn(ids)
+    const toTop3 = placed.filter(k => k === 'top3').length, toOther = placed.length - toTop3
     const text = toTop3 && toOther ? `Added ${toTop3} to ${top3} · ${toOther} to ${other}` : `Added ${toTop3 + toOther} to ${toTop3 ? top3 : other}`
-    const receipt = await run({ type: 'plan-tasks', date: today, items: tasks.map(s => ({ taskId: s.task.id, section: s.section })) }, null)
-    if (receipt) showStrip(allKey, { text, undo: receipt.operationId })
-  })
-  const bring = (line: { pageId: string; block: NoteBlock }) => guarded(async () => {
-    const receipt = await run({ type: 'bring-line', date: today, sourcePageId: line.pageId, sourceBlockId: line.block.id }, null)
+    showStrip(allKey, { text, undo: receipt.operationId })
+  }
+  const bring = async (line: { pageId: string; block: NoteBlock }) => {
+    const receipt = await write({ type: 'bring-line', date: today, sourcePageId: line.pageId, sourceBlockId: line.block.id }, null)
     if (receipt) showStrip(`line:${line.block.id}`, { text: 'Brought to today', undo: receipt.operationId })
-  })
-  const undo = (key: string, operationId: string) => guarded(async () => {
+  }
+  const undo = async (key: string, operationId: string) => {
     let refused = false
-    await run({ type: 'undo', targetOperationId: operationId }, null, undefined, { inlineRefusal: /Cannot undo|Can't undo/, onRefused: () => { refused = true } })
+    const receipt = await write({ type: 'undo', targetOperationId: operationId }, null, undefined, { inlineRefusal: /Cannot undo|Can't undo/, onRefused: () => { refused = true } })
     // An Undo after a later change is refused whole (§6); the strip says so, then goes.
     if (refused) showStrip(key, { text: 'Can’t undo · edited since', refused: true }, 3000)
-    else {
+    else if (receipt) {
       // The undone strip goes; any other strip of the same operation would go with it.
       setStrips(s => new Map([...s].filter(([, strip]) => strip.undo !== operationId)))
     }
-  })
+  }
 
   const row = (key: string) => {
     const strip = strips.get(key)
@@ -151,14 +159,14 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
       if (!s) return null
       return (
         <li key={key} className="mc-row">
-          <AddButton label={`Add ${s.task.title} to ${s.section === 'top3' && !top3Full() ? top3 : other}`} onPress={() => void add(s)} />
+          <AddButton label={`Add ${s.task.title} to ${s.section === 'top3' ? top3 : other}`} onPress={() => void add(s)} />
           <span className="mc-text">
             <span className="mc-title-line"><span className="mc-title"><TagText text={s.task.title} /></span><DateTag task={s.task} today={today} /></span>
             <span className="mc-reason">{s.reason}</span>
           </span>
           <RowMenu label={`More for ${s.task.title}`} groups={[
-            { items: [{ label: 'Not today', onSelect: () => void guarded(() => notToday(s.task, today)) }] },
-            { title: 'Another day', items: anotherDayItems(s.task, today, (t, d) => void guarded(() => planOn(t, d))) },
+            { items: [{ label: 'Not today', onSelect: () => void write({ type: 'not-today', taskId: s.task.id, date: today }, r => ({ text: notTodayText(s.task, today, today), undoOperationId: r.operationId })) }] },
+            { title: 'Another day', items: anotherDayItems(s.task, today, (t, d) => void write({ type: 'plan-task', taskId: t.id, date: d }, r => ({ text: `Moved to ${shortLabel(d)}`, undoOperationId: r.operationId }))) },
             { items: [{ label: 'Open task', onSelect: () => void navigate({ to: '/tasks', search: { view: 'today' } }) }] },
           ]} />
         </li>
@@ -171,7 +179,7 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
   const noTasksLine = !page.draft && (
     <p className="line">
       {page.draftError ? 'Suggestions couldn’t be prepared' : 'No suggestions from last night'} ·{' '}
-      <button type="button" className="app-link" onClick={() => run({ type: 'generate-draft', date: today, outcome: simOutcome }, null)}>
+      <button type="button" className="app-link" onClick={() => void write({ type: 'generate-draft', date: today, outcome: simOutcome }, null)}>
         {page.draftError ? 'Retry' : 'Draft my day'}
       </button>
     </p>
@@ -226,7 +234,7 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
       )}
 
       <footer className="card-foot">
-        <button type="button" className="primary" onClick={() => run({ type: 'handoff-done', date: today }, { text: 'Day started' })}>
+        <button type="button" className="primary" onClick={() => void write({ type: 'handoff-done', date: today }, { text: 'Day started' })}>
           Done
         </button>
         <button type="button" className="ghost" onClick={onLater}>
