@@ -12,7 +12,7 @@
 | Checkbox to pick, then a separate Add button | **Round `+` adds at once**, then the row shows an **Undo** strip |
 | Not today as a visible button | Not today and Another day move into the row's **⋯** menu |
 | Prose lines from the previous page not offered (`start-the-day.tsx:27`) | **Restored** as a collapsed "Lines from Thu" group (Brian, a4fd5686 #5) |
-| No proposals | **Proposals** group: text lines that aren't tasks yet. Shown only when there are any (see §4) |
+| No proposals | **From your notes** group (internally "proposals"): text lines that aren't tasks yet. Shown only when there are any (see §4) |
 
 ## 2. Layout
 
@@ -29,7 +29,7 @@ TASKS
      Unfinished · from Thu
      Add all tasks                                      ← text button, only with 2+ rows
 
-PROPOSALS                                               ← only when non-empty
+FROM YOUR NOTES                                         ← only when non-empty
 (+┄) Call the dentist                            ⋯
      Mon · Notes
 
@@ -56,7 +56,7 @@ Sources, merged into one list with each task appearing **once**:
 - Excluded, as now: tasks already planned for today (`plannedOn === today`), paused tasks, tasks already in Top 3. A task already in Top 3 is no longer shown greyed out with "In Top 3". It's simply not a suggestion.
 - **Add all tasks** applies each row's own destination in list order. Proposals and lines are never bulk-added.
 
-## 4. Proposals group
+## 4. From your notes (proposals)
 
 Lines from earlier threads that aren't tasks yet, including text that named today ("call dentist Friday", written on Mon).
 
@@ -73,16 +73,16 @@ Lines from earlier threads that aren't tasks yet, including text that named toda
 
 ## 6. After a tap: the Undo strip
 
-- The row is replaced in place, same height, by a muted strip: **"Added to Top 3 · Undo"**, **"Added to the plan · Undo"**, or **"Brought to today · Undo"**. It stays 5 s, then the row collapses out (180 ms).
-- Top 3 already full (3 rows): the item goes to the plan list, and the strip reads **"Top 3 is full · added to the plan · Undo"**.
-- No plan section with the plan role left on the page: before anything is added, a muted line under the card header reads **"Adding creates a Plan section at the top"**. After the tap, the strip reads **"Added · Plan section created · Undo"**. Undo removes both unless the section was edited since.
-- Undo uses the existing `undo` command with the receipt's operation id. If Undo is refused (something changed in between), the strip reads "Can't undo, it was changed since" for 3 s. Undo is never partial.
+- The row is replaced in place, same height, by a muted strip: **"Added to Top 3 · Undo"**, **"Added to {Section} · Undo"** ({Section} = the real name of the plan section on this page), or **"Brought to today · Undo"**. It stays 5 s, then the row collapses out (180 ms).
+- Top 3 already full (3 rows): the item goes to the plan list, and the strip reads **"Top 3 is full · added to {Section} · Undo"**.
+- No plan section with the plan role left on the page: before anything is added, a muted line under the card header reads **"Adding creates a {Section} section at the top"** ({Section} = the template's name for the plan section). After the tap, the strip reads **"Added · {Section} section created · Undo"**. Undo removes both unless the section was edited since.
+- Undo uses the existing `undo` command with the receipt's operation id. If Undo is refused (something changed in between), the strip reads "Can't undo · edited since" for 3 s. Undo is never partial.
 - When the last row leaves, the card closes on its own with no "all done" message.
 
 ## 7. ⋯ menu per row
 
 - Task rows: **Not today**, **Another day ▸** (the same date list as the Tasks screen row menu), **Open task**.
-- Proposal rows: **Dismiss for today** (screen-only, like Later).
+- Proposal rows: **Hide for today** (screen-only, like Later).
 - Line rows: none. Lines just stay collapsed.
 - On desktop it uses the HeroUI menu already used for task rows. On phone, the same HeroUI sheet.
 
@@ -98,11 +98,11 @@ Lines from earlier threads that aren't tasks yet, including text that named toda
 | Done | The card closes for today. Untouched items stay as they were (open, not planned). Nothing is offered again today |
 | Simulated provider | "Simulated" tag in the header (as now) |
 
-## 9. Copy (all strings)
+## 9. Copy (final, Bumblebee b842c6d3 0a735158)
 
-Start the day · TASKS · PROPOSALS · Suggested last night · Unfinished · from {Thu} · {Mon} · {Section} · Add all tasks · {n} lines from {Thu} · Bring to today · Added to Top 3 · Added to the plan · Brought to today · Top 3 is full · added to the plan · Added · Plan section created · Adding creates a Plan section at the top · Undo · Can't undo, it was changed since · Not today · Another day · Open task · Dismiss for today · Suggestions · {n} · Done · Later
+Start the day · TASKS · FROM YOUR NOTES · Suggested last night · Unfinished · from {Thu} · {Mon} · {Section} · Add all tasks · {n} lines from {Thu} · Bring to today · Added to Top 3 · Added to {Section} · Brought to today · Top 3 is full · added to {Section} · Added · {Section} section created · Adding creates a {Section} section at the top · Undo · Can't undo · edited since · Not today · Another day · Open task · Hide for today · Suggestions · {n} · Done · Later · Simulated
 
-Bumblebee owns final wording.
+{Section} is always the section's real name on Brian's page, never "the plan".
 
 ## 10. Acceptance (for Ratchet)
 
