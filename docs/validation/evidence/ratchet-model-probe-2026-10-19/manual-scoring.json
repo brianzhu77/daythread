@@ -1,0 +1,1373 @@
+{
+  "author-run3": {
+    "summary": {
+      "majorityCorrect": 19,
+      "captureCallsCorrect": 38,
+      "captureCalls": 45,
+      "criticalCalls": 6,
+      "criticalCases": 4,
+      "result": "Weak"
+    },
+    "lineCorrectRuns": {
+      "C1": 3,
+      "C2": 2,
+      "C3": 3,
+      "C4": 3,
+      "C5": 2,
+      "C6": 3,
+      "C7": 3,
+      "C8": 3,
+      "C9": 2,
+      "C10": 2,
+      "C11": 3,
+      "C12": 3,
+      "C13": 3,
+      "C14": 3,
+      "C15": 0,
+      "P1": 3,
+      "P2": 3,
+      "P3": 3,
+      "P4": 3,
+      "P5": 3
+    },
+    "rows": [
+      {
+        "caseId": "C1",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"周五前把 TFLOW PR 提了\",\"text\":\"周五前把 TFLOW PR 提了\",\"detail\":\"周五前把 TFLOW PR 提了\",\"date\":\"2026-10-23\",\"dateRole\":\"due\" ,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":false,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C1",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\n  \"items\": [\n    {\n      \"kind\": \"task\",\n      \"title\": \"把 TFLOW PR 提了\",\n      \"text\": \"周五前把 TFLOW PR 提了\",\n      \"detail\": null,\n      \"date\": \"2026-10-23\",\n      \"dateRole\": \"due\",\n      \"time\": null,\n      \"partOfDay\": null,\n      \"url\": null,\n      \"note\": null,\n      \"followUpDate\": null,\n      \"taskId\": null,\n      \"markDone\": false,\n      \"newDate\": null\n    }\n  ]\n}"
+      },
+      {
+        "caseId": "C1",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\n  \"items\": [\n    {\n      \"kind\": \"task\",\n      \"title\": \"把 TFLOW PR 提了\",\n      \"text\": \"把 TFLOW PR 提了\",\n      \"detail\": \"\",\n      \"date\": \"2026-10-23\",\n      \"dateRole\": \"due\",\n      \"time\": null,\n      \"partOfDay\": null,\n      \"url\": null,\n      \"note\": null,\n      \"followUpDate\": null,\n      \"taskId\": null,\n      \"markDone\": false,\n      \"newDate\": null\n    }\n  ]\n}"
+      },
+      {
+        "caseId": "C2",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":null,\"title\":\"Lunch with Kevin\",\"time\":\"12:30\",\"text\":null,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"event\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":\"2026-10-26\"}]}"
+      },
+      {
+        "caseId": "C2",
+        "run": 2,
+        "correct": false,
+        "critical": true,
+        "raw": "{\"items\":[{\"url\":\"https://www.rewind.com\",\"title\":\"Rewind\",\"time\":\"14:30\",\"text\":\"了解下 Rewind 这个产品\",\"taskId\":\"t-appx\",\"partOfDay\":null,\"note\":\"了解下 Rewind 这个产品\",\"newDate\":null,\"markDone\":null,\"kind\":\"event\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":\"2026-10-19\"}]}"
+      },
+      {
+        "caseId": "C2",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"\",\"title\":\"Lunch with Kevin\",\"time\":\"12:30\",\"text\":\"\",\"taskId\":null,\"partOfDay\":null,\"note\":\"\",\"newDate\":null,\"markDone\":false,\"kind\":\"event\",\"followUpDate\":null,\"detail\":\"\",\"dateRole\":null,\"date\":\"2026-10-26\"}]}"
+      },
+      {
+        "caseId": "C3",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\n  \"items\": [\n    {\n      \"kind\": \"event\",\n      \"title\": \"Kathy 游泳课\",\n      \"text\": \"明天下午 Kathy 游泳课\",\n      \"detail\": null,\n      \"date\": \"2026-10-20\",\n      \"dateRole\": null,\n      \"time\": null,\n      \"partOfDay\": \"afternoon\",\n      \"url\": null,\n      \"note\": null,\n      \"followUpDate\": null,\n      \"taskId\": null,\n      \"markDone\": false,\n      \"newDate\": null\n    }\n  ]\n}"
+      },
+      {
+        "caseId": "C3",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"event\",\"title\":\"Kathy 游泳课\",\"text\":\"Kathy 游泳课\",\"detail\":null,\"date\":\"2026-10-20\",\"dateRole\":null,\"time\":null,\"partOfDay\":\"afternoon\",\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":false,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C3",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\n  \"items\": [\n    {\n      \"kind\": \"event\",\n      \"title\": \"Kathy 游泳课\",\n      \"text\": \"明天下午 Kathy 游泳课\",\n      \"detail\": \"\",\n      \"date\": \"2026-10-20\",\n      \"dateRole\": null,\n      \"time\": null,\n      \"partOfDay\": \"afternoon\",\n      \"url\": null,\n      \"note\": \"\",\n      \"followUpDate\": null,\n      \"taskId\": null,\n      \"markDone\": false,\n      \"newDate\": null\n    }\n  ]\n}"
+      },
+      {
+        "caseId": "C4",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"https://github.com/karpathy/nanochat\" ,\"title\":\"https://github.com/karpathy/nanochat\",\"time\":null,\"text\":\"\",\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":false,\"kind\":\"material\",\"followUpDate\":null,\"detail\":\"\" ,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C4",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"https://github.com/karpathy/nanochat\",\"title\":\"https://github.com/karpathy/nanochat\",\"time\":null,\"text\":\"https://github.com/karpathy/nanochat\" ,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"material\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C4",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"https://github.com/karpathy/nanochat\",\"title\":\"https://github.com/karpathy/nanochat\" ,\"time\":null,\"text\":null,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":false,\"kind\":\"material\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C5",
+        "run": 1,
+        "correct": false,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":\"这个讲 RAG 的视频周末看\",\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://www.youtube.com/watch?v=abc123\",\"note\":\"周末看\",\"followUpDate\":\"2026-10-24\",\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C5",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":\"这个讲 RAG 的视频\",\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://www.youtube.com/watch?v=abc123\",\"note\":\"这个讲 RAG 的视频周末看\",\"followUpDate\":\"2026-10-24\",\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C5",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://www.youtube.com/watch?v=abc123\",\"note\":\"这个讲 RAG 的视频周末看\",\"followUpDate\":\"2026-10-24\",\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C6",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"Tax Return\",\"text\":\"tax return 搞定了\",\"detail\":\"tax return 搞定了\",\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-tax\",\"markDone\":true,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C6",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"\",\"text\":\"tax return 搞定了\",\"detail\":\"\",\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-tax\",\"markDone\":true,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C6",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"tax return 搞定了\",\"text\":\"tax return 搞定了\",\"detail\":\"tax return 搞定了\",\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-tax\",\"markDone\":true,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C7",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"note\",\"title\":\"想到一个点子：daily note 可以按 tag 自动生成周报\"    ,\"text\":\"想到一个点子：daily note 可以按 tag 自动生成周报\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":false,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C7",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"note\",\"title\":\"想到一个点子：daily note 可以按 tag 自动生成周报\",\"text\":\"想到一个点子：daily note 可以按 tag 自动生成周报\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":false,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C7",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"note\",\"title\":\"想到一个点子：daily note 可以按 tag 自动生成周报\",\"text\":\"想到一个点子：daily note 可以按 tag 自动生成周报\" ,\"detail\":\"daily note 可以按 tag 自动生成周报\" ,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C8",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\n  \"items\": [\n    {\n      \"kind\": \"update\",\n      \"title\": \"Kathy's Study Permit\",\n      \"text\": \"下周三之前续签 Kathy's study permit，记得带护照复印件\",\n      \"detail\": \"记得带护照复印件\",\n      \"date\": \"2026-10-28\",\n      \"dateRole\": \"due\",\n      \"time\": null,\n      \"partOfDay\": null,\n      \"url\": null,\n      \"note\": null,\n      \"followUpDate\": null,\n      \"taskId\": \"t-permit\"\n    , \"markDone\": false, \"newDate\": \"2026-10-28\"}\n  ]\n}"
+      },
+      {
+        "caseId": "C8",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"Kathy's Study Permit\",\"text\":\"下周三之前续签 Kathy's study permit，记得带护照复印件\",\"detail\":\"记得带护照复印件\",\"date\":\"2026-10-28\",\"dateRole\":\"due\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-permit\",\"markDone\":false,\"newDate\":\"2026-10-28\"}]}"
+      },
+      {
+        "caseId": "C8",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":null,\"text\":\"下周三之前续签 Kathy's study permit，记得带护照复印件\",\"detail\":\"记得带护照复印件\",\"date\":\"2026-10-28\",\"dateRole\":\"due\" ,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-permit\",\"markDone\":false,\"newDate\":\"2026-10-28\"}]}"
+      },
+      {
+        "caseId": "C9",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"task\",\"title\":\"Cairn cron job prod deploy\",\"time\":null,\"text\":\"Cairn cron job prod deploy\",\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":\"do\",\"date\":\"2026-11-02\"}]}"
+      },
+      {
+        "caseId": "C9",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":null,\"title\":\"Cairn cron job prod deploy 11/2\",\"time\":\"09:00\",\"text\":\"00:00\",\"taskId\":\"t-tax\",\"partOfDay\":null,\"note\":null,\"newDate\":\"2026-11-02\",\"markDone\":false,\"kind\":\"task\",\"followUpDate\":\"2026-11-02\",\"detail\":null,\"dateRole\":\"do\",\"date\":\"2026-11-02\"}]}"
+      },
+      {
+        "caseId": "C9",
+        "run": 3,
+        "correct": false,
+        "critical": true,
+        "raw": "{\"items\":[{\"url\":\"\",\"title\":\"\",\"time\":\"23:59\",\"text\":\"Cairn cron job prod deploy\",\"taskId\":\"t-appx\",\"partOfDay\":\"evening\",\"note\":\"Cairn cron job prod deploy\",\"newDate\":\"2026-11-02\",\"markDone\":false,\"kind\":\"update\",\"followUpDate\":\"2026-11-02\",\"detail\":\"Cairn cron job prod deploy 11/2\",\"dateRole\":\"due\",\"date\":\"2026-11-02\"}]}"
+      },
+      {
+        "caseId": "C10",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"task\",\"title\":\"交房租\",\"time\":null,\"text\":\"交房租\",\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":\"due\",\"date\":\"2026-10-31\"}]}"
+      },
+      {
+        "caseId": "C10",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"\",\"title\":\"交房租\",\"time\":null,\"text\":\"\",\"taskId\":\"t-tax\",\"partOfDay\":null,\"note\":\"\",\"newDate\":null,\"markDone\":false,\"kind\":\"task\",\"followUpDate\":null,\"detail\":\"\",\"dateRole\":\"due\",\"date\":\"2026-10-31\"}]}"
+      },
+      {
+        "caseId": "C10",
+        "run": 3,
+        "correct": false,
+        "critical": true,
+        "raw": "{\"items\":[{\"url\":\"https://example.com\" ,\"title\":\"示例\" ,\"time\":\"10:00\",\"text\":\"示例\",\"taskId\":\"t-tax\",\"partOfDay\":\"afternoon\",\"note\":\"示例\",\"newDate\":\"2026-10-31\",\"markDone\":true,\"kind\":\"task\",\"followUpDate\":\"2026-10-31\",\"detail\":\"示例\",\"dateRole\":\"due\",\"date\":\"2026-10-31\"}]}"
+      },
+      {
+        "caseId": "C11",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"task\",\"title\":\"call dentist\",\"time\":null,\"text\":null,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":false,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C11",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":null,\"title\":\"call dentist\",\"time\":null,\"text\":null,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C11",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":null,\"title\":\"call dentist\",\"time\":null,\"text\":\"call dentist\",\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C12",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":null,\"title\":\"读完《Thinking in Systems》第三章\",\"time\":null,\"text\":\"读完《Thinking in Systems》第三章\",\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C12",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"\",\"title\":\"读完《Thinking in Systems》第三章\",\"time\":null,\"text\":null,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C12",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"读完《Thinking in Systems》第三章\",\"title\":\"读完《Thinking in Systems》第三章\",\"time\":null,\"text\":null,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C13",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":null,\"newDate\":\"2026-10-20\"}]}",
+        "note": "Raw dateRole=null; accepted as do-date proposal under Lead d8f14200, not a model-supplied role."
+      },
+      {
+        "caseId": "C13",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":null,\"newDate\":\"2026-10-20\"}]}",
+        "note": "Raw dateRole=null; accepted as do-date proposal under Lead d8f14200, not a model-supplied role."
+      },
+      {
+        "caseId": "C13",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":null,\"text\":\"APPX PR 改成明天再弄\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":null,\"newDate\":\"2026-10-20\"}]}",
+        "note": "Raw dateRole=null; accepted as do-date proposal under Lead d8f14200, not a model-supplied role."
+      },
+      {
+        "caseId": "C14",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"https://www.sony.com/wh-1000xm6\",\"title\":\"Kevin 推荐的耳机\",\"time\":null,\"text\":\"Kevin 推荐的耳机 双十一看看价格\",\"taskId\":\"t-appx\" ,\"partOfDay\":null,\"note\":\"Kevin 推荐的耳机 双十一看看价格\",\"newDate\":null,\"markDone\":false,\"kind\":\"material\",\"followUpDate\":\"2026-11-11\" ,\"detail\":\"Kevin 推荐的耳机 双十一看看价格\" ,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C14",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"https://www.sony.com/wh-1000xm6\",\"title\":\"Kevin 推荐的耳机\",\"time\":null,\"text\":\"Kevin 推荐的耳机 双十一看看价格\",\"taskId\":null,\"partOfDay\":null,\"note\":\"双十一看看价格\",\"newDate\":null,\"markDone\":false,\"kind\":\"material\",\"followUpDate\":\"2026-11-11\",\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C14",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"https://www.sony.com/wh-1000xm6\",\"title\":\"Kevin 推荐的耳机\",\"time\":\"20:00\",\"text\":\"now\" ,\"taskId\":\"t-appx\" ,\"partOfDay\":\"afternoon\" ,\"note\":\"Kevin 推荐的耳机 双十一看看价格\",\"newDate\":\"2026-11-11\",\"markDone\":false,\"kind\":\"material\",\"followUpDate\":\"2026-11-11\" ,\"detail\":\"price check\" ,\"dateRole\":\"due\" ,\"date\":\"2026-11-11\"}]}"
+      },
+      {
+        "caseId": "C15",
+        "run": 1,
+        "correct": false,
+        "critical": true,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"回 Kevin 邮件\",\"text\":\"回 Kevin 邮件\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null},{\"kind\":\"update\",\"title\":null,\"text\":\"review APPX PR\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":null,\"newDate\":null},{\"kind\":\"task\",\"title\":\"订机票\",\"text\":\"订机票\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C15",
+        "run": 2,
+        "correct": false,
+        "critical": true,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"回 Kevin 邮件\",\"text\":\"回 Kevin 邮件\",\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null},{\"kind\":\"update\",\"title\":\"review APPX PR\",\"text\":\"review APPX PR\",\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":null,\"newDate\":null},{\"kind\":\"task\",\"title\":\"订机票\",\"text\":\"订机票\",\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C15",
+        "run": 3,
+        "correct": false,
+        "critical": true,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"回 Kevin 邮件\",\"text\":\"回 Kevin 邮件\",\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null},{\"kind\":\"update\",\"title\":\"review APPX PR\",\"text\":\"review APPX PR\",\"detail\":\"review APPX PR\",\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":null,\"newDate\":null},{\"kind\":\"task\",\"title\":\"订机票\",\"text\":\"订机票\",\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "P1",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\": [{\"lineId\": \"P1\", \"propose\": true, \"title\": \"给 Kevin 回电话\", \"date\": \"2026-10-19\", \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P2\", \"propose\": false, \"title\": null, \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P3\", \"propose\": true, \"title\": \"看看 Notion 导出的格式\", \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P4\", \"propose\": true, \"title\": \"研究一下 TRMNL 的 API\", \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P5\", \"propose\": false, \"title\": null, \"date\": null, \"reason\": \"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P2",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\": [{\"lineId\": \"P1\", \"propose\": true, \"title\": \"给 Kevin 回电话\", \"date\": \"2026-10-19\", \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P2\", \"propose\": false, \"title\": null, \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P3\", \"propose\": true, \"title\": \"看看 Notion 导出的格式\", \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P4\", \"propose\": true, \"title\": \"研究一下 TRMNL 的 API\", \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P5\", \"propose\": false, \"title\": null, \"date\": null, \"reason\": \"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P3",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\": [{\"lineId\": \"P1\", \"propose\": true, \"title\": \"给 Kevin 回电话\", \"date\": \"2026-10-19\", \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P2\", \"propose\": false, \"title\": null, \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P3\", \"propose\": true, \"title\": \"看看 Notion 导出的格式\", \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P4\", \"propose\": true, \"title\": \"研究一下 TRMNL 的 API\", \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P5\", \"propose\": false, \"title\": null, \"date\": null, \"reason\": \"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P4",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\": [{\"lineId\": \"P1\", \"propose\": true, \"title\": \"给 Kevin 回电话\", \"date\": \"2026-10-19\", \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P2\", \"propose\": false, \"title\": null, \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P3\", \"propose\": true, \"title\": \"看看 Notion 导出的格式\", \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P4\", \"propose\": true, \"title\": \"研究一下 TRMNL 的 API\", \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P5\", \"propose\": false, \"title\": null, \"date\": null, \"reason\": \"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P5",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\": [{\"lineId\": \"P1\", \"propose\": true, \"title\": \"给 Kevin 回电话\", \"date\": \"2026-10-19\", \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P2\", \"propose\": false, \"title\": null, \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P3\", \"propose\": true, \"title\": \"看看 Notion 导出的格式\", \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P4\", \"propose\": true, \"title\": \"研究一下 TRMNL 的 API\", \"date\": null, \"reason\": \"Fri · Notes\"}, {\"lineId\": \"P5\", \"propose\": false, \"title\": null, \"date\": null, \"reason\": \"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P1",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P2",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P3",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P4",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P5",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P1",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P2",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P3",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P4",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P5",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      }
+    ]
+  },
+  "author-luna": {
+    "summary": {
+      "majorityCorrect": 17,
+      "captureCallsCorrect": 37,
+      "captureCalls": 45,
+      "criticalCalls": 3,
+      "criticalCases": 2,
+      "result": "Weak"
+    },
+    "lineCorrectRuns": {
+      "C1": 0,
+      "C2": 3,
+      "C3": 3,
+      "C4": 3,
+      "C5": 3,
+      "C6": 3,
+      "C7": 3,
+      "C8": 2,
+      "C9": 3,
+      "C10": 3,
+      "C11": 3,
+      "C12": 3,
+      "C13": 3,
+      "C14": 1,
+      "C15": 1,
+      "P1": 3,
+      "P2": 3,
+      "P3": 3,
+      "P4": 3,
+      "P5": 3
+    },
+    "rows": [
+      {
+        "caseId": "C1",
+        "run": 1,
+        "correct": false,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"TFLOW PR\",\"text\":\"周五前把 TFLOW PR 提了\",\"detail\":null,\"date\":\"2026-10-23\",\"dateRole\":\"due\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C1",
+        "run": 2,
+        "correct": false,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"TFLOW PR\",\"text\":\"周五前把 TFLOW PR 提了\",\"detail\":null,\"date\":\"2026-10-23\",\"dateRole\":\"due\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C1",
+        "run": 3,
+        "correct": false,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"TFLOW PR\",\"text\":\"周五前把 TFLOW PR 提了\",\"detail\":null,\"date\":\"2026-10-23\",\"dateRole\":\"due\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C2",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"event\",\"title\":\"Lunch with Kevin\",\"text\":null,\"detail\":null,\"date\":\"2026-10-26\",\"dateRole\":null,\"time\":\"12:30\",\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C2",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"event\",\"title\":\"Lunch with Kevin\",\"text\":null,\"detail\":null,\"date\":\"2026-10-26\",\"dateRole\":null,\"time\":\"12:30\",\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C2",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"event\",\"title\":\"Lunch with Kevin\",\"text\":null,\"detail\":null,\"date\":\"2026-10-26\",\"dateRole\":null,\"time\":\"12:30\",\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C3",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"event\",\"title\":\"Kathy 游泳课\",\"text\":null,\"detail\":null,\"date\":\"2026-10-20\",\"dateRole\":null,\"time\":null,\"partOfDay\":\"afternoon\",\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C3",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"event\",\"title\":\"Kathy 游泳课\",\"text\":null,\"detail\":null,\"date\":\"2026-10-20\",\"dateRole\":null,\"time\":null,\"partOfDay\":\"afternoon\",\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C3",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"event\",\"title\":\"Kathy 游泳课\",\"text\":null,\"detail\":null,\"date\":\"2026-10-20\",\"dateRole\":null,\"time\":null,\"partOfDay\":\"afternoon\",\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C4",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://github.com/karpathy/nanochat\",\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C4",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://github.com/karpathy/nanochat\",\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C4",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://github.com/karpathy/nanochat\",\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C5",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://www.youtube.com/watch?v=abc123\",\"note\":\"这个讲 RAG 的视频周末看\",\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C5",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://www.youtube.com/watch?v=abc123\",\"note\":\"这个讲 RAG 的视频周末看\",\"followUpDate\":\"2026-10-24\",\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C5",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://www.youtube.com/watch?v=abc123\",\"note\":\"这个讲 RAG 的视频周末看\",\"followUpDate\":\"2026-10-24\",\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C6",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"Tax Return\",\"text\":\"tax return 搞定了\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-tax\",\"markDone\":true,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C6",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"Tax Return\",\"text\":\"tax return 搞定了\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-tax\",\"markDone\":true,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C6",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"Tax Return\",\"text\":\"tax return 搞定了\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-tax\",\"markDone\":true,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C7",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"note\",\"title\":null,\"text\":\"想到一个点子：daily note 可以按 tag 自动生成周报\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C7",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"note\",\"title\":null,\"text\":\"想到一个点子：daily note 可以按 tag 自动生成周报\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C7",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"note\",\"title\":null,\"text\":\"想到一个点子：daily note 可以按 tag 自动生成周报\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C8",
+        "run": 1,
+        "correct": false,
+        "critical": true,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"Kathy's Study Permit\",\"text\":\"下周三之前续签 Kathy's study permit，记得带护照复印件\",\"detail\":\"记得带护照复印件\",\"date\":\"2026-10-21\",\"dateRole\":\"due\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-permit\",\"markDone\":null,\"newDate\":\"2026-10-21\"}]}"
+      },
+      {
+        "caseId": "C8",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"Kathy's Study Permit\",\"text\":\"下周三之前续签 Kathy's study permit，记得带护照复印件\",\"detail\":\"记得带护照复印件\",\"date\":\"2026-10-28\",\"dateRole\":\"due\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-permit\",\"markDone\":null,\"newDate\":\"2026-10-28\"}]}"
+      },
+      {
+        "caseId": "C8",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"Kathy's Study Permit\",\"text\":\"下周三之前续签 Kathy's study permit，记得带护照复印件\",\"detail\":\"记得带护照复印件\",\"date\":\"2026-10-28\",\"dateRole\":\"due\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-permit\",\"markDone\":null,\"newDate\":\"2026-10-28\"}]}"
+      },
+      {
+        "caseId": "C9",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"Cairn cron job prod deploy\",\"text\":null,\"detail\":null,\"date\":\"2026-11-02\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C9",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"Cairn cron job prod deploy\",\"text\":null,\"detail\":null,\"date\":\"2026-11-02\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C9",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"Cairn cron job prod deploy\",\"text\":null,\"detail\":null,\"date\":\"2026-11-02\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C10",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"交房租\",\"text\":null,\"detail\":null,\"date\":\"2026-10-31\",\"dateRole\":\"due\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C10",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"交房租\",\"text\":null,\"detail\":null,\"date\":\"2026-10-31\",\"dateRole\":\"due\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C10",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"交房租\",\"text\":null,\"detail\":null,\"date\":\"2026-10-31\",\"dateRole\":\"due\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C11",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"call dentist\",\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C11",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"call dentist\",\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C11",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"call dentist\",\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C12",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"读完《Thinking in Systems》第三章\",\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C12",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"读完《Thinking in Systems》第三章\",\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C12",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"读完《Thinking in Systems》第三章\",\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C13",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"APPX PR 改成明天再弄\",\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":false,\"newDate\":\"2026-10-20\"}]}",
+        "note": "Raw dateRole=null; accepted as do-date proposal under Lead d8f14200, not a model-supplied role."
+      },
+      {
+        "caseId": "C13",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":null,\"text\":\"APPX PR 改成明天再弄\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":false,\"newDate\":\"2026-10-20\"}]}",
+        "note": "Raw dateRole=null; accepted as do-date proposal under Lead d8f14200, not a model-supplied role."
+      },
+      {
+        "caseId": "C13",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"Rewind - APPX PR - Provider\",\"text\":\"APPX PR 改成明天再弄\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":false,\"newDate\":\"2026-10-20\"}]}",
+        "note": "Raw dateRole=null; accepted as do-date proposal under Lead d8f14200, not a model-supplied role."
+      },
+      {
+        "caseId": "C14",
+        "run": 1,
+        "correct": false,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://www.sony.com/wh-1000xm6\",\"note\":\"Kevin 推荐的耳机\",\"followUpDate\":\"2026-11-11\",\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C14",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://www.sony.com/wh-1000xm6\",\"note\":\"Kevin 推荐的耳机 双十一看看价格\",\"followUpDate\":\"2026-11-11\",\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C14",
+        "run": 3,
+        "correct": false,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://www.sony.com/wh-1000xm6\",\"note\":\"Kevin 推荐的耳机\",\"followUpDate\":\"2026-11-11\",\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C15",
+        "run": 1,
+        "correct": false,
+        "critical": true,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"回 Kevin 邮件\",\"text\":null,\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null},{\"kind\":\"update\",\"title\":\"review APPX PR\",\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":null,\"newDate\":null},{\"kind\":\"task\",\"title\":\"订机票\",\"text\":null,\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C15",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"回 Kevin 邮件\",\"text\":null,\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null},{\"kind\":\"update\",\"title\":null,\"text\":\"review APPX PR\",\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":null,\"newDate\":\"2026-10-19\"},{\"kind\":\"task\",\"title\":\"订机票\",\"text\":null,\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C15",
+        "run": 3,
+        "correct": false,
+        "critical": true,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"回 Kevin 邮件\",\"text\":null,\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null},{\"kind\":\"update\",\"title\":\"review APPX PR\",\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":null,\"newDate\":null},{\"kind\":\"task\",\"title\":\"订机票\",\"text\":null,\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "P1",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P2",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P3",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P4",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P5",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P1",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P2",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P3",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P4",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P5",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P1",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P2",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P3",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P4",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P5",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"周一给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"下周看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"如果有空可以研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      }
+    ]
+  },
+  "independent-deepseek": {
+    "summary": {
+      "majorityCorrect": 19,
+      "captureCallsCorrect": 37,
+      "captureCalls": 45,
+      "criticalCalls": 5,
+      "criticalCases": 3,
+      "result": "Weak"
+    },
+    "lineCorrectRuns": {
+      "C1": 3,
+      "C2": 3,
+      "C3": 3,
+      "C4": 3,
+      "C5": 3,
+      "C6": 3,
+      "C7": 3,
+      "C8": 2,
+      "C9": 2,
+      "C10": 2,
+      "C11": 2,
+      "C12": 3,
+      "C13": 3,
+      "C14": 2,
+      "C15": 0,
+      "P1": 3,
+      "P2": 3,
+      "P3": 3,
+      "P4": 3,
+      "P5": 3
+    },
+    "rows": [
+      {
+        "caseId": "C1",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"把 TFLOW PR 提了\",\"text\":\"把 TFLOW PR 提了\",\"detail\":\"\",\"date\":\"2026-10-23\",\"dateRole\":\"due\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":false,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C1",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"周五前把 TFLOW PR 提了\",\"text\":\"周五前把 TFLOW PR 提了\",\"detail\":\"周五前把 TFLOW PR 提了\",\"date\":\"2026-10-23\",\"dateRole\":\"due\" ,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":false,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C1",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\n  \"items\": [\n    {\n      \"kind\": \"task\",\n      \"title\": \"把 TFLOW PR 提了\",\n      \"text\": \"周五前把 TFLOW PR 提了\",\n      \"detail\": \"\",\n      \"date\": \"2026-10-23\",\n      \"dateRole\": \"due\"\n    , \"time\": null, \"partOfDay\": null, \"url\": null, \"note\": null, \"followUpDate\": null, \"taskId\": null, \"markDone\": false, \"newDate\": null}\n  ]\n}"
+      },
+      {
+        "caseId": "C2",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":null,\"title\":\"Lunch with Kevin\",\"time\":\"12:30\",\"text\":null,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":false,\"kind\":\"event\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":\"2026-10-26\"}]}"
+      },
+      {
+        "caseId": "C2",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"\",\"title\":\"Lunch with Kevin\",\"time\":\"12:30\",\"text\":\"\",\"taskId\":\"t-appx\",\"partOfDay\":\"afternoon\",\"note\":\"\",\"newDate\":\"2026-10-26\",\"markDone\":false,\"kind\":\"event\",\"followUpDate\":\"2026-10-26\",\"detail\":\"Lunch with Kevin\",\"dateRole\":\"due\",\"date\":\"2026-10-26\"}]}"
+      },
+      {
+        "caseId": "C2",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":null,\"title\":\"Lunch with Kevin\",\"time\":\"12:30\",\"text\":null,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"event\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":\"2026-10-26\"}]}"
+      },
+      {
+        "caseId": "C3",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"event\",\"title\":\"Kathy 游泳课\",\"text\":\"明天下午 Kathy 游泳课\",\"detail\":\"Kathy 游泳课\",\"date\":\"2026-10-20\",\"dateRole\":null,\"time\":null,\"partOfDay\":\"afternoon\" ,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C3",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"event\",\"title\":\"Kathy 游泳课\",\"text\":\"明天下午 Kathy 游泳课\",\"detail\":null,\"date\":\"2026-10-20\",\"dateRole\":null,\"time\":null,\"partOfDay\":\"afternoon\" ,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":false,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C3",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"event\",\"title\":\"Kathy 游泳课\",\"text\":\"明天下午 Kathy 游泳课\",\"detail\":\"Kathy 游泳课\",\"date\":\"2026-10-20\",\"dateRole\":null,\"time\":null,\"partOfDay\":\"afternoon\" ,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C4",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"https://github.com/karpathy/nanochat\",\"title\":null,\"time\":null,\"text\":null,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":false,\"kind\":\"material\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C4",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"https://github.com/karpathy/nanochat\" ,\"title\":null,\"time\":null,\"text\":null,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"material\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C4",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"https://github.com/karpathy/nanochat\",\"title\":\"\",\"time\":null,\"text\":\"\" ,\"taskId\":\"t-appx\" ,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":false,\"kind\":\"material\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C5",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://www.youtube.com/watch?v=abc123\",\"note\":\"这个讲 RAG 的视频周末看\",\"followUpDate\":\"2026-10-24\",\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C5",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://www.youtube.com/watch?v=abc123\",\"note\":\"这个讲 RAG 的视频\",\"followUpDate\":\"2026-10-24\",\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C5",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"material\",\"title\":null,\"text\":null,\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":\"https://www.youtube.com/watch?v=abc123\",\"note\":\"这个讲 RAG 的视频周末看\",\"followUpDate\":\"2026-10-24\",\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C6",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"Tax Return\",\"text\":\"tax return 搞定了\",\"detail\":\"tax return 搞定了\",\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-tax\",\"markDone\":true,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C6",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":null,\"text\":\"tax return 搞定了\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-tax\",\"markDone\":true,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C6",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"Tax Return\",\"text\":\"tax return 搞定了\",\"detail\":\"tax return 搞定了\",\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-tax\",\"markDone\":true,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C7",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"note\",\"title\":\"想到一个点子：daily note 可以按 tag 自动生成周报\" ,\"text\":\"想到一个点子：daily note 可以按 tag 自动生成周报\" ,\"detail\":\"想到一个点子：daily note 可以按 tag 自动生成周报\" ,\"date\":\"2026-10-19\",\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":false,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C7",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"note\",\"title\":\"想到一个点子：daily note 可以按 tag 自动生成周报\",\"text\":\"想到一个点子：daily note 可以按 tag 自动生成周报\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":false,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C7",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"note\",\"title\":\"daily note 可以按 tag 自动生成周报\" ,\"text\":\"想到一个点子：daily note 可以按 tag 自动生成周报\" ,\"detail\":\"想到一个点子：daily note 可以按 tag 自动生成周报\" ,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":false,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C8",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"Kathy's Study Permit\",\"text\":\"下周三之前续签 Kathy's study permit\",\"detail\":\"记得带护照复印件\",\"date\":\"2026-10-28\",\"dateRole\":\"due\" ,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-permit\",\"markDone\":false,\"newDate\":\"2026-10-28\"}]}"
+      },
+      {
+        "caseId": "C8",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"下周三之前续签 Kathy's study permit，记得带护照复印件\",\"text\":\"下周三之前续签 Kathy's study permit，记得带护照复印件\",\"detail\":\"记得带护照复印件\",\"date\":\"2026-10-28\",\"dateRole\":\"due\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":\"记得带护照复印件\",\"followUpDate\":null,\"taskId\":\"t-permit\",\"markDone\":false,\"newDate\":\"2026-10-28\"}]}"
+      },
+      {
+        "caseId": "C8",
+        "run": 3,
+        "correct": false,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":\"Kathy's Study Permit\",\"text\":\"续签，记得带护照复印件\",\"detail\":null,\"date\":\"2026-10-28\",\"dateRole\":\"due\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-permit\",\"markDone\":false,\"newDate\":\"2026-10-28\"}]}"
+      },
+      {
+        "caseId": "C9",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"task\",\"title\":\"Cairn cron job prod deploy\",\"time\":null,\"text\":null,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":\"2026-11-02\",\"markDone\":false,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":\"do\",\"date\":\"2026-11-02\"}]}"
+      },
+      {
+        "caseId": "C9",
+        "run": 2,
+        "correct": false,
+        "critical": true,
+        "raw": "{\"items\":[{\"url\":\"https://example.com/abc\" ,\"title\":\"abc\" ,\"time\":null,\"text\":\"abc abc\",\"taskId\":\"t-appx\",\"partOfDay\":\"afternoon\",\"note\":\"abc abc\",\"newDate\":null,\"markDone\":false,\"kind\":\"material\",\"followUpDate\":null,\"detail\":\"abc abc\",\"dateRole\":\"do\",\"date\":null}]}"
+      },
+      {
+        "caseId": "C9",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"\",\"title\":\"Cairn cron job prod deploy\",\"time\":null,\"text\":\"Cairn cron job prod deploy\",\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":\"do\",\"date\":\"2026-11-02\"}]}"
+      },
+      {
+        "caseId": "C10",
+        "run": 1,
+        "correct": false,
+        "critical": true,
+        "raw": "{\"items\":[{\"url\":\"https://www.instagram.com/reel/DPrrETyjRQg/?igsh=czV2bDd4M3FpZ3F2\",\"title\":\"https://www.instagram.com/reel/DPrrETyjRQg/?igsh=czV2bDd4M3FpZ3F2\",\"time\":null,\"text\":\"月初争取搞定它\"  ,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":false,\"kind\":\"material\",\"followUpDate\":\"2026-11-01\",\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C10",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":null,\"title\":\"交房租\",\"time\":null,\"text\":\"交房租\",\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":false,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":\"due\",\"date\":\"2026-10-31\"}]}"
+      },
+      {
+        "caseId": "C10",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"\",\"title\":\"月底交房租\",\"time\":null,\"text\":\"月底交房租\",\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":false,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":\"due\",\"date\":\"2026-10-31\"}]}"
+      },
+      {
+        "caseId": "C11",
+        "run": 1,
+        "correct": false,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"\",\"title\":\"Is Brian's request to 'call dentist' a task?\",\"time\":null,\"text\":\"call dentist\",\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":false,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C11",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":null,\"title\":\"call dentist\",\"time\":null,\"text\":\"call dentist\",\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C11",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":null,\"title\":\"call dentist\",\"time\":null,\"text\":\"call dentist\",\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C12",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":null,\"title\":\"读完《Thinking in Systems》第三章\",\"time\":null,\"text\":\"读完《Thinking in Systems》第三章\",\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C12",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"task\",\"title\":\"读完《Thinking in Systems》第三章\",\"time\":null,\"text\":null,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C12",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":null,\"title\":\"读完《Thinking in Systems》第三章\",\"time\":null,\"text\":null,\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":null,\"kind\":\"task\",\"followUpDate\":null,\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C13",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":null,\"text\":\"APPX PR 改成明天再弄\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":null,\"newDate\":\"2026-10-20\"}]}",
+        "note": "Raw dateRole=null; accepted as do-date proposal under Lead d8f14200, not a model-supplied role."
+      },
+      {
+        "caseId": "C13",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":null,\"text\":\"APPX PR 改成明天再弄\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":null,\"newDate\":\"2026-10-20\"}]}",
+        "note": "Raw dateRole=null; accepted as do-date proposal under Lead d8f14200, not a model-supplied role."
+      },
+      {
+        "caseId": "C13",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"kind\":\"update\",\"title\":null,\"text\":\"APPX PR 改成明天再弄\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":false,\"newDate\":\"2026-10-20\"}]}",
+        "note": "Raw dateRole=null; accepted as do-date proposal under Lead d8f14200, not a model-supplied role."
+      },
+      {
+        "caseId": "C14",
+        "run": 1,
+        "correct": false,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"https://www.sony.com/wh-1000xm6\",\"title\":\"Kevin 推荐的耳机\",\"time\":null,\"text\":\"Kevin 推荐的耳机 双十一看看价格\",\"taskId\":null,\"partOfDay\":null,\"note\":null,\"newDate\":null,\"markDone\":false,\"kind\":\"material\",\"followUpDate\":\"2026-11-11\",\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C14",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"https://www.sony.com/wh-1000xm6\",\"title\":\"Kevin 推荐的耳机 双十一看看价格\",\"time\":null,\"text\":null,\"taskId\":null,\"partOfDay\":null,\"note\":\"Kevin 推荐的耳机 双十一看看价格\",\"newDate\":null,\"markDone\":false,\"kind\":\"material\",\"followUpDate\":\"2026-11-11\",\"detail\":null,\"dateRole\":null,\"date\":null}]}"
+      },
+      {
+        "caseId": "C14",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"items\":[{\"url\":\"https://www.sony.com/wh-1000xm6\",\"title\":\"Kevin 推荐的耳机\",\"time\":\"11:00\" ,\"text\":\"双十一看看价格\" ,\"taskId\":\"t-appx\" ,\"partOfDay\":\"morning\" ,\"note\":\"Kevin 推荐的耳机 双十一看看价格\" ,\"newDate\":\"2026-11-11\" ,\"markDone\":false,\"kind\":\"material\",\"followUpDate\":\"2026-11-11\" ,\"detail\":\"Kevin 推荐的耳机 双十一看看价格\" ,\"dateRole\":\"do\" ,\"date\":\"2026-11-11\"}]}"
+      },
+      {
+        "caseId": "C15",
+        "run": 1,
+        "correct": false,
+        "critical": true,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"回 Kevin 邮件\",\"text\":\"回 Kevin 邮件\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null},{\"kind\":\"update\",\"title\":\"review APPX PR\",\"text\":\"review APPX PR\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":null,\"newDate\":null},{\"kind\":\"task\",\"title\":\"订机票\",\"text\":\"订机票\",\"detail\":null,\"date\":null,\"dateRole\":null,\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C15",
+        "run": 2,
+        "correct": false,
+        "critical": true,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"回 Kevin 邮件\",\"text\":\"回 Kevin 邮件\",\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null},{\"kind\":\"update\",\"title\":\"review APPX PR\",\"text\":\"review APPX PR\",\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":null,\"newDate\":null},{\"kind\":\"task\",\"title\":\"订机票\",\"text\":\"订机票\",\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "C15",
+        "run": 3,
+        "correct": false,
+        "critical": true,
+        "raw": "{\"items\":[{\"kind\":\"task\",\"title\":\"回 Kevin 邮件\",\"text\":null,\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null},{\"kind\":\"update\",\"title\":\"review APPX PR\",\"text\":\"review APPX PR\",\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":\"t-appx\",\"markDone\":null,\"newDate\":null},{\"kind\":\"task\",\"title\":\"订机票\",\"text\":null,\"detail\":null,\"date\":\"2026-10-19\",\"dateRole\":\"do\",\"time\":null,\"partOfDay\":null,\"url\":null,\"note\":null,\"followUpDate\":null,\"taskId\":null,\"markDone\":null,\"newDate\":null}]}"
+      },
+      {
+        "caseId": "P1",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P2",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P3",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P4",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P5",
+        "run": 1,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P1",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P2",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P3",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P4",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P5",
+        "run": 2,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P1",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P2",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P3",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P4",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      },
+      {
+        "caseId": "P5",
+        "run": 3,
+        "correct": true,
+        "critical": false,
+        "raw": "{\"proposals\":[{\"lineId\":\"P1\",\"propose\":true,\"title\":\"给 Kevin 回电话\",\"date\":\"2026-10-19\",\"reason\":\"Fri · Notes\"},{\"lineId\":\"P2\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P3\",\"propose\":true,\"title\":\"看看 Notion 导出的格式\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P4\",\"propose\":true,\"title\":\"研究一下 TRMNL 的 API\",\"date\":null,\"reason\":\"Fri · Notes\"},{\"lineId\":\"P5\",\"propose\":false,\"title\":null,\"date\":null,\"reason\":\"Fri · Notes\"}]}"
+      }
+    ]
+  }
+}

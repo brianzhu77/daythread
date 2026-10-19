@@ -1,0 +1,2468 @@
+[
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C1",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "周五前把 TFLOW PR 提了",
+      "date": "2026-10-23",
+      "dateRole": "due",
+      "detail": "周五前把 TFLOW PR 提了"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C1",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "把 TFLOW PR 提了",
+      "date": "2026-10-23",
+      "dateRole": "due",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C1",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "把 TFLOW PR 提了",
+      "date": "2026-10-23",
+      "dateRole": "due",
+      "detail": ""
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C2",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Lunch with Kevin",
+      "date": "2026-10-26",
+      "time": "12:30",
+      "partOfDay": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C2",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Rewind",
+      "date": "2026-10-19",
+      "time": "14:30",
+      "partOfDay": null
+    },
+    "grounded": false,
+    "reasons": [
+      "title not from your text",
+      "time not in your text"
+    ],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C2",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Lunch with Kevin",
+      "date": "2026-10-26",
+      "time": "12:30",
+      "partOfDay": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C3",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Kathy 游泳课",
+      "date": "2026-10-20",
+      "time": null,
+      "partOfDay": "afternoon"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C3",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Kathy 游泳课",
+      "date": "2026-10-20",
+      "time": null,
+      "partOfDay": "afternoon"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C3",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Kathy 游泳课",
+      "date": "2026-10-20",
+      "time": null,
+      "partOfDay": "afternoon"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C4",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://github.com/karpathy/nanochat",
+      "note": null,
+      "followUpDate": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C4",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://github.com/karpathy/nanochat",
+      "note": null,
+      "followUpDate": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C4",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://github.com/karpathy/nanochat",
+      "note": null,
+      "followUpDate": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C5",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.youtube.com/watch?v=abc123",
+      "note": "周末看",
+      "followUpDate": "2026-10-24"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C5",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.youtube.com/watch?v=abc123",
+      "note": "这个讲 RAG 的视频周末看",
+      "followUpDate": "2026-10-24"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C5",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.youtube.com/watch?v=abc123",
+      "note": "这个讲 RAG 的视频周末看",
+      "followUpDate": "2026-10-24"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C6",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-tax",
+      "markDone": true,
+      "newDate": null,
+      "dateRole": null,
+      "detail": "tax return 搞定了"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C6",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-tax",
+      "markDone": true,
+      "newDate": null,
+      "dateRole": null,
+      "detail": ""
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C6",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-tax",
+      "markDone": true,
+      "newDate": null,
+      "dateRole": null,
+      "detail": "tax return 搞定了"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C7",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "note",
+      "text": "想到一个点子：daily note 可以按 tag 自动生成周报"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C7",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "note",
+      "text": "想到一个点子：daily note 可以按 tag 自动生成周报"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C7",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "note",
+      "text": "想到一个点子：daily note 可以按 tag 自动生成周报"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C8",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-permit",
+      "markDone": false,
+      "newDate": "2026-10-28",
+      "dateRole": "due",
+      "detail": "记得带护照复印件"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C8",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-permit",
+      "markDone": false,
+      "newDate": "2026-10-28",
+      "dateRole": "due",
+      "detail": "记得带护照复印件"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C8",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-permit",
+      "markDone": false,
+      "newDate": "2026-10-28",
+      "dateRole": "due",
+      "detail": "记得带护照复印件"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C9",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "Cairn cron job prod deploy",
+      "date": "2026-11-02",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C9",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "Cairn cron job prod deploy 11/2",
+      "date": "2026-11-02",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C9",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": "2026-11-02",
+      "dateRole": "due",
+      "detail": "Cairn cron job prod deploy 11/2"
+    },
+    "grounded": false,
+    "reasons": [
+      "not clearly the task you named"
+    ],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C10",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "交房租",
+      "date": "2026-10-31",
+      "dateRole": "due",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C10",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "交房租",
+      "date": "2026-10-31",
+      "dateRole": "due",
+      "detail": ""
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C10",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "示例",
+      "date": "2026-10-31",
+      "dateRole": "due",
+      "detail": "示例"
+    },
+    "grounded": false,
+    "reasons": [
+      "title not from your text"
+    ],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C11",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "call dentist",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C11",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "call dentist",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C11",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "call dentist",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C12",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "读完《Thinking in Systems》第三章",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C12",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "读完《Thinking in Systems》第三章",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C12",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "读完《Thinking in Systems》第三章",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C13",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": "2026-10-20",
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C13",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": "2026-10-20",
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C13",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": "2026-10-20",
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C14",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.sony.com/wh-1000xm6",
+      "note": "Kevin 推荐的耳机 双十一看看价格",
+      "followUpDate": "2026-11-11"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C14",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.sony.com/wh-1000xm6",
+      "note": "双十一看看价格",
+      "followUpDate": "2026-11-11"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C14",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.sony.com/wh-1000xm6",
+      "note": "Kevin 推荐的耳机 双十一看看价格",
+      "followUpDate": "2026-11-11"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C15",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "回 Kevin 邮件",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": false,
+    "reasons": [
+      "date missing"
+    ],
+    "dateMissing": true
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C15",
+    "run": 1,
+    "index": 1,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": false,
+    "reasons": [
+      "date missing"
+    ],
+    "dateMissing": true
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C15",
+    "run": 1,
+    "index": 2,
+    "item": {
+      "kind": "task",
+      "title": "订机票",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": false,
+    "reasons": [
+      "date missing"
+    ],
+    "dateMissing": true
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C15",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "回 Kevin 邮件",
+      "date": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C15",
+    "run": 2,
+    "index": 1,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": false,
+    "reasons": [
+      "date missing"
+    ],
+    "dateMissing": true
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C15",
+    "run": 2,
+    "index": 2,
+    "item": {
+      "kind": "task",
+      "title": "订机票",
+      "date": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C15",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "回 Kevin 邮件",
+      "date": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C15",
+    "run": 3,
+    "index": 1,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": null,
+      "dateRole": null,
+      "detail": "review APPX PR"
+    },
+    "grounded": false,
+    "reasons": [
+      "date missing"
+    ],
+    "dateMissing": true
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/run3/calls.jsonl",
+    "caseId": "C15",
+    "run": 3,
+    "index": 2,
+    "item": {
+      "kind": "task",
+      "title": "订机票",
+      "date": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C1",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "TFLOW PR",
+      "date": "2026-10-23",
+      "dateRole": "due",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C1",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "TFLOW PR",
+      "date": "2026-10-23",
+      "dateRole": "due",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C1",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "TFLOW PR",
+      "date": "2026-10-23",
+      "dateRole": "due",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C2",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Lunch with Kevin",
+      "date": "2026-10-26",
+      "time": "12:30",
+      "partOfDay": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C2",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Lunch with Kevin",
+      "date": "2026-10-26",
+      "time": "12:30",
+      "partOfDay": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C2",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Lunch with Kevin",
+      "date": "2026-10-26",
+      "time": "12:30",
+      "partOfDay": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C3",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Kathy 游泳课",
+      "date": "2026-10-20",
+      "time": null,
+      "partOfDay": "afternoon"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C3",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Kathy 游泳课",
+      "date": "2026-10-20",
+      "time": null,
+      "partOfDay": "afternoon"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C3",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Kathy 游泳课",
+      "date": "2026-10-20",
+      "time": null,
+      "partOfDay": "afternoon"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C4",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://github.com/karpathy/nanochat",
+      "note": null,
+      "followUpDate": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C4",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://github.com/karpathy/nanochat",
+      "note": null,
+      "followUpDate": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C4",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://github.com/karpathy/nanochat",
+      "note": null,
+      "followUpDate": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C5",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.youtube.com/watch?v=abc123",
+      "note": "这个讲 RAG 的视频周末看",
+      "followUpDate": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": true
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C5",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.youtube.com/watch?v=abc123",
+      "note": "这个讲 RAG 的视频周末看",
+      "followUpDate": "2026-10-24"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C5",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.youtube.com/watch?v=abc123",
+      "note": "这个讲 RAG 的视频周末看",
+      "followUpDate": "2026-10-24"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C6",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-tax",
+      "markDone": true,
+      "newDate": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C6",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-tax",
+      "markDone": true,
+      "newDate": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C6",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-tax",
+      "markDone": true,
+      "newDate": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C7",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "note",
+      "text": "想到一个点子：daily note 可以按 tag 自动生成周报"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C7",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "note",
+      "text": "想到一个点子：daily note 可以按 tag 自动生成周报"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C7",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "note",
+      "text": "想到一个点子：daily note 可以按 tag 自动生成周报"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C8",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-permit",
+      "markDone": false,
+      "newDate": "2026-10-21",
+      "dateRole": "due",
+      "detail": "记得带护照复印件"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C8",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-permit",
+      "markDone": false,
+      "newDate": "2026-10-28",
+      "dateRole": "due",
+      "detail": "记得带护照复印件"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C8",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-permit",
+      "markDone": false,
+      "newDate": "2026-10-28",
+      "dateRole": "due",
+      "detail": "记得带护照复印件"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C9",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "Cairn cron job prod deploy",
+      "date": "2026-11-02",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C9",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "Cairn cron job prod deploy",
+      "date": "2026-11-02",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C9",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "Cairn cron job prod deploy",
+      "date": "2026-11-02",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C10",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "交房租",
+      "date": "2026-10-31",
+      "dateRole": "due",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C10",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "交房租",
+      "date": "2026-10-31",
+      "dateRole": "due",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C10",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "交房租",
+      "date": "2026-10-31",
+      "dateRole": "due",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C11",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "call dentist",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C11",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "call dentist",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C11",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "call dentist",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C12",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "读完《Thinking in Systems》第三章",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C12",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "读完《Thinking in Systems》第三章",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C12",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "读完《Thinking in Systems》第三章",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C13",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": "2026-10-20",
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C13",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": "2026-10-20",
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C13",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": "2026-10-20",
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C14",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.sony.com/wh-1000xm6",
+      "note": "Kevin 推荐的耳机",
+      "followUpDate": "2026-11-11"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C14",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.sony.com/wh-1000xm6",
+      "note": "Kevin 推荐的耳机 双十一看看价格",
+      "followUpDate": "2026-11-11"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C14",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.sony.com/wh-1000xm6",
+      "note": "Kevin 推荐的耳机",
+      "followUpDate": "2026-11-11"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C15",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "回 Kevin 邮件",
+      "date": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C15",
+    "run": 1,
+    "index": 1,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": false,
+    "reasons": [
+      "date missing"
+    ],
+    "dateMissing": true
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C15",
+    "run": 1,
+    "index": 2,
+    "item": {
+      "kind": "task",
+      "title": "订机票",
+      "date": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C15",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "回 Kevin 邮件",
+      "date": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C15",
+    "run": 2,
+    "index": 1,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C15",
+    "run": 2,
+    "index": 2,
+    "item": {
+      "kind": "task",
+      "title": "订机票",
+      "date": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C15",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "回 Kevin 邮件",
+      "date": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C15",
+    "run": 3,
+    "index": 1,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": false,
+    "reasons": [
+      "date missing"
+    ],
+    "dateMissing": true
+  },
+  {
+    "path": "docs/validation/evidence/model-probe-2026-10-19/alt-openai-gpt-5-6-luna/calls.jsonl",
+    "caseId": "C15",
+    "run": 3,
+    "index": 2,
+    "item": {
+      "kind": "task",
+      "title": "订机票",
+      "date": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C1",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "把 TFLOW PR 提了",
+      "date": "2026-10-23",
+      "dateRole": "due",
+      "detail": ""
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C1",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "周五前把 TFLOW PR 提了",
+      "date": "2026-10-23",
+      "dateRole": "due",
+      "detail": "周五前把 TFLOW PR 提了"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C1",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "把 TFLOW PR 提了",
+      "date": "2026-10-23",
+      "dateRole": "due",
+      "detail": ""
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C2",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Lunch with Kevin",
+      "date": "2026-10-26",
+      "time": "12:30",
+      "partOfDay": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C2",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Lunch with Kevin",
+      "date": "2026-10-26",
+      "time": "12:30",
+      "partOfDay": "afternoon"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C2",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Lunch with Kevin",
+      "date": "2026-10-26",
+      "time": "12:30",
+      "partOfDay": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C3",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Kathy 游泳课",
+      "date": "2026-10-20",
+      "time": null,
+      "partOfDay": "afternoon"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C3",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Kathy 游泳课",
+      "date": "2026-10-20",
+      "time": null,
+      "partOfDay": "afternoon"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C3",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "event",
+      "title": "Kathy 游泳课",
+      "date": "2026-10-20",
+      "time": null,
+      "partOfDay": "afternoon"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C4",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://github.com/karpathy/nanochat",
+      "note": null,
+      "followUpDate": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C4",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://github.com/karpathy/nanochat",
+      "note": null,
+      "followUpDate": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C4",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://github.com/karpathy/nanochat",
+      "note": null,
+      "followUpDate": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C5",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.youtube.com/watch?v=abc123",
+      "note": "这个讲 RAG 的视频周末看",
+      "followUpDate": "2026-10-24"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C5",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.youtube.com/watch?v=abc123",
+      "note": "这个讲 RAG 的视频",
+      "followUpDate": "2026-10-24"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C5",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.youtube.com/watch?v=abc123",
+      "note": "这个讲 RAG 的视频周末看",
+      "followUpDate": "2026-10-24"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C6",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-tax",
+      "markDone": true,
+      "newDate": null,
+      "dateRole": null,
+      "detail": "tax return 搞定了"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C6",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-tax",
+      "markDone": true,
+      "newDate": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C6",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-tax",
+      "markDone": true,
+      "newDate": null,
+      "dateRole": null,
+      "detail": "tax return 搞定了"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C7",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "note",
+      "text": "想到一个点子：daily note 可以按 tag 自动生成周报"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C7",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "note",
+      "text": "想到一个点子：daily note 可以按 tag 自动生成周报"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C7",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "note",
+      "text": "想到一个点子：daily note 可以按 tag 自动生成周报"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C8",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-permit",
+      "markDone": false,
+      "newDate": "2026-10-28",
+      "dateRole": "due",
+      "detail": "记得带护照复印件"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C8",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-permit",
+      "markDone": false,
+      "newDate": "2026-10-28",
+      "dateRole": "due",
+      "detail": "记得带护照复印件"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C8",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-permit",
+      "markDone": false,
+      "newDate": "2026-10-28",
+      "dateRole": "due",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C9",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "Cairn cron job prod deploy",
+      "date": "2026-11-02",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C9",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://example.com/abc",
+      "note": "abc abc",
+      "followUpDate": null
+    },
+    "grounded": false,
+    "reasons": [
+      "link not in your text"
+    ],
+    "dateMissing": true
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C9",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "Cairn cron job prod deploy",
+      "date": "2026-11-02",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C10",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.instagram.com/reel/DPrrETyjRQg/?igsh=czV2bDd4M3FpZ3F2",
+      "note": null,
+      "followUpDate": "2026-11-01"
+    },
+    "grounded": false,
+    "reasons": [
+      "link not in your text"
+    ],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C10",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "交房租",
+      "date": "2026-10-31",
+      "dateRole": "due",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C10",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "月底交房租",
+      "date": "2026-10-31",
+      "dateRole": "due",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C11",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "Is Brian's request to 'call dentist' a task?",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": false,
+    "reasons": [
+      "title not from your text"
+    ],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C11",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "call dentist",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C11",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "call dentist",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C12",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "读完《Thinking in Systems》第三章",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C12",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "读完《Thinking in Systems》第三章",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C12",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "读完《Thinking in Systems》第三章",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C13",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": "2026-10-20",
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C13",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": "2026-10-20",
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C13",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": "2026-10-20",
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C14",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.sony.com/wh-1000xm6",
+      "note": null,
+      "followUpDate": "2026-11-11"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C14",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.sony.com/wh-1000xm6",
+      "note": "Kevin 推荐的耳机 双十一看看价格",
+      "followUpDate": "2026-11-11"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C14",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "material",
+      "url": "https://www.sony.com/wh-1000xm6",
+      "note": "Kevin 推荐的耳机 双十一看看价格",
+      "followUpDate": "2026-11-11"
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C15",
+    "run": 1,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "回 Kevin 邮件",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": false,
+    "reasons": [
+      "date missing"
+    ],
+    "dateMissing": true
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C15",
+    "run": 1,
+    "index": 1,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": false,
+    "reasons": [
+      "date missing"
+    ],
+    "dateMissing": true
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C15",
+    "run": 1,
+    "index": 2,
+    "item": {
+      "kind": "task",
+      "title": "订机票",
+      "date": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": false,
+    "reasons": [
+      "date missing"
+    ],
+    "dateMissing": true
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C15",
+    "run": 2,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "回 Kevin 邮件",
+      "date": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C15",
+    "run": 2,
+    "index": 1,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": false,
+    "reasons": [
+      "date missing"
+    ],
+    "dateMissing": true
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C15",
+    "run": 2,
+    "index": 2,
+    "item": {
+      "kind": "task",
+      "title": "订机票",
+      "date": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C15",
+    "run": 3,
+    "index": 0,
+    "item": {
+      "kind": "task",
+      "title": "回 Kevin 邮件",
+      "date": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C15",
+    "run": 3,
+    "index": 1,
+    "item": {
+      "kind": "update",
+      "taskId": "t-appx",
+      "markDone": false,
+      "newDate": null,
+      "dateRole": null,
+      "detail": null
+    },
+    "grounded": false,
+    "reasons": [
+      "date missing"
+    ],
+    "dateMissing": true
+  },
+  {
+    "path": "docs/validation/evidence/ratchet-model-probe-2026-10-19/calls.jsonl",
+    "caseId": "C15",
+    "run": 3,
+    "index": 2,
+    "item": {
+      "kind": "task",
+      "title": "订机票",
+      "date": "2026-10-19",
+      "dateRole": "do",
+      "detail": null
+    },
+    "grounded": true,
+    "reasons": [],
+    "dateMissing": false
+  }
+]
