@@ -185,6 +185,7 @@ export type ServerAction =
   | { type: "model-failed"; captureId: string; revision: number; failure: "failure" | "budget" | "context" | "paused"; error: string }
   | { type: "retry-capture"; captureId: string };
 export type Action =
+  | { type: "bring-line"; date: LocalDate; sourcePageId: string; sourceBlockId: string }
   | { type: "save-editor"; pageId: string; expectedContent: string; document: string; singleDeleteIds?: string[]; today?: string; historyTaskVersions?: Record<string, number>; history?: boolean }
   | { type: "ensure-day"; date: LocalDate }
   | { type: "rename-section"; pageId: string; sectionId: string; title: string }

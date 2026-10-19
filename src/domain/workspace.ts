@@ -1,4 +1,4 @@
-import { dayTemplate, pageContentKey, projectDocument, inlineText, type EditorNode } from "./editor-document.ts";
+import { dayTemplate, editorSeed, needsTemplateRows, pageContentKey, projectDocument, inlineText, sectionRange, type EditorNode } from "./editor-document.ts";
 import { moveRefusal } from "./page-tree.ts";
 import type {
   Command,
@@ -346,6 +346,15 @@ function untouchedLineMaterial(m: Material, blockId: string, previous: EditorNod
  * Saves are debounced while Brian types, so an untouched Material follows its line from one URL to the next
  * (re-keyed); words added to the line become that save's note, and a deleted line leaves the Material alone.
  */
+/** A line Bring to today can copy: text or a link, not a task, page card or event. */
+function bringable(b: NoteBlock): boolean {
+  return !b.taskId && !b.eventId && b.kind !== "reference" && !b.targetPageId && Boolean(b.text.trim());
+}
+/** Today holds, or once held, a copy of that line (block metadata keeps deleted blocks, Undo restores it whole). */
+function wasBrought(today: Page, sourcePageId: string, sourceBlockId: string): boolean {
+  return [...today.sections.flatMap((s) => s.blocks), ...Object.values(today.editorBlockMetadata ?? {})]
+    .some((b) => b.sourcePageId === sourcePageId && b.sourceBlockId === sourceBlockId);
+}
 function linkMaterialLines(state: Workspace, p: Page, nodes: readonly EditorNode[], previousNodes: readonly EditorNode[] = nodes) {
   const byId = new Map(nodes.map((n) => [n.id, n])), previousById = new Map(previousNodes.map((n) => [n.id, n]));
   for (const s of p.sections) {
@@ -430,24 +439,13 @@ export function getDayView(state: Workspace, day: string): DayView {
         a.id.localeCompare(b.id),
     )
     .slice(0, 3);
+  // Morning card §5: text and link lines from the previous day's Notes and Good Stuffs, not page cards or events.
+  // A line is offered until today holds a copy of it, or once held one: a copy he deleted stays dealt with, and only
+  // Undo (which restores the page as it was) offers it again (Jazz e876866a). The record is the copy's block metadata.
   const handoffBlocks =
     previous?.sections
       .filter((s) => s.kind === "notes" || s.kind === "good-stuffs")
-      .flatMap((s) =>
-        s.blocks
-          .filter(
-            (b) =>
-              !b.taskId &&
-              !current?.sections.some((sec) =>
-                sec.blocks.some(
-                  (copy) =>
-                    copy.sourcePageId === previous.id &&
-                    copy.sourceBlockId === b.id,
-                ),
-              ),
-          )
-          .map((block) => ({ pageId: previous.id, block })),
-      ) ?? [];
+      .flatMap((s) => s.blocks.filter((b) => bringable(b) && !(current && wasBrought(current, previous.id, b.id))).map((block) => ({ pageId: previous.id, block }))) ?? [];
   const materialReview = state.materials
     .filter(
       (m) =>
@@ -742,6 +740,39 @@ function execute(
       return { message: "Page saved; task arrangements unchanged" };
     }
 
+    case "bring-line": {
+      // Morning card §5: a line from the previous day's Notes or Good Stuffs is copied into the same-named section of
+      // the day's page (or Notes), through save-editor like typing, so tags and the Good Stuffs material rule apply.
+      // The copy keeps its source, so the line isn't offered again. The source line is never changed.
+      const p = state.pages.find((x) => x.type === "daily" && x.date === date(action.date));
+      if (!p) throw new DomainError("Page not found");
+      const source = page(state, action.sourcePageId);
+      const from = source.sections.find((s) => s.blocks.some((b) => b.id === action.sourceBlockId));
+      const block = from?.blocks.find((b) => b.id === action.sourceBlockId);
+      if (!from || !block) throw new DomainError("Line not found");
+      if (!bringable(block)) throw new DomainError("Only text lines can be brought");
+      if (wasBrought(p, source.id, block.id)) throw new DomainError("Already brought");
+      const doc = editorSeed(p, state, { templateRows: needsTemplateRows(p, action.date) });
+      const sourceNode = flatNodes(JSON.parse(source.editorJSON ?? "[]")).find((n) => n.id === block.id);
+      const copyId = newId();
+      // The line's own inline content (links, marks) when the editor saved it; otherwise its text.
+      const copy: EditorNode = { id: copyId, type: sourceNode && ["paragraph", "bulletListItem", "numberedListItem"].includes(sourceNode.type) ? sourceNode.type : "paragraph", content: sourceNode?.content ?? block.text };
+      const sameName = (t: string) => t.trim().toLowerCase() === from.title.trim().toLowerCase();
+      const heading = doc.find((n) => n.type === "heading" && from.title.trim() && sameName(inlineText(n.content)))
+        ?? doc.find((n) => n.type === "heading" && p.sections.find((s) => s.id === n.id)?.kind === "notes")
+        ?? doc.find((n) => n.type === "heading" && inlineText(n.content).trim().toLowerCase() === "notes");
+      if (heading) {
+        // After the section's last line with text, so its empty starter row stays last for typing.
+        const range = sectionRange(doc, heading.id);
+        let at = doc.indexOf(range.at(-1)!);
+        while (at > doc.indexOf(heading) && !inlineText(doc[at]!.content).trim() && !doc[at]!.children?.length && doc[at]!.type !== "task" && doc[at]!.type !== "pageLink") at--;
+        doc.splice(at + 1, 0, copy);
+      } else doc.push({ id: newId(), type: "heading", props: { level: 2 }, content: "Notes" }, copy);
+      (p.editorBlockMetadata ??= {})[copyId] = { id: copyId, kind: "paragraph", text: block.text, sourcePageId: source.id, sourceBlockId: block.id };
+      execute(state, { type: "save-editor", pageId: p.id, expectedContent: pageContentKey(p), document: JSON.stringify(doc) });
+      const target = p.sections.find((s) => s.blocks.some((b) => b.id === copyId))!;
+      return { message: `Brought to ${target.title || "today"}`, entityId: copyId };
+    }
     case "ensure-day": {
       const p = ensureDay(state, action.date);
       return { message: "Day opened", entityId: p.id };
