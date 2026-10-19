@@ -7,7 +7,7 @@
 //                                    titled saved link · invented time · lost date · dated update with no role
 //                                    (capture "Tax Return" first so that open task exists) · one item the server rejects
 //   "http401: …"                     key rejected (401) → "Model key rejected · text saved"
-//   "http500: …"                     any other provider error (500) → "Model unavailable · text saved"
+//   "http500: …"                     any other provider error (500, no usage) → "Model unavailable · text saved"; the charge is unknown, so the model pauses
 //   Budget used up: start the app with DAYTHREAD_MODEL_CAP_USD=0.0003 (may only lower the $10 cap); after one
 //                                    capture the next one finds the day's budget used up
 //   "slow: …"                        answers after 20 s, to see "Organizing…"

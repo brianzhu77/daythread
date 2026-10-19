@@ -2,7 +2,7 @@
 // database transaction: reserve (one transaction) → call → record (one transaction, ledger + workspace together).
 import type { GroundingFlag, ProposalItem, Workspace } from '../../domain/types.ts'
 import type { SqliteWorkspaceRepository } from '../sqlite-repository.ts'
-import { captureItems, captureMessages, captureSchema, type CaptureItem, type CaptureRawAnswer } from './capture-prompt.ts'
+import { captureMessages, captureSchema, readCaptureAnswer, type CaptureItem } from './capture-prompt.ts'
 import { groundItem } from './grounding.ts'
 import { callStructured, ModelError, requestBody, type ModelConfig } from './openrouter.ts'
 import { modelPrice, worstCaseUsd } from './pricing.ts'
@@ -93,26 +93,29 @@ export async function organizeCapture(deps: OrganizeDeps, captureId: string): Pr
     throw error
   }
 
-  let answer: CaptureRawAnswer, cost: number | null = null, generationId: string | null = null
+  let answer: unknown, cost: number | null = null, generationId: string | null = null
   try {
-    const r = await callStructured<CaptureRawAnswer>(config, messages, schema, { maxTokens: maxOutputTokens, timeoutMs: deps.timeoutMs ?? 60_000, fetchImpl: deps.fetchImpl })
+    const r = await callStructured<unknown>(config, messages, schema, { maxTokens: maxOutputTokens, timeoutMs: deps.timeoutMs ?? 60_000, fetchImpl: deps.fetchImpl })
     answer = r.value; cost = r.costUsd; generationId = r.generationId
   } catch (error) {
     const e = error instanceof ModelError ? error : null
-    // No answer: the charge may still be real. A timeout or lost connection stays unknown (paused until reconciled);
-    // an answer we couldn't use carries its cost if OpenRouter reported one.
-    const knownCost = e?.costUsd ?? null
-    // An HTTP error answer means no generation ran: settled at 0 on that evidence (note says why).
-    // Copy (Bumblebee): a rejected key is the one failure he can fix himself; every other provider error is "unavailable".
-    if (e?.httpStatus) return fail('failure', e.kind === 'auth' ? 'Model key rejected · text saved' : 'Model unavailable · text saved', { id: attemptId, cost: 0, generationId: null, note: `provider answered HTTP ${e.httpStatus}; no generation, nothing charged` })
-    if (knownCost !== null) return fail('failure', "Couldn't organize · text saved", { id: attemptId, cost: knownCost, generationId: null })
+    const message = e?.kind === 'auth' ? 'Model key rejected · text saved' : e?.httpStatus ? 'Model unavailable · text saved' : "Couldn't organize · text saved"
+    // A reported cost is what was charged, whatever the HTTP status (Ratchet #69): settled at that amount.
+    if (e?.costUsd != null) return fail('failure', message, { id: attemptId, cost: e.costUsd, generationId: e.generationId })
+    // A generation without a cost: something may have been charged. Unknown, so calls pause until it's reconciled.
+    if (e?.generationId) return fail('failure', message, { id: attemptId, cost: null, generationId: e.generationId })
+    // OpenRouter refuses a bad key (401/403) or an empty balance (402) before routing to any model: zero, with the reason.
+    if (e?.httpStatus === 401 || e?.httpStatus === 402 || e?.httpStatus === 403) return fail('failure', message, { id: attemptId, cost: 0, generationId: null, note: `provider refused before routing (HTTP ${e.httpStatus}); no generation id or cost reported` })
+    // Anything else (timeout, lost connection, other HTTP errors with no usage) may still have been charged: unknown.
     await repository.recordModelResult({ attemptId, actualUsd: null, generationId: null, now: now().toISOString() })
-    return fail('failure', e?.kind === 'timeout' ? 'Model took too long · text saved' : "Couldn't reach the model · text saved")
+    return fail('failure', e?.kind === 'timeout' ? 'Model took too long · text saved' : e?.httpStatus ? message : "Couldn't reach the model · text saved")
   }
 
-  const items = Array.isArray(answer?.items) ? captureItems(answer) : []
-  const proposals = items.map(i => toProposal(i, capture.text, openTasks)).filter((p): p is ProposalItem => !!p)
-  const unreadable = (Array.isArray(answer?.items) ? answer.items.length : 1) - proposals.length
+  const read = readCaptureAnswer(answer)
+  const proposals = read.items.map(i => toProposal(i, capture.text, openTasks)).filter((p): p is ProposalItem => !!p)
+  const unreadable = read.unreadable + read.items.length - proposals.length
+  // Nothing usable came back (Bumblebee): a failure with Retry, not an empty receipt. The cost is still recorded.
+  if (unreadable > 0 && proposals.length === 0) return fail('failure', 'Model unavailable · text saved', { id: attemptId, cost, generationId })
   const latest = await repository.load()
   const command = {
     operationId: `organized:${captureId}:${revision}`, expectedRevision: latest.revision,

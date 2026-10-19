@@ -16,9 +16,10 @@ export class ModelError extends Error {
   /** What the model actually sent, when there was an answer (kept for audits; never logged by default). */
   readonly raw: string | null
   readonly costUsd: number | null
-  /** Set when the provider answered with an HTTP error: no generation ran, so nothing was charged. */
+  /** Set when the provider answered with an HTTP error. The status alone doesn't prove nothing was charged. */
   readonly httpStatus: number | null
-  constructor(message: string, kind: ModelErrorKind, raw: string | null = null, costUsd: number | null = null, httpStatus: number | null = null) { super(message); this.kind = kind; this.raw = raw; this.costUsd = costUsd; this.httpStatus = httpStatus }
+  readonly generationId: string | null
+  constructor(message: string, kind: ModelErrorKind, raw: string | null = null, costUsd: number | null = null, httpStatus: number | null = null, generationId: string | null = null) { super(message); this.kind = kind; this.raw = raw; this.costUsd = costUsd; this.httpStatus = httpStatus; this.generationId = generationId }
 }
 
 export async function callStructured<T>(config: ModelConfig, messages: { role: string; content: string }[], schema: { name: string; strict: boolean; schema: unknown }, options: { maxTokens?: number; timeoutMs?: number; signal?: AbortSignal; reasoning?: boolean; fetchImpl?: typeof fetch } = {}): Promise<ModelCall<T>> {
@@ -35,15 +36,17 @@ export async function callStructured<T>(config: ModelConfig, messages: { role: s
     throw new ModelError(error instanceof Error && error.name === 'TimeoutError' ? 'Model timed out' : 'Model unreachable', error instanceof Error && error.name === 'TimeoutError' ? 'timeout' : 'unavailable')
   }
   const body = await response.json().catch(() => null) as { id?: string; choices?: { message?: { content?: string } }[]; usage?: { cost?: number; prompt_tokens?: number; completion_tokens?: number }; error?: { message?: string } } | null
+  const costUsd = typeof body?.usage?.cost === 'number' && Number.isFinite(body.usage.cost) && body.usage.cost >= 0 ? body.usage.cost : null
+  const generationId = typeof body?.id === 'string' && body.id ? body.id : null
   if (!response.ok) {
     const kind = response.status === 401 || response.status === 403 ? 'auth' : response.status === 402 || response.status === 429 ? 'limit' : 'unavailable'
-    throw new ModelError(`Model request failed (${response.status})`, kind, null, null, response.status)
+    throw new ModelError(`Model request failed (${response.status})`, kind, null, costUsd, response.status, generationId)
   }
   const raw = body?.choices?.[0]?.message?.content ?? ''
-  if (body?.choices?.[0] && (body.choices[0] as { finish_reason?: string }).finish_reason === 'length') throw new ModelError('Model ran out of output tokens', 'invalid-output', raw, typeof body?.usage?.cost === 'number' ? body.usage.cost : null)
+  if (body?.choices?.[0] && (body.choices[0] as { finish_reason?: string }).finish_reason === 'length') throw new ModelError('Model ran out of output tokens', 'invalid-output', raw, costUsd, null, generationId)
   let value: T
-  try { value = JSON.parse(raw) as T } catch { throw new ModelError('Model returned text that is not JSON', 'invalid-output', raw, typeof body?.usage?.cost === 'number' ? body.usage.cost : null) }
-  return { value, raw, generationId: body?.id ?? null, costUsd: typeof body?.usage?.cost === 'number' ? body.usage.cost : null, promptTokens: body?.usage?.prompt_tokens ?? 0, completionTokens: body?.usage?.completion_tokens ?? 0 }
+  try { value = JSON.parse(raw) as T } catch { throw new ModelError('Model returned text that is not JSON', 'invalid-output', raw, costUsd, null, generationId) }
+  return { value, raw, generationId, costUsd, promptTokens: body?.usage?.prompt_tokens ?? 0, completionTokens: body?.usage?.completion_tokens ?? 0 }
 }
 
 /** The exact JSON sent: also what the budget's worst case and the attempt's request hash are computed from. */

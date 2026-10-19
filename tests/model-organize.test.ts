@@ -13,7 +13,7 @@ const config = { apiKey: 'test-key', model: 'fake/model', baseUrl: 'https://fake
 const now = () => new Date('2026-10-19T16:00:00Z') // Mon 2026-10-19 09:00 Vancouver
 type Item = Record<string, unknown>
 const flat = (i: Item) => ({ kind: 'task', title: null, text: null, detail: null, date: null, dateRole: null, time: null, partOfDay: null, url: null, note: null, followUpDate: null, taskId: null, markDone: null, newDate: null, ...i })
-function fakeProvider(answer: (body: { messages: { content: string }[] }) => Item[] | 'timeout' | number, opts: { cost?: number | null; calls?: { n: number } } = {}): typeof fetch {
+function fakeProvider(answer: (body: { messages: { content: string }[] }) => Item[] | 'timeout' | number | Response, opts: { cost?: number | null; calls?: { n: number } } = {}): typeof fetch {
   return (async (url: string | URL, init?: RequestInit) => {
     if (String(url).endsWith('/models')) return Response.json({ data: [{ id: 'fake/model', pricing: { prompt: '0.0000003', completion: '0.0000012' } }] })
     if (opts.calls) opts.calls.n++
@@ -21,6 +21,7 @@ function fakeProvider(answer: (body: { messages: { content: string }[] }) => Ite
     const a = answer(body)
     if (a === 'timeout') { const e = new Error('timed out'); e.name = 'TimeoutError'; throw e }
     if (typeof a === 'number') return new Response('{}', { status: a })
+    if (a instanceof Response) return a
     return Response.json({ id: 'gen-1', choices: [{ message: { content: JSON.stringify({ items: a.map(flat) }) }, finish_reason: 'stop' }], usage: { cost: opts.cost === undefined ? 0.0002 : opts.cost, prompt_tokens: 600, completion_tokens: 200 } })
   }) as typeof fetch
 }
@@ -104,15 +105,78 @@ test('timeout: text kept, capture failed, the charge stays unknown and the model
   } finally { await s.cleanup() }
 })
 
-test('an HTTP error answer (e.g. 401) is settled at 0 with the reason, and doesn\'t pause the model', async () => {
+test('a 401 with no generation or cost is refused before routing: settled at 0 with the reason, the model isn\'t paused', async () => {
   const s = await store('call dentist')
   try {
     await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => 401), now }, s.captureId)
     assert.equal((await capture(s.repo, s.captureId)).error, 'Model key rejected · text saved')
     const [a] = await s.repo.modelAttempts()
-    assert.equal(a!.state, 'settled'); assert.equal(a!.actualUsd, 0); assert.match(a!.note!, /HTTP 401; no generation/)
+    assert.equal(a!.state, 'settled'); assert.equal(a!.actualUsd, 0); assert.match(a!.note!, /refused before routing \(HTTP 401\)/)
     assert.equal((await capture(s.repo, s.captureId)).contextLine, 'Not organized · your text is kept')
   } finally { await s.cleanup() }
+})
+
+// Ratchet #69: strict mode is a request to the provider, not a guarantee; every field is checked at run time.
+const answerWith = (items: unknown, extra: Record<string, unknown> = {}) => Response.json({ id: 'gen-x', choices: [{ message: { content: JSON.stringify({ items }) }, finish_reason: 'stop' }], usage: { cost: 0.002 }, ...extra })
+
+test('an item with a field of the wrong type is counted as unreadable; the rest saves and the cost is settled', async () => {
+  const s = await store('call dentist')
+  try {
+    assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => answerWith([flat({ title: 'call dentist' }), flat({ title: 23 }), flat({ kind: 'event', title: 'call dentist', partOfDay: 'noon' }), 'not an item'])), now }, s.captureId), 'organized')
+    const c = await capture(s.repo, s.captureId)
+    assert.equal(c.error, "3 parts weren't saved as items")
+    assert.deepEqual((await s.repo.load()).tasks.map(t => t.title), ['call dentist'])
+    const [a] = await s.repo.modelAttempts()
+    assert.equal(a!.state, 'settled'); assert.equal(a!.actualUsd, 0.002)
+  } finally { await s.cleanup() }
+})
+
+test('every item unreadable: failed with "Model unavailable", no empty receipt, the reported cost is settled', async () => {
+  for (const answer of [answerWith([flat({ title: 23 })]), answerWith('not a list'), answerWith([{ kind: 'task', title: 'call dentist', markDone: 'yes', taskId: 1 }].map(i => ({ ...i, kind: 'update' })))]) {
+    const s = await store('call dentist')
+    try {
+      assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => answer.clone()), now }, s.captureId), 'failed')
+      const c = await capture(s.repo, s.captureId)
+      assert.equal(c.status, 'failed'); assert.equal(c.error, 'Model unavailable · text saved'); assert.equal(c.text, 'call dentist')
+      assert.equal((await s.repo.load()).tasks.length, 0)
+      const [a] = await s.repo.modelAttempts()
+      assert.equal(a!.state, 'settled'); assert.equal(a!.actualUsd, 0.002); assert.equal(a!.generationId, 'gen-x')
+    } finally { await s.cleanup() }
+  }
+})
+
+test('a date role outside do/due is dropped, so the task waits as "Date unclear"', async () => {
+  const s = await store('call dentist tomorrow')
+  try {
+    await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => answerWith([flat({ title: 'call dentist', date: '2026-10-20', dateRole: 'banana' })])), now }, s.captureId)
+    const [p] = (await capture(s.repo, s.captureId)).proposals
+    assert.equal(p!.kind, 'create-task'); assert.equal((p as { dateRole: unknown }).dateRole, null); assert.deepEqual(p!.flags, ['date-role-missing'])
+    assert.equal((await s.repo.load()).tasks.length, 0)
+  } finally { await s.cleanup() }
+})
+
+test('an HTTP error never proves nothing was charged: a reported cost is kept, a generation without one stays unknown', async () => {
+  const cases: [Response, 'settled' | 'unknown', number | null][] = [
+    [Response.json({ id: 'gen-err', error: { message: 'upstream failed' }, usage: { cost: 0.002 } }, { status: 500 }), 'settled', 0.002],
+    [Response.json({ id: 'gen-err', error: { message: 'upstream failed' } }, { status: 502 }), 'unknown', null],
+    [Response.json({ error: { message: 'provider error' } }, { status: 500 }), 'unknown', null],
+    [Response.json({ id: 'gen-err', error: { message: 'bad key' }, usage: { cost: 0.001 } }, { status: 401 }), 'settled', 0.001],
+  ]
+  for (const [response, state, cost] of cases) {
+    const s = await store('call dentist')
+    try {
+      assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => response.clone()), now }, s.captureId), 'failed')
+      const c = await capture(s.repo, s.captureId)
+      assert.equal(c.error, response.status === 401 ? 'Model key rejected · text saved' : 'Model unavailable · text saved')
+      const [a] = await s.repo.modelAttempts()
+      assert.equal(a!.state, state); assert.equal(a!.actualUsd, cost)
+      assert.doesNotMatch(a!.note ?? '', /nothing charged/)
+      if (state === 'unknown') {
+        const next = await s.repo.execute({ operationId: 'cap2', expectedRevision: (await s.repo.load()).revision, action: { type: 'capture-for-model', pageId: c.pageId, text: 'buy milk', model: 'fake/model' } })
+        assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => [{ kind: 'task', title: 'buy milk' }]), now }, next.receipt.entityId!), 'paused')
+      }
+    } finally { await s.cleanup() }
+  }
 })
 
 test('no price: nothing is reserved or sent', async () => {

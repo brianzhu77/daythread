@@ -43,17 +43,68 @@ export function captureSchema(openTaskIds: readonly string[]) {
 }
 type FlatItem = { kind: CaptureItem['kind']; title: string | null; text: string | null; detail: string | null; date: string | null; dateRole: 'do' | 'due' | null; time: string | null; partOfDay: 'morning' | 'afternoon' | 'evening' | null; url: string | null; note: string | null; followUpDate: string | null; taskId: string | null; markDone: boolean | null; newDate: string | null }
 /** Narrows the flat answer to typed items; an item missing what its kind needs is dropped, never guessed. */
-export function captureItems(answer: { items: FlatItem[] }): CaptureItem[] {
-  return answer.items.flatMap((i): CaptureItem[] => {
-    switch (i.kind) {
-      case 'task': return i.title ? [{ kind: 'task', title: i.title, date: i.date, dateRole: i.dateRole, detail: i.detail }] : []
-      case 'event': return i.title ? [{ kind: 'event', title: i.title, date: i.date, time: i.time, partOfDay: i.partOfDay }] : []
-      case 'note': return i.text ?? i.title ? [{ kind: 'note', text: (i.text ?? i.title)! }] : []
-      case 'material': return i.url ? [{ kind: 'material', url: i.url, note: i.note, followUpDate: i.followUpDate }] : []
-      case 'update': return i.taskId ? [{ kind: 'update', taskId: i.taskId, markDone: !!i.markDone, newDate: i.newDate, dateRole: i.dateRole, detail: i.detail }] : []
-      default: return []
+export function captureItems(answer: unknown): CaptureItem[] {
+  return readCaptureAnswer(answer).items
+}
+
+class Unreadable extends Error {}
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+
+/**
+ * Runtime check of what the provider actually sent (Ratchet #69): strict mode is a request, not a guarantee. An item
+ * with a field of the wrong type is unreadable, so it is counted ("1 part wasn't saved as an item") rather than crashing
+ * the run. A date role outside do/due becomes null, so the item is held as "Date unclear" (Lead 6ea38307).
+ */
+export function readCaptureAnswer(answer: unknown): { items: CaptureItem[]; unreadable: number } {
+  if (!isRecord(answer) || !Array.isArray(answer.items)) return { items: [], unreadable: 1 }
+  const items: CaptureItem[] = []
+  let unreadable = 0
+  for (const raw of answer.items) {
+    try {
+      const item = readItem(raw)
+      if (item) items.push(item)
+      else unreadable++
+    } catch (error) {
+      if (!(error instanceof Unreadable)) throw error
+      unreadable++
     }
-  })
+  }
+  return { items, unreadable }
+}
+
+function readItem(raw: unknown): CaptureItem | null {
+  if (!isRecord(raw)) return null
+  const text = (key: string): string | null => {
+    const v = raw[key]
+    if (v === null || v === undefined) return null
+    if (typeof v !== 'string') throw new Unreadable(key)
+    return v
+  }
+  const oneOf = <T extends string>(key: string, allowed: readonly T[]): T | null => {
+    const v = text(key)
+    if (v !== null && !allowed.includes(v as T)) throw new Unreadable(key)
+    return v as T | null
+  }
+  const role = (): 'do' | 'due' | null => (raw.dateRole === 'do' || raw.dateRole === 'due' ? raw.dateRole : null)
+  const title = text('title')?.trim() || null
+  switch (raw.kind) {
+    case 'task': return title ? { kind: 'task', title, date: text('date'), dateRole: role(), detail: text('detail') } : null
+    case 'event': return title ? { kind: 'event', title, date: text('date'), time: text('time'), partOfDay: oneOf('partOfDay', ['morning', 'afternoon', 'evening'] as const) } : null
+    case 'note': {
+      const t = text('text')?.trim() || title
+      return t ? { kind: 'note', text: t } : null
+    }
+    case 'material': {
+      const url = text('url')
+      return url ? { kind: 'material', url, note: text('note'), followUpDate: text('followUpDate') } : null
+    }
+    case 'update': {
+      const taskId = text('taskId')
+      if (raw.markDone !== null && raw.markDone !== undefined && typeof raw.markDone !== 'boolean') throw new Unreadable('markDone')
+      return taskId ? { kind: 'update', taskId, markDone: raw.markDone === true, newDate: text('newDate'), dateRole: role(), detail: text('detail') } : null
+    }
+    default: return null
+  }
 }
 export type CaptureRawAnswer = { items: FlatItem[] }
 
