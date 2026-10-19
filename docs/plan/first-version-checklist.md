@@ -50,7 +50,7 @@ Group B is listed for tracking only and never counts toward M.
 
 | ID | Item | Source | Status | Evidence |
 |---|---|---|---|---|
-| A6 | Real model (OpenRouter, 10 USD/day cap) behind capture, Draft my day, review suggestions, Related | O-U18, 7a55cbbf D-C, c377e316 | partial | simulated provider only; **probe weak, Brian to choose** (step 0 329cf7c: ≥3 critical errors under the frozen rule; Ratchet #67 independent scoring pending). Context when built: one hop of linked pages (transitive later, Brian told) |
+| A6 | Real model (OpenRouter, 10 USD/day cap) behind capture, Draft my day, review suggestions, Related | O-U18, 7a55cbbf D-C, c377e316 | partial | simulated provider only; **probe weak; Brian asked yes/wait** (step 0 recount 6522522: 6 critical calls of 45 on his model, Luna also weak; Ratchet #67 pending; Brian "go" 5850bcad being confirmed). Context when built: one hop of linked pages (transitive later, Brian told) |
 | A7 | Indexing at plan/review into Weave pages; browse; copy to your pages; corrections in a thread fix the next run | 06469260, c377e316, 08a02686 | missing | waits on A6; layout A chosen (C2) |
 
 ### Part 4 · Predictions: yesterday's unfinished + items scheduled for today
