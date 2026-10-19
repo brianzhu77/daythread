@@ -106,7 +106,8 @@ export interface Capture {
   status: "organizing" | "needs_confirmation" | "applied" | "discarded" | "failed";
   contextLine?: string;
   error?: string;
-  failure?: "failure" | "budget" | "context";
+  /** "paused": a cost couldn't be confirmed; like "budget", no Retry until it's settled (Lead 33ae4578). */
+  failure?: "failure" | "budget" | "context" | "paused";
   proposals?: ProposalItem[];
   proposalRevision: number;
   simulated: boolean;
@@ -141,6 +142,12 @@ export interface ProposalItem {
   state?: "applied" | "removed";
   /** The task/event/material this proposal created. */
   entityId?: string;
+  /** For a created task: its version right after the capture saved it, so Remove / Undo all can tell "edited since". */
+  appliedVersion?: number;
+  /** For a saved link: the line this capture added (its source). */
+  blockId?: string;
+  /** For an applied update: what the task was before, so Remove / Undo all can put it back if nothing changed since. */
+  before?: { status: Task["status"]; plannedOn: LocalDate | null; deadlineOn: LocalDate | null; attentionOn: LocalDate | null; placements: Placement[] };
 }
 export interface Receipt {
   operationId: string;
@@ -173,7 +180,8 @@ export interface Workspace {
 export type ServerAction =
   | { type: "capture-for-model"; pageId: string; text: string; model: string; capturedAt: string }
   | { type: "organized-capture"; captureId: string; revision: number; model: string; mode: "auto" | "confirm"; proposals: ProposalItem[]; unreadable: number; contextLine: string }
-  | { type: "model-failed"; captureId: string; revision: number; failure: "failure" | "budget" | "context"; error: string };
+  | { type: "model-failed"; captureId: string; revision: number; failure: "failure" | "budget" | "context" | "paused"; error: string }
+  | { type: "retry-capture"; captureId: string };
 export type Action =
   | { type: "save-editor"; pageId: string; expectedContent: string; document: string; singleDeleteIds?: string[]; today?: string; historyTaskVersions?: Record<string, number>; history?: boolean }
   | { type: "ensure-day"; date: LocalDate }
@@ -279,6 +287,10 @@ export type Action =
     }
   | { type: "apply-capture"; captureId: string; proposalRevision: number }
   | { type: "discard-capture"; captureId: string }
+  | { type: "edit-capture-item"; captureId: string; itemId: string; title?: string; kind?: "create-task" | "create-event" | "add-note"; date?: LocalDate | null; dateRole?: "do" | "due" | "start"; time?: string | null }
+  | { type: "save-capture-item"; captureId: string; itemId: string }
+  | { type: "remove-capture-item"; captureId: string; itemId: string }
+  | { type: "undo-capture"; captureId: string }
   | {
       type: "generate-draft";
       date: LocalDate;

@@ -498,6 +498,7 @@ function applyProposal(state: Workspace, c: Capture, p: Page, proposal: Proposal
       appendBlock(p, ensureSection(p, "notes"), { id: newId(), kind: "task", taskId: t.id, text: t.title });
       c.taskId ??= t.id;
       proposal.entityId = t.id;
+      proposal.appliedVersion = t.version;
       break;
     }
     case "create-event": {
@@ -515,11 +516,13 @@ function applyProposal(state: Workspace, c: Capture, p: Page, proposal: Proposal
     case "create-material": {
       const m = saveMaterial(state, p, ensureSection(p, "good-stuffs"), proposal.url!, proposal.title, "", proposal.note ?? "");
       proposal.entityId = m.id;
+      proposal.blockId = m.sources.at(-1)?.blockId;
       break;
     }
     case "update-task": {
       const t = task(state, proposal.taskId!);
       if (proposal.expectedVersion !== undefined && t.version !== proposal.expectedVersion) throw new DomainError("Task changed; not applied");
+      proposal.before = { status: t.status, plannedOn: t.plannedOn, deadlineOn: t.deadlineOn, attentionOn: t.attentionOn, placements: structuredClone(state.placements.filter((x) => x.taskId === t.id)) };
       if (proposal.status) t.status = proposal.status;
       if (proposal.date) {
         // An update's date without a role is a move to that day (Lead 6ea38307).
@@ -530,10 +533,64 @@ function applyProposal(state: Workspace, c: Capture, p: Page, proposal: Proposal
       }
       t.version++;
       proposal.entityId = t.id;
+      proposal.appliedVersion = t.version;
       break;
     }
   }
   proposal.state = "applied";
+}
+/** Receipt v2: takes back one item this capture saved, only if nothing has changed it since ("Can't undo · edited since"). */
+function removeApplied(state: Workspace, proposal: ProposalItem): void {
+  const id = proposal.entityId;
+  const dropBlocks = (match: (b: NoteBlock) => boolean) => { for (const pg of state.pages) for (const s of pg.sections) s.blocks = s.blocks.filter((b) => !match(b)); };
+  switch (proposal.kind) {
+    case "create-task": {
+      const t = state.tasks.find((x) => x.id === id);
+      if (!t) break;
+      if (t.version !== proposal.appliedVersion) throw new DomainError("Can't undo · edited since");
+      state.tasks = state.tasks.filter((x) => x.id !== t.id);
+      state.placements = state.placements.filter((x) => x.taskId !== t.id);
+      dropBlocks((b) => b.taskId === t.id);
+      break;
+    }
+    case "create-event": {
+      const e = state.events.find((x) => x.id === id);
+      if (e && e.title !== proposal.title) throw new DomainError("Can't undo · edited since");
+      state.events = state.events.filter((x) => x.id !== id);
+      dropBlocks((b) => b.eventId === id);
+      break;
+    }
+    case "add-note":
+      dropBlocks((b) => b.id === id);
+      break;
+    case "create-material": {
+      const m = state.materials.find((x) => x.id === id);
+      dropBlocks((b) => b.id === proposal.blockId);
+      if (!m) break;
+      m.sources = m.sources.filter((x) => x.blockId !== proposal.blockId);
+      // A link first saved by this capture, with nothing done to it since, goes; an older one just loses this save.
+      if (!m.sources.length && m.reviewState === "pending" && !(m.decisions ?? []).length) state.materials = state.materials.filter((x) => x !== m);
+      break;
+    }
+    case "update-task": {
+      const t = state.tasks.find((x) => x.id === id);
+      if (!t || !proposal.before) break;
+      if (t.version !== proposal.appliedVersion) throw new DomainError("Can't undo · edited since");
+      Object.assign(t, { status: proposal.before.status, plannedOn: proposal.before.plannedOn, deadlineOn: proposal.before.deadlineOn, attentionOn: proposal.before.attentionOn });
+      state.placements = state.placements.filter((x) => x.taskId !== t.id).concat(structuredClone(proposal.before.placements));
+      t.version++;
+      delete proposal.before;
+      break;
+    }
+  }
+  delete proposal.entityId;
+  delete proposal.state;
+}
+/** A capture is waiting while any item waits, saved once every item is saved or removed, discarded if all were removed. */
+function settleCaptureStatus(c: Capture): void {
+  const items = c.proposals ?? [];
+  c.status = items.some((x) => !x.state) ? "needs_confirmation" : items.some((x) => x.state === "applied") ? "applied" : "discarded";
+  c.proposalRevision++;
 }
 function execute(
   state: Workspace,
@@ -1092,6 +1149,54 @@ function execute(
         simulated: c.simulated,
       };
     }
+    // ---- Receipt v2 (Jazz 283697c): fix one item of a capture ----
+    case "edit-capture-item": {
+      const c = requireValue(state.captures.find((c) => c.id === action.captureId), "Capture");
+      const item = requireValue(c.proposals?.find((x) => x.id === action.itemId), "Capture item");
+      if (item.state === "removed") throw new DomainError("Item was removed");
+      if (item.kind === "update-task" || item.kind === "create-material") {
+        if (action.kind) throw new DomainError("This item's type can't change here");
+      }
+      const p = page(state, c.pageId);
+      const wasApplied = item.state === "applied";
+      // A saved item is changed by replacing it (same item id, same capture), so the receipt row stays one row.
+      if (wasApplied && item.kind !== "update-task") removeApplied(state, item);
+      if (action.title !== undefined) { item.title = text(action.title, 1000).trim(); item.flags = item.flags?.filter((f) => f !== "title-not-grounded"); }
+      if (action.kind) item.kind = action.kind;
+      if (action.date !== undefined) { if (action.date) date(action.date); item.date = action.date; item.flags = item.flags?.filter((f) => f !== "date-missing" && f !== "date-role-missing"); }
+      if (action.dateRole) { item.dateRole = action.dateRole; item.flags = item.flags?.filter((f) => f !== "date-role-missing"); }
+      if (action.time !== undefined) { item.time = action.time; item.flags = item.flags?.filter((f) => f !== "time-not-in-text"); }
+      if (item.kind !== "create-event") { item.time = null; item.partOfDay = null; }
+      if (wasApplied && item.kind !== "update-task") applyProposal(state, c, p, item);
+      c.proposalRevision++;
+      return { message: wasApplied ? "Changed" : "Edited · still waiting", entityId: item.id };
+    }
+    case "save-capture-item": {
+      const c = requireValue(state.captures.find((c) => c.id === action.captureId), "Capture");
+      const item = requireValue(c.proposals?.find((x) => x.id === action.itemId), "Capture item");
+      if (item.state) throw new DomainError(item.state === "applied" ? "Already saved" : "Item was removed");
+      applyProposal(state, c, page(state, c.pageId), item);
+      settleCaptureStatus(c);
+      return { message: "Saved", entityId: item.entityId };
+    }
+    case "remove-capture-item": {
+      const c = requireValue(state.captures.find((c) => c.id === action.captureId), "Capture");
+      const item = requireValue(c.proposals?.find((x) => x.id === action.itemId), "Capture item");
+      if (item.state === "removed") return { message: "Already removed" };
+      if (item.state === "applied") removeApplied(state, item);
+      item.state = "removed";
+      settleCaptureStatus(c);
+      return { message: "Removed", entityId: item.id };
+    }
+    case "undo-capture": {
+      const c = requireValue(state.captures.find((c) => c.id === action.captureId), "Capture");
+      const applied = (c.proposals ?? []).filter((x) => x.state === "applied");
+      // All or nothing: removeApplied throws "edited since" before anything is kept (the command runs on a copy).
+      for (const item of applied) { removeApplied(state, item); item.state = "removed"; }
+      for (const item of c.proposals ?? []) if (!item.state) item.state = "removed";
+      settleCaptureStatus(c);
+      return { message: "Undone · your text is kept", entityId: c.id };
+    }
     // ---- feat/model step 1: server-only actions (not in commandSchema) ----
     case "capture-for-model": {
       // His words are saved before any model call (03 §6); the result is recorded later by organized-capture.
@@ -1140,6 +1245,19 @@ function execute(
           : `${saved} saved`,
         entityId: c.id,
       };
+    }
+    case "retry-capture": {
+      // Same capture, new revision: the old attempt's late result can no longer apply (03 §6).
+      const c = requireValue(state.captures.find((c) => c.id === action.captureId), "Capture");
+      if (c.status !== "failed" || c.simulated) throw new DomainError("Only a capture that failed can be retried");
+      if (c.failure === "budget") throw new DomainError("Today's model budget is used up");
+      if (c.failure === "paused") throw new DomainError("Model paused until a cost is confirmed");
+      c.status = "organizing";
+      c.proposalRevision++;
+      c.error = undefined;
+      c.failure = undefined;
+      c.contextLine = "Organizing…";
+      return { message: "Organizing again", entityId: c.id };
     }
     case "model-failed": {
       const c = requireValue(state.captures.find((c) => c.id === action.captureId), "Capture");

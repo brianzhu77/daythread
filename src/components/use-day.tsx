@@ -4,7 +4,7 @@ import { Button, toast } from '@heroui/react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Action, DayView, LocalDate, Receipt, Workspace } from '../domain/types'
 import { getDayView } from '../domain/workspace'
-import { loadWorkspace, runCommand, submitCapture as submitCaptureFn } from '../server/functions'
+import { loadWorkspace, retryCapture as retryCaptureFn, runCommand, submitCapture as submitCaptureFn } from '../server/functions'
 import { configureDebug, debugClient } from '../lib/debug'
 import { sampleActions } from './fixture'
 import { todayIso } from './dates'
@@ -15,8 +15,8 @@ export interface Transport {
 }
 
 /** What the server says about the model (feat/model step 1); "simulated" means no key, so captures stay simulated. */
-export interface ModelInfo { state: 'simulated' | 'ready' | 'paused' | 'budget-used'; model: string | null; mode: 'auto' | 'confirm' }
-let latestModel: ModelInfo = { state: 'simulated', model: null, mode: 'auto' }
+export interface ModelInfo { state: 'simulated' | 'ready' | 'paused' | 'budget-used'; model: string | null; mode: 'auto' | 'confirm'; costUnknown: string[] }
+let latestModel: ModelInfo = { state: 'simulated', model: null, mode: 'auto', costUnknown: [] }
 const serverTransport: Transport = {
   load: async (operationId = newOperationId(), triggerOperationId) => {
     const response=await loadWorkspace({data:{operationId,triggerOperationId}})
@@ -67,6 +67,8 @@ interface WorkspaceContextValue {
   model: ModelInfo
   /** Saves a capture: through the model when it's set up, otherwise the simulated capture. False = not saved. */
   submitCapture(pageId: string, text: string, outcome?: SimOutcome): Promise<boolean>
+  /** Organizes a failed model capture again (same capture, new revision). */
+  retryCapture(captureId: string): Promise<boolean>
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
@@ -200,6 +202,14 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     queue.current = job.catch(() => undefined)
     return job
   }, [run, refresh])
+  const retryCapture = useCallback(async (captureId: string) => {
+    const job = queue.current.then(async () => {
+      try { const r = await retryCaptureFn({ data: { operationId: newOperationId(), captureId } }); await refresh(); return r.ok }
+      catch { await refresh().catch(() => undefined); return false }
+    })
+    queue.current = job.catch(() => undefined)
+    return job
+  }, [refresh])
   // While a capture is still being organized, follow it (the model answers in a few seconds; stop after ~90 s).
   const polls = useRef(0)
   useEffect(() => {
@@ -230,8 +240,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       addSampleData,
       model,
       submitCapture,
+      retryCapture,
     }),
-    [workspace, loadError, saveState, saveError, lastFailed, simOutcome, run, retry, reload, refresh, addSampleData, model, submitCapture],
+    [workspace, loadError, saveState, saveError, lastFailed, simOutcome, run, retry, reload, refresh, addSampleData, model, submitCapture, retryCapture],
   )
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }

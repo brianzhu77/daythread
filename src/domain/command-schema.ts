@@ -136,6 +136,11 @@ const action = z.discriminatedUnion("type", [
     proposalRevision: z.number().int().min(1),
   }),
   z.object({ type: z.literal("discard-capture"), captureId: id }),
+  // Receipt v2 (Jazz 283697c): fix one item of a capture.
+  z.object({ type: z.literal("edit-capture-item"), captureId: id, itemId: id, title: title.min(1).optional(), kind: z.enum(["create-task", "create-event", "add-note"]).optional(), date: day.nullable().optional(), dateRole: z.enum(["do", "due", "start"]).optional(), time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable().optional() }),
+  z.object({ type: z.literal("save-capture-item"), captureId: id, itemId: id }),
+  z.object({ type: z.literal("remove-capture-item"), captureId: id, itemId: id }),
+  z.object({ type: z.literal("undo-capture"), captureId: id }),
   z.object({ type: z.literal("generate-draft"), date: day, outcome }),
   z.object({ type: z.literal("save-draft"), date: day, taskIds: z.array(id).max(3), materialIds: z.array(id).max(2) }),
   z.object({ type: z.literal("undo"), targetOperationId: id }),

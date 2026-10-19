@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { parseEnv } from 'node:util'
 import { getRepository } from '../storage.ts'
 import { SqliteWorkspaceRepository } from '../sqlite-repository.ts'
-import { modelStatus } from '../model-ledger.ts'
+import { costUnknownCaptureIds, modelStatus } from '../model-ledger.ts'
 import { modelConfig, type ModelConfig } from './openrouter.ts'
 import { organizeCapture } from './organize.ts'
 
@@ -22,7 +22,7 @@ export function loadModelEnv(path = resolve('.env.local')): void {
 }
 
 export type ModelState = 'simulated' | 'ready' | 'paused' | 'budget-used'
-export interface ModelInfo { state: ModelState; model: string | null; mode: 'auto' | 'confirm' }
+export interface ModelInfo { state: ModelState; model: string | null; mode: 'auto' | 'confirm'; costUnknown: string[] }
 
 let recovered: Promise<void> | null = null
 function sqlite(): SqliteWorkspaceRepository {
@@ -43,10 +43,10 @@ const today = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancou
 
 export async function modelInfo(): Promise<ModelInfo> {
   const c = config()
-  if (!c) return { state: 'simulated', model: null, mode: captureMode() }
+  if (!c) return { state: 'simulated', model: null, mode: captureMode(), costUnknown: [] }
   await ready()
-  const s = modelStatus(await sqlite().modelAttempts(), today())
-  return { state: s.state, model: c.model, mode: captureMode() }
+  const attempts = await sqlite().modelAttempts(), s = modelStatus(attempts, today())
+  return { state: s.state, model: c.model, mode: captureMode(), costUnknown: costUnknownCaptureIds(attempts) }
 }
 
 /** Saves his text, then organizes it in the background; the browser follows the capture's status. */
@@ -59,4 +59,15 @@ export async function submitCaptureForModel(operationId: string, pageId: string,
   const captureId = r.receipt.entityId ?? null
   if (captureId) void organizeCapture({ repository, config: c, mode: info.mode }, captureId).catch(error => console.error(JSON.stringify({ level: 'error', event: 'model.organize', captureId, error: error instanceof Error ? error.message : 'UnknownError' })))
   return { captureId, info }
+}
+
+/** Retry for a capture whose organizing failed: same capture, new revision, organized again in the background. */
+export async function retryCaptureForModel(operationId: string, captureId: string): Promise<{ ok: boolean; info: ModelInfo }> {
+  const info = await modelInfo()
+  if (info.state === 'simulated') return { ok: false, info }
+  const repository = sqlite(), c = config()!
+  const ws = await repository.load()
+  await repository.execute({ operationId, expectedRevision: ws.revision, action: { type: 'retry-capture', captureId } })
+  void organizeCapture({ repository, config: c, mode: info.mode }, captureId).catch(error => console.error(JSON.stringify({ level: 'error', event: 'model.organize', captureId, error: error instanceof Error ? error.message : 'UnknownError' })))
+  return { ok: true, info }
 }

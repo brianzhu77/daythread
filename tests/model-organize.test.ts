@@ -7,6 +7,7 @@ import { SqliteWorkspaceRepository } from '../src/server/sqlite-repository.ts'
 import { organizeCapture } from '../src/server/model/organize.ts'
 import { resetPriceCache } from '../src/server/model/pricing.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
+import { costUnknownCaptureIds } from '../src/server/model-ledger.ts'
 
 // feat/model step 1 (b): organizing a capture against a fake OpenRouter. No network, no cost.
 const config = { apiKey: 'test-key', model: 'fake/model', baseUrl: 'https://fake.invalid/api/v1' }
@@ -171,9 +172,12 @@ test('an HTTP error never proves nothing was charged: a reported cost is kept; a
       assert.equal(c.error, response.status === 401 ? 'Model key rejected · text saved' : 'Model unavailable · text saved')
       const [a] = await s.repo.modelAttempts()
       assert.equal(a!.state, state); assert.equal(a!.actualUsd, cost)
+      // "Cost unknown" on this capture's receipt exactly while its cost isn't confirmed.
+      assert.deepEqual(costUnknownCaptureIds(await s.repo.modelAttempts()), state === 'settled' ? [] : [s.captureId])
       assert.doesNotMatch(a!.note ?? '', /nothing charged/)
       const next = await s.repo.execute({ operationId: 'cap2', expectedRevision: (await s.repo.load()).revision, action: { type: 'capture-for-model', pageId: c.pageId, text: 'buy milk', model: 'fake/model', capturedAt: now().toISOString() } })
       assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => [{ kind: 'task', title: 'buy milk' }]), now }, next.receipt.entityId!), state === 'unknown' ? 'paused' : 'organized')
+      if (state === 'unknown') assert.equal((await capture(s.repo, next.receipt.entityId!)).failure, 'paused')
       if (state === 'unknown') assert.equal((await capture(s.repo, next.receipt.entityId!)).error, "Model paused · a cost couldn't be confirmed · text saved")
     } finally { await s.cleanup() }
   }

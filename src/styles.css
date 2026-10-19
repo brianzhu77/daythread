@@ -858,3 +858,43 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* Touch screens keep :hover after a tap, which would leave a row grey after going back. */
 @media (hover: hover) { .card-row:hover, .tag-block:hover { background: var(--fill-soft); } }
 @media (max-width: 899px) { .tag-block-section { display: none; } }
+
+/* Capture receipt v2 (Jazz 283697c): his text first, chips wrap under the title, 44px targets on the phone. */
+.receipt-v2 .receipt-head { align-items: flex-start; gap: 8px; }
+.receipt-v2 .receipt-source { color: var(--ink); }
+.receipt-v2 .group-title { font-size: 12px; font-weight: 600; color: var(--ink-2); text-transform: none; margin: 4px 0 2px; }
+.receipt-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+/* Laptop: type · title · chips · actions on one line. Phone: chips and actions wrap under the title. */
+.receipt-row { display: grid; grid-template-columns: auto minmax(min(14rem, 45%), 1fr) minmax(0, max-content) auto; align-items: center; gap: 6px 8px; min-height: 36px; }
+.receipt-row > .receipt-chips { justify-content: flex-end; }
+@media (max-width: 599px) {
+  .receipt-row { grid-template-columns: auto minmax(0, 1fr); }
+  .receipt-row > .receipt-chips, .receipt-row > .row-actions, .receipt-row > .row-menu { grid-column: 2; justify-self: start; justify-content: flex-start; }
+  .receipt-row > .row-actions { margin-left: 0; }
+}
+.receipt-row .receipt-title { flex: 1 1 50%; min-width: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-align: left; font: inherit; color: var(--ink); }
+.receipt-row input.receipt-title { display: block; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 2px 0; }
+.receipt-title.as-text { border: 0; background: none; padding: 0; cursor: text; }
+.receipt-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+/* Chips that open a menu look exactly like the chips that don't. */
+.receipt-v2 button.chip-button { border: 0; cursor: pointer; min-height: 0; line-height: 1.4; font-family: inherit; }
+.receipt-v2 button.app-chip.chip-button { font-size: .76rem; font-weight: 600; color: var(--ink-soft); background: var(--app-surface); border-radius: 999px; padding: 2px 9px; }
+.receipt-v2 button.date-chip.chip-button { font-size: 12px; font-weight: 400; padding: 3px 9px; }
+.date-chip { font-size: 12px; color: var(--ink-2); background: var(--app-surface); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+.date-chip.no-date { color: var(--ink-3); }
+.reason-chip { font-size: 12px; color: var(--warn); background: var(--warn-soft); border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
+.update-chip { background: var(--blue-soft); color: var(--blue-text); }
+.row-actions { display: inline-flex; gap: 6px; justify-self: end; }
+.receipt-v2 .row-actions button { padding: 4px 12px; min-height: 32px; }
+.receipt-row.held { background: var(--warn-soft); border-radius: 10px; padding: 4px 8px; }
+.model-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); white-space: nowrap; }
+.model-tag .spinner { width: 14px; height: 14px; border: 1.5px solid var(--ink-3); border-right-color: transparent; border-radius: 50%; animation: page-card-spin .8s linear infinite; }
+.cost-unknown { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.model-state { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.warn-text { color: var(--warn); margin: 0; }
+.unreadable { font-size: 13px; }
+.capture-bar:has(.capture-model-line) { flex-wrap: wrap; }
+.capture-model-line { display: block; flex: 0 0 100%; font-size: 12px; color: var(--ink-3); order: 3; }
+@media (max-width: 599px) {
+  .receipt-v2 button.chip-button, .receipt-v2 .row-actions button, .receipt-v2 .row-menu > button, .receipt-v2 .model-state button, .receipt-v2 .card-meta .app-link { min-height: 44px; min-width: 44px; }
+}

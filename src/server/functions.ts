@@ -37,3 +37,10 @@ export const submitCapture = createServerFn({ method: "POST" })
     const { submitCaptureForModel } = await import("./model/service");
     return submitCaptureForModel(data.operationId, data.pageId, data.text);
   });
+
+export const retryCapture = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.object({ operationId: z.string().min(1).max(200), captureId: z.string().min(1).max(200) }).parse(input))
+  .handler(async ({ data }) => {
+    const { retryCaptureForModel } = await import("./model/service");
+    return retryCaptureForModel(data.operationId, data.captureId);
+  });

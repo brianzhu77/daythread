@@ -63,7 +63,7 @@ export async function organizeCapture(deps: OrganizeDeps, captureId: string): Pr
   const capture = ws.captures.find(c => c.id === captureId)
   if (!capture || capture.status !== 'organizing') return 'stale'
   const revision = capture.proposalRevision
-  const fail = async (failure: 'failure' | 'budget' | 'context', error: string, attempt?: { id: string; cost: number | null; generationId: string | null; note?: string }) => {
+  const fail = async (failure: 'failure' | 'budget' | 'context' | 'paused', error: string, attempt?: { id: string; cost: number | null; generationId: string | null; note?: string }) => {
     const latest = await repository.load()
     const command = { operationId: `model-failed:${captureId}:${revision}`, expectedRevision: latest.revision, action: { type: 'model-failed' as const, captureId, revision, failure, error } }
     if (attempt) await repository.recordModelResult({ attemptId: attempt.id, actualUsd: attempt.cost, generationId: attempt.generationId, now: now().toISOString(), ...(attempt.note ? { note: attempt.note } : {}) }, command)
@@ -91,7 +91,7 @@ export async function organizeCapture(deps: OrganizeDeps, captureId: string): Pr
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (/Daily budget reached/.test(message)) { await fail('budget', "Today's model budget is used up · text saved"); return 'paused' }
-    if (/in-flight or unknown/.test(message)) { await fail('failure', "Model paused · a cost couldn't be confirmed · text saved"); return 'paused' }
+    if (/in-flight or unknown/.test(message)) { await fail('paused', "Model paused · a cost couldn't be confirmed · text saved"); return 'paused' }
     throw error
   }
 

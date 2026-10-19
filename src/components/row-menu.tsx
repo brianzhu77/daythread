@@ -10,7 +10,8 @@ export interface MenuItem {
  * The ⋯ menu every row has (01 §1): a tap path for every action, no hover or right-click.
  * Items can be grouped; a group label renders as a small heading.
  */
-export function RowMenu({ label, groups }: { label: string; groups: { title?: string; items: MenuItem[] }[] }) {
+/** `trigger` replaces the ⋯ button's content (e.g. a chip that opens its own menu); `triggerClass` its class. */
+export function RowMenu({ label, groups, trigger, triggerClass = 'icon' }: { label: string; groups: { title?: string; items: MenuItem[] }[]; trigger?: ReactNode; triggerClass?: string }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const id = useId()
@@ -32,14 +33,14 @@ export function RowMenu({ label, groups }: { label: string; groups: { title?: st
     <div className="row-menu" ref={ref}>
       <button
         type="button"
-        className="icon"
+        className={triggerClass}
         aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen(o => !o)}
       >
-        ⋯
+        {trigger ?? '⋯'}
       </button>
       {open && (
         <div className="app-menu" role="menu" id={id}>

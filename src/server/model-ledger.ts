@@ -107,6 +107,11 @@ export function reconcileAttempt(db: DatabaseSync, attemptId: string, amount: nu
   return settleAttempt(db, { attemptId, actualUsd: actual, generationId: null, now, note: amount === 'worst-case' ? 'reconciled at worst case' : 'reconciled by hand' })
 }
 
+/** Captures with a charge not yet confirmed: their receipt says "Cost unknown" until the real cost arrives (Jazz 4e8c2f1). */
+export function costUnknownCaptureIds(attempts: ModelAttempt[]): string[] {
+  return [...new Set(attempts.filter(a => (a.state === 'estimated' || a.state === 'unknown') && a.captureId).map(a => a.captureId!))]
+}
+
 /** What the browser may know: read-only, no amounts per attempt. */
 export type ModelStatus = { state: 'ready' | 'paused' | 'budget-used' ; spentTodayUsd: number }
 export function modelStatus(attempts: ModelAttempt[], day: string, capUsd = dailyCapUsd()): ModelStatus {

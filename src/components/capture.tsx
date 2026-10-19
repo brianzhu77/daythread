@@ -3,13 +3,17 @@ import type { Capture, Page, ProposalItem, Workspace } from '../domain/types'
 import { longLabel } from './dates'
 import { CloseIcon } from './icons'
 import { useWorkspace } from './use-day'
+import { ReceiptV2 } from './receipt-v2'
 
 type BarState = 'idle' | 'sending' | 'failed'
 
 /** "I'm speaking" (01 §4). The text is saved first; organizing follows. Bottom of the screen on iPhone. */
 export function CaptureBar({ page, placeholder = 'Capture… e.g. “Fri: submit materials, start Wed”' }: { page: Page; placeholder?: string }) {
-  const { submitCapture, simOutcome } = useWorkspace()
+  const { submitCapture, simOutcome, model, workspace } = useWorkspace()
   const [text, setText] = useState('')
+  // Jazz's status table: a muted line under the field for the two states he can act on himself.
+  const lastModel = [...(workspace?.captures ?? [])].reverse().find(c => !c.simulated && c.status !== 'organizing')
+  const modelLine = model.state === 'simulated' ? 'Simulated · no model key' : model.state === 'paused' ? "Model paused · a cost couldn't be confirmed · text saved" : lastModel?.status === 'failed' && /key rejected/.test(lastModel.error ?? '') ? 'Model key rejected · text saved' : null
   const [state, setState] = useState<BarState>('idle')
 
   const submit = async () => {
@@ -51,6 +55,7 @@ export function CaptureBar({ page, placeholder = 'Capture… e.g. “Fri: submit
           }
         }}
       />
+      {modelLine && <span className="capture-model-line">{modelLine}</span>}
       <span className="capture-status" aria-live="polite">
         {state === 'sending' && 'Saving…'}
         {state === 'failed' && 'Not saved'}
@@ -67,14 +72,14 @@ export function CaptureBar({ page, placeholder = 'Capture… e.g. “Fri: submit
  * handled captures from this page follow, newest last.
  */
 export function CaptureReceipts({ page, workspace }: { page: Page; workspace: Workspace }) {
-  const waiting = workspace.captures.filter(c => c.status === 'needs_confirmation')
-  const recent = workspace.captures.filter(c => c.pageId === page.id && c.status !== 'needs_confirmation').slice(-2)
+  const waiting = workspace.captures.filter(c => c.status === 'needs_confirmation' || c.status === 'organizing')
+  const recent = workspace.captures.filter(c => c.pageId === page.id && c.status !== 'needs_confirmation' && c.status !== 'organizing').slice(-2)
   if (!waiting.length && !recent.length) return null
   return (
     <div id="captures" className="receipts">
-      {[...waiting, ...recent].map(c => (
-        <ReceiptCard key={c.id} capture={c} workspace={workspace} currentPageId={page.id} />
-      ))}
+      {[...waiting, ...recent].map(c => c.simulated
+        ? <ReceiptCard key={c.id} capture={c} workspace={workspace} currentPageId={page.id} />
+        : <ReceiptV2 key={c.id} capture={c} workspace={workspace} />)}
     </div>
   )
 }
@@ -91,10 +96,11 @@ const failureCopy: Record<NonNullable<Capture['failure']>, string> = {
   failure: 'Couldn’t organize — your text is safe',
   budget: 'Today’s AI budget is used up ($10). Your text is saved. You can retry once the budget resets.',
   context: 'Too much linked material to send in one go. Nothing was sent. Your text is kept.',
+  paused: "Model paused · a cost couldn't be confirmed · text saved",
 }
 
 function ReceiptCard({ capture, workspace, currentPageId }: { capture: Capture; workspace: Workspace; currentPageId: string }) {
-  const { run, submitCapture, simOutcome } = useWorkspace()
+  const { run, submitCapture, simOutcome, model } = useWorkspace()
   const [showOriginal, setShowOriginal] = useState(false)
   const proposals = capture.proposals ?? []
   const mixed = proposals.some(p => p.kind === 'update-task')
@@ -108,7 +114,7 @@ function ReceiptCard({ capture, workspace, currentPageId }: { capture: Capture; 
         <p className="receipt-source">
           {capture.status === 'applied' ? 'Saved from' : 'From'} “{capture.text.length > 60 ? `${capture.text.slice(0, 60)}…` : capture.text}”
         </p>
-        {capture.simulated && <span className="sim">Simulated</span>}
+        {capture.simulated && <span className="sim">{model.state === 'simulated' ? 'Simulated · no model key' : 'Simulated'}</span>}
       </header>
 
       {capture.status === 'needs_confirmation' && (
