@@ -102,21 +102,46 @@ export function ReceiptV2({ capture, workspace }: { capture: Capture; workspace:
   )
 }
 
+/**
+ * The date chip's menu for a task, an event or a waiting update (spec 4e8c2f1+): KIND OF DATE, DAY and, for an event,
+ * TIME; the current choice carries a check mark.
+ */
+function dateMenuGroups(item: ProposalItem, edit: (patch: Record<string, unknown>) => void, today: LocalDate, setTime: () => void) {
+  const days = [0, 1, 2, 3, 4, 5, 6, 7].map(n => addDays(today, n))
+  const withRole = item.kind === 'create-task' || item.kind === 'update-task'
+  const role = item.date ? item.dateRole ?? 'do' : null
+  const groups: { title?: string; items: MenuItem[] }[] = []
+  if (withRole) groups.push({ title: 'Kind of date', items: (['do', 'start', 'due'] as const).map(r => ({ label: roleWord[r], checked: role === r, onSelect: () => edit({ dateRole: r, ...(item.date ? {} : { date: today }) }) })) })
+  groups.push({ title: 'Day', items: [
+    ...(item.date && !days.includes(item.date) ? [{ label: dayLabel(item.date, today), checked: true, onSelect: () => undefined }] : []),
+    ...days.map(d => ({ label: dayLabel(d, today), checked: item.date === d, onSelect: () => edit({ date: d }) })),
+    ...(item.kind === 'create-task' ? [{ label: 'No date', checked: !item.date, onSelect: () => edit({ date: null }) }] : []),
+  ] })
+  // An invented time is cleared, or replaced, in one step; the day stays (Bumblebee d26b1d5c, Jazz spec TIME group).
+  if (item.kind === 'create-event') groups.push({ title: 'Time', items: [
+    ...(item.time ? [{ label: item.time, checked: true, onSelect: () => undefined }] : []),
+    { label: 'No time', checked: !item.time, onSelect: () => edit({ time: null }) },
+    { label: 'Set time…', onSelect: setTime },
+  ] })
+  return groups
+}
+
+function TimeInput({ value, onSave, onCancel }: { value: string | null; onSave: (t: string) => void; onCancel: () => void }) {
+  const [v, setV] = useState(value ?? '')
+  const done = (save: boolean) => { if (save && /^\d{2}:\d{2}$/.test(v) && v !== value) onSave(v); else onCancel() }
+  return <input type="time" className="date-chip time-input" autoFocus value={v} aria-label="Event time" onChange={e => setV(e.target.value)} onBlur={() => done(true)}
+    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); done(true) } else if (e.key === 'Escape') { e.preventDefault(); done(false) } }} />
+}
+
 type Send = (action: Parameters<ReturnType<typeof useWorkspace>['run']>[0], undoable?: boolean) => Promise<unknown>
 
 function ItemRow({ item, capture, send, held = false }: { item: ProposalItem; capture: Capture; send: Send; held?: boolean }) {
   const today = todayIso()
+  const [settingTime, setSettingTime] = useState(false)
   const edit = (patch: Record<string, unknown>) => void send({ type: 'edit-capture-item', captureId: capture.id, itemId: item.id, ...patch } as never, !held)
-  const typeMenu: MenuItem[] = (['create-task', 'create-event', 'add-note'] as const).filter(k => k !== item.kind).map(k => ({ label: typeLabel[k], onSelect: () => edit({ kind: k, ...(k === 'create-event' && !item.date ? {} : {}) }) }))
+  const typeMenu: MenuItem[] = (['create-task', 'create-event', 'add-note'] as const).filter(k => k !== item.kind).map(k => ({ label: typeLabel[k], onSelect: () => edit({ kind: k }) }))
   const changeable = item.kind === 'create-task' || item.kind === 'create-event' || item.kind === 'add-note'
   const dated = item.kind === 'create-task' || item.kind === 'create-event'
-  const days = [0, 1, 2, 3, 4, 5, 6, 7].map(n => addDays(today, n))
-  const dateMenu: { title?: string; items: MenuItem[] }[] = [
-    ...(item.kind === 'create-task' ? [{ title: 'Kind of date', items: (['do', 'start', 'due'] as const).map(r => ({ label: roleWord[r], onSelect: () => edit({ dateRole: r, ...(item.date ? {} : { date: today }) }) })) }] : []),
-    { title: 'Day', items: [...days.map(d => ({ label: dayLabel(d, today), onSelect: () => edit({ date: d }) })), ...(item.kind === 'create-task' ? [{ label: 'No date', onSelect: () => edit({ date: null }) }] : [])] },
-    // An invented time is cleared in one tap; the day stays (Bumblebee d26b1d5c, Lead 1501107b).
-    ...(item.kind === 'create-event' && item.time ? [{ items: [{ label: 'No time', onSelect: () => edit({ time: null }) }] }] : []),
-  ]
   const date = dateText(item, today)
   return (
     <li className={`receipt-row ${held ? 'held' : ''}`}>
@@ -126,9 +151,11 @@ function ItemRow({ item, capture, send, held = false }: { item: ProposalItem; ca
       <EditableTitle title={item.kind === 'create-material' ? item.note || item.title : item.title} editable={item.kind !== 'create-material'} onSave={title => edit({ title })} />
       <span className="receipt-chips">
         {item.flags?.map(f => <span key={f} className="reason-chip">{flagCopy[f]}</span>)}
-        {date && (dated
-          ? <RowMenu label={`Change date of ${item.title}`} groups={dateMenu} trigger={date} triggerClass={`date-chip chip-button ${item.date ? '' : 'no-date'}`} />
-          : <span className="date-chip">{date}</span>)}
+        {settingTime
+          ? <TimeInput value={item.time ?? null} onSave={time => { setSettingTime(false); edit({ time }) }} onCancel={() => setSettingTime(false)} />
+          : date && (dated
+            ? <RowMenu label={`Change date of ${item.title}`} groups={dateMenuGroups(item, edit, today, () => setSettingTime(true))} trigger={date} triggerClass={`date-chip chip-button ${item.date ? '' : 'no-date'}`} />
+            : <span className="date-chip">{date}</span>)}
       </span>
       {held
         ? <span className="row-actions">
@@ -147,20 +174,17 @@ function ItemRow({ item, capture, send, held = false }: { item: ProposalItem; ca
 
 function UpdateRow({ item, capture, send }: { item: ProposalItem; capture: Capture; send: Send }) {
   const today = todayIso()
-  // A dated update defaults to Do; the role and the day are one tap to fix before Apply (Bumblebee d26b1d5c).
+  // A date-moving update shows its target as the same date chip as a task; role and day are one tap to fix before
+  // Apply (Bumblebee d26b1d5c, spec). "→ done" has no chip.
   const edit = (patch: Record<string, unknown>) => void send({ type: 'edit-capture-item', captureId: capture.id, itemId: item.id, ...patch } as never, false)
-  const role = item.dateRole ?? 'do'
-  const days = [0, 1, 2, 3, 4, 5, 6, 7].map(n => addDays(today, n))
-  const roleMenu: MenuItem[] = (['do', 'start', 'due'] as const).map(r => ({ label: roleWord[r], onSelect: () => edit({ dateRole: r }) }))
-  const dayMenu: MenuItem[] = days.map(d => ({ label: dayLabel(d, today), onSelect: () => edit({ date: d }) }))
+  const moves = item.status !== 'done' && !!item.date
   return (
     <li className="receipt-row update">
       <span className="app-chip update-chip">Update</span>
-      <span className="receipt-title">{item.title} → {item.status === 'done' ? 'done' : item.date ? '' : 'change'}</span>
-      {item.status !== 'done' && item.date && (
+      <span className="receipt-title">{item.title} → {item.status === 'done' ? 'done' : moves ? '' : 'change'}</span>
+      {moves && (
         <span className="receipt-chips">
-          <RowMenu label={`Change kind of date for ${item.title}`} groups={[{ title: 'Kind of date', items: roleMenu }]} trigger={roleWord[role]} triggerClass="date-chip chip-button" />
-          <RowMenu label={`Change date of ${item.title}`} groups={[{ title: 'Day', items: dayMenu }]} trigger={dayLabel(item.date, today)} triggerClass="date-chip chip-button" />
+          <RowMenu label={`Change date of ${item.title}`} groups={dateMenuGroups(item, edit, today, () => undefined)} trigger={dateText(item, today)} triggerClass="date-chip chip-button" />
         </span>
       )}
       <span className="row-actions">

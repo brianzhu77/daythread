@@ -393,6 +393,8 @@ textarea.task-title:focus { outline: none; }
 .menu-title { font-size: .7rem; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .07em; padding: 6px 10px 2px; }
 .app-menu button { width: 100%; justify-content: flex-start; font-weight: 400; border-radius: 8px; min-height: 38px; }
 .app-menu button:hover { background: var(--app-surface); }
+.app-menu button.checked::after { content: '✓'; margin-left: auto; padding-left: 12px; color: var(--app-accent); }
+.time-input { min-height: 32px; font: inherit; }
 
 /* ---------- Capture ---------- */
 .capture-bar {
@@ -902,4 +904,6 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
   /* Chips keep their small look; the 44px tap area is an invisible halo. */
   .receipt-v2 button.chip-button { position: relative; }
   .receipt-v2 button.chip-button::after { content: ''; position: absolute; inset: -10px -4px; }
+  /* Chips sit at the start of the row on the phone, so their menus open to the right instead of off the screen. */
+  .receipt-v2 .row-menu:has(> .chip-button) > .app-menu { left: 0; right: auto; }
 }

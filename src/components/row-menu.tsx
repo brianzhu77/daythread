@@ -4,6 +4,8 @@ export interface MenuItem {
   label: string
   onSelect: () => void
   danger?: boolean
+  /** Set for a choice among options (role, day, time): the current one carries a check mark. */
+  checked?: boolean
 }
 
 /**
@@ -51,8 +53,9 @@ export function RowMenu({ label, groups, trigger, triggerClass = 'icon' }: { lab
                 <button
                   key={item.label}
                   type="button"
-                  role="menuitem"
-                  className={item.danger ? 'danger' : undefined}
+                  role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
+                  aria-checked={item.checked}
+                  className={[item.danger && 'danger', item.checked && 'checked'].filter(Boolean).join(' ') || undefined}
                   onClick={() => {
                     setOpen(false)
                     item.onSelect()
