@@ -25,6 +25,8 @@ Mock: `prototypes/pages-trash/index.html` (`?only=t1|t2|t3|t4|p1|p2|p3`). Static
 - **Cards that point at a trashed page** stay in the text (deleting a page never edits other pages). They render
   muted (`--ink-3` title and icon) with a small outlined **"In trash"** tag before the ›; tapping opens the trashed
   page (§4).
+- **Tags** (Bumblebee): lines in a trashed page leave every tag page and the Tags list counts, like every other list.
+  A tag used only there drops off the Tags list until restore. Restoring brings the lines and counts back.
 - **Linked from** on other pages: an entry whose source page is in trash reads "{title} (removed)" in `--ink-3`,
   not tappable (N-5, already specced).
 - **Tasks** inside a trashed page keep their state and stay on Tasks, Calendar and Upcoming (N-7, 04 P07). Where a
@@ -79,6 +81,6 @@ Mock: `prototypes/pages-trash/index.html` (`?only=t1|t2|t3|t4|p1|p2|p3`). Static
 5. Restore from the Trash row → back under the old parent; notice + Open.
 6. Delete child, then parent separately; restore the child alone → top level, notice names the parent.
 7. A task inside a trashed page still shows on Tasks; its source reads "(removed)".
-8. Brian's real data copy: delete 韩国大酱汤 (under Sun, Oct 18), see "In your days" drop it, restore → back under
+8. Brian's real data copy: delete 韩国大酱汤 (under Sun, Oct 18), see "In your days" drop it and #recipe no longer list its lines (the tag disappears if it has no other uses), restore → back under
    Sun, Oct 18. 390 and 1280.
 9. Daily pages: no Delete anywhere.
