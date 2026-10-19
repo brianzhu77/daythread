@@ -7,7 +7,11 @@
 //                                    titled saved link · invented time · lost date · dated update with no role
 //                                    (capture "Tax Return" first so that open task exists) · one item the server rejects
 //   "http401: …"                     key rejected (401) → "Model key rejected · text saved"
-//   "http500: …"                     any other provider error (500, no usage) → "Model unavailable · text saved"; the charge is unknown, so the model pauses
+//   "http500: …"                     provider error with no usage (500) → the charge is unknown, so the model pauses:
+//                                    "Model paused · a charge needs checking · text saved"
+//   "error-cost: …"                  provider error that reports its cost (500 + generation id + usage.cost) →
+//                                    "Model unavailable · text saved", cost settled, the model is not paused
+//   "malformed: …"                   every item has a field of the wrong type → "Model unavailable · text saved", cost settled
 //   Budget used up: start the app with DAYTHREAD_MODEL_CAP_USD=0.0003 (may only lower the $10 cap); after one
 //                                    capture the next one finds the day's budget used up
 //   "slow: …"                        answers after 20 s, to see "Organizing…"
@@ -38,6 +42,8 @@ createServer(async (req, res) => {
   if (text.startsWith('timeout:')) return
   if (text.startsWith('http401:')) return send(401, { error: { message: 'bad key' } })
   if (text.startsWith('http500:')) return send(500, { error: { message: 'provider error' } })
+  if (text.startsWith('error-cost:')) return send(500, { id: `gen-${Date.now()}`, error: { message: 'upstream failed after generation' }, usage: { cost: 0.0002 } })
+  if (text.startsWith('malformed:')) return send(200, { id: `gen-${Date.now()}`, choices: [{ message: { content: JSON.stringify({ items: [flat({ title: 23 })] }) }, finish_reason: 'stop' }], usage: { cost: 0.0002 } })
   if (text.startsWith('slow:')) await new Promise(r => setTimeout(r, 20_000))
   const taxReturn = system.match(/id=(\S+) · "Tax Return"/)?.[1]
   const items = text === FIXTURE_TEXT ? fixture(taxReturn) : [{ kind: 'task', title: text.replace(/^slow:\s*/, '') }]
