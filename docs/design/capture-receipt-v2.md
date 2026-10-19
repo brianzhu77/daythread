@@ -51,6 +51,7 @@ This follows Bumblebee's grounding check (b842c6d3, abee294e). Ratchet's caution
 | Budget used up | **"Today's model budget is used up · text saved"** in `--warn` text, no Retry until tomorrow | no line |
 
 - His text is always the first thing on the receipt, in every state, so "saved" is visible before anything else.
+- **Retry** reads dates from the time he submitted the text, not when he taps Retry: "明天" written at 23:50 still means the next day after a Retry at 00:10 (Bumblebee/Ratchet, captured_at, b842c6d3 dc6d25f7).
 - No red: none of these lose data. Red stays for "Not created" style failures that need an action to avoid losing something.
 - The morning card uses the same header tag for proposals in the same states.
 
