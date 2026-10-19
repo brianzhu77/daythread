@@ -1,0 +1,31 @@
+(node:42880) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS real HTTP stalled body bounded 83
+PASS invalid values refused and zero accepted over actual HTTP
+PASS actual new server-process startup settles only ledger {
+  state: 'paused',
+  model: 'fake/model',
+  mode: 'auto',
+  costUnknown: [ 'start' ]
+}
+{ state: 'ready', model: 'fake/model', mode: 'auto', costUnknown: [] }
+PASS five concurrent real HTTP lookups settle once and later cost cannot overwrite
+PASS estimated never queried
+PASS over-reservation remains paused and workspace unchanged
+requests [
+  '/generation?id=bodyhang',
+  '/generation?id=invalid',
+  '/generation?id=invalid',
+  '/generation?id=invalid',
+  '/generation?id=invalid',
+  '/generation?id=invalid',
+  '/generation?id=zero',
+  '/generation?id=gen-start',
+  '/generation?id=gen-parallel',
+  '/generation?id=gen-parallel',
+  '/generation?id=gen-parallel',
+  '/generation?id=gen-parallel',
+  '/generation?id=gen-parallel',
+  '/generation?id=gen-over'
+]
