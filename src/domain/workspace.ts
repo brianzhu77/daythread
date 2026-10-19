@@ -495,7 +495,9 @@ function applyProposal(state: Workspace, c: Capture, p: Page, proposal: Proposal
         attentionOn: role === "start" ? proposal.date : null,
       });
       if (role === "do" && proposal.date) place(state, t, proposal.date);
-      appendBlock(p, ensureSection(p, "notes"), { id: newId(), kind: "task", taskId: t.id, text: t.title });
+      const blockId = newId();
+      appendBlock(p, ensureSection(p, "notes"), { id: blockId, kind: "task", taskId: t.id, text: t.title });
+      proposal.blockId = blockId;
       c.taskId ??= t.id;
       proposal.entityId = t.id;
       proposal.appliedVersion = t.version;
@@ -538,9 +540,79 @@ function applyProposal(state: Workspace, c: Capture, p: Page, proposal: Proposal
     }
   }
   proposal.state = "applied";
+  proposal.appliedSnapshot = appliedSnapshot(state, proposal);
+}
+/**
+ * What a saved item looks like right now, where it sits included (page, section, block): compared with the copy taken
+ * when this capture saved it, so an edit, a delete or a move made anywhere else blocks Undo all (Ratchet #70, Lead
+ * 2d21e087). Tasks and updates also check the task version.
+ */
+function appliedSnapshot(state: Workspace, proposal: ProposalItem): string {
+  const blocks = (match: (b: NoteBlock) => boolean) =>
+    state.pages.flatMap((pg) => pg.sections.flatMap((s) => s.blocks.filter(match).map((b) => [pg.id, s.id, b])));
+  switch (proposal.kind) {
+    case "create-task":
+      return JSON.stringify(blocks((b) => b.id === proposal.blockId));
+    case "create-event": {
+      const e = state.events.find((x) => x.id === proposal.entityId);
+      return JSON.stringify([e ?? null, blocks((b) => b.eventId === proposal.entityId)]);
+    }
+    case "add-note":
+      return JSON.stringify(blocks((b) => b.id === proposal.entityId));
+    case "create-material": {
+      const m = state.materials.find((x) => x.id === proposal.entityId);
+      return JSON.stringify([m ? { url: m.url, title: m.title, reviewState: m.reviewState, decisions: m.decisions ?? [] } : null, blocks((b) => b.id === proposal.blockId)]);
+    }
+    case "update-task":
+      return "";
+  }
+}
+/** Refuses when something this capture saved has been changed, deleted or moved since, anywhere. */
+function assertUnchangedSince(state: Workspace, proposal: ProposalItem): void {
+  if (proposal.kind === "create-task" || proposal.kind === "update-task") {
+    const t = state.tasks.find((x) => x.id === proposal.entityId);
+    if (!t || t.version !== proposal.appliedVersion) throw new DomainError("Can't undo · edited since");
+  }
+  if (proposal.appliedSnapshot !== undefined && appliedSnapshot(state, proposal) !== proposal.appliedSnapshot) throw new DomainError("Can't undo · edited since");
+}
+/**
+ * A field edit on a saved task, event or note changes it where it is: same id, same rows, same place (Ratchet #70).
+ * Only a type change replaces it. The item must be unchanged since it was saved.
+ */
+function editAppliedInPlace(state: Workspace, item: ProposalItem): void {
+  const blocksOf = (match: (b: NoteBlock) => boolean) => state.pages.flatMap((pg) => pg.sections.flatMap((s) => s.blocks.filter(match)));
+  switch (item.kind) {
+    case "create-task": {
+      const t = task(state, item.entityId!);
+      t.title = item.title;
+      for (const b of blocksOf((b) => b.kind === "task" && b.taskId === t.id)) b.text = t.title;
+      // The task is as this capture left it, so its dates can be set afresh from the item.
+      const role = item.date ? item.dateRole ?? "do" : null;
+      state.placements = state.placements.filter((x) => x.taskId !== t.id);
+      for (const pg of state.pages) for (const s of pg.sections)
+        if (s.kind === "top3" || s.kind === "other") s.blocks = s.blocks.filter((b) => !(b.kind === "task" && b.taskId === t.id));
+      Object.assign(t, { plannedOn: null, lastPlannedOn: null, deadlineOn: role === "due" ? item.date : null, attentionOn: role === "start" ? item.date : null });
+      if (role === "do" && item.date) place(state, t, item.date);
+      t.version++;
+      item.appliedVersion = t.version;
+      break;
+    }
+    case "create-event": {
+      if (!item.date) throw new DomainError("An event needs a date");
+      const e = requireValue(state.events.find((x) => x.id === item.entityId), "Event");
+      Object.assign(e, { title: text(item.title, 1000), date: date(item.date), time: item.time ?? null });
+      for (const b of blocksOf((b) => b.eventId === e.id)) b.text = e.title;
+      break;
+    }
+    case "add-note":
+      for (const b of blocksOf((b) => b.id === item.entityId)) b.text = text(item.title);
+      break;
+  }
+  item.appliedSnapshot = appliedSnapshot(state, item);
 }
 /** Receipt v2: takes back one item this capture saved, only if nothing has changed it since ("Can't undo · edited since"). */
 function removeApplied(state: Workspace, proposal: ProposalItem): void {
+  assertUnchangedSince(state, proposal);
   const id = proposal.entityId;
   const dropBlocks = (match: (b: NoteBlock) => boolean) => { for (const pg of state.pages) for (const s of pg.sections) s.blocks = s.blocks.filter((b) => !match(b)); };
   switch (proposal.kind) {
@@ -554,8 +626,6 @@ function removeApplied(state: Workspace, proposal: ProposalItem): void {
       break;
     }
     case "create-event": {
-      const e = state.events.find((x) => x.id === id);
-      if (e && e.title !== proposal.title) throw new DomainError("Can't undo · edited since");
       state.events = state.events.filter((x) => x.id !== id);
       dropBlocks((b) => b.eventId === id);
       break;
@@ -1159,15 +1229,18 @@ function execute(
       }
       const p = page(state, c.pageId);
       const wasApplied = item.state === "applied";
-      // A saved item is changed by replacing it (same item id, same capture), so the receipt row stays one row.
-      if (wasApplied && item.kind !== "update-task") removeApplied(state, item);
+      // A saved item is changed where it is; only a type change (or a link) replaces it, and the receipt row stays one row.
+      const inPlace = wasApplied && (!action.kind || action.kind === item.kind) && (item.kind === "create-task" || item.kind === "create-event" || item.kind === "add-note");
+      if (wasApplied && item.kind !== "update-task") assertUnchangedSince(state, item);
+      if (wasApplied && !inPlace && item.kind !== "update-task") removeApplied(state, item);
       if (action.title !== undefined) { item.title = text(action.title, 1000).trim(); item.flags = item.flags?.filter((f) => f !== "title-not-grounded"); }
       if (action.kind) item.kind = action.kind;
       if (action.date !== undefined) { if (action.date) date(action.date); item.date = action.date; item.flags = item.flags?.filter((f) => f !== "date-missing" && f !== "date-role-missing"); }
       if (action.dateRole) { item.dateRole = action.dateRole; item.flags = item.flags?.filter((f) => f !== "date-role-missing"); }
       if (action.time !== undefined) { item.time = action.time; item.flags = item.flags?.filter((f) => f !== "time-not-in-text"); }
       if (item.kind !== "create-event") { item.time = null; item.partOfDay = null; }
-      if (wasApplied && item.kind !== "update-task") applyProposal(state, c, p, item);
+      if (inPlace) editAppliedInPlace(state, item);
+      else if (wasApplied && item.kind !== "update-task") applyProposal(state, c, p, item);
       c.proposalRevision++;
       return { message: wasApplied ? "Changed" : "Edited · still waiting", entityId: item.id };
     }

@@ -144,7 +144,9 @@ export interface ProposalItem {
   entityId?: string;
   /** For a created task: its version right after the capture saved it, so Remove / Undo all can tell "edited since". */
   appliedVersion?: number;
-  /** For a saved link: the line this capture added (its source). */
+  /** What this capture left behind (content and place), so Undo all can tell "edited since" (Ratchet #70). */
+  appliedSnapshot?: string;
+  /** For a saved task or link: the line this capture added. */
   blockId?: string;
   /** For an applied update: what the task was before, so Remove / Undo all can put it back if nothing changed since. */
   before?: { status: Task["status"]; plannedOn: LocalDate | null; deadlineOn: LocalDate | null; attentionOn: LocalDate | null; placements: Placement[] };

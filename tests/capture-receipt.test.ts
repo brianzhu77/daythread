@@ -22,9 +22,61 @@ test('a saved task shows and keeps its date; editing its date changes the same t
   const edit = { operationId: 'edit', expectedRevision: start.revision, action: { type: 'edit-capture-item' as const, captureId, itemId: id, date: '2026-10-22' } }
   const ws = applyCommand(start, edit).workspace
   assert.equal(ws.tasks.length, 1); assert.equal(ws.tasks[0]!.plannedOn, '2026-10-22')
+  // Same task, updated where it is (Ratchet #70): its id, its one row on the page, its version moves on.
+  assert.equal(ws.tasks[0]!.id, start.tasks[0]!.id); assert.ok(ws.tasks[0]!.version > start.tasks[0]!.version)
+  assert.equal(ws.pages[0]!.sections.flatMap(s => s.blocks).filter(b => b.taskId === ws.tasks[0]!.id && b.kind === 'task').length, 1)
+  assert.deepEqual(ws.placements.filter(x => x.taskId === ws.tasks[0]!.id).map(x => x.date), ['2026-10-22'])
   assert.equal(item(ws, 'Book flights').id, id); assert.equal(item(ws, 'Book flights').state, 'applied')
   const undone = run(ws, { type: 'undo', targetOperationId: 'edit' })
   assert.equal(undone.tasks[0]!.plannedOn, '2026-10-20')
+})
+
+test('editing a saved task\'s title or role, an event or a note keeps its identity; Undo all still works after', () => {
+  const { ws: start, captureId, item } = organized([
+    p({ kind: 'create-task', title: 'Call dentist', date: '2026-10-20', dateRole: 'do' }),
+    p({ kind: 'create-event', title: 'Lunch with Kevin', date: '2026-10-20', time: '12:30' }),
+    p({ kind: 'add-note', title: 'A note' }),
+  ])
+  const [taskId, eventId] = [start.tasks[0]!.id, start.events[0]!.id]
+  let ws = run(start, { type: 'edit-capture-item', captureId, itemId: item(start, 'Call dentist').id, title: 'Call the dentist', dateRole: 'due' })
+  ws = run(ws, { type: 'edit-capture-item', captureId, itemId: item(ws, 'Lunch with Kevin').id, time: '13:00' })
+  ws = run(ws, { type: 'edit-capture-item', captureId, itemId: item(ws, 'A note').id, title: 'A longer note' })
+  const t = ws.tasks[0]!
+  assert.equal(t.id, taskId); assert.equal(t.title, 'Call the dentist'); assert.equal(t.deadlineOn, '2026-10-20'); assert.equal(t.plannedOn, null)
+  assert.equal(ws.placements.filter(x => x.taskId === taskId).length, 0)
+  assert.equal(ws.events[0]!.id, eventId); assert.equal(ws.events[0]!.time, '13:00')
+  const blocks = ws.pages[0]!.sections.flatMap(s => s.blocks)
+  assert.equal(blocks.find(b => b.taskId === taskId)!.text, 'Call the dentist'); assert.ok(blocks.some(b => b.text === 'A longer note'))
+  const all = run(ws, { type: 'undo-capture', captureId })
+  assert.equal(all.tasks.length, 0); assert.equal(all.events.length, 0)
+})
+
+test('Undo all is refused whole when a saved note was edited, deleted or moved elsewhere; nothing is removed', () => {
+  const { ws: start, captureId } = organized([
+    p({ kind: 'create-task', title: 'Book flights', date: '2026-10-20', dateRole: 'do' }),
+    p({ kind: 'add-note', title: 'A note' }),
+  ])
+  const note = start.pages[0]!.sections.flatMap(s => s.blocks).find(b => b.text === 'A note')!
+  const edited = run(start, { type: 'edit-block', pageId: start.pages[0]!.id, blockId: note.id, text: 'A note with my own words' })
+  // Delete and move as the editor would leave them.
+  const deleted = structuredClone(start); for (const s of deleted.pages[0]!.sections) s.blocks = s.blocks.filter(b => b.id !== note.id)
+  const moved = structuredClone(start); const from = moved.pages[0]!.sections.find(s => s.blocks.some(b => b.id === note.id))!
+  const to = moved.pages[0]!.sections.find(s => s !== from)!; to.blocks.push(from.blocks.find(b => b.id === note.id)!); from.blocks = from.blocks.filter(b => b.id !== note.id)
+  for (const ws of [edited, deleted, moved]) {
+    assert.throws(() => run(ws, { type: 'undo-capture', captureId }), /Can't undo · edited since/)
+    assert.equal(ws.tasks.length, 1)
+  }
+  assert.ok(edited.pages[0]!.sections.flatMap(s => s.blocks).some(b => b.text === 'A note with my own words'))
+})
+
+test('Undo all is refused when a saved event changed elsewhere, or the task row was deleted', () => {
+  const { ws: start, captureId } = organized([
+    p({ kind: 'create-task', title: 'Book flights', date: '2026-10-20', dateRole: 'do' }),
+    p({ kind: 'create-event', title: 'Lunch with Kevin', date: '2026-10-20', time: '12:30' }),
+  ])
+  const eventMoved = structuredClone(start); eventMoved.events[0]!.date = '2026-10-21'
+  const rowDeleted = structuredClone(start); for (const s of rowDeleted.pages[0]!.sections) s.blocks = s.blocks.filter(b => !(b.kind === 'task' && b.taskId === start.tasks[0]!.id))
+  for (const ws of [eventMoved, rowDeleted]) assert.throws(() => run(ws, { type: 'undo-capture', captureId }), /edited since/)
 })
 
 test('changing a saved item\'s type (task → event) replaces it: one row, no task left behind', () => {
