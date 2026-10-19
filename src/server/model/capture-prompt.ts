@@ -46,11 +46,11 @@ type FlatItem = { kind: CaptureItem['kind']; title: string | null; text: string 
 export function captureItems(answer: { items: FlatItem[] }): CaptureItem[] {
   return answer.items.flatMap((i): CaptureItem[] => {
     switch (i.kind) {
-      case 'task': return i.title ? [{ kind: 'task', title: i.title, date: i.date, dateRole: i.date ? i.dateRole : null, detail: i.detail }] : []
+      case 'task': return i.title ? [{ kind: 'task', title: i.title, date: i.date, dateRole: i.dateRole, detail: i.detail }] : []
       case 'event': return i.title ? [{ kind: 'event', title: i.title, date: i.date, time: i.time, partOfDay: i.partOfDay }] : []
       case 'note': return i.text ?? i.title ? [{ kind: 'note', text: (i.text ?? i.title)! }] : []
       case 'material': return i.url ? [{ kind: 'material', url: i.url, note: i.note, followUpDate: i.followUpDate }] : []
-      case 'update': return i.taskId ? [{ kind: 'update', taskId: i.taskId, markDone: !!i.markDone, newDate: i.newDate, dateRole: i.newDate ? i.dateRole : null, detail: i.detail }] : []
+      case 'update': return i.taskId ? [{ kind: 'update', taskId: i.taskId, markDone: !!i.markDone, newDate: i.newDate, dateRole: i.dateRole, detail: i.detail }] : []
       default: return []
     }
   })

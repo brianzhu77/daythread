@@ -25,6 +25,9 @@ export function groundItem(item: CaptureItem, inputText: string, openTasks: { id
   const timeIn = (t: string) => inputText.includes(t) || inputText.includes(t.replace(/^0/, ''))
   const dated = item.kind === 'task' || item.kind === 'event' ? item.date : item.kind === 'update' ? item.newDate ?? (item.markDone ? 'done' : null) : 'n/a'
   if (dated === null && hasDateWord(inputText)) reasons.push('date missing')
+  // Lead 6ea38307: a date without a valid do/due role is held as "Date unclear" (check the kind of date, not add one).
+  const roleOf = item.kind === 'task' ? [item.date, item.dateRole] : item.kind === 'update' ? [item.newDate, item.dateRole] : null
+  if (roleOf && roleOf[0] && roleOf[1] !== 'do' && roleOf[1] !== 'due') reasons.push('date unclear')
   switch (item.kind) {
     case 'task':
       if (!shares(item.title, input)) reasons.push('title not from your text')
