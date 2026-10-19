@@ -76,11 +76,30 @@ only).
 
 **Migration 4 on re-upgrade (code, in the initialization transaction):**
 1. Add the columns.
-2. If `held_trash_l4` exists: refuse, keeping the database as is, when any held id exists again as a page.
+2. If `held_trash_l4` exists and a held id exists again as a page, see "Id clash" below.
 3. Otherwise put the held rows back after the existing positions, in their own order. Same parent and batch; the
    position doesn't matter, because a restore puts the page last among its siblings anyway (below).
 4. Drop the table.
 5. Running it a second time finds no held table and only adds nothing.
+
+**Today's build with held pages (Lead `e7ab12dc` points 3–5)**, built app on a downgraded copy of Brian's database
+(`tests/evidence/a4-plan/old-build-setup.ts`, `old-build-screens.mjs`, `reupgrade.ts`):
+
+| Lead point | Seen | Verdict |
+| --- | --- | --- |
+| 3. A card on Oct 18 pointing at the held 佛卡夏披萨 | No crash, but it reads **"Untitled · Not created · Retry"**: today's build takes any card to a missing page for a `/page` whose create failed. **Retry would create a new empty page with the held id**, under Oct 18. | **Fails "doesn't create a page".** Can't be prevented without changing today's build or the card, both ruled out. Handled at re-upgrade (below). |
+| 4. A task written in the held page | Listed under Open; ticking it marks it done; no error | Passes |
+| 5. A subpage restored alone, parent held | Shows at top level in Pages; after re-upgrade the parent is back in the trash (batch `op1`) and the subpage stays live at top level | Passes |
+
+**Id clash (from point 3).** If Brian taps Retry while the old build runs, a live page and a held row share an id at
+re-upgrade. Two options:
+- **Refuse** (the earlier rule): the upgrade stops and the old build keeps running until someone fixes the database
+  by hand. Nothing is lost, but the app can't be upgraded.
+- **Recommended: keep both.** The live page keeps the id, because the card and anything he wrote point to it. The
+  held row goes back to the trash under a **new id**, with its batch, parent and content. Held pages that were its
+  children in the same batch get their `parentId` changed to the new id. The migration logs the old and new ids.
+  Nothing is lost, and nothing is chosen silently: both copies stay, one live and one in the trash, where he can
+  see and restore it.
 
 **Tried on a copy of Brian's database** (`tests/evidence/a4-plan/rollback-roundtrip.ts`, raw SQL for the script
 and the migration):
@@ -113,7 +132,10 @@ id appearing again (refusal); the backup.
      unchanged;
    - a new Undo works after the cleared one;
    - running the migration and the script twice;
-   - a held id appearing again → migration refused, database kept;
+   - Retry on a card to a held page in today's build, then re-upgrade → per the clash rule chosen above;
+   - a task written in a held page still shows and can be ticked in today's build;
+   - a subpage restored alone, parent held → top level in today's build; after re-upgrade the parent is back in the
+     trash and the subpage stays;
    - a failed backup → script stops with nothing changed.
 4. On a copy of Brian's data: delete 韩国大酱汤, and #recipe no longer lists it; restore puts it back under Sun, Oct 18,
    with its card and tag.
