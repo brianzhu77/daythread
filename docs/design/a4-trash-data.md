@@ -34,7 +34,7 @@
   Pages restored earlier stay where they are now and aren't duplicated.
 - **Where a restored page goes:** every restored page whose parent isn't coming back with it goes under its old
   `parentId` if that page is live, otherwise to top level. Its place among siblings isn't promised until B14 (Jazz
-  f6316c0): a normal restore leaves the row where it is in the stored order; after a rollback re-upgrade it's last. A day parent is always live, so 韩国大酱汤 goes back
+  2956eea): a normal restore leaves the row where it is in the stored order; after a rollback re-upgrade it's last. A day parent is always live, so 韩国大酱汤 goes back
   under Sun, Oct 18.
 - **What never changes:** tasks, placements, events, materials, references and the cost ledger.
 
