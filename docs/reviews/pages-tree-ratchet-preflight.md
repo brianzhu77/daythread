@@ -41,3 +41,8 @@ When a candidate exists, check migration count/schema diff, write moved hierarch
 6. Move Undo restores breadcrumb, expanded selected tree location, and old/new Subpages lists. Phone sheet and desktop dialog preserve the open page.
 
 These extend the planned implementation checks; static design is not runtime evidence. Trash display is future scope; do not invent trash support to satisfy the mock.
+
+## Sidebar creation and day-label checks (Lead35eeca5b)
+
+- Sidebar row “+” creates a child with that row's pageId as parentId, appends to its Subpages, and does **not** insert a card in the parent's body. ParentId alone must not create a Linked from record. Contrast body `/page`: it creates the child and the actual reference card. Verify Undo and duplicate-operation behavior in both entry paths.
+- “Today” is a render-time exception (N-5 b83f9a9), never persisted as a source title/date. Advance the test date across Vancouver midnight: the same source chip becomes its date; reference/source IDs remain unchanged.
