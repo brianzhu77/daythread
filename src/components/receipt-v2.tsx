@@ -58,7 +58,7 @@ export function ReceiptV2({ capture, workspace }: { capture: Capture; workspace:
       {capture.status === 'failed' && (
         <div className="model-state" role="status">
           <p className="warn-text">{capture.error ?? 'Model unavailable · text saved'}</p>
-          {capture.failure !== 'budget' && capture.failure !== 'paused' && <button type="button" className="secondary" onClick={() => void retryCapture(capture.id)}>Retry</button>}
+          {capture.failure !== 'budget' && capture.failure !== 'paused' && model.state !== 'paused' && <button type="button" className="secondary" onClick={() => void retryCapture(capture.id)}>Retry</button>}
         </div>
       )}
 
