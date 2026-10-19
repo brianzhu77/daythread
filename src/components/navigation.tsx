@@ -38,8 +38,10 @@ export function Navigation() {
         </Link>
         <nav className="sidebar-nav" aria-label="Main">
           {destinations.map(({ to, label, Icon, match }) => (
-            // An open page is highlighted in the tree, so the sidebar's Pages row is only current on the list itself.
-            <Link key={to} to={to} className="side-row" aria-current={match(path, today) && !(to === '/pages' && openPageId) ? 'page' : undefined}>
+            // An open page is highlighted in the tree, so the sidebar's Pages row is only current on the list itself;
+            // the Link's own active state has to compare the search too, or it marks the row current anyway.
+            <Link key={to} to={to} className="side-row" activeOptions={to === '/pages' ? { exact: true, includeSearch: true } : undefined}
+              aria-current={match(path, today) && !(to === '/pages' && openPageId) ? 'page' : undefined}>
               <Icon />
               {label}
             </Link>

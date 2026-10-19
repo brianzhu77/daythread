@@ -218,6 +218,13 @@ test('a page moved under a future day stays in the sidebar Days, before today, w
   assert.deepEqual(ids(pageAncestors(ws, 'C')), [future], 'the sidebar expands this chain when C is open')
   // An empty future day that is open itself is listed while it's open.
   assert.deepEqual(listed(dayId(ws, '2026-10-25'))[0], ['2026-10-25', '2026-10-22', '2026-10-19'])
+  // A page two levels under the future day: the day is in its breadcrumb chain, which the sidebar expands.
+  ws = ok(ws, { type: 'move-page', pageId: 'C', parentId: 'B' })
+  ws = ok(ws, { type: 'move-page', pageId: 'B', parentId: future })
+  assert.deepEqual(ids(pageAncestors(ws, 'C')), [future, 'B'])
+  assert.deepEqual(listed('C')[0], ['2026-10-22', '2026-10-19'])
+  ws = ok(ws, { type: 'move-page', pageId: 'B', parentId: 'A' })
+  ws = ok(ws, { type: 'move-page', pageId: 'C', parentId: future })
   // A past day whose only content is a subpage is listed too.
   ws = ok(ws, { type: 'ensure-day', date: '2026-10-12' })
   ws = ok(ws, { type: 'create-document', title: 'Only child', body: '', pageId: 'only', parentId: dayId(ws, '2026-10-12') })
