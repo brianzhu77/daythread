@@ -30,3 +30,14 @@ Confirmed by source and executed baseline fixture: parentId already exists in la
 Therefore **if** Step B only adds commands/queries/UI and reuses parentId plus existing pages ordering, no schema downgrade script is expected to roll back to cd3c494. Old UI may flatten/hide tree controls, but must preserve the hierarchy on load and subsequent save. Lead81ce1b0a explicitly disallows a siblingOrder field in this slice; any new mapped fields or migration must be raised and invalidate this assumption.
 
 When a candidate exists, check migration count/schema diff, write moved hierarchy using it, open that same temporary DB with cd3c494, perform a legitimate old-version edit, reopen with candidate and verify hierarchy, references, undo snapshot and ledger. A baseline-only fixture cannot prove future candidate rollback. No production data was read or changed.
+
+## Accepted layout checks (Jazz cfc7b92 §7)
+
+1. Open a page three levels deep through Linked from: desktop tree expands ancestors and selects that page.
+2. At390, long Chinese breadcrumb chain stays one line; middle “…” reveals all hidden ancestors with usable navigation. Parent crumb may jump to its child card when present; other ancestors open at top.
+3. Parent is filtered from Linked from consistently; after Move, old parent with a remaining card appears. More than3 entries expands through “N more”; no entries means no empty heading.
+4. Daily Subpages exists when it has a child and disappears after its last child moves away; 140px editor padding sits below the list.
+5. Move list omits self/descendants; current parent is disabled as Current. Top-level and day destinations remain available. If a target becomes invalid meanwhile, inline refusal retains the dialog and data; real storage failure retains the standard save-failure recovery.
+6. Move Undo restores breadcrumb, expanded selected tree location, and old/new Subpages lists. Phone sheet and desktop dialog preserve the open page.
+
+These extend the planned implementation checks; static design is not runtime evidence. Trash display is future scope; do not invent trash support to satisfy the mock.
