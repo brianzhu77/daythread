@@ -11,7 +11,7 @@ Spec: `docs/design/capture-receipt-v2.md` at 76774f7. I check on my own copy of 
 6. an update to an existing task with a new date and no role (→ shows "Do …", waits for Apply),
 7. one item the server rejects (→ "1 part wasn't saved as an item").
 
-Plus the five status states: no key, key rejected, other model error, budget used up, and Organizing… while waiting.
+Plus the six status states: no key, key rejected, other model error with a cost, paused on an unknown charge, budget used up, and Organizing… while waiting.
 
 ## Layout
 
@@ -50,7 +50,8 @@ Plus the five status states: no key, key rejected, other model error, budget use
 - [ ] Organizing…: grey tag with a 14 px spinner, and the capture field is free again at once.
 - [ ] No key: grey "Simulated · no model key", plus the same muted line under the capture field.
 - [ ] Key rejected (401/403): "Model key rejected · text saved" in `--warn`, with Retry, plus the muted line under the capture field.
-- [ ] Other model error: "Model unavailable · text saved" in `--warn`, with Retry.
+- [ ] Other model error **with a reported cost**: "Model unavailable · text saved" in `--warn`, with Retry. (The fake `http500:` has no cost, so it now leads to the paused state below; the fixture needs an error that reports a cost.)
+- [ ] Paused: the capture whose cost is unknown shows "Cost unknown"; the next capture shows "Model paused · a charge needs checking · text saved" in `--warn` with no Retry, and the muted line stays under the field until the charge is settled.
 - [ ] Retry after midnight on a "明天" capture written before midnight lands on the day after he wrote it.
 - [ ] Every item rejected: no empty receipt; it shows "Model unavailable · text saved" with Retry.
 - [ ] Unknown cost: muted "Cost unknown" tag in the header. "$0" or "nothing charged" never appears.
