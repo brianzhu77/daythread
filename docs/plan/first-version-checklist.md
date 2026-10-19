@@ -79,7 +79,7 @@ N = D1–D6 + A5 + A1a = 8.
 | B10 | Notes: explicit "Save" for a link | v0.3 P16 | missing |
 | B11 | Craft-colour replacement before any App Store build | prelaunch list, 08a02686 | not started (pre-launch only) |
 | B12 | Past day without a page shows "Nothing written · Start this page" (date rule R10, team addition) | date-navigation-rules R10 | built; Brian may veto |
-| B13 | Capture receipt follow-ups after Step 1 (receipt-v2-design-check.md, Lead 85852c23): (1) no-key capture still shows the v1 receipt; (3) an older receipt shows its capture-time date, should show the task's current date; (4) a held row saved without fixing keeps its reason chip, drop it on Save | Jazz design check acdfa91 | missing (after Step 1 deploy) |
+| B13 | Capture receipt follow-ups after Step 1 (receipt-v2-design-check.md, Lead 85852c23): (1) no-key capture still shows the v1 receipt; (3) an older receipt shows its capture-time date, should show the task's current date; (4) a held row saved without fixing keeps its reason chip, drop it on Save; (5) inline refusal copy: "Task changed; not applied" → "Task changed since · not applied", "… not found" → "Item no longer exists" (Bumblebee 77b32429) | Jazz design check acdfa91 | missing (after Step 1 deploy) |
 
 ## C. Open questions for Brian
 
