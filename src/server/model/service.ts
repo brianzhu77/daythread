@@ -55,7 +55,7 @@ export async function submitCaptureForModel(operationId: string, pageId: string,
   if (info.state === 'simulated') return { captureId: null, info }
   const repository = sqlite(), c = config()!
   const ws = await repository.load()
-  const r = await repository.execute({ operationId, expectedRevision: ws.revision, action: { type: 'capture-for-model', pageId, text, model: c.model } })
+  const r = await repository.execute({ operationId, expectedRevision: ws.revision, action: { type: 'capture-for-model', pageId, text, model: c.model, capturedAt: new Date().toISOString() } })
   const captureId = r.receipt.entityId ?? null
   if (captureId) void organizeCapture({ repository, config: c, mode: info.mode }, captureId).catch(error => console.error(JSON.stringify({ level: 'error', event: 'model.organize', captureId, error: error instanceof Error ? error.message : 'UnknownError' })))
   return { captureId, info }

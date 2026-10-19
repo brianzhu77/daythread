@@ -71,8 +71,10 @@ export async function organizeCapture(deps: OrganizeDeps, captureId: string): Pr
     return 'failed' as const
   }
 
-  // Request: his text and his open tasks — exactly what the quality probe measured.
-  const at = vancouver(now())
+  // Request: his text and his open tasks — exactly what the quality probe measured. Dates resolve from when he wrote
+  // the text (03 §2), so a run or Retry after midnight still reads "明天" as the day after he wrote it.
+  const at = vancouver(capture.capturedAt ? new Date(capture.capturedAt) : now())
+  const spendDay = vancouver(now()).day
   const openTasks = ws.tasks.filter(t => t.status === 'open')
   const ctx = { capturedAt: `${at.day} ${at.time}`, weekday: at.weekday, timezone, openTasks: openTasks.map(t => ({ id: t.id, title: t.title, plannedOn: t.plannedOn, deadlineOn: t.deadlineOn })) }
   const messages = captureMessages(capture.text, ctx), schema = captureSchema(openTasks.map(t => t.id))
@@ -84,7 +86,7 @@ export async function organizeCapture(deps: OrganizeDeps, captureId: string): Pr
   const attemptId = `organize:${captureId}:${revision}`
   try {
     // A second run for the same capture revision finds the reservation already there and sends nothing.
-    const { replayed } = await repository.reserveModelAttempt({ id: attemptId, captureId, revision, day: at.day, upperBoundUsd, model: config.model, requestHash: sha256(body), now: now().toISOString(), capUsd: dailyCapUsd() })
+    const { replayed } = await repository.reserveModelAttempt({ id: attemptId, captureId, revision, day: spendDay, upperBoundUsd, model: config.model, requestHash: sha256(body), now: now().toISOString(), capUsd: dailyCapUsd() })
     if (replayed) return 'stale'
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -104,8 +106,8 @@ export async function organizeCapture(deps: OrganizeDeps, captureId: string): Pr
     if (e?.costUsd != null) return fail('failure', message, { id: attemptId, cost: e.costUsd, generationId: e.generationId })
     // A generation without a cost: something may have been charged. Unknown, so calls pause until it's reconciled.
     if (e?.generationId) return fail('failure', message, { id: attemptId, cost: null, generationId: e.generationId })
-    // OpenRouter refuses a bad key (401/403) or an empty balance (402) before routing to any model: zero, with the reason.
-    if (e?.httpStatus === 401 || e?.httpStatus === 402 || e?.httpStatus === 403) return fail('failure', message, { id: attemptId, cost: 0, generationId: null, note: `provider refused before routing (HTTP ${e.httpStatus}); no generation id or cost reported` })
+    // A rejected key (401/403) is refused at authentication, before any generation: zero, with the reason (Lead 99d98c1f).
+    if (e?.httpStatus === 401 || e?.httpStatus === 403) return fail('failure', message, { id: attemptId, cost: 0, generationId: null, note: `provider refused before routing (HTTP ${e.httpStatus}); no generation id or cost reported` })
     // Anything else (timeout, lost connection, other HTTP errors with no usage) may still have been charged: unknown.
     await repository.recordModelResult({ attemptId, actualUsd: null, generationId: null, now: now().toISOString() })
     return fail('failure', e?.kind === 'timeout' ? 'Model took too long · text saved' : e?.httpStatus ? message : "Couldn't reach the model · text saved")

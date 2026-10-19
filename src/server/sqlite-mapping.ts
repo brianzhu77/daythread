@@ -9,7 +9,7 @@ const tasks = { id:'text',title:'text',status:'text',version:'number',plannedOn:
 const placements = { taskId:'text',date:'text',state:'text',order:'number',section:'text' } satisfies Fields<Placement>
 const events = { id:'text',title:'text',date:'text',time:'text',cancelled:'boolean' } satisfies Fields<Event>
 const materials = { id:'text',url:'text',title:'text',body:'text',savedOn:'text',reviewState:'text',nextReviewOn:'text',resurface:'boolean',lastDecisionOn:'text',skippedUntil:'text',taskId:'text',openedOn:'json',dismissedOn:'json',decisions:'json',sources:'json' } satisfies Fields<Material>
-const captures = { id:'text',pageId:'text',text:'text',status:'text',contextLine:'text',error:'text',failure:'text',proposals:'json',proposalRevision:'number',simulated:'boolean',proposedTitle:'text',taskId:'text',model:'text',mode:'text' } satisfies Fields<Capture>
+const captures = { id:'text',pageId:'text',text:'text',status:'text',contextLine:'text',error:'text',failure:'text',proposals:'json',proposalRevision:'number',simulated:'boolean',proposedTitle:'text',taskId:'text',model:'text',mode:'text',capturedAt:'text' } satisfies Fields<Capture>
 const receipts = { operationId:'text',message:'text',entityId:'text',simulated:'boolean',fingerprint:'text' } satisfies Fields<Receipt>
 const specs = [
   { name:'pages',fields:pages,keys:['id'] },{ name:'tasks',fields:tasks,keys:['id'] },
@@ -28,6 +28,7 @@ const addedColumns: readonly { table: typeof specs[number]['name']; column: stri
   { table: 'pages', column: 'parentId', kind: 'text' },
   { table: 'captures', column: 'model', kind: 'text' },
   { table: 'captures', column: 'mode', kind: 'text' },
+  { table: 'captures', column: 'capturedAt', kind: 'text' },
 ]
 /**
  * The model budget ledger (03 E3). Deliberately outside the current/undo snapshot scheme: Undo restores a whole
@@ -51,9 +52,9 @@ export const sqliteMigrations: readonly ((db: DatabaseSync) => void)[] = [db => 
   const { table, column, kind } = addedColumns[0]!
   db.exec(`ALTER TABLE ${table} ADD COLUMN ${quote(column)} ${columnType(kind)}`)
 }, db => {
-  // feat/model step 1: which model organized a capture and in which mode, plus the budget ledger. The ledger table
+  // feat/model step 1: which model organized a capture, in which mode and when he wrote it, plus the budget ledger. The ledger table
   // may already exist: a rollback to layout 2 keeps it, so today's spend survives a round trip.
-  for (const { table, column, kind } of addedColumns.slice(1, 3)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${quote(column)} ${columnType(kind)}`)
+  for (const { table, column, kind } of addedColumns.slice(1, 4)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${quote(column)} ${columnType(kind)}`)
   db.exec(modelAttemptsTable)
 }]
 

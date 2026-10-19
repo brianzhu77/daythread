@@ -94,7 +94,7 @@ test('SQLite layout 1 (no parentId) upgrades in place; old pages stay top level 
   let repo=f.create(), ws=await repo.load()
   ws=(await repo.execute({operationId:'doc',expectedRevision:ws.revision,action:{type:'create-document',title:'Old page',body:''}})).workspace
   // Recreate the layout an existing store has before this change.
-  let db=new DatabaseSync(f.path);db.exec('ALTER TABLE pages DROP COLUMN parentId');db.exec('ALTER TABLE captures DROP COLUMN model');db.exec('ALTER TABLE captures DROP COLUMN mode');db.exec('PRAGMA user_version=1');db.close()
+  let db=new DatabaseSync(f.path);db.exec('ALTER TABLE pages DROP COLUMN parentId');db.exec('ALTER TABLE captures DROP COLUMN model');db.exec('ALTER TABLE captures DROP COLUMN mode');db.exec('ALTER TABLE captures DROP COLUMN capturedAt');db.exec('PRAGMA user_version=1');db.close()
   repo=f.create(); ws=await repo.load()
   assert.equal(ws.pages[0]!.parentId,undefined)
   ws=(await repo.execute({operationId:'sub',expectedRevision:ws.revision,action:{type:'create-document',title:'',body:'',pageId:'child',parentId:ws.pages[0]!.id}})).workspace

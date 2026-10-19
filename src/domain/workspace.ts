@@ -1096,11 +1096,14 @@ function execute(
     case "capture-for-model": {
       // His words are saved before any model call (03 §6); the result is recorded later by organized-capture.
       const p = page(state, action.pageId);
+      if (typeof action.capturedAt !== "string" || Number.isNaN(Date.parse(action.capturedAt)))
+        throw new DomainError("Capture time missing");
       const id = newId();
       state.captures.push({
         id,
         pageId: p.id,
         text: text(action.text),
+        capturedAt: new Date(action.capturedAt).toISOString(),
         status: "organizing",
         proposalRevision: 1,
         simulated: false,

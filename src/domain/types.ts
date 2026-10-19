@@ -114,6 +114,8 @@ export interface Capture {
   taskId?: string;
   /** The model that organized this capture (absent when simulated). */
   model?: string;
+  /** ISO instant he submitted the text; every organize run and Retry resolves "明天" from this, not from the call (03 §2). */
+  capturedAt?: string;
   /** The captureMode in force when the result was recorded. */
   mode?: "auto" | "confirm";
 }
@@ -169,7 +171,7 @@ export interface Workspace {
  * them; the server's model orchestrator applies them through the repository.
  */
 export type ServerAction =
-  | { type: "capture-for-model"; pageId: string; text: string; model: string }
+  | { type: "capture-for-model"; pageId: string; text: string; model: string; capturedAt: string }
   | { type: "organized-capture"; captureId: string; revision: number; model: string; mode: "auto" | "confirm"; proposals: ProposalItem[]; unreadable: number; contextLine: string }
   | { type: "model-failed"; captureId: string; revision: number; failure: "failure" | "budget" | "context"; error: string };
 export type Action =

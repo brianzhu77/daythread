@@ -25,13 +25,13 @@ function fakeProvider(answer: (body: { messages: { content: string }[] }) => Ite
     return Response.json({ id: 'gen-1', choices: [{ message: { content: JSON.stringify({ items: a.map(flat) }) }, finish_reason: 'stop' }], usage: { cost: opts.cost === undefined ? 0.0002 : opts.cost, prompt_tokens: 600, completion_tokens: 200 } })
   }) as typeof fetch
 }
-async function store(text: string, extraTask?: string) {
+async function store(text: string, extraTask?: string, capturedAt?: string) {
   resetPriceCache()
   const dir = await mkdtemp(join(tmpdir(), 'daythread-organize-')), repo = new SqliteWorkspaceRepository(join(dir, 'w.sqlite'))
   let ws = await repo.load()
   ws = (await repo.execute({ operationId: 'day', expectedRevision: ws.revision, action: { type: 'ensure-day', date: '2026-10-19' } })).workspace
   if (extraTask) ws = (await repo.execute({ operationId: 'task', expectedRevision: ws.revision, action: { type: 'add-task', pageId: ws.pages[0]!.id, sectionId: ws.pages[0]!.sections[0]!.id, title: extraTask } })).workspace
-  const r = await repo.execute({ operationId: 'cap', expectedRevision: ws.revision, action: { type: 'capture-for-model', pageId: ws.pages[0]!.id, text, model: 'fake/model' } })
+  const r = await repo.execute({ operationId: 'cap', expectedRevision: ws.revision, action: { type: 'capture-for-model', pageId: ws.pages[0]!.id, text, model: 'fake/model', capturedAt: capturedAt ?? now().toISOString() } })
   return { repo, captureId: r.receipt.entityId!, cleanup: () => rm(dir, { recursive: true, force: true }) }
 }
 const capture = async (repo: SqliteWorkspaceRepository, id: string) => (await repo.load()).captures.find(c => c.id === id)!
@@ -99,7 +99,7 @@ test('timeout: text kept, capture failed, the charge stays unknown and the model
     const c = await capture(s.repo, s.captureId)
     assert.equal(c.status, 'failed'); assert.equal(c.text, 'call dentist'); assert.match(c.error!, /took too long/)
     assert.equal((await s.repo.modelAttempts())[0]!.state, 'unknown')
-    const next = await s.repo.execute({ operationId: 'cap2', expectedRevision: (await s.repo.load()).revision, action: { type: 'capture-for-model', pageId: c.pageId, text: 'buy milk', model: 'fake/model' } })
+    const next = await s.repo.execute({ operationId: 'cap2', expectedRevision: (await s.repo.load()).revision, action: { type: 'capture-for-model', pageId: c.pageId, text: 'buy milk', model: 'fake/model', capturedAt: now().toISOString() } })
     assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => [{ kind: 'task', title: 'buy milk' }]), now }, next.receipt.entityId!), 'paused')
     assert.match((await capture(s.repo, next.receipt.entityId!)).error!, /a charge needs checking/)
   } finally { await s.cleanup() }
@@ -172,11 +172,33 @@ test('an HTTP error never proves nothing was charged: a reported cost is kept, a
       assert.equal(a!.state, state); assert.equal(a!.actualUsd, cost)
       assert.doesNotMatch(a!.note ?? '', /nothing charged/)
       if (state === 'unknown') {
-        const next = await s.repo.execute({ operationId: 'cap2', expectedRevision: (await s.repo.load()).revision, action: { type: 'capture-for-model', pageId: c.pageId, text: 'buy milk', model: 'fake/model' } })
+        const next = await s.repo.execute({ operationId: 'cap2', expectedRevision: (await s.repo.load()).revision, action: { type: 'capture-for-model', pageId: c.pageId, text: 'buy milk', model: 'fake/model', capturedAt: now().toISOString() } })
         assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => [{ kind: 'task', title: 'buy milk' }]), now }, next.receipt.entityId!), 'paused')
       }
     } finally { await s.cleanup() }
   }
+})
+
+test('dates resolve from when he wrote the text: 明天 written before midnight, organized after, is the next day of writing', async () => {
+  // Written Sun 2026-10-18 23:59 Vancouver; the run (or a Retry) happens Mon 2026-10-19 09:00.
+  const s = await store('明天 call dentist', undefined, '2026-10-19T06:59:00Z')
+  try {
+    let system = ''
+    await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(body => { system = body.messages[0]!.content; return [{ kind: 'task', title: 'call dentist', date: '2026-10-19', dateRole: 'do' }] }), now }, s.captureId)
+    assert.match(system, /Now: Sunday 2026-10-18 23:59 \(America\/Vancouver\)/)
+    assert.equal((await capture(s.repo, s.captureId)).capturedAt, '2026-10-19T06:59:00.000Z')
+    // The money is spent today, whatever day the text was written.
+    assert.equal((await s.repo.modelAttempts())[0]!.day, '2026-10-19')
+  } finally { await s.cleanup() }
+})
+
+test('a model capture without a valid capture time is refused', async () => {
+  const s = await store('call dentist')
+  try {
+    const ws = await s.repo.load()
+    for (const capturedAt of [undefined, 'yesterday'])
+      await assert.rejects(s.repo.execute({ operationId: `bad-${capturedAt}`, expectedRevision: ws.revision, action: { type: 'capture-for-model', pageId: ws.pages[0]!.id, text: 'x', model: 'fake/model', capturedAt } as never }), /Capture time missing/)
+  } finally { await s.cleanup() }
 })
 
 test('no price: nothing is reserved or sent', async () => {
@@ -227,7 +249,7 @@ test('budget used up: text kept, nothing sent', async () => {
 test('the browser cannot send the server-only capture actions', () => {
   const command = (action: object) => ({ operationId: 'op', expectedRevision: 0, action })
   assert.equal(commandSchema.safeParse(command({ type: 'capture', pageId: 'p', text: 'x' })).success, true) // the check can pass
-  assert.equal(commandSchema.safeParse(command({ type: 'capture-for-model', pageId: 'p', text: 'x', model: 'm' })).success, false)
+  assert.equal(commandSchema.safeParse(command({ type: 'capture-for-model', pageId: 'p', text: 'x', model: 'm', capturedAt: '2026-10-19T16:00:00Z' })).success, false)
   assert.equal(commandSchema.safeParse(command({ type: 'organized-capture', captureId: 'c', revision: 1, model: 'm', mode: 'auto', proposals: [], unreadable: 0, contextLine: '' })).success, false)
   assert.equal(commandSchema.safeParse(command({ type: 'model-failed', captureId: 'c', revision: 1, failure: 'failure', error: 'x' })).success, false)
 })
