@@ -91,15 +91,21 @@ only).
 | 4. A task written in the held page | Listed under Open; ticking it marks it done; no error | Passes |
 | 5. A subpage restored alone, parent held | Shows at top level in Pages; after re-upgrade the parent is back in the trash (batch `op1`) and the subpage stays live at top level | Passes |
 
-**Id clash (from point 3).** If Brian taps Retry while the old build runs, a live page and a held row share an id at
-re-upgrade. Two options:
-- **Refuse** (the earlier rule): the upgrade stops and the old build keeps running until someone fixes the database
-  by hand. Nothing is lost, but the app can't be upgraded.
-- **Recommended: keep both.** The live page keeps the id, because the card and anything he wrote point to it. The
-  held row goes back to the trash under a **new id**, with its batch, parent and content. Held pages that were its
-  children in the same batch get their `parentId` changed to the new id. The migration logs the old and new ids.
-  Nothing is lost, and nothing is chosen silently: both copies stay, one live and one in the trash, where he can
-  see and restore it.
+**Id clash (from point 3), ruled by Lead `8e4be383`** (Jazz's split, never refuse). At re-upgrade, a live page may
+carry a held id because Retry recreated it.
+- **The live page is still empty:**
+  - Empty means a document page with an empty title and no child pages. It has no block with text, and no task,
+    event, link or card block. No task has it as its source.
+  - Then the migration drops it and puts the held row back in the trash under its **original id**. The card reads
+    "In trash" again, and Restore reconnects it.
+- **Otherwise, or when in doubt:** keep both.
+  - The live page keeps the id.
+  - The held row goes back to the trash under a new id, with its batch, parent and content. Held pages in the same
+    batch that were its children get their `parentId` changed to the new id.
+- **Either way** the migration logs what it did, including the id mapping.
+
+The note to Brian for a rollback includes: "During the rollback a card may show 'Not created · Retry'. Your page is
+safe in the trash; you don't need to tap it."
 
 **Tried on a copy of Brian's database** (`tests/evidence/a4-plan/rollback-roundtrip.ts`, raw SQL for the script
 and the migration):
@@ -132,7 +138,10 @@ id appearing again (refusal); the backup.
      unchanged;
    - a new Undo works after the cleared one;
    - running the migration and the script twice;
-   - Retry on a card to a held page in today's build, then re-upgrade → per the clash rule chosen above;
+   - Retry on a card to a held page in today's build, leave the page empty, then re-upgrade → the empty page is
+     gone, the held page is in the trash under its original id, and the card reads "In trash";
+   - Retry, write one line in the page, then re-upgrade → both kept: the live page has the original id and the
+     line; the held page is in the trash under a new id with its content; the log lists the mapping;
    - a task written in a held page still shows and can be ticked in today's build;
    - a subpage restored alone, parent held → top level in today's build; after re-upgrade the parent is back in the
      trash and the subpage stays;
