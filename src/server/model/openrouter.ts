@@ -9,8 +9,10 @@ export function modelConfig(env: NodeJS.ProcessEnv = process.env): ModelConfig |
   return apiKey && model ? { apiKey, model } : null
 }
 
+export type ModelErrorKind = 'auth' | 'limit' | 'unavailable' | 'invalid-output' | 'timeout'
 export class ModelError extends Error {
-  constructor(message: string, readonly kind: 'auth' | 'limit' | 'unavailable' | 'invalid-output' | 'timeout') { super(message) }
+  readonly kind: ModelErrorKind
+  constructor(message: string, kind: ModelErrorKind) { super(message); this.kind = kind }
 }
 
 export async function callStructured<T>(config: ModelConfig, messages: { role: string; content: string }[], schema: { name: string; strict: boolean; schema: unknown }, options: { maxTokens?: number; timeoutMs?: number; signal?: AbortSignal } = {}): Promise<ModelCall<T>> {
