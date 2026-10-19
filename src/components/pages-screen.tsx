@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import { ContinuousPage } from './continuous-page'
+import { displayPageTitle, PageTitleField } from './page-title'
 import { ChevronRightIcon, PagesIcon, PlusIcon } from './icons'
 import { useWorkspace } from './use-day'
 
@@ -17,10 +18,14 @@ export function useCreatePage() {
 export function PagesScreen() {
   const { workspace } = useWorkspace()
   const createPage = useCreatePage()
-  const [selected, setSelected] = useState<string | null>(() => typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('page'))
-  const p = workspace?.pages.find(p => p.id === selected)
+  const search = useSearch({ from: '/pages' })
+  const navigate = useNavigate()
+  const setSelected = (page: string | null) => void navigate({ to: '/pages', search: page ? { page } : {} })
+  const p = workspace?.pages.find(p => p.id === search.page)
   if (!workspace) return <p>Loading pages…</p>
-  if (p) return <div className="list-screen"><button className="secondary" onClick={() => setSelected(null)}>‹ Pages</button><h1 className="large-title">{p.title}</h1><ContinuousPage page={p} workspace={workspace} /></div>
+  if (p) return <div className="list-screen"><button className="secondary" onClick={() => setSelected(null)}>‹ Pages</button>
+    {p.type === 'document' ? <PageTitleField key={p.id} page={p} autoFocus={search.focus === 'title'} /> : <h1 className="large-title">{p.title}</h1>}
+    <ContinuousPage page={p} workspace={workspace} /></div>
   const documents = workspace.pages.filter(p => p.type === 'document')
   return (
     <div className="list-screen">
@@ -31,7 +36,7 @@ export function PagesScreen() {
       {/* Pages lists only pages, flat (Brian 77423ea0); Tags is a navigation destination of its own. */}
       {documents.length === 0 ? <p className="quiet">No pages yet. Tap + to start one.</p> : (
         <ul className="plain card-list">
-          {documents.map(p => <li key={p.id}><button type="button" className="card-row" onClick={() => setSelected(p.id)}><span className="card-row-icon"><PagesIcon /></span><span className="card-row-title">{p.title}</span><ChevronRightIcon /></button></li>)}
+          {documents.map(p => <li key={p.id}><button type="button" className="card-row" onClick={() => setSelected(p.id)}><span className="card-row-icon"><PagesIcon /></span><span className={`card-row-title ${p.title ? '' : 'untitled'}`}>{displayPageTitle(p)}</span><ChevronRightIcon /></button></li>)}
         </ul>
       )}
     </div>

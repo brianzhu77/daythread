@@ -21,7 +21,7 @@ repositoryContract('SQLite',fixture)
 function fullFixture(): Workspace {
   const task: Required<Task>={id:'task',title:'private task',status:'open',version:2,plannedOn:'2026-10-17',attentionOn:null,deadlineOn:'2026-10-18',paused:false,createdOn:'2026-10-16',lastPlannedOn:'2026-10-17',sourcePageId:'page'}
   const placement: Required<Placement>={taskId:task.id,date:'2026-10-17',state:'included',order:0,section:'top3'}
-  const page: Required<Page>={id:'page',type:'daily',date:'2026-10-17',title:'private day',sections:[{id:'section',kind:'top3',title:'Top 3',blocks:[{id:'block',kind:'task',taskId:task.id,text:task.title,planRole:'plan'}]}],editorJSON:'[]',templateApplied:true,editorSections:'[]',editorBlockMetadata:{block:{id:'block',kind:'paragraph',text:'private note'}},editorCreations:{block:task.id},editorDeletions:{removed:{task,placements:[placement],afterVersion:3,afterPlacements:[]}},reviewText:'private review',reviewSaved:true,handoffDone:true,reviewStep:2,reviewSource:'direct',reviewSkipped:false,draftError:'private error',draft:{simulated:true,taskIds:[task.id],materialIds:['material'],text:'private draft'}}
+  const page: Required<Page>={id:'page',type:'daily',date:'2026-10-17',title:'private day',parentId:null,sections:[{id:'section',kind:'top3',title:'Top 3',blocks:[{id:'block',kind:'task',taskId:task.id,text:task.title,planRole:'plan'}]}],editorJSON:'[]',templateApplied:true,editorSections:'[]',editorBlockMetadata:{block:{id:'block',kind:'paragraph',text:'private note'}},editorCreations:{block:task.id},editorDeletions:{removed:{task,placements:[placement],afterVersion:3,afterPlacements:[]}},reviewText:'private review',reviewSaved:true,handoffDone:true,reviewStep:2,reviewSource:'direct',reviewSkipped:false,draftError:'private error',draft:{simulated:true,taskIds:[task.id],materialIds:['material'],text:'private draft'}}
   const event:Required<Event>={id:'event',title:'private event',date:'2026-10-17',time:null,cancelled:false}
   const material:Required<Material>={id:'material',url:'https://example.com/private',title:'private link',body:'private body',savedOn:'2026-10-16',reviewState:'watching',nextReviewOn:'2026-10-23',resurface:true,lastDecisionOn:null,skippedUntil:null,taskId:task.id,openedOn:['2026-10-17'],dismissedOn:[],decisions:[{date:'2026-10-17',decision:'watching'}],sources:[{pageId:page.id,blockId:'source',note:'private annotation'}]}
   const capture:Required<Capture>={id:'capture',pageId:page.id,text:'private capture',status:'needs_confirmation',contextLine:'private context',error:'private error',failure:'context',proposals:[{id:'proposal',kind:'update-task',title:'private proposal',taskId:task.id,expectedVersion:2,status:'done',url:'https://example.com'}],proposalRevision:2,simulated:true,proposedTitle:'private title',taskId:task.id}
@@ -85,5 +85,23 @@ test('SQLite explicit missing import source fails before creating a database; on
   assert.deepEqual(await allowed.load(),createEmptyWorkspace())
   // After successful initialization the old import source is no longer a runtime dependency.
   assert.deepEqual(await new SqliteWorkspaceRepository(f.path,missing).load(),createEmptyWorkspace())
+ }finally{await f.cleanup()}
+})
+test('SQLite layout 1 (no parentId) upgrades in place; old pages stay top level and new subpages keep their parent',async()=>{
+ const f=await fixture()
+ try {
+  let repo=f.create(), ws=await repo.load()
+  ws=(await repo.execute({operationId:'doc',expectedRevision:ws.revision,action:{type:'create-document',title:'Old page',body:''}})).workspace
+  // Recreate the layout an existing store has before this change.
+  let db=new DatabaseSync(f.path);db.exec('ALTER TABLE pages DROP COLUMN parentId');db.exec('PRAGMA user_version=1');db.close()
+  repo=f.create(); ws=await repo.load()
+  assert.equal(ws.pages[0]!.parentId,undefined)
+  ws=(await repo.execute({operationId:'sub',expectedRevision:ws.revision,action:{type:'create-document',title:'',body:'',pageId:'child',parentId:ws.pages[0]!.id}})).workspace
+  ws=await f.create().load()
+  assert.equal(ws.pages.find(p=>p.id==='child')!.parentId,ws.pages[0]!.id)
+  db=new DatabaseSync(f.path)
+  assert.equal(Number(db.prepare('PRAGMA user_version').get()!.user_version),2)
+  assert.ok(db.prepare('PRAGMA table_info(pages)').all().some(c=>c.name==='parentId'))
+  db.close()
  }finally{await f.cleanup()}
 })

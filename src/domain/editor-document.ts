@@ -59,10 +59,12 @@ export function editorSeed(page: Page, workspace: Workspace, options: { template
     for (const b of s.blocks) {
       if (emitted.has(b.id)) continue
       const prior = byId.get(b.id)
-      const node: EditorNode = prior ? { ...prior, content: inlineText(prior.content) === b.text ? prior.content : b.text }
+      // A page card has no inline content; its title is read live from the page it points at.
+      const node: EditorNode = prior?.type === 'pageLink' ? prior
+        : prior ? { ...prior, content: inlineText(prior.content) === b.text ? prior.content : b.text }
         : b.taskId ? { id: b.id, type: 'task', props: { taskId: b.taskId, role: b.planRole ?? (s.kind === 'top3' || s.kind === 'other' ? 'plan' : 'reference'), planDate: page.date ?? '' }, content: workspace.tasks.find(t => t.id === b.taskId)?.title ?? b.text }
         : b.eventId ? { id: b.id, type: 'paragraph', content: workspace.events.find(e => e.id === b.eventId)?.title ?? b.text }
-        : b.targetPageId ? { id: b.id, type: 'paragraph', content: [{ type: 'link', href: `/pages?page=${encodeURIComponent(b.targetPageId)}`, content: workspace.pages.find(p => p.id === b.targetPageId)?.title ?? b.text }] }
+        : b.targetPageId ? { id: b.id, type: 'pageLink', props: { pageId: b.targetPageId } }
         : b.materialId ? { id: b.id, type: 'paragraph', content: [{ type: 'link', href: workspace.materials.find(m => m.id === b.materialId)?.url ?? '#', content: b.text }] }
         : { id: b.id, type: 'paragraph', content: b.text }
       result.push(node); mark(node)
@@ -96,7 +98,11 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
       sections.push(current)
     } else {
       if (!current) { current = { id: `intro:${page.id}`, kind: 'custom', title: '', blocks: [] }; sections.push(current) }
-      if (node.type === 'task') {
+      if (node.type === 'pageLink') {
+        // pages-delta N-2: a page card is a reference. Removing it never touches the page it points at.
+        const targetPageId = String(node.props?.pageId ?? '')
+        current.blocks.push({ id: node.id, kind: 'reference', targetPageId, text: workspace.pages.find(p => p.id === targetPageId)?.title ?? '' })
+      } else if (node.type === 'task') {
         const target = workspace.tasks.find(t => t.id === node.props?.taskId)
         if (!target && node.props?.taskId === `editor-task:${node.id}` && !inlineText(node.content)) { current.blocks.push({ id: node.id, kind: 'paragraph', text: '' }); return }
         if (!target) throw new Error('Task reference not found')

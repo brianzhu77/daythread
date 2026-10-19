@@ -4,7 +4,7 @@ import type { Capture, Event, Material, Page, Placement, Receipt, Task, Workspac
 type Kind = 'text' | 'number' | 'boolean' | 'json'
 type Fields<T> = Record<keyof T, Kind>
 // Exhaustive maps intentionally fail typecheck whenever a domain field is added without a storage mapping.
-const pages = { id:'text',type:'text',date:'text',title:'text',sections:'json',editorJSON:'text',templateApplied:'boolean',editorSections:'text',editorBlockMetadata:'json',editorCreations:'json',editorDeletions:'json',reviewText:'text',reviewSaved:'boolean',handoffDone:'boolean',reviewStep:'number',reviewSource:'text',reviewSkipped:'boolean',draftError:'text',draft:'json' } satisfies Fields<Page>
+const pages = { id:'text',type:'text',date:'text',title:'text',sections:'json',editorJSON:'text',templateApplied:'boolean',editorSections:'text',editorBlockMetadata:'json',editorCreations:'json',editorDeletions:'json',reviewText:'text',reviewSaved:'boolean',handoffDone:'boolean',reviewStep:'number',reviewSource:'text',reviewSkipped:'boolean',draftError:'text',draft:'json',parentId:'text' } satisfies Fields<Page>
 const tasks = { id:'text',title:'text',status:'text',version:'number',plannedOn:'text',attentionOn:'text',deadlineOn:'text',paused:'boolean',createdOn:'text',lastPlannedOn:'text',sourcePageId:'text' } satisfies Fields<Task>
 const placements = { taskId:'text',date:'text',state:'text',order:'number',section:'text' } satisfies Fields<Placement>
 const events = { id:'text',title:'text',date:'text',time:'text',cancelled:'boolean' } satisfies Fields<Event>
@@ -21,13 +21,23 @@ const quote = (s: string) => `"${s}"`
 type Snapshot = Omit<Workspace, 'undo'>
 type Entity = Record<string, unknown>
 
+const columnType = (kind: Kind) => kind === 'number' || kind === 'boolean' ? 'INTEGER' : 'TEXT'
+// Columns added after the first layout. Migration 0 must keep creating exactly the original tables, so that a
+// fresh database and an upgraded one end up identical after the later migrations run.
+const addedColumns: readonly { table: typeof specs[number]['name']; column: string; kind: Kind }[] = [
+  { table: 'pages', column: 'parentId', kind: 'text' },
+]
 // Each function runs once, in order, inside the adapter's initialization transaction.
 export const sqliteMigrations: readonly ((db: DatabaseSync) => void)[] = [db => {
   db.exec('CREATE TABLE meta (snapshot TEXT PRIMARY KEY CHECK(snapshot IN (\'current\',\'undo\')), schemaVersion INTEGER NOT NULL, revision INTEGER NOT NULL, timezone TEXT NOT NULL, undoOperationId TEXT, undoRevision INTEGER) STRICT')
   for (const spec of specs) {
-    const columns = Object.entries(spec.fields).map(([name,kind]) => `${quote(name)} ${kind === 'number' || kind === 'boolean' ? 'INTEGER' : 'TEXT'}`)
+    const columns = Object.entries(spec.fields).filter(([name]) => !addedColumns.some(a => a.table === spec.name && a.column === name)).map(([name,kind]) => `${quote(name)} ${columnType(kind)}`)
     db.exec(`CREATE TABLE ${spec.name} (snapshot TEXT NOT NULL CHECK(snapshot IN ('current','undo')), position INTEGER NOT NULL, present TEXT NOT NULL, ${columns.join(',')}, PRIMARY KEY(snapshot,${spec.keys.map(quote).join(',')})) STRICT`)
   }
+}, db => {
+  // pages-delta N-2: the page a page was created in. Existing rows read as top level.
+  const { table, column, kind } = addedColumns[0]!
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${quote(column)} ${columnType(kind)}`)
 }]
 
 const workspaceFields = {schemaVersion:true,revision:true,timezone:true,pages:true,tasks:true,placements:true,events:true,materials:true,captures:true,receipts:true,undo:true} satisfies Record<keyof Workspace,boolean>

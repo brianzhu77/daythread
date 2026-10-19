@@ -29,6 +29,8 @@ export interface Page {
   type: "daily" | "document";
   date: LocalDate | null;
   title: string;
+  /** The page it was created in (pages-delta N-2); null or absent = top level. Day pages never have one. */
+  parentId?: string | null;
   sections: Section[];
   editorJSON?: string;
   /** Set once the day template's starter rows have been saved, so rows the user deletes stay deleted. */
@@ -223,7 +225,8 @@ export type Action =
       nextReviewOn?: LocalDate;
     }
   | { type: "material-resurface"; materialId: string; enabled: boolean }
-  | { type: "create-document"; title: string; body: string }
+  | { type: "create-document"; title: string; body: string; pageId?: string; parentId?: string }
+  | { type: "rename-page"; pageId: string; title: string }
   | { type: "relink-material-lines" }
   | {
       type: "insert-reference";

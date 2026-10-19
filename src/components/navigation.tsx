@@ -6,6 +6,7 @@ import { CalendarIcon, PagesIcon, PlusIcon, ReviewIcon, TagsIcon, TasksIcon, Tod
 import type { LocalDate, Page } from '../domain/types'
 import { useDay, useWorkspace } from './use-day'
 import { useCreatePage } from './pages-screen'
+import { displayPageTitle } from './page-title'
 
 // Highlight only where you are: Today is today's page, not any day (another day highlights its Days row, or nothing).
 const destinations = [
@@ -103,7 +104,7 @@ function DayList({ path, today }: { path: string; today: LocalDate }) {
         </Link>
       ))}
       <p className="side-label">Pages</p>
-      {workspace?.pages.filter(p => p.type === 'document').map(p => <a className="side-row small" href={`/pages?page=${encodeURIComponent(p.id)}`} key={p.id}>{p.title}</a>)}
+      {workspace?.pages.filter(p => p.type === 'document').map(p => <a className="side-row small" href={`/pages?page=${encodeURIComponent(p.id)}`} key={p.id}>{displayPageTitle(p)}</a>)}
       <NewPageRow />
     </div>
   )

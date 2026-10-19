@@ -844,13 +844,25 @@ function execute(
       return { message: "Suggestion dismissed for this day" };
     }
     case "create-document": {
-      const id = newId();
+      // `/page` picks the id in the browser so the card can be inserted at once; a retry under a new operation
+      // id finds the same page instead of making a second one.
+      const id = action.pageId ?? newId();
+      const existing = state.pages.find((p) => p.id === id);
+      if (existing) {
+        if (existing.type !== "document" || (existing.parentId ?? null) !== (action.parentId ?? null)) throw new DomainError("Page id already in use");
+        return { message: "Page saved", entityId: id };
+      }
+      if (action.parentId) page(state, action.parentId);
       state.pages.push({
         id,
         type: "document",
         date: null,
         title: text(action.title, 1000),
-        sections: [
+        ...(action.parentId ? { parentId: action.parentId } : {}),
+        // A subpage starts as one empty line, like Notion; Pages → New keeps its Notes heading.
+        sections: action.parentId
+          ? [{ id: `intro:${id}`, kind: "custom", title: "", blocks: [{ id: newId(), kind: "paragraph", text: text(action.body) }] }]
+          : [
           {
             id: newId(),
             kind: "notes",
@@ -866,6 +878,12 @@ function execute(
         draft: null,
       });
       return { message: "Page saved", entityId: id };
+    }
+    case "rename-page": {
+      const p = page(state, action.pageId);
+      if (p.type !== "document") throw new DomainError("Day pages are named by their date");
+      p.title = text(action.title, 1000).trim();
+      return { message: "Page renamed", entityId: p.id };
     }
     case "relink-material-lines": {
       // One-off repair for pages written while the editor skipped the material rule; safe to repeat.

@@ -16,7 +16,9 @@ import { applyCommand } from '../domain/workspace'
 import { newOperationId, useWorkspace } from './use-day'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { CheckboxIcon, GripIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
+import { CheckboxIcon, ChevronRightIcon, GripIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
+import { useNavigate } from '@tanstack/react-router'
+import { displayPageTitle, focusAtEnd } from './page-title'
 import { addDays, fromIso, todayIso } from './dates'
 import { tagDecorations } from './tag-decorations'
 
@@ -28,7 +30,13 @@ const sourceChecklist = createReactBlockSpec({ type: 'sourceChecklist', propSche
   render: ({ block, contentRef, editor }) => <div className="editor-source-checklist"><input contentEditable={false} type="checkbox" aria-label="Check imported item" checked={block.props.checked} onChange={() => editor.updateBlock(block, { props: { checked: !block.props.checked } })} /><span ref={contentRef} /></div>,
   toExternalHTML: ({ block, contentRef }) => <p><span>{block.props.checked ? '☑ ' : '☐ '}</span><span ref={contentRef} /></p>,
 })()
-const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist } })
+// pages-delta N-2 / Jazz f69dd341-era spec: a page card is one quiet row (icon, title, ›) that drags, deletes and
+// undoes as a single block. It only points at the page; removing it never removes the page.
+const pageLink = createReactBlockSpec({ type: 'pageLink', propSchema: { pageId: { default: '' } }, content: 'none' }, {
+  render: ({ block }) => <PageCard pageId={block.props.pageId} />,
+  toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Page</a></p>,
+})()
+const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink } })
 const clipboardType = 'application/x-daythread-blocks'
 const cutTokens = new Set<string>()
 const deepNodes = (nodes: readonly EditorNode[]): EditorNode[] => nodes.flatMap(n => [n, ...deepNodes(n.children ?? [])])
@@ -43,6 +51,17 @@ function EditorTask({ taskId, role, planDate, contentRef }: { taskId: string; ro
     {role === 'reference' && t?.status === 'open' && <button className="editor-plan-action" contentEditable={false} onClick={() => void run({ type: 'plan-task', taskId, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }, r => ({ text: 'Planned for today', undoOperationId: r.operationId }))}>Plan for today</button>}
     {t && t.status === 'open' && hasDateFacts(t) && <span contentEditable={false} className="editor-date-tag"><DateTag task={t} today={todayIso()} pageDate={planDate || todayIso()} /></span>}
   </div>
+}
+
+function PageCard({ pageId }: { pageId: string }) {
+  const { workspace } = useWorkspace()
+  const navigate = useNavigate()
+  const target = workspace?.pages.find(p => p.id === pageId)
+  return <button type="button" contentEditable={false} className="editor-page-card" onClick={() => void navigate({ to: '/pages', search: { page: pageId } })}>
+    <span className="editor-page-card-icon"><PagesIcon /></span>
+    <span className={`editor-page-card-title ${target?.title ? '' : 'untitled'}`}>{target ? displayPageTitle(target) : 'Page not found'}</span>
+    <ChevronRightIcon />
+  </button>
 }
 
 // Inside a document only real dates earn a chip; "Unscheduled" is list-screen vocabulary and would be noise here.
@@ -62,6 +81,7 @@ function firstLineCenter(block: HTMLElement): number {
 
 export function PageEditor({ page, workspace }: { page: Page; workspace: Workspace }) {
   const { run, refresh } = useWorkspace()
+  const navigate = useNavigate()
   const key = `daythread:editor:${page.id}`
   const initial = useRef<{ nodes: EditorNode[]; base: string; recovered: boolean } | null>(null)
   if (!initial.current) {
@@ -315,6 +335,23 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return () => { clearTimeout(timer.current); if (dirty.current) stash(); window.removeEventListener('beforeunload', before) }
   }, [])
 
+  /** `/page`: card first (id chosen here), then the page, then save the card before leaving for the new page. */
+  async function createSubpage() {
+    const pageId = crypto.randomUUID()
+    insertOrUpdateBlockForSlashMenu(editor, { type: 'pageLink', props: { pageId } } as never)
+    const cardId = editor.document.find(b => (b.props as { pageId?: string }).pageId === pageId)?.id
+    const created = await run({ type: 'create-document', title: '', body: '', pageId, parentId: page.id })
+    if (!created) {
+      if (cardId && editor.getBlock(cardId)) editor.removeBlocks([cardId])
+      setStatus("Couldn't create the page · nothing changed")
+      return
+    }
+    clearTimeout(timer.current)
+    for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
+    if (dirty.current) await flushRef.current()
+    if (dirty.current) { setStatus('Page created · card not saved yet, try again from here'); return }
+    void navigate({ to: '/pages', search: { page: pageId, focus: 'title' } })
+  }
   async function performHistory(direction: 'undo' | 'redo') {
     if (historyPending.current) return
     const historyOperationId=newOperationId()
@@ -485,7 +522,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const target = firstSection.find(b => !inlineText(b.content)) ?? blocks[(nextHeading < 0 ? blocks.length : nextHeading) - 1] ?? blocks[0]
     // Desktop opens ready to type; on touch screens focusing would raise the keyboard over a page that is read as often as written.
     // Arriving at a block from a tag focuses nothing, so the view stays on that block.
-    if (target && !jumpTo && window.matchMedia('(pointer: fine)').matches) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
+    // A page just made with `/page` opens to name it: the title field has the cursor (Jazz f69dd341).
+    const naming = new URLSearchParams(window.location.search).get('focus') === 'title'
+    if (target && !jumpTo && !naming && window.matchMedia('(pointer: fine)').matches) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
   }, [editor, jumpTo])
   useEffect(() => {
     const update = () => {
@@ -617,6 +656,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.current.length) {
         e.preventDefault(); e.stopPropagation()
         deleteSelected()
+      } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && page.type === 'document' && editor.prosemirrorState.selection.empty && editor.getTextCursorPosition().block.id === editor.document[0]?.id && editor.prosemirrorState.selection.$from.parentOffset === 0) {
+        // Jazz's title spec: Backspace at the start of the first line goes up into the title, as in Notion.
+        const title = document.querySelector<HTMLElement>('.page-title-field')
+        if (title) { e.preventDefault(); e.stopPropagation(); focusAtEnd(title) }
       } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && editor.prosemirrorState.selection.empty && editor.getTextCursorPosition().block.type === 'task' && !inlineText(editor.getTextCursorPosition().block.content)) {
         e.preventDefault(); e.stopPropagation(); const id = editor.getTextCursorPosition().block.id; semanticDeletes.current.add(id); editor.removeBlocks([id])
       } else if (!['Shift', 'Control', 'Meta', 'Alt'].includes(e.key) && !((e.metaKey || e.ctrlKey) && ['c', 'x'].includes(e.key.toLowerCase()))) { selected.current = []; setSelectionLabel('') }
@@ -649,7 +692,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           const role = insertionRole(currentId)
           insertOrUpdateBlockForSlashMenu(editor, { ...(replaceCurrent ? {} : { id }), type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? page.date ?? '' : '' }, content: '' })
         } }
-        return filterSuggestionItems([taskItem, ...first, ...rest], query).slice(0, 8)
+        const pageItem = { title: 'Page', subtext: 'New page inside this one', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
+        return filterSuggestionItems([taskItem, pageItem, ...first, ...rest], query).slice(0, 9)
       }} />
       <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />
     </BlockNoteView>

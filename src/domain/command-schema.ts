@@ -107,7 +107,8 @@ const action = z.discriminatedUnion("type", [
     source: z.enum(["reminder", "direct"]).optional(),
     skip: z.boolean().optional(),
   }),
-  z.object({ type: z.literal("create-document"), title, body }),
+  z.object({ type: z.literal("create-document"), title, body, pageId: id.optional(), parentId: id.optional() }),
+  z.object({ type: z.literal("rename-page"), pageId: id, title }),
   z.object({ type: z.literal("relink-material-lines") }),
   z.object({
     type: z.literal("insert-reference"),
