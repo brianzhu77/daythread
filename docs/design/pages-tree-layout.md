@@ -114,17 +114,18 @@ showed him "No pages yet" while he had two pages. Fixed for desktop and phone al
 
 - **Pages screen = two groups.**
   1. Top-level pages, as now (card list, child counts). No header. Left out entirely if there are none.
-  2. **In your days**: header in the existing list-header style (20px, 600). Under it, one block per day that has
-     subpages, newest date first: a small label with the day ("Today", "Sun, Oct 18"; 13px, 600, `--ink-2`,
-     same as other small labels), then a card list of that day's **direct** subpages with child counts.
-     Tapping the day label opens the day page; tapping a row opens the page.
+  2. **In your days**: header in the existing list-header style (20px, 600), then **one** card list of every
+     page whose parent is a day (direct subpages only). The **title leads**; the day sits under it as a muted
+     second line ("Sun, Oct 18", "Today"; 13px `--ink-3`), and the child count stays before the ›. Rows are
+     ordered by day, newest first, then by stored order within a day. Brian thinks "my recipes", not
+     "something from Oct 18" (Bumblebee), so no per-day subheadings. Rows are 56px with two lines.
   - Deeper pages are reached through their parent's Subpages, as everywhere else.
-  - Future days with subpages are included, sorted with the rest by date (newest first, so they come first).
+  - Pages under future days are included, sorted with the rest by date (so they come first).
 - **Empty state** ("No pages yet. Tap + to start one.") only when there is **no document page at all**.
 - **+ on the Pages screen** still makes a top-level page.
 - **Sidebar PAGES group:** if there are no top-level pages but some pages sit in days, show one muted row,
   "{n} pages in your days" (singular "1 page in your days"), 14px `--ink-2`, linking to the Pages screen. Then
   "＋ New page" as now. When there are top-level pages, no extra row (the Days tree already shows the rest).
 - **Acceptance (design):** on a copy of Brian's real data (2 pages under Sun, Oct 18, none top level): Pages
-  shows "In your days › Sun, Oct 18 › 韩国大酱汤 / 佛卡夏披萨", no empty line; sidebar shows "2 pages in your
+  shows 韩国大酱汤 and 佛卡夏披萨 on first look under "In your days", each with "Sun, Oct 18" under the title, no empty line; sidebar shows "2 pages in your
   days". Check at 1280 and 390.
