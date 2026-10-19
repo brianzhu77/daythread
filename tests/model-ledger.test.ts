@@ -243,3 +243,11 @@ test('Lead: cost and result are judged separately; the same result later with it
     await assert.rejects(s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0003, generationId: 'gen-1', now }, { ...result, action: { ...result.action, title: 'Other' } }), /different result/)
   } finally { await s.cleanup() }
 })
+
+test('DAYTHREAD_MODEL_CAP_USD can only lower the $10 cap', async () => {
+  const { dailyCapUsd } = await import('../src/server/model-ledger.ts')
+  assert.equal(dailyCapUsd({}), 10)
+  assert.equal(dailyCapUsd({ DAYTHREAD_MODEL_CAP_USD: '0.0003' }), 0.0003)
+  assert.equal(dailyCapUsd({ DAYTHREAD_MODEL_CAP_USD: '50' }), 10)
+  assert.equal(dailyCapUsd({ DAYTHREAD_MODEL_CAP_USD: 'nonsense' }), 10)
+})

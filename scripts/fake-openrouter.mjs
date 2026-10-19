@@ -6,8 +6,10 @@
 //   FIXTURE_TEXT (printed at start)  the seven receipt rows: grounded task with a do date · event with a time ·
 //                                    titled saved link · invented time · lost date · dated update with no role
 //                                    (capture "Tax Return" first so that open task exists) · one item the server rejects
-//   "http401: …"                     key rejected (401)
-//   "budget: …"                      one task, reported cost $10, so the next capture finds the budget used up
+//   "http401: …"                     key rejected (401) → "Model key rejected · text saved"
+//   "http500: …"                     any other provider error (500) → "Model unavailable · text saved"
+//   Budget used up: start the app with DAYTHREAD_MODEL_CAP_USD=0.0003 (may only lower the $10 cap); after one
+//                                    capture the next one finds the day's budget used up
 //   "slow: …"                        answers after 20 s, to see "Organizing…"
 //   "timeout: …"                     never answers
 //   anything else                    one task titled with the text
@@ -35,9 +37,10 @@ createServer(async (req, res) => {
   const text = body.messages?.at(-1)?.content ?? '', system = body.messages?.[0]?.content ?? ''
   if (text.startsWith('timeout:')) return
   if (text.startsWith('http401:')) return send(401, { error: { message: 'bad key' } })
+  if (text.startsWith('http500:')) return send(500, { error: { message: 'provider error' } })
   if (text.startsWith('slow:')) await new Promise(r => setTimeout(r, 20_000))
   const taxReturn = system.match(/id=(\S+) · "Tax Return"/)?.[1]
-  const items = text === FIXTURE_TEXT ? fixture(taxReturn) : [{ kind: 'task', title: text.replace(/^(slow|budget):\s*/, '') }]
+  const items = text === FIXTURE_TEXT ? fixture(taxReturn) : [{ kind: 'task', title: text.replace(/^slow:\s*/, '') }]
   await new Promise(r => setTimeout(r, 400))
-  send(200, { id: `gen-${Date.now()}`, choices: [{ message: { content: JSON.stringify({ items: items.map(flat) }) }, finish_reason: 'stop' }], usage: { cost: text.startsWith('budget:') ? 10 : 0.0002, prompt_tokens: 600, completion_tokens: 200 } })
+  send(200, { id: `gen-${Date.now()}`, choices: [{ message: { content: JSON.stringify({ items: items.map(flat) }) }, finish_reason: 'stop' }], usage: { cost: 0.0002, prompt_tokens: 600, completion_tokens: 200 } })
 }).listen(port, '127.0.0.1', () => console.log(`fake OpenRouter on http://127.0.0.1:${port}/api/v1\nFIXTURE_TEXT: ${FIXTURE_TEXT}`))

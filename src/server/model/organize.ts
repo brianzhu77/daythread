@@ -6,7 +6,7 @@ import { captureItems, captureMessages, captureSchema, type CaptureItem, type Ca
 import { groundItem } from './grounding.ts'
 import { callStructured, ModelError, requestBody, type ModelConfig } from './openrouter.ts'
 import { modelPrice, worstCaseUsd } from './pricing.ts'
-import { sha256 } from '../model-ledger.ts'
+import { dailyCapUsd, sha256 } from '../model-ledger.ts'
 
 export const maxOutputTokens = 4000
 const timezone = 'America/Vancouver'
@@ -84,7 +84,7 @@ export async function organizeCapture(deps: OrganizeDeps, captureId: string): Pr
   const attemptId = `organize:${captureId}:${revision}`
   try {
     // A second run for the same capture revision finds the reservation already there and sends nothing.
-    const { replayed } = await repository.reserveModelAttempt({ id: attemptId, captureId, revision, day: at.day, upperBoundUsd, model: config.model, requestHash: sha256(body), now: now().toISOString() })
+    const { replayed } = await repository.reserveModelAttempt({ id: attemptId, captureId, revision, day: at.day, upperBoundUsd, model: config.model, requestHash: sha256(body), now: now().toISOString(), capUsd: dailyCapUsd() })
     if (replayed) return 'stale'
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

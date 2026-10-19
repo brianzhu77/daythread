@@ -38,7 +38,12 @@ export function toBudgetLedger(attempts: ModelAttempt[]): BudgetLedger {
   }
 }
 
-export interface ReserveInput { id: string; captureId: string; revision: number; day: string; upperBoundUsd: number; model: string; requestHash: string; now: string }
+export interface ReserveInput { id: string; captureId: string; revision: number; day: string; upperBoundUsd: number; model: string; requestHash: string; now: string; capUsd?: number }
+/** 10 USD per day (Brian). DAYTHREAD_MODEL_CAP_USD may only lower it, e.g. to see "budget used up" on a test server. */
+export function dailyCapUsd(env: NodeJS.ProcessEnv = process.env): number {
+  const requested = Number(env.DAYTHREAD_MODEL_CAP_USD)
+  return Number.isFinite(requested) && requested >= 0 && requested < 10 ? requested : 10
+}
 /** `replayed` = this id was already reserved with the same request: the caller must not send it again. */
 export function reserveAttempt(db: DatabaseSync, input: ReserveInput): { attempt: ModelAttempt; replayed: boolean } {
   const attempts = readAttempts(db)
@@ -50,7 +55,7 @@ export function reserveAttempt(db: DatabaseSync, input: ReserveInput): { attempt
       throw new Error('Attempt identity reused with different input')
     return { attempt: existing, replayed: true }
   }
-  reserveBudget(toBudgetLedger(attempts), input.id, input.day, input.upperBoundUsd)
+  reserveBudget(toBudgetLedger(attempts), input.id, input.day, input.upperBoundUsd, Math.min(input.capUsd ?? 10, 10))
   db.prepare('INSERT INTO model_attempts (id,captureId,revision,day,reservedMicros,actualMicros,state,generationId,model,createdAt,settledAt,note,resultFingerprint,resultOperationId,requestHash) VALUES (?,?,?,?,?,NULL,?,NULL,?,?,NULL,NULL,NULL,NULL,?)')
     .run(input.id, input.captureId, input.revision, input.day, micros(input.upperBoundUsd), 'reserved', input.model, input.now, input.requestHash)
   return { attempt: readAttempts(db).find(a => a.id === input.id)!, replayed: false }
@@ -91,7 +96,7 @@ export function reconcileAttempt(db: DatabaseSync, attemptId: string, amount: nu
 
 /** What the browser may know: read-only, no amounts per attempt. */
 export type ModelStatus = { state: 'ready' | 'paused' | 'budget-used' ; spentTodayUsd: number }
-export function modelStatus(attempts: ModelAttempt[], day: string, capUsd = 10): ModelStatus {
+export function modelStatus(attempts: ModelAttempt[], day: string, capUsd = dailyCapUsd()): ModelStatus {
   const ledger = toBudgetLedger(attempts)
   const spent = attempts.filter(a => a.day === day && a.state !== 'not-sent').reduce((s, a) => s + (a.actualUsd ?? a.reservedUsd), 0)
   if (ledger.breached || attempts.some(a => a.state === 'unknown')) return { state: 'paused', spentTodayUsd: spent }
