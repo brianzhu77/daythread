@@ -74,6 +74,9 @@ export function PageHeaderRow({ page, workspace }: { page: Page; workspace: Work
   const chain = pageAncestors(workspace, page.id)
   const pathRef = useRef<HTMLDivElement>(null)
   const [folded, setFolded] = useState(false)
+  // Bumped on every width change: unfolding alone is a no-op when the path is already unfolded, and then nothing would
+  // re-render to measure the narrower row.
+  const [, remeasure] = useState(0)
   const key = chain.map(p => `${p.id}:${p.title}`).join('/')
   useLayoutEffect(() => setFolded(false), [key])
   useLayoutEffect(() => {
@@ -84,7 +87,7 @@ export function PageHeaderRow({ page, workspace }: { page: Page; workspace: Work
     const el = pathRef.current
     if (!el) return
     let width = el.clientWidth
-    const observer = new ResizeObserver(() => { if (el.clientWidth !== width) { width = el.clientWidth; setFolded(false) } })
+    const observer = new ResizeObserver(() => { if (el.clientWidth !== width) { width = el.clientWidth; setFolded(false); remeasure(n => n + 1) } })
     observer.observe(el)
     return () => observer.disconnect()
   }, [])
