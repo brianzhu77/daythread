@@ -16,9 +16,15 @@ function shares(candidate: string, input: Set<string>, minShare = 0.5): boolean 
 
 export interface GroundingResult { grounded: boolean; reasons: string[] }
 
+// Bumblebee: if his text names a day and a dated kind of item comes back without one, the date was lost.
+const dateWord = /今天|明天|后天|大后天|周[一二三四五六日天末]|星期[一二三四五六日天]|下周|下个?月|月底|月初|号|today|tomorrow|tonight|next\s+\w+|\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b|\b\d{1,2}\/\d{1,2}\b|\d{4}-\d{2}-\d{2}/i
+export const hasDateWord = (text: string) => dateWord.test(text)
+
 export function groundItem(item: CaptureItem, inputText: string, openTasks: { id: string; title: string }[]): GroundingResult {
   const input = tokens(inputText), reasons: string[] = []
   const timeIn = (t: string) => inputText.includes(t) || inputText.includes(t.replace(/^0/, ''))
+  const dated = item.kind === 'task' || item.kind === 'event' ? item.date : item.kind === 'update' ? item.newDate ?? (item.markDone ? 'done' : null) : 'n/a'
+  if (dated === null && hasDateWord(inputText)) reasons.push('date missing')
   switch (item.kind) {
     case 'task':
       if (!shares(item.title, input)) reasons.push('title not from your text')
