@@ -68,16 +68,20 @@ export function CaptureBar({ page, placeholder = 'Capture… e.g. “Fri: submit
 }
 
 /**
- * Receipt cards (01 §4.3). Waiting groups from any day come first and never collapse;
- * handled captures from this page follow, newest last.
+ * Receipt cards (01 §4.3): waiting captures from any day, plus the last two handled ones from this page, newest first.
+ * The receipt is the only place he sees what Auto saved or failed, so the newest (failed too) never sits below older
+ * ones (Bumblebee, Lead 85852c23).
  */
 export function CaptureReceipts({ page, workspace }: { page: Page; workspace: Workspace }) {
   const waiting = workspace.captures.filter(c => c.status === 'needs_confirmation' || c.status === 'organizing')
   const recent = workspace.captures.filter(c => c.pageId === page.id && c.status !== 'needs_confirmation' && c.status !== 'organizing').slice(-2)
   if (!waiting.length && !recent.length) return null
+  // Captures are stored in the order they were made.
+  const order = new Map(workspace.captures.map((c, i) => [c.id, i]))
+  const shown = [...waiting, ...recent].sort((a, b) => order.get(b.id)! - order.get(a.id)!)
   return (
     <div id="captures" className="receipts">
-      {[...waiting, ...recent].map(c => c.simulated
+      {shown.map(c => c.simulated
         ? <ReceiptCard key={c.id} capture={c} workspace={workspace} currentPageId={page.id} />
         : <ReceiptV2 key={c.id} capture={c} workspace={workspace} />)}
     </div>

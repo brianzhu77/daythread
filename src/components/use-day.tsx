@@ -48,6 +48,8 @@ export interface Notice {
 
 type NoticeSpec = Notice | null
 type NoticeArg = NoticeSpec | ((r: Receipt) => NoticeSpec)
+/** A domain refusal matching `inlineRefusal` is handed to `onRefused` instead of the save-failed bar. */
+type RunOptions = { inlineRefusal?: RegExp; onRefused?: (message: string) => void }
 
 interface WorkspaceContextValue {
   workspace: Workspace | null
@@ -58,7 +60,7 @@ interface WorkspaceContextValue {
   failedAction: Action['type'] | null
   simOutcome: SimOutcome
   setSimOutcome(o: SimOutcome): void
-  run(action: Action, notice?: NoticeArg, operationId?: string): Promise<Receipt | null>
+  run(action: Action, notice?: NoticeArg, operationId?: string, options?: RunOptions): Promise<Receipt | null>
   retry(): void
   reload(): void
   refresh(triggerOperationId?: string): Promise<Workspace>
@@ -140,7 +142,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   }, [])
 
   const run = useCallback(
-    (action: Action, notice?: NoticeArg, operationId = newOperationId()) => {
+    (action: Action, notice?: NoticeArg, operationId = newOperationId(), options: RunOptions = {}) => {
       const job = queue.current.then(async (): Promise<Receipt | null> => {
         const current = wsRef.current
         if (!current) return null
@@ -160,8 +162,17 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           if (spec) push(spec)
           return result.receipt
         } catch (e) {
-          // What the user typed stays on screen; the header shows the failure with Retry.
           const message = e instanceof Error ? e.message : String(e)
+          // A refusal the caller shows in place (e.g. "Can't undo · edited since"): nothing failed to save, so no red
+          // bar and no Retry, which could only fail again (Jazz acdfa91).
+          if (options.inlineRefusal?.test(message)) {
+            setSaveState('saved')
+            debugClient('command.response',{...fields,elapsedMs:performance.now()-started,result:'refused'})
+            options.onRefused?.(message.match(options.inlineRefusal)![0])
+            try { await refresh(operationId) } catch { /* offline: the next action resyncs */ }
+            return null
+          }
+          // What the user typed stays on screen; the header shows the failure with Retry.
           setSaveState('failed')
           setSaveError(message)
           setLastFailed({ action, notice, operationId })

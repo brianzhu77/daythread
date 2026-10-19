@@ -909,3 +909,4 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
   /* Chips sit at the start of the row on the phone, so their menus open to the right instead of off the screen. */
   .receipt-v2 .row-menu:has(> .chip-button) > .app-menu { left: 0; right: auto; }
 }
+.receipt-refusal { margin: 4px 0 0; font-size: 13px; color: var(--ink-2); }

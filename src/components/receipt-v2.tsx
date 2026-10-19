@@ -31,6 +31,9 @@ function dateText(item: ProposalItem, today: LocalDate): string | null {
   return `${roleWord[item.dateRole ?? 'do']} ${day}`
 }
 
+/** Domain refusals of the receipt actions (edit, save, remove, Apply, Undo all). */
+const receiptRefusal = /Can't undo · edited since|Item was removed|Already saved|This item's type can't change here|Task changed; not applied|An event needs a date|(Capture|Capture item|Event|Task) not found/
+
 export function ReceiptV2({ capture, workspace }: { capture: Capture; workspace: Workspace }) {
   const { run, retryCapture, model } = useWorkspace()
   const [showOriginal, setShowOriginal] = useState(false)
@@ -41,7 +44,13 @@ export function ReceiptV2({ capture, workspace }: { capture: Capture; workspace:
   const waiting = held.length + updates.length
   const quote = `“${capture.text.length > 80 ? `${capture.text.slice(0, 80)}…` : capture.text}”`
   const fromPage = workspace.pages.find(p => p.id === capture.pageId)
-  const send = (action: Parameters<typeof run>[0], undoable = true) => run(action, undoable ? r => ({ text: r.message, undoOperationId: r.operationId }) : null)
+  // A refusal from the receipt's own rules ("Can't undo · edited since" and the like) is an answer, not a failed save:
+  // it shows under the receipt, with no red bar or Retry (Jazz acdfa91, Lead 85852c23). Real save failures keep the bar.
+  const [refused, setRefused] = useState<string | null>(null)
+  const send = async (action: Parameters<typeof run>[0], undoable = true) => {
+    setRefused(null)
+    return run(action, undoable ? r => ({ text: r.message, undoOperationId: r.operationId }) : null, undefined, { inlineRefusal: receiptRefusal, onRefused: setRefused })
+  }
 
   return (
     <section className={`app-card receipt receipt-v2 status-${capture.status}`} aria-label="Capture result">
@@ -97,6 +106,7 @@ export function ReceiptV2({ capture, workspace }: { capture: Capture; workspace:
         {capture.contextLine && capture.status !== 'organizing' && capture.status !== 'failed' && <span>{capture.contextLine} · </span>}
         <button type="button" className="app-link" onClick={() => setShowOriginal(s => !s)}>{showOriginal ? 'Hide original' : 'Show original'}</button>
       </p>
+      {refused && <p className="receipt-refusal" role="status">{refused}</p>}
       {showOriginal && <blockquote className="original">{capture.text}</blockquote>}
     </section>
   )
