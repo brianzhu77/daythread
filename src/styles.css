@@ -433,6 +433,8 @@ textarea.task-title:focus { outline: none; }
 .receipt { background: var(--card); border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(17, 17, 26, .04); }
 .receipt.status-needs_confirmation { border-color: #f0d6bd; }
 .receipt.status-failed { border-color: #efc9c4; }
+/* A model failure keeps his text, so it is amber like other waiting receipts, never red (receipt v2 spec). */
+.receipt-v2.status-failed { border-color: #f0d6bd; }
 .receipt-source { font-size: .85rem; color: var(--ink-soft); overflow-wrap: anywhere; }
 .waiting { color: var(--warn); }
 .proposals { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
