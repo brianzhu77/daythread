@@ -1,0 +1,9 @@
+same identity create-task
+same identity create-event
+same identity add-note
+atomic refusal note-edit
+atomic refusal note-delete
+atomic refusal note-move
+atomic refusal event-day
+atomic refusal task-row-delete
+PASS

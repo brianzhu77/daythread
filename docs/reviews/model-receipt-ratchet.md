@@ -21,3 +21,14 @@ Seven-item fixture renders at1280/390; phone has no page-width overflow. Behavio
 Full suite independently run:156 passed,4 TODO,no failures/skips (160 total). Ledger invariance for new edit/save/remove/undo commands and finalized ordinary-field identity/undo refusal await the fix candidate. Receipt UI pass does not yet exist.
 
 Evidence:tests/evidence/model-receipt-70/. Isolated databases /tmp/ratchet-receipt70.sqlite and /tmp/ratchet-receipt70-retry.sqlite. Test provider keys are synthetic. No real iPhone/IME validation.
+
+
+## Followup ad69333 — PASS (2026-10-19)
+
+All six blocking findings above are closed for this candidate. Independent checks:
+- `followup-domain.mjs`: saved task/event/note edits retain entity and block IDs; edited/deleted/moved note, changed event date and deleted task row each refuse whole Undo without mutating the input workspace. Original identity-undo reproduction also now refuses edited-note undo and preserves taskId.
+- `followup-paused-http.log`: actual browser-origin HTTP retry returned ok:false / model paused; capture before and after are identical (revision remains 2 from the previous reproduction), with no provider running. This is the actual endpoint check, not only a service unit test.
+- `followup-ui.mjs/log`: Chromium390 event No time clears invented14:00 and its warning while retaining Tomorrow; Set time15:00 works; waiting Tax Return update changes Do→Due and day→Oct22 before Apply. Database verification found deadlineOn2026-10-22 and plannedOn null. Menu bounds fit390; desktop1280 and phone390 screenshots saved; no page errors. Phone row title now reads naturally in the row.
+- Full suite:166 total,162 pass,4 TODO,0 fail. Source review confirms the Retry guard runs before repository mutation and Undo operates on a copy.
+
+Earlier controlled-provider same-capture Retry and capturedAt midnight-fixture evidence remains applicable; its code path was not changed by these fixes. Exploratory original browser.log remains excluded from pass evidence. Real iPhone/Chinese IME and real-provider quality are not verified here. No paid calls or production writes were made. Jazz retains ownership of the full visual checklist; Lead/Roadbuster owns the separately authorized one-shot smoke and deployment.
