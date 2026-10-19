@@ -39,7 +39,7 @@ Group B is listed for tracking only and never counts toward M.
 | ID | Item | Source | Status | Evidence |
 |---|---|---|---|---|
 | A1a | `/` → Page inside any page (day pages included): page card at the cursor, parent recorded, opens with the cursor in an editable title, Back returns to the card | e526eb12, 155a107d; v0.4 N-2 | built | c8fb28a live 2026-10-19; Ratchet #64 (docs/reviews/page-slash-ratchet.md) |
-| A1b | Nesting shown and managed: Subpages list, sidebar tree, Move, breadcrumb | 3596b765; v0.4 N-2, N-9 | building | step B on feat/pages-tree from cd3c494 (Lead b56155fb); parentId already stored since c8fb28a. Delete with children is A4 (N-7), not this row |
+| A1b | Nesting shown and managed: Subpages list, sidebar tree, Move, breadcrumb | 3596b765; v0.4 N-2, N-9 | building | step B on feat/pages-tree from cd3c494 (Lead b56155fb); parentId already stored since c8fb28a. Delete with children is A4 (N-7), not this row. Move is Move to… only; the row counts as built without drag (Lead c000dc41), drag is B14 |
 | A2 | Paste a URL → page with the URL as a property; one page per URL | 3596b765, e83b0640; v0.4 N-1, N-3, N-4 | missing | Page.type = daily/document only |
 | A3 | "Linked from" back to the day on every page | 3596b765; v0.4 N-5 | building | step B with A1b (Lead b56155fb); lists actual references only, parent goes in the breadcrumb |
 | A4 | Delete a page to trash and restore it, with its subpages | v0.4 N-7 | missing | — |
@@ -83,6 +83,7 @@ N = D1–D6 + A5 + A1a + A6a = 9.
 | B11 | Craft-colour replacement before any App Store build | prelaunch list, 08a02686 | not started (pre-launch only) |
 | B12 | Past day without a page shows "Nothing written · Start this page" (date rule R10, team addition) | date-navigation-rules R10 | built; Brian may veto |
 | B13 | Capture receipt follow-ups after Step 1 (receipt-v2-design-check.md, Lead 85852c23): (1) no-key capture still shows the v1 receipt; (3) an older receipt shows its capture-time date, should show the task's current date; (4) a held row saved without fixing keeps its reason chip, drop it on Save; (5) inline refusal copy: "Task changed; not applied" → "Task changed since · not applied", "… not found" → "Item no longer exists" (Bumblebee 77b32429) | Jazz design check acdfa91 | missing (after Step 1 deploy) |
+| B14 | Sidebar tree drag: move a page by dragging it, and manual sibling order by drag (N-2 lines 64, 67) | pages-delta N-2; Lead c000dc41, dd5e347 | missing (left out of Step B; Move to… covers moving) |
 
 ## C. Open questions for Brian
 
