@@ -1,0 +1,3 @@
+(node:34409) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS actual390 browser same-capture Retry: ID/text/time retained, revision2, two attempts, one task; Sunday23:59 synthetic persisted timestamp used after midnight

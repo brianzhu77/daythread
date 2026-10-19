@@ -1,0 +1,17 @@
+heldrow Event
+Swim class
+Time not in your text
+Tomorrow · 14:00
+Save
+Remove
+buttons [
+  { text: 'Event', label: 'Change type of Swim class' },
+  { text: 'Swim class', label: null },
+  { text: 'Tomorrow · 14:00', label: 'Change date of Swim class' },
+  { text: 'Save', label: null },
+  { text: 'Remove', label: null }
+]
+date-menu DAY
+
+TodayTomorrowWed, Oct 21Thu, Oct 22Fri, Oct 23Sat, Oct 24Sun, Oct 25Mon, Oct 26
+scroll { w: 390, s: 390 }

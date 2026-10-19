@@ -1,0 +1,54 @@
+(node:33600) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+inputs 0
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.fill: Timeout 30000ms exceeded.
+Call log:
+  - waiting for getByRole('textbox', { name: 'Capture', exact: true })
+
+    at /Users/dogrod/Developer/daythread-ratchet-receipt/tests/evidence/model-receipt-70/browser.mjs:1:583 {
+  name: 'TimeoutError'
+}
+
+Node.js v24.14.1
+emove
+Task
+Book flights
+Do Tomorrow
+⋯
+Event
+Lunch with Kevin
+Mon, Oct 26 · 12:30
+⋯
+Saved link
+Calm tech essay
+example.com
+⋯
+Update
+Tax Return → Do Tomorrow
+Apply
+Discard
+
+1 part wasn't saved as an item · See your text
+
+Undo all · Organized by fake/model · Context: your text and open tasks · Show original
+
+Saved from “Tax Return” · Today
+
+Task
+Tax Return
+No date
+⋯
+
+Undo all · Organized by fake/model · Context: your text and open tasks · Show original
+
+Tasks
+Today
+Upcoming
+Open
+Not today
+
+Nothing planned for today.

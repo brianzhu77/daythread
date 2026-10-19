@@ -1,0 +1,26 @@
+saved task title edit identity {
+  before: '90f22428-6329-445f-b25d-c14df727197a',
+  after: '7b1bab5e-0d0b-4965-be1e-351a5ad91330'
+}
+edited note undo { refused: false, remaining: [] }
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Undo all must refuse whole after editing a saved note elsewhere
+
+false !== true
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-receipt/tests/evidence/model-receipt-70/identity-undo.mjs:3:470
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
