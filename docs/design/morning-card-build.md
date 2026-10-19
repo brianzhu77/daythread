@@ -1,4 +1,6 @@
-# Morning card — build spec (Jazz, 2026-10-19)
+# Morning card — build spec (Jazz, 2026-10-19, rev 2)
+
+> **Rev 2 (after model step 1 and pages step B):** §12 lists what changed since this was written on 24a1b4b. Where §12 and the text below disagree, §12 wins.
 
 - Status: **draft for build**. Product and Weave rules are approved in `docs/design/v05-morning-and-weave.md` rev 2 (Bumblebee, 890325e). Brian chose this direction on Oct 17 (O4=b). On Oct 19 (9e538364, a4fd5686) he answered C5 = Auto and "Bring to today for plain lines" = restore.
 - This file only turns §1 of that doc into screens, states, copy and code touch points on main `24a1b4b`. Where they disagree, v05 §1 wins.
@@ -123,3 +125,30 @@ Start the day · TASKS · FROM YOUR NOTES · Suggested last night · Unfinished 
 3. **Proposals** (needs `draft.proposals`; real content only after the model key).
 
 I'll provide a static mock of states M1–M4 for Brian if the Lead wants one before step 1 ships. Otherwise I check the build on screen at 390 and 1280.
+
+## 12. Rev 2 deltas (main b63eb4e)
+
+1. **Proposals come from the real model now**, not only the simulated provider. The prompt from the quality probe
+   (`src/server/model/morning-prompt.ts`) is the starting point; it isn't wired yet. The model's job is narrowed:
+   - **Title = his line, verbatim** (2 lines, then ellipsis). The model only decides *propose yes/no* and an
+     optional *date*. It doesn't reword the title. Same lesson as the capture receipt: about 1 in 6 model calls
+     got something wrong, and a reworded title is the hardest error for him to spot. If the line is long, the UI
+     truncates; the task created by `+` gets the full line text.
+   - **Reason line is computed by the app**, never written by the model: "{Mon} · {Section}" from the source page.
+   - **Date:** if the model gives one, the row shows the shared `DateTag` with its role ("Do Fri, Oct 23") and the
+     created task gets that do date. A date that isn't grounded in his text (the receipt's "not in your text"
+     check) is dropped, not shown. No date → no tag.
+   - The dashed `+` and "From your notes" label stay; they mark "not a task yet".
+2. **Model states in the card** (same vocabulary and colours as the receipt spec `capture-receipt-v2.md`):
+   - Organizing: the group shows one muted line "Looking through your notes…" (no spinner rows).
+   - No key / key rejected / unavailable / paused / budget used up: the group isn't drawn; one muted `--warn`
+     line under the Tasks group: "Suggestions from your notes unavailable · {short reason}", with Retry only where
+     the receipt has Retry. Tasks and lines work as normal. Never red.
+   - Simulated: the existing "Simulated" header tag.
+   - Cost: shown nowhere in the card; "Cost unknown" rules follow the ledger as for capture.
+3. **Section names are real everywhere.** On Brian's page the plan sections are "TODO - Top 3" and "TODO - Other",
+   so the strips read "Added to TODO - Top 3 · Undo" and "Added to TODO - Other · Undo" (replaces the fixed
+   "Added to Top 3"). "Top 3 is full · added to {Section}" keeps the real plan-list name.
+4. **Proposal `+` and pages:** a proposal whose source line is a page card isn't proposed (a card isn't a to-do).
+5. **Acceptance addition:** every check in §10 also runs on an isolated copy of Brian's real database (built app or
+   own Vite `cacheDir`, no shared cache), at 390 and 1280, before the build is called done.
