@@ -103,7 +103,8 @@ export async function organizeCapture(deps: OrganizeDeps, captureId: string): Pr
     // an answer we couldn't use carries its cost if OpenRouter reported one.
     const knownCost = e?.costUsd ?? null
     // An HTTP error answer means no generation ran: settled at 0 on that evidence (note says why).
-    if (e?.httpStatus) return fail('failure', e.kind === 'auth' ? 'Model unavailable · check the key · text saved' : e.kind === 'limit' ? 'Model limit reached · text saved' : 'Model unavailable · text saved', { id: attemptId, cost: 0, generationId: null, note: `provider answered HTTP ${e.httpStatus}; no generation, nothing charged` })
+    // Copy (Bumblebee): a rejected key is the one failure he can fix himself; every other provider error is "unavailable".
+    if (e?.httpStatus) return fail('failure', e.kind === 'auth' ? 'Model key rejected · text saved' : 'Model unavailable · text saved', { id: attemptId, cost: 0, generationId: null, note: `provider answered HTTP ${e.httpStatus}; no generation, nothing charged` })
     if (knownCost !== null) return fail('failure', "Couldn't organize · text saved", { id: attemptId, cost: knownCost, generationId: null })
     await repository.recordModelResult({ attemptId, actualUsd: null, generationId: null, now: now().toISOString() })
     return fail('failure', e?.kind === 'timeout' ? 'Model took too long · text saved' : "Couldn't reach the model · text saved")
@@ -115,7 +116,7 @@ export async function organizeCapture(deps: OrganizeDeps, captureId: string): Pr
   const latest = await repository.load()
   const command = {
     operationId: `organized:${captureId}:${revision}`, expectedRevision: latest.revision,
-    action: { type: 'organized-capture' as const, captureId, revision, model: config.model, mode: deps.mode, proposals, unreadable, contextLine: `Organized by ${config.model} · sent: your text and open tasks` },
+    action: { type: 'organized-capture' as const, captureId, revision, model: config.model, mode: deps.mode, proposals, unreadable, contextLine: `Organized by ${config.model} · Context: your text and open tasks` },
   }
   const r = await repository.recordModelResult({ attemptId, actualUsd: cost, generationId, now: now().toISOString() }, command)
   return r.refused ? 'stale' : 'organized'

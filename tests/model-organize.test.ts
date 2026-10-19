@@ -108,7 +108,7 @@ test('an HTTP error answer (e.g. 401) is settled at 0 with the reason, and doesn
   const s = await store('call dentist')
   try {
     await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => 401), now }, s.captureId)
-    assert.match((await capture(s.repo, s.captureId)).error!, /check the key/)
+    assert.equal((await capture(s.repo, s.captureId)).error, 'Model key rejected · text saved')
     const [a] = await s.repo.modelAttempts()
     assert.equal(a!.state, 'settled'); assert.equal(a!.actualUsd, 0); assert.match(a!.note!, /HTTP 401; no generation/)
     assert.equal((await capture(s.repo, s.captureId)).contextLine, 'Not organized · your text is kept')
