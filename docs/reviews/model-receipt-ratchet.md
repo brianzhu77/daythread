@@ -32,3 +32,7 @@ All six blocking findings above are closed for this candidate. Independent check
 - Full suite:166 total,162 pass,4 TODO,0 fail. Source review confirms the Retry guard runs before repository mutation and Undo operates on a copy.
 
 Earlier controlled-provider same-capture Retry and capturedAt midnight-fixture evidence remains applicable; its code path was not changed by these fixes. Exploratory original browser.log remains excluded from pass evidence. Real iPhone/Chinese IME and real-provider quality are not verified here. No paid calls or production writes were made. Jazz retains ownership of the full visual checklist; Lead/Roadbuster owns the separately authorized one-shot smoke and deployment.
+
+## Final refusal UI followup 32b50c1 — PASS
+
+Independent actual Chromium390 interaction (`refusal-ui.mjs/log`): task changed via Tasks UI, then receipt Undo all clicked. Exact inline “Can't undo · edited since” appeared; no Not saved banner or Retry; persisted task and page arrays were identical before/after refusal. A subsequent deliberately aborted command request produced the genuine Not saved + Retry path and preserved persisted tasks. No page errors. Screenshot refusal390.png. Initial harness used the wrong role for the Upcoming link and checkbox check expected synchronous state; corrected harness uses link and click. Those harness failures are not product findings. Prior six-fix functional evidence remains valid (53b790a corresponds to reviewed ad69333); Jazz owns ordering and full visual coverage. No real-provider calls or production writes.

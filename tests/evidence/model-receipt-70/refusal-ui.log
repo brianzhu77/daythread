@@ -1,0 +1,5 @@
+(node:40213) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS real Undo click: inline refusal, no red Not saved/Retry, all tasks and pages unchanged
+PASS genuine transport failure keeps Not saved + Retry; persisted tasks unchanged
+pageerrors []
