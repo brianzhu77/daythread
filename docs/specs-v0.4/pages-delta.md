@@ -133,7 +133,7 @@ Typing a URL inside a sentence never does:
 ### N-5 "Linked from" [Brian: "链接回 today's thread"]
 
 - Every page shows **Linked from** under its title: the pages that actually reference it (cards,
-  `[[` references, subpage cards), newest first, daily pages shown as their date ("Fri Oct 16").
+  `[[` references, subpage cards), newest first, daily pages shown as their date ("Fri Oct 16"), except today's page, which shows as "Today" like the sidebar.
   Same relation as 04 P13: real references only, never text matching.
 - Each entry opens that page at the top. We still don't promise to land on the exact line (00 REF).
 - A link page also lists its **saves**: date and Brian's note from each pasted line (the old
