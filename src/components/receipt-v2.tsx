@@ -114,6 +114,8 @@ function ItemRow({ item, capture, send, held = false }: { item: ProposalItem; ca
   const dateMenu: { title?: string; items: MenuItem[] }[] = [
     ...(item.kind === 'create-task' ? [{ title: 'Kind of date', items: (['do', 'start', 'due'] as const).map(r => ({ label: roleWord[r], onSelect: () => edit({ dateRole: r, ...(item.date ? {} : { date: today }) }) })) }] : []),
     { title: 'Day', items: [...days.map(d => ({ label: dayLabel(d, today), onSelect: () => edit({ date: d }) })), ...(item.kind === 'create-task' ? [{ label: 'No date', onSelect: () => edit({ date: null }) }] : [])] },
+    // An invented time is cleared in one tap; the day stays (Bumblebee d26b1d5c, Lead 1501107b).
+    ...(item.kind === 'create-event' && item.time ? [{ items: [{ label: 'No time', onSelect: () => edit({ time: null }) }] }] : []),
   ]
   const date = dateText(item, today)
   return (
@@ -145,11 +147,22 @@ function ItemRow({ item, capture, send, held = false }: { item: ProposalItem; ca
 
 function UpdateRow({ item, capture, send }: { item: ProposalItem; capture: Capture; send: Send }) {
   const today = todayIso()
-  const change = item.status === 'done' ? 'done' : item.date ? `${roleWord[item.dateRole ?? 'do']} ${dayLabel(item.date, today)}` : 'change'
+  // A dated update defaults to Do; the role and the day are one tap to fix before Apply (Bumblebee d26b1d5c).
+  const edit = (patch: Record<string, unknown>) => void send({ type: 'edit-capture-item', captureId: capture.id, itemId: item.id, ...patch } as never, false)
+  const role = item.dateRole ?? 'do'
+  const days = [0, 1, 2, 3, 4, 5, 6, 7].map(n => addDays(today, n))
+  const roleMenu: MenuItem[] = (['do', 'start', 'due'] as const).map(r => ({ label: roleWord[r], onSelect: () => edit({ dateRole: r }) }))
+  const dayMenu: MenuItem[] = days.map(d => ({ label: dayLabel(d, today), onSelect: () => edit({ date: d }) }))
   return (
     <li className="receipt-row update">
       <span className="app-chip update-chip">Update</span>
-      <span className="receipt-title">{item.title} → {change}</span>
+      <span className="receipt-title">{item.title} → {item.status === 'done' ? 'done' : item.date ? '' : 'change'}</span>
+      {item.status !== 'done' && item.date && (
+        <span className="receipt-chips">
+          <RowMenu label={`Change kind of date for ${item.title}`} groups={[{ title: 'Kind of date', items: roleMenu }]} trigger={roleWord[role]} triggerClass="date-chip chip-button" />
+          <RowMenu label={`Change date of ${item.title}`} groups={[{ title: 'Day', items: dayMenu }]} trigger={dayLabel(item.date, today)} triggerClass="date-chip chip-button" />
+        </span>
+      )}
       <span className="row-actions">
         <button type="button" className="primary" onClick={() => void send({ type: 'save-capture-item', captureId: capture.id, itemId: item.id })}>Apply</button>
         <button type="button" className="ghost" onClick={() => void send({ type: 'remove-capture-item', captureId: capture.id, itemId: item.id }, false)}>Discard</button>

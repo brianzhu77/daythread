@@ -157,3 +157,23 @@ test('Undo all also puts back an applied update, unless the task changed since',
   const edited = run(ws, { type: 'task-status', taskId: t.id, status: 'done' })
   assert.throws(() => run(edited, { type: 'undo-capture', captureId: id }), /edited since/)
 })
+
+test('a waiting update: its role and day can be changed before Apply, and Apply uses them', () => {
+  let ws = run(createEmptyWorkspace(), { type: 'ensure-day', date: '2026-10-19' })
+  ws = run(ws, { type: 'add-task', pageId: ws.pages[0]!.id, sectionId: ws.pages[0]!.sections[0]!.id, title: 'Tax Return' })
+  const t = ws.tasks[0]!
+  ws = run(ws, { type: 'capture-for-model', pageId: ws.pages[0]!.id, text: 'Tax Return due Friday', model: 'm', capturedAt: '2026-10-19T16:00:00Z' })
+  const id = ws.captures[0]!.id
+  ws = run(ws, { type: 'organized-capture', captureId: id, revision: 1, model: 'm', mode: 'auto', proposals: [{ id: 'u', kind: 'update-task', title: 'Tax Return', taskId: t.id, expectedVersion: t.version, date: '2026-10-20', dateRole: null, flags: [] }], unreadable: 0, contextLine: '' })
+  ws = run(ws, { type: 'edit-capture-item', captureId: id, itemId: 'u', dateRole: 'due' })
+  ws = run(ws, { type: 'edit-capture-item', captureId: id, itemId: 'u', date: '2026-10-23' })
+  assert.equal(ws.tasks[0]!.deadlineOn, null) // nothing applied yet
+  ws = run(ws, { type: 'save-capture-item', captureId: id, itemId: 'u' })
+  assert.equal(ws.tasks[0]!.id, t.id); assert.equal(ws.tasks[0]!.deadlineOn, '2026-10-23'); assert.equal(ws.tasks[0]!.plannedOn, t.plannedOn)
+})
+
+test('a flagged event time is cleared in one edit: the day stays, the flag goes', () => {
+  const { ws: start, captureId, item } = organized([p({ kind: 'create-event', title: 'Swim class', date: '2026-10-20', time: '14:00', flags: ['time-not-in-text'] })])
+  const ws = run(start, { type: 'edit-capture-item', captureId, itemId: item(start, 'Swim class').id, time: null })
+  assert.equal(item(ws, 'Swim class').time, null); assert.equal(item(ws, 'Swim class').date, '2026-10-20'); assert.deepEqual(item(ws, 'Swim class').flags, [])
+})

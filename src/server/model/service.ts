@@ -64,7 +64,8 @@ export async function submitCaptureForModel(operationId: string, pageId: string,
 /** Retry for a capture whose organizing failed: same capture, new revision, organized again in the background. */
 export async function retryCaptureForModel(operationId: string, captureId: string): Promise<{ ok: boolean; info: ModelInfo }> {
   const info = await modelInfo()
-  if (info.state === 'simulated') return { ok: false, info }
+  // Paused or out of budget: refused before the capture is touched, not only hidden in the receipt (Ratchet #70).
+  if (info.state !== 'ready') return { ok: false, info }
   const repository = sqlite(), c = config()!
   const ws = await repository.load()
   await repository.execute({ operationId, expectedRevision: ws.revision, action: { type: 'retry-capture', captureId } })
