@@ -372,6 +372,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return () => { clearTimeout(timer.current); if (dirty.current) stash(); window.removeEventListener('beforeunload', before) }
   }, [])
 
+  // Read from the browser's caret, not editor state: ProseMirror picks up caret moves (Home, arrows) a moment later.
+  function caretAtDocumentStart(): boolean {
+    const sel = window.getSelection()
+    if (!sel?.isCollapsed || !sel.anchorNode) return false
+    const first = editor.domElement?.querySelector('[data-node-type="blockContainer"] .bn-inline-content')
+    if (!first || (first !== sel.anchorNode && !first.contains(sel.anchorNode))) return false
+    const range = document.createRange(); range.selectNodeContents(first); range.setEnd(sel.anchorNode, sel.anchorOffset)
+    return range.toString().length === 0
+  }
   /**
    * `/page`: the card goes in at once with a page id chosen here, then the page is created under that id. A failed or
    * lost reply never removes the card: the same id is retried (a page the server already made is just confirmed),
@@ -379,8 +388,17 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    */
   async function createSubpage() {
     const pageId = crypto.randomUUID()
-    insertOrUpdateBlockForSlashMenu(editor, { type: 'pageLink', props: { pageId } } as never)
-    const cardId = editor.document.find(b => (b.props as { pageId?: string }).pageId === pageId)?.id
+    // Card and the empty line after it go in as one transaction, so a single Undo takes the card back out while the
+    // page is still being created (Ratchet #64); insertOrUpdateBlockForSlashMenu made those two separate steps.
+    let cardId: string | undefined
+    editor.transact(() => {
+      const current = editor.getTextCursorPosition().block
+      const card = { type: 'pageLink', props: { pageId } } as never
+      const [inserted] = inlineText(current.content).trim() ? editor.insertBlocks([card], current, 'after') : editor.replaceBlocks([current], [card]).insertedBlocks
+      cardId = inserted!.id
+      const [line] = editor.insertBlocks([{ type: 'paragraph' } as never], inserted!, 'after')
+      editor.setTextCursorPosition(line!, 'start')
+    })
     await confirmSubpage(pageId, cardId, true)
   }
   async function confirmSubpage(pageId: string, cardId: string | undefined, open: boolean) {
@@ -706,7 +724,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.current.length) {
         e.preventDefault(); e.stopPropagation()
         deleteSelected()
-      } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && page.type === 'document' && editor.prosemirrorState.selection.empty && editor.getTextCursorPosition().block.id === editor.document[0]?.id && editor.prosemirrorState.selection.$from.parentOffset === 0) {
+      } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && page.type === 'document' && caretAtDocumentStart()) {
         // Jazz's title spec: Backspace at the start of the first line goes up into the title, as in Notion.
         const title = document.querySelector<HTMLElement>('.page-title-field')
         if (title) { e.preventDefault(); e.stopPropagation(); focusAtEnd(title) }
