@@ -1,0 +1,4 @@
+(node:95405) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS baseline cd3c494 layout3 stores A>B>C in current and undo; reopen and old rename preserve parent IDs. No rollback script exercised: future candidate not yet available.
