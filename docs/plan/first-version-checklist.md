@@ -51,18 +51,19 @@ Group B is listed for tracking only and never counts toward M.
 | ID | Item | Source | Status | Evidence |
 |---|---|---|---|---|
 | A6a | Real model (OpenRouter, 10 USD/day cap) behind capture: auto-save with receipt, grounding holds, edit/Undo all | O-U18, 7a55cbbf D-C, c377e316 | built | ca4c4ca live 2026-10-19 15:34Z; Step 1 a 33e1d38 Ratchet #68, b 25dc72a #69, c Ratchet #70 (docs/reviews/model-receipt-ratchet.md) + design check acdfa91; smoke 7/7. Probe weak, accepted risk (Brian yes 9f3f3f82). Context: his text + open tasks |
-| A6b | Real model behind Draft my day, review suggestions, Related | O-U18, 7a55cbbf D-C, c377e316 | missing | still simulated; Step 2. Context: one hop of linked pages + previous daily page; transitive later, Brian told |
+| A6b | Real model behind Draft my day, review suggestions, Related, and the morning card's "From your notes" proposals (morning-card-build.md §11 step 3) | O-U18, 7a55cbbf D-C, c377e316; 7c4e0cab | missing | still simulated; Step 2. Context: one hop of linked pages + previous daily page; transitive later, Brian told. Proposals moved here from A8 on 2026-10-19 (Lead e602d3b1) |
 | A7 | Indexing at plan/review into Weave pages; browse; copy to your pages; corrections in a thread fix the next run | 06469260, c377e316, 08a02686 | missing | waits on A6; layout A chosen (C2); context: Step 2 (one hop + previous daily page) |
 
 ### Part 4 · Predictions: yesterday's unfinished + items scheduled for today
 
 | ID | Item | Source | Status | Evidence |
 |---|---|---|---|---|
-| A8 | Morning card per v05 design (merged suggestions with reason, proposals for text lines, Undo) + Bring to today for plain lines | 7c4e0cab (O4=b), 78871f09 | partial | old Keep / Keep all card; plain lines dropped by team rule (start-the-day.tsx:27); unblocked (C5 yes) |
+| A8 | Morning card per v05 design (merged suggestions with reason, Undo) + Bring to today for plain lines | 7c4e0cab (O4=b), 78871f09 | building | feat/morning-card from b63eb4e (Lead e602d3b1), morning-card-build.md §11 steps 1-2. "From your notes" proposals (step 3) moved to A6b: they need the real model |
 
 Count: M = D1–D6 + A1a, A1b, A2–A5, A6a, A6b, A7–A9, A11, A12 = 19. A10 (drag preview) is settled inside D5, not a separate row.
 A1 was split into A1a/A1b on 2026-10-19 when `/page` shipped (same sources, no scope change), so M went 17 → 18.
 A6 was split into A6a/A6b on 2026-10-19 when capture went live on the real model (same sources, no scope change), so M went 18 → 19.
+A8's proposals for text lines moved to A6b on 2026-10-19 (they need the real model; same sources); M unchanged.
 A1b dropped "delete with children" on 2026-10-19 because A4 already covers it (N-7, trash and restore with subpages); M unchanged.
 N = D1–D6 + A5 + A1a, A1b, A3 + A6a = 11.
 
