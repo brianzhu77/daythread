@@ -6,7 +6,7 @@ after that (tags on Oct 18). Brian's latest message overrides this file; update 
 
 ## Count
 
-**Built: 7 of 17** (as of main `7f0de2d`, live on 3000, 2026-10-19).
+**Built: 8 of 18** (as of `c8fb28a`, live on 3000, 2026-10-19).
 
 Every status update to Brian quotes this line. Count rule: a row counts as built only when it is live on 3000
 **and** has passed review (Ratchet's acceptance task linked in Evidence). "Partial" counts as not built.
@@ -38,7 +38,8 @@ Group B is listed for tracking only and never counts toward M.
 
 | ID | Item | Source | Status | Evidence |
 |---|---|---|---|---|
-| A1 | Nesting to any depth, `/page` + page card, Subpages, Move, sidebar tree, breadcrumb | 3596b765, e526eb12, 155a107d; v0.4 N-2, N-9 | missing | step A on feat/page-slash (paused until A5); Page has no parent (types.ts:27) |
+| A1a | `/` → Page inside any page (day pages included): page card at the cursor, parent recorded, opens with the cursor in an editable title, Back returns to the card | e526eb12, 155a107d; v0.4 N-2 | built | c8fb28a live 2026-10-19; Ratchet #64 (docs/reviews/page-slash-ratchet.md) |
+| A1b | Nesting shown and managed: Subpages list, sidebar tree, Move, breadcrumb, delete with children | 3596b765; v0.4 N-2, N-7, N-9 | missing | step B; parentId already stored since c8fb28a |
 | A2 | Paste a URL → page with the URL as a property; one page per URL | 3596b765, e83b0640; v0.4 N-1, N-3, N-4 | missing | Page.type = daily/document only |
 | A3 | "Linked from" back to the day on every page | 3596b765; v0.4 N-5 | missing | — |
 | A4 | Delete a page to trash and restore it, with its subpages | v0.4 N-7 | missing | — |
@@ -58,14 +59,15 @@ Group B is listed for tracking only and never counts toward M.
 |---|---|---|---|---|
 | A8 | Morning card per v05 design (merged suggestions with reason, proposals for text lines, Undo) + Bring to today for plain lines | 7c4e0cab (O4=b), 78871f09 | partial | old Keep / Keep all card; plain lines dropped by team rule (start-the-day.tsx:27); unblocked (C5 yes) |
 
-Count: M = D1–D6 + A1–A9, A11, A12 = 17. A10 (drag preview) is settled inside D5, not a separate row.
-N = D1–D6 + A5 = 7.
+Count: M = D1–D6 + A1a, A1b, A2–A9, A11, A12 = 18. A10 (drag preview) is settled inside D5, not a separate row.
+A1 was split into A1a/A1b on 2026-10-19 when `/page` shipped (same sources, no scope change), so M went 17 → 18.
+N = D1–D6 + A5 + A1a = 8.
 
 ## B. In our own specs, Brian never named them (tracked, not counted)
 
 | ID | Item | Source | Status |
 |---|---|---|---|
-| B1 | Rename page | v0.3 P02 | missing |
+| B1 | Rename page | v0.3 P02 | built (c8fb28a, editable title; Ratchet #64) |
 | B2 | Events as records | v0.3 scope 6 | missing |
 | B3 | JSON export | v0.3 scope 13 | missing |
 | B4 | "/" menu Link and Separator; "Paragraph" → "Body" | editor spec F13 | missing |
