@@ -224,6 +224,7 @@ export type Action =
     }
   | { type: "material-resurface"; materialId: string; enabled: boolean }
   | { type: "create-document"; title: string; body: string }
+  | { type: "relink-material-lines" }
   | {
       type: "insert-reference";
       pageId: string;

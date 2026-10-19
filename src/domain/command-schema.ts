@@ -108,6 +108,7 @@ const action = z.discriminatedUnion("type", [
     skip: z.boolean().optional(),
   }),
   z.object({ type: z.literal("create-document"), title, body }),
+  z.object({ type: z.literal("relink-material-lines") }),
   z.object({
     type: z.literal("insert-reference"),
     pageId: id,

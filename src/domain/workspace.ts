@@ -244,6 +244,26 @@ function saveMaterial(
   body = "",
   note = "",
 ): Material {
+  const m = findOrCreateMaterial(state, p, url, title, body);
+  const b: NoteBlock = {
+    id: newId(),
+    kind: "material",
+    materialId: m.id,
+    text: text(note) || title || url,
+  };
+  appendBlock(p, s, b);
+  m.sources.push({ pageId: p.id, blockId: b.id, note: text(note) });
+  return m;
+}
+/** One Material per exact URL (04 P14); saving a "Done with it" URL again puts it back to sort (Addendum G05). */
+function findOrCreateMaterial(
+  state: Workspace,
+  p: Page,
+  url: string,
+  title: string,
+  body = "",
+  newMaterialId: string = newId(),
+): Material {
   const parsed = new URL(url);
   if (!["https:", "http:"].includes(parsed.protocol))
     throw new DomainError("Use an http(s) source URL");
@@ -253,7 +273,7 @@ function saveMaterial(
     new Date().toLocaleDateString("en-CA", { timeZone: state.timezone });
   if (!m) {
     m = {
-      id: newId(),
+      id: newMaterialId,
       url,
       title: text(title, 1000).trim() || url,
       body: text(body),
@@ -277,15 +297,41 @@ function saveMaterial(
       { date: day, decision: "saved-again" },
     ];
   }
-  const b: NoteBlock = {
-    id: newId(),
-    kind: "material",
-    materialId: m.id,
-    text: text(note) || title || url,
-  };
-  appendBlock(p, s, b);
-  m.sources.push({ pageId: p.id, blockId: b.id, note: text(note) });
   return m;
+}
+const bareUrl = (value: string): string | null => {
+  const v = value.trim();
+  if (!/^https?:\/\/\S+$/.test(v)) return null;
+  try { new URL(v); return v; } catch { return null; }
+};
+/**
+ * Editor path of 01 §6.1 / P14: a URL alone on a line in the material section (Good Stuffs, by kind, so a
+ * renamed heading still counts) becomes a saved Material, as add-text did. Saves are debounced while Brian
+ * types, so a Material this line created and nobody has touched yet follows the line: it is re-keyed or
+ * dropped when the URL changes. Once it has a decision, a second source or a title, it keeps its identity.
+ */
+function linkMaterialLines(state: Workspace, p: Page) {
+  for (const s of p.sections) {
+    if (s.kind !== "good-stuffs") continue;
+    for (const b of s.blocks) {
+      const url = bareUrl(b.text);
+      if (b.kind === "material" && b.materialId) {
+        const m = state.materials.find((m) => m.id === b.materialId);
+        const provisional = m && m.sources.length === 1 && m.sources[0]!.blockId === b.id && m.title === m.url
+          && m.reviewState === "pending" && !(m.decisions ?? []).length;
+        if (!provisional || m.url === url) continue;
+        state.materials = state.materials.filter((x) => x !== m);
+        b.kind = "paragraph";
+        delete b.materialId;
+      }
+      if (b.kind !== "paragraph" || !url) continue;
+      // Derived from the block, like `editor-task:` ids, so the browser's save preview and the server agree.
+      const m = findOrCreateMaterial(state, p, url, url, "", `material:${b.id}`);
+      b.kind = "material";
+      b.materialId = m.id;
+      if (!m.sources.some((x) => x.blockId === b.id)) m.sources.push({ pageId: p.id, blockId: b.id, note: "" });
+    }
+  }
 }
 /** Calendar and future-day lists (rule R4): the day's planned tasks, then open tasks only due that day. */
 export function getCalendarTasks(state: Workspace, day: string): Task[] {
@@ -458,6 +504,7 @@ function execute(
       }
       }
       p.sections = projectDocument(nodes, p, state);
+      linkMaterialLines(state, p);
       const ordered = p.sections.flatMap(s => s.blocks).filter(b => b.kind === 'task' && b.planRole === 'plan');
       ordered.forEach((b, order) => {
         const relation = state.placements.find(x => x.taskId === b.taskId && x.date === p.date && x.state === 'included');
@@ -776,6 +823,13 @@ function execute(
         draft: null,
       });
       return { message: "Page saved", entityId: id };
+    }
+    case "relink-material-lines": {
+      // One-off repair for pages written while the editor skipped the material rule; safe to repeat.
+      const before = state.materials.length;
+      for (const p of state.pages) linkMaterialLines(state, p);
+      const added = state.materials.length - before;
+      return { message: added ? `Saved ${added} link${added === 1 ? "" : "s"} from Good Stuffs` : "No unsaved Good Stuffs links" };
     }
     case "insert-reference": {
       const p = page(state, action.pageId),
