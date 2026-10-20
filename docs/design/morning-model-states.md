@@ -1,0 +1,80 @@
+# Morning card with the model: Draft my day and proposals — states (A6b step 1)
+
+Owner: Jazz (Design). Status: proposal for the A6b plan (Lead `b7f87619`). Builds on
+`docs/design/morning-card-build.md` (§3, §4, §8, §12) and `docs/design/v05-morning-and-weave.md` §1.
+State words and colours come from `docs/design/capture-receipt-v2.md`. Where this file and §12.2 of the card spec
+disagree, this file wins (it merges the two failure lines into one, see §3).
+
+Scope: what Brian sees in the **Start the day** card while the model drafts his day and after. Review suggestions
+and Related are a later step; they reuse the same state words.
+
+## 1. One call, one result
+
+- **Draft my day** and **proposals** are one model run that writes `page.draft` for today. The run returns
+  suggested tasks (picked from his open tasks) and proposals (lines that aren't tasks yet). Both show in the card;
+  nothing is written to his page or his tasks until he taps `+` (v05 §1.3).
+- **Trigger: his tap only.** No model call when a page opens or reloads. Reasons: cost stays visible and
+  predictable, a reload never runs it twice, and step 1's success criterion ("he uses it on 2 of 5 mornings",
+  Bumblebee `c741457c`) needs a real choice to measure. A finished evening review also writes a draft, as now.
+- **One draft per day.** Once today has a draft (from the review or from Draft my day), the link goes away. No
+  "draft again" in step 1. Retry exists only after a failure (§3).
+- The run belongs to the day it was started for. A tap at 23:58 that finishes at 00:01 lands on the earlier day.
+
+## 2. Where the link is
+
+- **Card shown** (open tasks or lines qualify): the Tasks group line "No suggestions from last night · **Draft my
+  day**", as now (`start-the-day.tsx:180`). Tasks rows below it work as normal.
+- **Card not shown today** (nothing qualifies), a gap today: there's no way to run it. Show the card with only that
+  line plus Done / Later when today has no draft and no failure. Done hides it for the day as usual. This is the
+  only change to when the card appears.
+- **Later strip:** "Suggestions · {n} ▸" counts rows only; while a run is going, it reads "Suggestions · drafting…".
+
+## 3. States
+
+All lines are 13 px, in the Tasks group where the "No suggestions" line sits. Tasks rows, lines, Done and Later keep
+working in every state. Never red.
+
+| State | What shows | Action |
+|---|---|---|
+| Ready, no draft | "No suggestions from last night · **Draft my day**" (`--ink-2`) | Draft my day |
+| Drafting | "Drafting your day…" with the 14 px spinner, `--ink-2`. No placeholder rows | none; he can leave and come back |
+| Done, with results | The line goes. Suggested tasks join the Tasks group with **"Suggested for today"** as their reason. Proposals appear under **FROM YOUR NOTES** | `+` per row |
+| Done, nothing to suggest | "Nothing to suggest from your notes" (`--ink-3`), no link | none |
+| Simulated (no model key) | Results as above, plus the existing **"Simulated"** tag in the card header | as above |
+| Key rejected | "Suggestions couldn't be prepared · Model key rejected" in `--warn` | **Retry** |
+| Model unavailable (error, timeout, every item invalid) | "Suggestions couldn't be prepared · Model unavailable" in `--warn` | **Retry** |
+| Paused (a cost couldn't be confirmed) | "Suggestions couldn't be prepared · a cost couldn't be confirmed" in `--warn` | none |
+| Budget used up | "Suggestions couldn't be prepared · today's model budget is used up" in `--warn` | none until tomorrow |
+| Cost unknown (error with no cost or id) | the failure line above, then a muted **"Cost unknown"** tag in `--ink-3` | as the row says |
+
+- This replaces §12.2's separate "Suggestions from your notes unavailable" line: proposals and suggested tasks come
+  from the same run, so one line covers both.
+- Retry is the same run again and keeps the day it was started for. A Retry that fails shows the same line.
+- No cost figure anywhere in the card, as in §12.2.
+- At 390 a failure line may wrap to 2 lines. Retry stays at the end of the text, with a 44 px target.
+
+## 4. Rows after a run
+
+- **Suggested tasks:** already tasks, so the rules in card spec §3 apply: shown once, `+` sends them to
+  {Top 3 section}, Top 3 full → plan list with the existing strip, empty-title tasks never shown, tasks already
+  planned for today never shown.
+- **Proposals** (card spec §4 and §12.1): title = his line word for word, reason "{Mon} · {Section}" computed by
+  the app, date tag only when grounded in his text, dashed `+`. `+` creates a new task in {plan list section} with
+  the full line; strip "Added to {Section} · Undo"; Undo deletes that task. ⋯ → Hide for today.
+- **The source changed after the run.** A proposal points at its source line by block id. When the card draws:
+  - line edited → show the line as it is now (still verbatim);
+  - line deleted, its page in trash (A4), or the line already became a task → the row isn't shown.
+- **Never proposed:** page cards (§12.4), lines in trashed pages, lines already linked to a task, his own empty rows.
+
+## 5. Checks (for Ratchet), on a copy of Brian's data at 390 and 1280
+
+Use the fake model (`scripts/fake-openrouter.mjs`): `http401:`, `http500:`, `slow:`, and the budget cap
+`DAYTHREAD_MODEL_CAP_USD`.
+
+1. Opening and reloading today makes no model call. Only the tap does.
+2. Drafting shows "Drafting your day…"; leaving and coming back shows the result once.
+3. Each failure in §3 shows its line, Retry only where the table says, and tasks rows still work.
+4. With nothing to suggest, the card says so and offers no link. Reloading doesn't bring the link back.
+5. A proposal's `+` creates one task with his exact line; Undo removes it; the source line is unchanged.
+6. Editing a source line after the run updates the row; deleting it or trashing its page removes the row.
+7. With no open tasks and no lines, the card still offers Draft my day until today has a draft.
