@@ -37,15 +37,32 @@ const fixture = (openTaskId) => [
   { kind: 'task', title: 'Pay rent', date: '2026-02-31', dateRole: 'due' },              // 7 rejected (no such date)
 ]
 const lookedUp = new Set()
+let draftMode = 'propose'
 createServer(async (req, res) => {
   const chunks = []; for await (const c of req) chunks.push(c)
   const send = (status, body) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)) }
   // /generation knows the cost only of generations made by "lookup:"; any other id is 404 (as for "paused:").
   if (req.url.includes('/generation?id=')) { const id = new URL(req.url, 'http://x').searchParams.get('id'); return lookedUp.has(id) ? send(200, { data: { id, total_cost: 0.0003 } }) : send(404, { error: { message: 'not found' } }) }
   if (req.url.endsWith('/models')) return send(200, { data: [{ id: 'fake/model', pricing: { prompt: '0.0000003', completion: '0.0000012' } }] })
+  // A6b Draft my day: POST /__draft-mode?mode=<propose|empty|http401|http500|slow|hang|invalid> picks what the next
+  // drafts get back (default "propose": the first task candidate and every line that names a day, undated).
+  if (req.url.startsWith('/__draft-mode')) { draftMode = new URL(req.url, 'http://x').searchParams.get('mode') ?? 'propose'; return send(200, { draftMode }) }
   if (!req.url.endsWith('/chat/completions')) return send(404, {})
   const body = JSON.parse(Buffer.concat(chunks).toString() || '{}')
   const text = body.messages?.at(-1)?.content ?? '', system = body.messages?.[0]?.content ?? ''
+  if (body.response_format?.json_schema?.name === 'day_draft') {
+    if (draftMode === 'hang') return
+    if (draftMode === 'http401') return send(401, { error: { message: 'bad key' } })
+    if (draftMode === 'http500') return send(500, { error: { message: 'provider error' } })
+    if (draftMode === 'slow') await new Promise(r => setTimeout(r, 20_000))
+    const ids = section => [...(text.split(`${section}\n`)[1] ?? '').split('\n\n')[0].matchAll(/^\[([^\]]+)\]/gm)].map(m => m[1])
+    const lines = [...text.matchAll(/^\[([^\]]+)\] \((.+?) · .+?\) (.*)$/gm)].filter(m => m[1].includes('/'))
+    const answer = draftMode === 'empty' ? { taskIds: [], materialIds: [], proposals: lines.map(m => ({ lineId: m[1], propose: false, date: null })) }
+      : draftMode === 'invalid' ? { taskIds: ['no-such-task'], materialIds: [], proposals: [{ lineId: 'no/such', propose: true, date: null }] }
+      : { taskIds: ids('TASK CANDIDATES').slice(0, 1), materialIds: [], proposals: lines.map(m => ({ lineId: m[1], propose: /明天|周[一二三四五六日]|tomorrow|call|给/i.test(m[3]), date: null })) }
+    await new Promise(r => setTimeout(r, 600))
+    return send(200, { id: `gen-${Date.now()}`, choices: [{ message: { content: JSON.stringify(answer) }, finish_reason: 'stop' }], usage: { cost: 0.0002, prompt_tokens: 900, completion_tokens: 80 } })
+  }
   if (text.startsWith('timeout:')) return
   if (text.startsWith('http401:')) return send(401, { error: { message: 'bad key' } })
   if (text.startsWith('http500:')) return send(500, { error: { message: 'provider error' } })

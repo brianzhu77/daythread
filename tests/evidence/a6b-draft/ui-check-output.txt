@@ -1,0 +1,32 @@
+ok   1. opening and reloading today makes no model call
+ok   card offers "Draft my day"
+ok   2. "Drafting your day…" while it runs
+ok   2. result: From your notes
+ok      the line that names a day is proposed, the other isn't
+ok      a drafted task reads "Drafted for today"
+ok      one call, cost settled · [{"id":"draft:2026-10-20:6b7fe6a9-6b8e-4474-a634-144f642aedf5","state":"settled"}]
+ok   5. + → "Added to TODO - Other · Undo"
+ok      one task with his exact line
+ok      the source line is unchanged
+ok      Undo removes it and offers the line again
+ok      + on a drafted task → TODO - Other
+ok   6. editing the line removes its row; no new model call
+ok   4. "Nothing to suggest today"
+ok      reload keeps it, no link back
+ok   3. http401: "Model key rejected · nothing was added"
+ok      with Retry
+ok      "Cost unknown" not shown
+ok      Retry runs again and shows the result
+ok   3. http500: "Model unavailable · nothing was added"
+ok      with Retry
+ok      "Cost unknown" shown
+ok   3. invalid: "Model unavailable · nothing was added"
+ok      with Retry
+ok      "Cost unknown" not shown
+ok   Done while drafting: result kept, card not reopened
+ok   no answer: drafting…
+ok      then "Model unavailable · nothing was added"
+ok      with Retry, stored as failed
+ok   390: drafted card
+ok   390: the dashed + is a 44 px target · 44
+ok   no page or console errors
