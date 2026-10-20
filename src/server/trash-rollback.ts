@@ -77,10 +77,13 @@ function isUntouchedRecreation(db: DatabaseSync, page: Row): boolean {
   if (blocks.some(b => b.kind !== 'paragraph' || b.text.trim())) return false
   if (flatNodes(json(page.editorJSON, [])).some(n => !['paragraph', 'heading'].includes(String(n.type)) || inlineHasContent(n.content))) return false
   if (db.prepare("SELECT 1 FROM pages WHERE snapshot='current' AND parentId=?").get(id)) return false
-  if (db.prepare("SELECT 1 FROM tasks WHERE snapshot='current' AND sourcePageId=?").get(id)) return false
-  if (db.prepare("SELECT 1 FROM captures WHERE snapshot='current' AND pageId=?").get(id)) return false
-  return !db.prepare("SELECT sources FROM materials WHERE snapshot='current'").all()
-    .some(m => json<{ pageId: string }[]>(m.sources, []).some(s => s.pageId === id))
+  // Sources recorded at the rollback belong to the held page; only one written since makes the recreation "used".
+  const recorded = (kind: string, ownerId: string, blockId: string | null = null) => tableExists(db, heldRefsTable) &&
+    Boolean(db.prepare(`SELECT 1 FROM ${heldRefsTable} WHERE kind=? AND ownerId=? AND pageId=? AND blockId IS ?`).get(kind, ownerId, id, blockId))
+  if (db.prepare("SELECT id FROM tasks WHERE snapshot='current' AND sourcePageId=?").all(id).some(t => !recorded('task', String(t.id)))) return false
+  if (db.prepare("SELECT id FROM captures WHERE snapshot='current' AND pageId=?").all(id).some(c => !recorded('capture', String(c.id)))) return false
+  return !db.prepare("SELECT id, sources FROM materials WHERE snapshot='current'").all()
+    .some(m => json<{ pageId: string; blockId: string }[]>(m.sources, []).some(s => s.pageId === id && !recorded('material', String(m.id), s.blockId)))
 }
 
 /** Every page id a held page's own content points at (`pageLink` props, block `targetPageId` / `sourcePageId`). */

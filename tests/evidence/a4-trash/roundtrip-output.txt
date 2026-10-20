@@ -1,0 +1,24 @@
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+ok   new build: two batches for C then P, Q1 restored alone and edited, Undo present
+ok   script: a failed backup stops with nothing changed
+     Layout 4 → 3. 4 pages held from the trash, 5 sources recorded; Undo cleared. Backup at <work>/workspace.sqlite.before-trash-rollback-2026-10-20<time>.sqlite.
+       held: P "Page P" (batch op-p)
+       held: C "Page C" (batch op-c)
+       held: E "Empty target" (batch op-e)
+       held: Q "Page Q" (batch op-q)
+ok   script: layout 4 → 3 with a readable backup
+ok   script: run again on layout 3 refuses and changes nothing
+ok   today's build opens it: held pages hidden, Undo empty, the held page's task still listed
+ok   today's build: Retry recreated P (written in) and E (left empty); its own Undo works
+     {"level":"info","event":"storage.trash-reupgrade","restored":4,"recreatedDropped":["E"],"idMap":{"P":"<new id>"},"sourcesMoved":4}
+ok   re-upgrade log: 4 restored, E dropped as an untouched recreation, P → new id, 4 sources moved (2 tasks, 1 material edge, 1 capture)
+ok   both P pages kept: the live one has the id and the new line; the held one is in the trash under the new id
+ok   cross-batch child C (op-c) now points at the held parent's new id
+ok   sources: old task, old material edge and capture → new id; new task and new edge stay on the live page
+ok   E: the empty recreation is gone and the held E is back in the trash under its original id, with its task
+ok   Q: back in the trash (op-q); Q1 stays live at top level with the rollback edit
+ok   Undo cleared at re-upgrade; nothing held is visible; the ledger is unchanged
+ok   a new Undo after the cleared one works and keeps every trashed page
+ok   opening again (migration already run) changes nothing
+ok   restore the held P, then C: P under Sun Oct 18 next to the live P, C under the restored P
+all checks passed

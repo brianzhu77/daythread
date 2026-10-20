@@ -105,7 +105,8 @@ only).
 carry a held id because Retry recreated it.
 - **The live page is still empty:**
   - Empty means a document page with an empty title and no child pages. It has no block with text, and no task,
-    event, link or card block. No task has it as its source.
+    event, link or card block. No task, capture or material source points at it except the ones the script recorded for the held page
+    (those were written before the rollback; found in the build, a held page's own task otherwise blocked the drop).
   - Then the migration drops it and puts the held row back in the trash under its **original id**. The card reads
     "In trash" again, and Restore reconnects it.
 - **Otherwise, or when in doubt:** keep both. The held row goes back to the trash under a **new id** with its
