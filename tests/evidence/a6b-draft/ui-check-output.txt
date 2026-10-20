@@ -7,12 +7,16 @@ ok      a picked task already on the card keeps "Unfinished · from Mon" (Lead, 
 ok      the proposed lines leave "lines from Mon" (3 → 1, Jazz c3a84702)
 ok      dated + → "Added for Fri, Oct 23 · Undo"
 ok      the task is planned for Fri, Oct 23
-ok      one call, cost settled · [{"id":"draft:2026-10-20:ecf04eea-0faa-42a3-81d4-40677e3fad12","state":"settled"}]
+ok      one call, cost settled · [{"id":"draft:2026-10-20:e23fcd5b-f931-47a9-aec9-5bc4acac7b42","state":"settled"}]
 ok   5. + → "Added to TODO - Other · Undo"
 ok      one task with his exact line
 ok      the source line is unchanged
 ok      Undo removes it and offers the line again
 ok   6. editing the line removes its row; no new model call
+ok   empty day: the card offers Draft my day
+ok      after an empty result the card stays: "Nothing to suggest today"
+ok      still there after reload, with Done / Later
+ok      Done closes it
 ok   4. "Nothing to suggest today"
 ok      reload keeps it, no link back
 ok   3. http401: "Model key rejected · nothing was added"

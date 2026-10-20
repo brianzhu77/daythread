@@ -58,6 +58,20 @@ await p.goto(`${base}/`, { waitUntil: 'networkidle' }); await p.waitForTimeout(8
 log(!(await card(p).getByText('明天给 Kevin 回电话').count()) && attempts().length === 1, '6. editing the line removes its row; no new model call')
 await p.close()
 
+// An entirely empty day: the card offers Draft my day, and after an empty result it stays with "Nothing to suggest
+// today" plus Done / Later, also after a reload (Ratchet #80, Jazz 8437503d).
+for (const f of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) rmSync(f, { force: true }); copyFileSync(pristine.replace(/pristine\.sqlite$/, 'empty.sqlite'), dbPath); await mode('empty')
+p = await open()
+log(await waitText(p, 'Draft my day'), 'empty day: the card offers Draft my day')
+await card(p).getByRole('button', { name: 'Draft my day' }).click()
+log(await waitText(p, 'Nothing to suggest today'), '   after an empty result the card stays: "Nothing to suggest today"')
+await p.reload({ waitUntil: 'networkidle' }); await p.waitForTimeout(800)
+log(await waitText(p, 'Nothing to suggest today', 3000) && await card(p).getByRole('button', { name: 'Done' }).count() === 1, '   still there after reload, with Done / Later')
+await p.screenshot({ path: `${out}/1280-empty-day.png` })
+await card(p).getByRole('button', { name: 'Done' }).click(); await p.waitForTimeout(800)
+log(!(await card(p).count()), '   Done closes it')
+await p.close()
+
 // 4. Nothing to suggest: the card says so, no link, also after reload.
 reset(); await mode('empty')
 p = await open()

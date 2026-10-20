@@ -65,6 +65,15 @@ export function isCardDraft(page: Page): boolean {
   return Boolean(page.draft?.run || page.draft?.proposals)
 }
 
+/**
+ * Draft my day finished and found nothing new: no task the card wouldn't offer anyway and no proposal. Read from what
+ * the run returned, not from the rows left, so adding a drafted task never turns it into "nothing".
+ */
+export function draftFoundNothing(page: Page, view: DayView): boolean {
+  if (!page.draft || !isCardDraft(page) || (page.draft.run && page.draft.run.status !== 'ready')) return false
+  return page.draft.taskIds.every(id => view.handoffTasks.some(t => t.id === id)) && !page.draft.proposals?.length
+}
+
 /** Proposals still standing: the line unchanged, its page not trashed, not carried forward, not hidden today. */
 export function liveProposals(page: Page, workspace: Workspace) {
   const hidden = new Set(page.draft?.hidden ?? [])
@@ -85,7 +94,11 @@ export function hasHandoffContent(view: DayView, workspace: Workspace, today: Lo
   // Draft my day needs a place to be tapped: while today has no draft and no failure, the card shows (Jazz §2).
   const needsDraftLink = Boolean(page && !page.draft && !page.draftError)
   const runShowing = Boolean(page?.draft?.run && page.draft.run.status !== 'ready') || Boolean(page?.draftError)
-  return taskSuggestions(view, workspace, today).length > 0 || cardLines(view, workspace).length > 0 || needsDraftLink || runShowing || Boolean(page && liveProposals(page, workspace).length)
+  // A Draft my day result stays on the card even when it found nothing, until Done or Later (Ratchet #80, Jazz 8437503d):
+  // the card vanishing after his tap would look like a failure.
+  // Only an empty one: a result with rows still closes on its own once he has dealt with them (Jazz).
+  const draftResult = Boolean(page && draftFoundNothing(page, view))
+  return taskSuggestions(view, workspace, today).length > 0 || cardLines(view, workspace).length > 0 || needsDraftLink || runShowing || draftResult || Boolean(page && liveProposals(page, workspace).length)
 }
 
 /** The section's real name on his page ("TODO - Top 3"), or the template's when the page has none. */
@@ -232,8 +245,7 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
       : !page.draft
         ? <p className="line">No suggestions from last night · <button type="button" className="app-link" onClick={() => void startDraft()}>Draft my day</button></p>
         // Nothing new: no task the card wouldn't offer anyway and no proposal (Lead, after the first real run).
-        // Read from what the run returned, not from the rows left, so adding a drafted task never turns it into "nothing".
-        : isCardDraft(page) && page.draft.taskIds.every(id => view.handoffTasks.some(t => t.id === id)) && !(page.draft.proposals?.length)
+        : draftFoundNothing(page, view)
           ? <p className="line mc-status nothing">Nothing to suggest today</p>
           : null
   const omitted = run?.manifest.omittedPages.length ?? 0

@@ -239,6 +239,8 @@ test('Ratchet #80: a paid answer about a line with an impossible date is read, n
     await s.start('r1')
     assert.equal(await draftDayRun(deps(s, fake(lines => ({ proposals: lines.map(id => ({ lineId: id, propose: id.endsWith('/bad'), date: id.endsWith('/bad') ? '2026-10-23' : null })) }))), '2026-10-19', 'r1'), 'drafted')
     const d = (await draftOf(s.repo)).draft!
+    assert.equal(d.run!.status, 'ready')
     assert.deepEqual(d.proposals!.map(p => [p.blockId, p.date]), [['bad', null]])
+    assert.deepEqual((await s.repo.modelAttempts()).map(a => [a.state, a.actualUsd, a.generationId]), [['settled', 0.0003, 'gen-1']], 'the real cost settles')
   } finally { await s.cleanup() }
 })

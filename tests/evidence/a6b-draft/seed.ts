@@ -3,7 +3,15 @@
 import { DatabaseSync } from 'node:sqlite'
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
 import { editorSeed, inlineText, pageContentKey } from '../../../src/domain/editor-document.ts'
-const [path, today] = process.argv.slice(2) as [string, string]
+const [path, today, kind] = process.argv.slice(2) as [string, string, string?]
+// "empty": a workspace with only today's page, nothing to hand off (Ratchet #80 empty-day case).
+if (kind === 'empty') {
+  const empty = new SqliteWorkspaceRepository(path, '/nonexistent.json', { allowMissingLegacy: true })
+  const w = await empty.load()
+  await empty.execute({ operationId: 'seed-day', expectedRevision: w.revision, action: { type: 'ensure-day', date: today } })
+  console.log(`seeded: empty workspace with ${today}`)
+  process.exit(0)
+}
 const repo = new SqliteWorkspaceRepository(path)
 let ws = await repo.load()
 const prev = ws.pages.filter(p => p.type === 'daily' && p.date! < today).sort((a, b) => b.date!.localeCompare(a.date!))[0]!
