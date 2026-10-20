@@ -28,6 +28,15 @@ them back (§5). Bumping the layout also means 32ef34b **refuses** an unconverte
 need exactly this: inline, one unit, live title, the card's states. Nothing about the title is stored; the node
 reads it from the workspace when it renders, so a rename shows everywhere at once (Jazz §1).
 
+- **Why not a plain link with the page id in its `href` (Lead 23:47).** A BlockNote `link` to `/pages?page=<id>` would
+  open in 32ef34b as is, with no layout 6 and no rollback conversion. But it's text with a link mark, not a unit:
+  - its words are typed text, so a rename doesn't show (the title isn't live) unless every page holding it is rewritten;
+  - Backspace deletes it one character at a time, and the cursor can land inside it;
+  - it looks and behaves like a web link, which Jazz §1 rules out;
+  - its trashed, missing and creating states can't be drawn.
+  Getting a live, whole-unit link costs one reversible format bump. We've done that twice (A4, A2) with the same
+  rollback pattern, and the rollback *does* turn each link into exactly that plain link (§5), so the cheap form is
+  what the old build sees.
 - **`refId`** (a uuid, chosen in the browser when the link is inserted) is the identity of **this** link (Ratchet):
   two links to the same page, even in one line, are two references with their own times. An in-app paste of copied
   blocks gives every `pageRef` a fresh `refId` (it's a new reference, made now), exactly as it gives blocks fresh
