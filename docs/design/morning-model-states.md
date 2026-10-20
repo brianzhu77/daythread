@@ -33,20 +33,20 @@ and Related are a later step; they reuse the same state words.
 
 ## 3. States
 
-All lines are 13 px, in the Tasks group where the "No suggestions" line sits. Tasks rows, lines, Done and Later keep
+Wording (Bumblebee `9a13d092`): the capture receipt's lines, with "· nothing was added" in place of "· text saved". All lines are 13 px, in the Tasks group where the "No suggestions" line sits. Tasks rows, lines, Done and Later keep
 working in every state. Never red.
 
 | State | What shows | Action |
 |---|---|---|
 | Ready, no draft | "No suggestions from last night · **Draft my day**" (`--ink-2`) | Draft my day |
 | Drafting | "Drafting your day…" with the 14 px spinner, `--ink-2`. No placeholder rows | none; he can leave and come back |
-| Done, with results | The line goes. Suggested tasks join the Tasks group with **"Suggested for today"** as their reason. Proposals appear under **FROM YOUR NOTES** | `+` per row |
-| Done, nothing to suggest | "Nothing to suggest from your notes" (`--ink-3`), no link | none |
+| Done, with results | The line goes. Suggested tasks join the Tasks group with **"Drafted for today"** (so a model pick never reads like his own "Suggested last night") as their reason. Proposals appear under **FROM YOUR NOTES** | `+` per row |
+| Done, nothing to suggest | "Nothing to suggest today" (`--ink-3`), no link | none |
 | Simulated (no model key) | Results as above, plus the existing **"Simulated"** tag in the card header | as above |
-| Key rejected | "Suggestions couldn't be prepared · Model key rejected" in `--warn` | **Retry** |
-| Model unavailable (error, timeout, every item invalid) | "Suggestions couldn't be prepared · Model unavailable" in `--warn` | **Retry** |
-| Paused (a cost couldn't be confirmed) | "Suggestions couldn't be prepared · a cost couldn't be confirmed" in `--warn` | none |
-| Budget used up | "Suggestions couldn't be prepared · today's model budget is used up" in `--warn` | none until tomorrow |
+| Key rejected | "Model key rejected · nothing was added" in `--warn` | **Retry** |
+| Model unavailable (error, timeout, every item invalid) | "Model unavailable · nothing was added" in `--warn` | **Retry** |
+| Paused (a cost couldn't be confirmed) | "Model paused · a cost couldn't be confirmed · nothing was added" in `--warn` | none |
+| Budget used up | "Today's model budget is used up · nothing was added" in `--warn` | none until tomorrow |
 | Cost unknown (error with no cost or id) | the failure line above, then a muted **"Cost unknown"** tag in `--ink-3` | as the row says |
 
 - This replaces §12.2's separate "Suggestions from your notes unavailable" line: proposals and suggested tasks come
