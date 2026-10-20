@@ -42,6 +42,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
   // The card stays while an Undo strip shows, even after its last row was added (morning card §6).
   const showHandoff = isToday && page && !page.handoffDone && !later && (hasHandoffContent(view, workspace, today) || handoffBusy)
   const handoffSettled = !showHandoff
+  const suggestions = taskSuggestions(view, workspace, today)
 
   return (
     <div className="day-screen">
@@ -56,7 +57,8 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
           date={date}
           today={today}
           handoffCollapsed={isToday && Boolean(page && !page.handoffDone && later && hasHandoffContent(view, workspace, today))}
-          handoffCount={taskSuggestions(view, workspace, today).length + view.handoffBlocks.length}
+          handoffCount={suggestions.length + view.handoffBlocks.length}
+          cardTaskIds={showHandoff ? new Set(suggestions.map(s => s.task.id)) : undefined}
           onReopenHandoff={() => setLater(false)}
           handoffSettled={handoffSettled}
         />

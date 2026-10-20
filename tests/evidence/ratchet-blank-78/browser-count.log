@@ -1,0 +1,4 @@
+ok   card open with the Calendar row: no "other" line · []
+ok   Later: "1 other open task" · ["1 other open task"]
+ok   after + on the row: no "other" line (planned for today) · []
+ok   no page or console errors

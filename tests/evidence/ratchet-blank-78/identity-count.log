@@ -1,0 +1,4 @@
+(node:64628) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS actual editor typing preserves original task id editor-task:day:2026-10-19:other:template:0
+PASS actual + plans named task today; blank task remains stored; layout still 4

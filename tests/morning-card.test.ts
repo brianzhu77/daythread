@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { applyCommand, createEmptyWorkspace, getDayView } from '../src/domain/workspace.ts'
+import { applyCommand, createEmptyWorkspace, getCalendarTasks, getDayView } from '../src/domain/workspace.ts'
+import { getUpcomingByDate } from '../src/domain/upcoming.ts'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, type EditorNode } from '../src/domain/editor-document.ts'
 import { tagIndex } from '../src/domain/tags.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
@@ -233,4 +234,32 @@ test('the stored shape on Brian\'s page (a starter task row saved as an empty dr
   other.blocks = other.blocks.map(b => b.text ? b : { id: b.id, kind: 'task', taskId: `editor-task:${b.id}`, text: '', planRole: 'plan' })
   ws = ok(ws, { type: 'plan-tasks', date: '2026-10-19', items: [{ taskId: ws.tasks.find(t => t.title === 'Water plants')!.id, section: 'other' }] })
   assert.deepEqual(day(ws, '2026-10-19').sections.find(s => s.kind === 'other')!.blocks.map(b => b.text || '∅'), ['Water plants', '∅'])
+})
+
+// Lead 2f917190 / d5723121: Brian's Oct 19 TODO - Other holds an open task with an empty title, placed on that day. No
+// task list or count shows it; the page keeps its row; a title makes it a normal task again.
+test('a task with an empty title is in no task list or count, stays on its page, and comes back once it has a title', () => {
+  let ws = ok(createEmptyWorkspace(), { type: 'ensure-day', date: '2026-10-19' })
+  const mon = day(ws, '2026-10-19')
+  for (const title of ['real task', 'blank']) ws = ok(ws, { type: 'add-task', pageId: mon.id, sectionId: mon.sections.find(s => s.kind === 'notes')!.id, title } as Action)
+  for (const t of ws.tasks) ws = ok(ws, { type: 'plan-task', taskId: t.id, date: '2026-10-19', section: 'other' } as Action)
+  const blankId = ws.tasks.find(t => t.title === 'blank')!.id
+  // The stored shape on his page: same task, title emptied (whitespace counts as empty), due Oct 22 as well.
+  ws = { ...ws, tasks: ws.tasks.map(t => t.id === blankId ? { ...t, title: '  ', deadlineOn: '2026-10-22' } : t) }
+  ws = ok(ws, { type: 'ensure-day', date: '2026-10-20' })
+  const titles = (list: { title: string }[]) => list.map(t => t.title)
+  let view = getDayView(ws, '2026-10-20')
+  assert.deepEqual(titles(view.handoffTasks), ['real task'])
+  assert.deepEqual(titles(view.openPool), ['real task'])
+  assert.deepEqual(titles(getDayView(ws, '2026-10-19').planned), ['real task'])
+  assert.deepEqual(titles(getCalendarTasks(ws, '2026-10-22')), [])
+  assert.deepEqual(getUpcomingByDate(ws, '2026-10-20').flatMap(d => d.tasks.map(r => r.task.id)), [])
+  assert.ok(day(ws, '2026-10-19').sections.some(s => s.blocks.some(b => b.taskId === blankId)), 'its row stays on the page')
+  ws = ok(ws, { type: 'generate-draft', date: '2026-10-20' } as Action)
+  assert.equal((day(ws, '2026-10-20').draft?.taskIds ?? []).includes(blankId), false)
+  // Typing a title: it shows everywhere again.
+  ws = { ...ws, tasks: ws.tasks.map(t => t.id === blankId ? { ...t, title: 'named now' } : t) }
+  view = getDayView(ws, '2026-10-20')
+  assert.deepEqual(titles(view.handoffTasks), ['real task', 'named now'])
+  assert.deepEqual(titles(getCalendarTasks(ws, '2026-10-22')), ['named now'])
 })

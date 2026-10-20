@@ -1,0 +1,29 @@
+✔ a Notes line is copied into today's Notes, keeps its source, and is not offered again (4.316166ms)
+✔ the copy goes through the editor save path: tags, starter rows and the editor document all agree (5.156542ms)
+✔ a Good Stuffs link brought to today is another save of the same material (0.338ms)
+✔ a line goes to the same-named section, or to Notes when today has none (0.494917ms)
+✔ the same-named section is matched case-insensitively (0.3795ms)
+✔ with no Notes section at all, a Notes heading is added at the end (0.373792ms)
+✔ tasks, page cards, empty lines and unknown lines are refused and write nothing (1.321666ms)
+✔ Undo removes the copy and offers the line again (0.338833ms)
+✔ the browser command schema accepts bring-line (1.242917ms)
+✔ a copy deleted later is not offered again; event and page-card lines are never offered (0.799334ms)
+✔ Add all tasks plans every row in one operation; one Undo takes them all back (0.636041ms)
+✔ with Top 3 full, the next Top 3 row goes to the plan list (0.355ms)
+✔ a removed plan section comes back at the top, in template order (0.397209ms)
+✔ a + after typing the third Top 3 row goes to the plan list; Top 3 stays at three (0.446625ms)
+✔ planned tasks go before the section's empty starter row, from the card and from plan-task alike (0.378125ms)
+✔ the stored shape on Brian's page (a starter task row saved as an empty draft task) also stays last (0.245208ms)
+✔ a task with an empty title is in no task list or count, stays on its page, and comes back once it has a title (0.468292ms)
+✔ Upcoming includes deadline-only, start-only and do dates beyond fourteen days (6.793ms)
+✔ Upcoming merges same-task same-date facts and retains distinct dates independently (0.151334ms)
+✔ Upcoming preserves paused date facts, excludes done/cancelled/undated tasks and honors inclusive bounds (0.104125ms)
+✔ Upcoming is a pure read, deterministic for ties, and validates the date window (0.569333ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 132.374417
