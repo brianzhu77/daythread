@@ -1,7 +1,7 @@
 # A9a `[[` page links + B15 Linked from order — plan for review
 
 - Author: Roadbuster · 2026-10-21 · status: **plan, not built**. No code until Ratchet's pre-review (task #83).
-- Revised after Ratchet `858f33ed` (held `at` and per-occurrence matching; workspace-wide identity; pending new-page
+- Revised after Ratchet `75bc01c4` (a `ref` marker on rollback links; card times held; readers go by target) and `858f33ed` (held `at` and per-occurrence matching; workspace-wide identity; pending new-page
   links; IME re-fire and Esc).
 - Inputs:
   - Jazz `docs/design/page-links-states.md` @ d69d8fd: §1–§3, §5 and §6 checks 1–6 and 8–10 (the design source);
@@ -122,9 +122,10 @@ reads it from the workspace when it renders, so a rename shows everywhere at onc
     any page. It's stored as `refs[i].pending = true`. Linked from and every other reader skip it until the page exists.
     The `newTitle` is what "Not created · Retry" uses after a reload, as a link card carries its URL;
   - a plain missing target with no `newTitle` is refused, so a made-up id is never a valid reference;
-  - `pending` ends when `create-document` with that id lands: the next save of the page sees the target and drops
-    `pending` (and the browser drops `newTitle` from the node). The reference's `at` is the save that first held it, so
-    it isn't re-stamped.
+  - **Readers go by the target, not the flag (Ratchet 75bc01c4):** once `create-document` with that id lands, Linked
+    from and every other reader count the reference at once, even if the linking page is never saved again. `pending`
+    only marks what the server accepted. The next save of the linking page drops it (and the browser drops `newTitle`).
+    The reference's `at` is the save that first held it, so it isn't re-stamped.
 - **References that already existed** stay whatever happens to the target: in the trash (shown as trashed) or gone
   (shown as "Page not found").
 - A `pageRef` inside a task row is refused, and so is the same `refId` twice on one page.
@@ -141,18 +142,26 @@ reads it from the workspace when it renders, so a rename shows everywhere at onc
 - **Migration 6:** no table changes. It (a) converts back any links the rollback held (below), then (b) stamps every
   untimed reference once (§2). `verifySqliteLayout(db, 6)` = layout 5's columns.
 - **`scripts/sqlite-rollback-page-links.ts`, 6 → 5** (A2's pattern: backup, one transaction):
-  - every `pageRef` node in every `editorJSON` becomes a plain link `{ type: "link", href: "/pages?page=<id>",
-    content: <the title now> }`, which 32ef34b renders and opens (a normal in-app link);
+  - every `pageRef` node in every `editorJSON` becomes a plain link `{ type: "link", href:
+    "/pages?page=<id>&ref=<refId>", content: <the title now> }`, which 32ef34b renders and opens (a normal in-app
+    link). **The `ref` parameter marks this exact link** (Ratchet 75bc01c4): 32ef34b's `/pages` route keeps only the
+    search keys it knows (`page`, `focus`, `block`, `view`), so the link still opens its page there (checked in
+    32ef34b's `routes/pages.tsx`);
   - each conversion is recorded in `held_page_links_l6(pageId, blockId, ordinal, refId, targetPageId, href, text, at,
-    pending, newTitle)`. `ordinal` is the link's position among this block's converted links, and **`at` is held here**,
-    because a save in 32ef34b drops `refs` from `sections` (Ratchet 858f33ed 1);
+    pending, newTitle)`, and **`at` is held here**, because a save in 32ef34b drops `refs` from `sections` (Ratchet
+    858f33ed 1);
+  - **card times too:** `held_card_times_l6(pageId, blockId, targetPageId, at)` for every card, since a 32ef34b save
+    rebuilds card blocks without `at` (Ratchet 75bc01c4);
   - the undo snapshot is cleared, and `user_version=5`.
 - **Re-upgrade, occurrence by occurrence:**
-  - in each block, the held rows are taken in `ordinal` order and matched to that block's links in document order. A
-    link qualifies only if its `href` is that row's in-app `/pages?page=<id>` and its text is unchanged. Each
-    qualifying link is used once, so two identical links come back as their two `refId`s, in order;
-  - a match becomes the `pageRef` again, with its `refId` and its **held `at`** (and `pending` and `newTitle`);
-  - a link he edited, and **any ordinary web link**, never matches a held row, so it stays a plain link;
+  - **links, by marker, never by position or text:** a link becomes the `pageRef` again only if its `href` carries
+    `ref=<refId>` for a held row with that `refId`, in that block, pointing at the same page, with its text unchanged.
+    It comes back with its `refId` and its **held `at`** (and `pending` and `newTitle`). An identical-looking in-app link he
+    pasted in 32ef34b has no matching marker (or a marker already used), so it stays a plain link and can't take the
+    original's identity. An edited link and any ordinary web link stay plain too. A marker found twice (copied in
+    32ef34b) restores only the first, in document order; the copy stays a plain link;
+  - **cards:** a card still in the same block pointing at the same page gets its held `at` back, so a page 32ef34b
+    saved keeps its Linked from order exactly;
   - then the one-time stamp for anything still untimed, and the held table is dropped.
 - **The chain** stays newest-first: 6 → 5 (links), then 5 → 4 (A2) etc. Older scripts accept the newer held table, as
   A2 did for A4.
@@ -177,8 +186,9 @@ reads it from the workspace when it renders, so a rename shows everywhere at onc
     it; two links to one page are two refs; Undo of a delete restores the old `at`;
   - identity: a cut-and-paste move to another line and to another page (either save first) keeps `at`; a copy gets a new
     one; the same `refId` pointing at a new target and a card re-targeted are new;
-  - a pending new-page link: saved, reloaded, Retry creates the page, `pending` clears, `at` unchanged; a missing target
-    with no `newTitle` is refused;
+  - a pending new-page link: saved, reloaded, Retry creates the page, `pending` clears, `at` unchanged. **Created →
+    leave the page → reload: the new page's Linked from lists it** before the linking page is saved again. A missing
+    target with no `newTitle` is refused;
   - the B15 order: newest first, fallback after deleting the newest, unchanged by a move, stamped old references
     below all timed ones and stable across moves;
   - `save-editor` refusals (new link to trashed, link in a task, duplicate `refId`, unknown page);
@@ -197,7 +207,10 @@ reads it from the workspace when it renders, so a rename shows everywhere at onc
     converted link's text, saves another page;
   - re-upgrade → links back with the same `refId` **and `at`** after 32ef34b saved that page, two identical links in one
     line back as two refs, an ordinary web link untouched, the edited one a plain link, and Linked from's order exactly
-    as before.
+    as before;
+  - **an identical in-app link pasted in 32ef34b before the converted one** stays plain, and the original gets back its
+    `refId` and `at`;
+  - **32ef34b saves a page that holds cards:** after the re-upgrade, Linked from's order is unchanged.
 
 ## 8. For review
 
