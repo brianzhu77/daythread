@@ -75,6 +75,10 @@ working in every state. Never red.
   - line text edited → the row isn't shown. The model judged the old words ("call the dentist tomorrow" edited to
     "called the dentist" must not become a task, and a changed date word must not keep the old date). No automatic
     re-run (Ratchet `8ba9abb6`);
+  - its page moved under a different day (the anchor for words like "明天" changed) → the row isn't shown, the same
+    as an edit, with no re-run (Ratchet `c19b111a`). Date tags follow the rule "no tag when unsure": the model's date
+    must equal the date the app parses; relative words on a top-level page give no tag; a subpage uses its day;
+    absolute dates work anywhere;
   - only its section renamed → the row stays and the app-computed reason shows the new name;
   - line deleted, its page in trash (A4), or the line already became a task → the row isn't shown.
   - `+` checks the same thing at tap time; if the line changed, the tap adds nothing and the row leaves.
