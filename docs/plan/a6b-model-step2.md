@@ -5,7 +5,7 @@
   - Lead `02141609` (scope, steps), `90935fb5` (empty is normal), `8fa4f515` (Jazz's states accepted);
   - Brian `3097861f`;
   - Ratchet `b64dd79d` (four constraints, §5–§7);
-  - Jazz `docs/design/morning-model-states.md` at dbf4fa7 (states and strings, with Bumblebee's wording; additions 0c16159, final 5df9e03);
+  - Jazz `docs/design/morning-model-states.md` at dbf4fa7 (states and strings, with Bumblebee's wording; additions 0c16159, 5df9e03, date rule a5c5b51);
   - 03 AI contract; A6a `docs/plan/feat-model-step1.md`.
 
 ## 1. One call, one object
@@ -57,7 +57,7 @@ Draft my day, the review's Prepare tomorrow, Related and the card's "From your n
 - **What a run is bound to:** `runId` = the `generate-draft` operation id. Each run has a target `date`, a `trigger` (card or review), the request **fingerprint** (`requestHash` of the full body, which includes the manifest), the `model` and the `attemptId`.
 - **Double tap or refresh:** the same operation id replays the first receipt. A different operation id while drafting is refused ("already drafting"). Either way, there's no second call and no second charge.
 - **`set-model-draft` applies only if** the page's draft still has that `runId` and status `drafting`. Otherwise the result is kept for audit and the cost still settles. That covers Retry beating a late answer, Done or Later during the run (Jazz §1: kept, the card isn't reopened), a midnight crossing, and a deleted day.
-- **Each proposal is bound to its source line's fingerprint** at run time (a hash of the line's text and type; Ratchet `8ba9abb6`, Lead).
+- **Each proposal is bound to its source line's fingerprint** at run time: a hash of the line's text, its type and its **date basis** (the day §6 resolves relative words from). Ratchet `8ba9abb6` / `09223ddb`, Lead, Jazz a5c5b51 §4. A subpage moved under another day changes the basis, so the proposal is withdrawn, the same as an edit, with no new model call.
   - The card checks it when it draws:
     - text changed: the row is withdrawn, with no automatic paid re-run. "明天打给牙医" edited to "已经打过牙医" must not become a task.
     - only the section renamed: the app-computed reason updates.
@@ -135,7 +135,8 @@ The request has labelled parts, and a **manifest** (part of the fingerprint, sto
     - **Keep the model's date only if** the parse yields exactly one date, it equals the model's, and it's ≥ the drafted day.
     - Otherwise it's set to null and the proposal stays undated: no date word, an ambiguous one ("下周"), no basis, a mismatch, or a past date.
     - "If I have time" lines never keep a date.
-  - Tests: "周五" with the model returning Saturday → no date. "明天" in an undated linked page with no day parent → no date, never guessed from the drafted day. "明天" in a subpage under Sun Oct 18 → Mon Oct 19.
+  - When in doubt there's no date tag; a date is never guessed (Jazz).
+  - Tests: "周五" with the model returning Saturday → no date. A subpage with "明天" moved from under Mon to under Tue → proposal withdrawn. "明天" in an undated linked page with no day parent → no date, never guessed from the drafted day. "明天" in a subpage under Sun Oct 18 → Mon Oct 19.
 - **Empty is not failure:** a valid answer with every `propose: false` and no picks is "Nothing to suggest today". An answer whose entries are **all** invalid (ids not sent, wrong shape), or invalid JSON, is `unavailable`, with Retry.
 
 ## 7. Cost: the same book (Ratchet 4)
