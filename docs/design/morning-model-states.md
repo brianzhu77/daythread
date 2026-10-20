@@ -69,8 +69,14 @@ working in every state. Never red.
   (his "TODO - Other"), never Top 3. Top 3 holds only what he chose, including "Suggested last night"; a model pick
   is a proposal and moving it up is one drag (Lead `c1ba8868`, after Bumblebee). Strip: "Added to {Section} · Undo".
 - **Proposals** (card spec §4 and §12.1): title = his line word for word, reason "{Mon} · {Section}" computed by
-  the app, date tag only when grounded in his text, dashed `+`. `+` creates a new task in {plan list section} with
-  the full line; strip "Added to {Section} · Undo"; Undo deletes that task. ⋯ → Hide for today.
+  the app, date tag only when grounded in his text, dashed `+`. `+` creates a new task with the full line:
+  - **no date, or the date is today** → a row in today's {plan list section}; strip "Added to {Section} · Undo";
+  - **a later date** (the tag shows "Do Fri, Oct 23") → the task is planned for that day, like a dated capture, and
+    today's page gets no row; strip "**Added for Fri, Oct 23 · Undo**" (Bumblebee `a487ca0e`). It shows on Calendar
+    and Upcoming, and on that day's page when it comes.
+  Undo deletes the task (and today's row, if any). ⋯ → Hide for today.
+- A live proposal isn't also listed under "{n} lines from {Mon}". If it's hidden or withdrawn, the line goes back
+  there; once added, it's linked and leaves both.
 - **The source changed after the run.** A proposal points at its source line by block id. When the card draws:
   - line text edited → the row isn't shown. The model judged the old words ("call the dentist tomorrow" edited to
     "called the dentist" must not become a task, and a changed date word must not keep the old date). No automatic
