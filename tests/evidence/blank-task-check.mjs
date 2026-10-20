@@ -12,7 +12,8 @@ for (const width of [1280, 390]) {
   await p.goto(`${base}/`, { waitUntil: 'networkidle' }); await p.waitForTimeout(1000)
   const reasons = await lines(p, /Unfinished · from|Suggested last night/)
   log(reasons.length === 1, `${width}: the card has one task row, no blank one`, JSON.stringify(reasons))
-  log((await lines(p, /other open task/)).join() === '1 other open task', `${width}: "1 other open task"`)
+  // With the card open its Calendar row isn't "other" (Lead 23a43f85); the blank task never counts.
+  log((await lines(p, /other open task/)).length === 0, `${width}: no "other open task" line while the card shows the only named task`)
   await p.screenshot({ path: `${out}/${width}-today.png` })
   await p.goto(`${base}/tasks?view=open`, { waitUntil: 'networkidle' }); await p.waitForTimeout(600)
   const rows = await p.locator('.list-screen .task-row').evaluateAll(els => els.map(e => e.innerText.trim().split('\n')[0]))

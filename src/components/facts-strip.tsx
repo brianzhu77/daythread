@@ -16,16 +16,19 @@ interface Props {
   handoffCount: number
   onReopenHandoff: () => void
   handoffSettled: boolean
+  /** Tasks that are rows in the open morning card; "N other open tasks" leaves them out (Lead 23a43f85, card §3). */
+  cardTaskIds?: ReadonlySet<string>
 }
 
 /** Computed facts above the page, never page text (01 §3.2, §3.3, §3.4). No counts to clear. */
-export function FactsStrip({ view, workspace, date, today, handoffCollapsed, handoffCount, onReopenHandoff, handoffSettled }: Props) {
+export function FactsStrip({ view, workspace, date, today, handoffCollapsed, handoffCount, onReopenHandoff, handoffSettled, cardTaskIds }: Props) {
   const isToday = date === today
   const pageTaskIds = new Set(view.page?.sections.flatMap(s => s.blocks).map(b => b.taskId).filter(Boolean))
   const dueSoon = view.attention.filter(t => !pageTaskIds.has(t.id))
   const notInNote = view.planned.filter(t => !pageTaskIds.has(t.id))
-  // Tasks already placed on this day are on the page; the pool lists the rest.
-  const stillOpen = view.openPool.filter(t => t.plannedOn !== date)
+  // Tasks already placed on this day are on the page, and rows of the open morning card are on the card; the pool lists
+  // the rest. Done, Later or hiding the card counts its tasks again.
+  const stillOpen = view.openPool.filter(t => t.plannedOn !== date && !cardTaskIds?.has(t.id))
   const waiting = workspace.captures.filter(c => c.status === 'needs_confirmation')
 
   return (

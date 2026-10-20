@@ -1,8 +1,8 @@
 ok   1280: the card has one task row, no blank one · ["Unfinished · from Mon"]
-ok   1280: "1 other open task"
+ok   1280: no "other open task" line while the card shows the only named task
 ok   1280: Tasks › Open lists 1 named task · ["#daythread 优化 Calendar 页面"]
 ok   390: the card has one task row, no blank one · ["Unfinished · from Mon"]
-ok   390: "1 other open task"
+ok   390: no "other open task" line while the card shows the only named task
 ok   390: Tasks › Open lists 1 named task · ["#daythread 优化 Calendar 页面"]
 ok   Oct 19 TODO - Other still ends with its empty row · [{"type":"task","text":"","id":"day:2026-10-19:other:template:0"}]
 ok   after typing a title: it shows in Tasks › Open · ["#daythread 优化 Calendar 页面","call the plumber"]
