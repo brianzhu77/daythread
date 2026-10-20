@@ -3,12 +3,13 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { dayTemplate } from '../domain/editor-document'
 import { isBlankTask } from '../domain/workspace'
 import type { DayView, LocalDate, NoteBlock, Page, Task, Workspace } from '../domain/types'
-import { shortLabel, weekday } from './dates'
+import { longLabel, shortLabel, weekday } from './dates'
 import { DateTag } from './date-tag'
 import { flushEditor } from './editor-flush'
 import { RowMenu } from './row-menu'
 import { TagText } from './tag-text'
 import { anotherDayItems, notTodayText } from './task-row'
+import { liveProposal } from '../domain/draft'
 import { useWorkspace } from './use-day'
 
 // Morning card (Jazz docs/design/morning-card-build.md, §12 at 5f05fc2): one Tasks group with a reason per row, a
@@ -45,15 +46,59 @@ export function taskSuggestions(view: DayView, workspace: Workspace, today: Loca
   const eligible = (t: Task | undefined): t is Task => Boolean(t) && !isBlankTask(t!) && t!.status === 'open' && !t!.paused && t!.plannedOn !== today && !inTop3.has(t!.id)
   const out: TaskSuggestion[] = []
   const seen = new Set<string>()
-  for (const t of (page.draft?.taskIds ?? []).map(id => workspace.tasks.find(x => x.id === id)))
+  // A Draft my day pick reads "Drafted for today" and goes to the plan list, never Top 3: Top 3 holds what he chose,
+  // including "Suggested last night" from his review (Lead c1ba8868, morning-model-states §4).
+  // A task the card already offers keeps its own reason and place; a model pick of it adds nothing (Lead, Bumblebee).
+  const drafted = isCardDraft(page)
+  const draftTasks = (page.draft?.taskIds ?? []).map(id => workspace.tasks.find(x => x.id === id))
+  if (!drafted) for (const t of draftTasks)
     if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: 'Suggested last night', section: 'top3' }) }
   for (const t of view.handoffTasks)
     if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: `Unfinished · from ${prev?.date ? weekday(prev.date) : 'yesterday'}`, section: 'other' }) }
+  if (drafted) for (const t of draftTasks)
+    if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: 'Drafted for today', section: 'other' }) }
   return out
 }
 
+/** A draft made by Draft my day (a real run, or its simulated stand-in from the card), not by the evening review. */
+export function isCardDraft(page: Page): boolean {
+  return Boolean(page.draft?.run || page.draft?.proposals)
+}
+
+/**
+ * Draft my day finished and found nothing new: no task the card wouldn't offer anyway and no proposal. Read from what
+ * the run returned, not from the rows left, so adding a drafted task never turns it into "nothing".
+ */
+export function draftFoundNothing(page: Page, view: DayView): boolean {
+  if (!page.draft || !isCardDraft(page) || (page.draft.run && page.draft.run.status !== 'ready')) return false
+  return page.draft.taskIds.every(id => view.handoffTasks.some(t => t.id === id)) && !page.draft.proposals?.length
+}
+
+/** Proposals still standing: the line unchanged, its page not trashed, not carried forward, not hidden today. */
+export function liveProposals(page: Page, workspace: Workspace) {
+  const hidden = new Set(page.draft?.hidden ?? [])
+  return (page.draft?.proposals ?? []).filter(p => !hidden.has(p.lineId)).flatMap(p => { const live = liveProposal(workspace, p); return live ? [{ proposal: p, ...live }] : [] })
+}
+
+/**
+ * Lines to bring from the previous page, minus those that are live proposals right now: one line is never offered twice
+ * in the card, and the proposal is the stronger offer. Hidden or withdrawn, it comes back here (Jazz c3a84702).
+ */
+export function cardLines(view: DayView, workspace: Workspace) {
+  const proposed = new Set(view.page ? liveProposals(view.page, workspace).map(p => `${p.page.id}/${p.block.id}`) : [])
+  return view.handoffBlocks.filter(l => !proposed.has(`${l.pageId}/${l.block.id}`))
+}
+
 export function hasHandoffContent(view: DayView, workspace: Workspace, today: LocalDate): boolean {
-  return taskSuggestions(view, workspace, today).length > 0 || view.handoffBlocks.length > 0
+  const page = view.page
+  // Draft my day needs a place to be tapped: while today has no draft and no failure, the card shows (Jazz §2).
+  const needsDraftLink = Boolean(page && !page.draft && !page.draftError)
+  const runShowing = Boolean(page?.draft?.run && page.draft.run.status !== 'ready') || Boolean(page?.draftError)
+  // A Draft my day result stays on the card even when it found nothing, until Done or Later (Ratchet #80, Jazz 8437503d):
+  // the card vanishing after his tap would look like a failure.
+  // Only an empty one: a result with rows still closes on its own once he has dealt with them (Jazz).
+  const draftResult = Boolean(page && draftFoundNothing(page, view))
+  return taskSuggestions(view, workspace, today).length > 0 || cardLines(view, workspace).length > 0 || needsDraftLink || runShowing || draftResult || Boolean(page && liveProposals(page, workspace).length)
 }
 
 /** The section's real name on his page ("TODO - Top 3"), or the template's when the page has none. */
@@ -67,13 +112,13 @@ const stripMs = 5000
 
 /** Morning hand-off (01 §3.5). Skipping is normal; nothing here needs clearing. */
 export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view: DayView; workspace: Workspace; today: LocalDate; onLater: () => void; onBusy: (busy: boolean) => void }) {
-  const { run: runUnsaved, latest, simOutcome } = useWorkspace()
+  const { run: runUnsaved, latest, draftMyDay } = useWorkspace()
   const navigate = useNavigate()
   const page = view.page!
   const prev = previousDailyPage(workspace, today)
   const prevDay = prev?.date ? weekday(prev.date) : 'yesterday'
   const tasks = taskSuggestions(view, workspace, today)
-  const lines = view.handoffBlocks
+  const lines = cardLines(view, workspace)
   const [linesOpen, setLinesOpen] = useState(false)
   const [strips, setStrips] = useState<Map<string, Strip>>(new Map())
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
@@ -175,16 +220,53 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
     }
     return null
   }
+  const proposals = liveProposals(page, workspace)
+  for (const key of proposals.map(p => `prop:${p.proposal.lineId}`)) if (!order.current.includes(key)) order.current.push(key)
+  const addProposal = async (lineId: string, date: string | null) => {
+    const receipt = await write({ type: 'add-proposal', date: today, lineId }, null)
+    // "Added for Fri, Oct 23" for a dated proposal (planned for that day), "Added to {Section}" otherwise.
+    if (receipt) showStrip(`prop:${lineId}`, { text: date && date > today ? `Added for ${longLabel(date)}` : receipt.message, undo: receipt.operationId })
+  }
+  const startDraft = async () => { setWorking(n => n + 1); try { if (await flushEditor(page.id)) await draftMyDay(today) } finally { setWorking(n => n - 1) } }
   const taskKeys = order.current.filter(k => k.startsWith('task:') && (strips.has(k) || tasks.some(t => `task:${t.task.id}` === k)))
+  const propKeys = order.current.filter(k => k.startsWith('prop:') && (strips.has(k) || proposals.some(p => `prop:${p.proposal.lineId}` === k)))
   const lineKeys = order.current.filter(k => k.startsWith('line:') && (strips.has(k) || lines.some(l => `line:${l.block.id}` === k)))
-  const noTasksLine = !page.draft && (
-    <p className="line">
-      {page.draftError ? 'Suggestions couldn’t be prepared' : 'No suggestions from last night'} ·{' '}
-      <button type="button" className="app-link" onClick={() => void write({ type: 'generate-draft', date: today, outcome: simOutcome }, null)}>
-        {page.draftError ? 'Retry' : 'Draft my day'}
-      </button>
-    </p>
-  )
+  // The status line of Draft my day (morning-model-states §3): one line for both drafted tasks and proposals.
+  const run = page.draft?.run
+  const retryable = !run?.failure || ['key-rejected', 'unavailable', 'busy'].includes(run.failure)
+  const statusLine = run?.status === 'drafting'
+    ? <p className="line mc-status" role="status"><span className="mc-spinner" aria-hidden="true" />Drafting your day…</p>
+    : page.draftError
+      ? <p className="line mc-status warn" role="alert">
+          {page.draftError}
+          {retryable && <> · <button type="button" className="app-link" onClick={() => void startDraft()}>Retry</button></>}
+          {run?.costUnknown && <span className="mc-cost-unknown">Cost unknown</span>}
+        </p>
+      : !page.draft
+        ? <p className="line">No suggestions from last night · <button type="button" className="app-link" onClick={() => void startDraft()}>Draft my day</button></p>
+        // Nothing new: no task the card wouldn't offer anyway and no proposal (Lead, after the first real run).
+        : draftFoundNothing(page, view)
+          ? <p className="line mc-status nothing">Nothing to suggest today</p>
+          : null
+  const omitted = run?.manifest.omittedPages.length ?? 0
+  const linkedTotal = omitted + Math.max(0, (run?.manifest.sentPages.length ?? 0) - (prev && run?.manifest.sentPages.includes(prev.id) ? 1 : 0))
+  const contextLine = run?.status === 'ready' && omitted > 0 && <p className="line mc-context">Read yesterday's page and {linkedTotal - omitted} of {linkedTotal} linked pages</p>
+  const proposalRow = (key: string) => {
+    if (strips.has(key)) return row(key)
+    const p = proposals.find(x => `prop:${x.proposal.lineId}` === key)
+    if (!p) return null
+    const where = p.page.type === 'daily' && p.page.date ? weekday(p.page.date) : (p.page.title || 'Untitled')
+    return (
+      <li key={key} className="mc-row">
+        <AddButton dashed label={`Add ${p.block.text} as a task`} onPress={() => void addProposal(p.proposal.lineId, p.proposal.date)} />
+        <span className="mc-text">
+          <span className="mc-title-line"><span className="mc-title"><TagText text={p.block.text} /></span>{p.proposal.date && <span className="app-tag">{shortLabel(p.proposal.date)}</span>}</span>
+          <span className="mc-reason">{where} · {p.section || 'Page'}</span>
+        </span>
+        <RowMenu label={`More for ${p.block.text}`} groups={[{ items: [{ label: 'Hide for today', onSelect: () => void write({ type: 'hide-proposal', date: today, lineId: p.proposal.lineId }, null) }] }]} />
+      </li>
+    )
+  }
 
   return (
     <section className="app-card start-the-day" aria-labelledby="std-title">
@@ -199,11 +281,20 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
       )}
       {!hasPlanSection && tasks.length > 0 && <p className="line quiet">Adding creates a {top3} section at the top</p>}
 
-      {(taskKeys.length > 0 || strips.has(allKey) || noTasksLine) && (
+      {(taskKeys.length > 0 || strips.has(allKey) || statusLine) && (
         <div className="mc-group">
           <h3 className="mc-label">Tasks</h3>
-          {taskKeys.length > 0 || strips.has(allKey) ? <ul className="plain mc-list">{strips.has(allKey) && row(allKey)}{taskKeys.map(row)}</ul> : noTasksLine}
+          {statusLine}
+          {(taskKeys.length > 0 || strips.has(allKey)) && <ul className="plain mc-list">{strips.has(allKey) && row(allKey)}{taskKeys.map(row)}</ul>}
           {tasks.length >= 2 && <button type="button" className="app-link mc-add-all" onClick={() => void addAll()}>Add all tasks</button>}
+          {contextLine}
+        </div>
+      )}
+
+      {propKeys.length > 0 && (
+        <div className="mc-group">
+          <h3 className="mc-label">From your notes</h3>
+          <ul className="plain mc-list">{propKeys.map(proposalRow)}</ul>
         </div>
       )}
 
@@ -246,6 +337,6 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
   )
 }
 
-function AddButton({ label, onPress }: { label: string; onPress: () => void }): ReactNode {
-  return <button type="button" className="mc-add" aria-label={label} onClick={onPress}><span aria-hidden="true">+</span></button>
+function AddButton({ label, onPress, dashed = false }: { label: string; onPress: () => void; dashed?: boolean }): ReactNode {
+  return <button type="button" className={`mc-add ${dashed ? 'dashed' : ''}`} aria-label={label} onClick={onPress}><span aria-hidden="true">+</span></button>
 }

@@ -1,0 +1,368 @@
+{
+  "summary": {
+    "model": "deepseek/deepseek-v4.1-flash-1017",
+    "maxTokens": 2000,
+    "runs": 2,
+    "cap": 0.05,
+    "spentUsd": 0.0012944879999999999,
+    "at": "2026-10-20T17:45:45.834Z",
+    "lookedUpTotalUsd": 0.0012944879999999999,
+    "lookupAt": "2026-10-20T17:46:05.461Z"
+  },
+  "results": [
+    {
+      "caseId": "A",
+      "run": 1,
+      "lines": [
+        {
+          "id": "P1",
+          "page": "Fri 2026-10-16",
+          "section": "Notes",
+          "text": "周一给 Kevin 回电话"
+        },
+        {
+          "id": "P2",
+          "page": "Fri 2026-10-16",
+          "section": "Notes",
+          "text": "今天天气很好，跑了 5k"
+        },
+        {
+          "id": "P3",
+          "page": "Fri 2026-10-16",
+          "section": "Notes",
+          "text": "下周看看 Notion 导出的格式"
+        },
+        {
+          "id": "P4",
+          "page": "Fri 2026-10-16",
+          "section": "Notes",
+          "text": "如果有空可以研究一下 TRMNL 的 API"
+        },
+        {
+          "id": "P5",
+          "page": "Fri 2026-10-16",
+          "section": "Notes",
+          "text": "已经把 Q3 报告发出去了"
+        }
+      ],
+      "ok": true,
+      "worstCaseUsd": 0.0027705,
+      "generationId": "gen-1792518332-0UNbPItMrnzxJztlHD1t",
+      "inlineCostUsd": 0.00025816,
+      "lookedUpCostUsd": 0.00025816,
+      "promptTokens": 327,
+      "completionTokens": 464,
+      "answer": {
+        "proposals": [
+          {
+            "propose": true,
+            "lineId": "P1",
+            "date": "2026-10-19"
+          },
+          {
+            "propose": false,
+            "lineId": "P2",
+            "date": null
+          },
+          {
+            "propose": true,
+            "lineId": "P3",
+            "date": null
+          },
+          {
+            "propose": true,
+            "lineId": "P4",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "P5",
+            "date": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "A",
+      "run": 2,
+      "lines": [
+        {
+          "id": "P1",
+          "page": "Fri 2026-10-16",
+          "section": "Notes",
+          "text": "周一给 Kevin 回电话"
+        },
+        {
+          "id": "P2",
+          "page": "Fri 2026-10-16",
+          "section": "Notes",
+          "text": "今天天气很好，跑了 5k"
+        },
+        {
+          "id": "P3",
+          "page": "Fri 2026-10-16",
+          "section": "Notes",
+          "text": "下周看看 Notion 导出的格式"
+        },
+        {
+          "id": "P4",
+          "page": "Fri 2026-10-16",
+          "section": "Notes",
+          "text": "如果有空可以研究一下 TRMNL 的 API"
+        },
+        {
+          "id": "P5",
+          "page": "Fri 2026-10-16",
+          "section": "Notes",
+          "text": "已经把 Q3 报告发出去了"
+        }
+      ],
+      "ok": true,
+      "worstCaseUsd": 0.0027705,
+      "generationId": "gen-1792518335-dlrHcHxxkS9XSf5CIcOU",
+      "inlineCostUsd": 0.000215728,
+      "lookedUpCostUsd": 0.000215728,
+      "promptTokens": 327,
+      "completionTokens": 416,
+      "answer": {
+        "proposals": [
+          {
+            "propose": true,
+            "lineId": "P1",
+            "date": "2026-10-19"
+          },
+          {
+            "propose": false,
+            "lineId": "P2",
+            "date": null
+          },
+          {
+            "propose": true,
+            "lineId": "P3",
+            "date": null
+          },
+          {
+            "propose": true,
+            "lineId": "P4",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "P5",
+            "date": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "B",
+      "run": 1,
+      "lines": [
+        {
+          "id": "day:2026-10-18/day:2026-10-18:events:template:0",
+          "page": "Sun 2026-10-18",
+          "section": "Events",
+          "text": "DRIVE Basketball Training #kathy"
+        },
+        {
+          "id": "day:2026-10-18/e288b066-4a3c-4ec9-9cf8-5d6932f6d1e1",
+          "page": "Sun 2026-10-18",
+          "section": "Events",
+          "text": "English Lesson #kathy"
+        },
+        {
+          "id": "day:2026-10-18/2b1f66e5-bdf7-42df-95e8-9bd2fc741ee7",
+          "page": "Sun 2026-10-18",
+          "section": "Notes",
+          "text": "肉酱意面 #recipe"
+        },
+        {
+          "id": "day:2026-10-18/a4f0bbd5-ecb9-45dc-af53-fd2f4602f78b",
+          "page": "Sun 2026-10-18",
+          "section": "Notes",
+          "text": "奥德赛"
+        },
+        {
+          "id": "day:2026-10-18/ec8dc024-8dbb-456b-9b1b-c7bdb7d5a333",
+          "page": "Sun 2026-10-18",
+          "section": "Notes",
+          "text": "原生家庭创伤导致的讨好型人格如何解决？（是否强关联？）"
+        },
+        {
+          "id": "day:2026-10-18/356637c1-5099-4aa8-985c-8c15d40fbf4a",
+          "page": "Sun 2026-10-18",
+          "section": "Notes",
+          "text": "I choose to：绝大多数的事情都是自我选择，既然做出了选择，就要承受相应的代价。 -> 做事前思考：代价是什么"
+        },
+        {
+          "id": "fa95e8a3-dd0a-4b3c-8fcc-c1129c8c4820/e9aa46a3-891e-46a1-a606-03c51dde297b",
+          "page": "page \"韩国大酱汤\"",
+          "section": "Page",
+          "text": "#recipe"
+        },
+        {
+          "id": "ee5bd493-980f-4041-ad34-89efa85ed78a/a777d65d-18d7-4b8a-887d-3a3a0a151ac8",
+          "page": "page \"佛卡夏披萨\"",
+          "section": "Page",
+          "text": "#recipe"
+        }
+      ],
+      "ok": true,
+      "worstCaseUsd": 0.0029834999999999996,
+      "generationId": "gen-1792518338-bAEHDMd6Ww8QT0qnvgd9",
+      "inlineCostUsd": 0.00049384,
+      "lookedUpCostUsd": 0.00049384,
+      "promptTokens": 673,
+      "completionTokens": 880,
+      "answer": {
+        "proposals": [
+          {
+            "propose": false,
+            "lineId": "day:2026-10-18/day:2026-10-18:events:template:0",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "day:2026-10-18/e288b066-4a3c-4ec9-9cf8-5d6932f6d1e1",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "day:2026-10-18/2b1f66e5-bdf7-42df-95e8-9bd2fc741ee7",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "day:2026-10-18/a4f0bbd5-ecb9-45dc-af53-fd2f4602f78b",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "day:2026-10-18/ec8dc024-8dbb-456b-9b1b-c7bdb7d5a333",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "day:2026-10-18/356637c1-5099-4aa8-985c-8c15d40fbf4a",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "fa95e8a3-dd0a-4b3c-8fcc-c1129c8c4820/e9aa46a3-891e-46a1-a606-03c51dde297b",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "ee5bd493-980f-4041-ad34-89efa85ed78a/a777d65d-18d7-4b8a-887d-3a3a0a151ac8",
+            "date": null
+          }
+        ]
+      }
+    },
+    {
+      "caseId": "B",
+      "run": 2,
+      "lines": [
+        {
+          "id": "day:2026-10-18/day:2026-10-18:events:template:0",
+          "page": "Sun 2026-10-18",
+          "section": "Events",
+          "text": "DRIVE Basketball Training #kathy"
+        },
+        {
+          "id": "day:2026-10-18/e288b066-4a3c-4ec9-9cf8-5d6932f6d1e1",
+          "page": "Sun 2026-10-18",
+          "section": "Events",
+          "text": "English Lesson #kathy"
+        },
+        {
+          "id": "day:2026-10-18/2b1f66e5-bdf7-42df-95e8-9bd2fc741ee7",
+          "page": "Sun 2026-10-18",
+          "section": "Notes",
+          "text": "肉酱意面 #recipe"
+        },
+        {
+          "id": "day:2026-10-18/a4f0bbd5-ecb9-45dc-af53-fd2f4602f78b",
+          "page": "Sun 2026-10-18",
+          "section": "Notes",
+          "text": "奥德赛"
+        },
+        {
+          "id": "day:2026-10-18/ec8dc024-8dbb-456b-9b1b-c7bdb7d5a333",
+          "page": "Sun 2026-10-18",
+          "section": "Notes",
+          "text": "原生家庭创伤导致的讨好型人格如何解决？（是否强关联？）"
+        },
+        {
+          "id": "day:2026-10-18/356637c1-5099-4aa8-985c-8c15d40fbf4a",
+          "page": "Sun 2026-10-18",
+          "section": "Notes",
+          "text": "I choose to：绝大多数的事情都是自我选择，既然做出了选择，就要承受相应的代价。 -> 做事前思考：代价是什么"
+        },
+        {
+          "id": "fa95e8a3-dd0a-4b3c-8fcc-c1129c8c4820/e9aa46a3-891e-46a1-a606-03c51dde297b",
+          "page": "page \"韩国大酱汤\"",
+          "section": "Page",
+          "text": "#recipe"
+        },
+        {
+          "id": "ee5bd493-980f-4041-ad34-89efa85ed78a/a777d65d-18d7-4b8a-887d-3a3a0a151ac8",
+          "page": "page \"佛卡夏披萨\"",
+          "section": "Page",
+          "text": "#recipe"
+        }
+      ],
+      "ok": true,
+      "worstCaseUsd": 0.0029834999999999996,
+      "generationId": "gen-1792518342-8Pnn0ljNCmQgJkesYf5h",
+      "inlineCostUsd": 0.00032676,
+      "lookedUpCostUsd": 0.00032676,
+      "promptTokens": 673,
+      "completionTokens": 638,
+      "answer": {
+        "proposals": [
+          {
+            "propose": false,
+            "lineId": "day:2026-10-18/day:2026-10-18:events:template:0",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "day:2026-10-18/e288b066-4a3c-4ec9-9cf8-5d6932f6d1e1",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "day:2026-10-18/2b1f66e5-bdf7-42df-95e8-9bd2fc741ee7",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "day:2026-10-18/a4f0bbd5-ecb9-45dc-af53-fd2f4602f78b",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "day:2026-10-18/ec8dc024-8dbb-456b-9b1b-c7bdb7d5a333",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "day:2026-10-18/356637c1-5099-4aa8-985c-8c15d40fbf4a",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "fa95e8a3-dd0a-4b3c-8fcc-c1129c8c4820/e9aa46a3-891e-46a1-a606-03c51dde297b",
+            "date": null
+          },
+          {
+            "propose": false,
+            "lineId": "ee5bd493-980f-4041-ad34-89efa85ed78a/a777d65d-18d7-4b8a-887d-3a3a0a151ac8",
+            "date": null
+          }
+        ]
+      }
+    }
+  ]
+}

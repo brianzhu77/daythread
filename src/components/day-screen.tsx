@@ -5,7 +5,7 @@ import { CaptureBar, CaptureReceipts } from './capture'
 import { ContinuousPage } from './continuous-page'
 import { LinkedFrom, Subpages } from './page-tree'
 import { FactsStrip } from './facts-strip'
-import { StartTheDay, hasHandoffContent, taskSuggestions, useHandoffLater } from './start-the-day'
+import { StartTheDay, cardLines, hasHandoffContent, liveProposals, taskSuggestions, useHandoffLater } from './start-the-day'
 import { useDay, useWorkspace } from './use-day'
 import { DayHeader } from './day-header'
 import { FutureDayState } from './future-day'
@@ -57,7 +57,8 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
           date={date}
           today={today}
           handoffCollapsed={isToday && Boolean(page && !page.handoffDone && later && hasHandoffContent(view, workspace, today))}
-          handoffCount={suggestions.length + view.handoffBlocks.length}
+          handoffCount={suggestions.length + cardLines(view, workspace).length + (page ? liveProposals(page, workspace).length : 0)}
+          handoffDrafting={page?.draft?.run?.status === 'drafting'}
           cardTaskIds={showHandoff ? new Set(suggestions.map(s => s.task.id)) : undefined}
           onReopenHandoff={() => setLater(false)}
           handoffSettled={handoffSettled}

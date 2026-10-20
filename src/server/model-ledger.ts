@@ -38,7 +38,15 @@ export function toBudgetLedger(attempts: ModelAttempt[]): BudgetLedger {
   }
 }
 
-export interface ReserveInput { id: string; captureId: string; revision: number; day: string; upperBoundUsd: number; model: string; requestHash: string; now: string; capUsd?: number }
+/**
+ * What an attempt is for (A6b plan §7): a capture revision, or a run of Draft my day. Stored in the existing columns:
+ * a capture keeps its id in `captureId`; a draft stores `draft:<date>` there and its run number in `revision`. No
+ * Capture is ever created for a draft, and `costUnknownCaptureIds` only reads captures.
+ */
+export type AttemptSubject = { kind: 'capture'; id: string; revision: number } | { kind: 'draft'; date: string; run: number }
+const subjectColumns = (s: AttemptSubject) => s.kind === 'capture' ? { captureId: s.id, revision: s.revision } : { captureId: `draft:${s.date}`, revision: s.run }
+export const isDraftSubject = (captureId: string | null) => Boolean(captureId?.startsWith('draft:'))
+export interface ReserveInput { id: string; subject: AttemptSubject; day: string; upperBoundUsd: number; model: string; requestHash: string; now: string; capUsd?: number }
 /** 10 USD per day (Brian). DAYTHREAD_MODEL_CAP_USD may only lower it, e.g. to see "budget used up" on a test server. */
 export function dailyCapUsd(env: NodeJS.ProcessEnv = process.env): number {
   const requested = Number(env.DAYTHREAD_MODEL_CAP_USD)
@@ -47,17 +55,17 @@ export function dailyCapUsd(env: NodeJS.ProcessEnv = process.env): number {
 /** `replayed` = this id was already reserved with the same request: the caller must not send it again. */
 export function reserveAttempt(db: DatabaseSync, input: ReserveInput): { attempt: ModelAttempt; replayed: boolean } {
   const attempts = readAttempts(db)
-  const existing = attempts.find(a => a.id === input.id)
+  const existing = attempts.find(a => a.id === input.id), columns = subjectColumns(input.subject)
   // Same attempt id and the same whole request: a replay, no new reservation. Anything else under that id is refused
   // (Ratchet #68: day and amount alone weren't enough).
   if (existing) {
-    if (existing.captureId !== input.captureId || existing.revision !== input.revision || existing.day !== input.day || existing.model !== input.model || existing.requestHash !== input.requestHash || micros(existing.reservedUsd) !== micros(input.upperBoundUsd))
+    if (existing.captureId !== columns.captureId || existing.revision !== columns.revision || existing.day !== input.day || existing.model !== input.model || existing.requestHash !== input.requestHash || micros(existing.reservedUsd) !== micros(input.upperBoundUsd))
       throw new Error('Attempt identity reused with different input')
     return { attempt: existing, replayed: true }
   }
   reserveBudget(toBudgetLedger(attempts), input.id, input.day, input.upperBoundUsd, Math.min(input.capUsd ?? 10, 10))
   db.prepare('INSERT INTO model_attempts (id,captureId,revision,day,reservedMicros,actualMicros,state,generationId,model,createdAt,settledAt,note,resultFingerprint,resultOperationId,requestHash) VALUES (?,?,?,?,?,NULL,?,NULL,?,?,NULL,NULL,NULL,NULL,?)')
-    .run(input.id, input.captureId, input.revision, input.day, micros(input.upperBoundUsd), 'reserved', input.model, input.now, input.requestHash)
+    .run(input.id, columns.captureId, columns.revision, input.day, micros(input.upperBoundUsd), 'reserved', input.model, input.now, input.requestHash)
   return { attempt: readAttempts(db).find(a => a.id === input.id)!, replayed: false }
 }
 
@@ -110,7 +118,7 @@ export function reconcileAttempt(db: DatabaseSync, attemptId: string, amount: nu
 
 /** Captures with a charge not yet confirmed: their receipt says "Cost unknown" until the real cost arrives (Jazz 4e8c2f1). */
 export function costUnknownCaptureIds(attempts: ModelAttempt[]): string[] {
-  return [...new Set(attempts.filter(a => (a.state === 'estimated' || a.state === 'unknown') && a.captureId).map(a => a.captureId!))]
+  return [...new Set(attempts.filter(a => (a.state === 'estimated' || a.state === 'unknown') && a.captureId && !isDraftSubject(a.captureId)).map(a => a.captureId!))]
 }
 
 /** What the browser may know: read-only, no amounts per attempt. */

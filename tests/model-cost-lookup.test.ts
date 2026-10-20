@@ -36,7 +36,7 @@ async function store() {
   let ws = await repo.load()
   ws = (await repo.execute({ operationId: 'day', expectedRevision: ws.revision, action: { type: 'ensure-day', date: '2026-10-19' } })).workspace
   const add = async (id: string, generationId: string | null) => {
-    await repo.reserveModelAttempt({ id, captureId: id, revision: 1, day: '2026-10-19', upperBoundUsd: 0.004, model: 'fake/model', requestHash: id, now })
+    await repo.reserveModelAttempt({ id, subject: { kind: 'capture', id, revision: 1 }, day: '2026-10-19', upperBoundUsd: 0.004, model: 'fake/model', requestHash: id, now })
     await repo.recordModelResult({ attemptId: id, actualUsd: null, generationId, now })
   }
   return { repo, add, cleanup: () => rm(dir, { recursive: true, force: true }) }

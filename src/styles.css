@@ -1070,3 +1070,14 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
   .pages-trash-row svg { width: 18px; height: 18px; color: var(--ink-3); }
   .pages-trash-row > svg:last-child { width: 13px; height: 13px; }
 }
+
+/* ---------- A6b Draft my day states (Jazz docs/design/morning-model-states.md, 9127710) ---------- */
+/* One status line, the card's normal .line in the same spot: Drafting, Nothing to suggest, failures, Draft my day. */
+.mc-status.warn { color: var(--warn); }
+.mc-spinner { display: inline-block; vertical-align: -2px; width: 14px; height: 14px; margin-right: 6px; border: 1.5px solid var(--ink-3); border-right-color: transparent; border-radius: 50%; animation: page-card-spin .8s linear infinite; }
+.mc-cost-unknown { margin-left: 6px; font-size: 13px; color: var(--ink-3); white-space: nowrap; }
+.mc-context { margin-top: 2px; font-size: 13px; color: var(--ink-3); }
+.mc-add.dashed span { background: none; border: 1.5px dashed var(--ink-3); }
+.mc-add.dashed:hover span { background: var(--fill); }
+/* 44 px targets for Draft my day and Retry on the phone, without moving the line. */
+@media (max-width: 599px) { .mc-group > .line .app-link { display: inline-block; padding: 12px 2px; margin: -12px -2px; } }

@@ -10,6 +10,8 @@ export const loadWorkspace = createServerFn({ method: "GET" })
     const started=performance.now();
     debugLog('request.load.start',data);
     try {
+      const { expireDrafts } = await import("./model/service");
+      await expireDrafts().catch(()=>undefined);
       const workspace=await withLogOperation(data.operationId,()=>getRepository().load());
       const { modelInfo } = await import("./model/service");
       const model=await modelInfo();
@@ -43,4 +45,12 @@ export const retryCapture = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { retryCaptureForModel } = await import("./model/service");
     return retryCaptureForModel(data.operationId, data.captureId);
+  });
+
+/** Draft my day (A6b step 1): real with the model ready, simulated otherwise; the browser follows the run. */
+export const draftMyDay = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.object({ operationId: z.string().min(1).max(200), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }).parse(input))
+  .handler(async ({ data }) => {
+    const { startDraftForDay } = await import("./model/service");
+    return startDraftForDay(data.operationId, data.date);
   });

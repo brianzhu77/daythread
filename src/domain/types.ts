@@ -17,6 +17,41 @@ export interface NoteBlock {
   targetPageId?: string;
   sourcePageId?: string;
   sourceBlockId?: string;
+  /** A6b: the source line's fingerprint when a proposal was accepted (text, type and date basis at that time). */
+  sourceFingerprint?: string;
+}
+/** A6b plan §4a: why a real Draft my day run ended without a result. */
+export type DraftFailure = "key-rejected" | "unavailable" | "paused" | "budget" | "too-large" | "busy";
+/** A6b plan §5: exactly what one run sent to the model. */
+export interface DraftManifest {
+  lines: { lineId: string; pageId: string; blockId: string; fingerprint: string }[];
+  sentPages: string[];
+  omittedPages: string[];
+  taskCandidates: string[];
+  materialCandidates: string[];
+}
+/** A6b plan §4a: one real run of Draft my day, bound to the operation that started it. */
+export interface DraftRun {
+  runId: string;
+  run: number;
+  trigger: "card";
+  startedAt: string;
+  status: "drafting" | "ready" | "failed" | "expired";
+  attemptId: string;
+  model: string;
+  requestHash: string;
+  failure?: DraftFailure;
+  /** The charge couldn't be confirmed (an estimate, or a generation id without a cost): the card adds "Cost unknown". */
+  costUnknown?: boolean;
+  manifest: DraftManifest;
+}
+/** A6b: a line from his own writing the model chose; the title is always the line itself, read when shown. */
+export interface DraftProposal {
+  lineId: string;
+  pageId: string;
+  blockId: string;
+  fingerprint: string;
+  date: LocalDate | null;
 }
 export interface Section {
   id: string;
@@ -52,10 +87,15 @@ export interface Page {
   reviewSkipped?: boolean;
   draftError?: string;
   draft: {
-    simulated: true;
+    simulated: boolean;
     taskIds: string[];
     materialIds: string[];
     text: string;
+    /** A6b: present for a real Draft my day run (and its simulated stand-in from the card). */
+    run?: DraftRun;
+    proposals?: DraftProposal[];
+    /** lineIds hidden for this day (Hide for today). */
+    hidden?: string[];
   } | null;
 }
 export interface Task {
@@ -187,7 +227,11 @@ export type ServerAction =
   | { type: "capture-for-model"; pageId: string; text: string; model: string; capturedAt: string }
   | { type: "organized-capture"; captureId: string; revision: number; model: string; mode: "auto" | "confirm"; proposals: ProposalItem[]; unreadable: number; contextLine: string }
   | { type: "model-failed"; captureId: string; revision: number; failure: "failure" | "budget" | "context" | "paused"; error: string }
-  | { type: "retry-capture"; captureId: string };
+  | { type: "retry-capture"; captureId: string }
+  | { type: "start-draft-run"; date: LocalDate; model: string; startedAt: string }
+  | { type: "record-draft-request"; date: LocalDate; runId: string; requestHash: string; manifest: DraftManifest }
+  | { type: "set-model-draft"; date: LocalDate; runId: string; taskIds: string[]; materialIds: string[]; proposals: DraftProposal[] }
+  | { type: "model-draft-failed"; date: LocalDate; runId: string; failure: DraftFailure; expired?: boolean; costUnknown?: boolean };
 export type Action =
   | { type: "plan-tasks"; date: LocalDate; items: { taskId: string; section: "top3" | "other" }[] }
   | { type: "bring-line"; date: LocalDate; sourcePageId: string; sourceBlockId: string }
@@ -307,7 +351,11 @@ export type Action =
       type: "generate-draft";
       date: LocalDate;
       outcome?: "success" | "failure" | "budget" | "context";
+      /** "card": Draft my day on the morning card (adds the example proposal when simulated); absent: the review. */
+      trigger?: "card";
     }
+  | { type: "add-proposal"; date: LocalDate; lineId: string }
+  | { type: "hide-proposal"; date: LocalDate; lineId: string }
   | { type: "save-draft"; date: LocalDate; taskIds: string[]; materialIds: string[] }
   | { type: "undo"; targetOperationId: string };
 export interface Command {

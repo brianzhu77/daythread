@@ -95,7 +95,7 @@ async function organizeOnce(deps: OrganizeDeps, captureId: string): Promise<Orga
   if (!price) { await fail('failure', 'Model price unavailable · text saved, nothing sent'); return 'no-price' }
   const upperBoundUsd = worstCaseUsd(body, maxOutputTokens, price)
   const attemptId = `organize:${captureId}:${revision}`
-  const reserve = () => repository.reserveModelAttempt({ id: attemptId, captureId, revision, day: spendDay, upperBoundUsd, model: config.model, requestHash: sha256(body), now: now().toISOString(), capUsd: dailyCapUsd() })
+  const reserve = () => repository.reserveModelAttempt({ id: attemptId, subject: { kind: 'capture', id: captureId, revision }, day: spendDay, upperBoundUsd, model: config.model, requestHash: sha256(body), now: now().toISOString(), capUsd: dailyCapUsd() })
   try {
     // A second run for the same capture revision finds the reservation already there and sends nothing.
     let reserved

@@ -1,0 +1,18 @@
+ok   drafting: 53c1b83 opens it and saves an edit
+ok   drafting: 53c1b83 Undoes it
+ok   drafting: the new build reads the draft back unchanged
+ok   drafting: and the old build's kept line
+ok   ready: 53c1b83 opens it and saves an edit
+ok   ready: 53c1b83 Undoes it
+ok   ready: the new build reads the draft back unchanged
+ok   ready: and the old build's kept line
+ok   ready: after 53c1b83 saved the page, the accepted record survives in block metadata and the line stays linked
+ok   failed: 53c1b83 opens it and saves an edit
+ok   failed: 53c1b83 Undoes it
+ok   failed: the new build reads the draft back unchanged
+ok   failed: and the old build's kept line
+ok   expired: 53c1b83 opens it and saves an edit
+ok   expired: 53c1b83 Undoes it
+ok   expired: the new build reads the draft back unchanged
+ok   expired: and the old build's kept line
+all checks passed

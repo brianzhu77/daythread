@@ -1,5 +1,6 @@
 import { dayTemplate, editorSeed, needsTemplateRows, pageContentKey, projectDocument, inlineText, sectionRange, type EditorNode } from "./editor-document.ts";
 import { isTrashed, moveRefusal, subtreeIds } from "./page-tree.ts";
+import { draftLines, fingerprintOf, isLineLinked, liveProposal, previousDayPage } from "./draft.ts";
 import type {
   Command,
   CommandResult,
@@ -356,6 +357,25 @@ function untouchedLineMaterial(m: Material, blockId: string, previous: EditorNod
  * Saves are debounced while Brian types, so an untouched Material follows its line from one URL to the next
  * (re-keyed); words added to the line become that save's note, and a deleted line leaves the Material alone.
  */
+/** One draft per day (morning-model-states §1): a ready draft or a run in progress; a failed run allows Retry. */
+function hasDayDraft(p: Page): boolean {
+  if (!p.draft) return false;
+  return !p.draft.run || p.draft.run.status === "ready" || p.draft.run.status === "drafting";
+}
+function draftingPage(state: Workspace, day: string, runId: string): Page {
+  const p = state.pages.find((x) => x.type === "daily" && x.date === date(day));
+  if (!p?.draft?.run || p.draft.run.runId !== runId || p.draft.run.status !== "drafting") throw new DomainError("Draft run moved on");
+  return p;
+}
+/** The card's failure lines (morning-model-states §3, capture receipt wording). */
+export const draftFailureLine: Record<import("./types.ts").DraftFailure, string> = {
+  "key-rejected": "Model key rejected · nothing was added",
+  unavailable: "Model unavailable · nothing was added",
+  paused: "Model paused · a cost couldn't be confirmed · nothing was added",
+  budget: "Today's model budget is used up · nothing was added",
+  "too-large": "Too much to read in one go · nothing was added",
+  busy: "Model busy · nothing was added",
+};
 /** A line Bring to today can copy: text or a link, not a task, page card or event. */
 function bringable(b: NoteBlock): boolean {
   return !b.taskId && !b.eventId && b.kind !== "reference" && !b.targetPageId && Boolean(b.text.trim());
@@ -1216,6 +1236,75 @@ function execute(
       const top = pages.find((x) => !x.parentId || !ids.has(x.parentId))!;
       return { message: toTopLevel.includes(top) ? "Restored to Pages" : "Restored", entityId: top.id };
     }
+    case "start-draft-run": {
+      // A6b plan §3: a real run of Draft my day, bound to the operation that started it (runId). Refused while one is
+      // drafting or the day already has a draft; allowed again after a failure (Retry is a new paid attempt).
+      const p = ensureDay(state, action.date);
+      if (hasDayDraft(p)) throw new DomainError(p.draft?.run?.status === "drafting" ? "Already drafting" : "Today already has a draft");
+      const run = (p.draft?.run?.run ?? 0) + 1;
+      p.draft = {
+        simulated: false, taskIds: [], materialIds: [], text: "",
+        run: { runId: operationId, run, trigger: "card", startedAt: action.startedAt, status: "drafting", attemptId: `draft:${action.date}:${operationId}`, model: action.model, requestHash: "", manifest: { lines: [], sentPages: [], omittedPages: [], taskCandidates: [], materialCandidates: [] } },
+        proposals: [], hidden: [],
+      };
+      delete p.draftError;
+      return { message: "Drafting your day", entityId: operationId };
+    }
+    case "record-draft-request": {
+      const p = draftingPage(state, action.date, action.runId);
+      p.draft!.run!.requestHash = action.requestHash;
+      p.draft!.run!.manifest = action.manifest;
+      return { message: "Draft request recorded" };
+    }
+    case "set-model-draft": {
+      // Applies only to the run still drafting under this runId: a late answer after Retry, expiry, Done or a new day
+      // is refused here and only its cost is settled (plan §4). Ids outside the manifest never get in.
+      const p = draftingPage(state, action.date, action.runId);
+      const run = p.draft!.run!, m = run.manifest;
+      const lines = new Set(m.lines.map((l) => l.lineId));
+      if (action.taskIds.some((id) => !m.taskCandidates.includes(id)) || action.materialIds.some((id) => !m.materialCandidates.includes(id)) || action.proposals.some((x) => !lines.has(x.lineId)))
+        throw new DomainError("Draft result points outside what was sent");
+      p.draft = { ...p.draft!, taskIds: action.taskIds.slice(0, 3), materialIds: action.materialIds.slice(0, 2), proposals: action.proposals, run: { ...run, status: "ready" } };
+      return { message: "Day drafted" };
+    }
+    case "model-draft-failed": {
+      const p = draftingPage(state, action.date, action.runId);
+      p.draft!.run = { ...p.draft!.run!, status: action.expired ? "expired" : "failed", failure: action.failure, ...(action.costUnknown ? { costUnknown: true } : {}) };
+      p.draftError = draftFailureLine[action.failure];
+      return { message: p.draftError };
+    }
+    case "add-proposal": {
+      // A6b plan §4: a new task from his line, word for word, in the plan list (never Top 3), recorded on its row like a
+      // brought line. Refused when the line changed, went, moved under another day or was already carried forward.
+      const p = state.pages.find((x) => x.type === "daily" && x.date === date(action.date));
+      const prop = p?.draft?.proposals?.find((x) => x.lineId === action.lineId);
+      if (!p || !prop || p.draft!.hidden?.includes(prop.lineId)) throw new DomainError("Suggestion not found");
+      const live = liveProposal(state, prop);
+      if (!live) throw new DomainError("This line changed; nothing was added");
+      const t = createTask(state, live.block.text, live.page, null);
+      t.createdOn = action.date;
+      const source = { sourcePageId: live.page.id, sourceBlockId: live.block.id, sourceFingerprint: prop.fingerprint };
+      // A dated proposal is planned for its day, like a dated capture: no row on the drafted day's page (Bumblebee,
+      // Lead, Ratchet #80). Its accepted record still lives on the drafted day's page, in block metadata under the
+      // task's id, so the line stays linked even before that day's page exists.
+      if (prop.date && prop.date > action.date) {
+        place(state, t, prop.date, "other");
+        (p.editorBlockMetadata ??= {})[`accepted:${t.id}`] = { id: `accepted:${t.id}`, kind: "task", taskId: t.id, text: t.title, ...source };
+        return { message: `Added for ${prop.date}`, entityId: t.id };
+      }
+      place(state, t, action.date, "other");
+      const row = p.sections.flatMap((s) => s.blocks).find((b) => b.kind === "task" && b.taskId === t.id)!;
+      Object.assign(row, source);
+      (p.editorBlockMetadata ??= {})[row.id] = structuredClone(row);
+      const section = p.sections.find((s) => s.blocks.includes(row))!;
+      return { message: `Added to ${section.title || "the plan"}`, entityId: t.id };
+    }
+    case "hide-proposal": {
+      const p = state.pages.find((x) => x.type === "daily" && x.date === date(action.date));
+      if (!p?.draft?.proposals?.some((x) => x.lineId === action.lineId)) throw new DomainError("Suggestion not found");
+      p.draft.hidden = [...new Set([...(p.draft.hidden ?? []), action.lineId])];
+      return { message: "Hidden for today" };
+    }
     case "relink-material-lines": {
       // One-off repair for pages written while the editor skipped the material rule; safe to repeat.
       const before = JSON.stringify([state.materials, state.pages]), count = state.materials.length;
@@ -1506,6 +1595,8 @@ function execute(
     }
     case "generate-draft": {
       const p = ensureDay(state, action.date);
+      // Draft my day on the card: one draft per day (morning-model-states §1); Retry only after a failure.
+      if (action.trigger === "card" && hasDayDraft(p)) throw new DomainError("Today already has a draft");
       if (action.outcome && action.outcome !== "success") {
         p.draftError = `Simulated ${action.outcome}; review remains saved`;
         return { message: p.draftError, simulated: true };
@@ -1527,6 +1618,14 @@ function execute(
           .map((m) => m.id),
         text: "Simulated draft from saved records. No model was called. Choose what to plan.",
       };
+      // The card's stand-in shows one example proposal so its states can be reviewed (card spec §4, §11 step 3).
+      if (action.trigger === "card") {
+        const prev = previousDayPage(state, action.date);
+        const line = prev ? draftLines(prev).find((l) => !isLineLinked(state, l.pageId, l.blockId)) : undefined;
+        const block = line && prev!.sections.flatMap((s) => s.blocks).find((b) => b.id === line.blockId);
+        p.draft.proposals = line && block ? [{ lineId: line.lineId, pageId: line.pageId, blockId: line.blockId, fingerprint: fingerprintOf(state, prev!, block), date: null }] : [];
+        p.draft.hidden = [];
+      }
       delete p.draftError;
       return {
         message: "Simulated suggestions saved; nothing scheduled",
