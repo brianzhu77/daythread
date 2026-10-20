@@ -21,7 +21,7 @@ test('server Retry is refused while the model is paused; the capture keeps its r
     ws = (await repo.execute({ operationId: 'f1', expectedRevision: old.workspace.revision, action: { type: 'model-failed', captureId: id, revision: 1, failure: 'failure', error: 'Model unavailable · text saved' } })).workspace
     // Another capture's charge has a generation id but no cost: the model is paused.
     const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver' }).format(new Date())
-    await repo.reserveModelAttempt({ id: 'a1', captureId: 'other', revision: 1, day, upperBoundUsd: 0.004, model: 'fake/model', requestHash: 'h', now: new Date().toISOString() })
+    await repo.reserveModelAttempt({ id: 'a1', subject: { kind: 'capture', id: 'other', revision: 1 }, day, upperBoundUsd: 0.004, model: 'fake/model', requestHash: 'h', now: new Date().toISOString() })
     await repo.recordModelResult({ attemptId: 'a1', actualUsd: null, generationId: 'gen-1', now: new Date().toISOString() })
     const r = await retryCaptureForModel('retry-1', id)
     assert.equal(r.ok, false); assert.equal(r.info.state, 'paused')

@@ -52,7 +52,7 @@ await exec(repo, { type: 'capture', pageId: 'P', text: 'try 80% hydration' })
 ws = await repo.load()
 const oldTaskId = ws.tasks.find(t => t.title === 'buy flour')!.id
 const captureId = ws.captures.find(c => c.pageId === 'P')!.id
-await repo.reserveModelAttempt({ id: 'a1', captureId, revision: 1, day: '2026-10-18', upperBoundUsd: 0.004, model: 'm', requestHash: 'h', now: at })
+await repo.reserveModelAttempt({ id: 'a1', subject: { kind: 'capture', id: captureId, revision: 1 }, day: '2026-10-18', upperBoundUsd: 0.004, model: 'm', requestHash: 'h', now: at })
 await exec(repo, { type: 'delete-page', pageId: 'C', at }, 'op-c')
 await exec(repo, { type: 'delete-page', pageId: 'P', at }, 'op-p')
 await exec(repo, { type: 'delete-page', pageId: 'E', at }, 'op-e')

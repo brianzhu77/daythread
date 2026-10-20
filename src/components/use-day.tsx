@@ -4,7 +4,7 @@ import { Button, toast } from '@heroui/react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Action, DayView, LocalDate, Receipt, Workspace } from '../domain/types'
 import { getDayView } from '../domain/workspace'
-import { loadWorkspace, retryCapture as retryCaptureFn, runCommand, submitCapture as submitCaptureFn } from '../server/functions'
+import { draftMyDay as draftMyDayFn, loadWorkspace, retryCapture as retryCaptureFn, runCommand, submitCapture as submitCaptureFn } from '../server/functions'
 import { configureDebug, debugClient } from '../lib/debug'
 import { sampleActions } from './fixture'
 import { todayIso } from './dates'
@@ -73,6 +73,8 @@ interface WorkspaceContextValue {
   submitCapture(pageId: string, text: string, outcome?: SimOutcome): Promise<boolean>
   /** Organizes a failed model capture again (same capture, new revision). */
   retryCapture(captureId: string): Promise<boolean>
+  /** Draft my day (A6b): the model when it's set up, otherwise the simulated draft. False = nothing started. */
+  draftMyDay(date: LocalDate): Promise<boolean>
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
@@ -223,6 +225,23 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     queue.current = job.catch(() => undefined)
     return job
   }, [refresh])
+  const draftMyDay = useCallback(async (date: LocalDate) => {
+    if (latestModel.state === 'simulated') return Boolean(await run({ type: 'generate-draft', date, trigger: 'card', outcome: simOutcome }, null))
+    const job = queue.current.then(async () => {
+      try { await draftMyDayFn({ data: { operationId: newOperationId(), date } }); await refresh(); return true }
+      catch { await refresh().catch(() => undefined); return false }
+    })
+    queue.current = job.catch(() => undefined)
+    return job
+  }, [run, refresh, simOutcome])
+  // While Draft my day is running, follow it; the server ends a run stuck past 90 s, so this stops on its own.
+  const draftPolls = useRef(0)
+  useEffect(() => {
+    if (!workspace?.pages.some(p => p.draft?.run?.status === 'drafting')) { draftPolls.current = 0; return }
+    if (draftPolls.current >= 80) return
+    const t = setTimeout(() => { draftPolls.current++; void refresh().catch(() => undefined) }, 1500)
+    return () => clearTimeout(t)
+  }, [workspace, refresh])
   // While a capture is still being organized, follow it (the model answers in a few seconds; stop after ~90 s).
   const polls = useRef(0)
   useEffect(() => {
@@ -256,8 +275,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       model,
       submitCapture,
       retryCapture,
+      draftMyDay,
     }),
-    [workspace, latest, loadError, saveState, saveError, lastFailed, simOutcome, run, retry, reload, refresh, addSampleData, model, submitCapture, retryCapture],
+    [workspace, latest, loadError, saveState, saveError, lastFailed, simOutcome, run, retry, reload, refresh, addSampleData, model, submitCapture, retryCapture, draftMyDay],
   )
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }

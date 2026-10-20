@@ -14,6 +14,8 @@ interface Props {
   handoffCollapsed: boolean
   /** Rows waiting in the collapsed morning card (morning card §8, Later). */
   handoffCount: number
+  /** Draft my day is running: the strip reads "Suggestions · drafting…" (morning-model-states §2). */
+  handoffDrafting?: boolean
   onReopenHandoff: () => void
   handoffSettled: boolean
   /** Tasks that are rows in the open morning card; "N other open tasks" leaves them out (Lead 23a43f85, card §3). */
@@ -21,7 +23,7 @@ interface Props {
 }
 
 /** Computed facts above the page, never page text (01 §3.2, §3.3, §3.4). No counts to clear. */
-export function FactsStrip({ view, workspace, date, today, handoffCollapsed, handoffCount, onReopenHandoff, handoffSettled, cardTaskIds }: Props) {
+export function FactsStrip({ view, workspace, date, today, handoffCollapsed, handoffCount, handoffDrafting, onReopenHandoff, handoffSettled, cardTaskIds }: Props) {
   const isToday = date === today
   const pageTaskIds = new Set(view.page?.sections.flatMap(s => s.blocks).map(b => b.taskId).filter(Boolean))
   const dueSoon = view.attention.filter(t => !pageTaskIds.has(t.id))
@@ -35,7 +37,7 @@ export function FactsStrip({ view, workspace, date, today, handoffCollapsed, han
     <div className="facts" aria-label="Facts for this day">
       {isToday && handoffCollapsed && (
         <button type="button" className="fact-line link-line" onClick={onReopenHandoff}>
-          Suggestions · {handoffCount} ▸
+          Suggestions · {handoffDrafting ? 'drafting…' : handoffCount} ▸
         </button>
       )}
 

@@ -88,8 +88,11 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
    * domain refuses (the capture moved on) leaves the settlement in place and applies nothing; any other failure rolls
    * back both, so a charge and its applied items never come apart.
    */
-  async recordModelResult(input: SettleInput, command?: Command, options: { failAfterWrite?: boolean } = {}): Promise<{ attempt: ModelAttempt; result?: CommandResult; refused?: string }> {
+  async recordModelResult(input: SettleInput, commandOrBuild?: Command | ((current: Workspace) => Command), options: { failAfterWrite?: boolean } = {}): Promise<{ attempt: ModelAttempt; result?: CommandResult; refused?: string }> {
     return this.transact(input.attemptId, db => {
+      // A builder gets the workspace as it is inside this transaction, so a background result isn't refused just
+      // because he typed meanwhile (its expectedRevision is current). Its own checks (runId, status) still apply.
+      const command = typeof commandOrBuild === 'function' ? (() => { const w = readWorkspace(db); if (!w) throw new Error('Workspace missing'); return commandOrBuild(w) })() : commandOrBuild
       const attempt = settleAttempt(db, input)
       let result: CommandResult | undefined, refused: string | undefined
       // No cost and no result = "outcome not known yet" (timeout, lost reply). That binds nothing, so the real result
@@ -119,6 +122,19 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
       }
       if (options.failAfterWrite) throw new Error('injected failure after write') // test hook for the atomicity check
       return { attempt, result, refused }
+    })
+  }
+  /**
+   * A server-only command applied to the workspace as it is now, in one transaction: background work (a draft run)
+   * must not be refused because he typed meanwhile. Its own checks decide; replays return the first receipt.
+   */
+  async executeOnLatest(operationId: string, action: Command['action']): Promise<CommandResult> {
+    return this.transact(operationId, db => {
+      const current = readWorkspace(db)
+      if (!current) throw new Error('Workspace missing')
+      const result = applyCommand(current, { operationId, expectedRevision: current.revision, action })
+      if (result.workspace.revision !== current.revision) writeWorkspace(db, current, result.workspace)
+      return result
     })
   }
   async markInterruptedModelAttempts(now: string): Promise<number> { return this.transact(crypto.randomUUID(), db => markInterrupted(db, now)) }

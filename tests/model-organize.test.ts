@@ -280,7 +280,7 @@ test('two runs for the same capture: one call, one result', async () => {
 test('budget used up: text kept, nothing sent', async () => {
   const s = await store('call dentist'), calls = { n: 0 }
   try {
-    await s.repo.reserveModelAttempt({ id: 'big', captureId: s.captureId, revision: 0, day: '2026-10-19', upperBoundUsd: 9.999, model: 'fake/model', requestHash: 'h', now: 'x' })
+    await s.repo.reserveModelAttempt({ id: 'big', subject: { kind: 'capture', id: s.captureId, revision: 0 }, day: '2026-10-19', upperBoundUsd: 9.999, model: 'fake/model', requestHash: 'h', now: 'x' })
     await s.repo.recordModelResult({ attemptId: 'big', actualUsd: 9.999, generationId: null, now: 'x' })
     assert.equal(await organizeCapture({ repository: s.repo, config, mode: 'auto', fetchImpl: fakeProvider(() => [], { calls }), now }, s.captureId), 'paused')
     assert.equal(calls.n, 0); assert.match((await capture(s.repo, s.captureId)).error!, /budget is used up/)

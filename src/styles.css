@@ -1070,3 +1070,14 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
   .pages-trash-row svg { width: 18px; height: 18px; color: var(--ink-3); }
   .pages-trash-row > svg:last-child { width: 13px; height: 13px; }
 }
+
+/* ---------- A6b Draft my day states (Jazz docs/design/morning-model-states.md) ---------- */
+.mc-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 13px; color: var(--ink-2); }
+.mc-status.warn { color: var(--warn); }
+.mc-status.nothing { color: var(--ink-3); }
+.mc-status .app-link { min-height: 44px; }
+.mc-spinner { flex: none; width: 14px; height: 14px; border: 1.5px solid var(--ink-3); border-right-color: transparent; border-radius: 50%; animation: page-card-spin .8s linear infinite; }
+.mc-cost-unknown { margin-left: 4px; font-size: 12px; color: var(--ink-3); }
+.mc-context { margin-top: 2px; font-size: 13px; color: var(--ink-3); }
+.mc-add.dashed span { background: none; border: 1.5px dashed var(--ink-3); }
+.mc-add.dashed:hover span { background: var(--fill); }

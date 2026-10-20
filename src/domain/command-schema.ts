@@ -147,7 +147,9 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("save-capture-item"), captureId: id, itemId: id }),
   z.object({ type: z.literal("remove-capture-item"), captureId: id, itemId: id }),
   z.object({ type: z.literal("undo-capture"), captureId: id }),
-  z.object({ type: z.literal("generate-draft"), date: day, outcome }),
+  z.object({ type: z.literal("generate-draft"), date: day, outcome, trigger: z.literal("card").optional() }),
+  z.object({ type: z.literal("add-proposal"), date: day, lineId: z.string().min(1).max(500) }),
+  z.object({ type: z.literal("hide-proposal"), date: day, lineId: z.string().min(1).max(500) }),
   z.object({ type: z.literal("save-draft"), date: day, taskIds: z.array(id).max(3), materialIds: z.array(id).max(2) }),
   z.object({ type: z.literal("undo"), targetOperationId: id }),
   z.object({

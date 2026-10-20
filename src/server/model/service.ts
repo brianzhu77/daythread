@@ -8,6 +8,7 @@ import { costUnknownCaptureIds, modelStatus } from '../model-ledger.ts'
 import { modelConfig, type ModelConfig } from './openrouter.ts'
 import { organizeCapture } from './organize.ts'
 import { recoverUnknownCosts } from './cost-lookup.ts'
+import { draftDayRun, expireStuckDrafts } from './draft-run.ts'
 
 let envLoaded = false
 /**
@@ -19,7 +20,7 @@ export function loadModelEnv(path = resolve('.env.local')): void {
   envLoaded = true
   if (!existsSync(path)) return
   const parsed = parseEnv(readFileSync(path, 'utf8'))
-  for (const [key, value] of Object.entries(parsed)) if (/^(OPENROUTER_|DAYTHREAD_CAPTURE_MODE$)/.test(key) && process.env[key] === undefined) process.env[key] = value
+  for (const [key, value] of Object.entries(parsed)) if (/^(OPENROUTER_|DAYTHREAD_CAPTURE_MODE$|DAYTHREAD_DRAFT$)/.test(key) && process.env[key] === undefined) process.env[key] = value
 }
 
 export type ModelState = 'simulated' | 'ready' | 'paused' | 'budget-used'
@@ -78,4 +79,38 @@ export async function retryCaptureForModel(operationId: string, captureId: strin
   await repository.execute({ operationId, expectedRevision: ws.revision, action: { type: 'retry-capture', captureId } })
   void organizeCapture({ repository, config: c, mode: info.mode }, captureId).catch(error => console.error(JSON.stringify({ level: 'error', event: 'model.organize', captureId, error: error instanceof Error ? error.message : 'UnknownError' })))
   return { ok: true, info }
+}
+
+let draftsRecovered = false
+/**
+ * A6b plan §3.5: before the browser reads the workspace, runs stuck on "drafting" end as failed — every one left by an
+ * earlier server process the first time, then those 90 s past their tap. A no-op when nothing is drafting.
+ */
+export async function expireDrafts(now = new Date()): Promise<void> {
+  const repository = getRepository()
+  if (!(repository instanceof SqliteWorkspaceRepository)) return
+  const all = !draftsRecovered
+  draftsRecovered = true
+  await expireStuckDrafts(repository, now, { all })
+}
+
+/**
+ * Draft my day (A6b step 1). Real when the model is ready and DAYTHREAD_DRAFT isn't "simulated"; otherwise the
+ * simulated draft, marked as such — a real failure never turns into a simulated draft. Paused or out of budget ends
+ * the run at once with its line, nothing sent. Otherwise the run continues in the background; the browser follows it.
+ */
+export async function startDraftForDay(operationId: string, date: string): Promise<{ mode: 'simulated' | 'real'; info: ModelInfo }> {
+  const info = await modelInfo()
+  const repository = sqlite(), c = config()
+  if (info.state === 'simulated' || !c || process.env.DAYTHREAD_DRAFT === 'simulated') {
+    await repository.executeOnLatest(operationId, { type: 'generate-draft', date, trigger: 'card' })
+    return { mode: 'simulated', info }
+  }
+  await repository.executeOnLatest(operationId, { type: 'start-draft-run', date, model: c.model, startedAt: new Date().toISOString() })
+  if (info.state === 'paused' || info.state === 'budget-used') {
+    try { await repository.executeOnLatest(`draft-failed:${operationId}`, { type: 'model-draft-failed', date, runId: operationId, failure: info.state === 'paused' ? 'paused' : 'budget' }) } catch { /* moved on */ }
+    return { mode: 'real', info }
+  }
+  void draftDayRun({ repository, config: c }, date, operationId).catch(error => console.error(JSON.stringify({ level: 'error', event: 'model.draft', date, error: error instanceof Error ? error.message : 'UnknownError' })))
+  return { mode: 'real', info }
 }

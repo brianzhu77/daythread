@@ -20,7 +20,7 @@ async function store() {
 }
 const now = '2026-10-19T17:00:00.000Z'
 const reserve = (repo: SqliteWorkspaceRepository, id: string, captureId: string, upperBoundUsd = 0.005, day = '2026-10-19') =>
-  repo.reserveModelAttempt({ id, captureId, revision: 1, day, upperBoundUsd, model: 'deepseek/deepseek-v4.1-flash-1017', requestHash: 'req-1', now })
+  repo.reserveModelAttempt({ id, subject: { kind: 'capture', id: captureId, revision: 1 }, day, upperBoundUsd, model: 'deepseek/deepseek-v4.1-flash-1017', requestHash: 'req-1', now })
 const run = (path: string, script: string) => new Promise<string>((ok, fail) => { const c = spawn(process.execPath, [script, path]); let s = ''; c.stdout.on('data', d => s += d); c.stderr.on('data', d => s += d); c.on('exit', code => code === 0 ? ok(s) : fail(new Error(s))) })
 
 test('one paid call in flight; settling frees the next; a replayed reservation is no new charge', async () => {
@@ -227,8 +227,9 @@ test('Ratchet #68: reusing a reservation id with another capture, revision or mo
   const s = await store()
   try {
     await reserve(s.repo, 'a1', s.captureId)
-    const base = { id: 'a1', captureId: s.captureId, revision: 1, day: '2026-10-19', upperBoundUsd: 0.005, model: 'deepseek/deepseek-v4.1-flash-1017', requestHash: 'req-1', now }
-    for (const change of [{ captureId: 'other' }, { revision: 2 }, { model: 'openai/gpt-5.6-luna' }, { requestHash: 'req-2' }, { upperBoundUsd: 0.006 }, { day: '2026-10-20' }])
+    const subject = { kind: 'capture' as const, id: s.captureId, revision: 1 }
+    const base = { id: 'a1', subject, day: '2026-10-19', upperBoundUsd: 0.005, model: 'deepseek/deepseek-v4.1-flash-1017', requestHash: 'req-1', now }
+    for (const change of [{ subject: { ...subject, id: 'other' } }, { subject: { ...subject, revision: 2 } }, { subject: { kind: 'draft' as const, date: '2026-10-19', run: 1 } }, { model: 'openai/gpt-5.6-luna' }, { requestHash: 'req-2' }, { upperBoundUsd: 0.006 }, { day: '2026-10-20' }])
       await assert.rejects(s.repo.reserveModelAttempt({ ...base, ...change }), /identity reused with different input/)
     assert.equal((await s.repo.reserveModelAttempt(base)).attempt.id, 'a1')
     assert.equal((await s.repo.modelAttempts()).length, 1)
