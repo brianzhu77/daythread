@@ -1,0 +1,13 @@
+(node:60002) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS injected down-script failure rolls back schema, held tables, rows and Undo
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS failed re-upgrade rolls back ALTERs, dropped recreation and all held data
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.trash-reupgrade","restored":1,"recreatedDropped":[],"idMap":{"P":"3cc701d9-883c-4083-a89b-f05aae85a452"},"sourcesMoved":0}
+PASS empty-body recreation with new unrecorded source task is kept; held page receives new id
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.trash-reupgrade","restored":1,"recreatedDropped":[],"idMap":{"P":"f1c8eee0-a26f-4250-be18-b9a3d145764a"},"sourcesMoved":0}
+PASS held section/editorJSON/block metadata references share one id map; new live content preserved
+PASS independent fault/source boundaries; fixtures /var/folders/54/kknm2fp14s1ft0h63zccl1t40000gn/T/ratchet-trash77-edge-9IZBgo

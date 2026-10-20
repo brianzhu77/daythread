@@ -1,0 +1,4 @@
+(node:59815) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS real database read-only backup: layout3→4 preserves complete workspace; save+Undo preserves pages/tasks/placements/materials
+copy /var/folders/54/kknm2fp14s1ft0h63zccl1t40000gn/T/ratchet-trash77-real-JHZYeU/workspace.sqlite
