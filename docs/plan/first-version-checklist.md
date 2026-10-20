@@ -6,7 +6,7 @@ after that (tags on Oct 18). Brian's latest message overrides this file; update 
 
 ## Count
 
-**Built: 13 of 19** (as of `53c1b83`, live on 3000, 2026-10-20).
+**Built: 14 of 20** (as of `21eb45b`, live on 3000, 2026-10-20).
 
 Every status update to Brian quotes this line. Count rule: a row counts as built only when it is live on 3000
 **and** has passed review (Ratchet's acceptance task linked in Evidence). "Partial" counts as not built.
@@ -51,19 +51,22 @@ Group B is listed for tracking only and never counts toward M.
 | ID | Item | Source | Status | Evidence |
 |---|---|---|---|---|
 | A6a | Real model (OpenRouter, 10 USD/day cap) behind capture: auto-save with receipt, grounding holds, edit/Undo all | O-U18, 7a55cbbf D-C, c377e316 | built | ca4c4ca live 2026-10-19 15:34Z; Step 1 a 33e1d38 Ratchet #68, b 25dc72a #69, c Ratchet #70 (docs/reviews/model-receipt-ratchet.md) + design check acdfa91; smoke 7/7. Probe weak, accepted risk (Brian yes 9f3f3f82). Context: his text + open tasks |
-| A6b | Real model behind Draft my day, review suggestions, Related, and the morning card's "From your notes" proposals (morning-card-build.md §11 step 3) | O-U18, 7a55cbbf D-C, c377e316; 7c4e0cab | building (step 1) | plan a902b05 passed (Ratchet #79), states docs/design/morning-model-states.md. Step 1 = Draft my day + "From your notes" proposals, on a tap only; step 2 = review suggestions + Related, after the 5-writing-day check (used on >=2 mornings, nothing written without a tap). Brian wants capture (3097861f). Probe cef4ee6: his real Oct 18 lines gave no proposals, $0.0013. Still simulated; Step 2. Context: one hop of linked pages + previous daily page; transitive later, Brian told. Proposals moved here from A8 on 2026-10-19 (Lead e602d3b1) |
+| A6b-1 | Real model behind Draft my day and the morning card's "From your notes" proposals, on a tap only (morning-card-build.md §11 step 3, step 1) | O-U18, 7a55cbbf D-C, c377e316; 7c4e0cab | built | 21eb45b live 2026-10-20 (Lead 2edb2589); Ratchet #80 (docs/reviews/model-draft-ratchet.md, b3dfa2f), Jazz design pass on b3dfa2f. Plan a902b05 (Ratchet #79), states docs/design/morning-model-states.md. Pre-release real-model run on a copy of his data: $0.000681, "后天" on Oct 19 planned for Wed, Oct 21. Drafted tasks go to TODO - Other; dated proposals are planned for their day. Not tested: real iPhone with Chinese input; real-model value is judged by the 5-writing-day check from Oct 22 (new tasks offered, proposals offered, what he added; used on >=2 mornings). Proposals moved here from A8 on 2026-10-19 (Lead e602d3b1) |
+| A6b-2 | Real model behind review suggestions and Related (morning-card-build.md §11 step 3, step 2) | O-U18, 7a55cbbf D-C, c377e316 | missing | Waits for the 5-writing-day check on A6b-1 (Lead 2edb2589). Still simulated. Context: one hop of linked pages + previous daily page; transitive later, Brian told. Brian wants capture (3097861f) |
 | A7 | Indexing at plan/review into Weave pages; browse; copy to your pages; corrections in a thread fix the next run | 06469260, c377e316, 08a02686 | missing | waits on A6; layout A chosen (C2); context: Step 2 (one hop + previous daily page) |
 
 ### Part 4 · Predictions: yesterday's unfinished + items scheduled for today
 
 | ID | Item | Source | Status | Evidence |
 |---|---|---|---|---|
-| A8 | Morning card per v05 design (merged suggestions with reason, Undo) + Bring to today for plain lines | 7c4e0cab (O4=b), 78871f09 | built | 5193991 live 2026-10-19 (Lead 3600952d); Ratchet #75 (docs/reviews/morning-card-ratchet.md, copy of Brian's real data), Jazz design pass. Text and link lines only; a brought line stays brought after its copy is deleted, Undo re-offers it; every card write saves the editor first. "From your notes" proposals are in A6b. Not tested: real iPhone with Chinese input. Blank "Unfinished" row from an empty-titled draft task fixed in 53c1b83 (Ratchet #78); "N other open tasks" leaves out tasks shown on the card |
+| A8 | Morning card per v05 design (merged suggestions with reason, Undo) + Bring to today for plain lines | 7c4e0cab (O4=b), 78871f09 | built | 5193991 live 2026-10-19 (Lead 3600952d); Ratchet #75 (docs/reviews/morning-card-ratchet.md, copy of Brian's real data), Jazz design pass. Text and link lines only; a brought line stays brought after its copy is deleted, Undo re-offers it; every card write saves the editor first. "From your notes" proposals are in A6b-1. Not tested: real iPhone with Chinese input. Blank "Unfinished" row from an empty-titled draft task fixed in 53c1b83 (Ratchet #78); "N other open tasks" leaves out tasks shown on the card |
 
-Count: M = D1–D6 + A1a, A1b, A2–A5, A6a, A6b, A7–A9, A11, A12 = 19. A10 (drag preview) is settled inside D5, not a separate row.
+Count: M = D1–D6 + A1a, A1b, A2–A5, A6a, A6b-1, A6b-2, A7–A9, A11, A12 = 20. A10 (drag preview) is settled inside D5, not a separate row.
 A1 was split into A1a/A1b on 2026-10-19 when `/page` shipped (same sources, no scope change), so M went 17 → 18.
 A6 was split into A6a/A6b on 2026-10-19 when capture went live on the real model (same sources, no scope change), so M went 18 → 19.
 A4 narrowed to document pages on 2026-10-19 (Lead 5598fdab); deleting daily pages is B16. M unchanged.
+A6b was split into A6b-1/A6b-2 on 2026-10-20 when step 1 went live (same sources, no scope change), so M went 19 → 20.
+
 A8's proposals for text lines moved to A6b on 2026-10-19 (they need the real model; same sources); M unchanged.
 A1b dropped "delete with children" on 2026-10-19 because A4 already covers it (N-7, trash and restore with subpages); M unchanged.
 N = D1–D6 + A5 + A1a, A1b, A3 + A4 + A6a + A8 = 13.
