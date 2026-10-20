@@ -1042,6 +1042,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .trash-row { display: flex; align-items: center; padding-right: 14px; }
 .trash-row > .card-row { flex: 1; min-width: 0; min-height: 64px; }
 .trash-row .card-row-detail { color: var(--ink-3); }
+/* The hover tint covers the whole row, Restore included (Jazz ac552a0d). */
+@media (hover: hover) { .trash-row:hover { background: var(--fill-soft); } .trash-row .card-row:hover { background: none; } }
+.trashed-page .subpage-row { color: var(--ink-2); }
 .trash-back { display: none; }
 .pages-trash-row { display: none; }
 .trash-banner { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 12px; background: var(--fill); font-size: 14px; color: var(--ink-2); }
@@ -1058,6 +1061,8 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .ro-body a.editor-page-card { text-decoration: none; }
 @media (max-width: 599px) {
   .restore-button { min-height: 44px; }
+  /* The time tells deletes apart; on the phone the second line wraps rather than cutting it off. */
+  .trash-row .card-row-detail { white-space: normal; }
   .trash-back { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; margin: -12px 0 -12px -6px; color: var(--blue); font-size: 17px; text-decoration: none; }
   .trash-back svg { transform: rotate(180deg); width: 18px; height: 18px; }
   .pages-trash-row { display: flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 6px; color: var(--ink-2); font-size: 15px; text-decoration: none; }
