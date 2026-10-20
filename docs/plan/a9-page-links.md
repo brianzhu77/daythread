@@ -8,7 +8,7 @@
   - Ratchet `4764cb56`, `c293ef38` (stable order for old references, one identity per reference, no re-stamping on
     ordinary saves or renames; links must reach A2's Undo check and the Trash views too);
   - pages-delta N-5; checklist A9, B15.
-- Base: main d69d8fd. Brian's data: 9 pages, 2 page cards (Oct 18 Notes), no `[[` links yet.
+- Base: main 377f955 (states §5 frozen order, Jazz). Brian's data: 9 pages, 2 page cards (Oct 18 Notes), no `[[` links yet.
 
 ## 0. One finding that shapes the plan
 
