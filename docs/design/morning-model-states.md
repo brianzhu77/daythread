@@ -19,6 +19,8 @@ and Related are a later step; they reuse the same state words.
 - **One draft per day.** Once today has a draft (from the review or from Draft my day), the link goes away. No
   "draft again" in step 1. Retry exists only after a failure (§3).
 - The run belongs to the day it was started for. A tap at 23:58 that finishes at 00:01 lands on the earlier day.
+- **Done or Later while drafting:** the result is kept but never reopens the card. After Done, nothing shows today.
+  After Later, the strip count updates. A result that arrives after a newer Retry is dropped (Ratchet `b64dd79d`).
 
 ## 2. Where the link is
 
