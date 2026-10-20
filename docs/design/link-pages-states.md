@@ -103,7 +103,7 @@ They use the editor's existing notice strip. Every create says what happened and
 | --- | --- |
 | New page | "Made a page · Undo" |
 | Same URL as a live page | "Saved before · Mon, Oct 19 · Undo". The card goes to the **existing** page and no page is made |
-| Same URL as a page in the trash | "Restored from trash · Undo", or "Restored to Pages · {parent} is in trash · Undo" when the old parent is still in the trash. It's exactly **Restore on that page's banner** (A4 `pages-trash-layout.md` §4–§5): **this page and its own subtree**, never the rest of the delete it was part of. It goes under its old parent, or the top level if the parent is in the trash. The card points to it |
+| Same URL as a page in the trash | "Restored from trash · Undo", or "Restored to Pages · {parent} is in trash · Undo" when the old parent is still in the trash. It's exactly **Restore on that page's banner** (A4 `pages-trash-layout.md` §4–§5): **this page and the subpages deleted together with it**, never the rest of that delete, and never subpages deleted earlier on their own (those keep their own Trash row). It goes under its old parent, or the top level if the parent is in the trash. The card points to it |
 | Several URLs | "Made 3 pages · Undo". With repeats: "Made 2 pages · 1 saved before · Undo" |
 | Save failed | No notice. The card shows "Not created · Retry" (§2) |
 
