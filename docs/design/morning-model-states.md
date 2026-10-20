@@ -47,12 +47,15 @@ working in every state. Never red.
 | Model unavailable (error, timeout, every item invalid) | "Model unavailable · nothing was added" in `--warn` | **Retry** |
 | Paused (a cost couldn't be confirmed) | "Model paused · a cost couldn't be confirmed · nothing was added" in `--warn` | none |
 | Stuck (still drafting 90 s after the tap: the 60 s call plus margin, or the server restarted mid-run) | "Model unavailable · nothing was added" in `--warn`, as a failure. A late answer from that run is dropped | **Retry** |
+| Busy (a capture is with the model; one call at a time in step 1, Ratchet `ae9c7b87`) | "Model busy with a capture · nothing was added" in `--warn` | **Retry** |
 | Too large (yesterday's page alone is over the context limit) | "Too much to read in one go · nothing was added" in `--warn` | none (Retry would fail the same way) |
 | Budget used up | "Today's model budget is used up · nothing was added" in `--warn` | none until tomorrow |
 | Cost unknown (error with no cost or id) | the failure line above, then a muted **"Cost unknown"** tag in `--ink-3` | as the row says |
 
 - This replaces §12.2's separate "Suggestions from your notes unavailable" line: proposals and suggested tasks come
   from the same run, so one line covers both.
+- **The other way round:** a capture saved while Draft my day is running keeps his text and its receipt reads
+  "Model busy · text saved" with Retry (capture receipt vocabulary). Neither waits silently for the other.
 - **Some linked pages left out** (over the limit, Bumblebee `e24bfd8c`): results show as normal, plus one muted `--ink-3`
   line under the Tasks group: "Read yesterday and {k} of {n} linked pages". Not shown when everything was read.
 - Retry is the same run again and keeps the day it was started for. A Retry that fails shows the same line.
