@@ -33,7 +33,7 @@ and Related are a later step; they reuse the same state words.
 
 ## 3. States
 
-Wording (Bumblebee `9a13d092`): the capture receipt's lines, with "· nothing was added" in place of "· text saved". All lines are 13 px, in the Tasks group where the "No suggestions" line sits. Tasks rows, lines, Done and Later keep
+Wording (Bumblebee `9a13d092`): the capture receipt's lines, with "· nothing was added" in place of "· text saved". Every state line uses the card's existing line style (the size and spacing of "No suggestions from last night"), in the same spot, so only the words and colour change between states and nothing below moves. Retry looks like the Draft my day link. "Cost unknown" follows inline in the same text and wraps with it. Tasks rows, lines, Done and Later keep
 working in every state. Never red.
 
 | State | What shows | Action |
