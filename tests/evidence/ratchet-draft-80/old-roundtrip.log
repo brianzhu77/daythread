@@ -1,0 +1,24 @@
+(node:74780) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+ok   drafting: 53c1b83 opens it and saves an edit
+ok   drafting: 53c1b83 Undoes it
+ok   drafting: the new build reads the draft back unchanged
+ok   drafting: and the old build's kept line
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+ok   ready: 53c1b83 opens it and saves an edit
+ok   ready: 53c1b83 Undoes it
+ok   ready: the new build reads the draft back unchanged
+ok   ready: and the old build's kept line
+ok   ready: after 53c1b83 saved the page, the accepted record survives in block metadata and the line stays linked
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+ok   failed: 53c1b83 opens it and saves an edit
+ok   failed: 53c1b83 Undoes it
+ok   failed: the new build reads the draft back unchanged
+ok   failed: and the old build's kept line
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+ok   expired: 53c1b83 opens it and saves an edit
+ok   expired: 53c1b83 Undoes it
+ok   expired: the new build reads the draft back unchanged
+ok   expired: and the old build's kept line
+all checks passed

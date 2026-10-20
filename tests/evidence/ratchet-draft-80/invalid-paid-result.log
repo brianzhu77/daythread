@@ -1,0 +1,6 @@
+(node:76318) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+THREW RangeError Invalid time value
+draft {"runId":"start","run":1,"trigger":"card","startedAt":"2026-10-20T17:00:00Z","status":"drafting","attemptId":"draft:2026-10-20:start","model":"fake/invalid","requestHash":"d63d54c5ded3b0580a7b4bba3bef57e039ef55bac4afbe1eb1ec26fd5291ae84","manifest":{"lines":[{"lineId":"day:2026-10-19/bad-date","pageId":"day:2026-10-19","blockId":"bad-date","fingerprint":"f8a90b28"}],"sentPages":["day:2026-10-19"],"omittedPages":[],"taskCandidates":[],"materialCandidates":[]}}
+ledger [{"id":"draft:2026-10-20:start","captureId":"draft:2026-10-20","revision":1,"day":"2026-10-20","reservedUsd":0.002971,"actualUsd":null,"state":"reserved","generationId":null,"model":"fake/invalid","createdAt":"2026-10-20T17:00:00.000Z","settledAt":null,"note":null,"resultFingerprint":null,"resultOperationId":null,"requestHash":"d63d54c5ded3b0580a7b4bba3bef57e039ef55bac4afbe1eb1ec26fd5291ae84"}]

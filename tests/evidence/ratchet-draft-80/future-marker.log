@@ -1,0 +1,31 @@
+(node:78531) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{
+  "proposalDate": "2026-10-23",
+  "task": {
+    "id": "ab6847b0-5e75-487a-90b7-b2f512b94a93",
+    "title": "周五打给牙医",
+    "status": "open",
+    "version": 2,
+    "plannedOn": "2026-10-23",
+    "attentionOn": null,
+    "deadlineOn": null,
+    "paused": false,
+    "createdOn": "2026-10-19",
+    "lastPlannedOn": "2026-10-23",
+    "sourcePageId": "day:2026-10-18"
+  },
+  "placements": [
+    {
+      "taskId": "ab6847b0-5e75-487a-90b7-b2f512b94a93",
+      "date": "2026-10-23",
+      "state": "included",
+      "section": "other"
+    }
+  ]
+}
+ok future acceptance Undo removes task and marker
+ok duplicate acceptance rejected
+ok absent future page marker survives actual 53c1b83 save-editor
+ok old Undo preserves future marker

@@ -1,0 +1,3 @@
+Call dentist 2026-13-40 THREW RangeError Invalid time value
+Call dentist 99/99 THREW RangeError Invalid time value
+Call dentist 2/30 null

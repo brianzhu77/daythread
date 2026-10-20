@@ -1,0 +1,14 @@
+before: Start the day
+TASKS
+
+No suggestions from last night · Draft my day
+
+Done
+Later
+after card count: 0
+empty result line count: 0
+(node:76200) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+stored draft [Object: null prototype] {
+  draft: '{"simulated":false,"taskIds":[],"materialIds":[],"text":"","run":{"runId":"2581d8ce-3c81-4221-b277-057496b00d80","run":1,"trigger":"card","startedAt":"2026-10-20T18:14:28.129Z","status":"ready","attemptId":"draft:2026-10-20:2581d8ce-3c81-4221-b277-057496b00d80","model":"fake/model","requestHash":"a9a8a4e8c742e0387e58b9d047eabac5687c583630df94b8e4dd0c74cd239edc","manifest":{"lines":[],"sentPages":[],"omittedPages":[],"taskCandidates":[],"materialCandidates":[]}},"proposals":[],"hidden":[]}'
+}

@@ -1,0 +1,27 @@
+(node:77707) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{
+  "proposalDate": "2026-10-23",
+  "task": {
+    "id": "fed2fc77-f3ae-4d84-af20-95fdc067ac6c",
+    "title": "周五打给牙医",
+    "status": "open",
+    "version": 2,
+    "plannedOn": "2026-10-23",
+    "attentionOn": null,
+    "deadlineOn": null,
+    "paused": false,
+    "createdOn": "2026-10-19",
+    "lastPlannedOn": "2026-10-23",
+    "sourcePageId": "day:2026-10-18"
+  },
+  "placements": [
+    {
+      "taskId": "fed2fc77-f3ae-4d84-af20-95fdc067ac6c",
+      "date": "2026-10-23",
+      "state": "included",
+      "section": "other"
+    }
+  ]
+}
