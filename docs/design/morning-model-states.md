@@ -15,7 +15,7 @@ and Related are a later step; they reuse the same state words.
   nothing is written to his page or his tasks until he taps `+` (v05 §1.3).
 - **Trigger: his tap only.** No model call when a page opens or reloads. Reasons: cost stays visible and
   predictable, a reload never runs it twice, and step 1's success criterion ("he uses it on 2 of 5 mornings",
-  Bumblebee `c741457c`) needs a real choice to measure. A finished evening review also writes a draft, as now.
+  Bumblebee `c741457c`) needs a real choice to measure. A finished evening review also writes a draft, as now, without the model in step 1 (Lead `f94c640d`): on those days the card shows "Suggested last night" and no Draft my day. So a morning has at most one real model run.
 - **One draft per day.** Once today has a draft (from the review or from Draft my day), the link goes away. No
   "draft again" in step 1. Retry exists only after a failure (§3).
 - The run belongs to the day it was started for. A tap at 23:58 that finishes at 00:01 lands on the earlier day.
