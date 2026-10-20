@@ -126,7 +126,8 @@ carry a held id because Retry recreated it.
 - **Either way** the migration logs what it did, including the id mapping.
 
 The note to Brian for a rollback includes: "During the rollback a card may show 'Not created · Retry'. Your page is
-safe in the trash; you don't need to tap it."
+safe in the trash; you don't need to tap it." It also says (Bumblebee `b12ff5de`): "Undo history resets at both steps,
+when we roll back and when we upgrade back; your pages and the trash are kept."
 
 **Tried on a copy of Brian's database** (`tests/evidence/a4-plan/rollback-roundtrip.ts`, raw SQL for the script
 and the migration):
