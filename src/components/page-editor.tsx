@@ -505,14 +505,22 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     if (!preview) { for (const id of freshIds) setPending(id, { state: 'failed', parentId: page.id, retry }); setStatus('Page not created · card kept, tap it to retry'); return }
     freshIds.forEach(id => setPending(id, null))
+    // The card save below projects page titles from the workspace, so it starts from the server's, not from a render
+    // that hasn't happened yet.
+    try { preview = await refresh(operationId) } catch { /* offline again: the local preview of the same command */ }
+    latestWorkspace.current = preview; latestPage.current = preview.pages.find(p => p.id === page.id)!
     const records = pasteRecords(preview.pages.find(p => p.id === page.id)!, operationId)
     // Another device made the page first: the card points at that one (not part of his history).
     const moved = records.filter(r => { const b = editor.getBlock(r.cardBlockId); return b && (b.props as { pageId: string }).pageId !== r.pageId })
     if (moved.length) editor.transact(tr => { for (const r of moved) editor.updateBlock(r.cardBlockId, { props: { pageId: r.pageId } } as never); tr.setMeta('addToHistory', false) })
     showLinkNotice(preview, operationId, records)
+    // As `/page`: once the pages exist, the cards are saved now, not at his next edit (e.g. after a Retry).
+    if (dirty.current && !sending.current) { clearTimeout(timer.current); void flushRef.current() }
   }
   /** Jazz §4: one notice for the paste, with Undo. Unlike edit notices, typing elsewhere doesn't retire it. */
   const linkNotice = useRef<{ key: string; operationId: string; fingerprint: string } | null>(null)
+  // Its Undo belongs to this editor: leaving the page retires it.
+  useEffect(() => () => { if (linkNotice.current) toast.close(linkNotice.current.key) }, [])
   function showLinkNotice(ws: Workspace, operationId: string, records: ReturnType<typeof pasteRecords>) {
     const pages = new Set(records.map(r => r.pageId)), made = records.filter(r => r.outcome === 'made').length
     const reused = records.filter(r => r.outcome === 'reused' && !records.some(o => o.outcome === 'made' && o.pageId === r.pageId))
@@ -543,23 +551,32 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * the normal refresh (or "Page changed elsewhere · draft kept") takes over.
    */
   async function undoLinkPaste(operationId: string) {
+    // A refusal is a notice too: the status line is replaced as soon as he types.
+    const refuse = (text: string) => { setStatus(text); toast(text, { timeout: 6000 }) }
     if (linkNotice.current?.operationId === operationId) { toast.close(linkNotice.current.key); linkNotice.current = null }
     clearTimeout(timer.current)
     for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
     if (dirty.current) await flushRef.current()
     for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
-    if (dirty.current || sending.current) { setStatus("Couldn't undo · card kept"); return }
+    if (dirty.current || sending.current) { refuse("Couldn't undo · card kept"); return }
     const action = { type: 'undo-paste-links' as const, pageId: page.id, operationId, today: todayIso() }
-    const undoOperationId = newOperationId(), source = latestWorkspace.current
+    const undoOperationId = newOperationId()
+    // The server's page must be exactly what this editor last saved (Ratchet 9c42d967); if another device changed it,
+    // nothing is undone and the normal refresh, or "Page changed elsewhere · draft kept", takes over.
+    let source: Workspace
+    try { source = await refresh(undoOperationId) } catch { refuse("Couldn't undo · card kept"); return }
+    const onServer = source.pages.find(p => p.id === page.id)
+    if (!onServer || pageContentKey(onServer) !== base.current) { refuse("Couldn't undo · page changed elsewhere"); return }
+    latestWorkspace.current = source
     let preview: Workspace
     try { preview = applyCommand(source, { operationId: undoOperationId, expectedRevision: source.revision, action }).workspace }
-    catch (error) { setStatus(error instanceof Error ? error.message : "Couldn't undo · card kept"); return }
+    catch (error) { refuse(error instanceof Error ? error.message : "Couldn't undo · card kept"); return }
     const before = source.pages.find(p => p.id === page.id)!
     const cards: UndoCard[] = pasteRecords(before, operationId).filter(r => !r.undone).map(r => ({ blockId: r.cardBlockId, pageId: r.pageId, url: r.url, lineType: r.lineType }))
     const expected = preview.pages.find(p => p.id === page.id)!
     undoingPaste.current = true
     try {
-      const receipt = await run(action, r => (r.message === 'Paste undone' ? null : { text: r.message }), undoOperationId, { inlineRefusal: /Page changed · nothing was undone|Nothing to undo|Saved elsewhere/, onRefused: () => setStatus("Couldn't undo · card kept") })
+      const receipt = await run(action, r => (r.message === 'Paste undone' ? null : { text: r.message }), undoOperationId, { inlineRefusal: /Page changed · nothing was undone|Nothing to undo|Saved elsewhere/, onRefused: () => refuse("Couldn't undo · card kept") })
       if (!receipt) return
       suppress.current = true
       editor.transact(tr => {

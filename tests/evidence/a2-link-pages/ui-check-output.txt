@@ -1,0 +1,54 @@
+ok   1. one link page, child of today, raw URL, default title · {"id":"d4a3a20c-f363-483a-a4fd-fa753c2786c3","title":"xiachufang.com/recipe/10324","url":"https://www.xiachufang.com/recipe/10324/","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}
+ok      notice "Made a page · Undo"
+ok      the line is a link card with the default title
+ok      globe icon on the card
+ok      the page body is empty
+ok      the page shows the URL row with the raw URL
+ok      "Open ↗" opens the site in a new tab
+ok      breadcrumb shows Today · Today / ⋯ / xiachufang.com/recipe/10324
+ok      Pages lists it under "In your days" with the globe
+ok   4. Undo after 1: page deleted, not in Trash
+ok      the line is the URL text again, same block, still a bullet
+ok      the editor shows the URL line
+ok   2. same key (host case) on Sun Oct 18: no second page, first parent kept · 1 pages
+ok      notice "Saved before · Today" · Saved before · Today
+Undo | Saved before · Today
+ok   4. Undo after 2: the page stays, only the card went
+ok   3. setup: the link page is in the trash
+ok   3. pasting it again restores it; one page, live
+ok      notice "Restored from trash" · Restored from trash
+Undo | Restored from trash
+ok   4. Undo after 3: back in the trash
+ok   5. pasted into a sentence: no page
+ok      pasted into a task row: no page
+ok      pasted into a heading: no page
+ok   6. three cards, three pages
+ok      one notice "Made 3 pages" · Made 3 pages
+Undo | Made 3 pages
+ok   his Notes: the card sits as a nested bullet under 奥德赛
+ok      Undo: the URL bullet comes back at the same nesting
+ok   ⌘Z right after the paste: same as Undo (page deleted, URL text back)
+ok   ⌘Z after typing: ordinary undo; the page stays
+ok   paste → note → Undo: note saved once, URL back, page deleted
+ok      no "changed elsewhere"
+ok   Undo mid-typing: the card is the URL line again, the page deleted
+ok      every typed character is there exactly once · ["typed during undo"]
+ok      no save sent while Undo was out, exactly one after · {"during":0,"after":1}
+ok      the next save does not bring the card back
+ok   Undo with a save pending: flushed first, text kept once, page deleted
+ok   two devices: B's line saved
+ok      B's line is not overwritten
+ok      A's Undo is refused: "Couldn't undo · page changed elsewhere" · ["Saved","Saved","Couldn't undo · page changed elsewhere","Couldn't undo · page changed elsewhere","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Saving…","Saving…","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved"]
+ok      nothing was undone: the page and the card stay
+ok      A's editor keeps its typing and now shows B's line
+ok      both are saved, each once
+ok   two devices: the other one shows the card
+ok      after Undo on one, the other shows the URL line
+ok   Good Stuffs: one follow-up record for the link page
+ok      Undo → a normal save → reload: no record, the line not collected again
+ok   7. 390: the card is one line, ↗ inside the screen · {"h":32,"x":316,"w":44}
+ok      the default title reads the Chinese path
+ok      ↗ is a 44 px target
+ok      the URL row is one line at 390 · {"x":20,"y":189,"width":350,"height":44}
+ok   no request left the app
+ok   no page or console errors

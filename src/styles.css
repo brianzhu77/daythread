@@ -665,7 +665,8 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-page-card-row.is-link .editor-page-card-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
 .editor-page-card-domain { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; color: var(--ink-3); }
 .editor-page-card-open { display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin: -6px -10px -6px 0; color: var(--ink-3); border-radius: 8px; }
-.editor-page-card-open:hover { color: var(--ink); }
+.editor-page-card-row a.editor-page-card-open { color: var(--ink-3); }
+.editor-page-card-row a.editor-page-card-open:hover { color: var(--ink); }
 .editor-page-card-open svg { width: 18px; height: 18px; }
 @media (max-width: 480px) { .editor-page-card-domain { display: none; } }
 /* A2 link page: the URL exactly as pasted, one muted line under the title (Jazz §3). */
