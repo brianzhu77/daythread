@@ -66,7 +66,7 @@ working in every state. Never red.
 
 - **A task the card already offers** (Unfinished · from {Mon}, or Suggested last night) keeps its reason and its
   destination when the model also picks it. The model adds nothing new there, and "from Mon" is the fact he needs
-  (Lead `c34c3531`, after the real-model run on 97d1679). "Drafted for today" is only for tasks the card wouldn't offer
+  (Lead `e5806572` with Bumblebee `c34c3531`, after the real-model run on 97d1679). "Drafted for today" is only for tasks the card wouldn't offer
   otherwise.
 - **Drafted tasks** ("Drafted for today"): already tasks, so card spec §3 applies (shown once, empty-title tasks and
   tasks already planned for today never shown), except where they go: `+` sends them to the **plan list section**
