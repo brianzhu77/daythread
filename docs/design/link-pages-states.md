@@ -28,7 +28,7 @@ lines allowed), **and the line it lands on is empty**.
 | Typing a URL (not pasting) | Stays a link. Nothing is made |
 | `mailto:`, `file:`, `javascript:` or anything else that isn't http(s) | Normal paste |
 | **A link copied from inside a web page**: `text/html` is exactly one `<a href>` to an http(s) URL and nothing else, and `text/plain` is its text (Lead `aa5d532f`) | One link page, **titled with the link text** (§3). The key comes only from `href`. Copy Link, where plain is the URL itself, is the row above |
-| HTML with a link inside a sentence, several links, or anything besides one `<a>` | Normal paste |
+| HTML with a link inside a sentence, several links, or anything besides one `<a>` (including an image, video or svg beside it **or inside it**, e.g. a linked thumbnail) | Normal paste, so nothing he copied is lost |
 
 Why "the line is empty": pasting into a sentence is writing, and turning half a sentence into a card would destroy his
 words. An empty line is the "我贴一个URL过来" case. There's no menu asking what to make, because Undo (§4) is the
