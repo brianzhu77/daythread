@@ -46,18 +46,22 @@ working in every state. Never red.
 | Key rejected | "Model key rejected · nothing was added" in `--warn` | **Retry** |
 | Model unavailable (error, timeout, every item invalid) | "Model unavailable · nothing was added" in `--warn` | **Retry** |
 | Paused (a cost couldn't be confirmed) | "Model paused · a cost couldn't be confirmed · nothing was added" in `--warn` | none |
+| Stuck (still drafting 90 s after the tap: the 60 s call plus margin, or the server restarted mid-run) | "Model unavailable · nothing was added" in `--warn`, as a failure. A late answer from that run is dropped | **Retry** |
+| Too large (yesterday's page alone is over the context limit) | "Too much to read in one go · nothing was added" in `--warn` | none (Retry would fail the same way) |
 | Budget used up | "Today's model budget is used up · nothing was added" in `--warn` | none until tomorrow |
 | Cost unknown (error with no cost or id) | the failure line above, then a muted **"Cost unknown"** tag in `--ink-3` | as the row says |
 
 - This replaces §12.2's separate "Suggestions from your notes unavailable" line: proposals and suggested tasks come
   from the same run, so one line covers both.
+- **Some linked pages left out** (over the limit, Bumblebee `e24bfd8c`): results show as normal, plus one muted `--ink-3`
+  line under the Tasks group: "Read yesterday and {k} of {n} linked pages". Not shown when everything was read.
 - Retry is the same run again and keeps the day it was started for. A Retry that fails shows the same line.
 - No cost figure anywhere in the card, as in §12.2.
 - At 390 a failure line may wrap to 2 lines. Retry stays at the end of the text, with a 44 px target.
 
 ## 4. Rows after a run
 
-- **Suggested tasks:** already tasks, so the rules in card spec §3 apply: shown once, `+` sends them to
+- **Drafted tasks** ("Drafted for today"): already tasks, so the rules in card spec §3 apply, the same as "Suggested last night", so the rules in card spec §3 apply: shown once, `+` sends them to
   {Top 3 section}, Top 3 full → plan list with the existing strip, empty-title tasks never shown, tasks already
   planned for today never shown.
 - **Proposals** (card spec §4 and §12.1): title = his line word for word, reason "{Mon} · {Section}" computed by
