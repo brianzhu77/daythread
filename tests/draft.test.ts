@@ -151,3 +151,30 @@ test('lines sent: text and links only, never tasks, cards or empty rows; the sim
   const review = ok(w0, { type: 'generate-draft', date: '2026-10-19' })
   assert.equal(day(review, '2026-10-19').draft!.proposals, undefined)
 })
+
+test('Ratchet #80: impossible dates in a line are no date, never an error', () => {
+  for (const text of ['deadline 2026-13-40', 'on 99/99', '13月40日', '2/30 交材料'])
+    assert.equal(resolveLineDate(text, '2026-10-18', 2026), null, text)
+  assert.equal(checkedDate('2026-10-23', 'deadline 2026-13-40', '2026-10-18', '2026-10-19'), null)
+})
+
+test('a dated proposal is planned for its day, with no row on the drafted day; the line stays linked; Undo offers it again', () => {
+  const { ws: w0, sun } = world()
+  let ws = drafted(w0, [`${sun}/n1`])
+  // As the server would keep it after checking: the line names Mon via "周一"; drafting Sun→Mon here uses Fri Oct 23.
+  const d = day(ws, '2026-10-19')
+  ws = { ...ws, pages: ws.pages.map(p => p.id === d.id ? { ...p, draft: { ...p.draft!, proposals: p.draft!.proposals!.map(x => ({ ...x, date: '2026-10-23' })) } } : p) }
+  const rowsBefore = day(ws, '2026-10-19').sections.flatMap(s => s.blocks).length
+  const r = run(ws, { type: 'add-proposal', date: '2026-10-19', lineId: `${sun}/n1` }, 'add-dated')
+  ws = r.workspace
+  const t = ws.tasks.find(x => x.id === r.receipt.entityId)!
+  assert.equal(t.plannedOn, '2026-10-23')
+  assert.equal(ws.placements.find(x => x.taskId === t.id)!.date, '2026-10-23')
+  assert.equal(day(ws, '2026-10-19').sections.flatMap(s => s.blocks).length, rowsBefore, 'no row on the drafted day')
+  assert.equal(ws.pages.some(p => p.date === '2026-10-23'), false, 'no future page created')
+  assert.equal(isLineLinked(ws, sun, 'n1'), true)
+  assert.throws(() => run(ws, { type: 'add-proposal', date: '2026-10-19', lineId: `${sun}/n1` }), /changed/)
+  ws = ok(ws, { type: 'undo', targetOperationId: 'add-dated' })
+  assert.equal(ws.tasks.some(x => x.id === t.id), false)
+  assert.equal(isLineLinked(ws, sun, 'n1'), false)
+})

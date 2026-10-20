@@ -85,9 +85,12 @@ const addDays = (d: LocalDate, n: number) => {
   return x.toISOString().slice(0, 10);
 };
 const weekdayOf = (d: LocalDate) => (new Date(`${d}T12:00:00Z`).getUTCDay() + 6) % 7; // Mon = 0
+/** A real calendar day, or null: "2026-13-40" and "99/99" are no date, never an error (Ratchet #80). */
 const realDate = (y: number, m: number, d: number): LocalDate | null => {
+  if (!Number.isInteger(y) || m < 1 || m > 12 || d < 1 || d > 31) return null;
   const s = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-  return new Date(`${s}T12:00:00Z`).toISOString().startsWith(s) ? s : null;
+  const t = new Date(`${s}T12:00:00Z`);
+  return !Number.isNaN(t.getTime()) && t.toISOString().startsWith(s) ? s : null;
 };
 const zhDay: Record<string, number> = { 一: 0, 二: 1, 三: 2, 四: 3, 五: 4, 六: 5, 日: 6, 天: 6 };
 const enDay = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];

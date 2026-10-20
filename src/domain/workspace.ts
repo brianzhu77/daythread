@@ -1283,9 +1283,18 @@ function execute(
       if (!live) throw new DomainError("This line changed; nothing was added");
       const t = createTask(state, live.block.text, live.page, null);
       t.createdOn = action.date;
+      const source = { sourcePageId: live.page.id, sourceBlockId: live.block.id, sourceFingerprint: prop.fingerprint };
+      // A dated proposal is planned for its day, like a dated capture: no row on the drafted day's page (Bumblebee,
+      // Lead, Ratchet #80). Its accepted record still lives on the drafted day's page, in block metadata under the
+      // task's id, so the line stays linked even before that day's page exists.
+      if (prop.date && prop.date > action.date) {
+        place(state, t, prop.date, "other");
+        (p.editorBlockMetadata ??= {})[`accepted:${t.id}`] = { id: `accepted:${t.id}`, kind: "task", taskId: t.id, text: t.title, ...source };
+        return { message: `Added for ${prop.date}`, entityId: t.id };
+      }
       place(state, t, action.date, "other");
       const row = p.sections.flatMap((s) => s.blocks).find((b) => b.kind === "task" && b.taskId === t.id)!;
-      Object.assign(row, { sourcePageId: live.page.id, sourceBlockId: live.block.id, sourceFingerprint: prop.fingerprint });
+      Object.assign(row, source);
       (p.editorBlockMetadata ??= {})[row.id] = structuredClone(row);
       const section = p.sections.find((s) => s.blocks.includes(row))!;
       return { message: `Added to ${section.title || "the plan"}`, entityId: t.id };

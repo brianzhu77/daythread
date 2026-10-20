@@ -8,7 +8,7 @@ const repo = new SqliteWorkspaceRepository(path)
 let ws = await repo.load()
 const prev = ws.pages.filter(p => p.type === 'daily' && p.date! < today).sort((a, b) => b.date!.localeCompare(a.date!))[0]!
 const doc = editorSeed(prev, ws), at = doc.findIndex(n => n.type === 'heading' && inlineText(n.content) === 'Notes')
-const lines = [{ id: 'seed-1', type: 'paragraph', content: '明天给 Kevin 回电话' }, { id: 'seed-2', type: 'paragraph', content: '奥德赛 第二章' }]
+const lines = [{ id: 'seed-1', type: 'paragraph', content: '明天给 Kevin 回电话' }, { id: 'seed-2', type: 'paragraph', content: '奥德赛 第二章' }, { id: 'seed-3', type: 'paragraph', content: '周五交材料' }]
 await repo.execute({ operationId: 'seed-lines', expectedRevision: ws.revision, action: { type: 'save-editor', pageId: prev.id, expectedContent: pageContentKey(prev), document: JSON.stringify([...doc.slice(0, at + 1), ...lines, ...doc.slice(at + 1)]) } })
 ws = await repo.load()
 if (!ws.pages.some(p => p.date === today)) await repo.execute({ operationId: 'seed-day', expectedRevision: ws.revision, action: { type: 'ensure-day', date: today } })

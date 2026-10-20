@@ -37,6 +37,7 @@ const fixture = (openTaskId) => [
   { kind: 'task', title: 'Pay rent', date: '2026-02-31', dateRole: 'due' },              // 7 rejected (no such date)
 ]
 const lookedUp = new Set()
+const nextFriday = () => { for (let i = 1; i <= 7; i++) { const d = day(i); if (new Date(`${d}T12:00:00Z`).getUTCDay() === 5) return d } }
 let draftMode = 'propose'
 createServer(async (req, res) => {
   const chunks = []; for await (const c of req) chunks.push(c)
@@ -59,7 +60,7 @@ createServer(async (req, res) => {
     const lines = [...text.matchAll(/^\[([^\]]+)\] \((.+?) · .+?\) (.*)$/gm)].filter(m => m[1].includes('/'))
     const answer = draftMode === 'empty' ? { taskIds: [], materialIds: [], proposals: lines.map(m => ({ lineId: m[1], propose: false, date: null })) }
       : draftMode === 'invalid' ? { taskIds: ['no-such-task'], materialIds: [], proposals: [{ lineId: 'no/such', propose: true, date: null }] }
-      : { taskIds: ids('TASK CANDIDATES').slice(0, 1), materialIds: [], proposals: lines.map(m => ({ lineId: m[1], propose: /明天|周[一二三四五六日]|tomorrow|call|给/i.test(m[3]), date: null })) }
+      : { taskIds: ids('TASK CANDIDATES').slice(0, 1), materialIds: [], proposals: lines.map(m => ({ lineId: m[1], propose: /明天|周[一二三四五六日]|tomorrow|call|给/i.test(m[3]), date: /周五/.test(m[3]) ? nextFriday() : null })) }
     await new Promise(r => setTimeout(r, 600))
     return send(200, { id: `gen-${Date.now()}`, choices: [{ message: { content: JSON.stringify(answer) }, finish_reason: 'stop' }], usage: { cost: 0.0002, prompt_tokens: 900, completion_tokens: 80 } })
   }

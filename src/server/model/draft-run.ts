@@ -31,11 +31,22 @@ async function failRun(repository: SqliteWorkspaceRepository, date: LocalDate, r
   try { await repository.executeOnLatest(`draft-failed:${runId}`, { type: 'model-draft-failed', date, runId, failure, ...extra }) } catch { /* moved on */ }
 }
 
+/** Runs going on in this process: a replay of one of them follows it instead of starting again (Ratchet #80). */
+const active = new Set<string>()
+
 export async function draftDayRun(deps: DraftDeps, date: LocalDate, runId: string): Promise<DraftOutcome> {
+  if (active.has(runId)) return 'stale'
+  active.add(runId)
+  try { return await draftOnce(deps, date, runId) } finally { active.delete(runId) }
+}
+
+async function draftOnce(deps: DraftDeps, date: LocalDate, runId: string): Promise<DraftOutcome> {
   const { repository, config } = deps, now = deps.now ?? (() => new Date())
   const ws = await repository.load()
   const run = runOf(ws, date)
   if (!run || run.runId !== runId || run.status !== 'drafting') return 'stale'
+  // The same run already reserved (by another process, or before a replay): it's that run's to finish, not a new one.
+  if ((await repository.modelAttempts()).some(a => a.id === run.attemptId)) return 'stale'
   const request = buildDraftRequest(ws, date, config, deps.budgetBytes)
   // Must-send part over the budget: nothing is sent, no Retry (it would fail the same way).
   if (request.tooLarge) { await failRun(repository, date, runId, 'too-large'); return 'failed' }
@@ -47,7 +58,7 @@ export async function draftDayRun(deps: DraftDeps, date: LocalDate, runId: strin
   const attemptId = run.attemptId
   const spendDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Vancouver' }).format(now())
   // One paid call at a time, shared with capture (Ratchet ae9c7b87): another call in flight is "busy", nothing reserved.
-  if ((await repository.modelAttempts()).some(a => a.state === 'reserved')) { await failRun(repository, date, runId, 'busy'); return 'failed' }
+  if ((await repository.modelAttempts()).some(a => a.state === 'reserved' && a.id !== attemptId)) { await failRun(repository, date, runId, 'busy'); return 'failed' }
   const reserve = () => repository.reserveModelAttempt({ id: attemptId, subject: { kind: 'draft', date, run: run.run }, day: spendDay, upperBoundUsd: worstCaseUsd(request.body, draftMaxTokens, price), model: config.model, requestHash, now: now().toISOString(), capUsd: dailyCapUsd() })
   try {
     let reserved
@@ -60,7 +71,7 @@ export async function draftDayRun(deps: DraftDeps, date: LocalDate, runId: strin
     const message = error instanceof Error ? error.message : String(error)
     if (/Daily budget reached/.test(message)) { await failRun(repository, date, runId, 'budget'); return 'failed' }
     if (/in-flight or unknown/.test(message)) {
-      const busy = (await repository.modelAttempts()).some(a => a.state === 'reserved')
+      const busy = (await repository.modelAttempts()).some(a => a.state === 'reserved' && a.id !== attemptId)
       await failRun(repository, date, runId, busy ? 'busy' : 'paused'); return 'failed'
     }
     throw error

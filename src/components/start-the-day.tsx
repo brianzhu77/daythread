@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { dayTemplate } from '../domain/editor-document'
 import { isBlankTask } from '../domain/workspace'
 import type { DayView, LocalDate, NoteBlock, Page, Task, Workspace } from '../domain/types'
-import { shortLabel, weekday } from './dates'
+import { longLabel, shortLabel, weekday } from './dates'
 import { DateTag } from './date-tag'
 import { flushEditor } from './editor-flush'
 import { RowMenu } from './row-menu'
@@ -48,11 +48,15 @@ export function taskSuggestions(view: DayView, workspace: Workspace, today: Loca
   const seen = new Set<string>()
   // A Draft my day pick reads "Drafted for today" and goes to the plan list, never Top 3: Top 3 holds what he chose,
   // including "Suggested last night" from his review (Lead c1ba8868, morning-model-states §4).
+  // A task the card already offers keeps its own reason and place; a model pick of it adds nothing (Lead, Bumblebee).
   const drafted = isCardDraft(page)
-  for (const t of (page.draft?.taskIds ?? []).map(id => workspace.tasks.find(x => x.id === id)))
-    if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push(drafted ? { task: t, reason: 'Drafted for today', section: 'other' } : { task: t, reason: 'Suggested last night', section: 'top3' }) }
+  const draftTasks = (page.draft?.taskIds ?? []).map(id => workspace.tasks.find(x => x.id === id))
+  if (!drafted) for (const t of draftTasks)
+    if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: 'Suggested last night', section: 'top3' }) }
   for (const t of view.handoffTasks)
     if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: `Unfinished · from ${prev?.date ? weekday(prev.date) : 'yesterday'}`, section: 'other' }) }
+  if (drafted) for (const t of draftTasks)
+    if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: 'Drafted for today', section: 'other' }) }
   return out
 }
 
@@ -67,12 +71,21 @@ export function liveProposals(page: Page, workspace: Workspace) {
   return (page.draft?.proposals ?? []).filter(p => !hidden.has(p.lineId)).flatMap(p => { const live = liveProposal(workspace, p); return live ? [{ proposal: p, ...live }] : [] })
 }
 
+/**
+ * Lines to bring from the previous page, minus those that are live proposals right now: one line is never offered twice
+ * in the card, and the proposal is the stronger offer. Hidden or withdrawn, it comes back here (Jazz c3a84702).
+ */
+export function cardLines(view: DayView, workspace: Workspace) {
+  const proposed = new Set(view.page ? liveProposals(view.page, workspace).map(p => `${p.page.id}/${p.block.id}`) : [])
+  return view.handoffBlocks.filter(l => !proposed.has(`${l.pageId}/${l.block.id}`))
+}
+
 export function hasHandoffContent(view: DayView, workspace: Workspace, today: LocalDate): boolean {
   const page = view.page
   // Draft my day needs a place to be tapped: while today has no draft and no failure, the card shows (Jazz §2).
   const needsDraftLink = Boolean(page && !page.draft && !page.draftError)
   const runShowing = Boolean(page?.draft?.run && page.draft.run.status !== 'ready') || Boolean(page?.draftError)
-  return taskSuggestions(view, workspace, today).length > 0 || view.handoffBlocks.length > 0 || needsDraftLink || runShowing || Boolean(page && liveProposals(page, workspace).length)
+  return taskSuggestions(view, workspace, today).length > 0 || cardLines(view, workspace).length > 0 || needsDraftLink || runShowing || Boolean(page && liveProposals(page, workspace).length)
 }
 
 /** The section's real name on his page ("TODO - Top 3"), or the template's when the page has none. */
@@ -92,7 +105,7 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
   const prev = previousDailyPage(workspace, today)
   const prevDay = prev?.date ? weekday(prev.date) : 'yesterday'
   const tasks = taskSuggestions(view, workspace, today)
-  const lines = view.handoffBlocks
+  const lines = cardLines(view, workspace)
   const [linesOpen, setLinesOpen] = useState(false)
   const [strips, setStrips] = useState<Map<string, Strip>>(new Map())
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
@@ -196,9 +209,10 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
   }
   const proposals = liveProposals(page, workspace)
   for (const key of proposals.map(p => `prop:${p.proposal.lineId}`)) if (!order.current.includes(key)) order.current.push(key)
-  const addProposal = async (lineId: string) => {
+  const addProposal = async (lineId: string, date: string | null) => {
     const receipt = await write({ type: 'add-proposal', date: today, lineId }, null)
-    if (receipt) showStrip(`prop:${lineId}`, { text: receipt.message, undo: receipt.operationId })
+    // "Added for Fri, Oct 23" for a dated proposal (planned for that day), "Added to {Section}" otherwise.
+    if (receipt) showStrip(`prop:${lineId}`, { text: date && date > today ? `Added for ${longLabel(date)}` : receipt.message, undo: receipt.operationId })
   }
   const startDraft = async () => { setWorking(n => n + 1); try { if (await flushEditor(page.id)) await draftMyDay(today) } finally { setWorking(n => n - 1) } }
   const taskKeys = order.current.filter(k => k.startsWith('task:') && (strips.has(k) || tasks.some(t => `task:${t.task.id}` === k)))
@@ -217,7 +231,9 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
         </p>
       : !page.draft
         ? <p className="line">No suggestions from last night · <button type="button" className="app-link" onClick={() => void startDraft()}>Draft my day</button></p>
-        : isCardDraft(page) && !(page.draft.taskIds.length) && !(page.draft.proposals?.length)
+        // Nothing new: no task the card wouldn't offer anyway and no proposal (Lead, after the first real run).
+        // Read from what the run returned, not from the rows left, so adding a drafted task never turns it into "nothing".
+        : isCardDraft(page) && page.draft.taskIds.every(id => view.handoffTasks.some(t => t.id === id)) && !(page.draft.proposals?.length)
           ? <p className="line mc-status nothing">Nothing to suggest today</p>
           : null
   const omitted = run?.manifest.omittedPages.length ?? 0
@@ -230,7 +246,7 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
     const where = p.page.type === 'daily' && p.page.date ? weekday(p.page.date) : (p.page.title || 'Untitled')
     return (
       <li key={key} className="mc-row">
-        <AddButton dashed label={`Add ${p.block.text} as a task`} onPress={() => void addProposal(p.proposal.lineId)} />
+        <AddButton dashed label={`Add ${p.block.text} as a task`} onPress={() => void addProposal(p.proposal.lineId, p.proposal.date)} />
         <span className="mc-text">
           <span className="mc-title-line"><span className="mc-title"><TagText text={p.block.text} /></span>{p.proposal.date && <span className="app-tag">{shortLabel(p.proposal.date)}</span>}</span>
           <span className="mc-reason">{where} · {p.section || 'Page'}</span>

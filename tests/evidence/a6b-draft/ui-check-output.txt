@@ -3,13 +3,15 @@ ok   card offers "Draft my day"
 ok   2. "Drafting your day…" while it runs
 ok   2. result: From your notes
 ok      the line that names a day is proposed, the other isn't
-ok      a drafted task reads "Drafted for today"
-ok      one call, cost settled · [{"id":"draft:2026-10-20:6b7fe6a9-6b8e-4474-a634-144f642aedf5","state":"settled"}]
+ok      a picked task already on the card keeps "Unfinished · from Mon" (Lead, Jazz 9127710)
+ok      the proposed lines leave "lines from Mon" (3 → 1, Jazz c3a84702)
+ok      dated + → "Added for Fri, Oct 23 · Undo"
+ok      the task is planned for Fri, Oct 23
+ok      one call, cost settled · [{"id":"draft:2026-10-20:ecf04eea-0faa-42a3-81d4-40677e3fad12","state":"settled"}]
 ok   5. + → "Added to TODO - Other · Undo"
 ok      one task with his exact line
 ok      the source line is unchanged
 ok      Undo removes it and offers the line again
-ok      + on a drafted task → TODO - Other
 ok   6. editing the line removes its row; no new model call
 ok   4. "Nothing to suggest today"
 ok      reload keeps it, no link back
@@ -29,4 +31,5 @@ ok      then "Model unavailable · nothing was added"
 ok      with Retry, stored as failed
 ok   390: drafted card
 ok   390: the dashed + is a 44 px target · 44
+ok   390: Hide for today → the line is back under "2 lines from Mon"
 ok   no page or console errors

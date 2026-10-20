@@ -211,3 +211,34 @@ test('context: the previous day always; linked pages whole until the budget; ove
     assert.deepEqual([p.draft!.run!.failure, p.draftError, calls.n], ['too-large', 'Too much to read in one go · nothing was added', 0])
   } finally { await s.cleanup() }
 })
+
+test('Ratchet #80: a replay of the same run while its call is still out follows it; the run keeps its result', async () => {
+  const s = await store()
+  try {
+    await s.start('r1')
+    let release!: () => void
+    const gate = new Promise<void>(r => { release = r })
+    const calls = { n: 0 }
+    const f = fake(lines => ({ proposals: lines.map(id => ({ lineId: id, propose: id.endsWith('/n1'), date: null })) }), { gate, calls })
+    const first = draftDayRun(deps(s, f), '2026-10-19', 'r1')
+    while ((await s.repo.modelAttempts()).length === 0) await new Promise(r => setTimeout(r, 5))
+    assert.equal(await draftDayRun(deps(s, f), '2026-10-19', 'r1'), 'stale')
+    assert.equal((await draftOf(s.repo)).draft!.run!.status, 'drafting', 'not marked busy')
+    release()
+    assert.equal(await first, 'drafted')
+    assert.equal((await draftOf(s.repo)).draft!.proposals!.length, 1)
+    assert.equal(calls.n, 1)
+  } finally { await s.cleanup() }
+})
+
+test('Ratchet #80: a paid answer about a line with an impossible date is read, not thrown', async () => {
+  const s = await store()
+  try {
+    const ws = await s.repo.load(), sun = ws.pages.find(p => p.id === s.sun)!
+    await s.exec({ type: 'save-editor', pageId: s.sun, expectedContent: pageContentKey(sun), document: JSON.stringify([...editorSeed(sun, ws), { id: 'bad', type: 'paragraph', content: 'pay rent 2026-13-40' }]) })
+    await s.start('r1')
+    assert.equal(await draftDayRun(deps(s, fake(lines => ({ proposals: lines.map(id => ({ lineId: id, propose: id.endsWith('/bad'), date: id.endsWith('/bad') ? '2026-10-23' : null })) }))), '2026-10-19', 'r1'), 'drafted')
+    const d = (await draftOf(s.repo)).draft!
+    assert.deepEqual(d.proposals!.map(p => [p.blockId, p.date]), [['bad', null]])
+  } finally { await s.cleanup() }
+})
