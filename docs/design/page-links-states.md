@@ -96,8 +96,8 @@ filled in) and pastes into a day.
   whole blocks with cards in them. Those stay ordinary pastes.
 - Because the source link is a real page link, the quote's page shows up in the source's **Linked from** (P13).
 
-**Scope note for Lead:** §4 can ship after §1–§3 if the plan finds it heavy. `[[` is the core of A9, and quote with
-source is a convenience on top of the same link.
+**Not in this round (Lead `a5a33307`):** §4 is A9b, the next round. This round is A9a (`[[`, §1–§3) plus B15 (§5).
+§4 stays here as the design for A9b, and §6 check 7 moves with it.
 
 ## 5. Linked from (B15 and what links add)
 
