@@ -135,7 +135,11 @@ function copiedLink(html: string, plain: string): { url: string; text: string } 
   const rest = doc.body.cloneNode(true) as HTMLElement
   rest.querySelectorAll('a[href]').forEach(a => a.remove())
   const url = anchors[0]!.getAttribute('href')?.trim() ?? '', text = anchors[0]!.textContent?.trim() ?? ''
-  if (rest.textContent?.trim() || !isHttpUrl(url) || (plain.trim() && plain.trim() !== text)) return null
+  // Nothing else that is content, inside or around the link: an image or other media is not "a link alone" (Ratchet
+  // 2aea0960), even though it has no text. Wrappers, <meta>, <style> and <br> are what clipboards add around a link.
+  const media = 'img, picture, svg, video, audio, iframe, canvas, object, embed, input, textarea, select, table, hr'
+  if (rest.textContent?.trim() || rest.querySelector(media) || anchors[0]!.querySelector(media)) return null
+  if (!isHttpUrl(url) || (plain.trim() && plain.trim() !== text)) return null
   return { url, text }
 }
 /** "Today", "Mon, Oct 19": the app's day format, for "Saved before · {day}". */
