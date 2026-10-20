@@ -5,6 +5,7 @@
   - Lead `5598fdab`: document pages only, including those under day pages; day pages can't be deleted (B16).
   - Lead `98df7dae` / `1a6d490b`: rollback direction A.
   - Lead `fd179341`: restore granularity, and one visibility filter.
+  - Lead `8e4be383`: id clash split; Lead `cdbbd148`: references by time of writing.
   - Layout: Jazz `docs/design/pages-trash-layout.md` (0aa65f1, Tags rule 0f79066).
 - Base: main `1260914`, storage layout 3 (`sqliteMigrations.length === 3`).
 
@@ -66,10 +67,15 @@ only).
 3. **One transaction** for the rest; any error or check failure rolls back everything.
    1. Move the **current** trashed rows out of `pages` into `held_trash_l4`, with their full `present`. Rows that
       exist only in the undo snapshot are dropped along with Undo.
-   2. **Live rows:** remove `trashedAt`/`trashId` from `present` (a page restored by the new build may still list
+   2. **Record the source edges** that point at a held page, in `held_refs_l4 (kind, ownerId, pageId, blockId)`:
+      - `task`: every task whose `sourcePageId` is a held id (`ownerId` = task id);
+      - `material`: every entry of a material's `sources` whose `pageId` is a held id, **per edge**
+        (`ownerId` = material id, plus that entry's `pageId` and `blockId`), never the material as a whole;
+      - `capture`: every capture whose `pageId` is a held id.
+   3. **Live rows:** remove `trashedAt`/`trashId` from `present` (a page restored by the new build may still list
       them).
-   3. Delete every `undo` row and the undo meta.
-   4. Drop the two columns, set `user_version=3`, and check the exact layout-3 columns.
+   4. Delete every `undo` row and the undo meta.
+   5. Drop the two columns, set `user_version=3`, and check the exact layout-3 columns.
 4. Print the held pages and the backup path.
 
 **While the old build runs:** trashed pages are hidden, and nothing written is lost.
@@ -77,10 +83,14 @@ only).
 **Migration 4 on re-upgrade (code, in the initialization transaction):**
 1. Add the columns.
 2. If `held_trash_l4` exists and a held id exists again as a page, see "Id clash" below.
-3. Otherwise put the held rows back after the existing positions, in their own order. Same parent and batch; the
-   position doesn't matter, because a restore puts the page last among its siblings anyway (below).
-4. Drop the table.
-5. Running it a second time finds no held table and only adds nothing.
+3. Put the held rows back after the existing positions, in their own order, with the same parent and batch. Their
+   place among siblings isn't promised until B14 (§2).
+4. **Clear Undo** (the `undo` rows and the undo meta) whenever held rows were put back. Undo restores a whole
+   earlier workspace, and the one today's build left behind has no held pages. An Undo after the re-upgrade would
+   otherwise drop them from the trash, and after a clash it would also put back the old source ids. The cost is the last
+   Undo from the rollback period.
+5. Drop both held tables.
+6. Running it a second time finds no held table and only adds the columns, which already exist, so it does nothing.
 
 **Today's build with held pages (Lead `e7ab12dc` points 3–5)**, built app on a downgraded copy of Brian's database
 (`tests/evidence/a4-plan/old-build-setup.ts`, `old-build-screens.mjs`, `reupgrade.ts`):
@@ -98,10 +108,21 @@ carry a held id because Retry recreated it.
     event, link or card block. No task has it as its source.
   - Then the migration drops it and puts the held row back in the trash under its **original id**. The card reads
     "In trash" again, and Restore reconnects it.
-- **Otherwise, or when in doubt:** keep both.
-  - The live page keeps the id.
-  - The held row goes back to the trash under a new id, with its batch, parent and content. Held pages in the same
-    batch that were its children get their `parentId` changed to the new id.
+- **Otherwise, or when in doubt:** keep both. The held row goes back to the trash under a **new id** with its
+  batch, parent and content. Which references move to the new id follows Lead `cdbbd148` (by time of writing): anything written
+  before the downgrade belongs to the held page, and anything written during the rollback belongs to the live page.
+  - **Held rows, all of them, any batch:** one id map applies to every `parentId`, and to every page reference
+    inside held content: the `pageLink` `props.pageId` in `editorJSON`, `targetPageId` in `sections` blocks and in
+    `editorBlockMetadata`. A child deleted in an earlier batch than its parent therefore follows the parent's new id.
+  - **Recorded source edges** (`held_refs_l4`, written by the down-script): each one still present and still
+    pointing at the old id moves to the new id. For a material that means only that `sources` entry, matched on
+    `pageId` and `blockId`; other entries of the same material, including ones added on the live page during the
+    rollback, stay.
+  - **Everything else stays on the live page:** live pages' `parentId`, cards and links in live pages (including the
+    one whose Retry made the page), and tasks, material sources and captures not in the record.
+    No live page can have a held parent when the down-script runs: a delete takes every live descendant, and a
+    child restored on its own goes to top level. So live children of the old id were all made during the rollback.
+- The **empty** case keeps the original id, so nothing is remapped there.
 - **Either way** the migration logs what it did, including the id mapping.
 
 The note to Brian for a rollback includes: "During the rollback a card may show 'Not created · Retry'. Your page is
@@ -118,8 +139,9 @@ and the migration):
 | Today's build, built app, 1280 and 390: Today, Oct 18 (its card to the held page), Pages, Tasks, Tags, Calendar | no error screen, no console errors |
 | Migration 4 again | 佛卡夏披萨 back in the trash with batch `op1`; "韩国大酱汤 v2" kept |
 
-Not covered yet: the real migration code and the script file; `present` on live rows the new build restored; a held
-id appearing again (refusal); the backup.
+Not covered by this experiment: the real migration code and the script file; `present` on live rows the new build
+restored; the id clash (both cases) and the source-edge record; Undo cleared at re-upgrade; the backup. All are in
+§5.
 
 ## 5. Checks for Ratchet
 
@@ -142,6 +164,13 @@ id appearing again (refusal); the backup.
      gone, the held page is in the trash under its original id, and the card reads "In trash";
    - Retry, write one line in the page, then re-upgrade → both kept: the live page has the original id and the
      line; the held page is in the trash under a new id with its content; the log lists the mapping;
+   - **two batches + Retry with writing + existing sources** (Ratchet `33d75688` / `96e4efd5`, Lead `cdbbd148`): the held parent P has a task and a
+     material source from its own blocks, and a capture; delete the child C, then P (two batches) → downgrade →
+     in today's build Retry P's card, write one line, create a task from that line, and save a link that reuses
+     P's material from the live page → re-upgrade. Expected: both pages kept; the held P is in the trash under a
+     new id; C's `parentId` is P's new id; P's old task, material edge and capture point at the new id; the new task
+     and the new material edge stay on the live page; the card opens the live page; the log lists the mapping;
+   - after a re-upgrade with held rows, Undo is empty, and Undo after a new edit doesn't remove a held page;
    - a task written in a held page still shows and can be ticked in today's build;
    - a subpage restored alone, parent held → top level in today's build; after re-upgrade the parent is back in the
      trash and the subpage stays;
