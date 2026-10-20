@@ -87,13 +87,15 @@ function PageCard({ pageId, cardId }: { pageId: string; cardId: string }) {
   const savedOn = target || pendingPages.has(pageId) ? undefined : workspace?.pages.find(p => p.sections.some(s => s.blocks.some(b => b.id === cardId)))
   const pending: PendingPage | undefined = target ? undefined : pendingPages.get(pageId)
     ?? (savedOn ? { state: 'failed', parentId: savedOn.id, retry: () => void run({ type: 'create-document', title: '', body: '', pageId, parentId: savedOn.id }) } : undefined)
-  return <button type="button" contentEditable={false} className="editor-page-card" disabled={pending?.state === 'creating'}
+  // A4: a card to a trashed page stays in the text, muted with "In trash", and opens the trashed page (layout §2).
+  const trashed = Boolean(target?.trashedAt)
+  return <button type="button" contentEditable={false} className={`editor-page-card ${trashed ? 'in-trash' : ''}`} disabled={pending?.state === 'creating'}
     onClick={() => { if (pending) { if (pending.state === 'failed') pending.retry(); return } rememberCard(cardId); void navigate({ to: '/pages', search: { page: pageId } }) }}>
     <span className="editor-page-card-icon"><PagesIcon /></span>
     <span className={`editor-page-card-title ${target?.title ? '' : 'untitled'}`}>{target ? displayPageTitle(target) : pending ? 'Untitled' : 'Page not found'}</span>
     {pending?.state === 'creating' ? <span className="editor-page-card-spinner" aria-label="Creating page" />
       : pending?.state === 'failed' ? <span className="editor-page-card-failed">Not created · Retry</span>
-      : <ChevronRightIcon />}
+      : <>{trashed && <span className="in-trash-tag">In trash</span>}<ChevronRightIcon /></>}
   </button>
 }
 

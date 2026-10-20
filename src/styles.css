@@ -1023,3 +1023,45 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 @media (prefers-reduced-motion: reduce) { .mc-strip { animation: none; } }
 .mc-add-all { justify-self: start; margin-top: 4px; }
 .mc-lines-toggle { justify-self: start; min-height: 44px; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
+
+/* ---------- A4 trash and restore (Jazz docs/design/pages-trash-layout.md, 2956eea) ---------- */
+/* The tree row's ⋯ is now a menu: its items are full rows, and the row keeps its actions shown while the menu is open. */
+.tree-acts .app-menu button { display: flex; width: 100%; height: auto; min-height: 38px; padding: 0 10px; font-size: 15px; }
+.tree-acts .app-menu button { color: var(--ink); }
+.tree-acts .app-menu button.danger { color: var(--app-danger); }
+.tree-row:has(.row-menu [aria-expanded='true']) .tree-acts { display: flex; }
+.trash-entry { color: var(--ink-2); }
+.trash-entry svg { width: 16px; height: 16px; color: var(--ink-3); }
+.trash-count { color: var(--ink-3); }
+/* A card to a trashed page stays in the text, muted, with a small outlined tag before the chevron. */
+.editor-page-card.in-trash, .editor-page-card.in-trash .editor-page-card-icon { color: var(--ink-3); }
+.in-trash-tag { flex: none; padding: 0 6px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; line-height: 18px; color: var(--ink-3); }
+.linked-from-removed { padding: 0 8px; font-size: 13px; color: var(--ink-3); }
+.restore-button { flex: none; display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--fill); color: var(--blue); font: inherit; font-size: 14px; font-weight: 550; cursor: pointer; }
+.trash-intro { margin: -4px 0 2px; font-size: 14px; color: var(--ink-2); }
+.trash-row { display: flex; align-items: center; padding-right: 14px; }
+.trash-row > .card-row { flex: 1; min-width: 0; min-height: 64px; }
+.trash-row .card-row-detail { color: var(--ink-3); }
+.trash-back { display: none; }
+.pages-trash-row { display: none; }
+.trash-banner { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 12px; background: var(--fill); font-size: 14px; color: var(--ink-2); }
+.trash-banner > svg { flex: none; width: 18px; height: 18px; color: var(--ink-3); }
+.trash-banner > span { flex: 1; min-width: 0; }
+.trashed-page .large-title, .ro-body { color: var(--ink-2); }
+.ro-body { display: grid; gap: 4px; font-size: 16px; line-height: 1.65; }
+.ro-line { margin: 0; overflow-wrap: anywhere; }
+.ro-heading { margin: 14px 0 2px; color: var(--ink-2); font-size: 22px; line-height: 1.35; font-weight: 650; }
+.ro-heading.level-3 { font-size: 18px; }
+.ro-box { display: inline-block; min-width: 1.4em; color: var(--ink-3); }
+.ro-task.done { text-decoration: line-through; }
+.ro-children { padding-left: 1.4em; }
+.ro-body a.editor-page-card { text-decoration: none; }
+@media (max-width: 599px) {
+  .restore-button { min-height: 44px; }
+  .trash-back { display: inline-flex; align-items: center; gap: 2px; min-height: 44px; margin: -12px 0 -12px -6px; color: var(--blue); font-size: 17px; text-decoration: none; }
+  .trash-back svg { transform: rotate(180deg); width: 18px; height: 18px; }
+  .pages-trash-row { display: flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 6px; color: var(--ink-2); font-size: 15px; text-decoration: none; }
+  .pages-trash-row > span { flex: 1; }
+  .pages-trash-row svg { width: 18px; height: 18px; color: var(--ink-3); }
+  .pages-trash-row > svg:last-child { width: 13px; height: 13px; }
+}

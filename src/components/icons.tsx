@@ -49,6 +49,12 @@ export const PagesIcon = () => (
   </Icon>
 )
 
+export const TrashIcon = () => (
+  <Icon>
+    <path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" />
+  </Icon>
+)
+
 export const TagsIcon = () => (
   <Icon>
     <path d="M9.5 4 8 20M16 4l-1.5 16M4.5 9h15M4 15h15" />

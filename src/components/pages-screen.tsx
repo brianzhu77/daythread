@@ -1,10 +1,11 @@
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { ContinuousPage } from './continuous-page'
 import { displayPageTitle, PageTitleField } from './page-title'
-import { childPages, pagesInDays, parentOf } from '../domain/page-tree'
+import { childPages, isTrashed, pagesInDays, parentOf } from '../domain/page-tree'
 import type { Page, Workspace } from '../domain/types'
 import { LinkedFrom, PageHeaderRow, pageLabel, Subpages, useToday } from './page-tree'
 import { ChevronRightIcon, PagesIcon, PlusIcon } from './icons'
+import { PagesTrashRow, TrashedPage, TrashScreen } from './trash'
 import { useWorkspace } from './use-day'
 
 /** Asks for a title and creates a document page; resolves to its id, or null if cancelled. */
@@ -26,7 +27,9 @@ export function PagesScreen() {
   const today = useToday()
   const setSelected = (page: string | null) => void navigate({ to: '/pages', search: page ? { page } : {} })
   const p = workspace?.pages.find(p => p.id === search.page)
+  if (search.view === 'trash' && !p) return <TrashScreen />
   if (!workspace) return <p>Loading pages…</p>
+  if (p && isTrashed(p)) return <TrashedPage key={p.id} page={p} workspace={workspace} />
   if (p) return <div className="doc-screen"><PageHeaderRow page={p} workspace={workspace} />
     <div className="page-head">
       {p.type === 'document' ? <PageTitleField key={p.id} page={p} autoFocus={search.focus === 'title'} /> : <h1 className="large-title">{p.title}</h1>}
@@ -54,6 +57,7 @@ export function PagesScreen() {
           <PageRows pages={inDays.flatMap(g => g.pages)} workspace={workspace} onOpen={setSelected} detail={p => pageLabel(parentOf(workspace, p)!, today)} />
         </section>
       )}
+      <PagesTrashRow workspace={workspace} />
     </div>
   )
 }

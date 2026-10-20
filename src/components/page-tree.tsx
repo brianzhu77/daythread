@@ -7,6 +7,7 @@ import { longLabel, todayIso } from './dates'
 import { ChevronRightIcon, PagesIcon } from './icons'
 import { displayPageTitle } from './page-title'
 import { RowMenu } from './row-menu'
+import { useDeletePage } from './trash'
 import { useWorkspace } from './use-day'
 
 // pages-delta N-2 / N-5 / N-9 step B, laid out per Jazz docs/design/pages-tree-layout.md (cfc7b92): breadcrumb,
@@ -50,7 +51,7 @@ function useOpen() {
 }
 
 /** An in-app link: a real href for new tabs, client navigation on a plain click. */
-function PageLink({ href, className, children, title, current }: { href: string; className?: string; children: ReactNode; title?: string; current?: boolean }) {
+export function PageLink({ href, className, children, title, current }: { href: string; className?: string; children: ReactNode; title?: string; current?: boolean }) {
   const open = useOpen()
   return <a href={href} className={className} title={title} aria-current={current ? 'page' : undefined}
     onClick={e => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; e.preventDefault(); open(href, !href.includes('block=')) }}>{children}</a>
@@ -118,13 +119,14 @@ function HiddenCrumbs({ pages, today }: { pages: Page[]; today: LocalDate }) {
     groups={[{ items: [...pages].reverse().map(p => ({ label: pageLabel(p, today), onSelect: () => open(pageHref(p)) })) }]} />
 }
 
-/** ⋯ on a document page: Move to… (Delete arrives with A4). Day pages have none this round. */
+/** ⋯ on a document page: Move to…, then Delete after a divider (A4 layout §1). Day pages have none this round. */
 export function PageMenu({ page }: { page: Page }) {
   const [moving, setMoving] = useState(false)
+  const deletePage = useDeletePage()
   if (page.type === 'daily') return null
   return (
     <>
-      <RowMenu label="Page actions" triggerClass="page-more" groups={[{ items: [{ label: 'Move to…', onSelect: () => setMoving(true) }] }]} />
+      <RowMenu label="Page actions" triggerClass="page-more" groups={[{ items: [{ label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void deletePage(page, page.id) }] }]} />
       {moving && <MovePageDialog page={page} onClose={() => setMoving(false)} />}
     </>
   )
@@ -140,7 +142,10 @@ export function LinkedFrom({ page, workspace }: { page: Page; workspace: Workspa
   return (
     <p className="linked-from">
       <span className="linked-from-label"><LinkIcon />Linked from</span>
-      {shown.map(({ page: p }) => <PageLink key={p.id} href={pageHref(p)}>{pageLabel(p, today)}</PageLink>)}
+      {/* A4: a source page in the trash reads "(removed)" and doesn't open (layout §2, N-5). */}
+      {shown.map(({ page: p, removed }) => removed
+        ? <span key={p.id} className="linked-from-removed">{pageLabel(p, today)} (removed)</span>
+        : <PageLink key={p.id} href={pageHref(p)}>{pageLabel(p, today)}</PageLink>)}
       {entries.length > shown.length && <button type="button" className="linked-from-more" onClick={() => setAll(true)}>{entries.length - shown.length} more</button>}
     </p>
   )
@@ -356,6 +361,7 @@ export function SidebarTree({ workspace, activeId, today, newPageRow }: { worksp
   const listRef = useRef<HTMLDivElement>(null)
   const { run } = useWorkspace()
   const open = useOpen()
+  const deletePage = useDeletePage()
   useEffect(() => {
     listRef.current?.querySelector('.tree-row[aria-current="page"]')?.scrollIntoView({ block: 'nearest' })
   }, [activeId, expanded])
@@ -381,7 +387,8 @@ export function SidebarTree({ workspace, activeId, today, newPageRow }: { worksp
           <PageLink className="tree-title" href={pageHref(p)} title={pageLabel(p, today)}>{!day && <PagesIcon />}<span>{pageLabel(p, today)}</span></PageLink>
           <span className="tree-acts">
             <button type="button" aria-label={`New subpage in ${pageLabel(p, today)}`} onClick={() => void newSubpage(p)}>+</button>
-            {!day && <button type="button" aria-label={`Move ${pageLabel(p, today)}`} onClick={() => setMoving(p)}>⋯</button>}
+            {!day && <RowMenu label={`Actions for ${pageLabel(p, today)}`} triggerClass="tree-more"
+              groups={[{ items: [{ label: 'Move to…', onSelect: () => setMoving(p) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void deletePage(p, activeId) }] }]} />}
           </span>
         </div>
         {isOpen && children.length > 0 && <ul className="plain" role="group">{children.map(c => row(c, depth + 1))}</ul>}

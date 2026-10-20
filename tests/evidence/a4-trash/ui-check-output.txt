@@ -1,0 +1,22 @@
+ok   1. lands on the parent day at the card · http://127.0.0.1:3320/day/2026-10-18
+ok   1. notice "Moved to trash · Undo"
+ok   1. the card reads "In trash"
+ok   3. sidebar "Trash 1" row
+ok   1. the tree drops it (its sibling stays)
+ok   8. "In your days" drops it
+ok   8. #recipe count changes · "#recipe\n3 blocks · Sun, Oct 18" → "#recipe\n2 blocks · Sun, Oct 18"
+ok   4. read-only with banner "In trash · was in Sun, Oct 18"
+ok   4. no editor, no ⋯
+ok   3. Trash screen: one row
+ok   3. second line "From Sun, Oct 18 · {time}"
+ok   5. notice "Restored to Sun, Oct 18 · Open"
+ok   5. the row leaves
+ok   5. the card is normal again
+ok   2. deleting a page that isn't open stays where you are · http://127.0.0.1:3320/day/2026-10-18
+ok   2. Undo: back, card normal, in the tree
+ok   9. a day page has no ⋯ / Delete
+ok   P1. Pages ends with "Trash · 1"
+ok   P2. "‹ Pages" back row
+ok   P2. Restore is 44px tall · 44
+ok   P3. Restore from the banner: the page becomes editable in place
+ok   no page or console errors
