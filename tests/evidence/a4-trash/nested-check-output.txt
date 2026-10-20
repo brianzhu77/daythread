@@ -1,0 +1,23 @@
+ok   1. Kyoto (with Ryokan) → lands on Trip ideas · http://127.0.0.1:3321/pages?page=trip
+ok   1. notice "Moved to trash · 1 subpage"
+ok   1. Kyoto card reads "In trash"
+ok   1. Subpages drops Kyoto
+ok   2. Undo: Kyoto back in Subpages, card normal
+ok   1. top-level Trip ideas → lands on Pages · http://127.0.0.1:3321/pages
+ok   1. notice "Moved to trash · 3 subpages"
+ok   3. one row "From Pages · with 3 subpages" · ["Trip ideas From Pages · with 3 subpages · 10:22 AM Restore"]
+ok   4. Trip ideas banner "was in Pages"
+ok   4. its Subpages list Kyoto and Packing
+ok   4. Kyoto banner "deleted with Trip ideas"
+ok   4. Kyoto still lists Ryokan
+ok   6b. notice "Restored Kyoto to Pages · Trip ideas is in trash"
+ok   6b. Kyoto editable in place, Ryokan back under it
+ok   6b. Trip ideas row now "with 1 subpage" · ["Trip ideas From Pages · with 1 subpage · 10:22 AM Restore"]
+ok   6b. Restore the row: "Restored to Pages"
+ok   6b. Trip ideas back with Packing; Kyoto stays where it was moved (Sun, Oct 18) · Subpages 1 Packing
+ok   6b. Kyoto is still under Sun, Oct 18 · Sun, Oct 18
+⋯
+ok   6. two rows, Packing "From Trip ideas" · ["Trip ideas From Pages · 10:23 AM Restore","Packing From Trip ideas · 10:23 AM Restore"]
+ok   6. notice "Restored Packing to Pages · Trip ideas is in trash"
+ok   6. Packing at top level in Pages
+ok   no page or console errors
