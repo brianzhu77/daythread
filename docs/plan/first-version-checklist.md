@@ -92,6 +92,7 @@ N = D1–D6 + A5 + A1a, A1b, A3 + A4 + A6a + A8 = 13.
 | B15 | Linked from: document entries ordered by when the reference was made (N-5 "newest first"); today they follow page order, so a move reshuffles them. Needs a stored time on reference blocks (column + migration); do it in the same round as A9 `[[` references | pages-delta N-5; Lead 4b587c39 + 6bea449 ruling, Roadbuster 97171952 | missing (known limit of Step B, not an N09 failure) |
 | B16 | Delete a daily page with its subpages; hand-off still counts its placements, its prose isn't offered for Bring, "(removed)" sources, P12 restore on reopening the date (N-7 lines 180-186) | pages-delta N-7, 04 P12; Lead 5598fdab | missing (left out of A4; touches the morning card) |
 | B17 | Trash style fixes: 390 Trash row wraps so the time shows, trashed page Subpages in `--ink-2`, 1280 hover covers Restore. Optional: wrap only at " · " | Jazz ac552a0d, 40e03d46 | built (53c1b83 live 2026-10-20). Optional " · " wrap still open |
+| B18 | URLs from the capture bar make link pages (one page per URL) instead of saved items, so the two kinds of saved link don't drift apart | pages-delta N-1/N-4; Jazz 90dfd91 §1 cut, Lead 043d101e | missing (cut from A2; he has never used capture) |
 
 ## C. Open questions for Brian
 
