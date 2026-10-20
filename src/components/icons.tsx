@@ -49,6 +49,24 @@ export const PagesIcon = () => (
   </Icon>
 )
 
+/** A2: a link page, wherever a page icon shows (Jazz link-pages-states §2). Not the chain icon "Linked from" uses. */
+export const GlobeIcon = () => (
+  <Icon>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5S9.6 5.9 12 3.5Z" />
+  </Icon>
+)
+
+/** ↗: opens the website in a new tab, the only thing on a link card that leaves the app. */
+export const ExternalIcon = () => (
+  <Icon>
+    <path d="M8 16 16.5 7.5M10 7h7v7" />
+  </Icon>
+)
+
+/** The icon of a page row: a globe for a link page, the page icon otherwise. */
+export const PageKindIcon = ({ url }: { url?: string | null }) => (url ? <GlobeIcon /> : <PagesIcon />)
+
 export const TrashIcon = () => (
   <Icon>
     <path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" />

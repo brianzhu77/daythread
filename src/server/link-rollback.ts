@@ -57,6 +57,18 @@ export function holdLinksForLayout4(db: DatabaseSync): HeldLinks {
     record.run(pageId, url, id, url)
     held.push({ pageId, url })
   }
+  // A link card's `url` / `line` props are A2's; the layout-4 card is `{ pageId }` only. After the re-upgrade a card
+  // reads its URL from the page again.
+  const stripCard = (list: Node[]): Node[] => list.map(n => {
+    const props = (n as Node & { props?: Record<string, unknown> }).props
+    const next = n.type === 'pageLink' && props && ('url' in props || 'line' in props) ? { ...n, props: { pageId: props.pageId } } : n
+    return next.children ? { ...next, children: stripCard(next.children) } : next
+  })
+  for (const row of db.prepare("SELECT id, editorJSON FROM pages WHERE snapshot='current' AND editorJSON IS NOT NULL").all()) {
+    const doc = json<Node[]>(row.editorJSON, [])
+    const next = JSON.stringify(stripCard(doc))
+    if (next !== row.editorJSON) db.prepare("UPDATE pages SET editorJSON=? WHERE snapshot='current' AND id=?").run(next, row.id as string)
+  }
   // The layout-4 build reads only the fields it knows, but `present` must not list one it can't store.
   for (const row of db.prepare("SELECT snapshot, id, present FROM pages").all()) {
     const present = json<string[]>(row.present, [])

@@ -5,7 +5,8 @@ import { isTrashed, parentOf, subtreeIds, trashBatch, trashBatches, trashedChild
 import type { Page, Receipt, Workspace } from '../domain/types'
 import { longLabel, toIso } from './dates'
 import { flushEditor } from './editor-flush'
-import { ChevronRightIcon, PagesIcon, TrashIcon } from './icons'
+import { ChevronRightIcon, PageKindIcon, TrashIcon } from './icons'
+import { LinkUrlRow } from './link-url-row'
 import { displayPageTitle } from './page-title'
 import { PageLink, pageHref, pageLabel, useToday } from './page-tree'
 import { useWorkspace } from './use-day'
@@ -104,7 +105,7 @@ export function TrashScreen() {
             return (
               <li key={b.trashId} className="trash-row">
                 <PageLink className="card-row" href={pageHref(b.top)}>
-                  <span className="card-row-icon"><PagesIcon /></span>
+                  <span className="card-row-icon"><PageKindIcon url={b.top.url} /></span>
                   <span className="card-row-text">
                     <span className={`card-row-title ${b.top.title ? '' : 'untitled'}`}>{displayPageTitle(b.top)}</span>
                     <span className="card-row-detail">{[`From ${oldParentLabel(workspace, b.top, today)}`, n > 0 && `with ${n} subpage${n === 1 ? '' : 's'}`, when(b.trashedAt, today)].filter(Boolean).join(' · ')}</span>
@@ -135,7 +136,7 @@ export function TrashedPage({ page, workspace }: { page: Page; workspace: Worksp
         <span>In trash · {isTop ? `was in ${oldParentLabel(workspace, page, today)}` : `deleted with ${displayPageTitle(batch!.top)}`}</span>
         <button type="button" className="restore-button" onClick={() => void restore(page, { whole: isTop, withOpen: false })}>Restore</button>
       </div>
-      <div className="page-head"><h1 className={`large-title ${page.title ? '' : 'untitled'}`}>{displayPageTitle(page)}</h1></div>
+      <div className="page-head"><h1 className={`large-title ${page.title ? '' : 'untitled'}`}>{displayPageTitle(page)}</h1><LinkUrlRow page={page} /></div>
       <ReadOnlyBody page={page} workspace={workspace} />
       {children.length > 0 && (
         <section className="subpages" aria-label="Subpages">
@@ -143,7 +144,7 @@ export function TrashedPage({ page, workspace }: { page: Page; workspace: Worksp
           <ul className="plain">
             {children.map(c => (
               <li key={c.id}><PageLink className="subpage-row" href={pageHref(c)} title={displayPageTitle(c)}>
-                <PagesIcon /><span className={`subpage-title ${c.title ? '' : 'untitled'}`}>{displayPageTitle(c)}</span><ChevronRightIcon />
+                <PageKindIcon url={c.url} /><span className={`subpage-title ${c.title ? '' : 'untitled'}`}>{displayPageTitle(c)}</span><ChevronRightIcon />
               </PageLink></li>
             ))}
           </ul>
@@ -168,7 +169,7 @@ function ReadOnlyBody({ page, workspace }: { page: Page; workspace: Workspace })
     if (n.type === 'pageLink') {
       const target = workspace.pages.find(p => p.id === n.props?.pageId)
       return <div key={n.id}>{target
-        ? <PageLink className={`editor-page-card ${isTrashed(target) ? 'in-trash' : ''}`} href={pageHref(target)}><span className="editor-page-card-icon"><PagesIcon /></span><span className="editor-page-card-title">{displayPageTitle(target)}</span>{isTrashed(target) && <span className="in-trash-tag">In trash</span>}<ChevronRightIcon /></PageLink>
+        ? <PageLink className={`editor-page-card ${isTrashed(target) ? 'in-trash' : ''}`} href={pageHref(target)}><span className="editor-page-card-icon"><PageKindIcon url={target.url} /></span><span className="editor-page-card-title">{displayPageTitle(target)}</span>{isTrashed(target) && <span className="in-trash-tag">In trash</span>}<ChevronRightIcon /></PageLink>
         : <p className="ro-line quiet">Page not found</p>}{children}</div>
     }
     if (!inlineText(n.content) && !children) return null

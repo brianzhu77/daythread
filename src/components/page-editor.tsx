@@ -12,14 +12,16 @@ import { offset } from '@floating-ui/react'
 import '@blocknote/shadcn/style.css'
 import type { Page, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, type EditorNode } from '../domain/editor-document'
-import { applyCommand } from '../domain/workspace'
+import { applyCommand, pasteRecords } from '../domain/workspace'
+import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
+import { cardsPresent, urlLine, type UndoCard } from '../domain/link-paste'
 import { newOperationId, useWorkspace } from './use-day'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { CheckboxIcon, ChevronRightIcon, GripIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
+import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
-import { addDays, fromIso, todayIso } from './dates'
+import { addDays, fromIso, longLabel, todayIso } from './dates'
 import { tagDecorations } from './tag-decorations'
 import { registerEditorFlush } from './editor-flush'
 
@@ -33,8 +35,10 @@ const sourceChecklist = createReactBlockSpec({ type: 'sourceChecklist', propSche
 })()
 // pages-delta N-2 / Jazz f69dd341-era spec: a page card is one quiet row (icon, title, ›) that drags, deletes and
 // undoes as a single block. It only points at the page; removing it never removes the page.
-const pageLink = createReactBlockSpec({ type: 'pageLink', propSchema: { pageId: { default: '' } }, content: 'none' }, {
-  render: ({ block }) => <PageCard pageId={block.props.pageId} cardId={block.id} />,
+// A2: a link card also carries its URL and the kind of line it replaced, so a paste the server never confirmed can be
+// retried as that paste (never as an empty page), and Undo can put the same line back.
+const pageLink = createReactBlockSpec({ type: 'pageLink', propSchema: { pageId: { default: '' }, url: { default: '' }, line: { default: '' } }, content: 'none' }, {
+  render: ({ block }) => <PageCard pageId={block.props.pageId} cardId={block.id} url={block.props.url} line={block.props.line} />,
   toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Page</a></p>,
 })()
 const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink } })
@@ -77,26 +81,50 @@ function setPending(pageId: string, value: PendingPage | null) {
 function usePendingVersion() {
   return useSyncExternalStore(l => { pendingListeners.add(l); return () => pendingListeners.delete(l) }, () => pendingVersion, () => 0)
 }
-function PageCard({ pageId, cardId }: { pageId: string; cardId: string }) {
+function PageCard({ pageId, cardId, url = '', line = '' }: { pageId: string; cardId: string; url?: string; line?: string }) {
   const { workspace, run } = useWorkspace()
   const navigate = useNavigate()
   usePendingVersion()
   const target = workspace?.pages.find(p => p.id === pageId)
+  const link = target?.url || url
   // A saved card whose page never got created (e.g. the tab closed during a failed create) can still be retried:
-  // its parent is the page the card is saved on, and the id is the card's own.
+  // its parent is the page the card is saved on, and the id is the card's own. A link card retries its paste.
   const savedOn = target || pendingPages.has(pageId) ? undefined : workspace?.pages.find(p => p.sections.some(s => s.blocks.some(b => b.id === cardId)))
+  const retrySaved = (on: Page) => link
+    ? run({ type: 'paste-links', pageId: on.id, today: todayIso(), items: [{ url: link, pageId, cardBlockId: cardId, lineType: (['paragraph', 'bulletListItem', 'numberedListItem'].includes(line) ? line : 'paragraph') as 'paragraph' }] })
+    : run({ type: 'create-document', title: '', body: '', pageId, parentId: on.id })
   const pending: PendingPage | undefined = target ? undefined : pendingPages.get(pageId)
-    ?? (savedOn ? { state: 'failed', parentId: savedOn.id, retry: () => void run({ type: 'create-document', title: '', body: '', pageId, parentId: savedOn.id }) } : undefined)
+    ?? (savedOn ? { state: 'failed', parentId: savedOn.id, retry: () => void retrySaved(savedOn) } : undefined)
   // A4: a card to a trashed page stays in the text, muted with "In trash", and opens the trashed page (layout §2).
   const trashed = Boolean(target?.trashedAt)
-  return <button type="button" contentEditable={false} className={`editor-page-card ${trashed ? 'in-trash' : ''}`} disabled={pending?.state === 'creating'}
-    onClick={() => { if (pending) { if (pending.state === 'failed') pending.retry(); return } rememberCard(cardId); void navigate({ to: '/pages', search: { page: pageId } }) }}>
-    <span className="editor-page-card-icon"><PagesIcon /></span>
-    <span className={`editor-page-card-title ${target?.title ? '' : 'untitled'}`}>{target ? displayPageTitle(target) : pending ? 'Untitled' : 'Page not found'}</span>
-    {pending?.state === 'creating' ? <span className="editor-page-card-spinner" aria-label="Creating page" />
-      : pending?.state === 'failed' ? <span className="editor-page-card-failed">Not created · Retry</span>
-      : <>{trashed && <span className="in-trash-tag">In trash</span>}<ChevronRightIcon /></>}
-  </button>
+  // Jazz §2: the domain only once the title isn't the default one, compared at render time (no stored flag).
+  const domain = link && target && target.title !== defaultLinkTitle(link) ? hostLabel(link) : ''
+  const title = target ? displayPageTitle(target) : pending ? (link ? defaultLinkTitle(link) : 'Untitled') : 'Page not found'
+  return <span className={`editor-page-card-row ${link ? 'is-link' : ''}`} contentEditable={false}>
+    <button type="button" className={`editor-page-card ${trashed ? 'in-trash' : ''}`} disabled={pending?.state === 'creating'}
+      onClick={() => { if (pending) { if (pending.state === 'failed') pending.retry(); return } rememberCard(cardId); void navigate({ to: '/pages', search: { page: pageId } }) }}>
+      <span className="editor-page-card-icon">{link ? <GlobeIcon /> : <PagesIcon />}</span>
+      <span className={`editor-page-card-title ${target?.title || link ? '' : 'untitled'}`}>{title}</span>
+      {domain && <span className="editor-page-card-domain">{domain}</span>}
+      {pending?.state === 'creating' ? <span className="editor-page-card-spinner" aria-label="Creating page" />
+        : pending?.state === 'failed' ? <span className="editor-page-card-failed">Not created · Retry</span>
+        : <>{trashed && <span className="in-trash-tag">In trash</span>}{!link && <ChevronRightIcon />}</>}
+    </button>
+    {link && <a className="editor-page-card-open" href={link} target="_blank" rel="noreferrer" aria-label="Open website" title={link}><ExternalIcon /></a>}
+  </span>
+}
+/** The host without `www.`, for the card's quiet domain. */
+function hostLabel(url: string): string {
+  try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' }
+}
+/** A2 §3: the pasted text when it's only web links, one per line (blank lines allowed); otherwise null. */
+function pastedUrls(text: string): string[] | null {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  return lines.length && lines.length <= 50 && lines.every(isHttpUrl) ? lines : null
+}
+/** "Today", "Mon, Oct 19": the app's day format, for "Saved before · {day}". */
+function dayLabel(day: string): string {
+  return day === todayIso() ? 'Today' : longLabel(day)
 }
 
 // Inside a document only real dates earn a chip; "Unscheduled" is list-screen vocabulary and would be noise here.
@@ -157,6 +185,14 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         return true
       } catch { setStatus('Could not paste these blocks · clipboard kept'); return true }
     }
+    // A2 §3: only web links, one per line, onto an empty text, bullet or numbered line → a link page per URL. Checked
+    // before the HTML branch, since a link copied from a page carries text/html too.
+    const urls = pastedUrls(data.getData('text/plain'))
+    const at = editor.getTextCursorPosition().block
+    if (urls && editor.prosemirrorState.selection.empty && ['paragraph', 'bulletListItem', 'numberedListItem'].includes(at.type) && !inlineText(at.content).trim() && !at.children.length) {
+      void pasteLinkLines(at.id, at.type, urls)
+      return true
+    }
     const html = data.getData('text/html')
     const text = data.getData('text/markdown') || data.getData('text/plain')
     // Parse external checklists before the normal typed-[] conversion can create Tasks.
@@ -187,6 +223,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const historyGuardBypass = useRef(false)
   const [historyBusy, setHistoryBusy] = useState(false)
   const lastSent = useRef('')
+  const undoingPaste = useRef(false)
   const knownSemantic = useRef(new Set<string>())
   const expectedTaskVersions = useRef(new Map(workspace.tasks.map(t => [t.id, t.version])))
   const invalidHistoryTasks = useRef(new Set<string>())
@@ -282,7 +319,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const flushRef = useRef<() => Promise<void>>(async () => {})
   const pendingSave = useRef<{ fingerprint: string; operationId: string } | null>(null)
   const flush = useCallback(async () => {
-    if (!dirty.current || sending.current) return
+    // A2 §4: while a paste's Undo is out, nothing is sent; typing collects and goes once the reply is applied.
+    if (!dirty.current || sending.current || undoingPaste.current) return
     sending.current = true
     const document = JSON.stringify(editor.document)
     const deletions = [...semanticDeletes.current]
@@ -357,7 +395,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (!composing.current) timer.current = setTimeout(() => void flushRef.current(), 450)
   }), [editor])
   useEffect(() => {
-    if (historyPending.current) return
+    if (historyPending.current || undoingPaste.current) return
     const next = pageContentKey(page)
     if (next === base.current) return
     // Our own save echoes back with the same document and sections projected from it. Anything else (Put back,
@@ -429,6 +467,115 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (dirty.current) { setStatus('Page created · card not saved yet; it opens from the card once saved'); return }
     rememberCard(cardId)
     void navigate({ to: '/pages', search: { page: pageId, focus: 'title' } })
+  }
+  /**
+   * A2 §3: the cards go in at once (one editor step), each pointing at the page the browser already knows for that key
+   * or at a new id; then one paste-links for all of them, retried like `/page` (3 tries, then "Not created · Retry").
+   */
+  async function pasteLinkLines(blockId: string, lineType: string, urls: string[]) {
+    const operationId = newOperationId()
+    const preceding = nodes().slice(0, nodes().findIndex(n => n.id === blockId) + 1).reverse().find(n => n.type === 'heading')
+    const items = urls.map(url => {
+      const known = latestWorkspace.current.pages.find(p => p.url && urlKey(p.url) === urlKey(url))
+      return { url, pageId: known?.id ?? crypto.randomUUID(), cardBlockId: crypto.randomUUID(), lineType: lineType as 'paragraph' }
+    })
+    editor.transact(() => {
+      const cards = items.map(it => ({ id: it.cardBlockId, type: 'pageLink', props: { pageId: it.pageId, url: it.url, line: lineType } }))
+      const { insertedBlocks } = editor.replaceBlocks([blockId], cards as never)
+      const [next] = editor.insertBlocks([{ type: lineType } as never], insertedBlocks.at(-1)!, 'after')
+      editor.setTextCursorPosition(next!, 'start')
+    })
+    const action = { type: 'paste-links' as const, pageId: page.id, ...(preceding ? { sectionId: preceding.id } : {}), today: todayIso(), items }
+    const fresh = items.filter(it => !latestWorkspace.current.pages.some(p => p.id === it.pageId))
+    const retry = () => void confirmLinks(action, operationId, fresh.map(it => it.pageId))
+    for (const it of fresh) setPending(it.pageId, { state: 'creating', parentId: page.id, retry })
+    await confirmLinks(action, operationId, fresh.map(it => it.pageId))
+  }
+  async function confirmLinks(action: Extract<Parameters<typeof run>[0], { type: 'paste-links' }>, operationId: string, freshIds: string[]) {
+    const retry = () => void confirmLinks(action, operationId, freshIds)
+    for (const id of freshIds) setPending(id, { state: 'creating', parentId: page.id, retry })
+    let preview: Workspace | null = null
+    for (let attempt = 0; attempt < 3 && !preview; attempt++) {
+      if (!action.items.some(it => editor.getBlock(it.cardBlockId))) { freshIds.forEach(id => setPending(id, null)); return } // undone: abandon
+      const source = latestWorkspace.current
+      let candidate: Workspace
+      try { candidate = applyCommand(source, { operationId, expectedRevision: source.revision, action }).workspace }
+      catch (error) { setStatus(error instanceof Error ? error.message : 'Link not saved'); break }
+      if (await run(action, null, operationId)) preview = candidate
+    }
+    if (!preview) { for (const id of freshIds) setPending(id, { state: 'failed', parentId: page.id, retry }); setStatus('Page not created · card kept, tap it to retry'); return }
+    freshIds.forEach(id => setPending(id, null))
+    const records = pasteRecords(preview.pages.find(p => p.id === page.id)!, operationId)
+    // Another device made the page first: the card points at that one (not part of his history).
+    const moved = records.filter(r => { const b = editor.getBlock(r.cardBlockId); return b && (b.props as { pageId: string }).pageId !== r.pageId })
+    if (moved.length) editor.transact(tr => { for (const r of moved) editor.updateBlock(r.cardBlockId, { props: { pageId: r.pageId } } as never); tr.setMeta('addToHistory', false) })
+    showLinkNotice(preview, operationId, records)
+  }
+  /** Jazz §4: one notice for the paste, with Undo. Unlike edit notices, typing elsewhere doesn't retire it. */
+  const linkNotice = useRef<{ key: string; operationId: string; fingerprint: string } | null>(null)
+  function showLinkNotice(ws: Workspace, operationId: string, records: ReturnType<typeof pasteRecords>) {
+    const pages = new Set(records.map(r => r.pageId)), made = records.filter(r => r.outcome === 'made').length
+    const reused = records.filter(r => r.outcome === 'reused' && !records.some(o => o.outcome === 'made' && o.pageId === r.pageId))
+    const restored = records.filter(r => r.outcome === 'restored')
+    const firstMade = (pageId: string) => ws.pages.flatMap(p => Object.values(p.editorBlockMetadata ?? {})).map(b => b.linkPaste).filter(r => r?.outcome === 'made' && r.pageId === pageId).map(r => r!.on).sort()[0]
+    let text: string
+    if (pages.size === 1 && restored.length) {
+      const p = ws.pages.find(x => x.id === restored[0]!.pageId)!, before = restored[0]!.restored?.find(e => e.pageId === p.id)
+      const parent = before?.parentBefore && !p.parentId ? ws.pages.find(x => x.id === before.parentBefore) : undefined
+      text = parent ? `Restored to Pages · ${displayPageTitle(parent)} is in trash` : 'Restored from trash'
+    } else if (pages.size === 1 && !made) {
+      const on = firstMade(records[0]!.pageId)
+      text = on ? `Saved before · ${dayLabel(on)}` : 'Saved before'
+    } else if (!reused.length && !restored.length) text = made === 1 ? 'Made a page' : `Made ${made} pages`
+    else text = [made && `Made ${made} ${made === 1 ? 'page' : 'pages'}`, reused.length && `${reused.length} saved before`, restored.length && `${restored.length} restored from trash`].filter(Boolean).join(' · ')
+    if (linkNotice.current) toast.close(linkNotice.current.key)
+    const key = toast(text, {
+      timeout: 8000,
+      actionProps: { children: 'Undo', onPress: () => void undoLinkPaste(operationId) },
+      onClose: () => { if (linkNotice.current?.key === key) linkNotice.current = null },
+    })
+    linkNotice.current = { key, operationId, fingerprint: JSON.stringify(editor.document) }
+  }
+  /**
+   * A2 §4, the targeted merge (Ratchet df3285ef / 9c42d967, Lead): save what he typed, send Undo with autosave held,
+   * and on success apply the same `undoCards` change to the editor's current document, so typing during the request
+   * stays. The server's page must equal that change applied to the flushed document; otherwise nothing is merged and
+   * the normal refresh (or "Page changed elsewhere · draft kept") takes over.
+   */
+  async function undoLinkPaste(operationId: string) {
+    if (linkNotice.current?.operationId === operationId) { toast.close(linkNotice.current.key); linkNotice.current = null }
+    clearTimeout(timer.current)
+    for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
+    if (dirty.current) await flushRef.current()
+    for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
+    if (dirty.current || sending.current) { setStatus("Couldn't undo · card kept"); return }
+    const action = { type: 'undo-paste-links' as const, pageId: page.id, operationId, today: todayIso() }
+    const undoOperationId = newOperationId(), source = latestWorkspace.current
+    let preview: Workspace
+    try { preview = applyCommand(source, { operationId: undoOperationId, expectedRevision: source.revision, action }).workspace }
+    catch (error) { setStatus(error instanceof Error ? error.message : "Couldn't undo · card kept"); return }
+    const before = source.pages.find(p => p.id === page.id)!
+    const cards: UndoCard[] = pasteRecords(before, operationId).filter(r => !r.undone).map(r => ({ blockId: r.cardBlockId, pageId: r.pageId, url: r.url, lineType: r.lineType }))
+    const expected = preview.pages.find(p => p.id === page.id)!
+    undoingPaste.current = true
+    try {
+      const receipt = await run(action, r => (r.message === 'Paste undone' ? null : { text: r.message }), undoOperationId, { inlineRefusal: /Page changed · nothing was undone|Nothing to undo|Saved elsewhere/, onRefused: () => setStatus("Couldn't undo · card kept") })
+      if (!receipt) return
+      suppress.current = true
+      editor.transact(tr => {
+        for (const c of cardsPresent(nodes(), cards)) { const line = urlLine(c); editor.updateBlock(c.blockId, { type: line.type, props: {}, content: line.content } as never) }
+        tr.setMeta('addToHistory', false)
+      })
+      suppress.current = false
+      latestWorkspace.current = preview; latestPage.current = expected
+      base.current = pageContentKey(expected); lastSent.current = expected.editorJSON ?? ''
+      pendingSave.current = null
+      dirty.current = JSON.stringify(editor.document) !== expected.editorJSON
+      if (!dirty.current) { localStorage.removeItem(key); setStatus('Saved') }
+    } finally {
+      undoingPaste.current = false
+      if (dirty.current) { stash(); timer.current = setTimeout(() => void flushRef.current(), 0) }
+    }
   }
   async function performHistory(direction: 'undo' | 'redo') {
     if (historyPending.current) return
@@ -698,7 +845,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     onKeyDownCapture={e => {
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
       if (historyPending.current) { e.preventDefault(); e.stopPropagation(); return }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.nativeEvent.isComposing) { e.preventDefault(); e.stopPropagation(); void performHistory(e.shiftKey ? 'redo' : 'undo'); return }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.nativeEvent.isComposing) {
+        e.preventDefault(); e.stopPropagation()
+        // A2 §4: right after a paste (its notice still showing, nothing edited since), ⌘Z is the notice's Undo.
+        const last = linkNotice.current
+        if (!e.shiftKey && last && last.fingerprint === JSON.stringify(editor.document)) { void undoLinkPaste(last.operationId); return }
+        void performHistory(e.shiftKey ? 'redo' : 'undo'); return
+      }
       if (e.key === ' ' && !e.nativeEvent.isComposing && editor.getTextCursorPosition().block.type === 'task' && /^(?:#{1,3}|[-*>]|1\.|\[\])$/.test(editor.prosemirrorState.selection.$from.parent.textBetween(0, editor.prosemirrorState.selection.$from.parentOffset))) { e.preventDefault(); editor.insertInlineContent(' '); return }
 
       if (e.key === 'Enter' && !e.nativeEvent.isComposing && editor.getTextCursorPosition().block.type === 'task' && editor.prosemirrorState.selection.empty) {

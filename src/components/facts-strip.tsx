@@ -4,6 +4,9 @@ import { Disclosure, RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
 import { useWorkspace } from './use-day'
 import { displayTitle } from './day-page'
+import { useNavigate } from '@tanstack/react-router'
+import { linkPageOf } from '../domain/workspace'
+import { displayPageTitle } from './page-title'
 
 interface Props {
   view: DayView
@@ -141,6 +144,7 @@ function NotInNote({ tasks, date, today }: { tasks: Task[]; date: LocalDate; tod
 /** 0–2 items from today's draft (01 §6.6). Opens and dismissals are logged for the kill rule. */
 function RelatedLine({ view, workspace, date }: { view: DayView; workspace: Workspace; date: LocalDate }) {
   const { run } = useWorkspace()
+  const navigate = useNavigate()
     const items = (view.page?.draft?.materialIds ?? [])
     .map(id => workspace.materials.find(m => m.id === id))
     .filter(m => m !== undefined && m.resurface && !m.dismissedOn?.includes(date) && m.reviewState !== 'done' && m.reviewState !== 'task')
@@ -151,15 +155,20 @@ function RelatedLine({ view, workspace, date }: { view: DayView; workspace: Work
       <p className="fact-label">
         Related {view.page?.draft?.simulated && <span className="sim">Simulated</span>}
       </p>
-      {items.map(m => (
+      {items.map(m => {
+        // A2 §6: a saved link that is a link page shows the page's title, and Open opens the page.
+        const linkPage = linkPageOf(workspace, m!)
+        return (
         <div key={m!.id} className="fact-row">
           <span className="grow">
-            {displayTitle(m!.title, m!.url)} <span className="quiet">— might be useful</span>
+            {linkPage ? displayPageTitle(linkPage) : displayTitle(m!.title, m!.url)} <span className="quiet">— might be useful</span>
           </span>
           <span className="actions">
-            <a className="app-button secondary" href={m!.url} target="_blank" rel="noreferrer" onClick={() => void run({ type: 'open-material', materialId: m!.id, date }, null)}>
+            {linkPage
+              ? <a className="app-button secondary" href={`/pages?page=${encodeURIComponent(linkPage.id)}`} onClick={e => { e.preventDefault(); void run({ type: 'open-material', materialId: m!.id, date }, null); void navigate({ to: '/pages', search: { page: linkPage.id } }) }}>Open</a>
+              : <a className="app-button secondary" href={m!.url} target="_blank" rel="noreferrer" onClick={() => void run({ type: 'open-material', materialId: m!.id, date }, null)}>
               Open
-            </a>
+            </a>}
             <button type="button" className="ghost" onClick={() => run({ type: 'dismiss-material', materialId: m!.id, date }, { text: 'Won’t show this today' })}>
               Not useful
             </button>
@@ -182,7 +191,8 @@ function RelatedLine({ view, workspace, date }: { view: DayView; workspace: Work
             />
           </span>
         </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

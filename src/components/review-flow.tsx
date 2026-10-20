@@ -6,6 +6,10 @@ import { RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
 import { useDay, useWorkspace } from './use-day'
 import { displayTitle } from './day-page'
+import { useNavigate } from '@tanstack/react-router'
+import { linkPageOf } from '../domain/workspace'
+import { displayPageTitle } from './page-title'
+import { ExternalIcon } from './icons'
 
 type StepId = 'plan' | 'saved' | 'capture' | 'reflect' | 'tomorrow'
 
@@ -223,6 +227,8 @@ function PlanCard({ task, date, today, acted, onActed }: { task: Task; date: Loc
 /** Addendum G-2: three one-tap choices; Make it a task and Pick a date sit in ⋯ to fit one phone screen. */
 function SortCard({ material, workspace, date, today }: { material: Material; workspace: Workspace; date: LocalDate; today: LocalDate }) {
   const { run } = useWorkspace()
+  const navigate = useNavigate()
+  const linkPage = linkPageOf(workspace, material)
   const source = material.sources[0]
   const sourceDay = source ? workspace.pages.find(p => p.id === source.pageId)?.date : undefined
   const decide = (decision: 'watching' | 'lower' | 'done' | 'task', text: string, nextReviewOn?: LocalDate) =>
@@ -231,9 +237,15 @@ function SortCard({ material, workspace, date, today }: { material: Material; wo
   return (
     <div className="app-card sort-card">
       <p className="sort-title">
-        <a href={material.url} target="_blank" rel="noreferrer" onClick={() => void run({ type: 'open-material', materialId: material.id, date }, null)}>
+        {linkPage ? <>
+          {/* A2 §6: a link page's title, and tapping it opens the page; ↗ opens the site. */}
+          <a href={`/pages?page=${encodeURIComponent(linkPage.id)}`} onClick={e => { e.preventDefault(); void run({ type: 'open-material', materialId: material.id, date }, null); void navigate({ to: '/pages', search: { page: linkPage.id } }) }}>
+            {displayPageTitle(linkPage)}
+          </a>
+          <a className="sort-open-site" href={material.url} target="_blank" rel="noreferrer" aria-label="Open website" title={material.url}><ExternalIcon /></a>
+        </> : <a href={material.url} target="_blank" rel="noreferrer" onClick={() => void run({ type: 'open-material', materialId: material.id, date }, null)}>
           {displayTitle(material.title, material.url)}
-        </a>
+        </a>}
       </p>
       <p className="quiet">
         Saved {sourceDay ? weekday(sourceDay) : shortLabel(material.savedOn)} in Good Stuffs

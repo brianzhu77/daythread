@@ -658,6 +658,23 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-page-card-spinner { flex: none; width: 14px; height: 14px; border: 1.5px solid var(--ink-3); border-right-color: transparent; border-radius: 50%; animation: page-card-spin .8s linear infinite; }
 @keyframes page-card-spin { to { transform: rotate(360deg); } }
 .editor-page-card-failed { flex: none; font-size: 13px; color: var(--app-danger); }
+/* A2 link card (Jazz link-pages-states §2): one line at every width; the title is cut with …, the domain is dropped
+   first at 390, and ↗ (a 44px target) never moves. The row keeps the card's 32px line height. */
+.editor-page-card-row { display: flex; align-items: center; width: 100%; min-height: 32px; }
+.editor-page-card-row .editor-page-card { flex: 1; min-width: 0; }
+.editor-page-card-row.is-link .editor-page-card-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.editor-page-card-domain { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; color: var(--ink-3); }
+.editor-page-card-open { display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin: -6px -10px -6px 0; color: var(--ink-3); border-radius: 8px; }
+.editor-page-card-open:hover { color: var(--ink); }
+.editor-page-card-open svg { width: 18px; height: 18px; }
+@media (max-width: 480px) { .editor-page-card-domain { display: none; } }
+/* A2 link page: the URL exactly as pasted, one muted line under the title (Jazz §3). */
+.link-url-row { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; min-width: 0; font-size: 15px; color: var(--ink-2); }
+.link-url-row svg { flex: none; width: 16px; height: 16px; color: var(--ink-3); }
+.link-url-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.link-url-open { flex: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; color: var(--accent, var(--ink)); text-decoration: none; }
+.sort-open-site { display: inline-grid; place-items: center; width: 44px; height: 44px; margin: -12px 0; vertical-align: middle; color: var(--ink-3); }
+.sort-open-site svg { width: 18px; height: 18px; }
 .untitled { color: var(--ink-3); }
 .page-title-field { outline: none; cursor: text; }
 .page-title-field:empty::before { content: attr(data-placeholder); color: var(--ink-3); }

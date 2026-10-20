@@ -4,7 +4,7 @@ import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode 
 import { childPages, linkedFrom, moveTargets, pageAncestors, pagesInDays, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { longLabel, todayIso } from './dates'
-import { ChevronRightIcon, PagesIcon } from './icons'
+import { ChevronRightIcon, PageKindIcon, PagesIcon } from './icons'
 import { displayPageTitle } from './page-title'
 import { RowMenu } from './row-menu'
 import { useDeletePage } from './trash'
@@ -165,7 +165,7 @@ export function Subpages({ page, workspace }: { page: Page; workspace: Workspace
           return (
             <li key={c.id}>
               <PageLink className="subpage-row" href={pageHref(c)} title={pageLabel(c, today)}>
-                <PagesIcon />
+                <PageKindIcon url={c.url} />
                 <span className={`subpage-title ${c.title ? '' : 'untitled'}`}>{pageLabel(c, today)}</span>
                 {n > 0 && <span className="subpage-count">{n}</span>}
                 <ChevronRightIcon />
@@ -384,7 +384,7 @@ export function SidebarTree({ workspace, activeId, today, newPageRow }: { worksp
           {children.length > 0
             ? <button type="button" className="disclose" aria-expanded={isOpen} aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${pageLabel(p, today)}`} onClick={() => toggle(p.id)}><ChevronRightIcon /></button>
             : <span className="disclose none" aria-hidden="true" />}
-          <PageLink className="tree-title" href={pageHref(p)} title={pageLabel(p, today)}>{!day && <PagesIcon />}<span>{pageLabel(p, today)}</span></PageLink>
+          <PageLink className="tree-title" href={pageHref(p)} title={pageLabel(p, today)}>{!day && <PageKindIcon url={p.url} />}<span>{pageLabel(p, today)}</span></PageLink>
           <span className="tree-acts">
             <button type="button" aria-label={`New subpage in ${pageLabel(p, today)}`} onClick={() => void newSubpage(p)}>+</button>
             {!day && <RowMenu label={`Actions for ${pageLabel(p, today)}`} triggerClass="tree-more"

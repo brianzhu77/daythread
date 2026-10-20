@@ -4,7 +4,8 @@ import { displayPageTitle, PageTitleField } from './page-title'
 import { childPages, isTrashed, pagesInDays, parentOf } from '../domain/page-tree'
 import type { Page, Workspace } from '../domain/types'
 import { LinkedFrom, PageHeaderRow, pageLabel, Subpages, useToday } from './page-tree'
-import { ChevronRightIcon, PagesIcon, PlusIcon } from './icons'
+import { ChevronRightIcon, PageKindIcon, PlusIcon } from './icons'
+import { LinkUrlRow } from './link-url-row'
 import { PagesTrashRow, TrashedPage, TrashScreen } from './trash'
 import { useWorkspace } from './use-day'
 
@@ -33,6 +34,7 @@ export function PagesScreen() {
   if (p) return <div className="doc-screen"><PageHeaderRow page={p} workspace={workspace} />
     <div className="page-head">
       {p.type === 'document' ? <PageTitleField key={p.id} page={p} autoFocus={search.focus === 'title'} /> : <h1 className="large-title">{p.title}</h1>}
+      <LinkUrlRow page={p} />
       <LinkedFrom page={p} workspace={workspace} />
     </div>
     <ContinuousPage page={p} workspace={workspace} />
@@ -70,7 +72,7 @@ function PageRows({ pages, workspace, onOpen, detail }: { pages: Page[]; workspa
         return (
           <li key={p.id}>
             <button type="button" className="card-row" onClick={() => onOpen(p.id)}>
-              <span className="card-row-icon"><PagesIcon /></span>
+              <span className="card-row-icon"><PageKindIcon url={p.url} /></span>
               <span className="card-row-text">
                 <span className={`card-row-title ${p.title ? '' : 'untitled'}`}>{displayPageTitle(p)}</span>
                 {detail && <span className="card-row-detail">{detail(p)}</span>}
