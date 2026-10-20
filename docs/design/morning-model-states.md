@@ -64,8 +64,12 @@ working in every state. Never red.
   the app, date tag only when grounded in his text, dashed `+`. `+` creates a new task in {plan list section} with
   the full line; strip "Added to {Section} · Undo"; Undo deletes that task. ⋯ → Hide for today.
 - **The source changed after the run.** A proposal points at its source line by block id. When the card draws:
-  - line edited → show the line as it is now (still verbatim);
+  - line text edited → the row isn't shown. The model judged the old words ("call the dentist tomorrow" edited to
+    "called the dentist" must not become a task, and a changed date word must not keep the old date). No automatic
+    re-run (Ratchet `8ba9abb6`);
+  - only its section renamed → the row stays and the app-computed reason shows the new name;
   - line deleted, its page in trash (A4), or the line already became a task → the row isn't shown.
+  - `+` checks the same thing at tap time; if the line changed, the tap adds nothing and the row leaves.
 - **Never proposed:** page cards (§12.4), lines in trashed pages, lines already linked to a task, his own empty rows.
 
 ## 5. Checks (for Ratchet), on a copy of Brian's data at 390 and 1280
@@ -78,5 +82,6 @@ Use the fake model (`scripts/fake-openrouter.mjs`): `http401:`, `http500:`, `slo
 3. Each failure in §3 shows its line, Retry only where the table says, and tasks rows still work.
 4. With nothing to suggest, the card says so and offers no link. Reloading doesn't bring the link back.
 5. A proposal's `+` creates one task with his exact line; Undo removes it; the source line is unchanged.
-6. Editing a source line after the run updates the row; deleting it or trashing its page removes the row.
+6. Editing a source line's text after the run removes its row (no new model call); renaming its section only updates
+   the reason; deleting the line or trashing its page removes the row; `+` on a row whose line just changed adds nothing.
 7. With no open tasks and no lines, the card still offers Draft my day until today has a draft.
