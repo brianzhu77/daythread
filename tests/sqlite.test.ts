@@ -118,7 +118,8 @@ test('rollback script: a store with a subpage and its card goes back to layout 1
   ws=(await repo.execute({operationId:'card',expectedRevision:ws.revision,action:{type:'save-editor',pageId:p.id,expectedContent:pageContentKey(p),document:JSON.stringify(doc)}})).workspace
   const before=ws.pages.length
   const script=(name:string)=>new Promise<string>((ok,fail)=>{const c=spawn(process.execPath,[name,f.path]);let s='';c.stdout.on('data',d=>s+=d);c.stderr.on('data',d=>s+=d);c.on('exit',code=>code===0?ok(s):fail(new Error(s)))})
-  // Rollbacks run newest first: layout 5 → 4 (link pages), 4 → 3 (trash), 3 → 2 (model ledger), then 2 → 1 (parentId).
+  // Rollbacks run newest first: layout 6 → 5 (page links), 5 → 4 (link pages), 4 → 3 (trash), 3 → 2 (model ledger), then 2 → 1 (parentId).
+  await script('scripts/sqlite-rollback-page-links.ts')
   await script('scripts/sqlite-rollback-link-pages.ts')
   await script('scripts/sqlite-rollback-trash.ts')
   await script('scripts/sqlite-rollback-model.ts')

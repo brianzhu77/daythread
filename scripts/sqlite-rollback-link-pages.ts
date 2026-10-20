@@ -10,6 +10,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { existsSync } from 'node:fs'
 import { verifySqliteLayout } from '../src/server/sqlite-mapping.ts'
 import { holdLinksForLayout4 } from '../src/server/link-rollback.ts'
+import { heldCardTimesTable, heldPageLinksTable } from '../src/server/page-link-rollback.ts'
 
 const applicationId = 0x44544852
 const layout5Tables = ['captures', 'events', 'materials', 'meta', 'model_attempts', 'pages', 'placements', 'receipts', 'tasks']
@@ -22,9 +23,10 @@ function checkLayout5(db: DatabaseSync): void {
   if (Number(db.prepare('PRAGMA application_id').get()!.application_id) !== applicationId) throw new Error('Not a Daythread database; nothing changed')
   const version = Number(db.prepare('PRAGMA user_version').get()!.user_version)
   if (version !== 5) throw new Error(`Expected layout 5, found ${version}; nothing changed`)
-  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map(t => String(t.name))
+  // A later rollback's held tables (A9a layout 6) may be present; migration 6 consumes them on the way back up.
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map(t => String(t.name)).filter(t => t !== heldPageLinksTable && t !== heldCardTimesTable)
   if (JSON.stringify(tables) !== JSON.stringify(layout5Tables)) throw new Error(`Unexpected tables (${tables.join(', ')}); nothing changed`)
-  verifySqliteLayout(db)
+  verifySqliteLayout(db, 5)
 }
 const pageColumns = (db: DatabaseSync) => db.prepare('PRAGMA table_info(pages)').all().map(c => String(c.name))
 

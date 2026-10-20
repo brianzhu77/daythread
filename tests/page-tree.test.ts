@@ -143,7 +143,7 @@ test('N10: deleting the card leaves the child in the tree; the parent then leave
   assert.deepEqual(sources(ws, 'B'), [])
 })
 
-test('N-5: one entry per referencing page, day pages newest first, then document pages newest first', () => {
+test('N-5 + B15: one entry per referencing page, newest reference first, whatever kind of page it is', () => {
   let { ws, today } = tree()
   ws = ok(ws, { type: 'ensure-day', date: '2026-10-17' })
   ws = ok(ws, { type: 'ensure-day', date: '2026-10-18' })
@@ -152,7 +152,8 @@ test('N-5: one entry per referencing page, day pages newest first, then document
   ws = save(ws, d18, doc => [...doc, card('x2', 'C'), card('x3', 'C')])
   ws = save(ws, 'T', doc => [...doc, card('x4', 'C')])
   ws = save(ws, 'C', doc => [...doc, card('self', 'C')])
-  assert.deepEqual(sources(ws, 'C'), [[d18, false], [d17, false], ['T', false], ['B', true]])
+  // Cards were made in the order: B's (tree), Oct 17, Oct 18, T.
+  assert.deepEqual(sources(ws, 'C'), [['T', false], [d18, false], [d17, false], ['B', true]])
   assert.equal(linkedFrom(ws, today).length, 0)
   assert.deepEqual(linkedFrom(ws, 'missing'), [])
 })

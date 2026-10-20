@@ -47,7 +47,8 @@ test('delete: the page and its live subpages go to the trash as one batch and le
   assert.deepEqual(pagesInDays(ws), [])
   assert.equal(ids(moveTargets(ws, 'T')).some(id => ['A', 'B', 'C'].includes(id)), false)
   assert.equal(tagIndex(ws).some(t => t.key === 'recipe'), false)
-  assert.deepEqual(linkedFrom(ws, 'A').map(e => [e.page.id, e.removed]), [[day, false], ['T', false]])
+  // B15: T's card was made after the day's, so it comes first.
+  assert.deepEqual(linkedFrom(ws, 'A').map(e => [e.page.id, e.removed]), [['T', false], [day, false]])
   assert.deepEqual(linkedFrom(ws, 'B').map(e => [e.page.id, e.removed]), [['A', true]])
   // Nothing else changes: tasks, materials, other pages' cards.
   assert.deepEqual(ws.tasks, before.tasks)

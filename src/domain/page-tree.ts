@@ -103,21 +103,55 @@ export interface LinkedFromEntry {
   removed: boolean;
 }
 
+/** One reference to a page, wherever it lives: a card (block) or a `[[` link (block + refId). */
+export interface PageReference { sourceId: string; key: string; at: number | undefined }
 /**
- * N-5: pages with a real reference to this page (a page card, a `/page` subpage card), one entry per page, day pages
- * newest date first, then document pages newest first by workspace order. Being the parent adds nothing by itself,
- * so moving either page never changes this list. A page's references to itself are not listed.
+ * Every live reference to `pageId` from other pages: cards and `[[` links (A9a), on live and trashed pages. A link
+ * counts as soon as its page exists, pending or not (plan §4).
+ */
+export function referencesTo(ws: Workspace, pageId: string): PageReference[] {
+  if (!ws.pages.some((p) => p.id === pageId)) return []
+  return ws.pages.flatMap((p) => p.id === pageId ? [] : p.sections.flatMap((s) => s.blocks.flatMap((b): PageReference[] => [
+    ...(b.kind === "reference" && b.targetPageId === pageId ? [{ sourceId: p.id, key: `${p.id}/${b.id}`, at: b.at }] : []),
+    ...(b.refs ?? []).filter((r) => r.pageId === pageId).map((r) => ({ sourceId: p.id, key: `${p.id}/${b.id}/${r.refId}`, at: r.at })),
+  ])))
+}
+/**
+ * N-5 + B15: pages with a real reference to this page (a card or a `[[` link), one entry per page, newest first by
+ * that page's newest live reference here (plan a9-page-links §2). Being the parent adds nothing by itself, and a move
+ * never changes the order. References not stamped yet (only between an old-build save and the re-upgrade) come last,
+ * in the old order. A page's references to itself are not listed.
  */
 export function linkedFrom(ws: Workspace, pageId: string): LinkedFromEntry[] {
   const target = ws.pages.find((p) => p.id === pageId);
   if (!target) return [];
   const parentId = parentOf(ws, target)?.id;
-  const sources = ws.pages.filter(
-    (p) => p.id !== pageId && p.sections.some((s) => s.blocks.some((b) => b.kind === "reference" && b.targetPageId === pageId)),
-  );
-  const days = sources.filter((p) => p.type === "daily").sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
-  const documents = sources.filter((p) => p.type !== "daily").reverse();
-  return [...days, ...documents].map((page) => ({ page, isParent: page.id === parentId, removed: isTrashed(page) }));
+  const newest = new Map<string, number | undefined>();
+  for (const r of referencesTo(ws, pageId)) {
+    const had = newest.get(r.sourceId);
+    newest.set(r.sourceId, r.at === undefined ? had : had === undefined ? r.at : Math.max(had, r.at));
+  }
+  const sources = ws.pages.filter((p) => newest.has(p.id));
+  const untimed = sources.filter((p) => newest.get(p.id) === undefined);
+  const legacy = [...untimed.filter((p) => p.type === "daily").sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")), ...untimed.filter((p) => p.type !== "daily").reverse()];
+  const timed = sources.filter((p) => newest.get(p.id) !== undefined).sort((a, b) => newest.get(b.id)! - newest.get(a.id)!);
+  return [...timed, ...legacy].map((page) => ({ page, isParent: page.id === parentId, removed: isTrashed(page) }));
+}
+
+/**
+ * A9a §3: the empty `[[` list, the same on every device: pages by the newest time of any reference to them, then pages
+ * with none (days newest first, then the rest in stored order). Never the current page or a trashed one.
+ */
+export function recentPages(ws: Workspace, currentId: string | null): Page[] {
+  const newest = new Map<string, number>();
+  for (const p of ws.pages) for (const s of p.sections) for (const b of s.blocks) {
+    const hits: [string, number | undefined][] = [...(b.kind === "reference" && b.targetPageId ? [[b.targetPageId, b.at] as [string, number | undefined]] : []), ...(b.refs ?? []).map((r) => [r.pageId, r.at] as [string, number])];
+    for (const [id, at] of hits) if (at !== undefined) newest.set(id, Math.max(newest.get(id) ?? -Infinity, at));
+  }
+  const live = visiblePages(ws).filter((p) => p.id !== currentId);
+  const timed = live.filter((p) => newest.has(p.id)).sort((a, b) => newest.get(b.id)! - newest.get(a.id)!);
+  const rest = live.filter((p) => !newest.has(p.id));
+  return [...timed, ...rest.filter((p) => p.type === "daily").sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")), ...rest.filter((p) => p.type !== "daily")];
 }
 
 /** Something was written or tracked on the page; a page created by opening or browsing a day has neither. */

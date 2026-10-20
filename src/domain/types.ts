@@ -19,8 +19,22 @@ export interface NoteBlock {
   sourceBlockId?: string;
   /** A6b: the source line's fingerprint when a proposal was accepted (text, type and date basis at that time). */
   sourceFingerprint?: string;
+  /** B15: a card's time, the revision of the save that first held it (plan a9-page-links §2). Absent = not stamped yet. */
+  at?: number;
+  /** A9a: the `[[` links in this line, one per link, with the title they showed when the line was saved. */
+  refs?: PageRefEntry[];
   /** A2 plan §4: what one pasted card did, kept in `editorBlockMetadata["paste:" + cardBlockId]` so Undo can be checked. */
   linkPaste?: LinkPasteRecord;
+}
+/** A9a plan §1–§2: one inline `[[` link. `refId` is this link's identity; `at` the revision that first saw it. */
+export interface PageRefEntry {
+  refId: string;
+  pageId: string;
+  at: number;
+  /** The target's title when the line was last saved, so the line's stored text can be compared and read. */
+  title: string;
+  /** A link to a page still being created (plan §4); readers go by whether the page exists, not by this. */
+  pending?: boolean;
 }
 /** A2 plan §4: the outcome of one URL of a paste. Never pruned, so it outlives the card. */
 export interface LinkPasteRecord {

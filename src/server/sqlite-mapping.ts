@@ -1,6 +1,7 @@
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { restoreHeldTrash } from './trash-rollback.ts'
 import { restoreHeldLinks } from './link-rollback.ts'
+import { restoreHeldPageLinks, stampUntimedReferences } from './page-link-rollback.ts'
 import type { Capture, Event, Material, Page, Placement, Receipt, Task, Workspace } from '../domain/types.ts'
 
 type Kind = 'text' | 'number' | 'boolean' | 'json'
@@ -75,6 +76,13 @@ export const sqliteMigrations: readonly ((db: DatabaseSync) => void)[] = [db => 
   db.exec(`ALTER TABLE ${table} ADD COLUMN ${quote(column)} ${columnType(kind)}`)
   const log = restoreHeldLinks(db)
   if (log) console.info(JSON.stringify({ level: 'info', event: 'storage.links-reupgrade', ...log }))
+}, db => {
+  // A9a layout 6 (docs/plan/a9-page-links.md §5): no table changes; inline `[[` links are a format the layout-5 build
+  // can't open. After a rollback to 5 the held links come back by their marker, then every reference without a time
+  // is stamped once, in the order Linked from shows now (B15).
+  const restored = restoreHeldPageLinks(db)
+  const stamped = stampUntimedReferences(db)
+  if (restored || stamped) console.info(JSON.stringify({ level: 'info', event: 'storage.page-links-upgrade', ...(restored ?? {}), stamped }))
 }]
 
 const workspaceFields = {schemaVersion:true,revision:true,timezone:true,pages:true,tasks:true,placements:true,events:true,materials:true,captures:true,receipts:true,undo:true} satisfies Record<keyof Workspace,boolean>

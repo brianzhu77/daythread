@@ -1,5 +1,5 @@
 import { dayTemplate, editorSeed, needsTemplateRows, pageContentKey, projectDocument, inlineText, sectionRange, type EditorNode } from "./editor-document.ts";
-import { isTrashed, moveRefusal, subtreeIds } from "./page-tree.ts";
+import { isTrashed, moveRefusal, referencesTo as pageReferences, subtreeIds } from "./page-tree.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import { cardsPresent, undoCards, type UndoCard } from "./link-paste.ts";
 import { draftLines, fingerprintOf, isLineLinked, liveProposal, previousDayPage } from "./draft.ts";
@@ -445,11 +445,9 @@ export function linkPageOf(state: Workspace, m: Material): Page | undefined {
   const key = urlKey(m.url);
   return key === null ? undefined : state.pages.find((p) => typeof p.url === "string" && urlKey(p.url) === key);
 }
-/** Every card or `[[` reference to `pageId`, as `pageId/blockId`, on live and trashed pages. */
+/** Every card or `[[` link to `pageId` (A9a), keyed `pageId/blockId` (card) or `pageId/blockId/refId` (link). */
 function referencesTo(state: Workspace, pageId: string): string[] {
-  return state.pages.flatMap((p) =>
-    p.id === pageId ? [] : p.sections.flatMap((s) => s.blocks.filter((b) => b.kind === "reference" && b.targetPageId === pageId).map((b) => `${p.id}/${b.id}`)),
-  );
+  return pageReferences(state, pageId).map((r) => r.key);
 }
 /** A4: what Restore on this page's own banner brings back: the page plus its descendants trashed in the same delete. */
 function restoreSetOf(state: Workspace, p: Page): Set<string> {
@@ -1027,7 +1025,9 @@ function execute(
       const sourceNode = flatNodes(JSON.parse(source.editorJSON ?? "[]")).find((n) => n.id === block.id);
       const copyId = newId();
       // The line's own inline content (links, marks) when the editor saved it; otherwise its text.
-      const copy: EditorNode = { id: copyId, type: sourceNode && ["paragraph", "bulletListItem", "numberedListItem"].includes(sourceNode.type) ? sourceNode.type : "paragraph", content: sourceNode?.content ?? block.text };
+      // A brought line's `[[` links are new references, made now (A9a §1), so each gets its own refId.
+      const freshRefs = (content: unknown): unknown => Array.isArray(content) ? content.map((c) => c?.type === "pageRef" ? { ...c, props: { ...c.props, refId: newId() } } : c) : content;
+      const copy: EditorNode = { id: copyId, type: sourceNode && ["paragraph", "bulletListItem", "numberedListItem"].includes(sourceNode.type) ? sourceNode.type : "paragraph", content: freshRefs(sourceNode?.content ?? block.text) };
       const sameName = (t: string) => t.trim().toLowerCase() === from.title.trim().toLowerCase();
       const heading = doc.find((n) => n.type === "heading" && from.title.trim() && sameName(inlineText(n.content)))
         ?? doc.find((n) => n.type === "heading" && p.sections.find((s) => s.id === n.id)?.kind === "notes")

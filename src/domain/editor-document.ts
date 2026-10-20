@@ -1,4 +1,5 @@
-import type { Page, Section, SectionKind, Workspace } from './types.ts'
+import type { NoteBlock, Page, PageRefEntry, Section, SectionKind, Workspace } from './types.ts'
+import { inlineRefs, lineText, referenceIndex, savedTitle } from './page-refs.ts'
 
 /** The default content of a new day page, like a Notion template: each heading and the empty rows under it. */
 export const dayTemplate: readonly { kind: SectionKind; title: string; rows: readonly ('task' | 'bullet')[] }[] = [
@@ -61,7 +62,8 @@ export function editorSeed(page: Page, workspace: Workspace, options: { template
       const prior = byId.get(b.id)
       // A page card has no inline content; its title is read live from the page it points at.
       const node: EditorNode = prior?.type === 'pageLink' ? prior
-        : prior ? { ...prior, content: inlineText(prior.content) === b.text ? prior.content : b.text }
+        // A line with `[[` links is compared with the titles it was saved with, so a rename never turns it into text.
+        : prior ? { ...prior, content: lineText(prior.content, savedTitle(b)) === b.text ? prior.content : b.text }
         : b.taskId ? { id: b.id, type: 'task', props: { taskId: b.taskId, role: b.planRole ?? (s.kind === 'top3' || s.kind === 'other' ? 'plan' : 'reference'), planDate: page.date ?? '' }, content: workspace.tasks.find(t => t.id === b.taskId)?.title ?? b.text }
         : b.eventId ? { id: b.id, type: 'paragraph', content: workspace.events.find(e => e.id === b.eventId)?.title ?? b.text }
         : b.targetPageId ? { id: b.id, type: 'pageLink', props: { pageId: b.targetPageId } }
@@ -89,6 +91,23 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
   const ids = new Set<string>()
   const sections: Section[] = []
   const old = new Map([...Object.values(page.editorBlockMetadata ?? {}), ...page.sections.flatMap(s => s.blocks)].map(b => [b.id, b]))
+  // A9a §2: a reference keeps the time of the save that first held it; a new one gets this save's revision.
+  const index = referenceIndex(workspace), revision = workspace.revision + 1
+  const refIds = new Set<string>()
+  const pageOf = (id: string) => workspace.pages.find(p => p.id === id)
+  /** §4: the `[[` links of one line, checked and timed. */
+  const refsOf = (node: EditorNode): PageRefEntry[] => inlineRefs(node.content).map(ref => {
+    if (!ref.refId || !ref.pageId) throw new Error('Invalid page link')
+    if (refIds.has(ref.refId)) throw new Error('A page link appears twice on this page')
+    refIds.add(ref.refId)
+    const known = index.links.get(`${ref.refId}|${ref.pageId}`), target = pageOf(ref.pageId)
+    if (!known) {
+      if (!target && !(ref.newTitle && !workspace.pages.some(p => p.id === ref.pageId))) throw new Error('Page not found')
+      if (target?.trashedAt) throw new Error('Page is in trash; restore it first')
+    }
+    const title = target?.title ?? ref.newTitle ?? known?.title ?? ''
+    return { refId: ref.refId, pageId: ref.pageId, at: known?.at ?? revision, title, ...(!target && (ref.newTitle || known?.pending) ? { pending: true } : {}) }
+  })
   let current: Section | undefined
   function visit(node: EditorNode) {
     if (!node.id || ids.has(node.id)) throw new Error('Duplicate editor block identity')
@@ -101,8 +120,12 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
       if (node.type === 'pageLink') {
         // pages-delta N-2: a page card is a reference. Removing it never touches the page it points at.
         const targetPageId = String(node.props?.pageId ?? '')
-        current.blocks.push({ id: node.id, kind: 'reference', targetPageId, text: workspace.pages.find(p => p.id === targetPageId)?.title ?? '' })
+        // B15: a card keeps its time while it points at the same page; a card that points elsewhere now is a new reference.
+        const before = old.get(node.id)
+        const at = before?.targetPageId === targetPageId && before.at !== undefined ? before.at : index.cards.get(`${node.id}|${targetPageId}`) ?? revision
+        current.blocks.push({ id: node.id, kind: 'reference', targetPageId, text: workspace.pages.find(p => p.id === targetPageId)?.title ?? '', at })
       } else if (node.type === 'task') {
+        if (inlineRefs(node.content).length) throw new Error('A task row cannot hold a page link')
         const target = workspace.tasks.find(t => t.id === node.props?.taskId)
         if (!target && node.props?.taskId === `editor-task:${node.id}` && !inlineText(node.content)) { current.blocks.push({ id: node.id, kind: 'paragraph', text: '' }); return }
         if (!target) throw new Error('Task reference not found')
@@ -117,7 +140,8 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
         // A card turned back into its URL line (A2 Undo) is a plain line now, not a reference to the page.
         const previous = old.get(node.id)
         const prior = previous?.kind === 'reference' ? undefined : previous
-        const value = inlineText(node.content)
+        const refs = refsOf(node)
+        const value = refs.length ? lineText(node.content, ref => refs.find(r => r.refId === ref.refId)?.title ?? '') : inlineText(node.content)
         if (prior?.eventId && prior.text !== value) {
           const event = workspace.events.find(e => e.id === prior.eventId)
           if (event) {
@@ -125,7 +149,8 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
             event.title = value
           }
         }
-        current.blocks.push({ ...prior, id: node.id, kind: prior?.kind ?? 'paragraph', text: value })
+        const { refs: _oldRefs, ...rest } = (prior ?? {}) as Partial<NoteBlock>
+        current.blocks.push({ ...rest, id: node.id, kind: prior?.kind ?? 'paragraph', text: value, ...(refs.length ? { refs } : {}) })
       }
     }
     node.children?.forEach(visit)
