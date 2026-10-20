@@ -1,6 +1,7 @@
 # A2 · paste a URL → a page — plan for review
 
 - Author: Roadbuster · 2026-10-20 · status: **plan, not built**. No code until Ratchet's pre-review (task #81).
+- Revised after Ratchet `c2cc3896` (rollback identity, Undo as one server command), Bumblebee `56de3d1e`, Jazz a167c39.
 - Inputs:
   - Brian `3596b765` (an empty page with the link as a property, linked back to today), `e83b0640` (O1 = B: no fetch);
   - pages-delta v0.4 N-3, N-4, N-5;
@@ -116,47 +117,68 @@ linkPaste: {
 }
 ```
 
-**`undo-paste-links { pageId: parent, operationId }`** is one command with no snapshot restore. Generic Undo can't be used, because `save-editor` runs right after the paste. For each card of that operation:
+**`undo-paste-links { pageId: parent, operationId, expectedContent }`** is **one server command that commits everything at once** (Ratchet `c2cc3896` 2). It does no snapshot restore: generic Undo can't be used, because `save-editor` runs right after the paste.
 
-| Outcome | Undo does | Unless (then the page stays, "Kept {title} · linked from {page}") |
+**What it does, in one transaction**, for each card of that operation still on the parent page:
+
+1. **It rewrites the parent page's document on the server.** The card block becomes a paragraph with the **same block id**, holding the raw URL as a plain link, in the same place and at the same nesting level. Both `editorJSON` and `sections` are rewritten, the way `bring-line` and `add-proposal` already edit a page's document on the server.
+2. **It applies the outcome's rule below.**
+3. **It removes the card's Good Stuffs save** from `sources`. If this paste made the Material (`materialCreated`) and it has no decision, it removes the Material instead.
+
+| Outcome | Undo does | Unless: the card still turns back into the URL text, and the page stays |
 | --- | --- | --- |
-| made | **deletes** the page record (not trash; it never existed for him), and its Material if this paste made it | the page has a title or body edit, a child, a Material decision, or **any reference other than this card**, from a live or trashed page, a card or `[[` |
-| restored | puts the `restored` set back in the trash **with its original `trashId`/`trashedAt`**, so it's the same Trash row; edits made meanwhile are kept (nothing in the trash is lost) | a new reference to any page of the set, added since the paste |
+| made | **deletes** the page record (not trash; Bumblebee `56de3d1e`, Jazz a167c39: the paste didn't happen, and a Trash row would turn a later paste into "Restored") | it has a title or body edit or a child → "Kept {title} · it has your edits"; any reference other than this card, from a live or trashed page, a card or `[[` → "Kept {title} · linked from {page}" |
+| restored | puts the `restored` set back in the trash **with its original `trashId`/`trashedAt`**, so it's the same Trash row. Edits made in between are kept | a new reference to any page of the set, added since the paste → "Kept {title} · linked from {page}" |
 | reused | nothing on the page | — |
 
-In every row:
-- the card's Good Stuffs save is removed from `sources` (or the Material, if `materialCreated` and it has no decision);
-- **the browser turns the card back into the URL text** as a plain link on the same line, after the command succeeds;
-- a card he already deleted himself is skipped.
+**Edge cases:**
+- **A card he already deleted** is skipped, and its page rule still applies. The command reports "nothing to undo" only if no card and no page changed.
+- **Replay:** the same operation id returns the first receipt.
+- **Lost response or closed browser:** a lost response leaves the state either fully applied or untouched. There's no window where a card points at a deleted page.
+- **The browser only applies the result:**
+  - It flushes any pending editor save first, then sends `expectedContent` = that page's content key.
+  - The server's new document reaches the editor through the existing **external refresh** (`page-editor.tsx:361`).
+  - If he typed in between and the key no longer matches, the command is refused with "Page changed · nothing was undone", and nothing changes.
 
 **⌘Z:**
-- **While the paste's notice is showing,** and the editor's last history step is that paste, ⌘Z runs the same Undo. It's a keydown handler in front of BlockNote's.
+- **While the paste's notice is showing,** and the editor's last history step is that paste, ⌘Z sends this same command. It's a keydown handler in front of BlockNote's.
 - **After that, ⌘Z is ordinary editor undo:** it removes the card only, and the page stays (Jazz's fallback, and the same as deleting any card later).
-- It's cheap to build, so it's not a fallback-only design.
 
 ## 5. Storage, rollback, old build
 
 - **Migration 5:** `pages.url TEXT`, `materials.pageId TEXT`, both null by default. `verifySqliteLayout` gets layout 5, and `sqlite-mapping` gets the fields.
-- **`scripts/sqlite-rollback-link-pages.ts`** (A4 pattern: it refuses without a fresh backup, then works in one transaction):
-  - **before dropping the columns, it inserts the URL as the first line of each link page's body**, so a rollback loses no URL;
-  - it drops `materials.pageId`; Good Stuffs Materials keep `url`, so their Open still works.
+- **`scripts/sqlite-rollback-link-pages.ts`, layout 5 → 4,** following A4's `held_trash_l4` pattern (Ratchet `c2cc3896` 1). It refuses without a fresh backup, and it works in one transaction:
+  1. It records identity in **`held_links_l5(pageId, url, materialId, lineBlockId, lineText)`**, one row per link page, before anything is dropped. The table sits outside the entity tables, and the old build ignores extra tables, as it did A4's.
+  2. **For the old build to see the URL,** it inserts the URL as the first line of each link page's body, and stores that line's block id and text in the row. That line is only visible content; it never carries identity.
+  3. It drops the two columns and clears the undo snapshot (as A4's `clearUndo`).
+- **Re-upgrade (migration 5 finding `held_links_l5`)**, row by row, inside the migration's transaction:
+  - **`Page.url`:**
+    - restored if the page still exists, live or trashed;
+    - **if another page already owns the key, it's left unset and listed in the migration's report.** That can't come from the old build, which can't make link pages, but it's checked.
+    - A page deleted for good by then has nothing to restore.
+  - **`Material.pageId`:** restored if the Material exists and its key equals the page's.
+  - **Then one linking pass:** any Material without `pageId` whose key equals a link page's gets it. That covers a URL typed into Good Stuffs on the old build.
+  - **The inserted URL line:** removed only if a block with `lineBlockId` still holds exactly `lineText`. If he edited or moved its text, it stays.
+  - The held table is then dropped. **After this, a repeat paste of the same URL finds the same page.**
 - **Round trip** against the live build 21eb45b (layout 4), on a copy of his DB with:
   - a page made in Notes;
   - one made in Good Stuffs with a decision;
   - a repeat paste;
-  - a trashed one, then restored by a paste;
+  - a trashed one restored by a paste;
   - an undone paste.
-  The steps: rollback → 21eb45b opens it, edits and Undoes → migrate → the new build reads it. The URL lines on the pages are expected (stated), and nothing else differs.
+  Then:
+  1. rollback → 21eb45b opens it, edits the URL line on one page, trashes another link page, types a Good Stuffs URL equal to a link page's, and Undoes;
+  2. migrate → the new build reads everything back with the same identities. **Pasting each URL again → "Saved before" on the same page, no second page.** The edited URL line stays, and the untouched ones are gone.
 
 ## 6. Surfaces
 
 | Surface | Change |
 | --- | --- |
-| Page card | A globe icon for link pages, ↗ opens the URL, and the domain is shown once the title isn't the default (Jazz §2). The states are reused. |
+| Page card | A globe icon for link pages, ↗ opens the URL, and the domain is shown when `title !== defaultLinkTitle(page.url)` at render time, with no stored flag (Jazz §2 @ a167c39). The states are reused. |
 | Link page | The URL row under the title (raw, one line, Open ↗), then "Linked from". Read-only in A2. |
 | Sidebar / Pages / Subpages / Trash | Globe icon for link pages. They sit under their parent ("In your days"). |
 | Evening review Good Stuffs / Related | Same selection. The title comes from the page, and tapping it opens the page. |
-| Morning "Bring to today" | **A pasted link is a card, so it's no longer offered** (cards aren't bringable). A typed Good Stuffs line still is. Jazz, please confirm. |
+| Morning "Bring to today" | A pasted link is a card, so it's no longer offered (cards aren't bringable). A typed Good Stuffs line still is. Agreed: Bumblebee `56de3d1e`, Jazz. |
 | A6b draft | Material candidates as before. Cards aren't proposal lines. |
 
 ## 7. Checks before the candidate
@@ -165,7 +187,7 @@ In every row:
   - `urlKey` (§2 list);
   - `defaultLinkTitle` (Chinese path, query, `www.`, a bad escape);
   - `paste-links`: made, reused (another day, same paste twice, different host case), restored (same-delete subtree only, an older separate delete stays, parent in trash → top level), Good Stuffs Material created/reused, Done → To sort, a typed Material linked, replay, a retry with a new op id, a stale revision then retry, a refused non-http URL;
-  - `undo-paste-links`: each row of §4 plus each "unless" as its own case, restored-then-edited-then-Undo (edits kept, same `trashId`), a card deleted before Undo;
+  - `undo-paste-links`: each row of §4 plus each "unless" as its own case (and both "Kept" wordings), restored-then-edited-then-Undo (edits kept, same `trashId`), a card deleted before Undo, a card nested in a bullet comes back as a link at the same level, a stale `expectedContent` refused with nothing changed, a replay;
   - the invariant check over a random sequence of paste, undo, trash, restore and typed lines.
 - **Browser, on a copy of his DB, 1280 and 390:**
   - Jazz §6 checks 1–8, using **his real Notes bullet structure** (Lead 2);
@@ -176,9 +198,11 @@ In every row:
 
 ## 8. For review
 
-- **Ratchet:**
-  1. the dedup function and `urlKey`'s exact rules;
-  2. the stored outcome record and the Undo checks (§4);
-  3. the rollback writing URLs into the body;
-  4. whether "made" Undo should delete the record (as Jazz's "gone from Pages and Trash") or trash it.
-- **Jazz:** "Bring to today" no longer offering pasted links (§6).
+- **Settled since aaf1862:**
+  - Undo of a page the paste made deletes it (Bumblebee, Jazz);
+  - "Bring to today" no longer offers pasted links (Bumblebee, Jazz);
+  - the two "Kept" wordings and the render-time domain rule (Jazz a167c39).
+- **Ratchet (task #81):**
+  1. the rollback's held table and the re-upgrade rules (§5);
+  2. Undo as one server command (§4);
+  3. still open from your first read: the restore set and Good Stuffs Undo under concurrency.
