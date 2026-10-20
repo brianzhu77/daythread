@@ -114,7 +114,9 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
         }
         current.blocks.push({ id: node.id, kind: 'task', taskId: target.id, text: nextTitle, planRole: node.props?.role === 'plan' ? 'plan' : 'reference' })
       } else {
-        const prior = old.get(node.id)
+        // A card turned back into its URL line (A2 Undo) is a plain line now, not a reference to the page.
+        const previous = old.get(node.id)
+        const prior = previous?.kind === 'reference' ? undefined : previous
         const value = inlineText(node.content)
         if (prior?.eventId && prior.text !== value) {
           const event = workspace.events.find(e => e.id === prior.eventId)

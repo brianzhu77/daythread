@@ -1,11 +1,12 @@
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { restoreHeldTrash } from './trash-rollback.ts'
+import { restoreHeldLinks } from './link-rollback.ts'
 import type { Capture, Event, Material, Page, Placement, Receipt, Task, Workspace } from '../domain/types.ts'
 
 type Kind = 'text' | 'number' | 'boolean' | 'json'
 type Fields<T> = Record<keyof T, Kind>
 // Exhaustive maps intentionally fail typecheck whenever a domain field is added without a storage mapping.
-const pages = { id:'text',type:'text',date:'text',title:'text',sections:'json',editorJSON:'text',templateApplied:'boolean',editorSections:'text',editorBlockMetadata:'json',editorCreations:'json',editorDeletions:'json',reviewText:'text',reviewSaved:'boolean',handoffDone:'boolean',reviewStep:'number',reviewSource:'text',reviewSkipped:'boolean',draftError:'text',draft:'json',parentId:'text',trashedAt:'text',trashId:'text' } satisfies Fields<Page>
+const pages = { id:'text',type:'text',url:'text',date:'text',title:'text',sections:'json',editorJSON:'text',templateApplied:'boolean',editorSections:'text',editorBlockMetadata:'json',editorCreations:'json',editorDeletions:'json',reviewText:'text',reviewSaved:'boolean',handoffDone:'boolean',reviewStep:'number',reviewSource:'text',reviewSkipped:'boolean',draftError:'text',draft:'json',parentId:'text',trashedAt:'text',trashId:'text' } satisfies Fields<Page>
 const tasks = { id:'text',title:'text',status:'text',version:'number',plannedOn:'text',attentionOn:'text',deadlineOn:'text',paused:'boolean',createdOn:'text',lastPlannedOn:'text',sourcePageId:'text' } satisfies Fields<Task>
 const placements = { taskId:'text',date:'text',state:'text',order:'number',section:'text' } satisfies Fields<Placement>
 const events = { id:'text',title:'text',date:'text',time:'text',cancelled:'boolean' } satisfies Fields<Event>
@@ -25,13 +26,15 @@ type Entity = Record<string, unknown>
 const columnType = (kind: Kind) => kind === 'number' || kind === 'boolean' ? 'INTEGER' : 'TEXT'
 // Columns added after the first layout. Migration 0 must keep creating exactly the original tables, so that a
 // fresh database and an upgraded one end up identical after the later migrations run.
-const addedColumns: readonly { table: typeof specs[number]['name']; column: string; kind: Kind }[] = [
-  { table: 'pages', column: 'parentId', kind: 'text' },
-  { table: 'captures', column: 'model', kind: 'text' },
-  { table: 'captures', column: 'mode', kind: 'text' },
-  { table: 'captures', column: 'capturedAt', kind: 'text' },
-  { table: 'pages', column: 'trashedAt', kind: 'text' },
-  { table: 'pages', column: 'trashId', kind: 'text' },
+// `layout`: the layout (user_version) that first has the column.
+const addedColumns: readonly { table: typeof specs[number]['name']; column: string; kind: Kind; layout: number }[] = [
+  { table: 'pages', column: 'parentId', kind: 'text', layout: 2 },
+  { table: 'captures', column: 'model', kind: 'text', layout: 3 },
+  { table: 'captures', column: 'mode', kind: 'text', layout: 3 },
+  { table: 'captures', column: 'capturedAt', kind: 'text', layout: 3 },
+  { table: 'pages', column: 'trashedAt', kind: 'text', layout: 4 },
+  { table: 'pages', column: 'trashId', kind: 'text', layout: 4 },
+  { table: 'pages', column: 'url', kind: 'text', layout: 5 },
 ]
 /**
  * The model budget ledger (03 E3). Deliberately outside the current/undo snapshot scheme: Undo restores a whole
@@ -65,6 +68,13 @@ export const sqliteMigrations: readonly ((db: DatabaseSync) => void)[] = [db => 
   for (const { table, column, kind } of addedColumns.slice(4, 6)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${quote(column)} ${columnType(kind)}`)
   const log = restoreHeldTrash(db)
   if (log) console.info(JSON.stringify({ level: 'info', event: 'storage.trash-reupgrade', ...log }))
+}, db => {
+  // A2 link pages (docs/plan/a2-url-page.md §5): a page's URL. After a rollback to layout 4, the identities the script
+  // held come back.
+  const { table, column, kind } = addedColumns[6]!
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${quote(column)} ${columnType(kind)}`)
+  const log = restoreHeldLinks(db)
+  if (log) console.info(JSON.stringify({ level: 'info', event: 'storage.links-reupgrade', ...log }))
 }]
 
 const workspaceFields = {schemaVersion:true,revision:true,timezone:true,pages:true,tasks:true,placements:true,events:true,materials:true,captures:true,receipts:true,undo:true} satisfies Record<keyof Workspace,boolean>
@@ -158,10 +168,12 @@ export function writeWorkspace(db: DatabaseSync,before: Workspace | undefined,af
   db.prepare("UPDATE meta SET undoOperationId=?,undoRevision=? WHERE snapshot='current'").run(after.undo?.operationId ?? null,after.undo?.revision ?? null)
 }
 
-export function verifySqliteLayout(db: DatabaseSync): void {
+/** The tables match `layout` exactly (default: the current one). A rollback script checks the layout it starts from. */
+export function verifySqliteLayout(db: DatabaseSync, layout: number = sqliteMigrations.length): void {
   for (const spec of specs) {
     const actual=db.prepare(`PRAGMA table_info(${spec.name})`).all()
-    const names=['snapshot','position','present',...Object.keys(spec.fields)]
+    const later=new Set(addedColumns.filter(a=>a.table===spec.name&&a.layout>layout).map(a=>a.column))
+    const names=['snapshot','position','present',...Object.keys(spec.fields).filter(n=>!later.has(n))]
     if (actual.length!==names.length || names.some(n=>!actual.some(c=>c.name===n))) throw new Error('Incompatible entity table layout')
     const primary=actual.filter(c=>Number(c.pk)>0).sort((a,b)=>Number(a.pk)-Number(b.pk)).map(c=>c.name)
     if (JSON.stringify(primary)!==JSON.stringify(['snapshot',...spec.keys])) throw new Error('Incompatible entity primary key')

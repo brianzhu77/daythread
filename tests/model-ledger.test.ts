@@ -189,7 +189,8 @@ test('rollback 3 → 2 keeps the ledger (and a JSON copy); rolling forward again
     assert.deepEqual(before.map(a => a.state), ['settled', 'estimated', 'unknown'])
     // Step (b) creates "organizing" captures; here one is set directly to stand for a call cut off by the rollback.
     const setup = new DatabaseSync(s.path); setup.prepare("UPDATE captures SET status='organizing'").run(); setup.close()
-    await run(s.path, 'scripts/sqlite-rollback-trash.ts') // newest first: layout 4 → 3
+    await run(s.path, 'scripts/sqlite-rollback-link-pages.ts') // newest first: layout 5 → 4
+    await run(s.path, 'scripts/sqlite-rollback-trash.ts') // then 4 → 3
     const out = await run(s.path, 'scripts/sqlite-rollback-model.ts')
     assert.match(out, /Layout 3 → 2\. 1 capture marked failed \(text kept\); ledger kept \(3 attempts\)/)
     const db = new DatabaseSync(s.path)

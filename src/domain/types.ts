@@ -19,6 +19,30 @@ export interface NoteBlock {
   sourceBlockId?: string;
   /** A6b: the source line's fingerprint when a proposal was accepted (text, type and date basis at that time). */
   sourceFingerprint?: string;
+  /** A2 plan §4: what one pasted card did, kept in `editorBlockMetadata["paste:" + cardBlockId]` so Undo can be checked. */
+  linkPaste?: LinkPasteRecord;
+}
+/** A2 plan §4: the outcome of one URL of a paste. Never pruned, so it outlives the card. */
+export interface LinkPasteRecord {
+  operationId: string;
+  cardBlockId: string;
+  outcome: "made" | "reused" | "restored";
+  pageId: string;
+  url: string;
+  /** The line the card replaced (paragraph, bullet, numbered), so Undo puts back the same kind of line. */
+  lineType: string;
+  /** The day of the paste, for "Saved before · {day}". */
+  on: LocalDate;
+  /** References (`pageId/blockId`) to each page of the outcome at paste time; only ones added since block Undo. */
+  refsBefore: string[];
+  restored?: { pageId: string; trashId: string; trashedAt: string; parentBefore: string | null; parentAfter: string | null }[];
+  /** Pasted under Good Stuffs: the follow-up record this card saved to, and whether this paste made it. */
+  materialId?: string;
+  materialCreated?: boolean;
+  /** A "Done with it" item this paste put back to To sort, so Undo can return it if nothing changed since. */
+  materialBefore?: { reviewState: Material["reviewState"]; nextReviewOn: LocalDate | null; skippedUntil: LocalDate | null; savedOn: LocalDate; decisions: number };
+  /** Set by Undo: the card is the plain URL line again, which Good Stuffs doesn't collect until it's edited. */
+  undone?: boolean;
 }
 /** A6b plan §4a: why a real Draft my day run ended without a result. */
 export type DraftFailure = "key-rejected" | "unavailable" | "paused" | "budget" | "too-large" | "busy";
@@ -64,6 +88,8 @@ export interface Page {
   type: "daily" | "document";
   date: LocalDate | null;
   title: string;
+  /** A2: a link page's URL exactly as first pasted. The page is the only owner of its key (`urlKey`). */
+  url?: string | null;
   /** The page it was created in (pages-delta N-2); null or absent = top level. Day pages never have one. */
   parentId?: string | null;
   /** A4: set while the page is in the trash (ISO time of the delete); null or absent = live. */
@@ -315,6 +341,9 @@ export type Action =
     }
   | { type: "material-resurface"; materialId: string; enabled: boolean }
   | { type: "create-document"; title: string; body: string; pageId?: string; parentId?: string }
+  /** A2: URLs pasted onto an empty line of `pageId`, one card each, in order. `sectionId`: the heading above them. */
+  | { type: "paste-links"; pageId: string; sectionId?: string; today: LocalDate; items: { url: string; pageId: string; cardBlockId: string; lineType: string }[] }
+  | { type: "undo-paste-links"; pageId: string; operationId: string; today: LocalDate }
   | { type: "rename-page"; pageId: string; title: string }
   | { type: "move-page"; pageId: string; parentId: string | null }
   | { type: "delete-page"; pageId: string; at: string }

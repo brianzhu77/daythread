@@ -29,8 +29,14 @@ async function store() {
   await exec({ type: 'save-material', pageId: 'P', sectionId: ws.pages.find(x => x.id === 'P')!.sections[0]!.id, url: 'https://example.com/a', title: 'A', body: '', note: '' })
   await exec({ type: 'delete-page', pageId: 'C', at }, 'op-c')
   await exec({ type: 'delete-page', pageId: 'P', at }, 'op-p')
-  const script = (...args: string[]) => spawnSync(process.execPath, ['scripts/sqlite-rollback-trash.ts', path, ...args], { encoding: 'utf8' })
-  return { dir, path, repo, day, exec, script, cleanup: () => rm(dir, { recursive: true, force: true }) }
+  // Rollbacks run newest first, so a layout-5 store goes 5 → 4 (link pages) before the trash step under test.
+  const script = (...args: string[]) => {
+    const db = new DatabaseSync(path), version = Number(db.prepare('PRAGMA user_version').get()!.user_version); db.close()
+    if (version === 5) { const links = spawnSync(process.execPath, ['scripts/sqlite-rollback-link-pages.ts', path], { encoding: 'utf8' }); if (links.status !== 0) return links }
+    return spawnSync(process.execPath, ['scripts/sqlite-rollback-trash.ts', path, ...args], { encoding: 'utf8' })
+  }
+  const toLayout4 = () => spawnSync(process.execPath, ['scripts/sqlite-rollback-link-pages.ts', path], { encoding: 'utf8' })
+  return { dir, path, repo, day, exec, script, toLayout4, cleanup: () => rm(dir, { recursive: true, force: true }) }
 }
 const sql = (path: string, fn: (db: DatabaseSync) => void) => { const db = new DatabaseSync(path); try { fn(db) } finally { db.close() } }
 /** Today's build's Retry on a card to P: a live page with the held id, as `create-document` makes it. */
@@ -104,6 +110,7 @@ test('clash, written in: both kept; held rows of any batch and recorded sources 
 test('a backup that cannot be written stops the script with nothing changed', async () => {
   const s = await store()
   try {
+    assert.equal(s.toLayout4().status, 0) // the trash step under test starts from layout 4
     const snapshot = () => { let out = ''; sql(s.path, db => { out = JSON.stringify([db.prepare('PRAGMA user_version').get(), db.prepare('SELECT * FROM pages ORDER BY snapshot, id').all()]) }); return out }
     const before = snapshot()
     const r = s.script('--backup', join(s.dir, 'missing', 'b.sqlite'))

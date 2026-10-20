@@ -1,5 +1,7 @@
 import { dayTemplate, editorSeed, needsTemplateRows, pageContentKey, projectDocument, inlineText, sectionRange, type EditorNode } from "./editor-document.ts";
 import { isTrashed, moveRefusal, subtreeIds } from "./page-tree.ts";
+import { defaultLinkTitle, urlKey } from "./url-key.ts";
+import { cardsPresent, undoCards, type UndoCard } from "./link-paste.ts";
 import { draftLines, fingerprintOf, isLineLinked, liveProposal, previousDayPage } from "./draft.ts";
 import type {
   Command,
@@ -11,6 +13,7 @@ import type {
   Section,
   Material,
   NoteBlock,
+  LinkPasteRecord,
   Action,
   ProposalItem,
   ServerAction,
@@ -281,7 +284,8 @@ function findOrCreateMaterial(
   const parsed = new URL(url);
   if (!["https:", "http:"].includes(parsed.protocol))
     throw new DomainError("Use an http(s) source URL");
-  let m = state.materials.find((m) => m.url === url);
+  const key = urlKey(url);
+  let m = state.materials.find((m) => m.url === url || (key !== null && urlKey(m.url) === key));
   const day =
     p.date ??
     new Date().toLocaleDateString("en-CA", { timeZone: state.timezone });
@@ -400,7 +404,7 @@ function linkMaterialLines(state: Workspace, p: Page, nodes: readonly EditorNode
       if (m) {
         if (link && untouchedLineMaterial(m, b.id, previousById.get(b.id))) {
           if (link.url === m.url) { m.title = text(link.title, 1000); continue; }
-          const owner = state.materials.find((x) => x.url === link.url);
+          const key = urlKey(link.url), owner = state.materials.find((x) => x.url === link.url || (key !== null && urlKey(x.url) === key));
           if (!owner) { m.url = link.url; m.title = text(link.title, 1000); continue; }
           // The URL is already saved: this line becomes another save of it. `m` carries nothing but the
           // half-typed URL, so it goes rather than leaving a second, empty item in the sort step.
@@ -414,6 +418,9 @@ function linkMaterialLines(state: Workspace, p: Page, nodes: readonly EditorNode
         continue;
       }
       if (b.kind !== "paragraph" || !link) continue;
+      // A2 §4: the URL line a paste's Undo put back stays a plain link until he edits it (Ratchet cad76b75).
+      const undone = p.editorBlockMetadata?.[`paste:${b.id}`]?.linkPaste;
+      if (undone?.undone && b.text.trim() === undone.url) continue;
       // Derived from the block, like `editor-task:` ids, so the browser's save preview and the server agree.
       const saved = findOrCreateMaterial(state, p, link.url, link.title, "", `material:${b.id}`);
       b.kind = "material";
@@ -422,6 +429,187 @@ function linkMaterialLines(state: Workspace, p: Page, nodes: readonly EditorNode
     }
   }
 }
+/** A2 §2: who holds a URL's key: the one link page (live or in the trash) and the one follow-up record. */
+export function urlOwner(state: Workspace, raw: string): { key: string | null; page?: Page; material?: Material } {
+  const key = urlKey(raw);
+  if (key === null) return { key };
+  return {
+    key,
+    page: state.pages.find((p) => typeof p.url === "string" && urlKey(p.url) === key),
+    material: state.materials.find((m) => urlKey(m.url) === key),
+  };
+}
+/** The link page a saved item belongs to: the one with the same key. Nothing is stored between them (Lead eeaf7490). */
+export function linkPageOf(state: Workspace, m: Material): Page | undefined {
+  const key = urlKey(m.url);
+  return key === null ? undefined : state.pages.find((p) => typeof p.url === "string" && urlKey(p.url) === key);
+}
+/** Every card or `[[` reference to `pageId`, as `pageId/blockId`, on live and trashed pages. */
+function referencesTo(state: Workspace, pageId: string): string[] {
+  return state.pages.flatMap((p) =>
+    p.id === pageId ? [] : p.sections.flatMap((s) => s.blocks.filter((b) => b.kind === "reference" && b.targetPageId === pageId).map((b) => `${p.id}/${b.id}`)),
+  );
+}
+/** A4: what Restore on this page's own banner brings back: the page plus its descendants trashed in the same delete. */
+function restoreSetOf(state: Workspace, p: Page): Set<string> {
+  const ids = new Set([p.id]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const x of state.pages)
+      if (isTrashed(x) && x.trashId === p.trashId && x.parentId && ids.has(x.parentId) && !ids.has(x.id)) { ids.add(x.id); grew = true; }
+  }
+  return ids;
+}
+/** One page per key, live or in the trash (N-4); every command must leave it so. */
+function checkLinkIdentity(state: Workspace): void {
+  const seen = new Set<string>();
+  for (const p of state.pages) {
+    if (typeof p.url !== "string") continue;
+    const key = urlKey(p.url);
+    if (key === null) throw new DomainError("A link page needs an http(s) link");
+    if (seen.has(key)) throw new DomainError("That link is already saved as another page");
+    seen.add(key);
+  }
+}
+/** Written or tracked on a link page since it was made: a title, any text or row, a review note. */
+function linkPageEdited(state: Workspace, p: Page): boolean {
+  return p.title !== defaultLinkTitle(p.url ?? "") || Boolean(p.reviewText.trim()) || state.pages.some((c) => c.parentId === p.id)
+    || p.sections.some((s) => s.title.trim() || s.blocks.some((b) => b.kind !== "paragraph" || b.text.trim()));
+}
+/** The follow-up record was acted on: a decision, a task made from it. A re-save of a Done item isn't a decision. */
+function followUpUsed(m: Material | undefined): boolean {
+  return Boolean(m && (m.lastDecisionOn || m.taskId || m.reviewState !== "pending" || (m.decisions ?? []).some((d) => d.decision !== "saved-again")));
+}
+function newLinkPage(id: string, parentId: string, url: string): Page {
+  return {
+    id, type: "document", date: null, title: defaultLinkTitle(url), url, parentId,
+    // The `/page` body: one empty line, like Notion.
+    sections: [{ id: `intro:${id}`, kind: "custom", title: "", blocks: [{ id: newId(), kind: "paragraph", text: "" }] }],
+    reviewText: "", reviewSaved: false, handoffDone: false, draft: null,
+  };
+}
+/**
+ * A2 §3: URLs pasted onto an empty line of `pageId`, one card each. Each URL is a page made under `pageId`, the page
+ * that already holds its key (unchanged, its first parent kept), or that page restored from the trash with the set its
+ * own Restore brings back. Under Good Stuffs the card is also a save on the follow-up record. Each card's outcome is
+ * kept as `paste:<cardBlockId>`, so a retry under another operation id repeats nothing and Undo can be checked.
+ */
+function pasteLinks(state: Workspace, action: Extract<Action, { type: "paste-links" }>, operationId: string): { message: string; entityId?: string } {
+  const parent = page(state, action.pageId);
+  const day = date(action.today);
+  const goodStuffs = Boolean(action.sectionId) && parent.sections.find((s) => s.id === action.sectionId)?.kind === "good-stuffs";
+  const meta = (parent.editorBlockMetadata ??= {});
+  for (const item of action.items) {
+    const metaKey = `paste:${item.cardBlockId}`;
+    const earlier = meta[metaKey]?.linkPaste;
+    if (earlier) {
+      if (urlKey(earlier.url) !== urlKey(item.url)) throw new DomainError("That card already holds another link");
+      continue;
+    }
+    const url = text(item.url.trim(), 10_000);
+    const owner = urlOwner(state, url);
+    if (owner.key === null) throw new DomainError("Use an http(s) link");
+    const base = { operationId, cardBlockId: item.cardBlockId, url, lineType: item.lineType, on: day };
+    let record: LinkPasteRecord;
+    if (!owner.page) {
+      if (state.pages.some((p) => p.id === item.pageId)) throw new DomainError("Page id already in use");
+      state.pages.push(newLinkPage(item.pageId, parent.id, url));
+      record = { ...base, outcome: "made", pageId: item.pageId, refsBefore: [] };
+    } else if (isTrashed(owner.page)) {
+      const ids = restoreSetOf(state, owner.page);
+      const before = [...ids].map((id) => { const x = page(state, id); return { pageId: id, trashId: x.trashId!, trashedAt: x.trashedAt!, parentBefore: x.parentId ?? null }; });
+      const refsBefore = [...ids].flatMap((id) => referencesTo(state, id));
+      restorePages(state, ids);
+      record = { ...base, outcome: "restored", pageId: owner.page.id, refsBefore, restored: before.map((r) => ({ ...r, parentAfter: page(state, r.pageId).parentId ?? null })) };
+    } else {
+      record = { ...base, outcome: "reused", pageId: owner.page.id, refsBefore: referencesTo(state, owner.page.id) };
+    }
+    if (goodStuffs) {
+      const linkPage = page(state, record.pageId);
+      const had = owner.material;
+      const before = had && { reviewState: had.reviewState, nextReviewOn: had.nextReviewOn, skippedUntil: had.skippedUntil ?? null, savedOn: had.savedOn, decisions: (had.decisions ?? []).length };
+      const m = findOrCreateMaterial(state, parent, had?.url ?? linkPage.url!, linkPage.title, "", `material:${item.cardBlockId}`);
+      if (!m.sources.some((x) => x.blockId === item.cardBlockId)) m.sources.push({ pageId: parent.id, blockId: item.cardBlockId, note: "" });
+      record.materialId = m.id;
+      record.materialCreated = !had;
+      if (before && before.reviewState !== m.reviewState) record.materialBefore = before;
+    }
+    meta[metaKey] = { id: metaKey, kind: "reference", text: url, linkPaste: record };
+  }
+  checkLinkIdentity(state);
+  return { message: "Links saved", entityId: meta[`paste:${action.items[0]!.cardBlockId}`]!.linkPaste!.pageId };
+}
+/** This operation's paste records on `parent`, in paste order. */
+export function pasteRecords(parent: Page, operationId: string): LinkPasteRecord[] {
+  return Object.values(parent.editorBlockMetadata ?? {}).flatMap((b) => (b.linkPaste?.operationId === operationId ? [b.linkPaste] : []));
+}
+/**
+ * A2 §4: Undo of one paste, as one command. Cards of this paste still on the page become their URL lines (the same
+ * `undoCards` the browser applies); a page the paste made is deleted unless he wrote in it, gave it a child, acted on
+ * its follow-up or something else links to it; a set the paste restored goes back to the trash as the same Trash row
+ * unless a page of it moved or gained a reference; this paste's Good Stuffs saves are removed. Every check runs before
+ * any write, inside the command's one transaction.
+ */
+function undoPasteLinks(state: Workspace, action: Extract<Action, { type: "undo-paste-links" }>): { message: string; entityId?: string } {
+  const parent = page(state, action.pageId);
+  const records = pasteRecords(parent, action.operationId).filter((r) => !r.undone);
+  if (!records.length) throw new DomainError("Nothing to undo");
+  const doc = editorSeed(parent, state, { templateRows: needsTemplateRows(parent, date(action.today)) });
+  const present = cardsPresent(doc, records.map(undoCard));
+  if (!present.length) throw new DomainError("Page changed · nothing was undone");
+  const own = new Set(records.map((r) => `${parent.id}/${r.cardBlockId}`));
+  const newRefs = (pageIds: string[], r: LinkPasteRecord) =>
+    pageIds.flatMap((id) => referencesTo(state, id)).filter((ref) => !own.has(ref) && !r.refsBefore.includes(ref));
+  const linkedFrom = (refs: string[]) => state.pages.find((p) => p.id === refs[0]!.split("/")[0])?.title || "another page";
+  const kept: string[] = [], remove = new Set<Page>(), retrash: NonNullable<LinkPasteRecord["restored"]>[] = [];
+  const decided = new Set<string>();
+  for (const r of records) {
+    if (decided.has(r.pageId)) continue;
+    decided.add(r.pageId);
+    const p = state.pages.find((x) => x.id === r.pageId);
+    if (!p || r.outcome === "reused") continue;
+    if (r.outcome === "made") {
+      const refs = newRefs([p.id], r);
+      if (linkPageEdited(state, p) || followUpUsed(urlOwner(state, r.url).material)) kept.push(`Kept ${p.title || "Untitled"} · it has your edits`);
+      else if (refs.length) kept.push(`Kept ${p.title || "Untitled"} · linked from ${linkedFrom(refs)}`);
+      else remove.add(p);
+    } else {
+      const set = r.restored ?? [];
+      const moved = set.some((e) => { const x = state.pages.find((y) => y.id === e.pageId); return !x || isTrashed(x) || (x.parentId ?? null) !== e.parentAfter; });
+      const refs = newRefs(set.map((e) => e.pageId), r);
+      if (moved) kept.push(`Kept ${p.title || "Untitled"} · it was moved`);
+      else if (refs.length) kept.push(`Kept ${p.title || "Untitled"} · linked from ${linkedFrom(refs)}`);
+      else retrash.push(set);
+    }
+  }
+  // Writes, after every check.
+  for (const r of records) {
+    if (r.materialId) {
+      const m = state.materials.find((x) => x.id === r.materialId);
+      if (m) {
+        m.sources = m.sources.filter((x) => !(x.pageId === parent.id && x.blockId === r.cardBlockId));
+        if (r.materialCreated && !m.sources.length && !followUpUsed(m)) state.materials = state.materials.filter((x) => x !== m);
+        else if (r.materialBefore && !followUpUsed(m) && (m.decisions ?? []).length === r.materialBefore.decisions + 1) {
+          Object.assign(m, { reviewState: r.materialBefore.reviewState, nextReviewOn: r.materialBefore.nextReviewOn, skippedUntil: r.materialBefore.skippedUntil, savedOn: r.materialBefore.savedOn });
+          m.decisions = (m.decisions ?? []).slice(0, -1);
+        }
+      }
+    }
+    r.undone = true;
+  }
+  state.pages = state.pages.filter((p) => !remove.has(p));
+  for (const set of retrash)
+    for (const e of set) {
+      const x = page(state, e.pageId);
+      x.trashedAt = e.trashedAt;
+      x.trashId = e.trashId;
+      if (e.parentBefore === null) delete x.parentId; else x.parentId = e.parentBefore;
+    }
+  execute(state, { type: "save-editor", pageId: parent.id, expectedContent: pageContentKey(parent), document: JSON.stringify(undoCards(doc, present)) });
+  checkLinkIdentity(state);
+  return { message: kept.join(" · ") || "Paste undone", entityId: parent.id };
+}
+const undoCard = (r: LinkPasteRecord): UndoCard => ({ blockId: r.cardBlockId, pageId: r.pageId, url: r.url, lineType: r.lineType });
 const flatNodes = (list: readonly EditorNode[]): EditorNode[] => list.flatMap((n) => [n, ...flatNodes(n.children ?? [])]);
 /** Calendar and future-day lists (rule R4): the day's planned tasks, then open tasks only due that day. */
 export function getCalendarTasks(state: Workspace, day: string): Task[] {
@@ -1182,6 +1370,10 @@ function execute(
       });
       return { message: "Page saved", entityId: id };
     }
+    case "paste-links":
+      return pasteLinks(state, action, operationId);
+    case "undo-paste-links":
+      return undoPasteLinks(state, action);
     case "rename-page": {
       const p = page(state, action.pageId);
       if (p.type !== "document") throw new DomainError("Day pages are named by their date");

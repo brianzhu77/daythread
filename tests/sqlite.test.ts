@@ -94,7 +94,7 @@ test('SQLite layout 1 (no parentId) upgrades in place; old pages stay top level 
   let repo=f.create(), ws=await repo.load()
   ws=(await repo.execute({operationId:'doc',expectedRevision:ws.revision,action:{type:'create-document',title:'Old page',body:''}})).workspace
   // Recreate the layout an existing store has before this change.
-  let db=new DatabaseSync(f.path);db.exec('ALTER TABLE pages DROP COLUMN trashedAt');db.exec('ALTER TABLE pages DROP COLUMN trashId');db.exec('ALTER TABLE pages DROP COLUMN parentId');db.exec('ALTER TABLE captures DROP COLUMN model');db.exec('ALTER TABLE captures DROP COLUMN mode');db.exec('ALTER TABLE captures DROP COLUMN capturedAt');db.exec('PRAGMA user_version=1');db.close()
+  let db=new DatabaseSync(f.path);db.exec('ALTER TABLE pages DROP COLUMN url');db.exec('ALTER TABLE pages DROP COLUMN trashedAt');db.exec('ALTER TABLE pages DROP COLUMN trashId');db.exec('ALTER TABLE pages DROP COLUMN parentId');db.exec('ALTER TABLE captures DROP COLUMN model');db.exec('ALTER TABLE captures DROP COLUMN mode');db.exec('ALTER TABLE captures DROP COLUMN capturedAt');db.exec('PRAGMA user_version=1');db.close()
   repo=f.create(); ws=await repo.load()
   assert.equal(ws.pages[0]!.parentId,undefined)
   ws=(await repo.execute({operationId:'sub',expectedRevision:ws.revision,action:{type:'create-document',title:'',body:'',pageId:'child',parentId:ws.pages[0]!.id}})).workspace
@@ -118,7 +118,8 @@ test('rollback script: a store with a subpage and its card goes back to layout 1
   ws=(await repo.execute({operationId:'card',expectedRevision:ws.revision,action:{type:'save-editor',pageId:p.id,expectedContent:pageContentKey(p),document:JSON.stringify(doc)}})).workspace
   const before=ws.pages.length
   const script=(name:string)=>new Promise<string>((ok,fail)=>{const c=spawn(process.execPath,[name,f.path]);let s='';c.stdout.on('data',d=>s+=d);c.stderr.on('data',d=>s+=d);c.on('exit',code=>code===0?ok(s):fail(new Error(s)))})
-  // Rollbacks run newest first: layout 4 → 3 (trash), 3 → 2 (model ledger), then 2 → 1 (parentId).
+  // Rollbacks run newest first: layout 5 → 4 (link pages), 4 → 3 (trash), 3 → 2 (model ledger), then 2 → 1 (parentId).
+  await script('scripts/sqlite-rollback-link-pages.ts')
   await script('scripts/sqlite-rollback-trash.ts')
   await script('scripts/sqlite-rollback-model.ts')
   const out=await script('scripts/sqlite-rollback-parent-id.ts')
