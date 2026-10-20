@@ -58,7 +58,7 @@ The existing page card (`editor-page-card`) with three changes:
 - **Tap the card:** opens the link page, same as any page card.
 - **↗ (44 px target, right side):** opens the website in a new tab. It's the only thing on the card that leaves the
   app.
-- **Domain:** shown quietly (`--ink-3`) only once the title is no longer the default. Otherwise it would show the
+- **Domain:** shown quietly (`--ink-3`) only while the title differs from the default (§3), checked when the card is drawn, so renaming it back hides the domain again. Otherwise it would show the
   domain twice.
 - **One line** at every width. The title is cut with … and the domain is the first thing dropped at 390. ↗ never
   moves.
@@ -114,7 +114,10 @@ They use the editor's existing notice strip. Every create says what happened and
   and its subtree), as the same Trash row, and keeps any edits made in between. Edits never block this, because
   nothing in the trash is lost. **A new reference does block it:** if a card or `[[` reference to that page (or its
   subtree) was added anywhere since the restore, Undo only turns this card back into the URL text, the page stays
-  live, and the notice reads "Kept {title} · linked from {page}". It's the same test as for a page this paste made. For a repeat paste, Undo removes only the
+  live, and the notice reads "Kept {title} · linked from {page}". It's the same test as for a page this paste made.
+- **When Undo keeps a page the paste made**, the card still turns back into text, and the notice says why: "Kept
+  {title} · it has your edits" (a title or body edit, or a child page) or "Kept {title} · linked from {page}" (another
+  card or `[[`). Otherwise Undo **deletes** that page outright. It never shows up in Trash, because he never had it. For a repeat paste, Undo removes only the
   card. The aim is that "I only wanted the link" is always one tap.
 - **⌘Z right after the paste does the same as Undo.** If the editor can't make that a single step, say so in the
   plan. The fallback is that ⌘Z removes the card, and the page stays with its "Made a page · Undo" notice still on
