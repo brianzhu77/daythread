@@ -103,14 +103,15 @@ They use the editor's existing notice strip. Every create says what happened and
 | --- | --- |
 | New page | "Made a page · Undo" |
 | Same URL as a live page | "Saved before · Mon, Oct 19 · Undo". The card goes to the **existing** page and no page is made |
-| Same URL as a page in the trash | "Restored from trash · Undo". The page comes back the way A4's Restore brings it back (its old parent, or the top level if that's in the trash too), and the card points to it |
+| Same URL as a page in the trash | "Restored from trash · Undo", or "Restored to Pages · {parent} is in trash · Undo" when the old parent is still in the trash. It's exactly **Restore on that page's banner** (A4 `pages-trash-layout.md` §4–§5): **this page and its own subtree**, never the rest of the delete it was part of. It goes under its old parent, or the top level if the parent is in the trash. The card points to it |
 | Several URLs | "Made 3 pages · Undo". With repeats: "Made 2 pages · 1 saved before · Undo" |
 | Save failed | No notice. The card shows "Not created · Retry" (§2) |
 
 - **The date in "Saved before"** is the day the page was made, shown in the app's day format ("Today", "Mon, Oct 19").
 - **Undo turns the card back into the URL text he pasted, as a plain link, on the same line.** It also removes the
   page if this paste made it and nothing else has touched it yet: no other card, and no title or body edit. If this
-  paste restored the page from the trash, Undo puts it back in the trash. For a repeat paste, Undo removes only the
+  paste restored the page from the trash, Undo puts back in the trash **exactly what the paste restored** (the page
+  and its subtree), as the same Trash row, and keeps any edits made in between. For a repeat paste, Undo removes only the
   card. The aim is that "I only wanted the link" is always one tap.
 - **⌘Z right after the paste does the same as Undo.** If the editor can't make that a single step, say so in the
   plan. The fallback is that ⌘Z removes the card, and the page stays with its "Made a page · Undo" notice still on
@@ -132,7 +133,9 @@ page, live or in the trash, including two pastes at the same moment.
    "‹ Today", Pages "In your days", globe icon), empty body.
 2. Paste the same URL with different host case or a trailing `/` on another day → "Saved before · {date}", no second
    page, the page stays under the first day, and the second day shows in its Linked from.
-3. Trash the page, paste the URL again → "Restored from trash", one page, live.
+3. Trash the page, paste the URL again → "Restored from trash", one page, live. Variant: the link page is under a
+   page that was deleted with it. Paste its URL → only the link page and its subpages come back, to the top level,
+   with "… {parent} is in trash". The parent stays in the trash.
 4. Undo right after 1 → the line is the URL text again, and the page is gone from Pages and Trash. Undo after 2 →
    only the card goes. Undo after 3 → the page is back in the trash.
 5. Paste a URL into the middle of a sentence, into a task row and into the title → nothing is made.
