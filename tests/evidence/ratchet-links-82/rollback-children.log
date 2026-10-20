@@ -1,0 +1,24 @@
+(node:31655) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+old editorJSON [{"id":"link-url:link","type":"paragraph","content":"https://children.example/","children":[{"id":"child-user-note","type":"bulletListItem","content":"keep my nested note"}]},{"id":"5f12852e-b0e2-46e3-b270-05194966e7c1","type":"paragraph","content":""}]
+{"level":"info","event":"storage.links-reupgrade","restored":1,"gone":[],"keyTaken":[],"linesRemoved":1,"linesKept":[]}
+new editorJSON [{"id":"5f12852e-b0e2-46e3-b270-05194966e7c1","type":"paragraph","content":""}]
+new sections [{"id":"intro:link","kind":"custom","title":"","blocks":[{"id":"child-user-note","kind":"paragraph","text":"keep my nested note"},{"id":"5f12852e-b0e2-46e3-b270-05194966e7c1","kind":"paragraph","text":""}]}]
+new editorSeed [{"id":"5f12852e-b0e2-46e3-b270-05194966e7c1","type":"paragraph","content":""}]
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: old-build nested note must remain visible after re-upgrade
+    at file:///Users/dogrod/Developer/daythread-ratchet-links/tests/evidence/ratchet-links-82/rollback-children.ts:5:327
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

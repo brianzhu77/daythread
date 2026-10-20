@@ -1,0 +1,8 @@
+(node:35765) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+old editorJSON [{"id":"link-url:link","type":"paragraph","content":"https://children.example/","children":[{"id":"child-user-note","type":"bulletListItem","content":"keep my nested note"}]},{"id":"5423233e-ab50-4725-a6dc-ea91a59f7a9f","type":"paragraph","content":""}]
+{"level":"info","event":"storage.links-reupgrade","restored":1,"gone":[],"keyTaken":[],"linesRemoved":0,"linesKept":["link"]}
+new editorJSON [{"id":"link-url:link","type":"paragraph","content":"https://children.example/","children":[{"id":"child-user-note","type":"bulletListItem","content":"keep my nested note"}]},{"id":"5423233e-ab50-4725-a6dc-ea91a59f7a9f","type":"paragraph","content":""}]
+new sections [{"id":"intro:link","kind":"custom","title":"","blocks":[{"id":"link-url:link","kind":"paragraph","text":"https://children.example/"},{"id":"child-user-note","kind":"paragraph","text":"keep my nested note"},{"id":"5423233e-ab50-4725-a6dc-ea91a59f7a9f","kind":"paragraph","text":""}]}]
+new editorSeed [{"id":"link-url:link","type":"paragraph","content":"https://children.example/","children":[{"id":"child-user-note","type":"bulletListItem","content":"keep my nested note"}]},{"id":"5423233e-ab50-4725-a6dc-ea91a59f7a9f","type":"paragraph","content":""}]

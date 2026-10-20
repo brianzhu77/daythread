@@ -1,0 +1,9 @@
+(node:33132) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   8. server stopped: the card says "Not created · Retry" · example.org/stopped
+Not created · Retry
+ok      the URL is never lost: it is the card's title
+ok      nothing was written
+ok      Retry after the restart makes the page once, a link page under today · [{"id":"97405c24-64a3-4df2-a994-facdef12da45","url":"https://example.org/stopped","parentId":"day:2026-10-20"}]
+ok      the card is saved right after, pointing at that page
+ok      a second tap opens it; still one page

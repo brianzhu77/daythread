@@ -1,0 +1,25 @@
+(node:32581) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   setup: 4 link pages (Notes, Good Stuffs with a decision, a restored one, one to trash); a repeat and an undone paste · [{"id":"rt-notes","url":"https://Notes.example/recipe","trashed":false},{"id":"rt-gs","url":"https://gs.example/article","trashed":false},{"id":"rt-restored","url":"https://restore.example/","trashed":false},{"id":"rt-trash-later","url":"https://trash-later.example/","trashed":false}]
+ok   rollback script: layout 5 → 4 · Layout 5 → 4. 4 link pages held, each URL also written as its page's first line; Undo cleared. Backup at /private/tmp/ratchet82-roundtrip.sqlite.rt-backup-1792538789155.sqlite.
+ok      user_version 4
+ok   21eb45b: the link page opens and shows its URL as the first line
+ok   21eb45b: a link page is trashed there
+ok   21eb45b: a Good Stuffs URL typed there (the Notes page's key) becomes a saved item
+ok   21eb45b: no page or console errors
+{"level":"info","event":"storage.links-reupgrade","restored":4,"gone":[],"keyTaken":[],"linesRemoved":3,"linesKept":["rt-notes"]}
+ok   migration 5: each page has its URL back, by page id
+ok      the page trashed in 21eb45b stays in the trash; the others stay live
+ok      the URL line edited in 21eb45b stays
+ok      the untouched URL lines are gone
+ok      the URL typed in 21eb45b is the Notes page's one saved item (matched by key)
+ok      the Good Stuffs item keeps its decision
+ok      held table consumed; layout 5
+ok      pasting https://NOTES.example/recipe again finds the same page
+ok      pasting https://gs.example:443/article again finds the same page
+ok      pasting https://restore.example again finds the same page
+ok      pasting https://trash-later.example again finds the same page
+ok      still 4 link pages, no second page for any URL
+ok   the new build shows the URL row again
+ok   today's link cards render as link cards (URL read from the page again)
+ok   no page or console errors in either build

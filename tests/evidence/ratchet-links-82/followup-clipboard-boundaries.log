@@ -1,0 +1,9 @@
+(node:36272) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   plain control · [{"id":"a3912d74-d055-4745-bfc1-72b7ef274e24","title":"clipboard.example/plain","url":"https://clipboard.example/plain","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}]
+ok   HTML plus URL plain · [{"id":"48813040-f7b5-4cb2-8755-2b24f155f516","title":"clipboard.example/html","url":"https://clipboard.example/html","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}]
+ok   HTML plus title plain · [{"id":"87a355f0-a6da-401c-b2fe-b77a163583bf","title":"A recipe title","url":"https://clipboard.example/title","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}]
+ok   uri-list comments · [{"id":"1654f56d-bcbd-4b01-8f4f-ac6ff7d01329","title":"clipboard.example/uri","url":"https://clipboard.example/uri","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}]
+ok   sentence with anchor · []
+ok   two anchors · []
+FAIL anchor plus image · [{"id":"d27071db-f261-4299-8fb8-8d95163fac00","title":"A recipe title","url":"https://clipboard.example/img","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}]

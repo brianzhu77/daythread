@@ -1,0 +1,5 @@
+(node:32115) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+plain control [{"id":"c28b6798-66d7-4c2c-9ca0-a9ed1d4f0de1","title":"clipboard.example/plain","url":"https://clipboard.example/plain","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}]
+HTML plus URL plain [{"id":"2c0237cd-dce4-4595-9e0a-408e85ed134e","title":"clipboard.example/html","url":"https://clipboard.example/html","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}]
+HTML plus title plain []

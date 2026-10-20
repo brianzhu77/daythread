@@ -1,0 +1,2 @@
+before undo {"pages":["page:first:0"],"sources":[{"pageId":"day:2026-10-19","blockId":"card:first:0","note":""},{"pageId":"day:2026-10-20","blockId":"typed-second","note":""}]}
+after undo {"pages":["page:first:0"],"sources":[{"pageId":"day:2026-10-20","blockId":"typed-second","note":""}]}

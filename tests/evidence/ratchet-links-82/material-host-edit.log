@@ -1,0 +1,24 @@
+before [{"id":"material:typed-gs","url":"https://EXAMPLE.com/a","title":"https://EXAMPLE.com/a","body":"","savedOn":"2026-10-19","reviewState":"pending","nextReviewOn":null,"resurface":true,"lastDecisionOn":null,"skippedUntil":null,"sources":[{"pageId":"day:2026-10-19","blockId":"typed-gs","note":""}],"decisions":[]}]
+after []
+block {"id":"day:2026-10-19:good-stuffs","kind":"good-stuffs","title":"Good Stuffs","blocks":[{"id":"typed-gs","kind":"material","text":"https://example.com/a","materialId":"material:typed-gs"}]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: editing only host case must keep the same saved item
+
+0 !== 1
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-links/tests/evidence/ratchet-links-82/material-host-edit.ts:55:486
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 0,
+  expected: 1,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

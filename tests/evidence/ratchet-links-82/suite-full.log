@@ -1,0 +1,392 @@
+✔ reserve before call and replay reserves only once (1.638292ms)
+✔ another call cannot start while one is unresolved (0.302792ms)
+✔ unknown timeout retains reserved budget and blocks retry (0.236291ms)
+✔ settled actual costs plus next bound cannot exceed ten dollars (0.193417ms)
+✔ settlement stays attributed to original day (0.170125ms)
+✔ invalid upper bounds fail closed (0.160417ms)
+✔ a saved task shows and keeps its date; editing its date changes the same task row, and Undo reverts that one edit (8.54225ms)
+✔ editing a saved task's title or role, an event or a note keeps its identity; Undo all still works after (2.058041ms)
+✔ Undo all is refused whole when a saved note was edited, deleted or moved elsewhere; nothing is removed (1.589167ms)
+✔ Undo all is refused when a saved event changed elsewhere, or the task row was deleted (0.411459ms)
+✔ changing a saved item's type (task → event) replaces it: one row, no task left behind (0.223417ms)
+✔ a held item: editing the flagged field clears that reason; Save saves it; Remove drops it without touching the others (0.524792ms)
+✔ Undo all reverts every saved item in one step; it is refused whole if one was edited since (0.457959ms)
+✔ retry: only a failed model capture, never on budget; it opens a new revision (0.403792ms)
+✔ retry: never on a capture paused because a cost couldn't be confirmed (0.21175ms)
+✔ the browser can send the receipt commands, but not retry-capture (server only) (1.80075ms)
+✔ Undo all also puts back an applied update, unless the task changed since (2.198458ms)
+✔ a waiting update: its role and day can be changed before Apply, and Apply uses them (1.003292ms)
+✔ a flagged event time is cleared in one edit: the day stays, the flag goes (0.493125ms)
+(node:33047) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ debug logs default off; enabled commands correlate and never serialize content or exception messages (22.692625ms)
+✔ rescheduling keeps identity, deadline and attention (13.087333ms)
+✔ Not today pauses carry but preserves dates unrelated to that placement (0.836625ms)
+✔ explicit planning reactivates excluded task on the same day (0.855958ms)
+✔ Keep task retains Task identity and operation replay is harmless (0.843834ms)
+✔ ordinary prose Bring copies text and provenance without creating Task (0.644667ms)
+✔ yesterday handoff is uncapped and does not include completed tasks (2.161375ms)
+✔ undated open task remains findable in pool (22.93425ms)
+✔ reflection saves without drafting or creating tasks (0.163125ms)
+✔ stale workspace command rejects without mutating input (0.19425ms)
+✔ exact URL reuse keeps one Material and independent annotations (0.47575ms)
+✔ current plan deletion pauses but bulk deletion only removes presentation (1.58175ms)
+✔ historical plan presentation deletion does not pause current task (0.180208ms)
+✔ undo of Not today restores original state rather than unconditional unpause (0.200292ms)
+✔ discarding a pending proposal leaves tasks unchanged and raw input retained (0.065208ms)
+✔ stale proposal revision cannot be applied (0.145417ms)
+✔ G01/G02 material review starts after two days and caps at three (17.169125ms)
+✔ G03/G04 watching returns in seven days; lower stays out; Undo restores (5.103417ms)
+✔ G05 saving a Done URL reopens one Material and keeps both sources (0.665416ms)
+✔ G06 Make task is idempotent even with a new transport operation ID (0.6425ms)
+✔ G07 skip affects only shown cards for three days and never saves review (0.560209ms)
+✔ mixed capture applies neither part on stale existing Task version (0.883542ms)
+✔ mixed capture removal of mutation still waits; replay creates only one task (2.696583ms)
+✔ yesterday handoff survives presentation-only bulk deletion without capping five commitments (1.524416ms)
+✔ dates: the app reads one day from the line against the page it is on; the model date is kept only if it agrees (17.67875ms)
+✔ a run: one at a time, one draft per day, ids outside the manifest refused, a stale run never applies (9.200167ms)
+✔ add-proposal: a new task with his line in the plan list; the line untouched; once only; Undo offers it again (1.507625ms)
+✔ deleting the new task row through save-editor still counts the line as carried forward (4.504667ms)
+✔ the source changed after the run: an edit or a move under another day withdraws it; a section rename does not (1.485ms)
+✔ lines sent: text and links only, never tasks, cards or empty rows; the simulated card draft shows one example (0.537875ms)
+✔ Ratchet #80: impossible dates in a line are no date, never an error (0.140042ms)
+✔ a dated proposal is planned for its day, with no row on the drafted day; the line stays linked; Undo offers it again (0.889458ms)
+✔ section boundary includes subordinate headings but stops at equal or higher headings (1.484ms)
+✔ a section owns its empty lines, including at the end of the document (0.163291ms)
+✔ whole section deletion and restoration preserve task and placement; moved rows keep their role (4.34675ms)
+✔ semantic single-row deletion and undo check task versions instead of rolling back later edits (0.728958ms)
+✔ editor stale save rejects atomically and new custom tasks get stable identities (0.380666ms)
+✔ external checklists remain prose until conversion, and conversion history removes and restores only its new task (0.707958ms)
+✔ a new day page opens with the template rows, carried tasks sit above them, and empty rows create no task (0.310417ms)
+✔ template rows the user deletes stay deleted, and past or written pages never get them (0.409583ms)
+✔ moving the last template section takes its empty line with it (0.106041ms)
+✔ tasks placed on a day go above the section's trailing empty rows (0.274208ms)
+✔ an image at the end of a section is content, so new rows go after it (0.165667ms)
+✔ text added to Notes goes above its empty template bullet (0.159584ms)
+✔ R1: today creation is one templated daily page (26.094334ms)
+✔ R7/R9: reading a future DayView is pure and returns planned tasks without a page (1.522833ms)
+✔ R9: plan-task stores placement and preserves identity/deadline without creating a future page (0.173084ms)
+✔ R9: assigning a future deadline alone creates no future page or placement (0.113042ms)
+✔ R9: add-task with future plannedOn does not create destination page (0.100834ms)
+✔ R5: explicit creation materializes existing placements once, preserving the same task (0.275375ms)
+✔ R5: lost-response replay of explicit create is harmless (0.087125ms)
+✔ R8: reopening an existing future page never replaces user text or editor document (0.133ms)
+✔ R2/R3 browser: today next arrow and future picker cells cannot create a page (0.04375ms) # TODO
+✔ R4/R6 browser: future Calendar prompt / Cancel / Escape / outside click leave revision, receipts and pages unchanged (0.065875ms) # TODO
+✔ R7 browser: direct URL, refresh and back/forward show missing-future state without ensure-day (0.036625ms) # TODO
+✔ R5 browser+SQLite: rapid Create double click, stale revision and lost response still create exactly once (1.079958ms) # TODO
+✔ R9: planning a task for a future day stores the placement only (33.9285ms)
+✔ R9: a task added with a future plan date does not create that page (0.358125ms)
+✔ R5: creating a future page renders its placements in their sections and order (1.259ms)
+✔ R5: placements moved away, excluded or finished are not rendered (1.521875ms)
+✔ R5: creating twice yields one page and no duplicate rows (0.388916ms)
+✔ R8: planning onto an existing future page still adds its row (0.234459ms)
+✔ moving a task from today to a future day removes it from today without creating the future page (0.203084ms)
+✔ R4: Calendar lists planned tasks, then open tasks only due that day (0.432ms)
+✔ a URL alone on a Good Stuffs line becomes one saved material with this line as its source (7.225792ms)
+✔ a URL typed as plain text (not a link mark) counts too (0.292167ms)
+✔ no material: URL inside a sentence, URL outside Good Stuffs, a task row, or not http(s) (0.477417ms)
+✔ the same URL on two days is one material with two sources; repeated saves add nothing (0.45975ms)
+✔ a material saved before keeps its follow-up state; a Done one goes back to sort (G05) (0.3115ms)
+✔ typing the URL across several debounced saves leaves exactly one material, for the final URL (0.295292ms)
+✔ turning the line into prose keeps the material; the words become that save's note (0.402958ms)
+✔ Ratchet #66: Don't resurface, then a note on the line, keeps the material and its choice (0.245083ms)
+✔ an acted-on material is never re-keyed, even if the line becomes another bare URL (0.208625ms)
+✔ a half-typed URL that completes into an already saved URL becomes another save of it (0.307959ms)
+✔ once a material has a decision or a second source, editing the line no longer changes it (1.344833ms)
+✔ deleting the line keeps the material (P05) (0.467292ms)
+✔ a renamed Good Stuffs heading still saves links (P17) (0.3985ms)
+✔ relink-material-lines saves links written before the fix and writes nothing the second time (0.936416ms)
+✔ a titled link alone on a line (bullet, spaces around it) saves the href with the link text as title (0.295917ms)
+✔ a titled link inside a sentence stays a plain link (0.215292ms)
+✔ editing the link text of an untouched item updates its title; the URL and identity stay (0.468084ms)
+✔ relink-material-lines also finds titled links in the saved editor document (0.463083ms)
+✔ Ratchet #66: an item whose title was changed elsewhere is not re-keyed or retitled by the line (0.681125ms)
+✔ moving an existing arrangement to Top 3 preserves identity and Notes references (43.368375ms)
+✔ saved draft choices survive a fresh serialized workspace without scheduling tasks (0.854541ms)
+✔ pure new capture applies immediately, mixed capture waits for confirmation (0.331167ms)
+✔ material conversion creates one unscheduled task and no task presentation (0.261625ms)
+✔ urlKey: N-4 exactly, built from the raw text (1.730875ms)
+✔ defaultLinkTitle: no scheme or www., decoded, no trailing /, query and fragment kept (0.1955ms)
+✔ made: a child of the page pasted into, titled from the URL, empty, with the raw URL; the day is in Linked from (6.627584ms)
+✔ reused: the same key on another day, or twice in one paste → one page, first parent kept, both days link to it (5.427375ms)
+✔ restored: exactly what its own Restore brings back; a subpage deleted earlier stays; parent in trash → top level (1.347542ms)
+✔ Good Stuffs: a follow-up record matched by key; another day adds a save; Done → To sort; Notes adds none (0.947458ms)
+✔ a URL typed into Good Stuffs is the same record as the link page with that key, never a second one (3.05325ms)
+✔ replay, retry under another operation id, a stale revision, a bad URL, a page id in use (5.903583ms)
+✔ two devices: the second paste of a new URL lands on the first one's page (0.598208ms)
+✔ Undo of a made page: the card is its URL line again (same id, same kind of line), the page is gone from Pages and Trash (1.440125ms)
+✔ Undo: A and A on two lines → both lines back, the page deleted (its own second card isn't an outside reference) (0.405916ms)
+✔ Undo keeps a made page he wrote in, renamed, gave a child, or that something else links to (4.488625ms)
+✔ Undo of a reused paste removes only that card (1.065458ms)
+✔ Undo of a restore: back in the same Trash row with its original parent; edits kept; blocked by a move or a new reference (4.244833ms)
+✔ Good Stuffs Undo removes only this save; the record goes only if this paste made it and nothing else uses it (3.093958ms)
+✔ Good Stuffs: the URL line Undo put back isn't collected again by a later save, until he edits it (0.623542ms)
+✔ Undo: a card he deleted is skipped; none left → "Page changed · nothing was undone" (2.927625ms)
+✔ undoCards: the same result on the server document and on a local one with more typing, nesting and a deleted card (0.387458ms)
+✔ the identity invariant holds over a random sequence of paste, Undo, trash, restore and typed lines (654.279958ms)
+✔ the review still lists a Good Stuffs link page two days later; Bring to today doesn't offer the card (1.173666ms)
+(node:33056) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.links-reupgrade","restored":3,"gone":[],"keyTaken":[],"linesRemoved":2,"linesKept":["page-g"]}
+✔ rollback 5 → 4: layout 4 exactly, each URL written as its page's first line; migration 5 restores identity and takes the line out (266.236042ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ re-upgrade: a page deleted for good or a key taken meanwhile is reported, never overwritten (156.165166ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ the rollback refuses a store that isn't layout 5, and changes nothing when the backup can't be written (375.584292ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.links-reupgrade","restored":1,"gone":[],"keyTaken":[],"linesRemoved":1,"linesKept":[]}
+✔ a URL line inside the editor document comes out too, and the page reads as before (141.1495ms)
+(node:33057) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ only a finite, non-negative total_cost counts; 0 is a real cost; errors and timeouts are not (86.117042ms)
+✔ the request asks for that generation with the key, and nothing else (0.78ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ parallel and repeated lookups settle an unknown attempt once; the workspace is untouched (47.6665ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ estimated attempts (no generation id) are never looked up or settled by it (18.969958ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ a cost above the reservation still settles, and pauses calls as any over-reservation does (12.325125ms)
+(node:33058) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ a run: picks only from what was sent, dates checked by the app, manifest and cost recorded on the draft subject (131.792042ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ empty is a normal answer; every entry invalid or bad JSON is "Model unavailable" (113.767167ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ failures: 401 key rejected (no charge), 500 / timeout unavailable with the cost estimated (205.594208ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ busy: a capture call in flight ends the run as "Model busy" with nothing reserved; budget used up says so (108.795458ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ double run of the same runId: one call, one charge (25.235167ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ expiry at 90 s: a persisted failure with Retry; the old answer arriving later settles its cost and publishes nothing (69.9465ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ expiry racing a result: only one changes the draft (89.667084ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ restart: a run left drafting by an earlier process expires at once; an unknown cost shows "Model paused" without Retry (80.812625ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ context: the previous day always; linked pages whole until the budget; over budget alone refuses with nothing sent (68.707625ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ Ratchet #80: a replay of the same run while its call is still out follows it; the run keeps its result (47.950541ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ Ratchet #80: a paid answer about a line with an impossible date is read, not thrown (29.427291ms)
+(node:33059) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ one paid call in flight; settling frees the next; a replayed reservation is no new charge (55.972916ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ 10 USD per Vancouver day: spent + this call's worst case may not pass the cap (55.31375ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ Lead 33ae4578: no generation id and no cost → estimated at the reservation; counted against the day, calls go on (36.747625ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ a generation id without a cost stays unknown and blocks; reconcile takes an amount or the worst case, never zero by default (17.83875ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ an estimate is replaced by the real cost (ledger only) or reconciled by hand; a settled attempt can't be reconciled (37.719583ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ the first record wins: the same values again are a no-op, different values are refused (34.956334ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ a charge above its reservation pauses further calls (32.471958ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ Lead (a) check 1: Undo, which restores a whole before-snapshot, leaves every ledger row as it was (42.928375ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ Lead (a) check 2: a failure after both writes rolls back the settlement and the workspace change together (25.6615ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ a result the domain refuses (the capture moved on) is still paid for, and applies nothing (16.773792ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ after a restart, an attempt still marked in flight never got a reply: estimated, and calls go on (13.36725ms)
+✔ the browser cannot send ledger operations: they are not commands (3.49075ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.trash-reupgrade","restored":0,"recreatedDropped":[],"idMap":{},"sourcesMoved":0}
+{"level":"info","event":"storage.links-reupgrade","restored":0,"gone":[],"keyTaken":[],"linesRemoved":0,"linesKept":[]}
+✔ rollback 3 → 2 keeps the ledger (and a JSON copy); rolling forward again finds the same spend (393.490833ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ Ratchet #68: one attempt, one result; a different result under any operation id is refused, the same one replays (24.272334ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ Ratchet #68: reusing a reservation id with another capture, revision or model is refused, not replayed (16.344709ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ Ratchet #68: an "estimated" record after a timeout binds nothing; the real late result is then recorded and applied once (21.479333ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ Lead c8706da8: a real result without a cost is applied once, counted at worst case, and stays to be reconciled (19.435667ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ Lead: cost and result are judged separately; the same result later with its real cost settles the cost and replays (17.03825ms)
+✔ DAYTHREAD_MODEL_CAP_USD can only lower the $10 cap (0.314917ms)
+(node:33060) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ auto: grounded new items save at once with their dates; held and update items wait; the cost is settled (144.197209ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ a do date places the task on that day; Apply later applies the waiting update with its version check (40.018792ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ confirm mode: nothing saves until Apply (25.238792ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ parts that can't be read are counted and shown, never applied (53.229417ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ timeout: text kept, capture failed, the charge is estimated at the reservation and the next capture still runs (33.332625ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ a 401 with no generation or cost is refused before routing: settled at 0 with the reason, the model isn't paused (25.169167ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ an item with a field of the wrong type is counted as unreadable; the rest saves and the cost is settled (23.589875ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ every item unreadable: failed with "Model unavailable", no empty receipt, the reported cost is settled (64.557583ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ a date role outside do/due is dropped, so the task waits as "Date unclear" (14.385584ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ an HTTP error never proves nothing was charged: a reported cost is kept; a generation without one is unknown and pauses; neither is estimated (357.224417ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ dates resolve from when he wrote the text: 明天 written before midnight, organized after, is the next day of writing (21.95625ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ a model capture without a valid capture time is refused (18.157417ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ a generation id without a cost is looked up: OpenRouter's total_cost settles it and the model isn't paused (28.206791ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ a lookup that keeps failing leaves it unknown and paused; a later capture looks again and runs once the cost is there (51.294959ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ no price: nothing is reserved or sent (13.332792ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ a capture discarded while the call runs: the cost is settled, the result is not applied (16.405166ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ two runs for the same capture: one call, one result (14.272333ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ budget used up: text kept, nothing sent (16.143416ms)
+✔ the browser cannot send the server-only capture actions (3.237459ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+(node:33061) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ server Retry is refused while the model is paused; the capture keeps its revision (160.826792ms)
+✔ a Notes line is copied into today's Notes, keeps its source, and is not offered again (12.19725ms)
+✔ the copy goes through the editor save path: tags, starter rows and the editor document all agree (10.51475ms)
+✔ a Good Stuffs link brought to today is another save of the same material (1.401709ms)
+✔ a line goes to the same-named section, or to Notes when today has none (2.045166ms)
+✔ the same-named section is matched case-insensitively (1.413166ms)
+✔ with no Notes section at all, a Notes heading is added at the end (1.058666ms)
+✔ tasks, page cards, empty lines and unknown lines are refused and write nothing (5.450458ms)
+✔ Undo removes the copy and offers the line again (1.256166ms)
+✔ the browser command schema accepts bring-line (3.074833ms)
+✔ a copy deleted later is not offered again; event and page-card lines are never offered (2.906917ms)
+✔ Add all tasks plans every row in one operation; one Undo takes them all back (1.79625ms)
+✔ with Top 3 full, the next Top 3 row goes to the plan list (1.180667ms)
+✔ a removed plan section comes back at the top, in template order (1.183292ms)
+✔ a + after typing the third Top 3 row goes to the plan list; Top 3 stays at three (1.258166ms)
+✔ planned tasks go before the section's empty starter row, from the card and from plan-task alike (1.0975ms)
+✔ the stored shape on Brian's page (a starter task row saved as an empty draft task) also stays last (0.641917ms)
+✔ a task with an empty title is in no task list or count, stays on its page, and comes back once it has a title (1.312708ms)
+(node:33063) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ the tree: children in order, breadcrumb root first, subtree at any depth (10.878333ms)
+✔ N08: a page can not move into itself or its descendants; a day page can not move at all (4.770292ms)
+✔ N09: moving keeps the id, the body and every reference record; it lands last among the new siblings (11.500541ms)
+✔ moving a page carries its subtree, and Undo puts it back where it was (0.890375ms)
+✔ a replayed move applies once, a stale one is refused, and a refusal writes nothing (2.724959ms)
+✔ a deep chain with identical titles: identity is the id (47.152167ms)
+✔ undoing a card deletion brings the source back into Linked from (1.015708ms)
+✔ a page can move under a day page, and from one day page to another (0.729167ms)
+✔ N10: deleting the card leaves the child in the tree; the parent then leaves Linked from (0.522ms)
+✔ N-5: one entry per referencing page, day pages newest first, then document pages newest first (2.662209ms)
+✔ stored data that disagrees with the rules reads safely: a missing parent is top level, a cycle stops the breadcrumb (1.335542ms)
+✔ the browser command schema accepts move-page with a parent or null and nothing else (6.055125ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ SQLite keeps a move, the new sibling order and its Undo across a reopen; no new column is needed (72.251917ms)
+✔ a page moved under a future day stays in the sidebar Days, before today, with that day as its ancestor (2.066833ms)
+✔ pages made in day pages are grouped by day for the Pages screen, newest day first (0.486666ms)
+✔ repository persists replay identity and rejects stale writes across independent processes (318.218ms)
+✔ repository serializes competing revisions and remains usable after rejection (35.036791ms)
+(node:33066) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ SQLite: reopen, lost-response replay, changed identity, stale rejection and continued use (36.039791ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ SQLite: competing clients serialize and stale loser can recover (12.94975ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ SQLite: storage failure after entity writes rolls back data, undo, receipts and revision (47.048625ms)
+{"level":"info","event":"storage.initialize","result":"imported","pages":2}
+✔ SQLite imports every optional field, arrays/order, receipts and undo exactly once; preserves source bytes (26.850042ms)
+{"level":"info","event":"storage.initialize","result":"imported","pages":0}
+{"level":"info","event":"storage.initialize","result":"imported","pages":0}
+{"level":"info","event":"storage.initialize","result":"imported","pages":0}
+✔ SQLite invalid and duplicate-key imports abort with source intact, and can retry after correction (46.736459ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ SQLite initialized missing-table and newer-layout stores fail instead of reimporting (27.199167ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ SQLite independent processes contend under one transaction; one stale writer loses (205.54ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ SQLite explicit missing import source fails before creating a database; only default-path mode permits empty initialization (9.207417ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ SQLite layout 1 (no parentId) upgrades in place; old pages stay top level and new subpages keep their parent (18.387166ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.trash-reupgrade","restored":0,"recreatedDropped":[],"idMap":{},"sourcesMoved":0}
+{"level":"info","event":"storage.links-reupgrade","restored":0,"gone":[],"keyTaken":[],"linesRemoved":0,"linesKept":[]}
+✔ rollback script: a store with a subpage and its card goes back to layout 1 with no pageLink left anywhere (324.887791ms)
+✔ a subpage records the page it was made in (a day page too), starts empty and untitled (6.010458ms)
+✔ retrying the create under a new operation id finds the same page; a clash is refused (1.522541ms)
+✔ Pages → New keeps its old shape: top level with a Notes heading (0.075834ms)
+✔ the card is stored as a reference to the page and seeds back as the same card (0.508666ms)
+✔ a reference saved before cards existed opens as a card (0.574542ms)
+✔ deleting the card leaves the page and its parent alone (1.617875ms)
+✔ a page title with #tags or a task-like title neither adds tags nor touches tasks through the card (11.948375ms)
+✔ rename-page renames documents, keeps an empty title empty, and refuses day pages (0.997542ms)
+✔ a tag is # and the letters, digits, _, - or / after it (5.601625ms)
+✔ a # right after other text still starts a tag, and full-width ＃ counts (0.069833ms)
+✔ a bare # is not a tag: heading shorthand, C#, and a lone mark (0.04775ms)
+✔ anything but letters, numbers, _, - and / ends a tag (Obsidian rule, Brian 5b496134) (0.177291ms)
+✔ the # in a link is not a tag (0.118625ms)
+✔ match positions cover the mark and the tag, for the editor tint (1.340875ms)
+✔ tagIndex reads paragraph and task blocks, counts a block once per tag, and groups case-insensitively under the first-written form (33.195083ms)
+(node:33072) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.trash-reupgrade","restored":2,"recreatedDropped":[],"idMap":{},"sourcesMoved":0}
+{"level":"info","event":"storage.links-reupgrade","restored":0,"gone":[],"keyTaken":[],"linesRemoved":0,"linesKept":[]}
+✔ script + migration 4, no clash: held pages come back in the trash with their batches; Undo cleared; running again does nothing (425.489209ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.trash-reupgrade","restored":2,"recreatedDropped":["P"],"idMap":{},"sourcesMoved":0}
+{"level":"info","event":"storage.links-reupgrade","restored":0,"gone":[],"keyTaken":[],"linesRemoved":0,"linesKept":[]}
+✔ clash, untouched recreation: it is dropped and the held page keeps its id (162.518708ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.trash-reupgrade","restored":2,"recreatedDropped":[],"idMap":{"P":"f3a4b11e-c011-4c48-a09b-f46fc4bd9ed3"},"sourcesMoved":2}
+{"level":"info","event":"storage.links-reupgrade","restored":0,"gone":[],"keyTaken":[],"linesRemoved":0,"linesKept":[]}
+✔ clash, written in: both kept; held rows of any batch and recorded sources move; live ones stay (162.662459ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+✔ a backup that cannot be written stops the script with nothing changed (155.521375ms)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.trash-reupgrade","restored":2,"recreatedDropped":[],"idMap":{},"sourcesMoved":0}
+{"level":"info","event":"storage.links-reupgrade","restored":0,"gone":[],"keyTaken":[],"linesRemoved":0,"linesKept":[]}
+✔ a new Undo after the re-upgrade works and keeps trashed pages (158.5915ms)
+✔ delete: the page and its live subpages go to the trash as one batch and leave every list (47.428167ms)
+✔ Undo of a delete brings everything back; tags and lists show again (8.2405ms)
+✔ day pages, missing pages and pages already in the trash are refused (24.576125ms)
+✔ a trashed page is read-only: no edit, rename, move, subpage or new card to it (20.111083ms)
+✔ two batches: delete a child, then its parent; restore the parent leaves the child in the trash (5.612584ms)
+✔ restore a child alone while its parent is in the trash: top level, with its own subtree from that delete (3.176125ms)
+✔ restore-page only takes members of the same delete: a subpage trashed earlier stays (4.027583ms)
+✔ same-batch delete → restore only a child → move it → restore the batch: the child stays where it was moved (5.192084ms)
+✔ restore keeps the stored order; a restored page under a day goes back under that day (3.562ms)
+✔ Upcoming includes deadline-only, start-only and do dates beyond fourteen days (11.738875ms)
+✔ Upcoming merges same-task same-date facts and retains distinct dates independently (1.027833ms)
+✔ Upcoming preserves paused date facts, excludes done/cancelled/undated tasks and honors inclusive bounds (0.228792ms)
+✔ Upcoming is a pure read, deterministic for ties, and validates the date window (0.303666ms)
+ℹ tests 262
+ℹ suites 0
+ℹ pass 258
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 4
+ℹ duration_ms 2037.582792
