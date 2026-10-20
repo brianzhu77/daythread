@@ -23,6 +23,7 @@ Draft my day, the review's Prepare tomorrow, Related and the card's "From your n
 ## 2. Steps and trigger (Jazz §1–§2)
 
 - **Trigger: his tap only.** No call on open or reload. There's one draft per day; Retry only after a failure; the run belongs to the day it started for.
+- **Retry after a failure is a new paid attempt for the same day and is always allowed**, unless the line says no Retry (paused, budget, too large). "At most one real run per morning" counts successful runs, not attempts.
 - **Step 1:** "Draft my day" on the card is **the only real entry** (Lead, after Ratchet `8ba9abb6`). The card also shows on a day with nothing else, while there's no draft (Jazz §2, Lead `8fa4f515`).
   - **The evening review stays on its simulated path in step 1** and makes no request (Lead, after Ratchet `8ba9abb6`). On a day the review wrote a draft, the card shows "Suggested last night" as now, and Draft my day doesn't appear. So a morning has at most one real run.
 - **Step 2:** the review's Prepare tomorrow through the same call, with the review text as extra input, read after step 1's success check (§8).
@@ -64,6 +65,44 @@ Draft my day, the review's Prepare tomorrow, Related and the card's "From your n
   - The task title is the line's text as fingerprinted. Nothing is written back into the line.
   - `plan-tasks` keeps its own checks.
 - **No duplicate tasks:** a proposal accepted twice (same operation id) replays; a second operation id finds the line already linked and refuses.
+- **Where "accepted" is recorded (Ratchet `ae9c7b87` 2):** the source line is never touched, and `Task` has no `sourceBlockId`.
+  - **The record:** `add-proposal` writes the new task's row on the drafted day's page with `sourcePageId` / `sourceBlockId` / `sourceFingerprint` in that row's block entry and in `editorBlockMetadata`. This is exactly how `bring-line` records "brought" (`wasBrought`, A8, shipped in 5193991).
+  - **"Linked":** a line counts as linked when **any** page's blocks or block metadata hold that `sourcePageId` + `sourceBlockId`. Metadata outlives the row being deleted, as for brought lines, so deleting the task row doesn't bring the proposal back.
+  - **Undo:** whole-workspace Undo removes the task, the row and its metadata together, so the line is offered again, the same as Bring.
+  - **Same day, twice:** the second `add-proposal` finds the link and refuses.
+  - **The next day:** the context builder leaves linked lines out of the manifest (§5), so a re-run never re-offers them.
+  - `hidden` (Hide for today) lives in that day's draft only.
+
+### 4a. Stored shape of `Page.draft` (Ratchet `ae9c7b87` 1)
+
+Everything lives in the existing `draft` JSON column. The fields today's build (5193991) reads are **always present** in every state:
+
+```ts
+draft: {
+  simulated: boolean          // old field; false for a real run
+  taskIds: string[]           // old field; [] while drafting or failed
+  materialIds: string[]       // old field; [] while drafting or failed
+  text: string                // old field; '' for a real run (no model prose)
+  run?: {                     // new, real runs only
+    runId: string; trigger: 'card'; startedAt: string
+    status: 'drafting' | 'ready' | 'failed' | 'expired'
+    attemptId: string; model: string; requestHash: string
+    failure?: 'key-rejected' | 'unavailable' | 'paused' | 'budget' | 'too-large' | 'busy'
+    manifest: {               // exactly what was sent (§5), stored with the run
+      lines: { lineId: string; pageId: string; blockId: string; fingerprint: string }[]
+      sentPages: string[]; omittedPages: string[]
+      taskCandidates: string[]; materialCandidates: string[]
+    }
+    reasons?: Record<string, string>   // taskId → "Drafted for today"
+  }
+  proposals?: { lineId: string; pageId: string; blockId: string; fingerprint: string; date: string | null }[]
+  hidden?: string[]           // lineIds hidden for today
+}
+```
+
+- A failure also sets the existing `draftError`, which today's build already shows with its own Retry.
+- **The ledger still keeps only `requestHash`.** The manifest in the draft is what can be audited, and its hash is part of the request body.
+- **Old-build check (in §9):** with a draft in each status, today's build opens the file, edits that day's page and Undoes the edit, with no error screen. A new-build row carrying `sourceBlockId` survives the old build's save. Then the new build reads everything back unchanged.
 
 ## 5. Context: an auditable manifest (Ratchet 3, Lead: one hop + previous day page)
 
@@ -90,9 +129,14 @@ The request has labelled parts, and a **manifest** (part of the fingerprint, sto
 - `materialIds` ⊆ the candidates, ≤ 2.
 - Proposals:
   - `lineId` must be in the manifest's lines;
-  - `date`, if any, must be a real date ≥ the drafted day; otherwise it's set to null, never guessed. The date tag shows only when the line has a date word (the existing grounding date check on the line text);
-  - "If I have time" lines with a date get the date dropped.
-- Everything invalid is dropped. If every item is invalid, it's `unavailable`, the same as A6a.
+  - **Dates are checked against the app's own parse** (Ratchet `ae9c7b87` 3).
+    - **The parser:** a small deterministic one reads the line for exactly one day: 今天 / 明天 / 后天, 周X / 星期X / 下周X, today / tomorrow / (next) Mon–Sun, M/D, X月X日, YYYY-MM-DD.
+    - **The basis:** the date of the page the line is on. For an undated page, the date of the day page it sits under (its `parentId` chain). With no day above it, relative words have **no basis**, and only absolute dates resolve.
+    - **Keep the model's date only if** the parse yields exactly one date, it equals the model's, and it's ≥ the drafted day.
+    - Otherwise it's set to null and the proposal stays undated: no date word, an ambiguous one ("下周"), no basis, a mismatch, or a past date.
+    - "If I have time" lines never keep a date.
+  - Tests: "周五" with the model returning Saturday → no date. "明天" in an undated linked page with no day parent → no date, never guessed from the drafted day. "明天" in a subpage under Sun Oct 18 → Mon Oct 19.
+- **Empty is not failure:** a valid answer with every `propose: false` and no picks is "Nothing to suggest today". An answer whose entries are **all** invalid (ids not sent, wrong shape), or invalid JSON, is `unavailable`, with Retry.
 
 ## 7. Cost: the same book (Ratchet 4)
 
@@ -136,7 +180,8 @@ The request has labelled parts, and a **manifest** (part of the fingerprint, sto
   - busy both ways: no reservation, the capture text saved;
   - budget used up (`DAYTHREAD_MODEL_CAP_USD`); no ledger row for simulated.
 - **Browser on a copy of his data at 1280 / 390:** Jazz §5 checks 1–7.
-- **Rollback:** no migration, so the previous build opens the same file. A round trip checks that it ignores the extra `draft` keys.
+- **Rollback:** no migration, so the previous build opens the same file. Per §4a, with a draft in each status (drafting, ready, failed, expired), today's build 5193991 opens it, edits that day's page and Undoes the edit, with no error screen. A row's `sourceBlockId` survives its save, and the new build reads it all back.
+- **Accepted record:** `add-proposal` then Undo re-offers; deleting the row doesn't; the same day twice refuses; the next day's manifest leaves the line out.
 - **Paid smoke after review:** one real draft on his data, under a $0.10 cap, with its cost reported.
 
 ## 10. Not in this plan
