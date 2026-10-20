@@ -122,6 +122,10 @@ They use the editor's existing notice strip. Every create says what happened and
 - **⌘Z right after the paste does the same as Undo.** If the editor can't make that a single step, say so in the
   plan. The fallback is that ⌘Z removes the card, and the page stays with its "Made a page · Undo" notice still on
   screen.
+- **Typing elsewhere doesn't block Undo.** Undo checks only this paste's cards (same block, same page). It turns
+  those back into text and leaves every other line, including a note he typed after the paste, as it is. A card he
+  already deleted is skipped. Only when none of the cards are left does it say "Page changed · nothing was undone"
+  (pending Ratchet on races, Lead decides).
 - **Deleting a card later** (Backspace, cut) removes only the card, like any page card (N-2). The page stays in Pages.
 - **The same URL pasted twice on the same page** gives two cards to one page, each with "Saved before". That follows
   "each paste keeps its own line" (N-4).
