@@ -85,8 +85,13 @@ Write…                                                ← empty body
 - **URL row:** sits under the title, above Linked from. It shows the URL **exactly as pasted**, on one muted line
   (`--ink-2`, 15px) cut with … at the end, with the full URL on hover or long-press. "Open ↗" is styled like the
   app's other text buttons. The row isn't editable in A2 (§1).
-- **Where the page lives:** top level of Pages, never under today (N-3). The day it came from shows in Linked from. In
-  the Pages list it's an ordinary row with the globe icon.
+- **Where the page lives (Lead `22:32`, after Bumblebee):** the same as `/page`. It's a **child of the page he pasted
+  into**, usually the day, with the card where he pasted. This replaces N-3's "top level". His two recipe pages already
+  live this way, so there's one rule for where pages live. The breadcrumb shows the parent ("‹ Mon, Oct 19"), and by
+  N-5's display rule the parent isn't repeated in Linked from. In Pages it shows under "In your days" with the globe
+  icon.
+- **The same URL pasted on a later day** keeps the page under its **first** parent. The new day only gets a card, so
+  it shows in Linked from.
 - **Trashed link page:** read-only like any trashed page. The URL row stays, and Open ↗ still works, because opening
   a website changes nothing.
 
@@ -98,7 +103,7 @@ They use the editor's existing notice strip. Every create says what happened and
 | --- | --- |
 | New page | "Made a page · Undo" |
 | Same URL as a live page | "Saved before · Mon, Oct 19 · Undo". The card goes to the **existing** page and no page is made |
-| Same URL as a page in the trash | "Restored from trash · Undo". The page comes back the way A4's Restore brings it back, and the card points to it |
+| Same URL as a page in the trash | "Restored from trash · Undo". The page comes back the way A4's Restore brings it back (its old parent, or the top level if that's in the trash too), and the card points to it |
 | Several URLs | "Made 3 pages · Undo". With repeats: "Made 2 pages · 1 saved before · Undo" |
 | Save failed | No notice. The card shows "Not created · Retry" (§2) |
 
@@ -123,10 +128,10 @@ page, live or in the trash, including two pastes at the same moment.
 
 ## 6. Checks (fake data, his copy, 1280 and 390)
 
-1. Paste one URL on an empty line of today → card, "Made a page · Undo", page at top level of Pages with the globe,
-   Linked from "Today", empty body.
+1. Paste one URL on an empty line of today → card, "Made a page · Undo", the page is a child of today (breadcrumb
+   "‹ Today", Pages "In your days", globe icon), empty body.
 2. Paste the same URL with different host case or a trailing `/` on another day → "Saved before · {date}", no second
-   page, Linked from lists both days.
+   page, the page stays under the first day, and the second day shows in its Linked from.
 3. Trash the page, paste the URL again → "Restored from trash", one page, live.
 4. Undo right after 1 → the line is the URL text again, and the page is gone from Pages and Trash. Undo after 2 →
    only the card goes. Undo after 3 → the page is back in the trash.
