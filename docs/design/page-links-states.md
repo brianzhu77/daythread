@@ -96,8 +96,8 @@ filled in) and pastes into a day.
   whole blocks with cards in them. Those stay ordinary pastes.
 - Because the source link is a real page link, the quote's page shows up in the source's **Linked from** (P13).
 
-**Scope note for Lead:** §4 can ship after §1–§3 if the plan finds it heavy. `[[` is the core of A9, and quote with
-source is a convenience on top of the same link.
+**Not in this round (Lead `a5a33307`):** §4 is A9b, the next round. This round is A9a (`[[`, §1–§3) plus B15 (§5).
+§4 stays here as the design for A9b, and §6 check 7 moves with it.
 
 ## 5. Linked from (B15 and what links add)
 
@@ -109,8 +109,12 @@ source is a convenience on top of the same link.
   reference. If that one is deleted, it falls back to the next newest. When the last one goes, the entry leaves.
   **Moving either page never changes the order.** That's the bug B15 fixes: today's order follows page order, so a
   move reshuffles it.
-- **References from before B15** have no time. They sort after all timed ones, in today's order. Nothing is
-  backfilled from guesses.
+- **References from before B15** get their order **frozen once at upgrade**, as it reads that day. They sort after
+  every reference made since, and a later move doesn't reshuffle them (Ratchet `c293ef38`: if their order is
+  recomputed from the page list each time, B15 still reshuffles). No real time is invented for them; they're shown
+  only as "older".
+- **A time is set when a reference is made and never again.** Ordinary saves, renames and moves don't touch it.
+  Each link or card has its own time, so deleting the newest falls back to the next one still there.
 - **Display is unchanged:** day pages as their date ("Fri Oct 16", "Today"), first 3 shown, then "{n} more"; a source
   page in the trash reads "{label} (removed)" and doesn't open (A4).
 
