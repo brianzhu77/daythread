@@ -1,0 +1,184 @@
+# A2 · paste a URL → a page — plan for review
+
+- Author: Roadbuster · 2026-10-20 · status: **plan, not built**. No code until Ratchet's pre-review (task #81).
+- Inputs:
+  - Brian `3596b765` (an empty page with the link as a property, linked back to today), `e83b0640` (O1 = B: no fetch);
+  - pages-delta v0.4 N-3, N-4, N-5;
+  - Lead `8ea3ff23` (no fetch), `ca10deaf` (child of the page pasted into), `043d101e` (the four cuts), `5043b9c5` (Good Stuffs gets a page, and the follow-up carries on; an empty bullet counts);
+  - Jazz `docs/design/link-pages-states.md` @ 055edb6 (the design source for what he sees);
+  - Ratchet `8ef58d40` and `a68af09f` (restore boundary, Undo after edits, one dedup constraint, N-4 boundary tests, no `new URL().href` as the key);
+  - Bumblebee `98a94e04`.
+- Base: main 055edb6. **His data** (copy of 2026-10-20): 0 Materials, no URLs, 9 pages. Nothing to migrate, but every old read path stays.
+
+## 1. Scope
+
+**In:** paste onto an **empty** paragraph, bullet or numbered line, on any day or document page, in any section (Good Stuffs included):
+
+- **What counts:** everything pasted is http(s) URLs, one per line, blank lines allowed (Jazz §1).
+- **What it makes:**
+  - one **link page** per URL, as a **child of the page pasted into** (Lead `ca10deaf`, the same as `/page`);
+  - a **link card** where each URL was;
+  - one notice with Undo.
+- **No network call of any kind.** "Offline" means only that the local server is unreachable, which is the card's existing "Not created · Retry".
+
+**Out:**
+- Make page for a URL inside a sentence;
+- capture-bar URLs (B18);
+- editing or removing a page's URL;
+- the per-save notes list.
+
+Out by design, unchanged: a URL pasted into a sentence, a task row, a heading, the title, or as typed text.
+
+## 2. Data: the page owns the URL; Good Stuffs adds a follow-up record
+
+- **`Page.url?: string`** holds the URL **exactly as first pasted**.
+  - A page is a link page iff `url` is set.
+  - The key is computed, never stored: `urlKey(page.url)`.
+- **The page is the only owner of a key**, live or in the trash. Two pages never hold the same key (N-4).
+- **Follow-up for Good Stuffs (Lead `5043b9c5`):**
+  - **When it's made:** pasting a link page **under a Good Stuffs section** creates or reuses its follow-up record, the existing `Material`, with a new **`pageId`**.
+  - **What it holds:** `Material.url` is set to the page's URL, so the old readers keep working. `sources` gets one entry per Good Stuffs paste, for the sort card's "Saved Mon in Good Stuffs".
+  - **The selection is unchanged.** The evening review's Good Stuffs step and Related keep reading `materialReview` (pending ≥ 2 days, watching due, skip, Don't resurface), so A5's rules carry on unchanged.
+  - **Display:** the sort card's title comes from the page, and tapping it opens **the page**. ↗ opens the URL.
+- **Pasted in Notes or anywhere else:** a link page with **no** Material, so it isn't in the follow-up. Pasting the same URL later under Good Stuffs adds the Material to the **same** page.
+- **Done with it:** a Good Stuffs repeat paste of a "Done with it" page puts it back to To sort (G05, the existing branch).
+- **Old saved items (Lead: say the read path):**
+  - **A URL typed into Good Stuffs** still becomes a `Material` line through `linkMaterialLines`, exactly as A5 built it, and its Open opens the URL.
+  - **Never two records:** if a link page already holds that key, the typed line's Material gets `pageId` → that page instead of standing alone. If the URL is pasted later, the page is created and linked to the existing Material.
+  - So **a URL never becomes a page plus a separate saved item** (Bumblebee 1). His data has none of the old kind.
+- **The one dedup function:** `urlOwner(ws, raw) → { key, page?, material? }`, used by every path: paste, its retry, several URLs in one paste, two devices, and the typed Good Stuffs line.
+  - It reads `page.url` and `material.url` through `urlKey`.
+  - Domain invariants are checked after every command: one page per key; one Material per key; a Material with `pageId` has the same key as its page.
+
+### `urlKey`, exactly N-4 (`src/domain/url-key.ts`)
+
+- **Built from the raw string by hand, not `new URL().href`** (Ratchet). That would percent-encode and normalise the path, and it rewrites more besides.
+- **Rules:**
+  - trim;
+  - match `^(https?)://([^/?#]*)(.*)$`, otherwise not a URL;
+  - lower-case the scheme;
+  - lower-case the host, keeping userinfo as typed;
+  - drop `:80` for http and `:443` for https;
+  - an empty rest, or one starting with `?` or `#`, gets `/` in front;
+  - everything else is kept byte for byte.
+- `new URL()` is used only to **validate** (it must parse, the scheme must be http(s), and the host must be non-empty).
+- **Tests:**
+  - N-4's seven rows;
+  - `https://x.com?a=1` → `https://x.com/?a=1`;
+  - `https://x.com#f` → `https://x.com/#f`;
+  - `https://X.com:8080/A` → `https://x.com:8080/A`;
+  - `http://x.com:443/` kept;
+  - an IDN host kept as typed;
+  - `%E5%A4%A7` vs `大` in the path → **different** keys (kept as typed; noted, not normalised).
+
+### Default title (Jazz §3)
+
+- `defaultLinkTitle(raw)`: drop `http(s)://` and a leading `www.`, decode percent-escapes (on a decode error, keep the raw text), drop a trailing `/`, and keep the query and fragment.
+- It's pure, computed on the server, and stored as `title`, an ordinary title from then on.
+
+## 3. The paste
+
+**Browser** (`page-editor.tsx` `pasteHandler`, before the HTML branch, because a link copied from a page carries `text/html` too):
+
+1. **Trigger check:** `text/plain` → lines → each trimmed line is empty or one `httpUrl`, with at least one URL. The cursor block is an empty `paragraph`, `bulletListItem` or `numberedListItem`, and the selection is collapsed. Otherwise the default paste runs.
+2. **The cards go in, one editor transaction:**
+   - each URL gets a `pageLink` card with a page id chosen here, in order;
+   - the empty line after them is kept;
+   - **a card replacing a bullet sits at that bullet's nesting level.**
+3. **Each card's target:** if the browser's own workspace already has a page for that key, the card points at **that** page from the start. That's the common repeat, and it means the card is never saved pointing at a page that won't exist.
+4. **Then one command for all the cards:** `paste-links { pageId: parent, sectionId, items: [{ url, pageId, cardBlockId }] }`, through `/page`'s confirm loop: 3 tries, then "Not created · Retry" on each card still pending.
+5. **If the server answers with a different page** for an item (a race with another device), that card's `pageId` prop is updated before the next save.
+
+**Server** (`case "paste-links"`, inside the one `BEGIN IMMEDIATE` transaction), for each item in order:
+
+- **No owner:**
+  - create the page (`id: pageId`, `document`, `parentId`, `url: raw`, title from `defaultLinkTitle`, the `/page` body shape) → **made**.
+  - A second item in the same paste with the same key finds the page just made → **reused**.
+- **The owner is live:** nothing is created and the parent is unchanged → **reused** ("Saved before · {day the page was made}").
+- **The owner is in the trash:** restore **exactly what that page's own Restore restores**: `restore-page`'s set, the page plus the descendants trashed in **the same delete** (Jazz 055edb6, Ratchet). Subpages deleted earlier stay in the trash. The old parent being in the trash → top level, with A4's notice → **restored**.
+- **Good Stuffs section:** `urlOwner`'s Material, or a new one with `pageId`. Its `sources` gets `{ pageId: parent, blockId: cardBlockId, note: "" }` unless that `blockId` is already there.
+- **Replay and retry:**
+  - The same operation id → the first receipt (existing).
+  - A retry under a new id: an item whose `pageId` already exists with the same key → the outcome from the stored record (§4), no second page.
+  - Two devices: the second command fails on `expectedRevision`, its confirm loop retries on the fresh workspace, and it lands in "reused" → one page, two cards (N19).
+
+## 4. Undo (Jazz §4 @ 055edb6)
+
+**The record.** Each card's outcome is stored in the parent page's `editorBlockMetadata["paste:" + cardBlockId]`, the way A6b keys `accepted:<taskId>`. It has its own key because `save-editor` copies every saved block into `editorBlockMetadata[block.id]` (`workspace.ts:777`), which would overwrite a record under the card's own id. Metadata is never pruned, so the record outlives the card being deleted:
+
+```ts
+linkPaste: {
+  operationId: string            // the paste-links operation
+  outcome: "made" | "reused" | "restored"
+  url: string                    // raw, for turning the card back into text
+  restored?: { pageId: string; trashId: string; trashedAt: string }[]  // the exact set and its original delete identity
+  materialCreated?: boolean      // this paste made the Good Stuffs follow-up record
+}
+```
+
+**`undo-paste-links { pageId: parent, operationId }`** is one command with no snapshot restore. Generic Undo can't be used, because `save-editor` runs right after the paste. For each card of that operation:
+
+| Outcome | Undo does | Unless (then the page stays, "Kept {title} · linked from {page}") |
+| --- | --- | --- |
+| made | **deletes** the page record (not trash; it never existed for him), and its Material if this paste made it | the page has a title or body edit, a child, a Material decision, or **any reference other than this card**, from a live or trashed page, a card or `[[` |
+| restored | puts the `restored` set back in the trash **with its original `trashId`/`trashedAt`**, so it's the same Trash row; edits made meanwhile are kept (nothing in the trash is lost) | a new reference to any page of the set, added since the paste |
+| reused | nothing on the page | — |
+
+In every row:
+- the card's Good Stuffs save is removed from `sources` (or the Material, if `materialCreated` and it has no decision);
+- **the browser turns the card back into the URL text** as a plain link on the same line, after the command succeeds;
+- a card he already deleted himself is skipped.
+
+**⌘Z:**
+- **While the paste's notice is showing,** and the editor's last history step is that paste, ⌘Z runs the same Undo. It's a keydown handler in front of BlockNote's.
+- **After that, ⌘Z is ordinary editor undo:** it removes the card only, and the page stays (Jazz's fallback, and the same as deleting any card later).
+- It's cheap to build, so it's not a fallback-only design.
+
+## 5. Storage, rollback, old build
+
+- **Migration 5:** `pages.url TEXT`, `materials.pageId TEXT`, both null by default. `verifySqliteLayout` gets layout 5, and `sqlite-mapping` gets the fields.
+- **`scripts/sqlite-rollback-link-pages.ts`** (A4 pattern: it refuses without a fresh backup, then works in one transaction):
+  - **before dropping the columns, it inserts the URL as the first line of each link page's body**, so a rollback loses no URL;
+  - it drops `materials.pageId`; Good Stuffs Materials keep `url`, so their Open still works.
+- **Round trip** against the live build 21eb45b (layout 4), on a copy of his DB with:
+  - a page made in Notes;
+  - one made in Good Stuffs with a decision;
+  - a repeat paste;
+  - a trashed one, then restored by a paste;
+  - an undone paste.
+  The steps: rollback → 21eb45b opens it, edits and Undoes → migrate → the new build reads it. The URL lines on the pages are expected (stated), and nothing else differs.
+
+## 6. Surfaces
+
+| Surface | Change |
+| --- | --- |
+| Page card | A globe icon for link pages, ↗ opens the URL, and the domain is shown once the title isn't the default (Jazz §2). The states are reused. |
+| Link page | The URL row under the title (raw, one line, Open ↗), then "Linked from". Read-only in A2. |
+| Sidebar / Pages / Subpages / Trash | Globe icon for link pages. They sit under their parent ("In your days"). |
+| Evening review Good Stuffs / Related | Same selection. The title comes from the page, and tapping it opens the page. |
+| Morning "Bring to today" | **A pasted link is a card, so it's no longer offered** (cards aren't bringable). A typed Good Stuffs line still is. Jazz, please confirm. |
+| A6b draft | Material candidates as before. Cards aren't proposal lines. |
+
+## 7. Checks before the candidate
+
+- **Unit:**
+  - `urlKey` (§2 list);
+  - `defaultLinkTitle` (Chinese path, query, `www.`, a bad escape);
+  - `paste-links`: made, reused (another day, same paste twice, different host case), restored (same-delete subtree only, an older separate delete stays, parent in trash → top level), Good Stuffs Material created/reused, Done → To sort, a typed Material linked, replay, a retry with a new op id, a stale revision then retry, a refused non-http URL;
+  - `undo-paste-links`: each row of §4 plus each "unless" as its own case, restored-then-edited-then-Undo (edits kept, same `trashId`), a card deleted before Undo;
+  - the invariant check over a random sequence of paste, undo, trash, restore and typed lines.
+- **Browser, on a copy of his DB, 1280 and 390:**
+  - Jazz §6 checks 1–8, using **his real Notes bullet structure** (Lead 2);
+  - ⌘Z during the notice and after it;
+  - no request leaves 127.0.0.1.
+- **A5 rerun:** Ratchet reruns A5 acceptance on the A2 build. I run the review's Good Stuffs step with a pasted link page first.
+- **Rollback round trip** as in §5.
+
+## 8. For review
+
+- **Ratchet:**
+  1. the dedup function and `urlKey`'s exact rules;
+  2. the stored outcome record and the Undo checks (§4);
+  3. the rollback writing URLs into the body;
+  4. whether "made" Undo should delete the record (as Jazz's "gone from Pages and Trash") or trash it.
+- **Jazz:** "Bring to today" no longer offering pasted links (§6).
