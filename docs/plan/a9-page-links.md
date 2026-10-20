@@ -80,9 +80,12 @@ reads it from the workspace when it renders, so a rename shows everywhere at onc
   - match on title (case-insensitive substring; day pages also on "Mon, Oct 19", "Oct 19" and the ISO date);
     start-of-title matches first, then recency, max 8;
   - second line = where it lives (parent's label, "in Pages", or the domain for a link page);
-  - **empty query = recent pages.** Pages store no edit or open time today; I don't add one in this round. Recency is
-    **this device's recently opened pages** (localStorage, last 20, written by the page screen), falling back to day
-    pages newest first. Jazz, that's a narrowing of "opened or edited", say if it isn't enough;
+  - **Empty query = recent pages, the same on every device (Bumblebee 982b0765):**
+    - pages ranked by the newest `at` of any live reference to them (§2), so the pages he linked to or made from `[[`
+      most recently come first;
+    - then pages with no timed reference: day pages newest first, then the rest in stored order.
+    - It's computed from the workspace in memory, with no new field. Pages store no open or edit time, and none is added
+      in this round.
   - last row "New page "{text}"" once something is typed;
   - Esc, or typing `]]` with nothing chosen, leaves `[[text` as plain text.
 
@@ -160,7 +163,7 @@ reads it from the workspace when it renders, so a rename shows everywhere at onc
   - the layout-6 format bump instead of no bump (§0, §5);
   - §6's reader list.
 - **Jazz:**
-  - recency = this device's recently opened pages (§3);
+  - recency = pages linked most recently, server-side (§3, Bumblebee);
   - the link text in `NoteBlock.text` may be stale until the line is saved (§1, internal only).
 - **For A9b (Jazz §7, next round):** can the app's own copy carry the source page id? **Yes for block copies**: our
   `copyBlocks` already writes `application/x-daythread-blocks`, and the page id can go in that payload. **Not today
