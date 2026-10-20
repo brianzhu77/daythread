@@ -1,5 +1,5 @@
 import type { LocalDate, Task, Workspace } from './types.ts'
-import { addDays, DomainError } from './workspace.ts'
+import { addDays, DomainError, isBlankTask } from './workspace.ts'
 
 export type UpcomingKind = 'do' | 'start' | 'due'
 export interface UpcomingTaskDate {
@@ -31,7 +31,7 @@ export function getUpcomingByDate(
   const days = new Map<LocalDate, Map<string, { task: Readonly<Task>; kinds: UpcomingKind[] }>>()
   const fields = [['do', 'plannedOn'], ['start', 'attentionOn'], ['due', 'deadlineOn']] as const
   for (const task of workspace.tasks) {
-    if (task.status !== 'open') continue
+    if (task.status !== 'open' || isBlankTask(task)) continue
     for (const [kind, field] of fields) {
       const date = task[field]
       if (date === null || date < from || (through !== undefined && date > through)) continue

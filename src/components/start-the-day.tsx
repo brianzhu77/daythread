@@ -1,6 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { dayTemplate } from '../domain/editor-document'
+import { isBlankTask } from '../domain/workspace'
 import type { DayView, LocalDate, NoteBlock, Page, Task, Workspace } from '../domain/types'
 import { shortLabel, weekday } from './dates'
 import { DateTag } from './date-tag'
@@ -41,7 +42,7 @@ export function taskSuggestions(view: DayView, workspace: Workspace, today: Loca
   if (!page) return []
   const prev = previousDailyPage(workspace, today)
   const inTop3 = new Set(page.sections.filter(s => s.kind === 'top3').flatMap(s => s.blocks).map(b => b.taskId))
-  const eligible = (t: Task | undefined): t is Task => Boolean(t) && t!.status === 'open' && !t!.paused && t!.plannedOn !== today && !inTop3.has(t!.id)
+  const eligible = (t: Task | undefined): t is Task => Boolean(t) && !isBlankTask(t!) && t!.status === 'open' && !t!.paused && t!.plannedOn !== today && !inTop3.has(t!.id)
   const out: TaskSuggestion[] = []
   const seen = new Set<string>()
   for (const t of (page.draft?.taskIds ?? []).map(id => workspace.tasks.find(x => x.id === id)))

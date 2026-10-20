@@ -407,14 +407,24 @@ const flatNodes = (list: readonly EditorNode[]): EditorNode[] => list.flatMap((n
 export function getCalendarTasks(state: Workspace, day: string): Task[] {
   const planned = getDayView(state, day).planned;
   const ids = new Set(planned.map((t) => t.id));
-  const due = state.tasks.filter((t) => t.status === "open" && t.deadlineOn === day && !ids.has(t.id));
+  const due = state.tasks.filter((t) => t.status === "open" && !isBlankTask(t) && t.deadlineOn === day && !ids.has(t.id));
   return [...planned, ...due];
+}
+/**
+ * A task whose title is empty after trimming: an empty checkbox row left in a section (Brian's Oct 19 TODO - Other).
+ * It stays where he left it, on the page and in the editor, but no task list or count shows it: Today, Open, Paused,
+ * Calendar, Upcoming, the hand-off, the morning card, Draft my day, "N other open tasks" (Lead 2f917190 / d5723121,
+ * morning-card-build §3). Typing a title makes it a normal task again.
+ */
+export function isBlankTask(t: Task): boolean {
+  return !t.title.trim();
 }
 export function getDayView(state: Workspace, day: string): DayView {
   date(day);
   const current =
     state.pages.find((p) => p.type === "daily" && p.date === day) ?? null;
-  const planned = state.tasks.filter(
+  const listed = state.tasks.filter((t) => !isBlankTask(t));
+  const planned = listed.filter(
     (t) =>
       t.status === "open" &&
       t.plannedOn === day &&
@@ -423,7 +433,7 @@ export function getDayView(state: Workspace, day: string): DayView {
       ),
   );
   planned.sort((a, b) => (state.placements.find(p => p.taskId === a.id && p.date === day)?.order ?? 1e9) - (state.placements.find(p => p.taskId === b.id && p.date === day)?.order ?? 1e9));
-  const openPool = state.tasks.filter(
+  const openPool = listed.filter(
     (t) =>
       t.status === "open" && !t.paused && (!t.plannedOn || t.plannedOn <= day),
   );
@@ -485,8 +495,8 @@ export function getDayView(state: Workspace, day: string): DayView {
     handoffTasks,
     handoffBlocks,
     carry,
-    paused: state.tasks.filter((t) => t.status === "open" && t.paused),
-    attention: state.tasks.filter(
+    paused: listed.filter((t) => t.status === "open" && t.paused),
+    attention: listed.filter(
       (t) =>
         t.status === "open" &&
         ((!!t.deadlineOn && t.deadlineOn <= day) ||
