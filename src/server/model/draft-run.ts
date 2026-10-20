@@ -19,6 +19,8 @@ export interface DraftDeps {
   now?: () => Date
   timeoutMs?: number
   lookupDelaysMs?: readonly number[]
+  /** Context budget in bytes (tests); default `draftBudgetBytes`. */
+  budgetBytes?: number
 }
 export type DraftOutcome = 'drafted' | 'failed' | 'stale'
 
@@ -34,7 +36,7 @@ export async function draftDayRun(deps: DraftDeps, date: LocalDate, runId: strin
   const ws = await repository.load()
   const run = runOf(ws, date)
   if (!run || run.runId !== runId || run.status !== 'drafting') return 'stale'
-  const request = buildDraftRequest(ws, date, config)
+  const request = buildDraftRequest(ws, date, config, deps.budgetBytes)
   // Must-send part over the budget: nothing is sent, no Retry (it would fail the same way).
   if (request.tooLarge) { await failRun(repository, date, runId, 'too-large'); return 'failed' }
   const requestHash = sha256(request.body)
