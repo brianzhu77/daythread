@@ -42,6 +42,7 @@ working in every state. Never red.
 | Drafting | "Drafting your day…" with the 14 px spinner, `--ink-2`. No placeholder rows | none; he can leave and come back |
 | Done, with results | The line goes. Suggested tasks join the Tasks group with **"Drafted for today"** (so a model pick never reads like his own "Suggested last night") as their reason. Proposals appear under **FROM YOUR NOTES** | `+` per row |
 | Done, nothing to suggest | "Nothing to suggest today" (`--ink-3`), no link | none |
+| Done, only re-picked tasks the card already shows (no new task, no proposal) | "Nothing to suggest today", the same line, so the tap never looks like it did nothing (Lead, 2026-10-20 18:11Z) | none |
 | Simulated (no model key) | Results as above, plus the existing **"Simulated"** tag in the card header | as above |
 | Key rejected | "Model key rejected · nothing was added" in `--warn` | **Retry** |
 | Model unavailable (error, timeout, every item invalid) | "Model unavailable · nothing was added" in `--warn` | **Retry** |
@@ -102,7 +103,7 @@ Use the fake model (`scripts/fake-openrouter.mjs`): `http401:`, `http500:`, `slo
 1. Opening and reloading today makes no model call. Only the tap does.
 2. Drafting shows "Drafting your day…"; leaving and coming back shows the result once.
 3. Each failure in §3 shows its line, Retry only where the table says, and tasks rows still work.
-4. With nothing to suggest, the card says so and offers no link. Reloading doesn't bring the link back.
+4. With nothing to suggest, or a run that only re-picks tasks already on the card, the card says "Nothing to suggest today" and offers no link. Reloading doesn't bring the link back.
 5. A proposal's `+` creates one task with his exact line; Undo removes it; the source line is unchanged.
 6. Editing a source line's text after the run removes its row (no new model call); renaming its section only updates
    the reason; deleting the line or trashing its page removes the row; `+` on a row whose line just changed adds nothing.
