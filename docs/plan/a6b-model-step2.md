@@ -14,7 +14,7 @@ Draft my day, the review's Prepare tomorrow, Related and the card's "From your n
 
 | Field | Shown as | Model returns | App supplies |
 | --- | --- | --- | --- |
-| `taskIds` (≤ 3) | Tasks group, reason "Drafted for today" (Jazz/Bumblebee) | ids from the candidates sent | title, reason, destination |
+| `taskIds` (≤ 3) | Tasks group, reason "Drafted for today" (Jazz/Bumblebee); `+` sends to **TODO - Other**, never Top 3 (Lead `c1ba8868`) | ids from the candidates sent | title, reason, destination |
 | `materialIds` (≤ 2) | Related | ids from the candidates sent | everything shown |
 | `proposals` (new) | "From your notes", dashed `+` | `{ lineId, propose, date | null }` | title = **the line verbatim**, reason "{Mon} · {Section}" |
 
@@ -39,7 +39,17 @@ Draft my day, the review's Prepare tomorrow, Related and the card's "From your n
    2. price, then **reserve**;
    3. call OpenRouter: strict schema, 60 s, `max_tokens` 2000;
    4. **`record-model-result`**: settles the cost and, in the same transaction, runs the server-only `set-model-draft { date, runId, result }`.
-3. **Failure** (`key-rejected`, `unavailable`, `paused`, `budget`, `too-large`): `draftError` with Jazz's line. His page and tasks are untouched. A real failure never falls back to a simulated draft.
+3. **Failure** (`key-rejected`, `unavailable`, `paused`, `budget`, `too-large`, `busy`): `draftError` with Jazz's line. His page and tasks are untouched. A real failure never falls back to a simulated draft.
+4. **Busy:** one paid call at a time per workspace, shared with capture (Ratchet's ruling, Jazz 0c16159).
+   - Draft my day while a capture is with the model → "Model busy · nothing was added · Retry". Nothing is reserved.
+   - A capture while drafting → "Model busy · text saved · Retry". His text is saved first.
+5. **A run stuck on "drafting" expires 90 s after the tap** (Jazz 0c16159; Ratchet `676b6ad1`; Lead `c1ba8868`). It's a **persisted server transition**, not a client relabel:
+   - It's made by the next read of that day (`set-draft-expired`, server-only) and by start-up recovery, which turns runs left `drafting` from a previous process into expired.
+   - **Expiry and a result race in one transaction keyed on `runId` + `status: drafting`.** Only one changes the draft. A result that loses still settles its cost but isn't published.
+   - On expiry the attempt ends as a failure under A6a's ledger rules:
+     - **with a generation id** → its cost is looked up; if it can't be found, the attempt stays `unknown`, and the card shows "Model paused · a cost couldn't be confirmed", with no Retry.
+     - **without one** → `estimated` at the reservation, which frees it, and the card shows "Model unavailable · nothing was added · Retry".
+   - The old "unknown outcome keeps the reservation and blocks" rule doesn't apply to an expired run without an id, or Retry would never appear.
 
 ## 4. Identity and replay (Ratchet 2)
 
@@ -70,8 +80,8 @@ The request has labelled parts, and a **manifest** (part of the fingerprint, sto
 - **Length (Bumblebee `e24bfd8c`): whole pages are dropped; text inside a page is never cut.** The budget is 24 KB, about 6k tokens. His data today is a few KB.
   - Always sent: the facts, the task and material candidates, and the previous day page.
   - Then linked pages are added whole until the budget, nearest first: pages behind cards on the drafted day's page, then those on the previous day page, each in card order.
-  - The manifest lists the pages left out. The run keeps a context line, e.g. "Context: yesterday + 2 of 5 linked pages". Where it shows is Jazz's call.
-  - Only if the must-send part alone is over the budget is the call not made, with "Too much to read in one go · nothing was added". The model never sees half a page.
+  - The manifest lists the pages left out. Only then does the card show one muted line under the Tasks group: "Read yesterday's page and 2 of 5 linked pages" (Jazz 0c16159, Bumblebee).
+  - Only if the must-send part alone is over the budget is the call not made, with "Too much to read in one go · nothing was added" and **no Retry**. The model never sees half a page.
 - **Output can only point at what was sent.** Any id not in the manifest is dropped and counted. Source names shown to him come from the app, never from the model.
 
 ## 6. Validation
@@ -92,7 +102,7 @@ The request has labelled parts, and a **manifest** (part of the fingerprint, sto
   - Storage stays in the same `model_attempts` columns: a capture stores its id as now; a draft stores `draft:<date>` and revision = run number. **No migration, and no Capture row is created.**
   - `costUnknownCaptureIds` reads only `kind: capture`; `modelStatus` counts both.
   - A test shows a draft attempt never appears as a capture.
-- **Decision for Ratchet:** today only one call can be in flight per workspace, so a capture during a draft would be refused. I propose one in flight **per kind**, with the cap check summing every reservation.
+- **One call in flight per workspace, shared with capture** (Ratchet). The other one shows "Model busy" (§3) and reserves nothing.
 - **Expected cost:** cents per draft on his data. No cost figure in the card (Jazz §3).
 
 ## 8. Simulated vs real, and success
@@ -115,7 +125,16 @@ The request has labelled parts, and a **manifest** (part of the fingerprint, sto
   - the evening review makes no request and no ledger row in step 1;
   - Done or Later during the run doesn't reopen the card;
   - a run started before midnight lands on its own day.
-- **Server with the fake provider:** double tap, refresh mid-run, timeout then Retry then the old answer arriving, `http401`, `http500`, `slow`, `length`, invalid JSON, too large, a capture and a draft at once, budget used up (`DAYTHREAD_MODEL_CAP_USD`), no ledger row for simulated.
+- **Server with the fake provider, and a controllable clock (no real 90 s waits):**
+  - double tap; refresh mid-run;
+  - timeout, then Retry, then the old answer arriving;
+  - 90 s expiry found on a refresh and found at a server restart;
+  - expiry, then Retry, then the old answer, which settles without publishing;
+  - expiry racing a result: exactly one wins;
+  - expiry with and without a generation id (paused vs Retry);
+  - `http401`, `http500`, `slow`, `length`, invalid JSON, too large;
+  - busy both ways: no reservation, the capture text saved;
+  - budget used up (`DAYTHREAD_MODEL_CAP_USD`); no ledger row for simulated.
 - **Browser on a copy of his data at 1280 / 390:** Jazz §5 checks 1–7.
 - **Rollback:** no migration, so the previous build opens the same file. A round trip checks that it ignores the extra `draft` keys.
 - **Paid smoke after review:** one real draft on his data, under a $0.10 cap, with its cost reported.
