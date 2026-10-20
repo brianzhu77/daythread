@@ -111,7 +111,10 @@ They use the editor's existing notice strip. Every create says what happened and
 - **Undo turns the card back into the URL text he pasted, as a plain link, on the same line.** It also removes the
   page if this paste made it and nothing else has touched it yet: no other card, and no title or body edit. If this
   paste restored the page from the trash, Undo puts back in the trash **exactly what the paste restored** (the page
-  and its subtree), as the same Trash row, and keeps any edits made in between. For a repeat paste, Undo removes only the
+  and its subtree), as the same Trash row, and keeps any edits made in between. Edits never block this, because
+  nothing in the trash is lost. **A new reference does block it:** if a card or `[[` reference to that page (or its
+  subtree) was added anywhere since the restore, Undo only turns this card back into the URL text, the page stays
+  live, and the notice reads "Kept {title} · linked from {page}". It's the same test as for a page this paste made. For a repeat paste, Undo removes only the
   card. The aim is that "I only wanted the link" is always one tap.
 - **⌘Z right after the paste does the same as Undo.** If the editor can't make that a single step, say so in the
   plan. The fallback is that ⌘Z removes the card, and the page stays with its "Made a page · Undo" notice still on
