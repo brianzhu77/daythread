@@ -46,8 +46,8 @@ working in every state. Never red.
 | Key rejected | "Model key rejected · nothing was added" in `--warn` | **Retry** |
 | Model unavailable (error, timeout, every item invalid) | "Model unavailable · nothing was added" in `--warn` | **Retry** |
 | Paused (a cost couldn't be confirmed) | "Model paused · a cost couldn't be confirmed · nothing was added" in `--warn` | none |
-| Stuck (still drafting 90 s after the tap: the 60 s call plus margin, or the server restarted mid-run) | "Model unavailable · nothing was added" in `--warn`, as a failure. A late answer from that run is dropped | **Retry** |
-| Busy (a capture is with the model; one call at a time in step 1, Ratchet `ae9c7b87`) | "Model busy with a capture · nothing was added" in `--warn` | **Retry** |
+| Stuck (still drafting 90 s after the tap: the 60 s call plus margin, or the server restarted mid-run) | The server ends the run as failed (Ratchet `676b6ad1`, Lead `c1ba8868`). With no generation id: "Model unavailable · nothing was added". With a generation id whose cost can't be found: the Paused line below. A late answer from that run is dropped | **Retry** for unavailable; none when paused |
+| Busy (a capture is with the model; one call at a time in step 1, Ratchet `ae9c7b87`) | "Model busy · nothing was added" in `--warn` | **Retry** |
 | Too large (yesterday's page alone is over the context limit) | "Too much to read in one go · nothing was added" in `--warn` | none (Retry would fail the same way) |
 | Budget used up | "Today's model budget is used up · nothing was added" in `--warn` | none until tomorrow |
 | Cost unknown (error with no cost or id) | the failure line above, then a muted **"Cost unknown"** tag in `--ink-3` | as the row says |
@@ -57,16 +57,17 @@ working in every state. Never red.
 - **The other way round:** a capture saved while Draft my day is running keeps his text and its receipt reads
   "Model busy · text saved" with Retry (capture receipt vocabulary). Neither waits silently for the other.
 - **Some linked pages left out** (over the limit, Bumblebee `e24bfd8c`): results show as normal, plus one muted `--ink-3`
-  line under the Tasks group: "Read yesterday and {k} of {n} linked pages". Not shown when everything was read.
+  line under the Tasks group: "Read yesterday's page and {k} of {n} linked pages". Not shown when everything was read.
 - Retry is the same run again and keeps the day it was started for. A Retry that fails shows the same line.
 - No cost figure anywhere in the card, as in §12.2.
 - At 390 a failure line may wrap to 2 lines. Retry stays at the end of the text, with a 44 px target.
 
 ## 4. Rows after a run
 
-- **Drafted tasks** ("Drafted for today"): already tasks, so the rules in card spec §3 apply, the same as "Suggested last night", so the rules in card spec §3 apply: shown once, `+` sends them to
-  {Top 3 section}, Top 3 full → plan list with the existing strip, empty-title tasks never shown, tasks already
-  planned for today never shown.
+- **Drafted tasks** ("Drafted for today"): already tasks, so card spec §3 applies (shown once, empty-title tasks and
+  tasks already planned for today never shown), except where they go: `+` sends them to the **plan list section**
+  (his "TODO - Other"), never Top 3. Top 3 holds only what he chose, including "Suggested last night"; a model pick
+  is a proposal and moving it up is one drag (Lead `c1ba8868`, after Bumblebee). Strip: "Added to {Section} · Undo".
 - **Proposals** (card spec §4 and §12.1): title = his line word for word, reason "{Mon} · {Section}" computed by
   the app, date tag only when grounded in his text, dashed `+`. `+` creates a new task in {plan list section} with
   the full line; strip "Added to {Section} · Undo"; Undo deletes that task. ⋯ → Hide for today.
