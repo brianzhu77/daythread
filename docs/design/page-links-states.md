@@ -23,6 +23,10 @@ today, made by `/page` and by pasting a URL. `[[` never makes a card.
 做法参考 [▢ 韩国大酱汤] 里的配料          ▢ = page icon, globe for a link page, calendar for a day
 ```
 
+- **Why not an ordinary link to the page's URL** (Lead `6db69cd3`): it would need no format change, but its text would
+  be a copy of the title that goes stale on rename, Backspace would eat it letter by letter, it would look like a web
+  link, and it couldn't show the in-trash or not-found states. Those four are what make `[[` trustworthy, so design
+  accepts the format change (plan §0, layout 6).
 - **Look:** a small icon (14 px) and the page's **current** title in `--ink`, on a `--fill` background with 4 px
   rounding, at the line's own text size. It must not look like a web link (BlockNote's blue underline), because it
   doesn't leave the app.
