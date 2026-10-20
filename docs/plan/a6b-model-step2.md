@@ -68,6 +68,8 @@ Draft my day, the review's Prepare tomorrow, Related and the card's "From your n
 - **Where "accepted" is recorded (Ratchet `ae9c7b87` 2):** the source line is never touched, and `Task` has no `sourceBlockId`.
   - **The record:** `add-proposal` writes the new task's row on the drafted day's page with `sourcePageId` / `sourceBlockId` / `sourceFingerprint` in that row's block entry and in `editorBlockMetadata`. This is exactly how `bring-line` records "brought" (`wasBrought`, A8, shipped in 5193991).
   - **"Linked":** a line counts as linked when **any** page's blocks or block metadata hold that `sourcePageId` + `sourceBlockId`. Metadata outlives the row being deleted, as for brought lines, so deleting the task row doesn't bring the proposal back.
+    - The check lives in **one named function**, `isLineLinked(ws, pageId, blockId)`. Its comment states the dependency: `save-editor` keeps a deleted block's metadata (Lead, the same condition as A8's `wasBrought`).
+    - The test "delete the row, still not offered" deletes the row through the real `save-editor` path.
   - **Undo:** whole-workspace Undo removes the task, the row and its metadata together, so the line is offered again, the same as Bring.
   - **Same day, twice:** the second `add-proposal` finds the link and refuses.
   - **The next day:** the context builder leaves linked lines out of the manifest (§5), so a re-run never re-offers them.
@@ -75,7 +77,7 @@ Draft my day, the review's Prepare tomorrow, Related and the card's "From your n
 
 ### 4a. Stored shape of `Page.draft` (Ratchet `ae9c7b87` 1)
 
-Everything lives in the existing `draft` JSON column. The fields today's build (5193991) reads are **always present** in every state:
+Everything lives in the existing `draft` JSON column. The fields the live build (**53c1b83**, layout 4) reads are **always present** in every state:
 
 ```ts
 draft: {
@@ -181,7 +183,7 @@ The request has labelled parts, and a **manifest** (part of the fingerprint, sto
   - busy both ways: no reservation, the capture text saved;
   - budget used up (`DAYTHREAD_MODEL_CAP_USD`); no ledger row for simulated.
 - **Browser on a copy of his data at 1280 / 390:** Jazz §5 checks 1–7.
-- **Rollback:** no migration, so the previous build opens the same file. Per §4a, with a draft in each status (drafting, ready, failed, expired), today's build 5193991 opens it, edits that day's page and Undoes the edit, with no error screen. A row's `sourceBlockId` survives its save, and the new build reads it all back.
+- **Rollback:** no migration, so the previous build opens the same file. Per §4a, with a draft in each status (drafting, ready, failed, expired), the live build **53c1b83** (layout 4; 5193991 is layout 3 and can't open it) opens it, edits that day's page and Undoes the edit, with no error screen. A row's `sourceBlockId` survives its save, and the new build reads it all back.
 - **Accepted record:** `add-proposal` then Undo re-offers; deleting the row doesn't; the same day twice refuses; the next day's manifest leaves the line out.
 - **Paid smoke after review:** one real draft on his data, under a $0.10 cap, with its cost reported.
 
