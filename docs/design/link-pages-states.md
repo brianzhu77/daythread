@@ -145,7 +145,7 @@ page, live or in the trash, including two pastes at the same moment.
 
 1. Paste one URL on an empty line of today → card, "Made a page · Undo", the page is a child of today (breadcrumb
    "‹ Today", Pages "In your days", globe icon), empty body.
-2. Paste the same URL with different host case or a trailing `/` on another day → "Saved before · {date}", no second
+2. Paste the same URL with different host case (or, for a bare host, a trailing `/`; a `/` at the end of a path is a different key under N-4) on another day → "Saved before · {date}", no second
    page, the page stays under the first day, and the second day shows in its Linked from.
 3. Trash the page, paste the URL again → "Restored from trash", one page, live. Variant: the link page is under a
    page that was deleted with it. Paste its URL → only the link page and its subpages come back, to the top level,
