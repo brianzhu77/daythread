@@ -115,6 +115,8 @@ They use the editor's existing notice strip. Every create says what happened and
   nothing in the trash is lost. **A new reference does block it:** if a card or `[[` reference to that page (or its
   subtree) was added anywhere since the restore, Undo only turns this card back into the URL text, the page stays
   live, and the notice reads "Kept {title} · linked from {page}". It's the same test as for a page this paste made.
+  If he **moved** any page of that set since the restore, it's kept too: "Kept {title} · it was moved" (Roadbuster
+  95c5ba7), so the Trash row never comes back with a different tree.
 - **When Undo keeps a page the paste made**, the card still turns back into text, and the notice says why: "Kept
   {title} · it has your edits" (a title or body edit, or a child page) or "Kept {title} · linked from {page}" (another
   card or `[[`). Otherwise Undo **deletes** that page outright. It never shows up in Trash, because he never had it. For a repeat paste, Undo removes only the
