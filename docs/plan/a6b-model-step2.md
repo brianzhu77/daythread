@@ -67,7 +67,11 @@ The request has labelled parts, and a **manifest** (part of the fingerprint, sto
   - Left out: trashed or missing pages, task rows, page cards, empty rows, and lines already linked to a task.
   - Text inside lines is data. "Ignore the rules" written on a page is a line, not an instruction (system prompt + the labels).
 - **Material candidates:** resurfacing, labelled **saved material**. They're never proposals (03 信任边界).
-- **Length:** over 24 KB (about 6k tokens), the call isn't made, and the line reads "Too much to read in one go · nothing was added". **Nothing is truncated.** His data today is a few KB.
+- **Length (Bumblebee `e24bfd8c`): whole pages are dropped; text inside a page is never cut.** The budget is 24 KB, about 6k tokens. His data today is a few KB.
+  - Always sent: the facts, the task and material candidates, and the previous day page.
+  - Then linked pages are added whole until the budget, nearest first: pages behind cards on the drafted day's page, then those on the previous day page, each in card order.
+  - The manifest lists the pages left out. The run keeps a context line, e.g. "Context: yesterday + 2 of 5 linked pages". Where it shows is Jazz's call.
+  - Only if the must-send part alone is over the budget is the call not made, with "Too much to read in one go · nothing was added". The model never sees half a page.
 - **Output can only point at what was sent.** Any id not in the manifest is dropped and counted. Source names shown to him come from the app, never from the model.
 
 ## 6. Validation
