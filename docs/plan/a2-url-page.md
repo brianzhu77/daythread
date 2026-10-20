@@ -1,7 +1,7 @@
 # A2 · paste a URL → a page — plan for review
 
 - Author: Roadbuster · 2026-10-20 · status: **plan, not built**. No code until Ratchet's pre-review (task #81).
-- Revised after Lead/Ratchet `eeaf7490` (no `materials.pageId`; three Undo cases), Ratchet `c2cc3896` (rollback identity, Undo as one server command), Bumblebee `56de3d1e`, Jazz a167c39.
+- Revised after Lead `2c2c1350` (per-card Undo check), Ratchet `cad76b75` (Good Stuffs marker, re-trash parents), Lead/Ratchet `eeaf7490` (no `materials.pageId`; three Undo cases), Ratchet `c2cc3896` (rollback identity, Undo as one server command), Bumblebee `56de3d1e`, Jazz a167c39.
 - Inputs:
   - Brian `3596b765` (an empty page with the link as a property, linked back to today), `e83b0640` (O1 = B: no fetch);
   - pages-delta v0.4 N-3, N-4, N-5;
@@ -113,12 +113,15 @@ linkPaste: {
   operationId: string            // the paste-links operation
   outcome: "made" | "reused" | "restored"
   url: string                    // raw, for turning the card back into text
-  restored?: { pageId: string; trashId: string; trashedAt: string }[]  // the exact set and its original delete identity
+  restored?: { pageId: string; trashId: string; trashedAt: string; parentBefore: string | null; parentAfter: string | null }[]
+                                 // the exact set, its original delete identity, and each page's parent before and after
+                                 // the restore (restorePages clears parentId when the old parent is in the trash)
+  undone?: boolean               // set by Undo; the card's block is now the plain URL line (see "Good Stuffs after Undo")
   materialCreated?: boolean      // this paste made the Good Stuffs follow-up record
 }
 ```
 
-**`undo-paste-links { pageId: parent, operationId, expectedContent }`** is **one server command that commits everything at once** (Ratchet `c2cc3896` 2). It does no snapshot restore: generic Undo can't be used, because `save-editor` runs right after the paste.
+**`undo-paste-links { pageId: parent, operationId }`** is **one server command that commits everything at once** (Ratchet `c2cc3896` 2). It does no snapshot restore: generic Undo can't be used, because `save-editor` runs right after the paste.
 
 **What it does, in one transaction**, for each card of that operation still on the parent page:
 
@@ -138,10 +141,22 @@ linkPaste: {
 - **A card he already deleted** is skipped, and its page rule still applies. The command reports "nothing to undo" only if no card and no page changed.
 - **Replay:** the same operation id returns the first receipt.
 - **Lost response or closed browser:** a lost response leaves the state either fully applied or untouched. There's no window where a card points at a deleted page.
-- **The browser only applies the result:**
-  - It **saves what he typed first** (flushes the pending editor save), then sends `expectedContent` = the content key from that save. So "paste → type a note on the next line → Undo on the notice" works: the note is kept and the cards turn back into text (Jazz `f8dc5ab7`). Editor input is held while the Undo request is in flight, so nothing typed can race it.
-  - The server's new document reaches the editor through the existing **external refresh** (`page-editor.tsx:361`).
-  - Only if the page changed elsewhere (another tab or device) between that save and the Undo does the key no longer match. The command is then refused with "Page changed · nothing was undone", and nothing changes. The whole-page key is kept rather than per-card checks, because the server rewrites the document and a stale open editor would conflict anyway.
+- **Which cards it checks (Lead `2c2c1350`, after Jazz `f8dc5ab7`):** only **this paste's cards**. Each must still be on the page with the same block id and the same `pageId`. Every other block is left untouched, including whatever he typed. A card he deleted or cut is skipped. "Page changed · nothing was undone" appears only when **none** of this paste's cards are left.
+- **The browser, so that typing is never lost and the card never comes back** (Lead's condition):
+  1. **It saves what he typed first** (flushes the pending `save-editor`).
+  2. **It holds editor input** until the reply arrives (milliseconds on his local server).
+  3. It sends the command.
+  4. It applies the server's document through the existing external refresh (`page-editor.tsx:361`). Because input was held, the editor isn't dirty, so the refresh applies instead of reporting a conflict, and the next save starts from the new content.
+  - **Why the hold is needed:** the current save path can't merge text typed during the request. A save on the old base is refused as "changed elsewhere", and a dirty editor refuses the refresh. The hold makes that window empty. Ratchet's check: if the hold can't be made reliable, we go back to the whole-page key, and I'll say so.
+- **Good Stuffs after Undo (Ratchet `cad76b75`):** a card turned back into a bare URL line under Good Stuffs would otherwise be collected again by `linkMaterialLines` on the next save (`workspace.ts:393`, `:807`), re-creating the follow-up Undo just removed.
+  - **Marker:** the paste record itself (`paste:<blockId>`, `undone: true`, `url`), which is never pruned.
+  - **Rule:** `linkMaterialLines` **skips a line whose block id has an undone paste record and whose text is still exactly that URL.** No flag needs clearing: the check runs on every save.
+  - **When A5 applies again:**
+    - **he edits that line** (it's no longer exactly the URL) → A5's rules, as for any line;
+    - **he types or pastes the URL on another line** → a new block id, so A5 or A2 as usual.
+- **Re-trashing a restored set (Ratchet `cad76b75`):**
+  - **Re-trashed only if every page's `parentId` still equals `parentAfter`.** Each page then gets back its `trashId`, `trashedAt` **and `parentBefore`**, so the Trash row is the same batch with the same tree, and its Restore puts it back exactly where it was.
+  - **If any page of the set was moved** after the restore, or its new parent is itself gone, nothing in the set is re-trashed: "Kept {title} · it was moved". The card still turns back into text.
 
 **⌘Z:**
 - **While the paste's notice is showing,** and the editor's last history step is that paste, ⌘Z sends this same command. It's a keydown handler in front of BlockNote's.
@@ -195,6 +210,9 @@ linkPaste: {
   - Jazz §6 checks 1–8, using **his real Notes bullet structure** (Lead 2);
   - ⌘Z during the notice and after it;
   - paste → type a note on the next line → Undo: the note is kept, the cards are back as text, and the page is deleted;
+  - **paste → type on the next line → Undo mid-typing** (keys sent while the request is in flight): the card is a URL again, every typed character is there exactly once, and the next save doesn't bring the card back (Lead `2c2c1350`);
+  - **Good Stuffs: paste → Undo → a normal save → reload**: no Material and no source for that line. Then edit the line → A5 collects it;
+  - **restored set → move one of its pages → Undo**: not re-trashed, "Kept · it was moved". **Restored to top level (parent in trash) → Undo**: back in the same Trash row with its original parent, and Restore from Trash puts it back under that parent;
   - no request leaves 127.0.0.1.
 - **A5 rerun:** Ratchet reruns A5 acceptance on the A2 build. I run the review's Good Stuffs step with a pasted link page first.
 - **Rollback round trip** as in §5.
