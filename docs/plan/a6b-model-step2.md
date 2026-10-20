@@ -1,94 +1,121 @@
 # A6b · the model drafts the day — plan for review
 
 - Author: Roadbuster · 2026-10-20 · status: **plan, not built**. No code, no paid call until Lead, Ratchet and Jazz have reviewed it.
-- Inputs: Lead `02141609` (scope, steps, rules), Brian `3097861f` (capture: yes, not tried yet), Bumblebee / Lead `90935fb5` (success criteria, empty is normal), 03 AI contract (每日草稿, Review, 信任边界), morning-card-build §4 / §8 / §11 step 3, v05 §1, A6a `docs/plan/feat-model-step1.md` (ledger, fake provider, rollback), the existing `src/server/model/morning-prompt.ts` (probe only, never wired).
+- Inputs:
+  - Lead `02141609` (scope, steps), `90935fb5` (empty is normal), `8fa4f515` (Jazz's states accepted);
+  - Brian `3097861f`;
+  - Ratchet `b64dd79d` (four constraints, §5–§7);
+  - Jazz `docs/design/morning-model-states.md` at d8763e6 (states and strings; Bumblebee's wording `9a13d092` goes through Jazz);
+  - 03 AI contract; A6a `docs/plan/feat-model-step1.md`.
 
 ## 1. One call, one object
 
-Draft my day, the review's Prepare tomorrow, Related and the card's "From your notes" all read **the same stored object, `Page.draft`**. Today a simulated `generate-draft` fills it. So A6b is **one model call that fills one draft** for a day, not four features. The call returns choices and wording only; the app shows them, and nothing is written until Brian taps.
+Draft my day, the review's Prepare tomorrow, Related and the card's "From your notes" all read **the same stored object, `Page.draft`**, which a simulated `generate-draft` fills today. So A6b is **one model call that fills one day's draft**. The model **only chooses**: task ids, material ids and line ids from what was sent, plus a date check for lines. Every visible word comes from his data or from the app. Nothing is written to his page or tasks until he taps `+` (Ratchet 1).
 
-| Field (on the day it's for) | Shown as | Today | A6b |
+| Field | Shown as | Model returns | App supplies |
 | --- | --- | --- | --- |
-| `taskIds` (≤ 3) | card "Suggested last night" → Top 3; review's Tomorrow list | first 3 candidates | model picks from the candidates sent, one short reason each |
-| `materialIds` (≤ 2) | Related (Today strip, review) | first 2 resurfacing materials | model picks from the candidates sent |
-| `proposals` (new) | card "From your notes", dashed rows | none | model picks lines from Brian's own writing and words a title |
+| `taskIds` (≤ 3) | Tasks group, reason "Drafted for today" (Jazz/Bumblebee) | ids from the candidates sent | title, reason, destination |
+| `materialIds` (≤ 2) | Related | ids from the candidates sent | everything shown |
+| `proposals` (new) | "From your notes", dashed `+` | `{ lineId, propose, date | null }` | title = **the line verbatim**, reason "{Mon} · {Section}" |
 
-**"Nothing to propose" is a normal answer** (Lead `90935fb5`). The prompt says so; empty groups aren't drawn; no minimum count anywhere.
+**Empty is a normal answer** (Lead `90935fb5`): the prompt says so, empty groups aren't drawn, and Jazz's "Nothing to suggest today" line shows. The existing `morning-prompt.ts` lets the model reword the title, so it is cut down to the schema above, not wired as is.
 
-## 2. Steps
+## 2. Steps and trigger (Jazz §1–§2)
 
-| Step | Ships | Trigger (never on page open, 01 §3.1) |
-| --- | --- | --- |
-| **1** | Draft my day with real `taskIds` + `materialIds` + `proposals`; the card's "From your notes" group with + / Not today / Undo | "Draft my day" and "Retry" on the card |
-| **2** | Review's Prepare tomorrow uses the same call, with his saved review text as extra input | "Prepare tomorrow" / "Retry" in the review |
-| **3** (only if asked) | Explicit adjustments in the review text ("tax return 搞定了") as update proposals, reusing capture's always-wait update path | review save |
+- **Trigger: his tap only.** No call on open or reload. There's one draft per day; Retry only after a failure; the run belongs to the day it started for.
+- **Step 1:** "Draft my day" on the card is **the only real entry** (Lead, after Ratchet `8ba9abb6`). The card also shows on a day with nothing else, while there's no draft (Jazz §2, Lead `8fa4f515`).
+  - **The evening review stays on its simulated path in step 1** and makes no request (Lead, after Ratchet `8ba9abb6`). On a day the review wrote a draft, the card shows "Suggested last night" as now, and Draft my day doesn't appear. So a morning has at most one real run.
+- **Step 2:** the review's Prepare tomorrow through the same call, with the review text as extra input, read after step 1's success check (§8).
+- **Step 3:** adjustments in the review text as update proposals (capture's always-wait path), only if asked.
 
-Step 1 doesn't depend on capture. Step 2 starts only after step 1's success criteria (§7) are read.
+## 3. Flow
 
-## 3. Call point and flow (same shape as A6a)
+1. **`generate-draft { date, trigger }`**, the existing command:
+   - with a real model, it writes `draft = { status: 'drafting', runId, trigger, startedAt }` and returns;
+   - it is refused if the day already has a ready draft, or a run that isn't failed;
+   - simulated: unchanged, plus one example proposal for Jazz's states. Simulated never calls the network and never touches the ledger.
+2. **`draftDay({ date, runId })`**, a server function shaped like `organizeCapture`:
+   1. one workspace read builds the context and its manifest (§5);
+   2. price, then **reserve**;
+   3. call OpenRouter: strict schema, 60 s, `max_tokens` 2000;
+   4. **`record-model-result`**: settles the cost and, in the same transaction, runs the server-only `set-model-draft { date, runId, result }`.
+3. **Failure** (`key-rejected`, `unavailable`, `paused`, `budget`, `too-large`): `draftError` with Jazz's line. His page and tasks are untouched. A real failure never falls back to a simulated draft.
 
-1. **`generate-draft`** (existing command): if the model is `ready`, it saves `draft = { status: 'preparing', revision: n+1, simulated: false, … }` and returns at once. If simulated, it stays as today, plus one example proposal so Jazz's states can be reviewed (§11 step 3).
-2. **`draftDay({ date, revision })`**, a server function, like `organizeCapture`:
-   1. Builds the context (§4) from one workspace read and stops if the draft moved on.
-   2. Price and reserve (§6) under subject id `draft:<date>`, with `revision` = draft revision.
-   3. Calls OpenRouter: strict JSON schema, 60 s timeout, `max_tokens` 2000.
-   4. **`record-model-result`** settles the cost and, in the same transaction, runs the server-only **`set-model-draft`** command. It applies only if the page's draft is still `preparing` at that revision. Otherwise the result is kept for audit, not applied (late or replayed answers).
-3. Failure, timeout, or invalid JSON → `draftError` with the kind (`failure` / `budget` / `paused` / `too-large`). His page and tasks are untouched. Retry makes a new revision.
+## 4. Identity and replay (Ratchet 2)
 
-## 4. Context (Lead: one hop + the previous day page)
+- **What a run is bound to:** `runId` = the `generate-draft` operation id. Each run has a target `date`, a `trigger` (card or review), the request **fingerprint** (`requestHash` of the full body, which includes the manifest), the `model` and the `attemptId`.
+- **Double tap or refresh:** the same operation id replays the first receipt. A different operation id while drafting is refused ("already drafting"). Either way, there's no second call and no second charge.
+- **`set-model-draft` applies only if** the page's draft still has that `runId` and status `drafting`. Otherwise the result is kept for audit and the cost still settles. That covers Retry beating a late answer, Done or Later during the run (Jazz §1: kept, the card isn't reopened), a midnight crossing, and a deleted day.
+- **Each proposal is bound to its source line's fingerprint** at run time (a hash of the line's text and type; Ratchet `8ba9abb6`, Lead).
+  - The card checks it when it draws:
+    - text changed: the row is withdrawn, with no automatic paid re-run. "明天打给牙医" edited to "已经打过牙医" must not become a task.
+    - only the section renamed: the app-computed reason updates.
+  - **Accepting re-checks the same:** `add-proposal { date, runId, lineId }` refuses if the fingerprint changed, the line is gone, its page is in the trash, or the line already has a task. The row then disappears (Jazz §4).
+  - The task title is the line's text as fingerprinted. Nothing is written back into the line.
+  - `plan-tasks` keeps its own checks.
+- **No duplicate tasks:** a proposal accepted twice (same operation id) replays; a second operation id finds the line already linked and refuses.
 
-Labelled sections in one user message, ids with every item, never free text without an origin:
+## 5. Context: an auditable manifest (Ratchet 3, Lead: one hop + previous day page)
 
-- **Facts:** today and weekday, timezone, the day being drafted.
-- **Task candidates:** `planned ∪ handoffTasks ∪ carry ∪` up to 20 open tasks (ids, titles, dates, why each is a candidate). Blank-title tasks are already out (`isBlankTask`).
-- **His lines:** text and link lines of the **most recent previous day page** (all sections except task rows), plus **one hop**: pages behind cards on that page and on today's page. Each line carries `lineId = pageId/blockId`, page date or title, and section. Lines already handled (§5) aren't sent.
-- **Material candidates:** resurfacing materials (title, URL, his note), labelled **saved material**. Per 03 信任边界, material text is never a source of proposals, and command sentences inside it aren't his.
-- **Size:** if the request is over a fixed limit (start 24 KB, about 6k tokens), the call isn't made and the card shows "Too much to read in one go". It's never truncated silently (03 输入上下文). His real data today is far below this.
+The request has labelled parts, and a **manifest** (part of the fingerprint, stored with the attempt) lists exactly what was sent:
 
-## 5. Output → app (validated; anything invalid is dropped and counted, never guessed)
+- **Facts:** the day drafted, its weekday, timezone, and the date basis "lines are dated by the page they're on".
+- **Task candidates:** `planned ∪ handoffTasks ∪ carry ∪` up to 20 open tasks (id, title, dates). Blank, paused, trashed-source and already-planned-today tasks are out.
+- **His lines:** text and link lines from the **most recent previous day page**, plus **one hop**: pages behind cards on that page and on the drafted day's page.
+  - Each line is `lineId = pageId/blockId`, with the page date or title and the section.
+  - **Deduplicated** by `lineId`.
+  - Left out: trashed or missing pages, task rows, page cards, empty rows, and lines already linked to a task.
+  - Text inside lines is data. "Ignore the rules" written on a page is a line, not an instruction (system prompt + the labels).
+- **Material candidates:** resurfacing, labelled **saved material**. They're never proposals (03 信任边界).
+- **Length:** over 24 KB (about 6k tokens), the call isn't made, and the line reads "Too much to read in one go · nothing was added". **Nothing is truncated.** His data today is a few KB.
+- **Output can only point at what was sent.** Any id not in the manifest is dropped and counted. Source names shown to him come from the app, never from the model.
 
-- `taskIds`: each must be in the candidates sent; ≤ 3; one `reason` (≤ 60 chars). Unknown ids are dropped.
-- `materialIds`: each must be in the candidates sent; ≤ 2.
-- `proposals[]`: `{ lineId, title, date | null, reason }`.
-  - `lineId` must be one of **his lines** sent (never a material).
-  - `title` must pass the existing `groundItem` title check (words from that line), in his language.
-  - `date` ≥ today and resolved from the line's own day (the prompt from `morning-prompt.ts`). "If I have time" lines get no date.
-  - Lines already turned into a task or dismissed aren't proposed again.
-- **Landing:** nothing is applied by the model.
-  - `+` on a task row = the existing `plan-tasks`.
-  - `+` on a proposal = new command **`add-proposal { date, proposalId }`**. It creates a task in the plan list (Top 3 rule as now), `sourcePageId` = the line's page, and never edits the source line.
-  - Not today on a proposal = `dismiss-proposal`.
-  - Each tap has the existing Undo strip (whole-workspace Undo).
-  - Handled lines are kept in `page.draft.handledLines: { lineId, taskId? }[]` and carried into the next draft for that day, so a re-draft never re-offers them.
-- **Storage:** all of this lives in `Page.draft`, which is already a JSON column. **No migration.** Rollback = the previous build. Older builds read `draft` as JSON and ignore the extra keys (Ratchet to confirm with the round trip). Tasks made from proposals are ordinary tasks.
+## 6. Validation
 
-## 6. Cost (A6a rules unchanged)
+- `taskIds` ⊆ the candidates, ≤ 3.
+- `materialIds` ⊆ the candidates, ≤ 2.
+- Proposals:
+  - `lineId` must be in the manifest's lines;
+  - `date`, if any, must be a real date ≥ the drafted day; otherwise it's set to null, never guessed. The date tag shows only when the line has a date word (the existing grounding date check on the line text);
+  - "If I have time" lines with a date get the date dropped.
+- Everything invalid is dropped. If every item is invalid, it's `unavailable`, the same as A6a.
 
-- 10 USD per Vancouver day; worst-case reservation = request bytes × the highest input rate + 2000 × the highest output rate.
-- An `estimated` attempt (no id, no cost) counts at its reservation and doesn't block. An `unknown` one (an id, no cost) pauses calls until it's reconciled. The same ledger, `model_attempts`, keeps `captureId = 'draft:<date>'` and `revision` = the draft revision, so there's no schema change.
-- **Decision for Ratchet:** A6a allows one paid call in flight per workspace, so a capture during a draft call would be refused. Proposal: one in flight **per kind** (capture, draft); the cap check still sums every reservation.
-- Expected cost per draft: a few cents at most on his data. The receipt shows the real cost the way capture does.
+## 7. Cost: the same book (Ratchet 4)
 
-## 7. Simulated vs real, and success
+- **Rules:** 10 USD per Vancouver day; atomic reserve before the call; worst case = full request bytes × the highest input rate + 2000 × the highest output rate. No id and no cost → `estimated` at the reservation; an id with no cost → `unknown`, which pauses until reconciled (`scripts/model-reconcile.ts`).
+- **The ledger interface without a fake capture:**
+  - `ReserveInput` gets `subject: { kind: 'capture' | 'draft', id, revision }` in place of `captureId` / `revision`.
+  - Storage stays in the same `model_attempts` columns: a capture stores its id as now; a draft stores `draft:<date>` and revision = run number. **No migration, and no Capture row is created.**
+  - `costUnknownCaptureIds` reads only `kind: capture`; `modelStatus` counts both.
+  - A test shows a draft attempt never appears as a capture.
+- **Decision for Ratchet:** today only one call can be in flight per workspace, so a capture during a draft would be refused. I propose one in flight **per kind**, with the cap check summing every reservation.
+- **Expected cost:** cents per draft on his data. No cost figure in the card (Jazz §3).
 
-- Real when `modelInfo().state === 'ready'` (key present, not paused, budget left). `DAYTHREAD_DRAFT=simulated` keeps drafts simulated while capture stays real. Otherwise simulated, with the existing "Simulated" tag. Nothing pretends to be the model.
-- **Step 1 success** (Bumblebee / Lead `90935fb5`), judged on his real data after 5 writing days:
-  - he uses Draft my day, or adds or dismisses a proposal, on ≥ 2 mornings;
+## 8. Simulated vs real, and success
+
+- **Real** when `modelInfo().state === 'ready'`. `DAYTHREAD_DRAFT=simulated` keeps drafts simulated while capture stays real. Paused or out of budget shows Jazz's lines; it doesn't silently simulate.
+- **Step 1 success** (Bumblebee / Lead `90935fb5`), on his real data after 5 writing days:
+  - he uses Draft my day, or adds or hides a proposal, on ≥ 2 mornings;
   - nothing is written without his tap;
   - spend stays far below the cap.
-  If he ignores both for 5 mornings, stop and ask Brian before step 2.
+  If he ignores both on 5 mornings, stop and ask Brian before step 2.
 
-## 8. Checks
+## 9. Checks
 
-- **Before code (≤ $0.05, Lead's yes needed):** run probe Part 2 (P1–P5) plus his real Oct 18 lines through `morning-prompt.ts` on his model. "肉酱意面 #recipe" and "奥德赛" should come back unproposed, or with a believable reason (Lead `90935fb5`).
+- **Before code (≤ $0.05, Lead's yes):** the cut-down prompt on his model with probe P1–P5 and his real Oct 18 lines. "肉酱意面 #recipe" and "奥德赛" should not be proposed. **Empty passes; a proposal count isn't a score.**
 - **Domain:**
-  - ids outside the candidates dropped; material lines never proposed;
-  - stale revision / replay / late answer not applied; empty answer → no group;
-  - handled lines not re-offered; `add-proposal` + Undo; source line unchanged.
-- **Server with the fake provider:** timeout, invalid JSON, `length` stop, 402/429, too-large refusal, a capture and a draft at once (per-kind rule), budget used up.
-- **Browser on a copy of his data at 1280 / 390:** Jazz's states (loading, failure, empty, budget used up).
-- **Paid smoke after review:** one draft on his data under a $0.10 cap, reported with its cost.
+  - ids outside the manifest are dropped; a material is never a proposal; the title equals the line;
+  - a stale `runId` isn't applied; the same op id replays; a second op while drafting is refused;
+  - a line edited after the run withdraws its proposal from the card and from `add-proposal`; a section rename only updates the reason;
+  - `add-proposal` re-checks the source (deleted, trashed, already a task), has Undo, and leaves the line unchanged;
+  - the evening review makes no request and no ledger row in step 1;
+  - Done or Later during the run doesn't reopen the card;
+  - a run started before midnight lands on its own day.
+- **Server with the fake provider:** double tap, refresh mid-run, timeout then Retry then the old answer arriving, `http401`, `http500`, `slow`, `length`, invalid JSON, too large, a capture and a draft at once, budget used up (`DAYTHREAD_MODEL_CAP_USD`), no ledger row for simulated.
+- **Browser on a copy of his data at 1280 / 390:** Jazz §5 checks 1–7.
+- **Rollback:** no migration, so the previous build opens the same file. A round trip checks that it ignores the extra `draft` keys.
+- **Paid smoke after review:** one real draft on his data, under a $0.10 cap, with its cost reported.
 
-## 9. Not in this plan
+## 10. Not in this plan
 
-Writing into the page from the model; a free-text draft summary (ungrounded prose); Weave; step 3 unless Lead asks.
+Model-written text anywhere he can see it; writing into the page; Weave; step 3 unless asked.
