@@ -57,6 +57,7 @@ Sources, merged into one list with each task appearing **once**:
 - Order: source 1 in draft order, then source 2 in its existing order.
 - Excluded, as now: tasks already planned for today (`plannedOn === today`), paused tasks, tasks already in Top 3. A task already in Top 3 is no longer shown greyed out with "In Top 3". It's simply not a suggestion.
 - Also excluded: tasks whose title is empty after trimming (an empty checkbox row left in a section, e.g. Brian's Oct 19 TODO - Other). They're never a row, never counted in "N other open tasks", and never added by Add all. If that leaves the group empty, the group isn't drawn (Lead `2f917190`).
+- **"N other open tasks"** under the card means other than the card: it leaves out tasks that are rows in the card's Tasks group right now. When the card goes away (Done, Later, Hide for today), those tasks count again. Added tasks are planned for today and already out (Lead `23a43f85`).
 - **Add all tasks** applies each row's own destination in list order. Proposals and lines are never bulk-added.
 
 ## 4. From your notes (proposals)
