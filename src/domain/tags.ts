@@ -1,3 +1,4 @@
+import { isTrashed } from './page-tree.ts'
 import type { LocalDate, Workspace } from './types.ts'
 
 // Tags are plain text Brian writes (#daythread:e36141c5): `#` (or full-width `＃`) followed by the tag characters
@@ -52,7 +53,8 @@ export function tagIndex(workspace: Workspace): TagEntry[] {
   const byKey = new Map<string, { tag: string; page: string; occurrences: TagOccurrence[] }>()
   // Newest first: day pages by date, then pages without a date, most recently created first (pages are stored in
   // creation order). Reading this order backwards gives the oldest occurrence.
-  const pages = workspace.pages.map((page, created) => ({ page, created }))
+  // A4 (Jazz 0f79066): lines in a trashed page leave every tag page and count until restored.
+  const pages = workspace.pages.map((page, created) => ({ page, created })).filter(p => !isTrashed(p.page))
     .sort((a, b) => (b.page.date ?? '').localeCompare(a.page.date ?? '') || b.created - a.created).map(p => p.page)
   for (const page of pages) for (const section of page.sections) for (const block of section.blocks) {
     if (block.kind !== 'paragraph' && block.kind !== 'task') continue

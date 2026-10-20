@@ -1,10 +1,11 @@
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
+import { restoreHeldTrash } from './trash-rollback.ts'
 import type { Capture, Event, Material, Page, Placement, Receipt, Task, Workspace } from '../domain/types.ts'
 
 type Kind = 'text' | 'number' | 'boolean' | 'json'
 type Fields<T> = Record<keyof T, Kind>
 // Exhaustive maps intentionally fail typecheck whenever a domain field is added without a storage mapping.
-const pages = { id:'text',type:'text',date:'text',title:'text',sections:'json',editorJSON:'text',templateApplied:'boolean',editorSections:'text',editorBlockMetadata:'json',editorCreations:'json',editorDeletions:'json',reviewText:'text',reviewSaved:'boolean',handoffDone:'boolean',reviewStep:'number',reviewSource:'text',reviewSkipped:'boolean',draftError:'text',draft:'json',parentId:'text' } satisfies Fields<Page>
+const pages = { id:'text',type:'text',date:'text',title:'text',sections:'json',editorJSON:'text',templateApplied:'boolean',editorSections:'text',editorBlockMetadata:'json',editorCreations:'json',editorDeletions:'json',reviewText:'text',reviewSaved:'boolean',handoffDone:'boolean',reviewStep:'number',reviewSource:'text',reviewSkipped:'boolean',draftError:'text',draft:'json',parentId:'text',trashedAt:'text',trashId:'text' } satisfies Fields<Page>
 const tasks = { id:'text',title:'text',status:'text',version:'number',plannedOn:'text',attentionOn:'text',deadlineOn:'text',paused:'boolean',createdOn:'text',lastPlannedOn:'text',sourcePageId:'text' } satisfies Fields<Task>
 const placements = { taskId:'text',date:'text',state:'text',order:'number',section:'text' } satisfies Fields<Placement>
 const events = { id:'text',title:'text',date:'text',time:'text',cancelled:'boolean' } satisfies Fields<Event>
@@ -29,6 +30,8 @@ const addedColumns: readonly { table: typeof specs[number]['name']; column: stri
   { table: 'captures', column: 'model', kind: 'text' },
   { table: 'captures', column: 'mode', kind: 'text' },
   { table: 'captures', column: 'capturedAt', kind: 'text' },
+  { table: 'pages', column: 'trashedAt', kind: 'text' },
+  { table: 'pages', column: 'trashId', kind: 'text' },
 ]
 /**
  * The model budget ledger (03 E3). Deliberately outside the current/undo snapshot scheme: Undo restores a whole
@@ -56,6 +59,12 @@ export const sqliteMigrations: readonly ((db: DatabaseSync) => void)[] = [db => 
   // may already exist: a rollback to layout 2 keeps it, so today's spend survives a round trip.
   for (const { table, column, kind } of addedColumns.slice(1, 4)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${quote(column)} ${columnType(kind)}`)
   db.exec(modelAttemptsTable)
+}, db => {
+  // A4 trash (docs/design/a4-trash-data.md): existing rows read as live. After a rollback to layout 3, what the script
+  // held back goes into the trash again (§4).
+  for (const { table, column, kind } of addedColumns.slice(4, 6)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${quote(column)} ${columnType(kind)}`)
+  const log = restoreHeldTrash(db)
+  if (log) console.info(JSON.stringify({ level: 'info', event: 'storage.trash-reupgrade', ...log }))
 }]
 
 const workspaceFields = {schemaVersion:true,revision:true,timezone:true,pages:true,tasks:true,placements:true,events:true,materials:true,captures:true,receipts:true,undo:true} satisfies Record<keyof Workspace,boolean>

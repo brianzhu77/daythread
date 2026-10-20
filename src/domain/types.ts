@@ -31,6 +31,10 @@ export interface Page {
   title: string;
   /** The page it was created in (pages-delta N-2); null or absent = top level. Day pages never have one. */
   parentId?: string | null;
+  /** A4: set while the page is in the trash (ISO time of the delete); null or absent = live. */
+  trashedAt?: string | null;
+  /** A4: the delete's operation id, shared by the page and every page trashed with it (the batch). */
+  trashId?: string | null;
   sections: Section[];
   editorJSON?: string;
   /** Set once the day template's starter rows have been saved, so rows the user deletes stay deleted. */
@@ -269,6 +273,9 @@ export type Action =
   | { type: "create-document"; title: string; body: string; pageId?: string; parentId?: string }
   | { type: "rename-page"; pageId: string; title: string }
   | { type: "move-page"; pageId: string; parentId: string | null }
+  | { type: "delete-page"; pageId: string; at: string }
+  | { type: "restore-page"; pageId: string }
+  | { type: "restore-batch"; trashId: string }
   | { type: "relink-material-lines" }
   | {
       type: "insert-reference";

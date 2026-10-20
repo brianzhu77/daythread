@@ -3,6 +3,19 @@ import type { LocalDate, Page, Workspace } from "./types";
 // pages-delta N-2 / N-5 step B: the page tree and "Linked from". The tree is each page's own parentId; sibling order
 // is the workspace's page order, so a page that is created or moved lands at the end of its new siblings.
 
+/** A4: a page in the trash. Day pages can't be deleted, so they're always live. */
+export function isTrashed(p: Page): boolean {
+  return Boolean(p.trashedAt);
+}
+
+/**
+ * A4 (Lead fd179341): the one way lists read pages. Trashed pages leave every list and count; only a card pointing at
+ * one and the Trash screen still show it, and those look it up by id.
+ */
+export function visiblePages(ws: Workspace): Page[] {
+  return ws.pages.filter((p) => !isTrashed(p));
+}
+
 /** The parent a page actually sits under: a missing parent (or a day page, which has none) reads as top level. */
 export function parentOf(ws: Workspace, p: Page): Page | null {
   if (p.type === "daily" || !p.parentId) return null;
@@ -11,7 +24,29 @@ export function parentOf(ws: Workspace, p: Page): Page | null {
 
 /** Children in sibling order. `null` lists the top-level document pages; day pages live in the Days group instead. */
 export function childPages(ws: Workspace, parentId: string | null): Page[] {
-  return ws.pages.filter((p) => p.type === "document" && (parentOf(ws, p)?.id ?? null) === parentId);
+  return visiblePages(ws).filter((p) => p.type === "document" && (parentOf(ws, p)?.id ?? null) === parentId);
+}
+
+/** The Subpages of a trashed page: its children deleted with it (pages-trash-layout §4). */
+export function trashedChildPages(ws: Workspace, page: Page): Page[] {
+  return ws.pages.filter((p) => isTrashed(p) && p.trashId === page.trashId && p.parentId === page.id);
+}
+
+/** A delete's members still in the trash, in stored order; the batch's top page is the one whose parent isn't a member. */
+export function trashBatch(ws: Workspace, trashId: string): { top: Page; members: Page[] } | null {
+  const members = ws.pages.filter((p) => isTrashed(p) && p.trashId === trashId);
+  const ids = new Set(members.map((p) => p.id));
+  const top = members.find((p) => !p.parentId || !ids.has(p.parentId));
+  return top ? { top, members } : null;
+}
+
+/** The Trash screen: one row per delete with members left, newest delete first. */
+export function trashBatches(ws: Workspace): { trashId: string; top: Page; members: Page[]; trashedAt: string }[] {
+  const ids = [...new Set(ws.pages.filter(isTrashed).map((p) => p.trashId!))];
+  return ids
+    .map((trashId) => ({ trashId, ...trashBatch(ws, trashId)! }))
+    .map((b) => ({ ...b, trashedAt: b.top.trashedAt! }))
+    .sort((a, b) => b.trashedAt.localeCompare(a.trashedAt));
 }
 
 /** Root first, the page itself excluded: the breadcrumb. Stops at a cycle, which only corrupt data can contain. */
@@ -46,7 +81,10 @@ export function moveRefusal(ws: Workspace, pageId: string, parentId: string | nu
   const p = ws.pages.find((x) => x.id === pageId);
   if (!p) return "Page not found";
   if (p.type === "daily") return "Day pages stay in Days";
-  if (parentId !== null && !ws.pages.some((x) => x.id === parentId)) return "Page not found";
+  if (isTrashed(p)) return "Page is in trash";
+  const target = parentId === null ? null : ws.pages.find((x) => x.id === parentId);
+  if (parentId !== null && !target) return "Page not found";
+  if (target && isTrashed(target)) return "Page is in trash";
   if (parentId !== null && subtreeIds(ws, pageId).has(parentId)) return "Can't move a page into itself or its subpages";
   if ((parentOf(ws, p)?.id ?? null) === parentId) return "Already there";
   return null;
@@ -61,6 +99,8 @@ export interface LinkedFromEntry {
   page: Page;
   /** The referencing page is also this page's current parent (its card is a real reference; the tree link isn't). */
   isParent: boolean;
+  /** A4: the referencing page is in the trash; it reads "{title} (removed)" and doesn't open. */
+  removed: boolean;
 }
 
 /**
@@ -77,7 +117,7 @@ export function linkedFrom(ws: Workspace, pageId: string): LinkedFromEntry[] {
   );
   const days = sources.filter((p) => p.type === "daily").sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
   const documents = sources.filter((p) => p.type !== "daily").reverse();
-  return [...days, ...documents].map((page) => ({ page, isParent: page.id === parentId }));
+  return [...days, ...documents].map((page) => ({ page, isParent: page.id === parentId, removed: isTrashed(page) }));
 }
 
 /** Something was written or tracked on the page; a page created by opening or browsing a day has neither. */

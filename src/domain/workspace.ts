@@ -1,5 +1,5 @@
 import { dayTemplate, editorSeed, needsTemplateRows, pageContentKey, projectDocument, inlineText, sectionRange, type EditorNode } from "./editor-document.ts";
-import { moveRefusal } from "./page-tree.ts";
+import { isTrashed, moveRefusal, subtreeIds } from "./page-tree.ts";
 import type {
   Command,
   CommandResult,
@@ -676,10 +676,41 @@ function settleCaptureStatus(c: Capture): void {
   c.status = items.some((x) => !x.state) ? "needs_confirmation" : items.some((x) => x.state === "applied") ? "applied" : "discarded";
   c.proposalRevision++;
 }
+/** A4: a trashed page is read-only until restored, and nothing can be put under it or point at it anew. */
+function refuseTrashedTarget(state: Workspace, action: Action | ServerAction): void {
+  if (action.type === "restore-page" || action.type === "restore-batch") return;
+  const a = action as { pageId?: unknown; parentId?: unknown; targetPageId?: unknown };
+  for (const id of [a.pageId, a.parentId, a.targetPageId])
+    if (typeof id === "string" && state.pages.some((p) => p.id === id && isTrashed(p))) throw new DomainError("Page is in trash; restore it first");
+}
+/**
+ * A4: bring back `ids` (members of one delete). A restored page whose parent isn't coming back with it goes under that
+ * parent if it's live, otherwise to top level (a parent still in the trash, or gone). Its place in the stored order is
+ * kept; sibling order isn't promised until B14.
+ */
+function restorePages(state: Workspace, ids: Set<string>): { pages: Page[]; toTopLevel: Page[] } {
+  const pages = state.pages.filter((p) => ids.has(p.id));
+  const toTopLevel: Page[] = [];
+  for (const p of pages) {
+    delete p.trashedAt;
+    delete p.trashId;
+  }
+  for (const p of pages) {
+    if (!p.parentId || ids.has(p.parentId)) continue;
+    const parent = state.pages.find((x) => x.id === p.parentId);
+    if (!parent || isTrashed(parent)) {
+      delete p.parentId;
+      toTopLevel.push(p);
+    }
+  }
+  return { pages, toTopLevel };
+}
 function execute(
   state: Workspace,
   action: Action | ServerAction,
+  operationId: string = newId(),
 ): { message: string; entityId?: string; simulated?: boolean } {
+  refuseTrashedTarget(state, action);
   switch (action.type) {
     case "save-editor": {
       const p = page(state, action.pageId);
@@ -1139,6 +1170,42 @@ function execute(
       state.pages.push(moved!);
       return { message: action.parentId ? "Page moved" : "Moved to top level", entityId: moved!.id };
     }
+    case "delete-page": {
+      // A4 (plan a4-trash-data §2): the page and every live descendant go to the trash as one batch, the delete's
+      // operation id. Pages trashed earlier keep their own batch. Nothing else changes: tasks, materials, references.
+      const p = page(state, action.pageId);
+      if (p.type !== "document") throw new DomainError("Day pages can't be deleted");
+      if (!Number.isFinite(Date.parse(action.at))) throw new DomainError("Invalid time");
+      const ids = subtreeIds(state, p.id);
+      const members = state.pages.filter((x) => ids.has(x.id) && !isTrashed(x));
+      for (const x of members) {
+        x.trashedAt = action.at;
+        x.trashId = operationId;
+      }
+      const n = members.length - 1;
+      return { message: n ? `Moved to trash · ${n} subpage${n === 1 ? "" : "s"}` : "Moved to trash", entityId: p.id };
+    }
+    case "restore-page": {
+      // A4: the page plus those of its descendants still in the same batch (pages-trash-layout §4).
+      const p = page(state, action.pageId);
+      if (!isTrashed(p)) throw new DomainError("Page is not in trash");
+      const ids = new Set([p.id]);
+      for (let grew = true; grew; ) {
+        grew = false;
+        for (const x of state.pages)
+          if (isTrashed(x) && x.trashId === p.trashId && x.parentId && ids.has(x.parentId) && !ids.has(x.id)) { ids.add(x.id); grew = true; }
+      }
+      const { toTopLevel } = restorePages(state, ids);
+      return { message: toTopLevel.length ? "Restored to Pages" : "Restored", entityId: p.id };
+    }
+    case "restore-batch": {
+      // A4: what's left of a delete; pages restored earlier stay where they are now.
+      const ids = new Set(state.pages.filter((x) => isTrashed(x) && x.trashId === action.trashId).map((x) => x.id));
+      if (!ids.size) throw new DomainError("Nothing left to restore");
+      const { pages, toTopLevel } = restorePages(state, ids);
+      const top = pages.find((x) => !x.parentId || !ids.has(x.parentId))!;
+      return { message: toTopLevel.includes(top) ? "Restored to Pages" : "Restored", entityId: top.id };
+    }
     case "relink-material-lines": {
       // One-off repair for pages written while the editor skipped the material rule; safe to repeat.
       const before = JSON.stringify([state.materials, state.pages]), count = state.materials.length;
@@ -1516,7 +1583,7 @@ export function applyCommand(
         today: "2000-01-01",
       });
     else result = { message: "Previous operation restored" };
-  } else result = execute(state, command.action);
+  } else result = execute(state, command.action, command.operationId);
   state.revision = input.revision + 1;
   const receipt = { operationId: command.operationId, ...result, fingerprint };
   state.receipts[command.operationId] = receipt;
