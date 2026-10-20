@@ -5,7 +5,7 @@
   - Lead `02141609` (scope, steps), `90935fb5` (empty is normal), `8fa4f515` (Jazz's states accepted);
   - Brian `3097861f`;
   - Ratchet `b64dd79d` (four constraints, §5–§7);
-  - Jazz `docs/design/morning-model-states.md` at dbf4fa7 (states and strings, with Bumblebee's wording);
+  - Jazz `docs/design/morning-model-states.md` at dbf4fa7 (states and strings, with Bumblebee's wording; additions 0c16159);
   - 03 AI contract; A6a `docs/plan/feat-model-step1.md`.
 
 ## 1. One call, one object
