@@ -122,6 +122,21 @@ function pastedUrls(text: string): string[] | null {
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
   return lines.length && lines.length <= 50 && lines.every(isHttpUrl) ? lines : null
 }
+/**
+ * A link copied from a page (Bumblebee ede057e9): the plain text is its title, and only the HTML holds the URL. It
+ * counts when the HTML is nothing but web links (one or more `<a href>`, whitespace between); anything else, such as
+ * a sentence around the link, is a normal paste.
+ */
+function htmlLinks(html: string): string[] | null {
+  if (!html) return null
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const anchors = [...doc.body.querySelectorAll('a[href]')]
+  if (!anchors.length) return null
+  const rest = doc.body.cloneNode(true) as HTMLElement
+  rest.querySelectorAll('a[href]').forEach(a => a.remove())
+  if (rest.textContent?.trim()) return null
+  return pastedUrls(anchors.map(a => a.getAttribute('href') ?? '').join('\n'))
+}
 /** "Today", "Mon, Oct 19": the app's day format, for "Saved before · {day}". */
 function dayLabel(day: string): string {
   return day === todayIso() ? 'Today' : longLabel(day)
@@ -187,7 +202,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     // A2 §3: only web links, one per line, onto an empty text, bullet or numbered line → a link page per URL. Checked
     // before the HTML branch, since a link copied from a page carries text/html too.
-    const urls = pastedUrls(data.getData('text/plain'))
+    const urls = pastedUrls(data.getData('text/plain')) ?? pastedUrls(data.getData('text/uri-list').split(/\r?\n/).filter(l => !l.startsWith('#')).join('\n')) ?? htmlLinks(data.getData('text/html'))
     const at = editor.getTextCursorPosition().block
     if (urls && editor.prosemirrorState.selection.empty && ['paragraph', 'bulletListItem', 'numberedListItem'].includes(at.type) && !inlineText(at.content).trim() && !at.children.length) {
       void pasteLinkLines(at.id, at.type, urls)

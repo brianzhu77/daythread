@@ -244,6 +244,25 @@ await p.reload({ waitUntil: 'networkidle' }); await p.waitForTimeout(800)
 log(sql("SELECT count(*) n FROM materials WHERE snapshot='current'")[0].n === 0, '   Undo → a normal save → reload: no record, the line not collected again')
 await p.close()
 
+// Real clipboards (Bumblebee ede057e9): a link copied from a page (plain text = its title, the URL only in the HTML),
+// Copy Link (plain URL + an <a>), the iOS share sheet (text/uri-list); a sentence around a link stays a normal paste.
+const pasteData = (p, data) => p.evaluate(d => { const dt = new DataTransfer(); for (const [k, v] of Object.entries(d)) dt.setData(k, v); document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })) }, data)
+for (const [name, data, url] of [
+  ['a link copied from a page (title as plain text, URL in the HTML)', { 'text/plain': '韩国大酱汤 (正宗)', 'text/html': '<meta charset="utf-8"><a href="https://www.xiachufang.com/recipe/10324/">韩国大酱汤 (正宗)</a>' }, 'https://www.xiachufang.com/recipe/10324/'],
+  ['Copy Link (plain URL and an <a>)', { 'text/plain': 'https://copy.example/link', 'text/html': '<a href="https://copy.example/link">https://copy.example/link</a>' }, 'https://copy.example/link'],
+  ['the iOS share sheet (text/uri-list)', { 'text/uri-list': 'https://share.example/item', 'text/plain': 'Shared item' }, 'https://share.example/item'],
+]) {
+  reset(); p = await open()
+  await clickLine(p, notes); await pasteData(p, data); await settle(p)
+  lp = linkPages()
+  log(lp.length === 1 && lp[0].url === url && lp[0].title !== '韩国大酱汤 (正宗)', `clipboard: ${name} → one link page, default title from the URL`, JSON.stringify(lp[0] ?? null))
+  await p.close()
+}
+reset(); p = await open()
+await clickLine(p, notes); await pasteData(p, { 'text/plain': 'see 韩国大酱汤 here', 'text/html': 'see <a href="https://x.example/">韩国大酱汤</a> here' }); await settle(p)
+log(linkPages().length === 0, 'clipboard: a sentence around a link → normal paste, no page')
+await p.close()
+
 // 7 + 390: a long Chinese-path URL; the card is one line and ↗ stays put.
 reset(); p = await open('/', 390)
 const long = 'https://zh.wikipedia.org/wiki/%E9%9F%A9%E5%9B%BD%E5%A4%A7%E9%85%B1%E6%B1%A4%E7%9A%84%E5%81%9A%E6%B3%95%E5%92%8C%E5%8E%86%E5%8F%B2?section=%E9%85%8D%E6%96%99'

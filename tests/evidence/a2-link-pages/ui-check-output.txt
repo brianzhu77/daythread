@@ -1,4 +1,4 @@
-ok   1. one link page, child of today, raw URL, default title · {"id":"d4a3a20c-f363-483a-a4fd-fa753c2786c3","title":"xiachufang.com/recipe/10324","url":"https://www.xiachufang.com/recipe/10324/","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}
+ok   1. one link page, child of today, raw URL, default title · {"id":"4428c890-7a2d-4ff0-a90c-6ee01c7ae061","title":"xiachufang.com/recipe/10324","url":"https://www.xiachufang.com/recipe/10324/","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}
 ok      notice "Made a page · Undo"
 ok      the line is a link card with the default title
 ok      globe icon on the card
@@ -38,7 +38,7 @@ ok      the next save does not bring the card back
 ok   Undo with a save pending: flushed first, text kept once, page deleted
 ok   two devices: B's line saved
 ok      B's line is not overwritten
-ok      A's Undo is refused: "Couldn't undo · page changed elsewhere" · ["Saved","Saved","Couldn't undo · page changed elsewhere","Couldn't undo · page changed elsewhere","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Saving…","Saving…","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved"]
+ok      A's Undo is refused: "Couldn't undo · page changed elsewhere" · ["Saved","Saved","Couldn't undo · page changed elsewhere","Couldn't undo · page changed elsewhere","Couldn't undo · page changed elsewhere","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Unsaved changes","Saving…","Saving…","Saving…","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved","Saved"]
 ok      nothing was undone: the page and the card stay
 ok      A's editor keeps its typing and now shows B's line
 ok      both are saved, each once
@@ -46,6 +46,10 @@ ok   two devices: the other one shows the card
 ok      after Undo on one, the other shows the URL line
 ok   Good Stuffs: one follow-up record for the link page
 ok      Undo → a normal save → reload: no record, the line not collected again
+ok   clipboard: a link copied from a page (title as plain text, URL in the HTML) → one link page, default title from the URL · {"id":"3fbac521-6ad1-4ef6-a684-a34091a32397","title":"xiachufang.com/recipe/10324","url":"https://www.xiachufang.com/recipe/10324/","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}
+ok   clipboard: Copy Link (plain URL and an <a>) → one link page, default title from the URL · {"id":"142726ed-ba60-4faf-bac7-d9f5bbe1d9b7","title":"copy.example/link","url":"https://copy.example/link","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}
+ok   clipboard: the iOS share sheet (text/uri-list) → one link page, default title from the URL · {"id":"080108e0-d356-4fb6-9218-71fbaf52f70d","title":"share.example/item","url":"https://share.example/item","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}
+ok   clipboard: a sentence around a link → normal paste, no page
 ok   7. 390: the card is one line, ↗ inside the screen · {"h":32,"x":316,"w":44}
 ok      the default title reads the Chinese path
 ok      ↗ is a 44 px target
