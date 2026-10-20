@@ -129,7 +129,8 @@ reads it from the workspace when it renders, so a rename shows everywhere at onc
 | Trash: read-only body (`trash.tsx` `Inline`) | renders `pageRef` with the same states (live, in trash, not found) |
 | Trash: Linked from / "(removed)" | unchanged code, now fed by `refs` too |
 | A4 trash rollback (`remapIds`) | already remaps any `pageId` prop, so a link inside a held page follows its page |
-| A6b draft, tags, Bring to today | read `NoteBlock.text` (§1); a brought line copies its `pageRef` nodes with fresh `refId`s |
+| Tag pages, the morning card's "lines from {day}" (Jazz) | draw the line from its editor node through one shared `LineText` component, which renders `pageRef` with the live title (as Trash does), so a rename shows there at once |
+| A6b draft, tag index, Bring to today | read `NoteBlock.text` (§1), the title as of the line's last save; a brought line copies its `pageRef` nodes with fresh `refId`s |
 | Old `day-page.tsx` | not mounted; untouched |
 
 ## 7. Checks before the candidate
@@ -164,7 +165,7 @@ reads it from the workspace when it renders, so a rename shows everywhere at onc
   - §6's reader list.
 - **Jazz:**
   - recency = pages linked most recently, server-side (§3, Bumblebee);
-  - the link text in `NoteBlock.text` may be stale until the line is saved (§1, internal only).
+  - the stored line text may hold an old title until that line is saved again. It's internal only: every view that shows a line draws the live title (§6).
 - **For A9b (Jazz §7, next round):** can the app's own copy carry the source page id? **Yes for block copies**: our
   `copyBlocks` already writes `application/x-daythread-blocks`, and the page id can go in that payload. **Not today
   for a selection inside one line**: `copyBlocks` returns early there and the browser copies plain text. A9b would
