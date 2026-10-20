@@ -139,9 +139,9 @@ linkPaste: {
 - **Replay:** the same operation id returns the first receipt.
 - **Lost response or closed browser:** a lost response leaves the state either fully applied or untouched. There's no window where a card points at a deleted page.
 - **The browser only applies the result:**
-  - It flushes any pending editor save first, then sends `expectedContent` = that page's content key.
+  - It **saves what he typed first** (flushes the pending editor save), then sends `expectedContent` = the content key from that save. So "paste → type a note on the next line → Undo on the notice" works: the note is kept and the cards turn back into text (Jazz `f8dc5ab7`). Editor input is held while the Undo request is in flight, so nothing typed can race it.
   - The server's new document reaches the editor through the existing **external refresh** (`page-editor.tsx:361`).
-  - If he typed in between and the key no longer matches, the command is refused with "Page changed · nothing was undone", and nothing changes.
+  - Only if the page changed elsewhere (another tab or device) between that save and the Undo does the key no longer match. The command is then refused with "Page changed · nothing was undone", and nothing changes. The whole-page key is kept rather than per-card checks, because the server rewrites the document and a stale open editor would conflict anyway.
 
 **⌘Z:**
 - **While the paste's notice is showing,** and the editor's last history step is that paste, ⌘Z sends this same command. It's a keydown handler in front of BlockNote's.
@@ -194,6 +194,7 @@ linkPaste: {
 - **Browser, on a copy of his DB, 1280 and 390:**
   - Jazz §6 checks 1–8, using **his real Notes bullet structure** (Lead 2);
   - ⌘Z during the notice and after it;
+  - paste → type a note on the next line → Undo: the note is kept, the cards are back as text, and the page is deleted;
   - no request leaves 127.0.0.1.
 - **A5 rerun:** Ratchet reruns A5 acceptance on the A2 build. I run the review's Good Stuffs step with a pasted link page first.
 - **Rollback round trip** as in §5.
