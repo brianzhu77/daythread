@@ -27,6 +27,8 @@ lines allowed), **and the line it lands on is empty**.
 | A URL into a page title | Plain text in the title |
 | Typing a URL (not pasting) | Stays a link. Nothing is made |
 | `mailto:`, `file:`, `javascript:` or anything else that isn't http(s) | Normal paste |
+| **A link copied from inside a web page**: `text/html` is exactly one `<a href>` to an http(s) URL and nothing else, and `text/plain` is its text (Lead `aa5d532f`) | One link page, **titled with the link text** (§3). The key comes only from `href`. Copy Link, where plain is the URL itself, is the row above |
+| HTML with a link inside a sentence, several links, or anything besides one `<a>` | Normal paste |
 
 Why "the line is empty": pasting into a sentence is writing, and turning half a sentence into a card would destroy his
 words. An empty line is the "我贴一个URL过来" case. There's no menu asking what to make, because Undo (§4) is the
@@ -56,7 +58,7 @@ The existing page card (`editor-page-card`) with three changes:
 - **Icon:** a globe, both here and wherever a page icon shows a link page (sidebar tree, Pages rows, Subpages, Trash).
   It must not be the chain icon that "Linked from" uses.
 - **Tap the card:** opens the link page, same as any page card.
-- **↗ (44 px target, right side):** opens the website in a new tab. It's the only thing on the card that leaves the
+- **↗ (44 px target, right side):** `--ink-3`, the app accent on hover or press (never the browser's link blue). It opens the website in a new tab. It's the only thing on the card that leaves the
   app.
 - **Domain:** shown quietly (`--ink-3`) only while the title differs from the default (§3), checked when the card is drawn, so renaming it back hides the domain again. Otherwise it would show the
   domain twice.
@@ -78,6 +80,7 @@ Linked from  Mon, Oct 19                              ← as today
 Write…                                                ← empty body
 ```
 
+- **Default title from a copied link:** the link text, trimmed, when the paste came from a single `<a>` (§1) and its text isn't the URL itself. Otherwise it's the URL default below. The card's domain then shows, because the title differs from the URL default.
 - **Default title:** the URL without `https://`, `http://` and a leading `www.`, with percent-escapes decoded
   (Chinese paths read as Chinese) and no trailing `/`. The query and fragment are kept, because
   `youtube.com/watch?v=…` would otherwise give every video the same name. It's an ordinary title: editable, never
