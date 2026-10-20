@@ -144,12 +144,13 @@ linkPaste: {
 - **Which cards it checks (Lead `2c2c1350`, after Jazz `f8dc5ab7`):** only **this paste's cards**. Each must still be on the page with the same block id and the same `pageId`. Every other block is left untouched, including whatever he typed. A card he deleted or cut is skipped. "Page changed · nothing was undone" appears only when **none** of this paste's cards are left.
 - **The browser: a targeted merge for this command only** (Ratchet `df3285ef`, Lead): the server and the browser apply **the same deterministic change** to the same cards, `undoCards(doc, cards)`. It's one pure function in `src/domain/link-paste.ts`, used by both: each matching card (same block id, same `pageId`) becomes a paragraph with the same block id holding the URL as a plain link. Nothing else is touched.
   1. **Flush:** the pending `save-editor` is sent and confirmed first, so the server document = what he had typed until then.
-  2. **The command is sent.** He can keep typing meanwhile; input is **not** held.
-  3. **On success**, the editor applies `undoCards` to **its current document** in one editor transaction, so later typing stays where it is. Then:
+  2. **The command is sent.** He can keep typing meanwhile; input is **not** held. **This page's autosave sending is paused** until the reply. Edits collect locally, and no save is sent or in flight, so no old save callback can move the base back (Ratchet `9c42d967`).
+  3. **On success, it first checks the reply is only this Undo:** the returned document must equal `undoCards(flushed document)`, the one the flush confirmed. If the server also holds another device's edits, the targeted merge is **not** used, and the existing "Page changed elsewhere · draft kept" conflict applies; it never re-bases and saves the whole old document. When it does match, the editor applies `undoCards` to **its current document** in one editor transaction, so later typing stays where it is. Then:
      - it sets its save base to the **server's returned page content key and revision**;
-     - it **discards any pending save snapshot built before the reply**, so an old snapshot can never write the cards back;
+     - it **discards any pending save snapshot built before the reply and builds a new one**, so an old snapshot can never write the cards back;
+     - **it resumes autosave**;
      - if he typed during the request, the next save goes out on the new base. It's accepted, because local = server document + only his new typing.
-  4. **On failure or a refused command:** the editor changes nothing, and the notice reads "Couldn't undo · card kept".
+  4. **On failure or a refused command:** the editor changes nothing, autosave resumes with what he typed, and the notice reads "Couldn't undo · card kept".
   - **Not a general merge:** this path exists only for `undo-paste-links`. Every other server-side edit keeps the existing refresh, conflict and "draft kept" behaviour (`page-editor.tsx:361`).
   - **The open-page cases:**
     - **A card he deleted locally during the request:** the server already turned it into text, and his next save removes that line, which is what he did.
@@ -218,7 +219,9 @@ linkPaste: {
   - paste → type a note on the next line → Undo: the note is kept, the cards are back as text, and the page is deleted;
   - **The targeted merge (Lead):**
     - **Undo mid-typing:** paste → type on the next line → Undo while typing continues during the request. The card is a URL again, every typed character is there exactly once, and the next save doesn't bring the card back.
+    - **No save sent during the request:** the network log shows no `save-editor` for that page between the Undo request and its reply, and exactly one after it.
     - **Undo with a save still pending:** type → Undo before the debounce fires. The flush goes first, then the Undo, with no "changed elsewhere" and no lost text.
+    - **Two devices, other lines:** device B edits another line of the page and its save lands, then device A runs Undo while typing during the request. A's reply doesn't match `undoCards(flushed)`, so A gets "Page changed elsewhere · draft kept", and neither B's line nor A's typing is overwritten.
     - **Two devices:** the same page is open on 1280 and 390, and Undo is run on one. The other refreshes to the URL text if it's clean. If it's dirty, it shows the existing conflict notice and its draft is kept.
     - **Unit:** `undoCards` gives the same result on the server document and on a local document with extra blocks, nested bullets, and a deleted card.
   - **Good Stuffs: paste → Undo → a normal save → reload**: no Material and no source for that line. Then edit the line → A5 collects it;
