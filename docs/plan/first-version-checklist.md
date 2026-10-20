@@ -6,7 +6,7 @@ after that (tags on Oct 18). Brian's latest message overrides this file; update 
 
 ## Count
 
-**Built: 15 of 20** (as of `32ef34b`, live on 3000, 2026-10-21).
+**Built: 15 of 21** (as of `32ef34b`, live on 3000, 2026-10-21).
 
 Every status update to Brian quotes this line. Count rule: a row counts as built only when it is live on 3000
 **and** has passed review (Ratchet's acceptance task linked in Evidence). "Partial" counts as not built.
@@ -43,7 +43,8 @@ Group B is listed for tracking only and never counts toward M.
 | A2 | Paste a URL → page with the URL as a property; one page per URL | 3596b765, e83b0640; v0.4 N-1, N-3, N-4 | built | 32ef34b live 2026-10-21 (Lead 038e7cf1, layout 5); Ratchet #82 (docs/reviews/a2-candidate-ratchet.md, b157465), Jazz design pass. Rollback = stop, scripts/sqlite-rollback-link-pages.ts, build 21eb45b. plan docs/plan/a2-url-page.md 46ba81b passed (Ratchet #81, report 01e36d1); states docs/design/link-pages-states.md 26a3625, design passed (Jazz). No fetching; page = card where pasted + child of that page, like `/page` (Lead ca10deaf); Good Stuffs pastes make pages too and the review lists them (Lead 5043b9c5); empty bullet counts; Undo checks only this paste's cards (Lead 2c2c1350). Migration 5 (`pages.url`) with rollback. A link copied from a page (one text-only `<a>`) is titled with its link text; media inside or beside it = normal paste (Lead aa5d532f, 06f5a617). Not tested: real iPhone, Safari's own clipboard. Watching: same site with and without `www.` makes two pages with the same default title (N-4; Lead 06f5a617). Capture-bar URLs: B18 |
 | A3 | "Linked from" back to the day on every page | 3596b765; v0.4 N-5 | built | 960d5d4 live 2026-10-19, Ratchet #73. Real references only; the breadcrumb parent is not repeated; today shows as "Today" |
 | A4 | Delete a document page to trash and restore it, with its subpages | v0.4 N-7 | built | 9936224 live 2026-10-20, layout 4 (Lead 2f917190); Ratchet #77 (docs/reviews/trash-ratchet.md: migration, rollback script round trip, atomic failure), Jazz design pass incl. nested pages. Document pages only; day pages can't be deleted (B16). Rollback = stop, scripts/sqlite-rollback-trash.ts, build 5193991, start (Undo cleared) |
-| A9 | `[[` page reference; quote with source | v0.3 scope 4, 01 §6.2 | missing | `insert-reference` has no caller |
+| A9a | `[[` page reference (also `【【`), inline link, pick list incl. link pages, New page from `[[` | v0.3 scope 4, 01 §6.2; O-U11 | missing | Planning: states docs/design/page-links-states.md d69d8fd (Jazz); plan by Roadbuster, Ratchet pre-review #83. Ships with B15 (Lead a5a33307). `insert-reference` has no caller yet |
+| A9b | Quote with source: pasted text from another page offers "Add source" → Quote with "— [link]" (v0.3 P03) | v0.3 scope 4, 01 §6.3; O-U11 | missing | Next round after A9a (Lead a5a33307); depends on whether an in-app copy can carry the source page id (plan §7 to answer). States in page-links-states.md §4 |
 | A11 | Block-level references | c5c9142e #1 | missing | moved to Later by the team without asking; build or ask Brian |
 
 ### Part 3 · Indexing at plan and review · Part 5 · Weave (minimal: browse and copy)
@@ -61,11 +62,13 @@ Group B is listed for tracking only and never counts toward M.
 |---|---|---|---|---|
 | A8 | Morning card per v05 design (merged suggestions with reason, Undo) + Bring to today for plain lines | 7c4e0cab (O4=b), 78871f09 | built | 5193991 live 2026-10-19 (Lead 3600952d); Ratchet #75 (docs/reviews/morning-card-ratchet.md, copy of Brian's real data), Jazz design pass. Text and link lines only; a brought line stays brought after its copy is deleted, Undo re-offers it; every card write saves the editor first. "From your notes" proposals are in A6b-1. Not tested: real iPhone with Chinese input. Blank "Unfinished" row from an empty-titled draft task fixed in 53c1b83 (Ratchet #78); "N other open tasks" leaves out tasks shown on the card |
 
-Count: M = D1–D6 + A1a, A1b, A2–A5, A6a, A6b-1, A6b-2, A7–A9, A11, A12 = 20. A10 (drag preview) is settled inside D5, not a separate row.
+Count: M = D1–D6 + A1a, A1b, A2–A5, A6a, A6b-1, A6b-2, A7, A8, A9a, A9b, A11, A12 = 21. A10 (drag preview) is settled inside D5, not a separate row.
 A1 was split into A1a/A1b on 2026-10-19 when `/page` shipped (same sources, no scope change), so M went 17 → 18.
 A6 was split into A6a/A6b on 2026-10-19 when capture went live on the real model (same sources, no scope change), so M went 18 → 19.
 A4 narrowed to document pages on 2026-10-19 (Lead 5598fdab); deleting daily pages is B16. M unchanged.
 A6b was split into A6b-1/A6b-2 on 2026-10-20 when step 1 went live (same sources, no scope change), so M went 19 → 20.
+
+A9 was split into A9a/A9b on 2026-10-21 when quote with source was moved to the round after `[[` (Lead a5a33307; same sources, no scope change), so M went 20 → 21.
 
 A8's proposals for text lines moved to A6b on 2026-10-19 (they need the real model; same sources); M unchanged.
 A1b dropped "delete with children" on 2026-10-19 because A4 already covers it (N-7, trash and restore with subpages); M unchanged.
