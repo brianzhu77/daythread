@@ -108,7 +108,11 @@ export function restoreHeldLinks(db: DatabaseSync): LinksReupgradeLog | null {
     const inSync = row.editorSections === JSON.stringify(sections)
     const holder = sections.find(s => s.blocks.some(b => b.id === h.lineBlockId))
     const block = holder?.blocks.find(b => b.id === h.lineBlockId)
-    if (!holder || !block || block.text !== h.lineText) { log.linesKept.push(h.pageId); continue }
+    // Notes he nested under the URL line in the old build are about that link: the whole line stays (Ratchet 832ad8f0,
+    // Bumblebee b5c4af03), like an edited one.
+    const findNode = (list: Node[]): Node | undefined => list.map(n => n.id === h.lineBlockId ? n : n.children && findNode(n.children)).find(Boolean)
+    const node = typeof row.editorJSON === 'string' && row.editorJSON ? findNode(json<Node[]>(row.editorJSON, [])) : undefined
+    if (!holder || !block || block.text !== h.lineText || node?.children?.length) { log.linesKept.push(h.pageId); continue }
     holder.blocks = holder.blocks.filter(b => b !== block)
     let editorJSON = row.editorJSON
     if (typeof editorJSON === 'string' && editorJSON) {

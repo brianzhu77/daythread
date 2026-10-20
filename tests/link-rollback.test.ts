@@ -140,3 +140,33 @@ test('a URL line inside the editor document comes out too, and the page reads as
     assert.equal(after.editorSections, before.editorSections)
   } finally { await s.cleanup() }
 })
+
+test('Ratchet #82: a URL line the old build nested notes under stays whole after the re-upgrade', async () => {
+  const s = await store()
+  try {
+    const id = await s.paste('https://nested.example/', 'nested')
+    assert.equal(s.script().status, 0)
+    // What 21eb45b saves when he writes a nested bullet under the URL line.
+    sql(s.path, db => {
+      const row = db.prepare("SELECT sections, editorJSON FROM pages WHERE snapshot='current' AND id=?").get(id)!
+      const doc = JSON.parse(String(row.editorJSON ?? '[]')) as EditorNode[]
+      const sections = JSON.parse(String(row.sections))
+      const at = doc.findIndex(n => n.id === `link-url:${id}`)
+      const base = at >= 0 ? doc : [{ id: `link-url:${id}`, type: 'paragraph', content: [{ type: 'link', href: 'https://nested.example/', content: [{ type: 'text', text: 'https://nested.example/', styles: {} }] }] } as EditorNode, ...doc]
+      const i = base.findIndex(n => n.id === `link-url:${id}`)
+      base[i] = { ...base[i]!, children: [{ id: 'note', type: 'bulletListItem', content: 'about this link' }] }
+      sections[0].blocks.splice(1, 0, { id: 'note', kind: 'paragraph', text: 'about this link' })
+      const present = JSON.parse(String(db.prepare("SELECT present FROM pages WHERE snapshot='current' AND id=?").get(id)!.present)) as string[]
+      for (const k of ['editorJSON', 'editorSections']) if (!present.includes(k)) present.push(k)
+      db.prepare("UPDATE pages SET editorJSON=?, sections=?, editorSections=?, present=? WHERE snapshot='current' AND id=?").run(JSON.stringify(base), JSON.stringify(sections), JSON.stringify(sections), JSON.stringify(present), id)
+    })
+    const ws = await s.reopen()
+    const p = ws.pages.find(x => x.id === id)!
+    assert.equal(p.url, 'https://nested.example/')
+    const doc = JSON.parse(p.editorJSON!) as EditorNode[]
+    const kept = doc.find(n => n.id === `link-url:${id}`)
+    assert.ok(kept, 'the URL line stays')
+    assert.equal(kept!.children?.[0]?.id, 'note', 'with the note nested under it')
+    assert.ok(p.sections.flatMap(x => x.blocks).some(b => b.id === 'note'))
+  } finally { await s.cleanup() }
+})

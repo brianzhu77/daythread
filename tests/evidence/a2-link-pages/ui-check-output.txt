@@ -1,4 +1,4 @@
-ok   1. one link page, child of today, raw URL, default title · {"id":"4428c890-7a2d-4ff0-a90c-6ee01c7ae061","title":"xiachufang.com/recipe/10324","url":"https://www.xiachufang.com/recipe/10324/","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}
+ok   1. one link page, child of today, raw URL, default title · {"id":"5f4c5fca-e29f-43d9-b29e-6ee8e3c282da","title":"xiachufang.com/recipe/10324","url":"https://www.xiachufang.com/recipe/10324/","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}
 ok      notice "Made a page · Undo"
 ok      the line is a link card with the default title
 ok      globe icon on the card
@@ -46,10 +46,14 @@ ok   two devices: the other one shows the card
 ok      after Undo on one, the other shows the URL line
 ok   Good Stuffs: one follow-up record for the link page
 ok      Undo → a normal save → reload: no record, the line not collected again
-ok   clipboard: a link copied from a page (title as plain text, URL in the HTML) → one link page, default title from the URL · {"id":"3fbac521-6ad1-4ef6-a684-a34091a32397","title":"xiachufang.com/recipe/10324","url":"https://www.xiachufang.com/recipe/10324/","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}
-ok   clipboard: Copy Link (plain URL and an <a>) → one link page, default title from the URL · {"id":"142726ed-ba60-4faf-bac7-d9f5bbe1d9b7","title":"copy.example/link","url":"https://copy.example/link","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}
-ok   clipboard: the iOS share sheet (text/uri-list) → one link page, default title from the URL · {"id":"080108e0-d356-4fb6-9218-71fbaf52f70d","title":"share.example/item","url":"https://share.example/item","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}
+ok   clipboard: a link copied as text from a page (plain = its text, URL only in the HTML) → one link page titled "韩国大酱汤 (正宗)" · {"id":"c687152d-9052-47b4-ba6f-0858a98f2d93","title":"韩国大酱汤 (正宗)","url":"https://www.xiachufang.com/recipe/10324/","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}
+ok      the card shows the link text and the domain (Lead aa5d532f)
+ok      Undo still deletes it: the link-text title is its first title, not an edit
+ok   clipboard: Copy Link (plain URL and an <a>) → one link page titled "copy.example/link" · {"id":"c461771f-8872-411a-adfd-31889d57443f","title":"copy.example/link","url":"https://copy.example/link","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}
+ok   clipboard: the iOS share sheet (text/uri-list) → one link page titled "share.example/item" · {"id":"994373d9-7ae9-4d33-969b-d17303c64a2b","title":"share.example/item","url":"https://share.example/item","parentId":"day:2026-10-20","trashedAt":null,"trashId":null}
+ok   clipboard: HTML with two links → normal paste, no page
 ok   clipboard: a sentence around a link → normal paste, no page
+ok   ↗ uses --ink-3, not the browser link blue · rgb(158, 160, 164)
 ok   7. 390: the card is one line, ↗ inside the screen · {"h":32,"x":316,"w":44}
 ok      the default title reads the Chinese path
 ok      ↗ is a 44 px target

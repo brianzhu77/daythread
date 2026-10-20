@@ -376,3 +376,39 @@ test('the review still lists a Good Stuffs link page two days later; Bring to to
   assert.equal(getDayView(ws, day2).handoffBlocks.some(b => b.block.kind === 'reference'), false)
   assert.ok(visiblePages(ws).some(p => p.url))
 })
+
+test('Ratchet #82: a made page also saved by a typed Good Stuffs line elsewhere is kept by Undo', () => {
+  const { ws: start, d1, d2 } = days()
+  const p = paste(start, d1, ['https://typed-later.example/'], { kind: 'good-stuffs' })
+  const ws = save(p.ws, d2, doc => { const at = doc.findIndex(n => n.id === heading(p.ws, d2, 'good-stuffs')); return [...doc.slice(0, at + 1), line('typed', 'https://typed-later.example/'), ...doc.slice(at + 1)] })
+  assert.equal(ws.materials[0]!.sources.length, 2)
+  const r = undo(ws, d1, p.op)
+  assert.ok(page(r.workspace, p.target(0)), 'the page stays: another save uses it')
+  assert.match(r.receipt.message, /linked from/)
+  assert.deepEqual(r.workspace.materials[0]!.sources.map(s => s.pageId), [d2])
+})
+
+test('Ratchet #82 (A5): changing only the host\'s case of a typed Good Stuffs URL keeps its saved item', () => {
+  const { ws: start, d1 } = days()
+  let ws = save(start, d1, doc => { const at = doc.findIndex(n => n.id === heading(start, d1, 'good-stuffs')); return [...doc.slice(0, at + 1), line('h', 'https://EXAMPLE.com/a'), ...doc.slice(at + 1)] })
+  const id = ws.materials[0]!.id
+  ws = save(ws, d1, doc => doc.map(n => n.id === 'h' ? line('h', 'https://example.com/a') : n))
+  assert.equal(ws.materials.length, 1)
+  assert.equal(ws.materials[0]!.id, id)
+  assert.equal(ws.materials[0]!.url, 'https://example.com/a')
+  assert.equal(page(ws, d1)!.sections.flatMap(s => s.blocks).find(b => b.id === 'h')!.materialId, id)
+})
+
+test('Lead aa5d532f: a link copied as text keeps its text as the first title; Undo still deletes it unless renamed', () => {
+  const { ws: start, d2 } = days()
+  const item = { url: 'https://www.xiachufang.com/recipe/1/', pageId: 'T1', cardBlockId: 'CT1', lineType: 'paragraph', title: ' 韩国大酱汤 (正宗) ' }
+  let ws = ok(start, { type: 'paste-links', pageId: d2, today: day2, items: [item] }, 'op-t')
+  assert.equal(page(ws, 'T1')!.title, '韩国大酱汤 (正宗)')
+  ws = save(ws, d2, doc => [...doc, { id: 'CT1', type: 'pageLink', props: { pageId: 'T1' } }])
+  assert.equal(page(undo(ws, d2, 'op-t').workspace, 'T1'), undefined)
+  const renamed = ok(ws, { type: 'rename-page', pageId: 'T1', title: 'Doenjang jjigae' })
+  assert.match(undo(renamed, d2, 'op-t').receipt.message, /it has your edits/)
+  // The text is the URL itself: the URL default.
+  const plain = ok(start, { type: 'paste-links', pageId: d2, today: day2, items: [{ ...item, pageId: 'T2', cardBlockId: 'CT2', title: item.url }] })
+  assert.equal(page(plain, 'T2')!.title, 'xiachufang.com/recipe/1')
+})

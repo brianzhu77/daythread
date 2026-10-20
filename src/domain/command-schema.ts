@@ -115,7 +115,7 @@ const action = z.discriminatedUnion("type", [
     pageId: id,
     sectionId: id.optional(),
     today: day,
-    items: z.array(z.object({ url: z.string().min(1).max(10_000), pageId: id, cardBlockId: id, lineType: z.enum(["paragraph", "bulletListItem", "numberedListItem"]) })).min(1).max(50),
+    items: z.array(z.object({ url: z.string().min(1).max(10_000), pageId: id, cardBlockId: id, lineType: z.enum(["paragraph", "bulletListItem", "numberedListItem"]), title: title.optional() })).min(1).max(50),
   }),
   z.object({ type: z.literal("undo-paste-links"), pageId: id, operationId: id, today: day }),
   z.object({ type: z.literal("rename-page"), pageId: id, title }),

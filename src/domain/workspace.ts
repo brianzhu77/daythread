@@ -405,7 +405,8 @@ function linkMaterialLines(state: Workspace, p: Page, nodes: readonly EditorNode
         if (link && untouchedLineMaterial(m, b.id, previousById.get(b.id))) {
           if (link.url === m.url) { m.title = text(link.title, 1000); continue; }
           const key = urlKey(link.url), owner = state.materials.find((x) => x.url === link.url || (key !== null && urlKey(x.url) === key));
-          if (!owner) { m.url = link.url; m.title = text(link.title, 1000); continue; }
+          // The same key as itself (e.g. only the host's case changed) is the same item, not another one to join.
+          if (!owner || owner === m) { m.url = link.url; m.title = text(link.title, 1000); continue; }
           // The URL is already saved: this line becomes another save of it. `m` carries nothing but the
           // half-typed URL, so it goes rather than leaving a second, empty item in the sort step.
           state.materials = state.materials.filter((x) => x !== m);
@@ -472,17 +473,17 @@ function checkLinkIdentity(state: Workspace): void {
   }
 }
 /** Written or tracked on a link page since it was made: a title, any text or row, a review note. */
-function linkPageEdited(state: Workspace, p: Page): boolean {
-  return p.title !== defaultLinkTitle(p.url ?? "") || Boolean(p.reviewText.trim()) || state.pages.some((c) => c.parentId === p.id)
+function linkPageEdited(state: Workspace, p: Page, firstTitle: string = defaultLinkTitle(p.url ?? "")): boolean {
+  return p.title !== firstTitle || Boolean(p.reviewText.trim()) || state.pages.some((c) => c.parentId === p.id)
     || p.sections.some((s) => s.title.trim() || s.blocks.some((b) => b.kind !== "paragraph" || b.text.trim()));
 }
 /** The follow-up record was acted on: a decision, a task made from it. A re-save of a Done item isn't a decision. */
 function followUpUsed(m: Material | undefined): boolean {
   return Boolean(m && (m.lastDecisionOn || m.taskId || m.reviewState !== "pending" || (m.decisions ?? []).some((d) => d.decision !== "saved-again")));
 }
-function newLinkPage(id: string, parentId: string, url: string): Page {
+function newLinkPage(id: string, parentId: string, url: string, title: string): Page {
   return {
-    id, type: "document", date: null, title: defaultLinkTitle(url), url, parentId,
+    id, type: "document", date: null, title, url, parentId,
     // The `/page` body: one empty line, like Notion.
     sections: [{ id: `intro:${id}`, kind: "custom", title: "", blocks: [{ id: newId(), kind: "paragraph", text: "" }] }],
     reviewText: "", reviewSaved: false, handoffDone: false, draft: null,
@@ -513,8 +514,11 @@ function pasteLinks(state: Workspace, action: Extract<Action, { type: "paste-lin
     let record: LinkPasteRecord;
     if (!owner.page) {
       if (state.pages.some((p) => p.id === item.pageId)) throw new DomainError("Page id already in use");
-      state.pages.push(newLinkPage(item.pageId, parent.id, url));
-      record = { ...base, outcome: "made", pageId: item.pageId, refsBefore: [] };
+      // Lead aa5d532f: a link copied as text keeps its text as the title; otherwise (or when the text is the URL) the URL default.
+      const linkText = item.title?.trim();
+      const title = linkText && linkText !== url ? text(linkText, 1000) : defaultLinkTitle(url);
+      state.pages.push(newLinkPage(item.pageId, parent.id, url, title));
+      record = { ...base, outcome: "made", pageId: item.pageId, refsBefore: [], title };
     } else if (isTrashed(owner.page)) {
       const ids = restoreSetOf(state, owner.page);
       const before = [...ids].map((id) => { const x = page(state, id); return { pageId: id, trashId: x.trashId!, trashedAt: x.trashedAt!, parentBefore: x.parentId ?? null }; });
@@ -570,8 +574,11 @@ function undoPasteLinks(state: Workspace, action: Extract<Action, { type: "undo-
     if (!p || r.outcome === "reused") continue;
     if (r.outcome === "made") {
       const refs = newRefs([p.id], r);
-      if (linkPageEdited(state, p) || followUpUsed(urlOwner(state, r.url).material)) kept.push(`Kept ${p.title || "Untitled"} · it has your edits`);
-      else if (refs.length) kept.push(`Kept ${p.title || "Untitled"} · linked from ${linkedFrom(refs)}`);
+      // A save of this link from anywhere but this paste (Ratchet 2b3a09fd: typed under Good Stuffs on another day)
+      // is a use of the page too.
+      const otherSaves = (urlOwner(state, r.url).material?.sources ?? []).filter((x) => !own.has(`${x.pageId}/${x.blockId}`)).map((x) => `${x.pageId}/${x.blockId}`);
+      if (linkPageEdited(state, p, r.title) || followUpUsed(urlOwner(state, r.url).material)) kept.push(`Kept ${p.title || "Untitled"} · it has your edits`);
+      else if (refs.length || otherSaves.length) kept.push(`Kept ${p.title || "Untitled"} · linked from ${linkedFrom([...refs, ...otherSaves])}`);
       else remove.add(p);
     } else {
       const set = r.restored ?? [];

@@ -123,19 +123,20 @@ function pastedUrls(text: string): string[] | null {
   return lines.length && lines.length <= 50 && lines.every(isHttpUrl) ? lines : null
 }
 /**
- * A link copied from a page (Bumblebee ede057e9): the plain text is its title, and only the HTML holds the URL. It
- * counts when the HTML is nothing but web links (one or more `<a href>`, whitespace between); anything else, such as
- * a sentence around the link, is a normal paste.
+ * A link copied as text from a page (Bumblebee ede057e9, Lead aa5d532f): the HTML is exactly one `<a href>` to an
+ * http(s) URL and nothing else, and the plain text is its text. That text becomes the default title. HTML with a link
+ * inside a sentence, or with more than one link, is a normal paste.
  */
-function htmlLinks(html: string): string[] | null {
+function copiedLink(html: string, plain: string): { url: string; text: string } | null {
   if (!html) return null
   const doc = new DOMParser().parseFromString(html, 'text/html')
   const anchors = [...doc.body.querySelectorAll('a[href]')]
-  if (!anchors.length) return null
+  if (anchors.length !== 1) return null
   const rest = doc.body.cloneNode(true) as HTMLElement
   rest.querySelectorAll('a[href]').forEach(a => a.remove())
-  if (rest.textContent?.trim()) return null
-  return pastedUrls(anchors.map(a => a.getAttribute('href') ?? '').join('\n'))
+  const url = anchors[0]!.getAttribute('href')?.trim() ?? '', text = anchors[0]!.textContent?.trim() ?? ''
+  if (rest.textContent?.trim() || !isHttpUrl(url) || (plain.trim() && plain.trim() !== text)) return null
+  return { url, text }
 }
 /** "Today", "Mon, Oct 19": the app's day format, for "Saved before · {day}". */
 function dayLabel(day: string): string {
@@ -202,10 +203,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     // A2 §3: only web links, one per line, onto an empty text, bullet or numbered line → a link page per URL. Checked
     // before the HTML branch, since a link copied from a page carries text/html too.
-    const urls = pastedUrls(data.getData('text/plain')) ?? pastedUrls(data.getData('text/uri-list').split(/\r?\n/).filter(l => !l.startsWith('#')).join('\n')) ?? htmlLinks(data.getData('text/html'))
+    const copied = copiedLink(data.getData('text/html'), data.getData('text/plain'))
+    const urls = pastedUrls(data.getData('text/plain')) ?? pastedUrls(data.getData('text/uri-list').split(/\r?\n/).filter(l => !l.startsWith('#')).join('\n')) ?? (copied ? [copied.url] : null)
     const at = editor.getTextCursorPosition().block
     if (urls && editor.prosemirrorState.selection.empty && ['paragraph', 'bulletListItem', 'numberedListItem'].includes(at.type) && !inlineText(at.content).trim() && !at.children.length) {
-      void pasteLinkLines(at.id, at.type, urls)
+      void pasteLinkLines(at.id, at.type, urls, copied && urls.length === 1 && urls[0] === copied.url ? copied.text : undefined)
       return true
     }
     const html = data.getData('text/html')
@@ -487,12 +489,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * A2 §3: the cards go in at once (one editor step), each pointing at the page the browser already knows for that key
    * or at a new id; then one paste-links for all of them, retried like `/page` (3 tries, then "Not created · Retry").
    */
-  async function pasteLinkLines(blockId: string, lineType: string, urls: string[]) {
+  async function pasteLinkLines(blockId: string, lineType: string, urls: string[], linkText?: string) {
     const operationId = newOperationId()
     const preceding = nodes().slice(0, nodes().findIndex(n => n.id === blockId) + 1).reverse().find(n => n.type === 'heading')
     const items = urls.map(url => {
       const known = latestWorkspace.current.pages.find(p => p.url && urlKey(p.url) === urlKey(url))
-      return { url, pageId: known?.id ?? crypto.randomUUID(), cardBlockId: crypto.randomUUID(), lineType: lineType as 'paragraph' }
+      return { url, pageId: known?.id ?? crypto.randomUUID(), cardBlockId: crypto.randomUUID(), lineType: lineType as 'paragraph', ...(linkText ? { title: linkText } : {}) }
     })
     editor.transact(() => {
       const cards = items.map(it => ({ id: it.cardBlockId, type: 'pageLink', props: { pageId: it.pageId, url: it.url, line: lineType } }))

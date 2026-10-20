@@ -31,6 +31,8 @@ export interface LinkPasteRecord {
   url: string;
   /** The line the card replaced (paragraph, bullet, numbered), so Undo puts back the same kind of line. */
   lineType: string;
+  /** A made page's first title (the link text, or the URL default), so Undo can tell a rename. */
+  title?: string;
   /** The day of the paste, for "Saved before · {day}". */
   on: LocalDate;
   /** References (`pageId/blockId`) to each page of the outcome at paste time; only ones added since block Undo. */
@@ -342,7 +344,7 @@ export type Action =
   | { type: "material-resurface"; materialId: string; enabled: boolean }
   | { type: "create-document"; title: string; body: string; pageId?: string; parentId?: string }
   /** A2: URLs pasted onto an empty line of `pageId`, one card each, in order. `sectionId`: the heading above them. */
-  | { type: "paste-links"; pageId: string; sectionId?: string; today: LocalDate; items: { url: string; pageId: string; cardBlockId: string; lineType: string }[] }
+  | { type: "paste-links"; pageId: string; sectionId?: string; today: LocalDate; items: { url: string; pageId: string; cardBlockId: string; lineType: string; title?: string }[] }
   | { type: "undo-paste-links"; pageId: string; operationId: string; today: LocalDate }
   | { type: "rename-page"; pageId: string; title: string }
   | { type: "move-page"; pageId: string; parentId: string | null }

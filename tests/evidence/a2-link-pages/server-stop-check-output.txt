@@ -2,6 +2,6 @@ ok   8. server stopped: the card says "Not created · Retry" · example.org/stop
 Not created · Retry
 ok      the URL is never lost: it is the card's title
 ok      nothing was written
-ok      Retry after the restart makes the page once, a link page under today · [{"id":"975a6d93-c363-421e-ba43-e66395557956","url":"https://example.org/stopped","parentId":"day:2026-10-20"}]
+ok      Retry after the restart makes the page once, a link page under today · [{"id":"e35123b1-1d16-41db-b103-c3e86d53610e","url":"https://example.org/stopped","parentId":"day:2026-10-20"}]
 ok      the card is saved right after, pointing at that page
 ok      a second tap opens it; still one page
