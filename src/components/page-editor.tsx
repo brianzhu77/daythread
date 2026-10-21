@@ -74,7 +74,7 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
     {t?.status === 'cancelled' && <span contentEditable={false} className="editor-cancelled-tag">Cancelled</span>}
     {role === 'reference' && <span contentEditable={false} className="editor-reference-tag">Reference</span>}
     {role === 'reference' && t?.status === 'open' && <button className="editor-plan-action" contentEditable={false} onClick={() => void run({ type: 'plan-task', taskId, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }, r => ({ text: 'Planned for today', undoOperationId: r.operationId }))}>Plan for today</button>}
-    {model && <span contentEditable={false} className="editor-row-menu"><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent))} /></span>}
+    {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent))} /></span>}
     {t && t.status === 'open' && hasDateFacts(t) && <span contentEditable={false} className="editor-date-tag"><DateTag task={t} today={todayIso()} pageDate={planDate || todayIso()} /></span>}
   </div>
 }
@@ -1156,6 +1156,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }}
     onKeyDownCapture={e => {
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
+      // Keys inside a row's ⋯ menu belong to the menu (Enter chooses, arrows move), never to the editor's row rules.
+      if ((e.target as Element).closest?.('.editor-row-menu')) return
       if (historyPending.current) { e.preventDefault(); e.stopPropagation(); return }
       // A12 keyboard path (Lead b8ec39d5): ⌘/ (Ctrl+/), as Notion's block menu, opens the caret row's ⋯ menu; the
       // context-menu key and Shift+F10 too. Tab keeps indenting.

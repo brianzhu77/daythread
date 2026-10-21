@@ -48,7 +48,8 @@ export function rowMenu(task: Task, role: string, section: 'top3' | 'other' | nu
   if (task.status === 'done') return null
   if (task.status === 'cancelled') return { primary: [], anotherDay: null, groups: [{ items: [{ label: 'Restore', intent: { kind: 'restore' } }] }] }
   if (pageDate < today) return { primary: [], anotherDay: null, groups: [{ items: [{ label: 'Bring to today', intent: { kind: 'bring-today' } }] }] }
-  const anotherDay = anotherDayOptions(today).map(o => ({ label: `${o.label} · ${shortLabel(o.date)}`, date: o.date }))
+  // Never the page's own day: moving a row to the day it's on does nothing.
+  const anotherDay = anotherDayOptions(today).filter(o => o.date !== pageDate).map(o => ({ label: `${o.label} · ${shortLabel(o.date)}`, date: o.date }))
   const anotherDayGroup = { title: 'Another day', items: [...anotherDay.map(o => ({ label: o.label, intent: { kind: 'move', date: o.date } as RowIntent })), { label: 'Pick date…', intent: 'pick-date' as const }] }
   const cancel = { items: [{ label: 'Cancel task', intent: { kind: 'cancel' } as RowIntent, danger: true }] }
   if (role !== 'plan' || !section) {
