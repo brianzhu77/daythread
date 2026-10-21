@@ -1157,8 +1157,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     onKeyDownCapture={e => {
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
       if (historyPending.current) { e.preventDefault(); e.stopPropagation(); return }
-      // A12 keyboard path: the context-menu key (or Shift+F10) opens the caret row's ⋯ menu; Tab keeps indenting.
-      if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+      // A12 keyboard path (Lead b8ec39d5): ⌘/ (Ctrl+/), as Notion's block menu, opens the caret row's ⋯ menu; the
+      // context-menu key and Shift+F10 too. Tab keeps indenting.
+      if (((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === '/') || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
         const block = editor.getTextCursorPosition().block
         const more = editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"] .editor-row-more`)
         if (more) { e.preventDefault(); e.stopPropagation(); more.click(); return }
