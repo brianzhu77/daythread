@@ -85,6 +85,10 @@ today, made by `/page` and by pasting a URL. `[[` never makes a card.
 
 ## 4. Quote with a source
 
+> **Dropped (2026-10-21).** Brian (`7b89f7c9`) wants Notion's model instead: a plain copy pastes as-is with no source
+> and no prompt, and keeping text in sync is an explicit "synced block" he makes himself (Lead `dfcb04d4`). This
+> section is kept as history; don't build from it. Synced blocks get their own states doc.
+
 v0.3 item 4: "A quote keeps its excerpt as text with a source link." He copies from a page (often a link page he has
 filled in) and pastes into a day.
 
