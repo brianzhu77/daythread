@@ -1,0 +1,15 @@
+(node:97344) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS 1280 heading Down reaches empty section row {"id":"day:2026-10-19:good-stuffs:template:0","text":"","visible":true}
+PASS 1280 focus/reveal writes nothing ""
+PASS 1280 typing saves in Good Stuffs [{"kind":"top3","text":["#rewind Narwhal Styling","#rewind Wire Transaction ID","#daythread 优化 Calendar 页面"]},{"kind":"other","text":[""]},{"kind":"events","text":[""]},{"kind":"good-stuffs","text":["Heading down QA87"]},{"kind":"notes","text":[""]}]
+PASS 1280 Notes heading retained ""
+PASS 1280 Undo removes typed content ""
+PASS 1280 Undo survives reload ""
+PASS 390 heading Down reaches empty section row {"id":"day:2026-10-19:good-stuffs:template:0","text":"","visible":true}
+PASS 390 focus/reveal writes nothing ""
+PASS 390 typing saves in Good Stuffs [{"kind":"top3","text":["#rewind Narwhal Styling","#rewind Wire Transaction ID","#daythread 优化 Calendar 页面"]},{"kind":"other","text":[""]},{"kind":"events","text":[""]},{"kind":"good-stuffs","text":["Heading down QA87"]},{"kind":"notes","text":[""]}]
+PASS 390 Notes heading retained ""
+PASS 390 Undo removes typed content ""
+PASS 390 Undo survives reload ""
+PASS no page errors []
