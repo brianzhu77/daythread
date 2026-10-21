@@ -96,6 +96,7 @@ N = D1–D6 + A5 + A1a, A1b, A3 + A4 + A6a + A8 = 13.
 | B16 | Delete a daily page with its subpages; hand-off still counts its placements, its prose isn't offered for Bring, "(removed)" sources, P12 restore on reopening the date (N-7 lines 180-186) | pages-delta N-7, 04 P12; Lead 5598fdab | missing (left out of A4; touches the morning card) |
 | B17 | Trash style fixes: 390 Trash row wraps so the time shows, trashed page Subpages in `--ink-2`, 1280 hover covers Restore. Optional: wrap only at " · " | Jazz ac552a0d, 40e03d46 | built (53c1b83 live 2026-10-20). Optional " · " wrap still open |
 | B18 | URLs from the capture bar make link pages (one page per URL) instead of saved items, so the two kinds of saved link don't drift apart | pages-delta N-1/N-4; Jazz 90dfd91 §1 cut, Lead 043d101e | missing (cut from A2; he has never used capture) |
+| B19 | UI polish from Brian's comparison with Notion and Craft: done tasks greyed (strikethrough per his pick), smaller headings and spacing, deeper nested indent, no blue bar left of TODO groups (Jazz); page-card preview line per v0.3 "title + short preview", empty template lines hidden on past days, render only (Roadbuster) | Brian afb0c665; Lead 2ea283a3, a2edc0a7 | missing (two style commits, separate from A12; Ratchet checks regressions) |
 
 ## C. Open questions for Brian
 
