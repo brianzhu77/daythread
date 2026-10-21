@@ -66,7 +66,10 @@ else {
   log(created.length === 1 && created[0].title === 'new task B4', '4. the new task exists once, as a task', JSON.stringify(created.map(t => t.title)))
   log(tasksAfter.find(t => t.id === taskRow.props.taskId)?.title === title, '4. the existing task keeps its title (no second task)')
   const plain = flat(doc()).find(n => txt(n.content) === `${title} renamed-B4`)
-  log(plain?.type === 'paragraph', '4. B\'s new title is a plain line below it', plain?.type)
+  log(plain?.type === 'bulletListItem', '4. B\'s new title is a bullet below it (Jazz fix 1)', plain?.type)
+  const x = async text => Math.round((await row(B, text).boundingBox())?.x ?? -1)
+  const xs = [await x(`${title} renamed-B4`), await x(L2)]
+  log(xs[0] > 0 && Math.abs(xs[0] - xs[1]) <= 1, '4. it sits on the shared text column', `${xs[0]} vs a bullet at ${xs[1]}`)
   await A.close(); await B.close()
 }
 
@@ -105,6 +108,8 @@ await B.close()
 A = await open(); B = await open(390)
 await typeAt(A, L5, ' [A8]'); await settle(A)
 await typeAt(B, L2, ' [B8]'); await settle(B)
+const style = await saveLine(B).getByRole('button', { name: 'Load latest' }).evaluate(e => { const c = getComputedStyle(e), r = getComputedStyle(document.documentElement); return { weight: c.fontWeight, color: c.color, ink: getComputedStyle(Object.assign(document.body.appendChild(document.createElement('span')), { style: 'color: var(--ink)' })).color, size: getComputedStyle(e.parentElement).fontSize } })
+log(style.weight === '600' && style.color === style.ink && style.size === '13px', '8. Load latest in ink, 600; status 13px (Jazz fix 2)', JSON.stringify(style))
 const box = await saveLine(B).boundingBox(), btn = await saveLine(B).getByRole('button', { name: 'Load latest' }).boundingBox()
 log(box && btn && box.x >= 0 && box.x + box.width <= 390 && btn.x + btn.width <= 390, '8. 390: line and button inside the screen', `line ${Math.round(box?.x)}–${Math.round((box?.x ?? 0) + (box?.width ?? 0))}, button ${Math.round(btn?.x)}–${Math.round((btn?.x ?? 0) + (btn?.width ?? 0))} h${Math.round(btn?.height ?? 0)}`)
 await B.screenshot({ path: new URL('./conflict-390.png', import.meta.url).pathname })

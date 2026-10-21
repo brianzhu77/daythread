@@ -47,7 +47,7 @@ test('the same edit on both sides comes back once; no changes at all inserts not
   assert.deepEqual(merge(base, structuredClone(base), [line('1', 'changed elsewhere')]).inserted, [])
 })
 
-test('tasks: a new one stays a task once, an existing one is not repeated, a renamed one comes back as text', () => {
+test('tasks: a new one stays a task once, an existing one is not repeated, a renamed one comes back as a bullet', () => {
   const b = [task('t1', 'existing', 'task-1'), task('t2', 'to rename', 'task-2'), line('1', 'one')]
   const draft = [task('t1', 'existing', 'task-1'), task('t2', 'renamed by me', 'task-2'), line('1', 'one'), task('t3', 'brand new')]
   const latest = [task('t1', 'existing', 'task-1'), task('t2', 'to rename', 'task-2'), line('1', 'one (theirs)')]
@@ -55,7 +55,7 @@ test('tasks: a new one stays a task once, an existing one is not repeated, a ren
   assert.deepEqual(texts(document), ['[] existing', '[] to rename', 'renamed by me', 'one (theirs)', '[] brand new'])
   const fresh = document.find(x => inlineText(x.content) === 'brand new')!
   assert.equal(fresh.props?.taskId, `editor-task:${fresh.id}`)
-  assert.equal(document.find(x => inlineText(x.content) === 'renamed by me')!.type, 'paragraph')
+  assert.equal(document.find(x => inlineText(x.content) === 'renamed by me')!.type, 'bulletListItem')
 })
 
 test('a task he typed into an empty template row goes in that row, still a task', () => {
@@ -68,11 +68,11 @@ test('a task he typed into an empty template row goes in that row, still a task'
   assert.equal(document[1]!.props?.taskId, 'editor-task:row')
 })
 
-test('a changed heading comes back as a plain line, so no new section appears', () => {
+test('a changed heading comes back as a bullet, so no new section appears', () => {
   const b = [{ id: 'h', type: 'heading', props: { level: 2 }, content: t('Notes'), children: [] }]
   const draft = [{ ...b[0]!, content: t('Notes and ideas') }]
   const { document } = merge(b, draft, [{ ...b[0]!, content: t('Notes (theirs)') }])
-  assert.deepEqual(document.map(x => x.type), ['heading', 'paragraph'])
+  assert.deepEqual(document.map(x => x.type), ['heading', 'bulletListItem'])
 })
 
 test('nested lines: his change to a child goes below that child; links keep their target with a new identity', () => {
@@ -92,4 +92,20 @@ test('the latest page is not changed in place', () => {
   const before = JSON.stringify(latest)
   merge(base, [line('1', 'one'), line('2', 'two (mine)')], latest)
   assert.equal(JSON.stringify(latest), before)
+})
+
+test('a line holding only a [[ link is not empty: his changed link goes below, the latest link stays (Ratchet #97)', () => {
+  const link = (pageId: string) => ({ id: 'l', type: 'bulletListItem', props: {}, content: [{ type: 'pageRef', props: { pageId, refId: `r-${pageId}`, newTitle: '' } }], children: [] }) as EditorNode
+  const { document } = merge([link('A')], [link('B')], [link('C')])
+  const targets = document.map(n => (n.content as { props: { pageId: string } }[])[0]!.props.pageId)
+  assert.deepEqual(targets, ['C', 'B'])
+})
+
+test('checklist tick: only his tick changed → in place; both sides changed → his ticked line below (Jazz, Ratchet #97)', () => {
+  const item = (id: string, text: string, checked: boolean): EditorNode => ({ id, type: 'sourceChecklist', props: { checked }, content: t(text), children: [] })
+  const tickOnly = merge([item('c', 'milk', false)], [item('c', 'milk', true)], [item('c', 'milk', false), line('x', 'theirs')])
+  assert.deepEqual(tickOnly.document.map(n => [inlineText(n.content), n.props?.checked ?? null]), [['milk', true], ['theirs', null]])
+  assert.deepEqual(tickOnly.inserted, ['c'])
+  const both = merge([item('c', 'milk', false)], [item('c', 'milk', true)], [item('c', 'oat milk', false)])
+  assert.deepEqual(both.document.map(n => [n.type, inlineText(n.content), n.props?.checked]), [['sourceChecklist', 'oat milk', false], ['sourceChecklist', 'milk', true]])
 })

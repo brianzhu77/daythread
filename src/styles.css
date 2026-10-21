@@ -651,6 +651,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor .bn-block-outer:has(> .bn-block > .bn-block-content[data-content-type=heading]) { margin-top:18px; }
 .editor-save-line { min-height:24px; font-size:12px; color:var(--ink-2); display:flex;gap:12px; align-items:center; padding-left:24px; }
 .editor-save-line button { padding:2px 8px; font-size:12px; }
+/* B23 (Jazz): in a conflict, Load latest is the one way on, so it reads as a button. */
+.editor-save-line.is-conflict { font-size:13px; }
+.editor-save-line.is-conflict button { color:var(--ink); font-weight:600; font-size:13px; }
 .editor-task { display:flex; align-items:center; gap:10px; min-height:32px; width:100%; }
 /* Page card (Jazz): one quiet row in the note, no border or fill; hover/selection come from the block like any other. */
 /* Same columns as a task row: icon in the checkbox/dot column, title on the text column; icon and chevron centre on the title's first line. */
