@@ -13,3 +13,9 @@ export async function flushEditor(pageId: string): Promise<boolean> {
   const flush = flushers.get(pageId)
   return flush ? flush() : true
 }
+
+/** Saves every open editor; true when nothing is left unsaved anywhere. */
+export async function flushAllEditors(): Promise<boolean> {
+  const results = await Promise.all([...flushers.values()].map(flush => flush()))
+  return results.every(Boolean)
+}

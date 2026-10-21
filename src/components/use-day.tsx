@@ -8,6 +8,7 @@ import { draftMyDay as draftMyDayFn, loadWorkspace, retryCapture as retryCapture
 import { configureDebug, debugClient } from '../lib/debug'
 import { sampleActions } from './fixture'
 import { todayIso } from './dates'
+import { flushAllEditors } from './editor-flush'
 
 export interface Transport {
   load(operationId?: string, triggerOperationId?: string): Promise<Workspace>
@@ -98,7 +99,11 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const refresh = useCallback(async (triggerOperationId?: string) => {
     const operationId=newOperationId(),started=performance.now()
     debugClient('workspace.refresh.start',{operationId,triggerOperationId})
-    try { const next=await transport.load(operationId,triggerOperationId); adopt(next); debugClient('workspace.refresh.finish',{operationId,triggerOperationId,afterRevision:next.revision,elapsedMs:performance.now()-started,result:'ok'}); return next }
+    try { const next=await transport.load(operationId,triggerOperationId)
+      // A load can be overtaken by a command that finished while it was in flight (he typed and it saved): its older
+      // snapshot must not replace the newer one, or the editor would roll his text back (Ratchet #95).
+      if (wsRef.current && next.revision < wsRef.current.revision) { debugClient('workspace.refresh.finish',{operationId,triggerOperationId,afterRevision:next.revision,elapsedMs:performance.now()-started,result:'stale'}); return wsRef.current }
+      adopt(next); debugClient('workspace.refresh.finish',{operationId,triggerOperationId,afterRevision:next.revision,elapsedMs:performance.now()-started,result:'ok'}); return next }
     catch(error) { debugClient('workspace.refresh.finish',{operationId,triggerOperationId,elapsedMs:performance.now()-started,result:'error',error:error instanceof Error?error.name:'UnknownError'}); throw error }
   }, [transport, adopt])
 
@@ -108,6 +113,26 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   }, [refresh])
 
   useEffect(reload, [reload])
+
+  // An open tab only learns of edits made elsewhere (another tab, the phone) when it loads again. Coming back to the
+  // tab loads again, after saving what was typed here, so the refresh never lands on unsaved typing. If that save is
+  // refused (the page changed elsewhere), the editor already shows "changed elsewhere · draft kept" and nothing loads
+  // over it. At most once every 5s.
+  useEffect(() => {
+    let last = 0, running = false
+    const onVisible = async () => {
+      if (document.visibilityState !== 'visible' || running || Date.now() - last < 5000) return
+      running = true; last = Date.now()
+      try {
+        if (!(await flushAllEditors())) return
+        await queue.current
+        await refresh()
+      } catch { /* offline: the next action resyncs */ } finally { running = false }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => { document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('focus', onVisible) }
+  }, [refresh])
 
   useEffect(() => {
     if (saveState !== 'saved') return

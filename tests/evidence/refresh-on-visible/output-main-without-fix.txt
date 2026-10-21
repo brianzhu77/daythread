@@ -1,0 +1,16 @@
+ok   1. A saved its edit
+ok   1. B still shows the old page before coming back
+FAIL 1. B shows A's edit after coming back
+ok   1. the caret stays where it was · {"block":"day:2026-10-18:events:template:0","offset":2,"scrollY":120} → {"block":"day:2026-10-18:events:template:0","offset":2,"scrollY":120}
+ok   1. the scroll stays where it was · 120 → 120
+ok   3. F saved the newer edit
+ok   3. the stale save didn't overwrite it · F3 true · E3 false
+ok   3. E says its draft is kept · Page changed elsewhere · draft kept; copy it before reloading
+ok   3. E still shows what it typed
+FAIL 2. A and B picked up F's edit on coming back
+ok   2. B still shows what it typed · Page changed elsewhere · draft kept; copy it before reloading
+FAIL 2. the database holds one of the two edits, and nothing else changed · A2 false · B2 false
+ok   2. whichever tab lost the race keeps its text and says draft kept · A: Page changed elsewhere · draft kept; copy it before reloading
+ok   2. if B's typing isn't saved, B says so (draft kept) · Page changed elsewhere · draft kept; copy it before reloading
+ok   no page errors
+3 failed
