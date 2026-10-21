@@ -1,5 +1,5 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
-import { NodeSelection, TextSelection, type Transaction } from '@tiptap/pm/state'
+import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
@@ -10,7 +10,7 @@ import { BasicTextStyleButton, BlockTypeSelect, CreateLinkButton, createReactBlo
 import { BlockNoteView } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
 import '@blocknote/shadcn/style.css'
-import type { Page, Task, Workspace } from '../domain/types'
+import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, type EditorNode } from '../domain/editor-document'
 import { applyCommand, pasteRecords } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
@@ -25,13 +25,16 @@ import { DateTag } from './date-tag'
 import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
-import { addDays, fromIso, longLabel, todayIso } from './dates'
+import { addDays, fromIso, longLabel, todayIso, weekday } from './dates'
+import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
 import { registerEditorFlush } from './editor-flush'
+import { RowMenu } from './row-menu'
+import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
 
 const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' }, planDate: { default: '' } }, content: 'inline' }, {
   toExternalHTML: ({ contentRef }) => <p ref={contentRef} />,
-  render: ({ block, contentRef }) => <EditorTask taskId={block.props.taskId} role={block.props.role} planDate={block.props.planDate} contentRef={contentRef} />,
+  render: ({ block, contentRef }) => <EditorTask blockId={block.id} taskId={block.props.taskId} role={block.props.role} planDate={block.props.planDate} contentRef={contentRef} />,
 })()
 const sourceChecklist = createReactBlockSpec({ type: 'sourceChecklist', propSchema: { checked: { default: false } }, content: 'inline' }, {
   render: ({ block, contentRef, editor }) => <div className="editor-source-checklist"><input contentEditable={false} type="checkbox" aria-label="Check imported item" checked={block.props.checked} onChange={() => editor.updateBlock(block, { props: { checked: !block.props.checked } })} /><span ref={contentRef} /></div>,
@@ -58,15 +61,21 @@ const clipboardType = 'application/x-daythread-blocks'
 const cutTokens = new Set<string>()
 const deepNodes = (nodes: readonly EditorNode[]): EditorNode[] => nodes.flatMap(n => [n, ...deepNodes(n.children ?? [])])
 const checklistIds = (nodes: readonly EditorNode[]): string[] => deepNodes(nodes).filter(n => n.type === 'sourceChecklist' && n.props?.checked !== true).map(n => n.id)
-function EditorTask({ taskId, role, planDate, contentRef }: { taskId: string; role: string; planDate: string; contentRef: (node: HTMLElement | null) => void }) {
+function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: string; taskId: string; role: string; planDate: string; contentRef: (node: HTMLElement | null) => void }) {
   const { workspace, run } = useWorkspace()
+  const rows = useRowActions()
   const t = workspace?.tasks.find(t => t.id === taskId)
+  // A12: the row's actions, on a ⋯ at the end of the row (Jazz §2). Done and draft rows have none.
+  const model = t && rows ? rowMenu(t, role, rows.sectionOf(blockId), rows.pageDate, rows.today) : null
   // data-status: the task's real state, for checks such as scripts/check-alignment.mjs (Lead a2428bb1). Display only.
   return <div className="editor-task" data-role={role} data-draft={t ? undefined : true} data-status={t?.status ?? 'draft'}>
-    <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={t?.status === 'done'} disabled={!t && !taskId.startsWith('editor-task:')} onChange={() => t && void run({ type: 'task-status', taskId, status: t.status === 'done' ? 'open' : 'done' }, r => ({ text: t.status === 'done' ? 'Task reopened' : 'Task completed', undoOperationId: r.operationId }))} />
-    <span ref={contentRef} className={`editor-task-title ${t?.status === 'done' ? 'task-done' : ''}`} data-placeholder="To do" />
+    <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={t?.status === 'done'} disabled={(!t && !taskId.startsWith('editor-task:')) || t?.status === 'cancelled'} onChange={() => t && void run({ type: 'task-status', taskId, status: t.status === 'done' ? 'open' : 'done' }, r => ({ text: t.status === 'done' ? 'Task reopened' : 'Task completed', undoOperationId: r.operationId }))} />
+    <span ref={contentRef} className={`editor-task-title ${t?.status === 'done' ? 'task-done' : t?.status === 'cancelled' ? 'task-cancelled' : ''}`} data-placeholder="To do" />
+    {/* Jazz f58abeaf: done rows are grey and struck through too, so the label is what says Cancelled. */}
+    {t?.status === 'cancelled' && <span contentEditable={false} className="editor-cancelled-tag">Cancelled</span>}
     {role === 'reference' && <span contentEditable={false} className="editor-reference-tag">Reference</span>}
     {role === 'reference' && t?.status === 'open' && <button className="editor-plan-action" contentEditable={false} onClick={() => void run({ type: 'plan-task', taskId, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }, r => ({ text: 'Planned for today', undoOperationId: r.operationId }))}>Plan for today</button>}
+    {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent))} onEscape={() => rows!.focusRow(blockId)} /></span>}
     {t && t.status === 'open' && hasDateFacts(t) && <span contentEditable={false} className="editor-date-tag"><DateTag task={t} today={todayIso()} pageDate={planDate || todayIso()} /></span>}
   </div>
 }
@@ -206,7 +215,7 @@ function firstLineCenter(block: HTMLElement): number {
 }
 
 export function PageEditor({ page, workspace }: { page: Page; workspace: Workspace }) {
-  const { run, refresh } = useWorkspace()
+  const { run, refresh, latest } = useWorkspace()
   const navigate = useNavigate()
   const key = `daythread:editor:${page.id}`
   const initial = useRef<{ nodes: EditorNode[]; base: string; recovered: boolean } | null>(null)
@@ -493,14 +502,25 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     queueMicrotask(() => {
       if (dirty.current || base.current === next) return
       debugClient('editor.external-refresh',{operationId:newOperationId(),pageId:page.id,afterRevision:workspace.revision,result:'applied'})
-      const selection = browserSelection()
-      suppress.current = true
-      editor.replaceBlocks(editor.document, editorSeed(page, workspace, { templateRows: needsTemplateRows(page, todayIso()) }) as never)
-      restoreBrowserSelection(selection)
-      suppress.current = false
-      base.current = next
+      applyServerPage(page, workspace)
     })
   }, [page, editor, workspace])
+  /**
+   * The server rewrote the open page (Put back, the hand-off, a row action, another tab): show its version. Kept out
+   * of editor history (A12 §3), so ⌘Z never reverses a server change locally for the next save to write back; the
+   * change's own notice offers its Undo.
+   */
+  function applyServerPage(p: Page, ws: Workspace) {
+    const selection = browserSelection()
+    suppress.current = true
+    editor.transact(tr => {
+      editor.replaceBlocks(editor.document, editorSeed(p, ws, { templateRows: needsTemplateRows(p, todayIso()) }) as never)
+      tr.setMeta('addToHistory', false)
+    })
+    restoreBrowserSelection(selection)
+    suppress.current = false
+    base.current = pageContentKey(p)
+  }
   useEffect(() => {
     const before = (e: BeforeUnloadEvent) => { if (dirty.current) { stash(); e.preventDefault() } }
     window.addEventListener('beforeunload', before)
@@ -962,6 +982,136 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       selected.current = []; setSelectionLabel('')
     }
   }
+  /**
+   * A12 §3: a row action edits this page on the server. Save what he typed first and hold input while the command
+   * runs, so no autosave races the server's rewrite; then show the server's page. A failure releases the editor with
+   * the draft as it was (Ratchet 980d5695).
+   */
+  const rowNotice = useRef<{ key: string; operationId: string; fingerprint: string } | null>(null)
+  const menuReturn = useRef<{ blockId: string; selection: ReturnType<Selection['toJSON']> } | null>(null)
+  const closeRowNotice = () => { if (rowNotice.current) toast.close(rowNotice.current.key); rowNotice.current = null }
+  useEffect(() => () => closeRowNotice(), [])
+  async function onServer(action: Action, operationId: string, options?: { inlineRefusal: RegExp; onRefused: (m: string) => void }): Promise<Receipt | null> {
+    if (historyPending.current) return null
+    historyPending.current = true; setHistoryBusy(true); editor.isEditable = false
+    clearTimeout(timer.current)
+    try {
+      for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
+      if (dirty.current) await flushRef.current()
+      for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
+      if (dirty.current || sending.current) return null
+      const receipt = await run(action, null, operationId, options)
+      const ws = latest()
+      const p = ws?.pages.find(x => x.id === page.id)
+      if (receipt && ws && p) { latestWorkspace.current = ws; latestPage.current = p; if (pageContentKey(p) !== base.current) applyServerPage(p, ws) }
+      return receipt
+    } finally {
+      historyPending.current = false; setHistoryBusy(false); editor.isEditable = true
+    }
+  }
+  const notDone = (text: string) => { setStatus(text); toast(text, { timeout: 6000 }) }
+  async function rowAct(blockId: string, t: Task, intent: RowIntent) {
+    const today = todayIso(), day = page.date
+    if (!day) return
+    if (intent.kind === 'section') { moveToSection(blockId, intent.to); return }
+    const section = sectionOf(blockId)
+    const action: Action =
+      intent.kind === 'move' ? { type: 'plan-task', taskId: t.id, date: intent.date, section: section ?? undefined, from: day, today }
+      : intent.kind === 'bring-today' ? { type: 'plan-task', taskId: t.id, date: today }
+      : intent.kind === 'not-today' ? { type: 'not-today', taskId: t.id, date: day, onlyThisDay: true }
+      : { type: 'task-status', taskId: t.id, status: intent.kind === 'cancel' ? 'cancelled' : 'open' }
+    // The caret leaves a row that goes: to the end of the line above (Jazz §3).
+    const index = nodes().findIndex(n => n.id === blockId)
+    const above = index > 0 ? nodes()[index - 1]!.id : null
+    const caretHere = editor.getTextCursorPosition().block.id === blockId
+    closeRowNotice()
+    const operationId = newOperationId()
+    const receipt = await onServer(action, operationId)
+    if (!receipt) { notDone('Not done · your text is kept'); return }
+    // The menu took focus; give it back to the row (or the line above, if the row left) so ⌘Z and typing go on.
+    const caretTo = editor.getBlock(blockId) ? blockId : above && editor.getBlock(above) ? above : null
+    if (caretTo && (caretHere || document.activeElement === document.body || !editor.domElement?.contains(document.activeElement))) { editor.setTextCursorPosition(caretTo, 'end'); editor.focus() }
+    const fallback = receipt.message.indexOf(' · Top 3 is full')
+    const text =
+      intent.kind === 'move' ? `Moved to ${noticeDate(intent.date)}${fallback >= 0 ? receipt.message.slice(fallback) : ''}`
+      : intent.kind === 'bring-today' ? 'On today'
+      : intent.kind === 'not-today' ? (receipt.message.startsWith('Removed from') ? `Removed from ${weekday(day)} · still planned for ${weekday(t.plannedOn ?? day)}` : notTodayText(t, day, today))
+      : intent.kind === 'cancel' ? 'Cancelled' : 'Restored'
+    const key: string = toast(text, {
+      timeout: 8000,
+      actionProps: { children: 'Undo', onPress: () => void undoRowAction(operationId) },
+      onClose: () => { if (rowNotice.current?.key === key) rowNotice.current = null },
+    })
+    rowNotice.current = { key, operationId, fingerprint: JSON.stringify(editor.document) }
+  }
+  /** The notice's Undo, and ⌘Z while it shows: the server's undo of that action, run like the action itself. */
+  async function undoRowAction(operationId: string) {
+    closeRowNotice()
+    let refused = ''
+    const receipt = await onServer({ type: 'undo', targetOperationId: operationId }, newOperationId(), { inlineRefusal: /Cannot undo after later changes/, onRefused: m => { refused = m } })
+    if (receipt) toast('Undone', { timeout: 4000 })
+    else notDone(refused ? "Can't undo · changed since" : "Couldn't undo · your text is kept")
+  }
+  function sectionOf(blockId: string): 'top3' | 'other' | null {
+    const list = nodes()
+    const heading = list.slice(0, list.findIndex(n => n.id === blockId) + 1).reverse().find(n => n.type === 'heading')
+    const kind = latestPage.current.sections.find(s => s.id === heading?.id)?.kind
+    return kind === 'top3' || kind === 'other' ? kind : null
+  }
+  /** Move to Top 3 / Other (Jazz §3): a local edit like dragging the row, to the end of the other section; ⌘Z undoes it. */
+  function moveToSection(blockId: string, to: 'top3' | 'other') {
+    const heading = latestPage.current.sections.find(s => s.kind === to)
+    const block = editor.getBlock(blockId)
+    if (!heading || !block || !editor.getBlock(heading.id)) return
+    editor.transact(() => {
+      editor.removeBlocks([blockId])
+      const range = sectionRange(nodes(), heading.id)
+      const last = [...range].reverse().find(n => n.type !== 'heading' && (n.type !== 'paragraph' || inlineText(n.content).trim())) ?? range[0]!
+      editor.insertBlocks([block as never], last.id, 'after')
+    })
+    editor.setTextCursorPosition(blockId, 'end'); editor.focus()
+  }
+  /**
+   * A12 at 390 (Jazz §2): the handle selects one open task row, and the selection bar shows its actions instead of
+   * "1 selected · Delete". Any other selection keeps the usual bar. Choosing an action ends the selection.
+   */
+  function phoneRowBar() {
+    if (selected.current.length !== 1) return null
+    const id = selected.current[0]!, block = editor.getBlock(id)
+    if (block?.type !== 'task') return null
+    const t = latestWorkspace.current.tasks.find(x => x.id === block.props.taskId)
+    if (!t || t.status === 'done') return null
+    const keepFocus = (e: { preventDefault(): void }) => e.preventDefault()
+    // A cancelled row's only way back is Restore (Ratchet 5701d547, Jazz 1358f49b); at 390 the bar is where it lives.
+    if (t.status === 'cancelled') return <div className="editor-selection-bar is-row-actions" onPointerDown={keepFocus}>
+      <button type="button" onClick={() => { selected.current = []; setSelectionLabel(''); void rowAct(id, t, { kind: 'restore' }) }}>Restore</button>
+      <button type="button" onClick={deleteSelected}>Delete line</button>
+    </div>
+    if (t.status !== 'open') return null
+    const model = rowMenu(t, block.props.role, sectionOf(id), page.date ?? null, todayIso())
+    if (!model) return null
+    const choose = (intent: RowIntent) => { selected.current = []; setSelectionLabel(''); void rowAct(id, t, intent) }
+    const keep = (e: { preventDefault(): void }) => e.preventDefault()
+    const [tomorrow, ...rest] = model.primary[0]?.label === 'Tomorrow' ? model.primary : [null, ...model.primary]
+    const more = [...menuGroups(model, todayIso(), choose).filter(g => g.title !== 'Another day').map(g => ({ ...g, items: g.items.filter(i => !model.primary.some(p => p.label === i.label) && !i.label.startsWith('Tomorrow')) })).filter(g => g.items.length), { items: [{ label: 'Delete line', danger: true, onSelect: deleteSelected }] }]
+    return <div className="editor-selection-bar is-row-actions" onPointerDown={keep}>
+      {tomorrow && <button type="button" onClick={() => choose(tomorrow.intent)}>{tomorrow.label}</button>}
+      {model.anotherDay && <RowMenu label="Another day" triggerClass="editor-bar-button" trigger="Another day" groups={menuGroups({ ...model, groups: model.groups.filter(g => g.title === 'Another day') }, todayIso(), choose)} />}
+      {rest.map(p => p && <button key={p.label} type="button" onClick={() => choose(p.intent)}>{p.label}</button>)}
+      <RowMenu label="More actions" triggerClass="editor-bar-button" groups={more} />
+    </div>
+  }
+  const rowActions: RowActions = {
+    pageDate: page.date ?? null, today: todayIso(), sectionOf, act: (id, t, intent) => void rowAct(id, t, intent),
+    focusRow: id => {
+      if (!editor.getBlock(id)) return
+      const back = menuReturn.current; menuReturn.current = null
+      const view = editor.prosemirrorView
+      // Opened with ⌘/: back to where the caret was. Opened by pointer: the end of the row.
+      if (back?.blockId === id) { try { view.dispatch(view.state.tr.setSelection(Selection.fromJSON(view.state.doc, back.selection))); editor.focus(); return } catch { /* the row changed meanwhile */ } }
+      editor.setTextCursorPosition(id, 'end'); editor.focus()
+    },
+  }
   return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
     onMouseDownCapture={e => { const target = e.target as Element; if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') } }}
@@ -1025,12 +1175,42 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }}
     onKeyDownCapture={e => {
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
-      if (historyPending.current) { e.preventDefault(); e.stopPropagation(); return }
+      // Keys inside a row's ⋯ menu belong to the menu (Enter chooses, arrows move), never to the editor's row rules.
+      if ((e.target as Element).closest?.('.editor-row-menu')) return
+      // Line end/start in a task row: the browser's own move can step over the row's non-editable parts (⋯, tags)
+      // into the next block, so typing would land in the next heading. Make the same line move here, synchronously,
+      // and keep it in the row; ProseMirror reads the browser's selection back.
+      if (((e.metaKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) || ((e.key === 'End' || e.key === 'Home') && !e.metaKey && !e.ctrlKey)) && !e.altKey) {
+        const block = editor.getTextCursorPosition().block, sel = window.getSelection()
+        if (block.type === 'task' && sel?.modify) {
+          e.preventDefault()
+          const toEnd = e.key === 'ArrowRight' || e.key === 'End'
+          sel.modify(e.shiftKey ? 'extend' : 'move', toEnd ? 'forward' : 'backward', 'lineboundary')
+          const title = editor.domElement?.querySelector(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"] .editor-task-title`)
+          if (title && !title.contains(sel.focusNode)) {
+            const range = document.createRange(); range.selectNodeContents(title); range.collapse(!toEnd)
+            if (e.shiftKey) sel.extend(range.startContainer, range.startOffset)
+            else { sel.removeAllRanges(); sel.addRange(range) }
+          }
+          return
+        }
+      }
+      // A12 keyboard path (Lead b8ec39d5): ⌘/ (Ctrl+/), as Notion's block menu, opens the caret row's ⋯ menu; the
+      // context-menu key and Shift+F10 too. Tab keeps indenting.
+      if (((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === '/') || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+        const block = editor.getTextCursorPosition().block
+        const more = editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"] .editor-row-more`)
+        // Esc gives the caret back exactly where ⌘/ was pressed (Jazz check 8).
+        if (more) { e.preventDefault(); e.stopPropagation(); menuReturn.current = { blockId: block.id, selection: editor.prosemirrorState.selection.toJSON() }; more.click(); return }
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.nativeEvent.isComposing) {
         e.preventDefault(); e.stopPropagation()
         // A2 §4: right after a paste (its notice still showing, nothing edited since), ⌘Z is the notice's Undo.
         const last = linkNotice.current
         if (!e.shiftKey && last && last.fingerprint === JSON.stringify(editor.document)) { void undoLinkPaste(last.operationId); return }
+        // A12 §3: while a row action's notice shows and nothing was edited since, ⌘Z is that notice's Undo.
+        const row = rowNotice.current
+        if (!e.shiftKey && row && row.fingerprint === JSON.stringify(editor.document)) { void undoRowAction(row.operationId); return }
         void performHistory(e.shiftKey ? 'redo' : 'undo'); return
       }
       if (e.key === ' ' && !e.nativeEvent.isComposing && editor.getTextCursorPosition().block.type === 'task' && /^(?:#{1,3}|[-*>]|1\.|\[\])$/.test(editor.prosemirrorState.selection.$from.parent.textBetween(0, editor.prosemirrorState.selection.$from.parentOffset))) { e.preventDefault(); editor.insertInlineContent(' '); return }
@@ -1080,6 +1260,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     <div ref={selectionFocus} tabIndex={-1} className="sr-only" aria-label={selectionLabel || undefined} />
     {hiddenEmpty.size > 0 && <style>{[...hiddenEmpty].map(id => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"]`).join(',')}{'{display:none}'}</style>}
     <div className="editor-save-line" role="status">{status}{failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
+    <RowActionsContext.Provider value={rowActions}>
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
       {!compact && !selectionLabel && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
@@ -1118,6 +1299,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       {['[[', '【【'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} shouldOpen={() => false} getItems={async query => linkItems(query, trigger)} onItemClick={item => item.onItemClick()} />)}
       <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />
     </BlockNoteView>
+    </RowActionsContext.Provider>
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}
       onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); dragging.current = sectionRange(nodes(), touchHandle.id); setTouchDragging(true) }}
       onPointerMove={e => { if (dragging.current.length && e.buttons) updateDrop(e.clientX - 35, e.clientY) }}
@@ -1125,7 +1307,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null) }}><GripIcon /></button>}
     <div className="editor-phone-toolbar" aria-label="Editor tools"><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('undo')} aria-label="Undo"><UndoIcon /></button><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('redo')} aria-label="Redo"><RedoIcon /></button><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }} aria-label="Insert block"><PlusIcon /></button></div>
     {dock && createPortal(<>
-      {selectionLabel && <div className="editor-selection-bar"><span>{selectionLabel}</span><button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>}
+      {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span><button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
     {pastedChecklistIds.length > 0 && <div className="editor-paste-notice" role="status">{pastedChecklistIds.length} checklist {pastedChecklistIds.length === 1 ? 'line' : 'lines'} · <button onClick={() => {
       let count = 0, planned = 0
       editor.transact(tr => {

@@ -13,7 +13,8 @@ export interface MenuItem {
  * Items can be grouped; a group label renders as a small heading.
  */
 /** `trigger` replaces the ⋯ button's content (e.g. a chip that opens its own menu); `triggerClass` its class. */
-export function RowMenu({ label, groups, trigger, triggerClass = 'icon' }: { label: string; groups: { title?: string; items: MenuItem[] }[]; trigger?: ReactNode; triggerClass?: string }) {
+/** `onEscape` replaces the default of focusing the ⋯ again when Esc closes the menu (a row in the editor puts its caret back). */
+export function RowMenu({ label, groups, trigger, triggerClass = 'icon', onEscape }: { label: string; groups: { title?: string; items: MenuItem[] }[]; trigger?: ReactNode; triggerClass?: string; onEscape?: () => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const id = useId()
@@ -25,6 +26,8 @@ export function RowMenu({ label, groups, trigger, triggerClass = 'icon' }: { lab
     }
     document.addEventListener('pointerdown', close)
     document.addEventListener('keydown', close)
+    // The menu-button pattern: focus moves into the menu, so ↑↓ and Enter work from the keyboard (Jazz A12 §5 check 8).
+    ref.current?.querySelector<HTMLElement>('[role^=menuitem]')?.focus()
     return () => {
       document.removeEventListener('pointerdown', close)
       document.removeEventListener('keydown', close)
@@ -45,7 +48,14 @@ export function RowMenu({ label, groups, trigger, triggerClass = 'icon' }: { lab
         {trigger ?? '⋯'}
       </button>
       {open && (
-        <div className="app-menu" role="menu" id={id}>
+        <div className="app-menu" role="menu" id={id} onKeyDown={e => {
+          const items = [...e.currentTarget.querySelectorAll<HTMLElement>('[role^=menuitem]')]
+          const at = items.indexOf(document.activeElement as HTMLElement)
+          const to = e.key === 'ArrowDown' ? (at + 1) % items.length : e.key === 'ArrowUp' ? (at - 1 + items.length) % items.length : e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : -1
+          // Esc is handled here too: a menu inside the editor stops key events from reaching the document.
+          if (to < 0) { if (e.key === 'Escape') { setOpen(false); if (onEscape) onEscape(); else ref.current?.querySelector<HTMLElement>('[aria-haspopup=menu]')?.focus() } return }
+          e.preventDefault(); e.stopPropagation(); items[to]?.focus()
+        }}>
           {groups.map((g, gi) => (
             <div key={gi} className="menu-group" role="group" aria-label={g.title}>
               {g.title && <p className="menu-title">{g.title}</p>}

@@ -18,8 +18,9 @@ export function useTaskActions(today: LocalDate) {
     }))
   }
 
-  const planOn = (task: Task, date: LocalDate, section?: 'top3' | 'other') =>
-    run({ type: 'plan-task', taskId: task.id, date, section }, r => ({
+  /** `from`: the day page the move is made from; its row leaves it unless that day is past (A12 §2, Lead 6c169851). */
+  const planOn = (task: Task, date: LocalDate, section?: 'top3' | 'other', from?: LocalDate) =>
+    run({ type: 'plan-task', taskId: task.id, date, section, ...(from ? { from, today } : {}) }, r => ({
       text: date === today ? 'On today' : `Moved to ${shortLabel(date)}`,
       undoOperationId: r.operationId,
     }))

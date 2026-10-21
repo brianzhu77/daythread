@@ -1149,3 +1149,26 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .mc-add.dashed:hover span { background: var(--fill); }
 /* 44 px targets for Draft my day and Retry on the phone, without moving the line. */
 @media (max-width: 599px) { .mc-group > .line .app-link { display: inline-block; padding: 12px 2px; margin: -12px -2px; } }
+
+/* A12 row actions (Jazz day-row-actions-states §2). Desktop: a ⋯ at the end of a task row, shown on hover and while
+   the caret is in the row; it sits left of the date tag so the tag never jumps. */
+.editor-row-menu { flex:none; display:inline-flex; order:0; }
+.editor-row-more { width:28px; height:24px; padding:0; border:0; border-radius:6px; background:transparent; color:var(--ink-3); font-size:16px; line-height:1; opacity:0; }
+.editor-row-more:hover, .editor-row-more:focus-visible { background:var(--app-surface); color:var(--ink); }
+.bn-block-outer:hover .editor-row-more, .editor-task:focus-within .editor-row-more, .bn-block-outer:has(.ProseMirror-selectednode, [data-is-empty-and-focused]) .editor-row-more,
+.editor-row-more:focus-visible, .editor-row-more[aria-expanded='true'] { opacity:1; }
+.editor-row-menu .app-menu { font-size:14px; }
+/* Jazz f58abeaf: done rows are also grey and struck through, so the label and the empty box say Cancelled. */
+.continuous-editor .editor-task-title.task-cancelled, .continuous-editor .editor-task-title.task-cancelled * { color:var(--ink-3); text-decoration:line-through; }
+.editor-cancelled-tag { flex:none; font-size:12px; color:var(--ink-3); white-space:nowrap; }
+/* A cancelled task can't be ticked; Restore brings it back first (Jazz 1358f49b). */
+.editor-task[data-status=cancelled] input[type=checkbox] { opacity:.45; cursor:default; }
+/* The label reads with the title (Jazz d0c8df18): a cancelled title takes its own width, the label follows it. */
+.continuous-editor .editor-task-title.task-cancelled { flex:0 1 auto; }
+.editor-task:has(.task-cancelled) .editor-cancelled-tag { margin-right:auto; }
+/* 390: the selection bar becomes the row's actions, 44px each, menus opening upward. */
+.editor-selection-bar.is-row-actions { gap:4px; padding:4px; }
+.editor-selection-bar.is-row-actions .editor-bar-button { min-width:44px; }
+.editor-selection-bar.is-row-actions > button, .editor-bar-button { min-height:44px; padding:0 10px; border:0; border-radius:8px; background:transparent; color:var(--ink); font-size:14px; white-space:nowrap; }
+.editor-selection-bar.is-row-actions .app-menu { top:auto; bottom:calc(100% + 8px); }
+@media(hover:none) { .editor-row-more { display:none; } }

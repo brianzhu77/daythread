@@ -52,8 +52,11 @@ const action = z.discriminatedUnion("type", [
     taskId: id,
     date: day,
     section: z.enum(["top3", "other"]).optional(),
+    // A12 §2: the day page the move is made from, with the browser's day; the row leaves it only if it isn't past.
+    from: day.optional(),
+    today: day.optional(),
   }),
-  z.object({ type: z.literal("not-today"), taskId: id, date: day }),
+  z.object({ type: z.literal("not-today"), taskId: id, date: day, onlyThisDay: z.literal(true).optional() }),
   z.object({
     type: z.literal("add-event"),
     pageId: id,

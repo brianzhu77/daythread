@@ -308,8 +308,12 @@ export type Action =
       taskId: string;
       date: LocalDate;
       section?: "top3" | "other";
+      /** A12 §2: the row leaves this day page in the same command, unless `from` is before `today`. Needs `today`. */
+      from?: LocalDate;
+      today?: LocalDate;
     }
-  | { type: "not-today"; taskId: string; date: LocalDate }
+  /** `onlyThisDay` (A12 §1): pause only if the task is still planned for `date`; otherwise remove just that page's row. */
+  | { type: "not-today"; taskId: string; date: LocalDate; onlyThisDay?: true }
   | {
       type: "add-event";
       pageId: string;

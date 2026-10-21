@@ -226,10 +226,24 @@ function place(
       text: t.title,
     });
 }
-/** Top 3 holds three tasks on that day's page. */
-export function top3Full(state: Workspace, day: string): boolean {
+/** Top 3 holds three tasks on that day's page. A task already there doesn't count against itself (Ratchet 980d5695). */
+export function top3Full(state: Workspace, day: string, taskId?: string): boolean {
   const p = state.pages.find((x) => x.type === "daily" && x.date === day);
-  return (p?.sections.filter((s) => s.kind === "top3").flatMap((s) => s.blocks).filter((b) => b.kind === "task" && b.taskId).length ?? 0) >= 3;
+  // A day without a page yet (a future day) holds its plan as placements; its page renders them when created (Ratchet
+  // b8dac42e: counting only page rows let a fourth task into an unopened day's Top 3).
+  const ids = new Set(p
+    ? p.sections.filter((s) => s.kind === "top3").flatMap((s) => s.blocks).filter((b) => b.kind === "task" && b.taskId).map((b) => b.taskId!)
+    : state.placements.filter((x) => x.date === day && x.state === "included" && x.section === "top3").map((x) => x.taskId));
+  if (taskId && ids.has(taskId)) return false;
+  return ids.size >= 3;
+}
+/** A day page's plan rows for a task leave it (A12): the presentation only; placements are the caller's. */
+function removePlanRows(state: Workspace, taskId: string, day: string) {
+  const p = state.pages.find((x) => x.type === "daily" && x.date === day);
+  if (p)
+    for (const s of p.sections)
+      if (s.kind === "top3" || s.kind === "other")
+        s.blocks = s.blocks.filter((b) => !(b.kind === "task" && b.taskId === taskId));
 }
 function pause(state: Workspace, t: Task, day: string) {
   date(day);
@@ -1166,8 +1180,22 @@ function execute(
       const t = task(state, action.taskId);
       if (t.status !== "open")
         throw new DomainError("Restore task before planning");
-      place(state, t, action.date, action.section);
-      return { message: `Planned for ${action.date}`, entityId: t.id };
+      // A12: a move from a day page keeps the row's section, and a full Top 3 there sends it to the plan list instead
+      // of making a fourth row (the morning card's rule), said in the receipt.
+      const full = action.from !== undefined && action.from !== action.date && action.section === "top3" && top3Full(state, action.date, t.id);
+      place(state, t, action.date, full ? "other" : action.section);
+      if (action.from !== undefined) {
+        if (!action.today) throw new DomainError("A move from a day page needs today's date");
+        date(action.from);
+        date(action.today);
+        // Spec 02 §86: the presentation moves with the task. A past page keeps its rows as that day's record.
+        if (action.from !== action.date && action.from >= action.today) removePlanRows(state, t.id, action.from);
+      }
+      const other = full ? state.pages.find((x) => x.type === "daily" && x.date === action.date)?.sections.find((x) => x.kind === "other") : undefined;
+      return {
+        message: full ? `Planned for ${action.date} · Top 3 is full · added to ${other?.title || dayTemplate.find((x) => x.kind === "other")?.title || "the plan"}` : `Planned for ${action.date}`,
+        entityId: t.id,
+      };
     }
     case "plan-tasks": {
       // Morning card "Add all tasks": every row to its own section in one operation, so its Undo is whole. A full
@@ -1178,12 +1206,20 @@ function execute(
         if (t.status !== "open") throw new DomainError("Restore task before planning");
         if (ids.has(t.id)) throw new DomainError("Task listed twice");
         ids.add(t.id);
-        place(state, t, action.date, item.section === "top3" && top3Full(state, action.date) ? "other" : item.section);
+        place(state, t, action.date, item.section === "top3" && top3Full(state, action.date, t.id) ? "other" : item.section);
       }
       return { message: `Added ${action.items.length} tasks` };
     }
     case "not-today": {
-      pause(state, task(state, action.taskId), action.date);
+      const t = task(state, action.taskId);
+      // A12 §1: the menu can be a moment old. If the task is now planned for another day, Not on {day} only takes this
+      // page's row away; it never pauses a task that was just moved elsewhere.
+      if (action.onlyThisDay && t.plannedOn && t.plannedOn !== action.date) {
+        date(action.date);
+        removePlanRows(state, t.id, action.date);
+        return { message: `Removed from ${action.date} · still planned for ${t.plannedOn}`, entityId: t.id };
+      }
+      pause(state, t, action.date);
       return {
         message: "Not today — carry-over stopped; deadline kept · Undo",
         entityId: action.taskId,

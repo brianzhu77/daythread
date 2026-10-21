@@ -11,7 +11,7 @@
 //        shared text column, the one most rows use;
 //      - a nested row: its parent's text column + 24px (B19: one step right of the parent's text);
 //      - headings: the editor's own left edge.
-//   2. Markers on the first text line: a task's checkbox, a bullet's marker (top level and nested), a card's icon
+//   2. Markers on the first text line: a task's checkbox (and its ⋯, labels and tags), a bullet's marker (top level and nested), a card's icon
 //      and chevron, and (1280, hovered, one row per type) the drag handle, each centred on the row's first text line.
 //      Bullet markers are measured as drawn (screenshot pixels in the zone left of the text), at every level, and
 //      each nested marker's drawn size and gap to its text must match the top-level dot's within 1px.
@@ -61,6 +61,11 @@ function measure() {
       const status = content.querySelector('.editor-task')?.getAttribute('data-status') ?? 'unknown'
       Object.assign(row, { kind: `${status} task`, empty: !title.textContent.trim(), ...firstLine(title) })
       if (box && visible(box)) row.markers.checkbox = cy(box.getBoundingClientRect())
+      // The row's other parts on its first line (A12): the ⋯ (laid out even while hidden), and the labels and tags.
+      for (const [name, selector] of [['⋯ button', '.editor-row-more'], ['Cancelled label', '.editor-cancelled-tag'], ['reference tag', '.editor-reference-tag'], ['date tag', '.editor-date-tag'], ['Plan for today', '.editor-plan-action']]) {
+        const part = content.querySelector(selector)
+        if (part && visible(part)) row.markers[name] = cy(part.getBoundingClientRect())
+      }
     } else if (type === 'pageLink') {
       const card = content.querySelector('.editor-page-card'), title = content.querySelector('.editor-page-card-title')
       if (!card || !title) return
