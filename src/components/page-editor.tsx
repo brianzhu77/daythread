@@ -529,8 +529,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * measured against the page he started from; the draft this browser kept for recovery is replaced by the merged
    * page, so a reload doesn't bring the conflict back.
    */
-  function loadLatest() {
-    const latestNow = latestPage.current, ws = latestWorkspace.current
+  async function loadLatest() {
+    // The page may have changed again since the conflict showed (Ratchet #97): load it now, and hold typing meanwhile
+    // so nothing typed during the load is left out of the merge.
+    if (historyPending.current) return
+    editor.isEditable = false; setStatus('Loading latest…')
+    let ws: Workspace
+    try { ws = await refresh() } catch { editor.isEditable = true; setStatus("Couldn't load the latest · draft kept"); return }
+    editor.isEditable = true
+    const latestNow = ws.pages.find(p => p.id === page.id)
+    if (!latestNow) { setStatus("Couldn't load the latest · draft kept"); return }
     const [baseSections, baseJSON] = JSON.parse(base.current) as [Page['sections'], string | null]
     const started = { ...latestNow, sections: baseSections, editorJSON: baseJSON ?? undefined, editorSections: JSON.stringify(baseSections) } as Page
     const seed = (p: Page) => editorSeed(p, ws, { templateRows: needsTemplateRows(p, todayIso()) }) as EditorNode[]
@@ -1285,7 +1293,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     >
     <div ref={selectionFocus} tabIndex={-1} className="sr-only" aria-label={selectionLabel || undefined} />
     {hiddenEmpty.size > 0 && <style>{[...hiddenEmpty].map(id => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"]`).join(',')}{'{display:none}'}</style>}
-    <div className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? 'Changed in another tab · draft kept' : status}{conflict ? <button onClick={loadLatest}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
+    <div className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? 'Changed in another tab · draft kept' : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
