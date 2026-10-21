@@ -75,6 +75,9 @@ Three ways to reach the same action, all already on screen today:
 | **edited** | its new words | opens it, as §4 |
 | **moved to another page** (cut and pasted, a task moved to another day: followed through its task) | its words · **the page it's on now** | opens it there (follow the line, Bumblebee) |
 | **copied** (Bring to today, copy and paste) | unchanged: the link stays on the original line | opens the original |
+| **a task line whose task moved day** | its words · **the day it's planned for now**, not the history row left on the old day (Jazz `93497700`) | opens that day; the URL from other apps resolves the same way |
+| **a task line whose task has no plan day** (Not today, paused) | its words · the most recent page that still shows its row (Bumblebee `565cad22`) | opens that page |
+| **a task line whose task is done** | its words · the day it was completed on (Bumblebee) | opens that day |
 | **deleted** | "Line removed · {last page}" in `--ink-3`, ↳ icon kept | opens that page at the top, notice "That line was removed" |
 | **its page is in the trash** | its words · {page} in `--ink-3` with the bin icon, like a trashed page link | opens the trashed page (banner + Restore, A4), scrolled to the line |
 | **its page doesn't exist** | "Line not found" in `--ink-3` | nothing |
