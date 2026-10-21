@@ -61,7 +61,9 @@ and their presentations in one transaction, so the row should go too.
 - **Why a parameter and not "always":** today, past pages keep their plan rows as history (yesterday's page still
   shows what was planned, and the hand-off reads it), and the review's "Tomorrow" leaves today's row in place. Changing
   `place()` for every caller would change those too. Lead, the review and the facts strip could send `from` as well,
-  so a moved task never still sits in today's Top 3. Recommended, but it's your call whether it goes in this round.
+  so a moved task never still sits in today's Top 3. **Lead 6c169851: yes, this round.** The review and the facts strip
+  send `from` too, with one test each (A5 review, A8 card): "moved to another day → the row leaves the old page,
+  appears on the new one, Undo puts it back in place".
 
 ## 3. Running a command while the editor has the page open
 
@@ -120,6 +122,8 @@ at that moment, or its existing refresh reports "Page changed elsewhere · draft
   - the action and the menu are reachable with no hover at 390;
   - the keyboard shortcut;
   - no page or console errors.
+- **Regression of every ⌘Z path the refresh change touches (Lead):** Put back, the morning hand-off's actions, A2's
+  paste Undo, and ordinary typing Undo, each checked in the browser after the change.
 - **No format or data change:** no migration, no rollback script. `from` is an optional command field.
 
 ## 6. For review
