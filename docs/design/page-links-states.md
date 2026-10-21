@@ -106,7 +106,9 @@ filled in) and pastes into a day.
   the middle of a sentence is writing, so no offer (the same rule as A2's link paste).
 - **What he copied:**
   - part of one line → a one-line quote of exactly that excerpt;
-  - several lines → one Quote with the lines kept as line breaks, plain text only;
+  - several lines → one Quote with the lines kept as line breaks. Block structure goes (task rows, nesting, headings
+    become plain lines), but **inline formatting stays** in both cases: bold, italic and web links keep their style,
+    so a one-line and a several-line quote follow the same rule;
   - a copy holding a **task row or a card** gets **no offer**; it stays today's plain paste. The plain paste can save
     before he taps Add source, so a copied task row is already a new task by then, and turning it into a quote
     would leave a task he never meant to make (Roadbuster a9b plan §4, Lead `4110e3e4`). Part of one task title is
@@ -130,7 +132,7 @@ filled in) and pastes into a day.
 - **Source later trashed or renamed:** only the link changes (§1 states). The quoted words never do.
 - **Phone:** the same notice, because pasting is how he copies between pages there. No new toolbar.
 
-Checks for A9b: §6 check 7, plus a paste mid-sentence (no offer), a copy that contains a task (no offer, no new task) and
+Checks for A9b: §6 check 7, plus a paste mid-sentence (no offer), a copy that contains a task row (no offer; the plain paste behaves exactly as today) and
 Undo after Add source (the exact plain paste, no Linked from entry).
 
 ## 5. Linked from (B15 and what links add)
