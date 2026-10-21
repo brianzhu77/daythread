@@ -653,7 +653,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-page-card-icon { display: grid; place-items: center; flex: none; width: 20px; color: var(--ink-3); }
 .editor-page-card-icon svg { width: 18px; height: 18px; }
 .editor-page-card-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-.editor-page-card-title { min-width: 0; overflow-wrap: anywhere; }
+.editor-page-card-title { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
 /* v0.3 §6.2 "title, short preview": the page's first lines, one quiet line under the title. */
 .editor-page-card-preview { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; line-height: 18px; color: var(--ink-3); }
 .editor-page-card > svg { flex: none; color: var(--ink-3); }
