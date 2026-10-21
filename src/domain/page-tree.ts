@@ -1,4 +1,5 @@
 import type { LocalDate, Page, Workspace } from "./types";
+import { refHolders } from "./page-refs.ts";
 
 // pages-delta N-2 / N-5 step B: the page tree and "Linked from". The tree is each page's own parentId; sibling order
 // is the workspace's page order, so a page that is created or moved lands at the end of its new siblings.
@@ -111,10 +112,10 @@ export interface PageReference { sourceId: string; key: string; at: number | und
  */
 export function referencesTo(ws: Workspace, pageId: string): PageReference[] {
   if (!ws.pages.some((p) => p.id === pageId)) return []
-  return ws.pages.flatMap((p) => p.id === pageId ? [] : p.sections.flatMap((s) => s.blocks.flatMap((b): PageReference[] => [
-    ...(b.kind === "reference" && b.targetPageId === pageId ? [{ sourceId: p.id, key: `${p.id}/${b.id}`, at: b.at }] : []),
-    ...(b.refs ?? []).filter((r) => r.pageId === pageId).map((r) => ({ sourceId: p.id, key: `${p.id}/${b.id}/${r.refId}`, at: r.at })),
-  ])))
+  return ws.pages.flatMap((p) => p.id === pageId ? [] : [
+    ...p.sections.flatMap((s) => s.blocks.filter((b) => b.kind === "reference" && b.targetPageId === pageId).map((b): PageReference => ({ sourceId: p.id, key: `${p.id}/${b.id}`, at: b.at }))),
+    ...refHolders(p).flatMap((h) => h.refs.filter((r) => r.pageId === pageId).map((r): PageReference => ({ sourceId: p.id, key: `${p.id}/${h.id}/${r.refId}`, at: r.at }))),
+  ])
 }
 /**
  * N-5 + B15: pages with a real reference to this page (a card or a `[[` link), one entry per page, newest first by
@@ -144,8 +145,11 @@ export function linkedFrom(ws: Workspace, pageId: string): LinkedFromEntry[] {
  */
 export function recentPages(ws: Workspace, currentId: string | null): Page[] {
   const newest = new Map<string, number>();
-  for (const p of ws.pages) for (const s of p.sections) for (const b of s.blocks) {
-    const hits: [string, number | undefined][] = [...(b.kind === "reference" && b.targetPageId ? [[b.targetPageId, b.at] as [string, number | undefined]] : []), ...(b.refs ?? []).map((r) => [r.pageId, r.at] as [string, number])];
+  for (const p of ws.pages) {
+    const hits: [string, number | undefined][] = [
+      ...p.sections.flatMap((s) => s.blocks.filter((b) => b.kind === "reference" && b.targetPageId).map((b) => [b.targetPageId!, b.at] as [string, number | undefined])),
+      ...refHolders(p).flatMap((h) => h.refs.map((r) => [r.pageId, r.at] as [string, number])),
+    ];
     for (const [id, at] of hits) if (at !== undefined) newest.set(id, Math.max(newest.get(id) ?? -Infinity, at));
   }
   const live = visiblePages(ws).filter((p) => p.id !== currentId);

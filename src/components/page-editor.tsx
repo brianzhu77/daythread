@@ -684,7 +684,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   function whereLabel(p: Page): string {
     if (p.url) { try { return new URL(p.url).hostname.replace(/^www\./, '') } catch { return p.url } }
     const parent = parentOf(latestWorkspace.current, p)
-    return parent ? `in ${pageLabel(parent)}` : p.type === 'daily' ? 'Day' : 'in Pages'
+    // A day needs no second line: its calendar icon already says it (Jazz 2ff83a4e).
+    return parent ? `in ${pageLabel(parent)}` : p.type === 'daily' ? '' : 'in Pages'
   }
   /** §3: the list. Empty: recent pages; typed: titles (and day labels) containing it, start of title first, max 8. */
   function linkItems(query: string, trigger: string) {
@@ -697,7 +698,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const keys = (p: Page) => [pageLabel(p), p.title, ...(p.date ? [p.date, longLabel(p.date), longLabel(p.date).replace(/^\w+,\s*/, '')] : [])].map(k => k.toLowerCase())
     const pages = q
       ? visiblePages(ws).filter(p => p.id !== page.id && keys(p).some(k => k.includes(q)))
-        .sort((a, b) => Number(!keys(b).some(k => k.startsWith(q))) - Number(!keys(a).some(k => k.startsWith(q))) || (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9)).slice(0, 8)
+        .sort((a, b) => Number(!keys(a).some(k => k.startsWith(q))) - Number(!keys(b).some(k => k.startsWith(q))) || (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9)).slice(0, 8)
       : recent.slice(0, 6)
     const items = pages.map(p => ({ title: pageLabel(p), subtext: whereLabel(p), icon: pageRefView(ws, p.id).icon, onItemClick: () => chooseLink(trigger, query, p.id) }))
     if (q) items.push({ title: `New page "${query.trim()}"`, subtext: pages.length ? '' : `No page called ${query.trim()}`, icon: <PlusIcon />, onItemClick: () => chooseLink(trigger, query, crypto.randomUUID(), query.trim()) })

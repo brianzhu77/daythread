@@ -98,6 +98,8 @@ export interface Section {
   kind: SectionKind;
   title: string;
   blocks: NoteBlock[];
+  /** A9a: `[[` links in the heading itself (Ratchet #84: a heading is a line like any other). */
+  refs?: PageRefEntry[];
 }
 export interface Page {
   id: string;

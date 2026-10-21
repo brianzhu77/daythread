@@ -54,7 +54,7 @@ export function editorSeed(page: Page, workspace: Workspace, options: { template
   for (const s of page.sections) {
     if (!s.id.startsWith('intro:')) {
       const heading = byId.get(s.id)
-      const node = heading ? { ...heading, content: inlineText(heading.content) === s.title ? heading.content : s.title } : { id: s.id, type: 'heading', props: { level: 2 }, content: s.title }
+      const node = heading ? { ...heading, content: lineText(heading.content, savedTitle(s)) === s.title ? heading.content : s.title } : { id: s.id, type: 'heading', props: { level: 2 }, content: s.title }
       result.push(node); mark(node)
     }
     for (const b of s.blocks) {
@@ -113,7 +113,10 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
     if (!node.id || ids.has(node.id)) throw new Error('Duplicate editor block identity')
     ids.add(node.id)
     if (node.type === 'heading') {
-      current = { id: node.id, kind: page.sections.find(s => s.id === node.id)?.kind ?? 'custom', title: inlineText(node.content), blocks: [] }
+      // A heading holds `[[` links like any line: checked, timed and stored on the section.
+      const refs = refsOf(node)
+      const title = refs.length ? lineText(node.content, ref => refs.find(r => r.refId === ref.refId)?.title ?? '') : inlineText(node.content)
+      current = { id: node.id, kind: page.sections.find(s => s.id === node.id)?.kind ?? 'custom', title, blocks: [], ...(refs.length ? { refs } : {}) }
       sections.push(current)
     } else {
       if (!current) { current = { id: `intro:${page.id}`, kind: 'custom', title: '', blocks: [] }; sections.push(current) }

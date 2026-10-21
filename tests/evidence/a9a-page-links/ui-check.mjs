@@ -159,10 +159,35 @@ await p.goto(`${base}/pages?page=${X}`, { waitUntil: 'networkidle' }); await p.w
 log((await linkedFromText(p)).replace(/Sun, Oct 18 ?/, '').trim() === lf1.replace(/Sun, Oct 18 ?/, '').trim(), '   after Move, the order is unchanged', await linkedFromText(p))
 await p.goto(`${base}/`, { waitUntil: 'networkidle' }); await p.waitForTimeout(600)
 // Click past the end of the line (not on the chip, which opens its page), then Backspace removes the link.
-const lineBox = await block(p, notes).boundingBox(), chipBox = await chips(p, notes).first().boundingBox()
-await p.mouse.click(lineBox.x + lineBox.width - 40, chipBox.y + chipBox.height / 2); await p.keyboard.press('End'); await p.keyboard.press('Backspace'); await p.keyboard.press('Backspace'); await settle(p)
+// The caret at the very end of the line (after the space that follows the link), set as a DOM range so no click can
+// land on the chip and open its page; then Backspace takes the space and the link.
+await block(p, notes).locator('.bn-inline-content').first().evaluate(el => { (el.closest('[contenteditable="true"]')).focus(); const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r) })
+await p.waitForTimeout(100)
+await p.keyboard.press('Backspace'); await p.keyboard.press('Backspace'); await settle(p)
 await p.goto(`${base}/pages?page=${X}`, { waitUntil: 'networkidle' }); await p.waitForTimeout(600)
 log(!/Today/.test(await linkedFromText(p)) && /Mon, Oct 19/.test(await linkedFromText(p)), '   delete today\'s link → Today leaves, Mon Oct 19 stays', await linkedFromText(p))
+await p.close()
+
+// Ranking (Ratchet 4703f076): a title starting with the query comes before one that only contains it.
+reset(); p = await open(); await p.close() // the copy is upgraded on first open
+{
+  const d = new DatabaseSync(dbPath)
+  // Two pages straight in the copy (the server reads the file on each command).
+  const tpl = d.prepare("SELECT * FROM pages WHERE snapshot='current' AND type='document' LIMIT 1").get()
+  for (const [id, title, pos] of [['rk-other', 'other needle', 900], ['rk-start', 'needle start', 901]]) {
+    const row = { ...tpl, id, title, position: pos, parentId: null }
+    const names = Object.keys(row)
+    d.prepare(`INSERT INTO pages (${names.map(n => `"${n}"`).join(',')}) VALUES (${names.map(() => '?').join(',')})`).run(...names.map(n => row[n]))
+  }
+  d.close()
+}
+p = await open()
+await clickLine(p, notes); await p.keyboard.type('[[needle'); await p.waitForTimeout(500)
+const rows = (await menuText(p)).split('\n').filter(l => /needle/.test(l) && !/New page/.test(l))
+log(rows[0] === 'needle start' && rows[1] === 'other needle', 'ranking: the title starting with "needle" comes first', JSON.stringify(rows))
+await p.keyboard.press('Escape')
+await clickLine(p, `day:${today}:events:template:0`); await p.keyboard.type('[[Oct 19'); await p.waitForTimeout(500)
+log(!(await menuText(p)).includes('\nDay'), 'a day row has no "Day" second line (Jazz)', (await menuText(p)).replace(/\n/g, ' / '))
 await p.close()
 
 // Lines outside the editor show the live title: a tagged line with a link on the Tags page after a rename.

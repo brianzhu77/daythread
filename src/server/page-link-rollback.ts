@@ -12,7 +12,7 @@ const entityTables = ['pages', 'tasks', 'placements', 'events', 'materials', 'ca
 type Row = Record<string, SQLInputValue>
 type Ref = { refId: string; pageId: string; at?: number; title: string; pending?: boolean }
 type Block = { id: string; kind: string; text: string; targetPageId?: string; at?: number; refs?: Ref[] }
-type Section = { id: string; blocks: Block[] }
+type Section = { id: string; blocks: Block[]; refs?: Ref[] }
 type Inline = { type?: string; text?: string; href?: string; content?: unknown; props?: Record<string, unknown>; styles?: unknown }
 type Node = { id: string; type: string; content?: unknown; children?: Node[] }
 
@@ -52,8 +52,9 @@ export function holdPageLinksForLayout5(db: DatabaseSync): HeldPageLinks {
   let links = 0, cards = 0
   for (const row of rows) {
     const pageId = String(row.id), sections = json<Section[]>(row.sections, [])
-    const blocks = new Map(sections.flatMap(s => s.blocks).map(b => [b.id, b]))
-    for (const b of blocks.values()) if (b.kind === 'reference' && b.targetPageId && b.at !== undefined) { holdCard.run(pageId, b.id, b.targetPageId, b.at); cards++ }
+    // Lines that can hold links: blocks and headings (sections), by id (Ratchet #84).
+    const blocks = new Map<string, { refs?: Ref[] }>([...sections.map(x => [x.id, x] as const), ...sections.flatMap(x => x.blocks).map(b => [b.id, b] as const)])
+    for (const b of sections.flatMap(x => x.blocks)) if (b.kind === 'reference' && b.targetPageId && b.at !== undefined) { holdCard.run(pageId, b.id, b.targetPageId, b.at); cards++ }
     if (typeof row.editorJSON !== 'string' || !row.editorJSON.includes('"pageRef"')) continue
     const convert = (blockId: string) => (content: unknown): unknown => Array.isArray(content) ? (content as Inline[]).map(c => {
       if (c?.type !== 'pageRef') return c && typeof c === 'object' && Array.isArray(c.content) ? { ...c, content: convert(blockId)(c.content) } : c
@@ -92,11 +93,13 @@ export function restoreHeldPageLinks(db: DatabaseSync): Omit<PageLinksReupgradeL
     }) : content
     const doc = typeof row.editorJSON === 'string' && row.editorJSON ? mapNodes(json<Node[]>(row.editorJSON, []), n => Array.isArray(n.content) ? { ...n, content: back(n.id)(n.content) } : n) : null
     const sections = json<Section[]>(row.sections, [])
-    for (const b of sections.flatMap(s => s.blocks)) {
-      // A line that had held links gets exactly the ones restored; a link left plain is no longer a reference.
-      const mineHere = restored.filter(h => h.blockId === b.id)
-      if (mine.some(h => h.blockId === b.id) && !mineHere.length) delete b.refs
-      if (mineHere.length) b.refs = mineHere.map(h => ({ refId: h.refId, pageId: h.targetPageId, ...(h.at !== null ? { at: h.at } : {}), title: h.text, ...(h.pending ? { pending: true } : {}) }))
+    // A line (block or heading) that had held links gets exactly the ones restored; a link left plain is no longer a reference.
+    for (const holder of [...sections, ...sections.flatMap(x => x.blocks)] as (Section | Block)[]) {
+      const mineHere = restored.filter(h => h.blockId === holder.id)
+      if (mine.some(h => h.blockId === holder.id) && !mineHere.length) delete holder.refs
+      if (mineHere.length) holder.refs = mineHere.map(h => ({ refId: h.refId, pageId: h.targetPageId, ...(h.at !== null ? { at: h.at } : {}), title: h.text, ...(h.pending ? { pending: true } : {}) }))
+    }
+    for (const b of sections.flatMap(x => x.blocks)) {
       const card = myCards.find(c => c.blockId === b.id && c.targetPageId === b.targetPageId)
       if (b.kind === 'reference' && card) { b.at = card.at; log.cardTimesRestored++ }
     }
@@ -125,12 +128,14 @@ export function stampUntimedReferences(db: DatabaseSync): number {
   let stamped = 0
   const touched = new Set<string>()
   for (const target of pages) {
-    const untimed = (p: typeof pages[number]) => p.id !== target.id && p.sections.some(s => s.blocks.some(b =>
-      (b.kind === 'reference' && b.targetPageId === target.id && b.at === undefined) || (b.refs ?? []).some(r => r.pageId === target.id && r.at === undefined)))
+    const untimed = (p: typeof pages[number]) => p.id !== target.id && (p.sections.some(s => (s.refs ?? []).some(r => r.pageId === target.id && r.at === undefined)) || p.sections.some(s => s.blocks.some(b =>
+      (b.kind === 'reference' && b.targetPageId === target.id && b.at === undefined) || (b.refs ?? []).some(r => r.pageId === target.id && r.at === undefined))))
     const order = legacyRank(new Set(pages.filter(untimed).map(p => p.id)))
     order.forEach((sourceId, i) => {
       const at = -(i + 1)
-      for (const b of pages.find(p => p.id === sourceId)!.sections.flatMap(s => s.blocks)) {
+      const source = pages.find(p => p.id === sourceId)!
+      for (const r of source.sections.flatMap(x => x.refs ?? [])) if (r.pageId === target.id && r.at === undefined) { r.at = at; stamped++ }
+      for (const b of source.sections.flatMap(x => x.blocks)) {
         if (b.kind === 'reference' && b.targetPageId === target.id && b.at === undefined) { b.at = at; stamped++ }
         for (const r of b.refs ?? []) if (r.pageId === target.id && r.at === undefined) { r.at = at; stamped++ }
       }

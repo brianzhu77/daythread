@@ -165,3 +165,36 @@ test('Bring to today: a brought line\'s links are new references with their own 
   assert.notEqual(brought.refs![0]!.refId, 'r-src')
   assert.deepEqual(from(ws, 'R').sort(), [d19, d20].sort())
 })
+
+test('Ratchet #84 / Lead: every line type with inline content goes through the same link rules, headings included', () => {
+  const types: [string, Record<string, unknown>][] = [['paragraph', {}], ['heading', { level: 3 }], ['bulletListItem', {}], ['numberedListItem', {}], ['quote', {}]]
+  for (const [type, props] of types) {
+    let { ws, d20 } = setup()
+    const id = `${type}-line`
+    ws = save(ws, d20, doc => [...doc, { id, type, props, content: [text('see '), ref('R', `r-${type}`)] }])
+    const holder = type === 'heading' ? page(ws, d20).sections.find(s => s.id === id)! : blockOf(ws, d20, id)
+    assert.equal(holder.refs?.[0]?.pageId, 'R', `${type}: stored as a reference`)
+    assert.ok(from(ws, 'R').includes(d20), `${type}: Linked from lists the page`)
+    refuses(ws, d20, doc => [...doc, { id: `${id}-dup`, type, props, content: [ref('R', `r-${type}`)] }], /twice/)
+    refuses(ws, d20, doc => [...doc, { id: `${id}-bad`, type, props, content: [ref('nope', `bad-${type}`)] }], /not found/)
+  }
+  // The heading's title text reads the link's title, and a rename doesn't turn the heading into text when reseeded.
+  let { ws, d20 } = setup()
+  ws = save(ws, d20, doc => [...doc, { id: 'h', type: 'heading', props: { level: 2 }, content: [text('关于 '), ref('R', 'rh')] }])
+  assert.equal(page(ws, d20).sections.find(s => s.id === 'h')!.title, '关于 韩国大酱汤')
+  const renamed = ok(ws, { type: 'rename-page', pageId: 'R', title: 'Doenjang' })
+  const seeded = editorSeed({ ...page(renamed, d20), editorSections: 'out of step' }, renamed).find(n => n.id === 'h')!
+  assert.ok(JSON.stringify(seeded.content).includes('"pageRef"'))
+  // A task row still refuses.
+  refuses(ws, d20, doc => [...doc, { id: 't', type: 'task', props: { taskId: 'editor-task:t', role: 'reference' }, content: [ref('R', 'rt2')] }], /task row/)
+})
+
+test('Ratchet #84: a [[ link in a heading blocks A2\'s Undo too', () => {
+  let { ws, d19, d20 } = setup()
+  ws = ok(ws, { type: 'paste-links', pageId: d20, today: '2026-10-20', items: [{ url: 'https://h.example/', pageId: 'H', cardBlockId: 'cardH', lineType: 'paragraph' }] }, 'op-h')
+  ws = save(ws, d20, doc => [...doc, { id: 'cardH', type: 'pageLink', props: { pageId: 'H' } }])
+  ws = save(ws, d19, doc => [...doc, { id: 'hh', type: 'heading', props: { level: 2 }, content: [ref('H', 'rhh')] }])
+  const r = run(ws, { type: 'undo-paste-links', pageId: d20, operationId: 'op-h', today: '2026-10-20' })
+  assert.match(r.receipt.message, /linked from/)
+  assert.ok(page(r.workspace, 'H'))
+})

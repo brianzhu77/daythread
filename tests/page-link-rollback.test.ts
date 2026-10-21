@@ -151,3 +151,21 @@ test('the 6 → 5 script refuses a store that isn\'t layout 6, and changes nothi
     assert.match(again.stderr, /Expected layout 6, found 5/)
   } finally { await s.cleanup() }
 })
+
+test('Ratchet #84: a heading\'s link is converted, held and restored with its refId and time like any line', async () => {
+  const s = await store()
+  try {
+    await s.save('day:2026-10-20', doc => [...doc, { id: 'hd', type: 'heading', props: { level: 2 }, content: [text('关于 '), ref('R', 'rhd')] }])
+    let ws = await s.reopen()
+    const at = ws.pages.find(p => p.id === 'day:2026-10-20')!.sections.find(x => x.id === 'hd')!.refs![0]!.at
+    assert.equal(s.script().status, 0)
+    const doc = JSON.parse(row(s.path, 'day:2026-10-20').editorJSON) as EditorNode[]
+    assert.deepEqual(links(doc.find(n => n.id === 'hd')!.content).map(l => l.href), ['/pages?page=R&ref=rhd'])
+    oldBuildSave(s.path, 'day:2026-10-20')
+    sql(s.path, db => { const r = db.prepare("SELECT sections FROM pages WHERE snapshot='current' AND id='day:2026-10-20'").get()!; const secs = JSON.parse(String(r.sections)); for (const x of secs) delete x.refs; db.prepare("UPDATE pages SET sections=?, editorSections=? WHERE snapshot='current' AND id='day:2026-10-20'").run(JSON.stringify(secs), JSON.stringify(secs)) })
+    ws = await s.reopen()
+    const sec = ws.pages.find(p => p.id === 'day:2026-10-20')!.sections.find(x => x.id === 'hd')!
+    assert.deepEqual(sec.refs?.map(r => [r.refId, r.at]), [['rhd', at]])
+    assert.ok(linkedFrom(ws, 'R').some(e => e.page.id === 'day:2026-10-20'))
+  } finally { await s.cleanup() }
+})
