@@ -1,0 +1,5 @@
+FAIL typing while old refresh in flight is retained
+PASS duplicate focus/visibility events coalesce to one load
+PASS normal typing Undo remains functional after refresh
+PASS failed refresh leaves editor content and editing intact
+PASS later focus retries after network recovery
