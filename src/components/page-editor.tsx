@@ -67,7 +67,8 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
   const t = workspace?.tasks.find(t => t.id === taskId)
   // A12: the row's actions, on a ⋯ at the end of the row (Jazz §2). Done and draft rows have none.
   const model = t && rows ? rowMenu(t, role, rows.sectionOf(blockId), rows.pageDate, rows.today) : null
-  return <div className="editor-task" data-role={role} data-draft={t ? undefined : true}>
+  // data-status: the task's real state, for checks such as scripts/check-alignment.mjs (Lead a2428bb1). Display only.
+  return <div className="editor-task" data-role={role} data-draft={t ? undefined : true} data-status={t?.status ?? 'draft'}>
     <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={t?.status === 'done'} disabled={!t && !taskId.startsWith('editor-task:')} onChange={() => t && void run({ type: 'task-status', taskId, status: t.status === 'done' ? 'open' : 'done' }, r => ({ text: t.status === 'done' ? 'Task reopened' : 'Task completed', undoOperationId: r.operationId }))} />
     <span ref={contentRef} className={`editor-task-title ${t?.status === 'done' ? 'task-done' : t?.status === 'cancelled' ? 'task-cancelled' : ''}`} data-placeholder="To do" />
     {/* Jazz f58abeaf: done rows are grey and struck through too, so the label is what says Cancelled. */}
@@ -207,7 +208,7 @@ const touchHandleSize = 44
 // Viewport y of the middle of a block's first line of text. Works for empty blocks and wrapped text alike,
 // since it reads the line box of the inline content rather than the rendered glyphs.
 function firstLineCenter(block: HTMLElement): number {
-  const inline = block.querySelector<HTMLElement>('.bn-inline-content') ?? block
+  const inline = block.querySelector<HTMLElement>('.bn-inline-content, .editor-page-card-title') ?? block
   const style = getComputedStyle(inline)
   const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2
   return inline.getBoundingClientRect().top + lineHeight / 2

@@ -649,25 +649,26 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-save-line button { padding:2px 8px; font-size:12px; }
 .editor-task { display:flex; align-items:center; gap:10px; min-height:32px; width:100%; }
 /* Page card (Jazz): one quiet row in the note, no border or fill; hover/selection come from the block like any other. */
-.editor-page-card { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
-.editor-page-card-icon { display: grid; place-items: center; flex: none; width: 20px; color: var(--ink-3); }
+/* Same columns as a task row: icon in the checkbox/dot column, title on the text column; icon and chevron centre on the title's first line. */
+.editor-page-card { display: flex; align-items: flex-start; gap: 13px; width: 100%; min-height: 32px; padding: 3px 0 3px 14px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.editor-page-card-icon { display: grid; place-items: center; flex: none; width: 18px; height: 1lh; color: var(--ink-3); }
 .editor-page-card-icon svg { width: 18px; height: 18px; }
 .editor-page-card-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-.editor-page-card-title { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.editor-page-card-title { min-width: 0; white-space: normal; overflow-wrap: anywhere; font-weight: 600; }
 /* v0.3 §6.2 "title, short preview": the page's first lines, one quiet line under the title. */
 .editor-page-card-preview { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; line-height: 18px; color: var(--ink-3); }
-.editor-page-card > svg { flex: none; color: var(--ink-3); }
+.editor-page-card > svg { flex: none; margin-block: calc((1lh - 14px) / 2); color: var(--ink-3); }
 .editor-page-card:disabled { cursor: default; color: inherit; }
 .editor-page-card-spinner { flex: none; width: 14px; height: 14px; border: 1.5px solid var(--ink-3); border-right-color: transparent; border-radius: 50%; animation: page-card-spin .8s linear infinite; }
 @keyframes page-card-spin { to { transform: rotate(360deg); } }
 .editor-page-card-failed { flex: none; font-size: 13px; color: var(--app-danger); }
 /* A2 link card (Jazz link-pages-states §2): one line at every width; the title is cut with …, the domain is dropped
    first at 390, and ↗ (a 44px target) never moves. The row keeps the card's 32px line height. */
-.editor-page-card-row { display: flex; align-items: center; width: 100%; min-height: 32px; }
+.editor-page-card-row { display: flex; align-items: flex-start; width: 100%; min-height: 32px; }
 .editor-page-card-row .editor-page-card { flex: 1; min-width: 0; }
 .editor-page-card-row.is-link .editor-page-card-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
 .editor-page-card-domain { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; color: var(--ink-3); }
-.editor-page-card-open { display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin: -6px -10px -6px 0; color: var(--ink-3); border-radius: 8px; }
+.editor-page-card-open { display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin: calc((1lh + 6px - 44px) / 2) -10px calc((1lh + 6px - 44px) / 2) 0; color: var(--ink-3); border-radius: 8px; }
 /* BlockNote resets link colour inside the editor (`.bn-shadcn .bn-editor a { color: revert }`); a secondary action is --ink-3. */
 .bn-editor .editor-page-card-row a.editor-page-card-open { color: var(--ink-3); }
 .bn-editor .editor-page-card-row a.editor-page-card-open:hover, .bn-editor .editor-page-card-row a.editor-page-card-open:active { color: var(--app-accent); }
@@ -729,7 +730,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-reference-tag,.editor-plan-tag { font-size:11px;color:var(--ink-2);white-space:nowrap; }
 .editor-plan-action { background:transparent;color:var(--blue-text);border:0;font-size:12px;padding:2px 4px; }
 .continuous-editor .bn-block-content[data-content-type=task]:has(.editor-task:is([data-role=reference],[data-draft])) { border-left-color:transparent; }
-@media(max-width:700px) { .editor-task { flex-wrap:wrap;column-gap:8px; } .editor-task-title { min-width:130px; } .editor-plan-tag { display:none; } }
+@media(max-width:700px) { .editor-task { flex-wrap:wrap;column-gap:10px; } .editor-task-title { min-width:130px; } .editor-plan-tag { display:none; } }
 .continuous-editor .bn-editor { padding-left:0; padding-right:0; }
 .editor-save-line { padding-left:0; }
 .desktop-capture-plus { display:flex;position:fixed;right:40px;bottom:32px;width:52px;height:52px;align-items:center;justify-content:center;border-radius:50%;background:var(--bg);border:0;box-shadow:0 5px 24px #0002;color:var(--ink);z-index:50; }
