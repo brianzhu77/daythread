@@ -354,7 +354,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // are hidden on screen only, never deleted. A row shows again once the cursor is in it, and new lines are never hidden.
   const [hiddenEmpty, setHiddenEmpty] = useState<ReadonlySet<string>>(() => {
     if (page.type !== 'daily' || !page.date || page.date >= todayIso()) return new Set()
-    return new Set(deepNodes(initial.current!.nodes).filter(n => ['paragraph', 'bulletListItem', 'numberedListItem'].includes(n.type) && !inlineText(n.content).trim() && !(Array.isArray(n.content) && n.content.some((c: { type?: string }) => c.type && c.type !== 'text')) && !n.children?.length).map(n => n.id))
+    return new Set(deepNodes(initial.current!.nodes).filter(n => ['paragraph', 'bulletListItem', 'numberedListItem', 'task'].includes(n.type) && !inlineText(n.content).trim() && !(Array.isArray(n.content) && n.content.some((c: { type?: string }) => c.type && c.type !== 'text')) && !n.children?.length).map(n => n.id))
   })
   useEffect(() => editor.onSelectionChange(() => {
     const id = editor.getTextCursorPosition().block.id

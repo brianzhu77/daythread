@@ -29,6 +29,8 @@ for (const width of [1280, 390]) {
   await p.waitForTimeout(100); await p.keyboard.press('ArrowDown'); await p.waitForTimeout(300)
   c = await cursorLine()
   log(c.visible && c.text === 'Good Stuffs', `${width}: ArrowDown skips the hidden empty row (it's not on screen) and lands on the next line`, JSON.stringify(c))
+  await p.goto(`${base}/day/2026-10-19`, { waitUntil: 'networkidle' }); await p.waitForTimeout(900)
+  log(await p.locator('.bn-block-outer').evaluateAll(es => es.filter(e => e.offsetParent && !e.querySelector('.bn-block-outer') && !e.innerText.trim()).length) === 0, `${width}: Oct 19 shows no empty rows (its blank TODO - Other task row too)`)
   await p.goto(`${base}/`, { waitUntil: 'networkidle' }); await p.waitForTimeout(800)
   log(await p.locator('.bn-block-outer[data-id="day:2026-10-20:notes:template:0"]').isVisible(), `${width}: today keeps its empty template rows`)
   await p.close()
