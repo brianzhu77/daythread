@@ -568,6 +568,8 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* Five tabs share the capsule: about 54px each at 390, never wider than 64 (Jazz). */
 .tab { display: grid; place-items: center; flex: 1; min-width: 0; max-width: 64px; height: 48px; border-radius: 999px; color: var(--ink); }
 .tab[aria-current='page'] { background: var(--fill); color: var(--blue); }
+/* B20 (Jazz): text that scrolls under the floating bar fades out instead of showing through the glass. */
+.tab-bar::before { content: ''; position: fixed; left: 0; right: 0; bottom: 0; height: calc(104px + env(safe-area-inset-bottom)); background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 0%, transparent), var(--bg) 62%); pointer-events: none; z-index: -1; }
 .tab-plus { pointer-events: auto; flex: none; width: 60px; height: 60px; padding: 0; border-radius: 50%; background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); color: var(--ink); box-shadow: var(--shadow-float); }
 
 /* Phone: capture lives behind + (craft-v1 §5.3); notices move to the top, clear of the tab bar. */
@@ -587,9 +589,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
   gap: 12px;
   padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
   border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
-  background: var(--glass);
-  backdrop-filter: saturate(1.6) blur(24px);
-  -webkit-backdrop-filter: saturate(1.6) blur(24px);
+  background: var(--bg);
   box-shadow: var(--shadow-float);
   animation: sheet-in .2s ease-out;
 }
