@@ -1,10 +1,7 @@
 PASS inflight then more input then leave persists both 
 PASS return after settled save is clean 
-PASS old leave save cannot clear newer returned draft Changed in another tab · draft kept
-Load latest
-RETURN_STATUS Changed in another tab · draft kept
-Load latest NEW_IN_DB false NEW_STASH true
-PASS return-race Load latest saves all words 
+PASS old leave save cannot clear newer returned draft Saved
+RETURN_STATUS Saved NEW_IN_DB true NEW_STASH false
 SLOW_A_DB true SLOW_B_DB true SLOW_B_STASH false
 PASS save slower than five seconds still saves later input on leave 
 failures 0

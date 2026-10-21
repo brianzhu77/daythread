@@ -29,7 +29,7 @@ import { displayPageTitle, focusAtEnd } from './page-title'
 import { addDays, fromIso, longLabel, todayIso, weekday } from './dates'
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
-import { registerEditorFlush } from './editor-flush'
+import { isOwnLeaveSave, registerEditorFlush, rememberLeaveSave } from './editor-flush'
 import { RowMenu } from './row-menu'
 import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
 
@@ -424,6 +424,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const flush = useCallback(async () => {
     // A2 §4: while a paste's Undo is out, nothing is sent; typing collects and goes once the reply is applied.
     if (left.current || !dirty.current || sending.current || undoingPaste.current) return
+    // The page moved on only by his own save from when he last left it: start from that.
+    if (isOwnLeaveSave(page.id, latestPage.current.editorJSON)) base.current = pageContentKey(latestPage.current)
     sending.current = true
     const document = JSON.stringify(editor.document)
     const deletions = [...semanticDeletes.current]
@@ -511,6 +513,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // Our own save echoes back with the same document and sections projected from it. Anything else (Put back,
     // Keep from the morning hand-off, another tab) rewrote the page under us and the open editor must follow.
     if (page.editorJSON === lastSent.current && page.editorSections === JSON.stringify(page.sections)) return
+    // His own save from when he left this page landed after he came back: carry on from it, it isn't a conflict.
+    if (dirty.current && isOwnLeaveSave(page.id, page.editorJSON)) { base.current = next; setFailed(false); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0); return }
     if (dirty.current) { debugClient('editor.external-refresh',{operationId:newOperationId(),triggerOperationId:pendingSave.current?.operationId,pageId:page.id,result:'conflict'}); setFailed(true); setStatus('Page changed elsewhere · draft kept; copy it before reloading'); return }
     // Deferred: replacing blocks synchronously inside React's commit triggers a flushSync warning from BlockNote's views.
     queueMicrotask(() => {
@@ -592,6 +596,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           debugClient('editor.save.leave',{pageId:page.id})
           const result = await runRef.current(action, undefined, newOperationId(), { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => {} })
           if (!result) return
+          rememberLeaveSave(page.id, document)
         }
         // Clear the stash only if it's still this draft: he may already be back on the page and typing.
         try { if (JSON.parse(localStorage.getItem(key) ?? 'null')?.document === document) localStorage.removeItem(key) } catch { /* keep it */ }

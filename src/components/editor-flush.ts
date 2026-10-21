@@ -19,3 +19,10 @@ export async function flushAllEditors(): Promise<boolean> {
   const results = await Promise.all([...flushers.values()].map(flush => flush()))
   return results.every(Boolean)
 }
+
+// The document each page's editor last saved as it closed. When he comes back before that save lands, the page then
+// changes under the new editor; that change is his own, not another tab's, so the editor carries on from it instead of
+// reporting a conflict (Jazz, Ratchet #99).
+const leaveSaves = new Map<string, string>()
+export const rememberLeaveSave = (pageId: string, document: string) => { leaveSaves.set(pageId, document) }
+export const isOwnLeaveSave = (pageId: string, editorJSON: string | undefined) => editorJSON !== undefined && leaveSaves.get(pageId) === editorJSON
