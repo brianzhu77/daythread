@@ -42,15 +42,21 @@
 
 ## 2. Resolving a link (one pure function, every reader uses it)
 
-`resolveLine(ws, ref) → { state, pageId, blockId, words }`, in `page-refs.ts`, tried in this order:
+`resolveLine(ws, ref) → { state, pageId, blockId, words }`, in `page-refs.ts`. **A task line resolves to its task,
+not to the row** (Ratchet `8acaaf61`, Jazz `a5d1ba2b`). Moving a task from a past day leaves a history row on that
+day (`plan-task` keeps it, workspace.ts 1191), so following the row id would keep jumping to Oct 18. Order:
 
-1. the block `lineId` on the page `pageId` → **live**;
-2. the block `lineId` on any other page (a cut-and-paste move, §3) → **live, moved**;
-3. `taskId` set: the task's current row, preferring its planned day's page, then any page showing it → **live,
-   moved**. A done or cancelled task still resolves;
-4. otherwise, if page `pageId` exists → **removed** ("Line removed · {page}"), and if that page is in the trash →
-   **trashed**;
-5. otherwise → **not found**.
+1. **Which task, if any:** the link's `taskId`; otherwise, if block `lineId` (on `pageId` or any page) is a task row,
+   that row's task. The plain URL (page + block) goes through the same step, so the URL and the in-app chip always
+   land in the same place without `taskId` in the URL.
+2. **A task:** its row on the page of the day it's planned for now. If it has no plan day (or that page has no row
+   for it), the row the link was made to if it still exists, else any page's row for it → **live** (moved when not on
+   `pageId`). A done or cancelled task still resolves.
+3. **Not a task:** the block `lineId` on page `pageId`, else on any other page (a cut-and-paste move, §3) → **live** /
+   **moved**.
+4. Otherwise, if page `pageId` exists → **removed** ("Line removed · {page}"), and if that page is in the trash →
+   **trashed**.
+5. Otherwise → **not found**.
 
 The chip's words come from the resolved block's `NoteBlock` text (live, nothing stored), and its "where" from the
 resolved page (day label or title).
@@ -113,7 +119,8 @@ taps.
 ## 7. Checks before the candidate (copy of his data, 1280 and 390)
 
 Jazz §7 checks 1–10, plus:
-- a task moved to tomorrow with the row menu: the chip follows it (task identity);
+- a task moved from a **past** day (its history row stays there) and from today: the chip and the URL both land on
+  the day it's planned now;
 - cut on Oct 18, paste on today (also after switching pages at once, and from another tab): the chip follows it (§3); the line is never on two pages; a cut whose source save failed pastes with a new id;
 - Bring to today of a linked line: the link stays on Oct 18's line;
 - merge a linked line into the one above → "Line removed";
