@@ -2,16 +2,20 @@
 // checklist "How to update"). Read-only: it opens pages, hovers rows and measures; it never types or saves.
 //
 //   node scripts/check-alignment.mjs <base url> [path ...] [--all]
-//   e.g. node scripts/check-alignment.mjs http://127.0.0.1:3361 /day/2026-10-18 /day/2026-10-19
+//   e.g. node scripts/check-alignment.mjs http://127.0.0.1:3361
 //
-// Run it against a build serving a copy of Brian's data. Paths default to Oct 18, Oct 19 and today. At 1280 and 390:
+// Run it against a build serving a copy of Brian's data with scripts/align-fixtures.ts applied (it adds the row types
+// his data lacks on /day/2026-12-31). Paths default to Oct 18, Oct 19, today and 2026-12-31. At 1280 and 390:
 //   1. Columns. Each row against its own expected column:
 //      - top-level rows (open/done/cancelled tasks, bullets, numbered lines, page and link cards, empty rows): one
 //        shared text column, the one most rows use;
 //      - a nested row: its parent's text column + 24px (B19: one step right of the parent's text);
 //      - headings: the editor's own left edge.
-//   2. Markers on the first text line: a task's checkbox, a top-level bullet's dot, a card's icon and chevron, and
-//      (1280, hovered) the drag handle, each centred on the row's first text line.
+//   2. Markers on the first text line: a task's checkbox, a bullet's marker (top level and nested), a card's icon
+//      and chevron, and (1280, hovered, one row per type) the drag handle, each centred on the row's first text line.
+//      Nested bullets use BlockNote's glyph marker, a zero-height box; its centre is taken as half its own line.
+//      A marker that can't be found is MISSING, never skipped.
+//   Page card titles must wrap, not clip (link cards may end in an ellipsis).
 //   3. Coverage. Every row type in REQUIRED must appear on the measured pages; one that doesn't is MISSING, never a
 //      pass. Add it to the data copy (or pass a fixture page) and run again.
 // Tolerance is 1px on unrounded coordinates (output shows one decimal). Exit code 1 on any FAIL or MISSING.
@@ -21,7 +25,7 @@ const args = process.argv.slice(2)
 const [base, ...given] = args.filter(a => !a.startsWith('--'))
 if (!base) { console.error('usage: node scripts/check-alignment.mjs <base url> [path ...] [--all]'); process.exit(2) }
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
-const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`]
+const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
 const REQUIRED = ['heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'empty row', 'page card with preview', 'page card without preview', 'link card']
 
@@ -50,7 +54,8 @@ function measure() {
     const row = { index, depth: d, label: (text || '(empty)').slice(0, 24), parent: outers.indexOf(outer.parentElement?.closest('.bn-block-outer')), markers: {} }
     if (type === 'task') {
       const title = content.querySelector('.editor-task-title'), box = content.querySelector('.editor-task input')
-      const status = title.classList.contains('task-done') ? 'done' : title.classList.contains('task-cancelled') || content.querySelector('.editor-cancelled-tag') ? 'cancelled' : 'open'
+      // The task's real state, set by the editor from the workspace (data-status), never inferred from styling.
+      const status = content.querySelector('.editor-task')?.getAttribute('data-status') ?? 'unknown'
       Object.assign(row, { kind: `${status} task`, empty: !title.textContent.trim(), ...firstLine(title) })
       if (box && visible(box)) row.markers.checkbox = cy(box.getBoundingClientRect())
     } else if (type === 'pageLink') {
@@ -58,6 +63,8 @@ function measure() {
       if (!card || !title) return
       const link = Boolean(content.querySelector('.editor-page-card-row.is-link'))
       Object.assign(row, { kind: link ? 'link card' : content.querySelector('.editor-page-card-preview') ? 'page card with preview' : 'page card without preview', ...firstLine(title) })
+      // A page card's title wraps; only a link card's one line may end in an ellipsis (A2). Clipped text fails.
+      row.clipped = !link && title.scrollWidth > title.clientWidth + 1 ? `${title.scrollWidth}px of text in ${title.clientWidth}px` : null
       const icon = card.querySelector('.editor-page-card-icon'), chevron = card.querySelector(':scope > svg')
       if (icon && visible(icon)) row.markers.icon = cy(icon.getBoundingClientRect())
       if (chevron && visible(chevron)) row.markers.chevron = cy(chevron.getBoundingClientRect())
@@ -65,10 +72,17 @@ function measure() {
       const inline = content.querySelector('.bn-inline-content')
       const list = type === 'bulletListItem' ? 'bullet' : 'numbered'
       Object.assign(row, { kind: type === 'paragraph' ? 'paragraph' : d > 0 ? `nested ${list}` : list, empty: !text, ...firstLine(inline) })
-      // Top-level bullets draw their dot as a ::before box, the dot centred in its height (styles.css).
-      const before = getComputedStyle(content, '::before')
-      if (type === 'bulletListItem' && d === 0 && before.content !== 'none' && parseFloat(before.height))
-        row.markers.dot = content.getBoundingClientRect().top + parseFloat(getComputedStyle(content).paddingTop) + parseFloat(before.height) / 2
+      // Bullets draw their marker as a ::before box at the top of the line: a centred dot at the top level
+      // (styles.css), BlockNote's glyph when nested. Its box centre is the marker's centre. No box = MISSING.
+      if (type === 'bulletListItem') {
+        const before = getComputedStyle(content, '::before')
+        const top = content.getBoundingClientRect().top + parseFloat(getComputedStyle(content).paddingTop)
+        // A nested glyph ("◦") is a zero-height flex box; its glyph runs from the box top over one line of its own.
+        const glyphLine = parseFloat(before.lineHeight) || parseFloat(before.fontSize) * 1.2
+        row.markers.dot = before.content === 'none' ? null
+          : parseFloat(before.height) ? top + parseFloat(before.height) / 2
+          : glyphLine ? top + glyphLine / 2 : null
+      }
     } else if (type === 'heading') {
       Object.assign(row, { kind: 'heading', ...firstLine(content.querySelector('.bn-inline-content')) })
     } else return
@@ -99,13 +113,18 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
           const outer = document.querySelectorAll('.continuous-editor .bn-block-outer')[i]
           const content = [...outer.querySelectorAll('.bn-block-content')].find(c => c.closest('.bn-block-outer') === outer)
           const text = content?.querySelector('.editor-task-title, .editor-page-card-title, .bn-inline-content')
-          const range = document.createRange(); if (text) range.selectNodeContents(text)
-          const line = text && [...range.getClientRects()].find(r => r.width > 0 && r.height > 0)
+          if (!text) return null
+          const range = document.createRange(); range.selectNodeContents(text)
+          const line = [...range.getClientRects()].find(r => r.width > 0 && r.height > 0)
+          // An empty row has no line box: use the line its caret would sit on, as measure() does.
+          const box = text.getBoundingClientRect(), style = getComputedStyle(text)
+          const cy = line ? line.top + line.height / 2 : box.top + parseFloat(style.paddingTop) + (parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2) / 2
           const h = document.querySelector('.editor-handle svg'), r = h?.getBoundingClientRect()
-          return r?.width ? { handle: r.top + r.height / 2, cy: line ? line.top + line.height / 2 : null } : null
+          return r?.width ? { handle: r.top + r.height / 2, cy } : null
         }, row.index)
-        // Hovering scrolls the page, so the handle is compared with the row measured at the same moment.
-        if (after?.cy != null) row.hovered = after
+        // Hovering scrolls the page, so the handle is compared with the row measured at the same moment. No handle
+        // found on hover is reported as MISSING, not skipped.
+        row.hovered = after?.cy != null ? after : { missing: true }
       }
     }
     await page.close()
@@ -126,12 +145,16 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
       const off = r.left - expected
       results.push({ at, check: `${r.kind} text x: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `x=${fmt(r.left)}, expected ${fmt(expected)} (${rule}), off ${off >= 0 ? '+' : ''}${fmt(off)}` })
     }
+    for (const r of rows) if (r.clipped !== undefined && !r.kind.startsWith('link'))
+      results.push({ at, check: `${r.kind} title not clipped: "${r.label}"`, ok: !r.clipped, detail: r.clipped ?? 'wraps' })
     // 2. Markers on the first text line.
     for (const r of rows) {
-      const markers = Object.entries(r.markers).map(([m, y]) => [m, y - r.cy])
-      if (r.hovered) markers.push(['handle', r.hovered.handle - r.hovered.cy])
+      const markers = Object.entries(r.markers).map(([m, y]) => [m, y === null ? null : y - r.cy])
+      if (r.hovered) markers.push(['handle', r.hovered.missing ? null : r.hovered.handle - r.hovered.cy])
       for (const [marker, off] of markers)
-        results.push({ at, check: `${r.kind} ${marker} on first line: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
+        results.push(off === null
+          ? { at, check: `${r.kind} ${marker}: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
+          : { at, check: `${r.kind} ${marker} on first line: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
     }
   }
 }
