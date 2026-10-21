@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { childPages, linkedFrom, moveTargets, pageAncestors, pagesInDays, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
 import type { LocalDate, Page, Workspace } from '../domain/types'
-import { longLabel, todayIso } from './dates'
+import { fromIso, longLabel, todayIso } from './dates'
 import { ChevronRightIcon, PageKindIcon, PagesIcon } from './icons'
 import { displayPageTitle } from './page-title'
 import { RowMenu } from './row-menu'
@@ -425,8 +425,28 @@ export function SidebarTree({ workspace, activeId, today, newPageRow }: { worksp
   )
 }
 
+/** B20 (Jazz): name the pages that live under days, newest day first, each with its day; the rest go to Pages. */
+const DAY_PAGES_SHOWN = 3
+
 function DayPagesHint({ workspace }: { workspace: Workspace }) {
-  const n = pagesInDays(workspace).reduce((sum, g) => sum + g.pages.length, 0)
-  if (n === 0) return null
-  return <PageLink className="side-row small side-hint" href="/pages">{n} page{n === 1 ? '' : 's'} in your days</PageLink>
+  const today = useToday()
+  const all = pagesInDays(workspace).flatMap(g => g.pages.map(page => ({ page, day: g.day })))
+  if (all.length === 0) return null
+  const shown = all.slice(0, DAY_PAGES_SHOWN), more = all.length - shown.length
+  return (
+    <ul className="plain tree" aria-label="Pages in your days">
+      {shown.map(({ page, day }) => (
+        <li key={page.id}>
+          <div className="tree-row">
+            <span className="disclose none" aria-hidden="true" />
+            <PageLink className="tree-title" href={pageHref(page)} title={`${pageLabel(page, today)} · ${pageLabel(day, today)}`}>
+              <PageKindIcon url={page.url} /><span>{pageLabel(page, today)}</span>
+            </PageLink>
+            <span className="tree-day">{day.date === today ? 'Today' : fromIso(day.date!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+          </div>
+        </li>
+      ))}
+      {more > 0 && <li><PageLink className="side-row small side-hint tree-more-link" href="/pages">{more} more in your days</PageLink></li>}
+    </ul>
+  )
 }

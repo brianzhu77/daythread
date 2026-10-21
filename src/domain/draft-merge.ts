@@ -15,15 +15,18 @@ const walk = (nodes: EditorNode[], visit: (node: EditorNode, parent: EditorNode 
   nodes.forEach((node, index) => { visit(node, parent, index); walk(node.children ?? [], visit, node) })
 const byId = (nodes: EditorNode[]) => { const map = new Map<string, EditorNode>(); walk(nodes, n => map.set(n.id, n)); return map }
 /** What a line says: its kind and words, with links by target (a link's refId is identity, not wording). */
-const wording = (node: EditorNode) => JSON.stringify([node.type, node.type === 'heading' ? node.props?.level : null, node.content ?? null, node.type === 'pageLink' ? node.props?.pageId : null], (key, value) => (key === 'refId' ? undefined : value))
-const isEmpty = (node: EditorNode) => node.type !== 'pageLink' && !inlineText(node.content).trim()
+// A checklist line's tick is part of what it says (Ratchet #97).
+const wording = (node: EditorNode) => JSON.stringify([node.type, node.type === 'heading' ? node.props?.level : null, node.content ?? null, node.type === 'pageLink' ? node.props?.pageId : null, node.type === 'sourceChecklist' ? Boolean(node.props?.checked) : null], (key, value) => (key === 'refId' ? undefined : value))
+/** No words and nothing else inline: a line holding only a `[[` link is not empty (Ratchet #97). */
+const isEmpty = (node: EditorNode) => node.type !== 'pageLink' && !inlineText(node.content).trim() && !(Array.isArray(node.content) && (node.content as { type?: string }[]).some(c => c?.type && c.type !== 'text'))
 const withoutChildren = ({ children: _children, ...node }: EditorNode): EditorNode => ({ ...node, children: [] })
-/** His text for a line that already exists: a plain line of the same kind, never a second task or a new section. */
+/** His text for a line that already exists: a line of the same kind, or a bullet for a task or heading (never a second task or a new section). */
 function copyOf(node: EditorNode, newId: () => string): EditorNode {
   const content = Array.isArray(node.content)
     ? (node.content as { type?: string; props?: Record<string, unknown> }[]).map(c => (c?.type === 'pageRef' ? { ...c, props: { ...c.props, refId: newId() } } : c))
     : node.content
-  const type = node.type === 'task' || node.type === 'heading' ? 'paragraph' : node.type
+  // A bullet sits on the section's text column like every other line (Jazz: a plain paragraph read as a stray heading).
+  const type = node.type === 'task' || node.type === 'heading' ? 'bulletListItem' : node.type
   return { id: newId(), type, props: type === node.type ? node.props : {}, content, children: [] }
 }
 
@@ -67,6 +70,12 @@ export function mergeDraft(base: EditorNode[], draft: EditorNode[], latest: Edit
       // A line that was empty on both sides (a template row): his words go in place, with nothing below to repeat.
       now.content = structuredClone(node.content)
       if (now.type === 'task' && String(now.props?.taskId ?? '') === `editor-task:${now.id}`) now.props = { ...now.props, ...node.props, taskId: `editor-task:${now.id}` }
+      inserted.push(now.id); anchorFor.set(node.id, now.id)
+      return
+    }
+    if (node.type === 'sourceChecklist' && now && wording(now) === wording(before) && JSON.stringify(node.content) === JSON.stringify(before.content)) {
+      // Only his tick changed, and the other side left the line alone: the tick goes in place, not as a second line (Jazz).
+      now.props = { ...now.props, checked: Boolean(node.props?.checked) }
       inserted.push(now.id); anchorFor.set(node.id, now.id)
       return
     }

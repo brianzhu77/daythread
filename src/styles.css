@@ -155,7 +155,7 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
 
 /* ---------- Shell ---------- */
 .brand { font-weight: 650; font-size: .95rem; color: var(--ink); text-decoration: none; letter-spacing: -.01em; }
-.app-main { max-width: calc(var(--column) + 40px); margin: 0 auto; padding: 0 20px calc(110px + env(safe-area-inset-bottom)); }
+.app-main { max-width: calc(var(--column) + 40px); margin: 0 auto; padding: 0 20px calc(136px + env(safe-area-inset-bottom)); } /* B20: clears the 120px fade under the tab bar with room to spare */
 
 /* Development-only controls: present but out of the way. */
 .banner {
@@ -568,6 +568,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* Five tabs share the capsule: about 54px each at 390, never wider than 64 (Jazz). */
 .tab { display: grid; place-items: center; flex: 1; min-width: 0; max-width: 64px; height: 48px; border-radius: 999px; color: var(--ink); }
 .tab[aria-current='page'] { background: var(--fill); color: var(--blue); }
+/* B20 (Jazz): text that scrolls under the floating bar fades out over 48px and is fully hidden from the bar's top edge
+   (12px offset + 60px bar = 72px), so nothing shows through the glass. */
+.tab-bar::before { content: ''; position: fixed; left: 0; right: 0; bottom: 0; height: calc(120px + env(safe-area-inset-bottom)); background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 0%, transparent), var(--bg) 48px); pointer-events: none; z-index: -1; }
 .tab-plus { pointer-events: auto; flex: none; width: 60px; height: 60px; padding: 0; border-radius: 50%; background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); color: var(--ink); box-shadow: var(--shadow-float); }
 
 /* Phone: capture lives behind + (craft-v1 §5.3); notices move to the top, clear of the tab bar. */
@@ -587,9 +590,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
   gap: 12px;
   padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
   border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
-  background: var(--glass);
-  backdrop-filter: saturate(1.6) blur(24px);
-  -webkit-backdrop-filter: saturate(1.6) blur(24px);
+  background: var(--bg);
   box-shadow: var(--shadow-float);
   animation: sheet-in .2s ease-out;
 }
@@ -651,6 +652,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor .bn-block-outer:has(> .bn-block > .bn-block-content[data-content-type=heading]) { margin-top:18px; }
 .editor-save-line { min-height:24px; font-size:12px; color:var(--ink-2); display:flex;gap:12px; align-items:center; padding-left:24px; }
 .editor-save-line button { padding:2px 8px; font-size:12px; }
+/* B23 (Jazz): in a conflict, Load latest is the one way on, so it reads as a button. */
+.editor-save-line.is-conflict { font-size:13px; }
+.editor-save-line.is-conflict button { color:var(--ink); font-weight:600; font-size:13px; }
 .editor-task { display:flex; align-items:center; gap:10px; min-height:32px; width:100%; }
 /* Page card (Jazz): one quiet row in the note, no border or fill; hover/selection come from the block like any other. */
 /* Same columns as a task row: icon in the checkbox/dot column, title on the text column; icon and chevron centre on the title's first line. */
@@ -1072,6 +1076,10 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .two-line .card-row { min-height: 56px; }
 .card-row-detail { font-size: 13px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-hint { color: var(--ink-2); }
+/* B20: a page under a day names its day, quietly, after the title. */
+.tree-day { flex: none; padding: 0 8px 0 6px; font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.tree-title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-more-link { padding-left: 26px; }
 
 /* Morning card (Jazz docs/design/morning-card-build.md §2) */
 .mc-group { display: grid; gap: 0; padding-top: 4px; }
