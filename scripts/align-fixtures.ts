@@ -8,7 +8,8 @@
 //
 // Everything goes through the same commands the app sends (add-task, task-status, create-document, paste-links,
 // save-editor), so a cancelled task is really cancelled. On /day/2026-12-31 it adds: an open task and a cancelled one,
-// a bullet with a nested bullet and an empty nested line, a page card without preview, and a link card.
+// a bullet with a nested bullet and an empty nested line, two page cards without preview (one with a long title),
+// and a link card.
 // Run it once per copy: a second run refuses, since the scratch page already has its rows.
 import { resolve } from 'node:path'
 import { getRepository } from '../src/server/storage.ts'
@@ -45,6 +46,9 @@ ws = await run({ type: 'task-status', taskId: cancelled.id, status: 'cancelled' 
 // Cards: a page with nothing in it (no preview), and a pasted link, each created first as the editor does.
 const emptyPageId = crypto.randomUUID(), linkPageId = crypto.randomUUID(), emptyCardId = crypto.randomUUID(), linkCardId = crypto.randomUUID()
 ws = await run({ type: 'create-document', title: 'Fixture empty page', body: '', pageId: emptyPageId, parentId: scratch(ws).id })
+// A long title, so a card's wrapping is measured too (Ratchet ba2ad8a5: long titles were clipped at 390).
+const longPageId = crypto.randomUUID(), longCardId = crypto.randomUUID()
+ws = await run({ type: 'create-document', title: 'Fixture page with a very long title that has to wrap onto a second line on a phone 长标题需要换行', body: '', pageId: longPageId, parentId: scratch(ws).id })
 ws = await run({ type: 'paste-links', pageId: scratch(ws).id, today, items: [{ url: 'https://example.com/fixture-link', pageId: linkPageId, cardBlockId: linkCardId, lineType: 'paragraph' }] })
 
 // The editor document: what the page shows now, plus the cards and a nested list under Notes.
@@ -54,6 +58,7 @@ const text = (t: string) => (t ? [{ type: 'text', text: t, styles: {} }] : [])
 const bullet = (t: string, children: EditorNode[] = []) => ({ id: crypto.randomUUID(), type: 'bulletListItem', props: {}, content: text(t), children }) as unknown as EditorNode
 const added = [
   { id: emptyCardId, type: 'pageLink', props: { pageId: emptyPageId, url: '', line: '' }, children: [] },
+  { id: longCardId, type: 'pageLink', props: { pageId: longPageId, url: '', line: '' }, children: [] },
   { id: linkCardId, type: 'pageLink', props: { pageId: linkPageId, url: 'https://example.com/fixture-link', line: 'paragraph' }, children: [] },
   bullet('Fixture parent', [bullet('Fixture nested child'), bullet('')]),
 ] as unknown as EditorNode[]

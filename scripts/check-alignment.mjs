@@ -15,6 +15,7 @@
 //      and chevron, and (1280, hovered, one row per type) the drag handle, each centred on the row's first text line.
 //      Nested bullets use BlockNote's glyph marker, a zero-height box; its centre is taken as half its own line.
 //      A marker that can't be found is MISSING, never skipped.
+//   Page card titles must wrap, not clip (link cards may end in an ellipsis).
 //   3. Coverage. Every row type in REQUIRED must appear on the measured pages; one that doesn't is MISSING, never a
 //      pass. Add it to the data copy (or pass a fixture page) and run again.
 // Tolerance is 1px on unrounded coordinates (output shows one decimal). Exit code 1 on any FAIL or MISSING.
@@ -62,6 +63,8 @@ function measure() {
       if (!card || !title) return
       const link = Boolean(content.querySelector('.editor-page-card-row.is-link'))
       Object.assign(row, { kind: link ? 'link card' : content.querySelector('.editor-page-card-preview') ? 'page card with preview' : 'page card without preview', ...firstLine(title) })
+      // A page card's title wraps; only a link card's one line may end in an ellipsis (A2). Clipped text fails.
+      row.clipped = !link && title.scrollWidth > title.clientWidth + 1 ? `${title.scrollWidth}px of text in ${title.clientWidth}px` : null
       const icon = card.querySelector('.editor-page-card-icon'), chevron = card.querySelector(':scope > svg')
       if (icon && visible(icon)) row.markers.icon = cy(icon.getBoundingClientRect())
       if (chevron && visible(chevron)) row.markers.chevron = cy(chevron.getBoundingClientRect())
@@ -142,6 +145,8 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
       const off = r.left - expected
       results.push({ at, check: `${r.kind} text x: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `x=${fmt(r.left)}, expected ${fmt(expected)} (${rule}), off ${off >= 0 ? '+' : ''}${fmt(off)}` })
     }
+    for (const r of rows) if (r.clipped !== undefined && !r.kind.startsWith('link'))
+      results.push({ at, check: `${r.kind} title not clipped: "${r.label}"`, ok: !r.clipped, detail: r.clipped ?? 'wraps' })
     // 2. Markers on the first text line.
     for (const r of rows) {
       const markers = Object.entries(r.markers).map(([m, y]) => [m, y === null ? null : y - r.cy])
