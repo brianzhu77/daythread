@@ -968,6 +968,8 @@ function execute(
       const previousBlocks = p.sections.flatMap(s => s.blocks);
       p.editorBlockMetadata ??= {};
       for (const block of previousBlocks) p.editorBlockMetadata[block.id] = structuredClone(block);
+      // A9a §2: a heading's `[[` links outlive the heading too, so Undo or a cut-and-paste move finds their time.
+      for (const sec of p.sections) if (sec.refs?.length) p.editorBlockMetadata[`heading:${sec.id}`] = { id: `heading:${sec.id}`, kind: "paragraph", text: sec.title, refs: structuredClone(sec.refs) };
       for (const node of all) {
         if (node.type !== 'task' || state.tasks.some(t => t.id === node.props?.taskId)) continue;
         if (!inlineText(node.content) && node.props?.taskId === `editor-task:${node.id}`) continue;

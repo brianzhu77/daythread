@@ -198,3 +198,25 @@ test('Ratchet #84: a [[ link in a heading blocks A2\'s Undo too', () => {
   assert.match(r.receipt.message, /linked from/)
   assert.ok(page(r.workspace, 'H'))
 })
+
+test('Ratchet #84: a heading link keeps its time when the heading is deleted and Undone, or cut and pasted to another page', () => {
+  let { ws, d19, d20 } = setup()
+  const heading = (id: string) => ({ id, type: 'heading', props: { level: 2 }, content: [text('关于 '), ref('R', 'rh')] })
+  ws = save(ws, d20, doc => [...doc, heading('h')])
+  const at = page(ws, d20).sections.find(s => s.id === 'h')!.refs![0]!.at
+  ws = save(ws, d20, doc => [...doc, line('x', text('later'))])
+  const deleted = save(ws, d20, doc => doc.filter(n => n.id !== 'h'))
+  assert.equal(from(deleted, 'R').length, 0)
+  const back = save(deleted, d20, doc => [...doc, heading('h')])
+  assert.equal(page(back, d20).sections.find(s => s.id === 'h')!.refs![0]!.at, at, 'Undo of the delete: same time')
+  // Cut from Oct 20 (saved first), pasted on Oct 19 with its refId (a move).
+  const cut = save(ws, d20, doc => doc.filter(n => n.id !== 'h'))
+  const moved = save(cut, d19, doc => [...doc, heading('h2')])
+  assert.equal(page(moved, d19).sections.find(s => s.id === 'h2')!.refs![0]!.at, at, 'moved to another page: same time')
+  assert.deepEqual(from(moved, 'R'), [d19])
+  // The other order: pasted on Oct 19 first, then Oct 20 saves without it.
+  let pasteFirst = save(ws, d19, doc => [...doc, heading('h3')])
+  pasteFirst = save(pasteFirst, d20, doc => doc.filter(n => n.id !== 'h'))
+  assert.equal(page(pasteFirst, d19).sections.find(s => s.id === 'h3')!.refs![0]!.at, at, 'paste saved first: same time')
+  assert.deepEqual(from(pasteFirst, 'R'), [d19])
+})

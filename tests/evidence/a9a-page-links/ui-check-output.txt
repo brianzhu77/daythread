@@ -1,6 +1,6 @@
 ok   1. the list shows 韩国大酱汤 "in Sun, Oct 18" · 韩国大酱汤 / in Sun, Oct 18 / New page "韩"
 ok      the link sits inline with the words around it
-ok      saved as a reference with its own refId and time · {"refId":"f94550f8-47a2-4a3c-998e-5eceab0e628e","pageId":"fa95e8a3-dd0a-4b3c-8fcc-c1129c8c4820","at":160,"title":"韩国大酱汤","blockId":"day:2026-10-20:notes:template:0"}
+ok      saved as a reference with its own refId and time · {"refId":"7475d101-b086-4818-9257-1fcf098d77e1","pageId":"fa95e8a3-dd0a-4b3c-8fcc-c1129c8c4820","at":160,"title":"韩国大酱汤","blockId":"day:2026-10-20:notes:template:0"}
 ok      it doesn't look like a web link
 ok      tapping it opens 韩国大酱汤
 ok      its Linked from shows Today · Linked from Today
@@ -11,7 +11,7 @@ ok      `[[` no longer lists the trashed page · New page "大酱" / No page cal
 ok      tapping it opens the trashed page with Restore
 ok      Restore → the link is live again
 ok   5. the list ends with New page "新页面" · New page "新页面" / No page called 新页面
-ok      a page "新页面" is made under today · [{"id":"d43b999a-81f7-450f-aa86-9fe4be05300e","title":"新页面","parentId":"day:2026-10-20"}]
+ok      a page "新页面" is made under today · [{"id":"0fb5bd75-4997-40a1-95ad-b89b13e25c9d","title":"新页面","parentId":"day:2026-10-20"}]
 ok      he stays on today and the link is live
 ok      it's in today's Subpages
 ok      ⌘Z removes the link; the page stays
@@ -20,7 +20,7 @@ ok      one more Backspace removes the whole link
 ok      and today is no longer a reference
 ok   10. Esc leaves exactly "[[abc"
 ok       typing `]]` closes it and leaves plain text
-ok       `[[` in a task row opens nothing · 0  | focus in: tiptap ProseMirror bn-editor bn-default-styles placeholder-selector-94da5821-fd1e-4e23-8fc7-06ade5357a88 ProseMirror-focused
+ok       `[[` in a task row opens nothing · 0  | focus in: tiptap ProseMirror bn-editor bn-default-styles placeholder-selector-77e2f38e-c621-40e7-87c8-87ca02b1f880 ProseMirror-focused
 ok       pasting `[[` opens nothing
 ok   IME: nothing opens while composing
 ok       after compositionend the list opens · 1
@@ -29,7 +29,7 @@ ok       and it searches what follows `【【`
 ok       Esc leaves exactly "【【韩" · "【【韩"
 ok       a cancelled composition opens nothing
 ok       `[` then `【` is not a trigger
-ok   in-app copy of a line with a link: a new refId and a newer time · [["25374a",160],["cf8a4e",159]]
+ok   in-app copy of a line with a link: a new refId and a newer time · [["e57041",160],["8b7796",159]]
 ok   8. B15: Linked from reads Today, then Mon Oct 19 · Linked from Today Mon, Oct 19
 ok      after Move, the order is unchanged · Linked from Today Mon, Oct 19 Sun, Oct 18
 ok      delete today's link → Today leaves, Mon Oct 19 stays · Linked from Mon, Oct 19 Sun, Oct 18
