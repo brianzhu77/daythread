@@ -1,0 +1,37 @@
+(node:14624) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS 1280 Today normal contrast {"bg":[235,235,236],"ink":[28,28,30],"ratio":14.281837845090923}
+PASS 1280 Today normal neutral ink {"bg":[235,235,236],"ink":[28,28,30]}
+PASS 1280 Today hover contrast {"bg":[225,225,226],"ink":[28,28,30],"ratio":13.020155976100279}
+PASS 1280 Today hover neutral ink {"bg":[225,225,226],"ink":[28,28,30]}
+PASS 1280 Previous day normal contrast {"bg":[235,235,236],"ink":[40,40,42],"ratio":12.350980891833453}
+PASS 1280 Previous day normal neutral ink {"bg":[235,235,236],"ink":[40,40,42]}
+PASS 1280 Previous day hover contrast {"bg":[225,225,226],"ink":[40,40,42],"ratio":11.259874213232386}
+PASS 1280 Previous day hover neutral ink {"bg":[225,225,226],"ink":[40,40,42]}
+PASS 1280 Next day normal contrast {"bg":[235,235,236],"ink":[40,40,42],"ratio":12.350980891833453}
+PASS 1280 Next day normal neutral ink {"bg":[235,235,236],"ink":[40,40,42]}
+PASS 1280 Next day hover contrast {"bg":[225,225,226],"ink":[40,40,42],"ratio":11.259874213232386}
+PASS 1280 Next day hover neutral ink {"bg":[225,225,226],"ink":[40,40,42]}
+PASS 1280 keyboard previous works "http://127.0.0.1:3401/day/2026-10-17"
+PASS 1280 next returns same day "http://127.0.0.1:3401/day/2026-10-18"
+PASS 1280 disabled next exists 1
+PASS 1280 disabled ink lighter {"bg":[245,245,245],"ink":[208,209,211]}
+PASS 1280 disabled next does not navigate "http://127.0.0.1:3401/"
+PASS 390 Today normal contrast {"bg":[235,235,236],"ink":[28,28,30],"ratio":14.281837845090923}
+PASS 390 Today normal neutral ink {"bg":[235,235,236],"ink":[28,28,30]}
+PASS 390 Today hover contrast {"bg":[225,225,226],"ink":[28,28,30],"ratio":13.020155976100279}
+PASS 390 Today hover neutral ink {"bg":[225,225,226],"ink":[28,28,30]}
+PASS 390 Previous day normal contrast {"bg":[235,235,236],"ink":[28,28,30],"ratio":14.281837845090923}
+PASS 390 Previous day normal neutral ink {"bg":[235,235,236],"ink":[28,28,30]}
+PASS 390 Previous day hover contrast {"bg":[225,225,226],"ink":[28,28,30],"ratio":13.020155976100279}
+PASS 390 Previous day hover neutral ink {"bg":[225,225,226],"ink":[28,28,30]}
+PASS 390 Next day normal contrast {"bg":[235,235,236],"ink":[28,28,30],"ratio":14.281837845090923}
+PASS 390 Next day normal neutral ink {"bg":[235,235,236],"ink":[28,28,30]}
+PASS 390 Next day hover contrast {"bg":[225,225,226],"ink":[28,28,30],"ratio":13.020155976100279}
+PASS 390 Next day hover neutral ink {"bg":[225,225,226],"ink":[28,28,30]}
+PASS 390 keyboard previous works "http://127.0.0.1:3401/day/2026-10-17"
+PASS 390 next returns same day "http://127.0.0.1:3401/day/2026-10-18"
+PASS 390 disabled next exists 1
+PASS 390 disabled ink lighter {"bg":[245,245,245],"ink":[206,207,209]}
+PASS 390 disabled next does not navigate "http://127.0.0.1:3401/"
+PASS no console/page errors []

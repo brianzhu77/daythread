@@ -199,6 +199,10 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
 .day-head { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 2px 12px; padding: 24px 0 12px; }
 .day-head h1 { font-size: 28px; line-height: 34px; letter-spacing: -.02em; font-weight: 700; }
 .day-nav { display: flex; align-items: center; gap: 6px; color: var(--ink-faint); }
+/* Brian 116a40ab (option A): the day buttons keep their grey shape but use the page's ink, not the accent blue;
+   blue is left to the checkboxes. Disabled keeps HeroUI's 50% opacity over a lighter ink. */
+.day-nav .button--secondary { color: var(--ink); }
+.day-nav .button--secondary:disabled, .day-nav .button--secondary[data-disabled] { color: var(--ink-3); }
 .save-state { grid-column: 1 / -1; min-height: 1.2em; font-size: .78rem; color: var(--ink-2); }
 .save-state.failed { color: var(--app-danger); font-weight: 550; }
 .day-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
