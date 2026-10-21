@@ -92,8 +92,11 @@ at that moment, or its existing refresh reports "Page changed elsewhere · draft
   locally, and the next save would write it back: for A12, a moved row's text would reappear without its placement. The
   refresh is applied with `addToHistory: false`. That fixes every server-driven refresh (Put back, the hand-off), not only
   A12, and ⌘Z then never reverses a server action; the notice's Undo does.
-- **⌘Z while the action's notice is showing** runs that same server Undo (Jazz §4), the A2 pattern: a keydown in front of
-  BlockNote's, and only while nothing was edited since the action.
+- **⌘Z after an action (Ratchet 980d5695):** while the action's notice is showing, ⌘Z runs that same server Undo (Jazz §4,
+  the A2 pattern: a keydown in front of BlockNote's, only while nothing was edited since): the row and its placement come
+  back together. Once the notice is gone, ⌘Z never brings the row back locally (the refresh isn't in editor history).
+- **A failed action (Ratchet):** if the flush or the command fails, the editor is released at once, the typed draft is
+  kept as it was, and the notice says the action didn't happen.
 - **Notices** are the hand-off's, word for word: "Moved to Fri 10/23 · Undo", "Not today — won't carry over · due Fri
   still tracked · Undo", "Cancelled · Undo" (`useTaskActions`).
 
@@ -116,14 +119,17 @@ at that moment, or its existing refresh reports "Page changed elsewhere · draft
   - `not-today` with `onlyThisDay`: planned here → D05; planned for another day → only the row leaves, the task
     unchanged; without it, as today;
   - Undo of each action restores the row in its section and position, and the task's dates and pause;
-  - Not today by action and by deleting the row give the same task and placement state.
+  - Not today by action and by deleting the row give the same task and placement state;
+  - moving into a day whose Top 3 already holds this same task (three rows) doesn't count the task against itself and
+    keeps it in Top 3 (Ratchet).
 - **Browser, on a copy of his data, 1280 and 390:**
   - each action from Top 3 and from Other on today and on a future page, per row type (§1); the notice text; Undo
     puts the row back in its section and position; a moved row lands in the same section (Other when Top 3 is full);
   - Backspace on a whole plan row and Not today from the menu leave the same state;
   - type in a line, then use an action at once: the text is saved first, with no "changed elsewhere";
-  - an action, then ⌘Z: the row doesn't come back in the editor; the notice's Undo brings it back with its placement,
-    and a following save keeps it;
+  - an action, then ⌘Z with the notice showing: the row and its placement come back together; after the notice is gone,
+    ⌘Z doesn't bring the row back, and a following save keeps the state;
+  - a failed action (server stopped): editing is released, the draft is kept, and the notice says so;
   - the action and the menu are reachable with no hover at 390;
   - the keyboard shortcut;
   - no page or console errors.
