@@ -83,11 +83,13 @@ One action set, two surfaces, so there's nothing to learn twice.
 - **The task was changed on another device** after the page loaded: the action applies to its current state, and
   Undo restores what this action changed (the existing versioned Undo, v0.3 §8 "Undo blocked" if it can't).
 - **A row whose task is now planned on another day** (a stale plan row, e.g. Wed's row after the task moved to Fri;
-  Ratchet `9abc4857`): the actions follow the **task's current state**, not the page. That row is shown and treated
-  as a **reference row**: its date tag reads "Do Fri", and it offers Plan for {this day} · Another day ▸ · Cancel
-  task. **No "Not today / Not on {day}"**, because that would pause the carry-over of a plan that lives on another
-  day. Backspace on it removes only the line (it's a reference now), with "Reference removed · Undo".
-- **In general, "Not today / Not on {day}" is offered only when the task is planned on that page's day right now.**
+  Ratchet `9abc4857`, Bumblebee `9462aa55`): the actions follow the **task's current state**, not the page. Its date
+  tag reads "Do Fri", and in place of "Not on Wed" the menu offers **"Remove from Wed"**. That removes only this
+  row and changes nothing on the task: no pause, Fri's plan stays. The notice says so: "Removed from Wed · still
+  planned for Fri · Undo". Backspace on the whole row does the same. The other actions (Another day, Cancel) are
+  unchanged.
+- **"Not today / Not on {day}" (D05: clear the date and pause) is offered only while the task is planned on that
+  page's day.** Otherwise it's "Remove from {day}", as above.
 - **The save is still pending** when he taps an action: flush first, then act (the A2 rule), so the row's latest
   title is what moves.
 - **Read-only pages** (past days, trashed pages): no ⋯ and no bar actions except Bring to today on past days.
@@ -107,7 +109,8 @@ One action set, two surfaces, so there's nothing to learn twice.
    and fits at 390 with no overflow. Tap the handle on a text line → "1 selected · Delete" as before.
 8. Keyboard at 1280: from the row's text, Tab reaches ⋯, Enter opens the menu, ↑↓ and Enter choose, Esc closes.
 9. A future day's row shows "Not on Wed" and no Tomorrow. Move that task to Fri from the Tasks screen → Wed's row
-   reads "Do Fri" and offers no "Not on Wed". A past day's row offers only Bring to today.
+   reads "Do Fri" and offers "Remove from Wed" → "Removed from Wed · still planned for Fri", and Fri's plan and
+   carry-over are untouched. A past day's row offers only Bring to today.
 10. Done and draft rows show no ⋯.
 
 ## 6. Open questions for the plan
