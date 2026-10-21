@@ -1,0 +1,15 @@
+(node:5223) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS 1280 long card wraps unclipped {"link":false,"white":"normal","width":628,"scroll":628,"lines":4,"iconOff":0,"arrowOff":0}
+PASS 1280 wrapped card markers first line {"link":false,"white":"normal","width":628,"scroll":628,"lines":4,"iconOff":0,"arrowOff":0}
+PASS 1280 link keeps single line {"link":true,"white":"nowrap","width":621,"scroll":621,"lines":1,"iconOff":0,"arrowOff":null}
+PASS 1280 render does not persist null
+PASS 1280 real task data-status ["open","cancelled","draft","draft"]
+PASS 1280 done data-status null
+PASS 390 long card wraps unclipped {"link":false,"white":"normal","width":258,"scroll":258,"lines":8,"iconOff":0,"arrowOff":0}
+PASS 390 wrapped card markers first line {"link":false,"white":"normal","width":258,"scroll":258,"lines":8,"iconOff":0,"arrowOff":0}
+PASS 390 link keeps single line {"link":true,"white":"nowrap","width":251,"scroll":251,"lines":1,"iconOff":0,"arrowOff":null}
+PASS 390 render does not persist null
+PASS 390 real task data-status ["open","cancelled","draft","draft"]
+PASS 390 done data-status null
+PASS no console/page errors []

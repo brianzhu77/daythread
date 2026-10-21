@@ -1,0 +1,6 @@
+(node:2794) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Fixture via real domain commands: long no-preview page card and link card on /day/2026-10-25; copy only.
+(node:2961) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+link card saved then resolved via paste-links
