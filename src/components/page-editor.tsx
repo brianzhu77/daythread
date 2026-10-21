@@ -12,6 +12,7 @@ import { offset } from '@floating-ui/react'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, type EditorNode } from '../domain/editor-document'
+import { mergeDraft } from '../domain/draft-merge'
 import { applyCommand, pasteRecords } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
@@ -360,6 +361,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     notice.current = { key, fingerprint }
   }
   const [selectionLabel, setSelectionLabel] = useState('')
+
   // B19 (Lead a2edc0a7): on a past day, the rows that were empty when the page opened (template bullets he never used)
   // are hidden on screen only, never deleted. A row shows again once the cursor is in it, and new lines are never hidden.
   const [hiddenEmpty, setHiddenEmpty] = useState<ReadonlySet<string>>(() => {
@@ -432,7 +434,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     catch (error) { debugClient('editor.save.rejected',{operationId,pageId:page.id,result:'conflict',error:error instanceof Error?error.name:'UnknownError'}); sending.current = false; setFailed(true); setStatus(error instanceof Error ? error.message : 'Cannot save; draft kept'); return }
     const result = await run(action,undefined,operationId)
     sending.current = false
-    if (!result) { debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true); setStatus('Not saved · your draft is kept on this device'); return }
+    if (!result) { debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true); setStatus("Couldn't save · draft kept"); return }
     pendingSave.current=null
     debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
     for (const t of source.tasks) if (expectedTaskVersions.current.get(t.id) !== t.version) invalidHistoryTasks.current.add(t.id)
@@ -520,6 +522,28 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     restoreBrowserSelection(selection)
     suppress.current = false
     base.current = pageContentKey(p)
+  }
+  /**
+   * B23 (save-conflict-states §2): the page changed elsewhere since he started. Load the latest page, then put his
+   * changes below their lines as one editor edit (so Undo takes exactly those lines out again). His changes are
+   * measured against the page he started from; the draft this browser kept for recovery is replaced by the merged
+   * page, so a reload doesn't bring the conflict back.
+   */
+  function loadLatest() {
+    const latestNow = latestPage.current, ws = latestWorkspace.current
+    const [baseSections, baseJSON] = JSON.parse(base.current) as [Page['sections'], string | null]
+    const started = { ...latestNow, sections: baseSections, editorJSON: baseJSON ?? undefined, editorSections: JSON.stringify(baseSections) } as Page
+    const seed = (p: Page) => editorSeed(p, ws, { templateRows: needsTemplateRows(p, todayIso()) }) as EditorNode[]
+    const merged = mergeDraft(seed(started), nodes(), seed(latestNow), new Set(ws.tasks.map(t => t.id)))
+    clearTimeout(timer.current)
+    semanticDeletes.current.clear(); pendingSave.current = null
+    applyServerPage(latestNow, ws)
+    dirty.current = false; setFailed(false); localStorage.removeItem(key)
+    if (!merged.inserted.length) { setStatus('Latest loaded'); return }
+    editor.transact(tr => { closeHistory(tr); editor.replaceBlocks(editor.document, merged.document as never) })
+    editor.setTextCursorPosition(merged.inserted[0]!, 'end'); editor.focus()
+    editor.domElement?.querySelector(`[data-id="${CSS.escape(merged.inserted[0]!)}"]`)?.scrollIntoView({ block: 'center' })
+    setNotice({ text: 'Latest loaded · your changes are below their lines', fingerprint: JSON.stringify(editor.document) })
   }
   useEffect(() => {
     const before = (e: BeforeUnloadEvent) => { if (dirty.current) { stash(); e.preventDefault() } }
@@ -1112,6 +1136,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       editor.setTextCursorPosition(id, 'end'); editor.focus()
     },
   }
+  // B23 §1: a failed save is a conflict when he has unsaved typing and the page is no longer the one he started from.
+  const conflict = failed && dirty.current && pageContentKey(page) !== base.current
   return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
     onMouseDownCapture={e => { const target = e.target as Element; if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') } }}
@@ -1259,7 +1285,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     >
     <div ref={selectionFocus} tabIndex={-1} className="sr-only" aria-label={selectionLabel || undefined} />
     {hiddenEmpty.size > 0 && <style>{[...hiddenEmpty].map(id => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"]`).join(',')}{'{display:none}'}</style>}
-    <div className="editor-save-line" role="status">{status}{failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
+    <div className="editor-save-line" role="status">{conflict ? 'Changed in another tab · draft kept' : status}{conflict ? <button onClick={loadLatest}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
