@@ -1,0 +1,25 @@
+(node:49414) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.page-links-upgrade","stamped":2}
+ok   setup: 4 links (two to one page in one line), Brian's 2 Oct 18 cards and a new card, all timed · {"R":["rt-doc","day:2026-10-20","day:2026-10-18"],"F":["rt-doc","day:2026-10-20","day:2026-10-18"]}
+ok   rollback script: layout 6 → 5 · Layout 6 → 5. 4 page links now plain in-app links (marked), 3 card times held; Undo cleared.
+ok   32ef34b: today opens (no "Something went wrong!")
+ok   32ef34b: the two links are plain in-app links with the title
+ok   32ef34b: a converted link opens its page · /pages?page=fa95e8a3-dd0a-4b3c-8fcc-c1129c8c4820&ref=rt-r1
+ok   32ef34b: the document page with a link and a card opens
+ok   32ef34b: its save of Oct 18 dropped the cards' times (as expected)
+ok   32ef34b: the look-alike link is in the line before the converted ones · ["/pages?page=fa95e8a3-dd0a-4b3c-8fcc-c1129c8c4820","/pages?page=fa95e8a3-dd0a-4b3c-8fcc-c1129c8c4820&ref=rt-r1","/pages?page=fa95e8a3-dd0a-4b3c-8fcc-c1129c8c4820&ref=rt-r2"]
+ok   32ef34b: no page or console errors
+{"level":"info","event":"storage.page-links-upgrade","linksRestored":3,"linksKeptPlain":1,"cardTimesRestored":3,"stamped":0}
+ok   migration 6: the two links are [[ links again with their refIds; the look-alike stays a plain link · ["link","ref:rt-r1","ref:rt-r2"]
+ok      the link edited in 32ef34b stays a plain link
+ok      rt-r1 has its time back · 160 → 160
+ok      rt-r2 has its time back · 160 → 160
+ok      rt-f2 has its time back · 161 → 161
+ok      rt-doc-card has its time back · 161 → 161
+ok      Brian's Oct 18 cards have their times back after 32ef34b saved that page
+ok      Linked from of 韩国大酱汤 is as before · ["rt-doc","day:2026-10-20","day:2026-10-18"]
+ok      Linked from of 佛卡夏披萨 is as before, minus the line whose link he edited · ["rt-doc","day:2026-10-18"]
+ok      layout 6, held tables consumed
+ok   the new build shows the two [[ links as chips again
+ok   no page or console errors in either build

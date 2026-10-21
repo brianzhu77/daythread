@@ -1,0 +1,6 @@
+(node:54405) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+{"level":"info","event":"storage.page-links-upgrade","linksRestored":1,"linksKeptPlain":0,"cardTimesRestored":0,"stamped":0}
+{"before":3,"refs":[{"refId":"heading-identity","pageId":"target","at":3,"title":"目标"}],"linkedFrom":["day:2026-10-20"]}
+ok real 32ef34b heading link edit/re-upgrade keeps identity/time and unrelated note

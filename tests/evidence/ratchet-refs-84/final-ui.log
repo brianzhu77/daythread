@@ -1,0 +1,44 @@
+(node:55381) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1. the list shows 韩国大酱汤 "in Sun, Oct 18" · 韩国大酱汤 / in Sun, Oct 18 / New page "韩"
+ok      the link sits inline with the words around it
+ok      saved as a reference with its own refId and time · {"refId":"a992a7fd-3a71-4ce1-a2cd-b783515b09ed","pageId":"fa95e8a3-dd0a-4b3c-8fcc-c1129c8c4820","at":160,"title":"韩国大酱汤","blockId":"day:2026-10-20:notes:template:0"}
+ok      it doesn't look like a web link
+ok      tapping it opens 韩国大酱汤
+ok      its Linked from shows Today · Linked from Today
+ok   3. after a rename the link shows the new name
+ok      today's page wasn't edited by the rename
+ok   4. trashed: the link is muted with the bin icon
+ok      `[[` no longer lists the trashed page · New page "大酱" / No page called 大酱
+ok      tapping it opens the trashed page with Restore
+ok      Restore → the link is live again
+ok   5. the list ends with New page "新页面" · New page "新页面" / No page called 新页面
+ok      a page "新页面" is made under today · [{"id":"78ff47a3-2d00-4102-9570-560560b0e784","title":"新页面","parentId":"day:2026-10-20"}]
+ok      he stays on today and the link is live
+ok      it's in today's Subpages
+ok      ⌘Z removes the link; the page stays
+ok   6. a space follows the link, so the cursor can sit after it
+ok      one more Backspace removes the whole link
+ok      and today is no longer a reference
+ok   10. Esc leaves exactly "[[abc"
+ok       typing `]]` closes it and leaves plain text
+ok       `[[` in a task row opens nothing · 0  | focus in: tiptap ProseMirror bn-editor bn-default-styles placeholder-selector-64be4ff4-9feb-44f0-85a0-77a26ccefb8c ProseMirror-focused
+ok       pasting `[[` opens nothing
+ok   IME: nothing opens while composing
+ok       after compositionend the list opens · 1
+ok       the extra input after compositionend doesn't open it twice
+ok       and it searches what follows `【【`
+ok       Esc leaves exactly "【【韩" · "【【韩"
+ok       a cancelled composition opens nothing
+ok       `[` then `【` is not a trigger
+ok   in-app copy of a line with a link: a new refId and a newer time · [["73ff31",160],["100904",159]]
+ok   8. B15: Linked from reads Today, then Mon Oct 19 · Linked from Today Mon, Oct 19
+ok      after Move, the order is unchanged · Linked from Today Mon, Oct 19 Sun, Oct 18
+ok      delete today's link → Today leaves, Mon Oct 19 stays · Linked from Mon, Oct 19 Sun, Oct 18
+ok   ranking: the title starting with "needle" comes first · ["needle start","other needle"]
+ok   a day row has no "Day" second line (Jazz) · Mon, Oct 19 / New page "Oct 19"
+ok   Tags page: the line shows the link's current title
+ok   9. at 390 a long title wraps with the line and never overflows · [[101,348],[65,343],[65,232]]
+ok   390: the + menu has "Link to page"
+ok       which opens the same list
+ok   no page or console errors

@@ -1,0 +1,28 @@
+sections [{"id":"day:2026-10-20:top3","kind":"top3","title":"TODO - Top 3","blocks":[]},{"id":"day:2026-10-20:other","kind":"other","title":"TODO - Other","blocks":[]},{"id":"day:2026-10-20:events","kind":"events","title":"Events","blocks":[]},{"id":"day:2026-10-20:good-stuffs","kind":"good-stuffs","title":"Good Stuffs","blocks":[]},{"id":"day:2026-10-20:notes","kind":"notes","title":"Notes","blocks":[]},{"id":"linked-heading","kind":"custom","title":"see ","blocks":[]}]
+linkedFrom []
+editorJSON [{"id":"day:2026-10-20:top3","type":"heading","props":{"level":2},"content":"TODO - Top 3"},{"id":"day:2026-10-20:other","type":"heading","props":{"level":2},"content":"TODO - Other"},{"id":"day:2026-10-20:events","type":"heading","props":{"level":2},"content":"Events"},{"id":"day:2026-10-20:good-stuffs","type":"heading","props":{"level":2},"content":"Good Stuffs"},{"id":"day:2026-10-20:notes","type":"heading","props":{"level":2},"content":"Notes"},{"id":"linked-heading","type":"heading","props":{"level":2},"content":[{"type":"text","text":"see ","styles":{}},{"type":"pageRef","props":{"pageId":"R","refId":"heading-ref"}}]}]
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: heading inline link must count as a real reference
++ actual - expected
+
++ []
+- [
+-   'day:2026-10-20'
+- ]
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-refs/tests/evidence/ratchet-refs-84/heading-ref.ts:36:325
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [],
+  expected: [ 'day:2026-10-20' ],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

@@ -1,0 +1,9 @@
+(node:54653) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.page-links-upgrade","stamped":2}
+needle start
+in Pages
+other needle
+in Pages
+New page "needle"
+ok   prefix match ranks before substring match

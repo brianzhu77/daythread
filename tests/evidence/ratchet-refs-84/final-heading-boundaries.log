@@ -1,0 +1,7 @@
+ok heading move cut-first retains identity/time
+ok heading move paste-first retains identity/time
+ok paragraph rejects missing/duplicate/trashed new refs
+ok heading rejects missing/duplicate/trashed new refs
+ok bulletListItem rejects missing/duplicate/trashed new refs
+ok numberedListItem rejects missing/duplicate/trashed new refs
+ok quote rejects missing/duplicate/trashed new refs
