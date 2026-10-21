@@ -66,7 +66,12 @@ One action set, two surfaces, so there's nothing to learn twice.
 - **Undo puts the row back exactly** in its old section and position, with its text (Bumblebee 3), and puts the task
   back to its previous plan date and carry-over state. If the page has changed since and the old position is gone,
   it goes to the end of its old section. It never goes into the wrong section.
-- **Top 3 with three rows already:** Move to Top 3 is still allowed. Top 3 is a section name, not a hard limit, the
+- **Moving a Top 3 row to a day whose Top 3 already has 3 rows** (Bumblebee `5dfb8155`): it goes to that day's plan
+  list instead, and the notice reads "Moved to Wed, Oct 21 · Top 3 is full · added to {Section} · Undo", the morning
+  card's wording (`morning-card-build.md` §6). The new day never gets a silent 4th Top 3 row. If that day has no plan
+  section left, the morning card's "{Section} section created" rule applies.
+- **Move to Top 3 on the same page with three rows already:** still allowed, because he's choosing it there, in
+  front of the three rows. Top 3 is a section name, not a hard limit, the
   same as dragging a row there today.
 - **The facts strip and the morning card** update at once, as they do for the same commands from the Tasks screen.
 
@@ -83,7 +88,8 @@ One action set, two surfaces, so there's nothing to learn twice.
 ## 5. Checks (his data copy, 1280 and 390)
 
 1. Today, Top 3 row → ⋯ → Tomorrow → the row leaves, "Moved to Wed, Oct 21 · Undo", and the row is in Top 3 on
-   Wed's page. Undo → back in the same Top 3 position.
+   Wed's page. Undo → back in the same Top 3 position. With Wed's Top 3 already full → "… Top 3 is full · added to
+   {Section}" and the row is in Wed's plan list.
 2. Today, Other row → Not today → "Not today — won't carry over · Undo". It doesn't come back tomorrow. Undo → back in
    place, carry-over on again.
 3. The same row deleted with Backspace gives the same notice and result as 2.
