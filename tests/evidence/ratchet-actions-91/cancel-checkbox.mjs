@@ -1,0 +1,5 @@
+import {chromium} from '/Users/dogrod/Developer/daythread/node_modules/playwright/index.mjs';
+const b=await chromium.launch();const p=await b.newPage();await p.goto('http://127.0.0.1:3402/day/2026-10-20');await p.waitForTimeout(1200);
+const r=p.locator('.continuous-editor .bn-block-outer').filter({hasText:'Ratchet Cancel Probe'}).first();
+console.log('row',await r.count());if(await r.count()){await r.hover();await r.locator('.editor-row-more').click();console.log('menu',await p.locator('.app-menu').innerText());const c=p.locator('.app-menu [role^=menuitem]',{hasText:'Cancel task'});if(await c.count()){await c.click();await p.waitForTimeout(1300);}else await p.keyboard.press('Escape');console.log('cancelled row',await r.innerText());console.log('checkboxes',await r.locator('input').evaluateAll(es=>es.map(e=>({type:e.type,disabled:e.disabled,checked:e.checked}))));}
+const box=r.locator('input[type=checkbox]'); if(await box.count() && !(await box.isDisabled())){await box.click();await p.waitForTimeout(1100);console.log('after checkbox',await r.innerText());} await b.close();
