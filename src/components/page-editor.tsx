@@ -1,5 +1,5 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
-import { NodeSelection, TextSelection, type Transaction } from '@tiptap/pm/state'
+import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
@@ -988,6 +988,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * the draft as it was (Ratchet 980d5695).
    */
   const rowNotice = useRef<{ key: string; operationId: string; fingerprint: string } | null>(null)
+  const menuReturn = useRef<{ blockId: string; selection: ReturnType<Selection['toJSON']> } | null>(null)
   const closeRowNotice = () => { if (rowNotice.current) toast.close(rowNotice.current.key); rowNotice.current = null }
   useEffect(() => () => closeRowNotice(), [])
   async function onServer(action: Action, operationId: string, options?: { inlineRefusal: RegExp; onRefused: (m: string) => void }): Promise<Receipt | null> {
@@ -1102,7 +1103,14 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }
   const rowActions: RowActions = {
     pageDate: page.date ?? null, today: todayIso(), sectionOf, act: (id, t, intent) => void rowAct(id, t, intent),
-    focusRow: id => { if (editor.getBlock(id)) { editor.setTextCursorPosition(id, 'end'); editor.focus() } },
+    focusRow: id => {
+      if (!editor.getBlock(id)) return
+      const back = menuReturn.current; menuReturn.current = null
+      const view = editor.prosemirrorView
+      // Opened with ⌘/: back to where the caret was. Opened by pointer: the end of the row.
+      if (back?.blockId === id) { try { view.dispatch(view.state.tr.setSelection(Selection.fromJSON(view.state.doc, back.selection))); editor.focus(); return } catch { /* the row changed meanwhile */ } }
+      editor.setTextCursorPosition(id, 'end'); editor.focus()
+    },
   }
   return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
@@ -1192,7 +1200,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === '/') || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
         const block = editor.getTextCursorPosition().block
         const more = editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"] .editor-row-more`)
-        if (more) { e.preventDefault(); e.stopPropagation(); more.click(); return }
+        // Esc gives the caret back exactly where ⌘/ was pressed (Jazz check 8).
+        if (more) { e.preventDefault(); e.stopPropagation(); menuReturn.current = { blockId: block.id, selection: editor.prosemirrorState.selection.toJSON() }; more.click(); return }
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.nativeEvent.isComposing) {
         e.preventDefault(); e.stopPropagation()

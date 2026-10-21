@@ -38,7 +38,8 @@ ok   Restore: "Restored · Undo", open again
 ok   a done row has no ⋯
 ok   a draft (empty) row has no ⋯
 ok   ⌘/ opens the row menu with focus inside; ↓ moves; Esc closes · Not on Sat → Tomorrow · Wed 10/21
-ok   Esc puts the caret back at the end of the row: the next letter lands there (Jazz d0c8df18)
+ok   Esc puts the caret back where it was (row end): the next letter lands there (Jazz d0c8df18)
+ok   mid-row: Esc returns the caret to the same spot (Jazz check 8) · #dQaythread 
 ok   a second ⌘/ after Esc opens the menu again
 ok   failed action: "Not done · your text is kept", editing released, text kept · ["Not done · your text is kept"]
 ok   typing then ⌘Z removes the typing
