@@ -3,10 +3,10 @@ import { NodeSelection, TextSelection, type Transaction } from '@tiptap/pm/state
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
-import { BlockNoteSchema, blockToNode, defaultBlockSpecs, docToBlocks, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
+import { BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
 import { toast } from '@heroui/react'
-import { BasicTextStyleButton, BlockTypeSelect, CreateLinkButton, createReactBlockSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useExtensionState } from '@blocknote/react'
+import { BasicTextStyleButton, BlockTypeSelect, CreateLinkButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useExtensionState } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
 import '@blocknote/shadcn/style.css'
@@ -15,6 +15,9 @@ import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange
 import { applyCommand, pasteRecords } from '../domain/workspace'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
 import { cardsPresent, urlLine, type UndoCard } from '../domain/link-paste'
+import { recentPages, visiblePages, parentOf } from '../domain/page-tree'
+import { pageRefView } from './line-text'
+import { pageLabel } from './page-tree'
 import { newOperationId, useWorkspace } from './use-day'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
@@ -41,7 +44,15 @@ const pageLink = createReactBlockSpec({ type: 'pageLink', propSchema: { pageId: 
   render: ({ block }) => <PageCard pageId={block.props.pageId} cardId={block.id} url={block.props.url} line={block.props.line} />,
   toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Page</a></p>,
 })()
-const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink } })
+// A9a (Jazz page-links-states §1): a `[[` link is one inline unit, icon + the page's current title on a quiet chip.
+// Backspace removes it whole (it has no content of its own). It reads its title live, so nothing is stored as text.
+const pageRef = createReactInlineContentSpec({ type: 'pageRef', propSchema: { pageId: { default: '' }, refId: { default: '' }, newTitle: { default: '' } }, content: 'none' }, {
+  render: ({ inlineContent }) => <PageRefChip pageId={inlineContent.props.pageId} refId={inlineContent.props.refId} newTitle={inlineContent.props.newTitle} />,
+  toExternalHTML: ({ inlineContent }) => <a href={`/pages?page=${encodeURIComponent(inlineContent.props.pageId)}`}>{inlineContent.props.newTitle || 'Page'}</a>,
+})
+const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef } })
+/** Lines a `[[` link can live in (plan §1): never a task row. */
+const linkableLines = new Set(['paragraph', 'bulletListItem', 'numberedListItem', 'heading', 'quote'])
 const clipboardType = 'application/x-daythread-blocks'
 const cutTokens = new Set<string>()
 const deepNodes = (nodes: readonly EditorNode[]): EditorNode[] => nodes.flatMap(n => [n, ...deepNodes(n.children ?? [])])
@@ -113,6 +124,29 @@ function PageCard({ pageId, cardId, url = '', line = '' }: { pageId: string; car
     {link && <a className="editor-page-card-open" href={link} target="_blank" rel="noreferrer" aria-label="Open website" title={link}><ExternalIcon /></a>}
   </span>
 }
+/**
+ * A9a: the `[[` link in the editor, with the page card's states (Jazz §1): live, in trash (opens the trashed page),
+ * "Page not found", being created, and "Not created · Retry", which re-runs the same create, also after a reload.
+ */
+function PageRefChip({ pageId, refId, newTitle }: { pageId: string; refId: string; newTitle: string }) {
+  const { workspace, run } = useWorkspace()
+  const navigate = useNavigate()
+  usePendingVersion()
+  const view = pageRefView(workspace, pageId, newTitle || undefined)
+  const pending = view.target ? undefined : pendingPages.get(pageId)
+  // Saved with its page never confirmed (the tab closed, or every try failed): Retry from the line it's saved on.
+  const holder = !view.target && !pending && newTitle ? workspace?.pages.find(p => p.sections.some(s => s.blocks.some(b => b.refs?.some(r => r.refId === refId)))) : undefined
+  const state = pending ? pending.state : holder ? 'failed' : view.state
+  const retry = () => { if (pending) pending.retry(); else if (holder) void run({ type: 'create-document', title: newTitle, body: '', pageId, parentId: holder.id }) }
+  return <span className={`page-ref is-${state}`} contentEditable={false} role={state === 'live' || state === 'trashed' || state === 'failed' ? 'link' : undefined}
+    onMouseDown={e => e.preventDefault()}
+    onClick={() => { if (state === 'failed') retry(); else if (view.target) void navigate({ to: '/pages', search: { page: pageId } }) }}>
+    <span className="page-ref-icon">{view.icon}</span>
+    <span className="page-ref-title">{state === 'failed' ? (newTitle || 'Untitled') : view.label}</span>
+    {state === 'creating' && <span className="page-ref-spinner" aria-label="Creating page" />}
+    {state === 'failed' && <span className="page-ref-failed">Not created · Retry</span>}
+  </span>
+}
 /** The host without `www.`, for the card's quiet domain. */
 function hostLabel(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' }
@@ -182,6 +216,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const tagCounts = useCallback((id: string) => { const kind = latestPage.current.sections.flatMap(s => s.blocks).find(b => b.id === id)?.kind; return !kind || kind === 'paragraph' || kind === 'task' }, [])
   const editor = useCreateBlockNote({ schema, extensions: [tagDecorations(tagCounts)], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
+    // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
+    pastingNow.current = true; setTimeout(() => { pastingNow.current = false }, 0)
     if (!data) return defaultPasteHandler()
     const insert = (blocks: EditorNode[]) => {
       // ProseMirror fits a block slice at the actual selection, preserving both sides of a split paragraph.
@@ -196,9 +232,14 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const payload = JSON.parse(internal)
         if (!Array.isArray(payload.blocks)) return defaultPasteHandler()
         const moving = payload.cut && (cutTokens.has(payload.token) || localStorage.getItem(`daythread:cut:${payload.token}`) === JSON.stringify(payload.blocks))
+        // A9a §1: a pasted copy's `[[` links are new references (new refIds); a cut-and-paste move keeps them. A task row
+        // can't hold a link, so there it becomes the page's title as text.
+        const freshContent = (node: EditorNode): unknown => !Array.isArray(node.content) ? node.content : (node.content as { type?: string; props?: Record<string, string> }[]).map(c => c?.type !== 'pageRef' ? c
+          : node.type === 'task' ? { type: 'text', text: pageRefView(latestWorkspace.current, c.props?.pageId ?? '', c.props?.newTitle || undefined).label, styles: {} }
+          : moving ? c : { ...c, props: { ...c.props, refId: crypto.randomUUID() } })
         const fresh = (node: EditorNode): EditorNode => {
           const id = crypto.randomUUID()
-          return { ...node, id, ...(node.type === 'task' ? { props: moving && latestWorkspace.current.tasks.some(t => t.id === node.props?.taskId) ? node.props : { taskId: `editor-task:${id}`, role: 'reference', planDate: '' } } : {}), ...(node.children ? { children: node.children.map(fresh) } : {}) }
+          return { ...node, id, content: freshContent(node), ...(node.type === 'task' ? { props: moving && latestWorkspace.current.tasks.some(t => t.id === node.props?.taskId) ? node.props : { taskId: `editor-task:${id}`, role: 'reference', planDate: '' } } : {}), ...(node.children ? { children: node.children.map(fresh) } : {}) }
         }
         insert(payload.blocks.map(fresh))
         if (payload.cut) { cutTokens.delete(payload.token); localStorage.removeItem(`daythread:cut:${payload.token}`) }
@@ -245,6 +286,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const [historyBusy, setHistoryBusy] = useState(false)
   const lastSent = useRef('')
   const undoingPaste = useRef(false)
+  // A9a §3: where the last `[[` list opened (so the same characters don't open it twice), and whether text is being pasted.
+  const lastTrigger = useRef(-1)
+  const pastingNow = useRef(false)
   const knownSemantic = useRef(new Set<string>())
   const expectedTaskVersions = useRef(new Map(workspace.tasks.map(t => [t.id, t.version])))
   const invalidHistoryTasks = useRef(new Set<string>())
@@ -412,6 +456,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       tr.setMeta('addToHistory', false)
     })
     dirty.current = true; setFailed(false); setStatus('Unsaved changes')
+    queueMicrotask(maybeOpenLinkList)
     stash(); clearTimeout(timer.current)
     if (!composing.current) timer.current = setTimeout(() => void flushRef.current(), 450)
   }), [editor])
@@ -614,6 +659,78 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       undoingPaste.current = false
       if (dirty.current) { stash(); timer.current = setTimeout(() => void flushRef.current(), 0) }
     }
+  }
+  /**
+   * A9a §3: `[[` or `【【` just before the cursor, typed (not pasted), in a line that can hold a link, opens the list over
+   * those characters. Never while an input method is composing; the `input` a browser sends again after
+   * `compositionend` finds the list already open (or the position already used), so it opens once. Esc leaves exactly
+   * what was typed, since the characters were never removed.
+   */
+  function maybeOpenLinkList() {
+    if (composing.current || pastingNow.current) return
+    const menu = editor.getExtension(SuggestionMenu)
+    if (!menu || menu.shown()) return
+    const { selection } = editor.prosemirrorState
+    if (!selection.empty || !linkableLines.has(editor.getTextCursorPosition().block.type)) return
+    const $from = selection.$from
+    const before = $from.parent.textBetween(Math.max(0, $from.parentOffset - 2), $from.parentOffset, undefined, '\ufffc')
+    const trigger = before === '[[' ? '[[' : before === '【【' ? '【【' : null
+    if (!trigger) { lastTrigger.current = -1; return }
+    if (lastTrigger.current === selection.from) return
+    lastTrigger.current = selection.from
+    menu.openSuggestionMenu(trigger, { deleteTriggerCharacter: false })
+  }
+  /** §3: where a page lives, for the list's second line. */
+  function whereLabel(p: Page): string {
+    if (p.url) { try { return new URL(p.url).hostname.replace(/^www\./, '') } catch { return p.url } }
+    const parent = parentOf(latestWorkspace.current, p)
+    return parent ? `in ${pageLabel(parent)}` : p.type === 'daily' ? 'Day' : 'in Pages'
+  }
+  /** §3: the list. Empty: recent pages; typed: titles (and day labels) containing it, start of title first, max 8. */
+  function linkItems(query: string, trigger: string) {
+    const menu = editor.getExtension(SuggestionMenu)
+    // `]]` with nothing chosen leaves plain text.
+    if (/(\]\]|】】)$/.test(query)) { queueMicrotask(() => menu?.closeMenu()); return [] }
+    const ws = latestWorkspace.current, q = query.trim().toLowerCase()
+    const recent = recentPages(ws, page.id)
+    const rank = new Map(recent.map((p, i) => [p.id, i]))
+    const keys = (p: Page) => [pageLabel(p), p.title, ...(p.date ? [p.date, longLabel(p.date), longLabel(p.date).replace(/^\w+,\s*/, '')] : [])].map(k => k.toLowerCase())
+    const pages = q
+      ? visiblePages(ws).filter(p => p.id !== page.id && keys(p).some(k => k.includes(q)))
+        .sort((a, b) => Number(!keys(b).some(k => k.startsWith(q))) - Number(!keys(a).some(k => k.startsWith(q))) || (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9)).slice(0, 8)
+      : recent.slice(0, 6)
+    const items = pages.map(p => ({ title: pageLabel(p), subtext: whereLabel(p), icon: pageRefView(ws, p.id).icon, onItemClick: () => chooseLink(trigger, query, p.id) }))
+    if (q) items.push({ title: `New page "${query.trim()}"`, subtext: pages.length ? '' : `No page called ${query.trim()}`, icon: <PlusIcon />, onItemClick: () => chooseLink(trigger, query, crypto.randomUUID(), query.trim()) })
+    return items
+  }
+  /** §4: `[[query` becomes the link, as one editor step. A new page is made under this one, like `/page`. */
+  function chooseLink(trigger: string, query: string, pageId: string, newTitle?: string) {
+    editor.getExtension(SuggestionMenu)?.closeMenu()
+    // BlockNote's menu has usually cleared `[[query` already (closeMenu + clearQuery run before the item); take away
+    // whatever of it is still before the cursor, and nothing else.
+    const { $from } = editor.prosemirrorState.selection, to = $from.pos
+    const before = $from.parent.textBetween(0, $from.parentOffset, undefined, '\ufffc')
+    const from = to - (before.endsWith(trigger + query) ? trigger.length + query.length : before.endsWith(trigger) ? trigger.length : 0)
+    // One step: `[[query` is replaced by the link node itself, and the cursor goes after it.
+    const view = editor.prosemirrorView, node = view.state.schema.nodes.pageRef!.create({ pageId, refId: crypto.randomUUID(), newTitle: newTitle ?? '' })
+    const tr = view.state.tr.replaceWith(from, to, node)
+    view.dispatch(tr.setSelection(TextSelection.create(tr.doc, from + node.nodeSize)).scrollIntoView())
+    lastTrigger.current = -1
+    if (newTitle) void createLinkedPage(pageId, newTitle)
+  }
+  /** §4: `/page`'s confirm loop for a page made from `[[`: 3 tries, then "Not created · Retry" on the link. No notice. */
+  async function createLinkedPage(pageId: string, title: string) {
+    const retry = () => void createLinkedPage(pageId, title)
+    const linked = () => JSON.stringify(editor.document).includes(`"pageId":"${pageId}"`)
+    setPending(pageId, { state: 'creating', parentId: page.id, retry })
+    let created = false
+    for (let attempt = 0; attempt < 3 && !created; attempt++) {
+      if (!linked()) { setPending(pageId, null); return } // undone before it was made: abandon
+      created = Boolean(await run({ type: 'create-document', title, body: '', pageId, parentId: page.id }, null)) || latestWorkspace.current.pages.some(p => p.id === pageId)
+    }
+    if (!created) { setPending(pageId, { state: 'failed', parentId: page.id, retry }); setStatus('Page not created · link kept, tap it to retry'); return }
+    setPending(pageId, null)
+    if (dirty.current && !sending.current) { clearTimeout(timer.current); void flushRef.current() }
   }
   async function performHistory(direction: 'undo' | 'redo') {
     if (historyPending.current) return
@@ -962,8 +1079,14 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           insertOrUpdateBlockForSlashMenu(editor, { ...(replaceCurrent ? {} : { id }), type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? page.date ?? '' : '' }, content: '' })
         } }
         const pageItem = { title: 'Page', subtext: 'New page inside this one', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
-        return filterSuggestionItems([taskItem, pageItem, ...first, ...rest], query).slice(0, 9)
+        // A9a §3: the phone's way to `[[` (v0.3's toolbar button), through the same + menu.
+        const linkItem = { title: 'Link to page', subtext: 'A link to a page, inside this line', icon: <PagesIcon />, aliases: ['link', '[[', '链接', '引用'], group: 'Suggested', onItemClick: () => {
+          if (!linkableLines.has(editor.getTextCursorPosition().block.type)) return
+          setTimeout(() => editor.getExtension(SuggestionMenu)?.openSuggestionMenu('[[', { deleteTriggerCharacter: true }), 0)
+        } }
+        return filterSuggestionItems([taskItem, pageItem, linkItem, ...first, ...rest], query).slice(0, 9)
       }} />
+      {['[[', '【【'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} getItems={async query => linkItems(query, trigger)} onItemClick={item => item.onItemClick()} />)}
       <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />
     </BlockNoteView>
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}

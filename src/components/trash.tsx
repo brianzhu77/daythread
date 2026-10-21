@@ -7,6 +7,7 @@ import { longLabel, toIso } from './dates'
 import { flushEditor } from './editor-flush'
 import { ChevronRightIcon, PageKindIcon, TrashIcon } from './icons'
 import { LinkUrlRow } from './link-url-row'
+import { InlineWithRefs } from './line-text'
 import { displayPageTitle } from './page-title'
 import { PageLink, pageHref, pageLabel, useToday } from './page-tree'
 import { useWorkspace } from './use-day'
@@ -154,18 +155,13 @@ export function TrashedPage({ page, workspace }: { page: Page; workspace: Worksp
   )
 }
 
-function Inline({ content }: { content: unknown }): ReactNode {
-  if (!Array.isArray(content)) return inlineText(content)
-  return content.map((c: { type?: string; href?: string; content?: unknown; text?: string }, i) =>
-    c.type === 'link' ? <a key={i} href={c.href} target="_blank" rel="noreferrer">{inlineText(c.content)}</a> : <span key={i}>{c.text ?? inlineText(c.content)}</span>)
-}
 
 /** The body as saved, without an editor: a trashed page can't change until it's restored. */
 function ReadOnlyBody({ page, workspace }: { page: Page; workspace: Workspace }) {
   const nodes = editorSeed(page, workspace)
   const render = (n: EditorNode): ReactNode => {
     const children = n.children?.length ? <div className="ro-children">{n.children.map(render)}</div> : null
-    if (n.type === 'heading') return <div key={n.id}><h2 className={`ro-heading level-${n.props?.level ?? 2}`}><Inline content={n.content} /></h2>{children}</div>
+    if (n.type === 'heading') return <div key={n.id}><h2 className={`ro-heading level-${n.props?.level ?? 2}`}><InlineWithRefs content={n.content} workspace={workspace} /></h2>{children}</div>
     if (n.type === 'pageLink') {
       const target = workspace.pages.find(p => p.id === n.props?.pageId)
       return <div key={n.id}>{target
@@ -175,10 +171,10 @@ function ReadOnlyBody({ page, workspace }: { page: Page; workspace: Workspace })
     if (!inlineText(n.content) && !children) return null
     if (n.type === 'task') {
       const done = workspace.tasks.find(t => t.id === n.props?.taskId)?.status === 'done'
-      return <div key={n.id}><p className={`ro-line ro-task ${done ? 'done' : ''}`}><span className="ro-box" aria-hidden="true">{done ? '☑' : '☐'}</span><Inline content={n.content} /></p>{children}</div>
+      return <div key={n.id}><p className={`ro-line ro-task ${done ? 'done' : ''}`}><span className="ro-box" aria-hidden="true">{done ? '☑' : '☐'}</span><InlineWithRefs content={n.content} workspace={workspace} /></p>{children}</div>
     }
     const marker = n.type === 'bulletListItem' ? '•' : n.type === 'numberedListItem' ? '–' : n.type === 'checkListItem' ? (n.props?.checked ? '☑' : '☐') : null
-    return <div key={n.id}><p className="ro-line">{marker && <span className="ro-box" aria-hidden="true">{marker}</span>}<Inline content={n.content} /></p>{children}</div>
+    return <div key={n.id}><p className="ro-line">{marker && <span className="ro-box" aria-hidden="true">{marker}</span>}<InlineWithRefs content={n.content} workspace={workspace} /></p>{children}</div>
   }
   return <div className="ro-body">{nodes.map(render)}</div>
 }

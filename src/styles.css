@@ -670,6 +670,15 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .bn-editor .editor-page-card-row a.editor-page-card-open:hover, .bn-editor .editor-page-card-row a.editor-page-card-open:active { color: var(--app-accent); }
 .editor-page-card-open svg { width: 18px; height: 18px; }
 @media (max-width: 480px) { .editor-page-card-domain { display: none; } }
+/* A9a `[[` link (Jazz page-links-states §1): icon + live title on a quiet chip, at the line's own size. Inline with a
+   cloned box, so a long title wraps with the line at 390 instead of overflowing. Never the web-link blue underline. */
+.page-ref { display: inline; padding: 1px 4px; border-radius: 4px; background: var(--fill); color: var(--ink); cursor: pointer; text-decoration: none; -webkit-box-decoration-break: clone; box-decoration-break: clone; overflow-wrap: anywhere; }
+.page-ref-icon { display: inline-flex; align-items: center; width: 14px; height: 1em; margin-right: 3px; vertical-align: -0.12em; color: var(--ink-3); }
+.page-ref-icon svg { display: block; width: 14px; height: 14px; }
+.page-ref.is-trashed, .page-ref.is-missing, .page-ref.is-creating { color: var(--ink-3); }
+.page-ref.is-missing { cursor: default; }
+.page-ref-spinner { display: inline-block; width: 10px; height: 10px; margin-left: 4px; border: 1.5px solid var(--ink-3); border-right-color: transparent; border-radius: 50%; animation: page-card-spin .8s linear infinite; vertical-align: -1px; }
+.page-ref-failed { margin-left: 6px; font-size: 13px; color: var(--app-danger); }
 /* A2 link page: the URL exactly as pasted, one muted line under the title (Jazz §3). */
 .link-url-row { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; min-width: 0; font-size: 15px; color: var(--ink-2); }
 .link-url-row svg { flex: none; width: 16px; height: 16px; color: var(--ink-3); }

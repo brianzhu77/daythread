@@ -8,6 +8,7 @@ import { DateTag } from './date-tag'
 import { flushEditor } from './editor-flush'
 import { RowMenu } from './row-menu'
 import { TagText } from './tag-text'
+import { LineText } from './line-text'
 import { anotherDayItems, notTodayText } from './task-row'
 import { liveProposal } from '../domain/draft'
 import { useWorkspace } from './use-day'
@@ -314,7 +315,7 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
                   <li key={key} className="mc-row">
                     <AddButton label="Bring to today" onPress={() => void bring(l)} />
                     <span className="mc-text">
-                      <span className="mc-title"><TagText text={l.block.text} /></span>
+                      <span className="mc-title"><LineText workspace={workspace} pageId={l.pageId} block={l.block} /></span>
                       {from && <span className="mc-reason">{from}</span>}
                     </span>
                   </li>
