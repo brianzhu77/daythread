@@ -1072,6 +1072,10 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .two-line .card-row { min-height: 56px; }
 .card-row-detail { font-size: 13px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-hint { color: var(--ink-2); }
+/* B20: a page under a day names its day, quietly, after the title. */
+.tree-day { flex: none; padding: 0 8px 0 6px; font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.tree-title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tree-more-link { padding-left: 26px; }
 
 /* Morning card (Jazz docs/design/morning-card-build.md §2) */
 .mc-group { display: grid; gap: 0; padding-top: 4px; }
