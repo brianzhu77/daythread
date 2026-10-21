@@ -113,7 +113,8 @@ function PageCard({ pageId, cardId, url = '', line = '' }: { pageId: string; car
   const domain = link && target && target.title !== defaultLinkTitle(link) ? hostLabel(link) : ''
   const title = target ? displayPageTitle(target) : pending ? (link ? defaultLinkTitle(link) : 'Untitled') : 'Page not found'
   // The first lines written on the page, as in Craft's card (v0.3 §6.2 "title, short preview").
-  const preview = target ? pagePreview(target) : ''
+  // A trashed page keeps its contents out of other pages (Ratchet).
+  const preview = target && !trashed ? pagePreview(target) : ''
   return <span className={`editor-page-card-row ${link ? 'is-link' : ''}`} contentEditable={false}>
     <button type="button" className={`editor-page-card ${trashed ? 'in-trash' : ''}`} disabled={pending?.state === 'creating'}
       onClick={() => { if (pending) { if (pending.state === 'failed') pending.retry(); return } rememberCard(cardId); void navigate({ to: '/pages', search: { page: pageId } }) }}>

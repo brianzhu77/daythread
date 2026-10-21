@@ -1,4 +1,3 @@
-(Use `node --trace-warnings ...` to show where the warning was created)
 ok   1280: Oct 18's empty Events bullet is hidden
 ok   1280: the recipe cards show their first line under the title
 ok   1280: nothing on the page was deleted or saved
@@ -12,3 +11,4 @@ ok   390: a new empty line is visible while he types in it · {"visible":true,"t
 ok   390: ArrowDown skips the hidden empty row (it's not on screen) and lands on the next line · {"visible":true,"text":"Good Stuffs"}
 ok   390: today keeps its empty template rows
 ok   no page or console errors
+FAIL a trashed page's card shows no preview; the other card keeps its own
