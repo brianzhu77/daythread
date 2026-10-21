@@ -1,0 +1,9 @@
+target page exists before move false
+fourth receipt Planned for 2026-10-21 · Top 3 is full · added to TODO - Other
+target rows [
+  { kind: 'top3', tasks: [ 'Future 0', 'Future 1', 'Future 2' ] },
+  { kind: 'other', tasks: [ 'Future 3' ] },
+  { kind: 'events', tasks: [] },
+  { kind: 'good-stuffs', tasks: [] },
+  { kind: 'notes', tasks: [] }
+]
