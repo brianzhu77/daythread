@@ -1,0 +1,239 @@
+ok      1280 /day/2026-10-18   heading text x: "TODO - Top 3" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-18   done task text x: "#rewind Narwhal Styling" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   done task text x: "#rewind Wire Transaction" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   heading text x: "TODO - Other" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-18   open task text x: "#daythread 优化 Calendar 页" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   done task text x: "驱虫 #ramen" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   heading text x: "Events" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-18   bullet text x: "DRIVE Basketball Trainin" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   bullet text x: "English Lesson #kathy" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   heading text x: "Good Stuffs" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-18   heading text x: "Notes" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-18   page card with preview text x: "韩国大酱汤" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   page card with preview text x: "佛卡夏披萨" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   bullet text x: "肉酱意面 #recipe" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   bullet text x: "奥德赛" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   nested bullet text x: "原生家庭创伤导致的讨好型人格如何解决？（是否强关" · x=489.0, expected 489.0 (parent 465.0 + 24), off +0.0
+ok      1280 /day/2026-10-18   nested bullet text x: "I choose to：绝大多数的事情都是自我选" · x=489.0, expected 489.0 (parent 465.0 + 24), off +0.0
+ok      1280 /day/2026-10-18   page card with preview title not clipped: "韩国大酱汤" · wraps
+ok      1280 /day/2026-10-18   page card with preview title not clipped: "佛卡夏披萨" · wraps
+ok      1280 /day/2026-10-18   heading handle on first line: "TODO - Top 3" · +1.0px
+ok      1280 /day/2026-10-18   done task checkbox on first line: "#rewind Narwhal Styling" · +0.0px
+ok      1280 /day/2026-10-18   done task handle on first line: "#rewind Narwhal Styling" · +0.4px
+ok      1280 /day/2026-10-18   done task checkbox on first line: "#rewind Wire Transaction" · +0.0px
+ok      1280 /day/2026-10-18   open task checkbox on first line: "#daythread 优化 Calendar 页" · +0.0px
+ok      1280 /day/2026-10-18   open task handle on first line: "#daythread 优化 Calendar 页" · -0.3px
+ok      1280 /day/2026-10-18   done task checkbox on first line: "驱虫 #ramen" · +0.0px
+ok      1280 /day/2026-10-18   bullet dot on first line: "DRIVE Basketball Trainin" · +0.1px
+ok      1280 /day/2026-10-18   bullet handle on first line: "DRIVE Basketball Trainin" · +0.1px
+ok      1280 /day/2026-10-18   bullet dot on first line: "English Lesson #kathy" · +0.1px
+ok      1280 /day/2026-10-18   page card with preview icon on first line: "韩国大酱汤" · +0.0px
+ok      1280 /day/2026-10-18   page card with preview chevron on first line: "韩国大酱汤" · +0.0px
+ok      1280 /day/2026-10-18   page card with preview handle on first line: "韩国大酱汤" · -0.2px
+ok      1280 /day/2026-10-18   page card with preview icon on first line: "佛卡夏披萨" · +0.0px
+ok      1280 /day/2026-10-18   page card with preview chevron on first line: "佛卡夏披萨" · +0.0px
+ok      1280 /day/2026-10-18   bullet dot on first line: "肉酱意面 #recipe" · -0.2px
+ok      1280 /day/2026-10-18   bullet dot on first line: "奥德赛" · -0.2px
+ok      1280 /day/2026-10-18   nested bullet dot on first line: "原生家庭创伤导致的讨好型人格如何解决？（是否强关" · +0.8px
+ok      1280 /day/2026-10-18   nested bullet handle on first line: "原生家庭创伤导致的讨好型人格如何解决？（是否强关" · -0.2px
+ok      1280 /day/2026-10-18   nested bullet dot on first line: "I choose to：绝大多数的事情都是自我选" · +0.8px
+FAIL    1280 /day/2026-10-18   level 2 bullet marker size vs top level: "原生家庭创伤导致的讨好型人格如何解决？（是否强关" · 4.0px vs 6.0px
+FAIL    1280 /day/2026-10-18   level 2 bullet marker gap to text vs top level: "原生家庭创伤导致的讨好型人格如何解决？（是否强关" · 12.0px vs 19.0px
+FAIL    1280 /day/2026-10-18   level 2 bullet marker size vs top level: "I choose to：绝大多数的事情都是自我选" · 4.0px vs 6.0px
+FAIL    1280 /day/2026-10-18   level 2 bullet marker gap to text vs top level: "I choose to：绝大多数的事情都是自我选" · 12.0px vs 19.0px
+ok      1280 /day/2026-10-19   heading text x: "TODO - Top 3" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-19   done task text x: "#rewind Narwhal Styling" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-19   done task text x: "#rewind Wire Transaction" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-19   open task text x: "#daythread 优化 Calendar 页" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-19   heading text x: "TODO - Other" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-19   heading text x: "Events" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-19   heading text x: "Good Stuffs" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-19   heading text x: "Notes" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-19   heading handle on first line: "TODO - Top 3" · +1.0px
+ok      1280 /day/2026-10-19   done task checkbox on first line: "#rewind Narwhal Styling" · +0.0px
+ok      1280 /day/2026-10-19   done task handle on first line: "#rewind Narwhal Styling" · +0.4px
+ok      1280 /day/2026-10-19   done task checkbox on first line: "#rewind Wire Transaction" · +0.0px
+ok      1280 /day/2026-10-19   open task checkbox on first line: "#daythread 优化 Calendar 页" · +0.0px
+ok      1280 /day/2026-10-19   open task handle on first line: "#daythread 优化 Calendar 页" · +0.4px
+ok      1280 /day/2026-10-20   heading text x: "TODO - Top 3" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-20   draft task text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-20   heading text x: "TODO - Other" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-20   open task text x: "#daythread 优化 Calendar 页" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-20   draft task text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-20   heading text x: "Events" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-20   bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-20   heading text x: "Good Stuffs" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-20   bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-20   heading text x: "Notes" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-20   bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-20   heading handle on first line: "TODO - Top 3" · +1.0px
+ok      1280 /day/2026-10-20   draft task checkbox on first line: "(empty)" · +0.0px
+ok      1280 /day/2026-10-20   draft task handle on first line: "(empty)" · +0.4px
+ok      1280 /day/2026-10-20   open task checkbox on first line: "#daythread 优化 Calendar 页" · +0.0px
+ok      1280 /day/2026-10-20   open task handle on first line: "#daythread 优化 Calendar 页" · -0.3px
+ok      1280 /day/2026-10-20   draft task checkbox on first line: "(empty)" · +0.0px
+ok      1280 /day/2026-10-20   bullet dot on first line: "(empty)" · +0.1px
+ok      1280 /day/2026-10-20   bullet handle on first line: "(empty)" · +0.1px
+ok      1280 /day/2026-10-20   bullet dot on first line: "(empty)" · +0.4px
+ok      1280 /day/2026-10-20   bullet dot on first line: "(empty)" · -0.2px
+ok      1280 /day/2026-12-31   heading text x: "TODO - Top 3" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-12-31   open task text x: "Fixture open task" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   cancelled task text x: "Fixture cancelled task" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   draft task text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   heading text x: "TODO - Other" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-12-31   draft task text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   heading text x: "Events" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-12-31   bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   heading text x: "Good Stuffs" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-12-31   bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   heading text x: "Notes" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-12-31   page card without preview text x: "Fixture empty page" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   page card without preview text x: "Fixture page with a very" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   link card text x: "example.com/fixture-link" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   bullet text x: "Fixture parent" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   nested bullet text x: "Fixture nested child" · x=489.0, expected 489.0 (parent 465.0 + 24), off +0.0
+FAIL    1280 /day/2026-12-31   nested bullet text x: "Fixture level 3" · x=534.0, expected 513.0 (parent 489.0 + 24), off +21.0
+ok      1280 /day/2026-12-31   nested bullet text x: "(empty)" · x=489.0, expected 489.0 (parent 465.0 + 24), off +0.0
+ok      1280 /day/2026-12-31   bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   page card without preview title not clipped: "Fixture empty page" · wraps
+ok      1280 /day/2026-12-31   page card without preview title not clipped: "Fixture page with a very" · wraps
+ok      1280 /day/2026-12-31   heading handle on first line: "TODO - Top 3" · +1.0px
+ok      1280 /day/2026-12-31   open task checkbox on first line: "Fixture open task" · +0.0px
+ok      1280 /day/2026-12-31   open task handle on first line: "Fixture open task" · +0.4px
+ok      1280 /day/2026-12-31   cancelled task checkbox on first line: "Fixture cancelled task" · +0.0px
+ok      1280 /day/2026-12-31   cancelled task handle on first line: "Fixture cancelled task" · +0.4px
+ok      1280 /day/2026-12-31   draft task checkbox on first line: "(empty)" · +0.0px
+ok      1280 /day/2026-12-31   draft task handle on first line: "(empty)" · +0.4px
+ok      1280 /day/2026-12-31   draft task checkbox on first line: "(empty)" · +0.0px
+ok      1280 /day/2026-12-31   bullet dot on first line: "(empty)" · +0.1px
+ok      1280 /day/2026-12-31   bullet handle on first line: "(empty)" · +0.1px
+ok      1280 /day/2026-12-31   bullet dot on first line: "(empty)" · +0.4px
+ok      1280 /day/2026-12-31   page card without preview icon on first line: "Fixture empty page" · +0.0px
+ok      1280 /day/2026-12-31   page card without preview chevron on first line: "Fixture empty page" · +0.0px
+ok      1280 /day/2026-12-31   page card without preview handle on first line: "Fixture empty page" · -0.2px
+ok      1280 /day/2026-12-31   page card without preview icon on first line: "Fixture page with a very" · +0.0px
+ok      1280 /day/2026-12-31   page card without preview chevron on first line: "Fixture page with a very" · +0.0px
+ok      1280 /day/2026-12-31   link card icon on first line: "example.com/fixture-link" · +0.0px
+ok      1280 /day/2026-12-31   link card handle on first line: "example.com/fixture-link" · -0.2px
+ok      1280 /day/2026-12-31   bullet dot on first line: "Fixture parent" · -0.2px
+ok      1280 /day/2026-12-31   nested bullet dot on first line: "Fixture nested child" · +0.8px
+ok      1280 /day/2026-12-31   nested bullet handle on first line: "Fixture nested child" · -0.2px
+ok      1280 /day/2026-12-31   nested bullet dot on first line: "Fixture level 3" · +0.3px
+ok      1280 /day/2026-12-31   nested bullet dot on first line: "(empty)" · +0.8px
+ok      1280 /day/2026-12-31   bullet dot on first line: "(empty)" · -0.2px
+FAIL    1280 /day/2026-12-31   level 2 bullet marker size vs top level: "Fixture nested child" · 4.0px vs 6.0px
+FAIL    1280 /day/2026-12-31   level 2 bullet marker gap to text vs top level: "Fixture nested child" · 12.0px vs 19.0px
+ok      1280 /day/2026-12-31   level 3 bullet marker size vs top level: "Fixture level 3" · 5.0px vs 6.0px
+FAIL    1280 /day/2026-12-31   level 3 bullet marker gap to text vs top level: "Fixture level 3" · 12.0px vs 19.0px
+FAIL    1280 /day/2026-12-31   level 2 bullet marker size vs top level: "(empty)" · 4.0px vs 6.0px
+FAIL    1280 /day/2026-12-31   level 2 bullet marker gap to text vs top level: "(empty)" · 12.0px vs 19.0px
+ok      390 /day/2026-10-18    heading text x: "TODO - Top 3" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-18    done task text x: "#rewind Narwhal Styling" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-18    done task text x: "#rewind Wire Transaction" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-18    heading text x: "TODO - Other" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-18    open task text x: "#daythread 优化 Calendar 页" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-18    done task text x: "驱虫 #ramen" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-18    heading text x: "Events" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-18    bullet text x: "DRIVE Basketball Trainin" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-18    bullet text x: "English Lesson #kathy" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-18    heading text x: "Good Stuffs" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-18    heading text x: "Notes" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-18    page card with preview text x: "韩国大酱汤" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-18    page card with preview text x: "佛卡夏披萨" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-18    bullet text x: "肉酱意面 #recipe" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-18    bullet text x: "奥德赛" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-18    nested bullet text x: "原生家庭创伤导致的讨好型人格如何解决？（是否强关" · x=89.0, expected 89.0 (parent 65.0 + 24), off +0.0
+ok      390 /day/2026-10-18    nested bullet text x: "I choose to：绝大多数的事情都是自我选" · x=89.0, expected 89.0 (parent 65.0 + 24), off +0.0
+ok      390 /day/2026-10-18    page card with preview title not clipped: "韩国大酱汤" · wraps
+ok      390 /day/2026-10-18    page card with preview title not clipped: "佛卡夏披萨" · wraps
+ok      390 /day/2026-10-18    done task checkbox on first line: "#rewind Narwhal Styling" · +0.0px
+ok      390 /day/2026-10-18    done task checkbox on first line: "#rewind Wire Transaction" · +0.0px
+ok      390 /day/2026-10-18    open task checkbox on first line: "#daythread 优化 Calendar 页" · +0.0px
+ok      390 /day/2026-10-18    done task checkbox on first line: "驱虫 #ramen" · +0.0px
+ok      390 /day/2026-10-18    bullet dot on first line: "DRIVE Basketball Trainin" · +0.1px
+ok      390 /day/2026-10-18    bullet dot on first line: "English Lesson #kathy" · +0.1px
+ok      390 /day/2026-10-18    page card with preview icon on first line: "韩国大酱汤" · +0.0px
+ok      390 /day/2026-10-18    page card with preview chevron on first line: "韩国大酱汤" · +0.0px
+ok      390 /day/2026-10-18    page card with preview icon on first line: "佛卡夏披萨" · +0.0px
+ok      390 /day/2026-10-18    page card with preview chevron on first line: "佛卡夏披萨" · +0.0px
+ok      390 /day/2026-10-18    bullet dot on first line: "肉酱意面 #recipe" · -0.2px
+ok      390 /day/2026-10-18    bullet dot on first line: "奥德赛" · -0.2px
+ok      390 /day/2026-10-18    nested bullet dot on first line: "原生家庭创伤导致的讨好型人格如何解决？（是否强关" · +0.8px
+ok      390 /day/2026-10-18    nested bullet dot on first line: "I choose to：绝大多数的事情都是自我选" · +0.8px
+FAIL    390 /day/2026-10-18    level 2 bullet marker size vs top level: "原生家庭创伤导致的讨好型人格如何解决？（是否强关" · 4.0px vs 6.0px
+FAIL    390 /day/2026-10-18    level 2 bullet marker gap to text vs top level: "原生家庭创伤导致的讨好型人格如何解决？（是否强关" · 12.0px vs 19.0px
+FAIL    390 /day/2026-10-18    level 2 bullet marker size vs top level: "I choose to：绝大多数的事情都是自我选" · 4.0px vs 6.0px
+FAIL    390 /day/2026-10-18    level 2 bullet marker gap to text vs top level: "I choose to：绝大多数的事情都是自我选" · 12.0px vs 19.0px
+ok      390 /day/2026-10-19    heading text x: "TODO - Top 3" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-19    done task text x: "#rewind Narwhal Styling" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-19    done task text x: "#rewind Wire Transaction" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-19    open task text x: "#daythread 优化 Calendar 页" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-19    heading text x: "TODO - Other" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-19    heading text x: "Events" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-19    heading text x: "Good Stuffs" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-19    heading text x: "Notes" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-19    done task checkbox on first line: "#rewind Narwhal Styling" · +0.0px
+ok      390 /day/2026-10-19    done task checkbox on first line: "#rewind Wire Transaction" · +0.0px
+ok      390 /day/2026-10-19    open task checkbox on first line: "#daythread 优化 Calendar 页" · +0.0px
+ok      390 /day/2026-10-20    heading text x: "TODO - Top 3" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-20    draft task text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-20    heading text x: "TODO - Other" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-20    open task text x: "#daythread 优化 Calendar 页" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-20    draft task text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-20    heading text x: "Events" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-20    bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-20    heading text x: "Good Stuffs" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-20    bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-20    heading text x: "Notes" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-20    bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-20    draft task checkbox on first line: "(empty)" · +0.0px
+ok      390 /day/2026-10-20    open task checkbox on first line: "#daythread 优化 Calendar 页" · +0.0px
+ok      390 /day/2026-10-20    draft task checkbox on first line: "(empty)" · +0.0px
+ok      390 /day/2026-10-20    bullet dot on first line: "(empty)" · +0.1px
+ok      390 /day/2026-10-20    bullet dot on first line: "(empty)" · +0.4px
+ok      390 /day/2026-10-20    bullet dot on first line: "(empty)" · -0.2px
+ok      390 /day/2026-12-31    heading text x: "TODO - Top 3" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-12-31    open task text x: "Fixture open task" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    cancelled task text x: "Fixture cancelled task" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    draft task text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    heading text x: "TODO - Other" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-12-31    draft task text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    heading text x: "Events" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-12-31    bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    heading text x: "Good Stuffs" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-12-31    bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    heading text x: "Notes" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-12-31    page card without preview text x: "Fixture empty page" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    page card without preview text x: "Fixture page with a very" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    link card text x: "example.com/fixture-link" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    bullet text x: "Fixture parent" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    nested bullet text x: "Fixture nested child" · x=89.0, expected 89.0 (parent 65.0 + 24), off +0.0
+FAIL    390 /day/2026-12-31    nested bullet text x: "Fixture level 3" · x=134.0, expected 113.0 (parent 89.0 + 24), off +21.0
+ok      390 /day/2026-12-31    nested bullet text x: "(empty)" · x=89.0, expected 89.0 (parent 65.0 + 24), off +0.0
+ok      390 /day/2026-12-31    bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    page card without preview title not clipped: "Fixture empty page" · wraps
+ok      390 /day/2026-12-31    page card without preview title not clipped: "Fixture page with a very" · wraps
+ok      390 /day/2026-12-31    open task checkbox on first line: "Fixture open task" · +0.0px
+ok      390 /day/2026-12-31    cancelled task checkbox on first line: "Fixture cancelled task" · +0.0px
+ok      390 /day/2026-12-31    draft task checkbox on first line: "(empty)" · +0.0px
+ok      390 /day/2026-12-31    draft task checkbox on first line: "(empty)" · +0.0px
+ok      390 /day/2026-12-31    bullet dot on first line: "(empty)" · +0.1px
+ok      390 /day/2026-12-31    bullet dot on first line: "(empty)" · +0.4px
+ok      390 /day/2026-12-31    page card without preview icon on first line: "Fixture empty page" · +0.0px
+ok      390 /day/2026-12-31    page card without preview chevron on first line: "Fixture empty page" · +0.0px
+ok      390 /day/2026-12-31    page card without preview icon on first line: "Fixture page with a very" · +0.0px
+ok      390 /day/2026-12-31    page card without preview chevron on first line: "Fixture page with a very" · +0.0px
+ok      390 /day/2026-12-31    link card icon on first line: "example.com/fixture-link" · +0.0px
+ok      390 /day/2026-12-31    bullet dot on first line: "Fixture parent" · -0.2px
+ok      390 /day/2026-12-31    nested bullet dot on first line: "Fixture nested child" · +0.8px
+ok      390 /day/2026-12-31    nested bullet dot on first line: "Fixture level 3" · +0.3px
+ok      390 /day/2026-12-31    nested bullet dot on first line: "(empty)" · +0.8px
+ok      390 /day/2026-12-31    bullet dot on first line: "(empty)" · -0.2px
+FAIL    390 /day/2026-12-31    level 2 bullet marker size vs top level: "Fixture nested child" · 4.0px vs 6.0px
+FAIL    390 /day/2026-12-31    level 2 bullet marker gap to text vs top level: "Fixture nested child" · 12.0px vs 19.0px
+ok      390 /day/2026-12-31    level 3 bullet marker size vs top level: "Fixture level 3" · 5.0px vs 6.0px
+FAIL    390 /day/2026-12-31    level 3 bullet marker gap to text vs top level: "Fixture level 3" · 12.0px vs 19.0px
+FAIL    390 /day/2026-12-31    level 2 bullet marker size vs top level: "(empty)" · 4.0px vs 6.0px
+FAIL    390 /day/2026-12-31    level 2 bullet marker gap to text vs top level: "(empty)" · 12.0px vs 19.0px
+
+217 passed, 20 failed, 0 missing
