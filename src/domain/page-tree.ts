@@ -158,6 +158,16 @@ export function recentPages(ws: Workspace, currentId: string | null): Page[] {
   return [...timed, ...rest.filter((p) => p.type === "daily").sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")), ...rest.filter((p) => p.type !== "daily")];
 }
 
+/**
+ * v0.3 §6.2 "title, short preview" (Brian's UI comparison, Lead a2edc0a7): the first lines he wrote on a page, joined
+ * with " · ", for the line under a page card. Headings and other pages' cards are left out; empty when nothing is written.
+ */
+export function pagePreview(p: Page, lines = 2, max = 120): string {
+  const texts = p.sections.flatMap((s) => s.blocks).filter((b) => b.kind !== "reference" && b.text.trim()).slice(0, lines).map((b) => b.text.trim().replace(/\s+/g, " "));
+  const joined = texts.join(" · ");
+  return joined.length > max ? `${joined.slice(0, max - 1)}…` : joined;
+}
+
 /** Something was written or tracked on the page; a page created by opening or browsing a day has neither. */
 function hasContent(page: Page): boolean {
   return Boolean(page.reviewText.trim()) || page.sections.some((s) => s.blocks.some((b) => b.kind === "task" || b.text.trim()));

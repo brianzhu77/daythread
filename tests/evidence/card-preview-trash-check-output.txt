@@ -1,0 +1,1 @@
+ok   the trashed page's card shows no preview; the other card keeps its own · [{"trash":true,"preview":null},{"trash":false,"preview":"#recipe"}]

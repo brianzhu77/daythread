@@ -251,3 +251,12 @@ test('pages made in day pages are grouped by day for the Pages screen, newest da
   ws = ok(ws, { type: 'move-page', pageId: 'later', parentId: null })
   assert.deepEqual(pagesInDays(ws).map(g => g.day.date), ['2026-10-18'])
 })
+
+test('pagePreview: the first written lines joined with " · ", no headings or cards, capped; empty when nothing is written', async () => {
+  const { pagePreview } = await import('../src/domain/page-tree.ts')
+  const page = (blocks: { kind: string; text: string }[]) => ({ sections: [{ id: 's', kind: 'custom', title: 'Heading', blocks }] }) as never
+  assert.equal(pagePreview(page([{ kind: 'paragraph', text: '食材：' }, { kind: 'paragraph', text: ' ' }, { kind: 'paragraph', text: '韩国大酱' }, { kind: 'paragraph', text: '豆腐' }])), '食材： · 韩国大酱')
+  assert.equal(pagePreview(page([{ kind: 'reference', text: 'Other page' }, { kind: 'task', text: 'buy  miso' }])), 'buy miso')
+  assert.equal(pagePreview(page([])), '')
+  assert.equal(pagePreview(page([{ kind: 'paragraph', text: 'x'.repeat(200) }])).length, 120)
+})

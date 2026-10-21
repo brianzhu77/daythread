@@ -13,6 +13,7 @@ import '@blocknote/shadcn/style.css'
 import type { Page, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, type EditorNode } from '../domain/editor-document'
 import { applyCommand, pasteRecords } from '../domain/workspace'
+import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
 import { cardsPresent, urlLine, type UndoCard } from '../domain/link-paste'
 import { recentPages, visiblePages, parentOf } from '../domain/page-tree'
@@ -111,11 +112,18 @@ function PageCard({ pageId, cardId, url = '', line = '' }: { pageId: string; car
   // Jazz §2: the domain only once the title isn't the default one, compared at render time (no stored flag).
   const domain = link && target && target.title !== defaultLinkTitle(link) ? hostLabel(link) : ''
   const title = target ? displayPageTitle(target) : pending ? (link ? defaultLinkTitle(link) : 'Untitled') : 'Page not found'
+  // The first lines written on the page, as in Craft's card (v0.3 §6.2 "title, short preview").
+  // A trashed page keeps its contents out of other pages (Ratchet).
+  const preview = target && !trashed ? pagePreview(target) : ''
   return <span className={`editor-page-card-row ${link ? 'is-link' : ''}`} contentEditable={false}>
     <button type="button" className={`editor-page-card ${trashed ? 'in-trash' : ''}`} disabled={pending?.state === 'creating'}
       onClick={() => { if (pending) { if (pending.state === 'failed') pending.retry(); return } rememberCard(cardId); void navigate({ to: '/pages', search: { page: pageId } }) }}>
       <span className="editor-page-card-icon">{link ? <GlobeIcon /> : <PagesIcon />}</span>
-      <span className={`editor-page-card-title ${target?.title || link ? '' : 'untitled'}`}>{title}</span>
+      <span className="editor-page-card-text">
+        <span className={`editor-page-card-title ${target?.title || link ? '' : 'untitled'}`}>{title}</span>
+        {/* Link cards stay one line (A2): they show the domain instead. */}
+        {target && !link && preview && <span className="editor-page-card-preview">{preview}</span>}
+      </span>
       {domain && <span className="editor-page-card-domain">{domain}</span>}
       {pending?.state === 'creating' ? <span className="editor-page-card-spinner" aria-label="Creating page" />
         : pending?.state === 'failed' ? <span className="editor-page-card-failed">Not created · Retry</span>
@@ -342,6 +350,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     notice.current = { key, fingerprint }
   }
   const [selectionLabel, setSelectionLabel] = useState('')
+  // B19 (Lead a2edc0a7): on a past day, the rows that were empty when the page opened (template bullets he never used)
+  // are hidden on screen only, never deleted. A row shows again once the cursor is in it, and new lines are never hidden.
+  const [hiddenEmpty, setHiddenEmpty] = useState<ReadonlySet<string>>(() => {
+    if (page.type !== 'daily' || !page.date || page.date >= todayIso()) return new Set()
+    return new Set(deepNodes(initial.current!.nodes).filter(n => ['paragraph', 'bulletListItem', 'numberedListItem', 'task'].includes(n.type) && !inlineText(n.content).trim() && !(Array.isArray(n.content) && n.content.some((c: { type?: string }) => c.type && c.type !== 'text')) && !n.children?.length).map(n => n.id))
+  })
+  useEffect(() => editor.onSelectionChange(() => {
+    const id = editor.getTextCursorPosition().block.id
+    setHiddenEmpty(ids => ids.has(id) ? new Set([...ids].filter(x => x !== id)) : ids)
+  }), [editor])
   const selectionFocus = useRef<HTMLDivElement>(null)
   // Browser selection can survive React node-view replacement while ProseMirror's selection moves elsewhere.
   // Keep stable block IDs and inline offsets instead of positions tied to the replaced document.
@@ -1057,6 +1075,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }}
     >
     <div ref={selectionFocus} tabIndex={-1} className="sr-only" aria-label={selectionLabel || undefined} />
+    {hiddenEmpty.size > 0 && <style>{[...hiddenEmpty].map(id => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"]`).join(',')}{'{display:none}'}</style>}
     <div className="editor-save-line" role="status">{status}{failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}

@@ -1,0 +1,11 @@
+import {chromium} from 'playwright';
+import {DatabaseSync} from 'node:sqlite';
+const base='http://127.0.0.1:3397';let failed=false;const check=(x,s,d='')=>{console.log(`${x?'PASS':'FAIL'} ${s} ${JSON.stringify(d)}`);failed||=!x};
+const b=await chromium.launch(),p=await b.newPage({viewport:{width:1280,height:1000}});
+await p.goto(base+'/day/2026-10-18',{waitUntil:'networkidle'});await p.waitForTimeout(600);
+let card=p.locator('.editor-page-card').filter({hasText:'韩国大酱汤'});let id=await card.evaluate(e=>e.closest('.bn-block-outer').dataset.id);await card.hover();await p.getByRole('button',{name:'Select or drag block',exact:true}).click();await p.keyboard.press('Backspace');await p.waitForTimeout(1200);check(await card.count()===0,'card removed via handle');
+await p.keyboard.press('Meta+z');await p.waitForTimeout(1200);check(await card.count()===1,'card Undo restores card');check(await card.locator('.editor-page-card-preview').innerText()==='#recipe','card Undo restores preview');await p.reload({waitUntil:'networkidle'});await p.waitForTimeout(500);check(await card.count()===1,'card Undo survives reload');
+check(await card.locator('.editor-page-card-title').evaluate(e=>getComputedStyle(e).fontWeight)==='600','final card title semibold');
+await p.goto(base+'/pages?page=fa95e8a3-dd0a-4b3c-8fcc-c1129c8c4820',{waitUntil:'networkidle'});await p.waitForTimeout(400);await p.locator('.page-more').first().click();await p.getByRole('menuitem',{name:'Delete',exact:true}).click();await p.waitForTimeout(900);await p.goto(base+'/day/2026-10-18',{waitUntil:'networkidle'});await p.waitForTimeout(500);
+check(await card.locator('.editor-page-card-preview').count()===0,'trashed card hides content preview');check(await card.evaluate(e=>e.classList.contains('in-trash')),'trashed card distinguished');check(await p.locator('.editor-page-card-preview').allInnerTexts().then(x=>JSON.stringify(x)==='["#recipe"]'),'other card preview unaffected');
+await b.close();if(failed)process.exitCode=1;
