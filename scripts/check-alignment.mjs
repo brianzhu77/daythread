@@ -13,7 +13,8 @@
 //      - headings: the editor's own left edge.
 //   2. Markers on the first text line: a task's checkbox, a bullet's marker (top level and nested), a card's icon
 //      and chevron, and (1280, hovered, one row per type) the drag handle, each centred on the row's first text line.
-//      Nested bullets use BlockNote's glyph marker, a zero-height box; its centre is taken as half its own line.
+//      Bullet markers are measured as drawn (screenshot pixels in the zone left of the text), at every level, and
+//      each nested marker's drawn size and gap to its text must match the top-level dot's within 1px.
 //      A marker that can't be found is MISSING, never skipped.
 //   Page card titles must wrap, not clip (link cards may end in an ellipsis).
 //   3. Coverage. Every row type in REQUIRED must appear on the measured pages; one that doesn't is MISSING, never a
@@ -27,7 +28,7 @@ if (!base) { console.error('usage: node scripts/check-alignment.mjs <base url> [
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
-const REQUIRED = ['heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'empty row', 'page card with preview', 'page card without preview', 'link card']
+const REQUIRED = ['heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'empty row', 'page card with preview', 'page card without preview', 'link card']
 
 function measure() {
   const visible = e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 }
@@ -38,7 +39,8 @@ function measure() {
     const rect = [...range.getClientRects()].find(r => r.width > 0 && r.height > 0)
     const box = e.getBoundingClientRect(), style = getComputedStyle(e)
     const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2
-    return { left: box.left + parseFloat(style.paddingLeft), cy: rect ? cy(rect) : box.top + parseFloat(style.paddingTop) + lineHeight / 2 }
+    const lineTop = rect ? rect.top : box.top + parseFloat(style.paddingTop), lineBottom = rect ? rect.bottom : lineTop + lineHeight
+    return { left: box.left + parseFloat(style.paddingLeft), cy: rect ? cy(rect) : lineTop + lineHeight / 2, lineTop, lineBottom }
   }
   const depth = e => { let d = 0; for (let g = e.closest('.bn-block-group'); g; g = g.parentElement?.closest('.bn-block-group')) d++; return d - 1 }
   const editor = document.querySelector('.continuous-editor .bn-editor')
@@ -72,17 +74,10 @@ function measure() {
       const inline = content.querySelector('.bn-inline-content')
       const list = type === 'bulletListItem' ? 'bullet' : 'numbered'
       Object.assign(row, { kind: type === 'paragraph' ? 'paragraph' : d > 0 ? `nested ${list}` : list, empty: !text, ...firstLine(inline) })
-      // Bullets draw their marker as a ::before box at the top of the line: a centred dot at the top level
-      // (styles.css), BlockNote's glyph when nested. Its box centre is the marker's centre. No box = MISSING.
-      if (type === 'bulletListItem') {
-        const before = getComputedStyle(content, '::before')
-        const top = content.getBoundingClientRect().top + parseFloat(getComputedStyle(content).paddingTop)
-        // A nested glyph ("◦") is a zero-height flex box; its glyph runs from the box top over one line of its own.
-        const glyphLine = parseFloat(before.lineHeight) || parseFloat(before.fontSize) * 1.2
-        row.markers.dot = before.content === 'none' ? null
-          : parseFloat(before.height) ? top + parseFloat(before.height) / 2
-          : glyphLine ? top + glyphLine / 2 : null
-      }
+      // Bullets: the marker is measured from pixels later (drawPass), in the zone left of the text on the first line,
+      // so a dot, a ring or a glyph is measured as drawn. Its centre must sit on the first line, and at every level its
+      // size and gap to the text must match the top-level dot's (Lead b51edfe5).
+      if (type === 'bulletListItem') row.zone = { left: content.getBoundingClientRect().left, right: row.left, top: row.lineTop, bottom: row.lineBottom }
     } else if (type === 'heading') {
       Object.assign(row, { kind: 'heading', ...firstLine(content.querySelector('.bn-inline-content')) })
     } else return
@@ -92,6 +87,45 @@ function measure() {
 }
 
 const fmt = n => (Math.round(n * 10) / 10).toFixed(1)
+/**
+ * Bullet markers as drawn: a screenshot of the page, read back through a canvas, and in each bullet's marker zone the
+ * box of pixels that differ from the zone's background. Gives the marker's drawn size, centre and gap to the text.
+ */
+async function drawPass(page, rows) {
+  const bullets = rows.filter(r => r.zone && r.zone.right - r.zone.left > 2)
+  if (!bullets.length) return
+  // Fixed and sticky layers (phone toolbar, handle, + button, header) land on rows in a full-page capture: hide them.
+  await page.evaluate(() => { for (const e of document.querySelectorAll('body *')) { const p = getComputedStyle(e).position; if (p === 'fixed' || p === 'sticky') e.setAttribute('data-align-hidden', e.style.visibility || ' '), e.style.visibility = 'hidden' } })
+  const png = await page.screenshot({ fullPage: true })
+  await page.evaluate(() => { for (const e of document.querySelectorAll('[data-align-hidden]')) { e.style.visibility = e.getAttribute('data-align-hidden').trim(); e.removeAttribute('data-align-hidden') } })
+  const scroll = await page.evaluate(() => ({ x: scrollX, y: scrollY }))
+  const reader = await browser.newPage()
+  const boxes = await reader.evaluate(async ({ data, zones }) => {
+    const img = new Image(); img.src = `data:image/png;base64,${data}`; await img.decode()
+    const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height
+    const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0)
+    return zones.map(z => {
+      const x0 = Math.floor(z.left), x1 = Math.ceil(z.right), y0 = Math.floor(z.top), y1 = Math.ceil(z.bottom)
+      if (x1 <= x0 || y1 <= y0) return null
+      const { data: px } = ctx.getImageData(x0, y0, x1 - x0, y1 - y0), w = x1 - x0
+      const bg = [px[0], px[1], px[2]]
+      let minX = Infinity, maxX = -1, minY = Infinity, maxY = -1
+      for (let i = 0; i < px.length; i += 4) {
+        if (Math.max(Math.abs(px[i] - bg[0]), Math.abs(px[i + 1] - bg[1]), Math.abs(px[i + 2] - bg[2])) < 48) continue
+        const x = (i / 4) % w, y = Math.floor(i / 4 / w)
+        minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y)
+      }
+      return maxX < 0 ? null : { left: x0 + minX, right: x0 + maxX + 1, top: y0 + minY, bottom: y0 + maxY + 1 }
+    })
+  }, { data: png.toString('base64'), zones: bullets.map(r => ({ left: r.zone.left + scroll.x, right: r.zone.right + scroll.x, top: r.zone.top + scroll.y, bottom: r.zone.bottom + scroll.y })) })
+  await reader.close()
+  bullets.forEach((r, i) => {
+    const b = boxes[i]
+    if (!b) { r.markers.dot = null; return }
+    r.drawn = { size: Math.max(b.right - b.left, b.bottom - b.top), gap: r.left + scroll.x - b.right }
+    r.markers.dot = (b.top + b.bottom) / 2 - scroll.y
+  })
+}
 const browser = await chromium.launch()
 const results = [], seen = new Map()
 for (const [width, height] of [[1280, 900], [390, 844]]) {
@@ -100,6 +134,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     const page = await browser.newPage({ viewport: { width, height } })
     await page.goto(`${base}${path}`, { waitUntil: 'networkidle' }); await page.waitForTimeout(1000)
     const { rows, editorLeft } = await page.evaluate(measure)
+    await drawPass(page, rows)
     // The drag handle shows on hover (desktop only): hover one row of each kind and measure it there.
     if (width === 1280) {
       const sampled = new Set()
@@ -129,7 +164,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     }
     await page.close()
     const at = `${width} ${path}`
-    for (const r of rows) { seen.get(width).add(r.kind); if (r.empty) seen.get(width).add('empty row') }
+    for (const r of rows) { seen.get(width).add(r.kind); if (r.empty) seen.get(width).add('empty row'); if (r.kind === 'nested bullet' && r.depth >= 2) seen.get(width).add('level 3 bullet') }
     // 1. Columns.
     const top = rows.filter(r => r.depth === 0 && r.kind !== 'heading' && r.kind !== 'paragraph')
     const counts = new Map(); for (const r of top) { const x = Math.round(r.left); counts.set(x, (counts.get(x) ?? 0) + 1) }
@@ -156,6 +191,16 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
           ? { at, check: `${r.kind} ${marker}: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
           : { at, check: `${r.kind} ${marker} on first line: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
     }
+    // Every bullet marker against the top-level dot on the same page: drawn size within 1px, gap to text within 1px.
+    const tops = rows.filter(r => r.drawn && r.depth === 0)
+    if (tops.length) {
+      const median = xs => xs.slice().sort((a, b) => a - b)[Math.floor(xs.length / 2)]
+      const ref = { size: median(tops.map(r => r.drawn.size)), gap: median(tops.map(r => r.drawn.gap)) }
+      for (const r of rows.filter(r => r.drawn && r.depth > 0)) {
+        results.push({ at, check: `level ${r.depth + 1} bullet marker size vs top level: "${r.label}"`, ok: Math.abs(r.drawn.size - ref.size) <= TOLERANCE, detail: `${fmt(r.drawn.size)}px vs ${fmt(ref.size)}px` })
+        results.push({ at, check: `level ${r.depth + 1} bullet marker gap to text vs top level: "${r.label}"`, ok: Math.abs(r.drawn.gap - ref.gap) <= TOLERANCE, detail: `${fmt(r.drawn.gap)}px vs ${fmt(ref.gap)}px` })
+      }
+    } else if (rows.some(r => r.drawn && r.depth > 0)) results.push({ at, check: 'top-level bullet to compare nested markers with', ok: 'missing', detail: 'no drawn top-level dot on this page' })
   }
 }
 await browser.close()
