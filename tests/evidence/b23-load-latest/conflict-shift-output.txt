@@ -1,0 +1,3 @@
+ok   1280: conflict line shown ("Changed in another tab · draft kept"); 19 rows, 0 moved
+ok   390: conflict line shown ("Changed in another tab · draft kept"); 19 rows, 0 moved
+all passed
