@@ -12,25 +12,27 @@
   - Bumblebee `16ce6fe4`: Tomorrow as its own action; Not today = D05 and the same command as deleting the row; Done
     stays the checkbox; every action with the hand-off's notice + Undo, the row back in its old place; reachable at 390
     with no hover;
-  - Jazz: states doc to come, in parallel (entry, look, which rows, cancelled look). This plan doesn't decide those.
-- Base: main 0ad04d9. Brian's data: 5 tasks; Oct 18–19 he carried 3 forward and finished 2 (Bumblebee).
+  - Jazz `docs/design/day-row-actions-states.md` @ 0f58e8f (the design source: entry, rows, what happens to the row).
+- Base: main 0f58e8f. Brian's data: 5 tasks; Oct 18–19 he carried 3 forward and finished 2 (Bumblebee).
 
-## 1. What he can do from a task row on the day page
+## 1. What each row offers, and the command behind it (Jazz §1–§3)
 
-| Action | Command (existing) | Effect on the task | Effect on this page |
-| --- | --- | --- | --- |
-| **Tomorrow** | `plan-task { date: today + 1, from }` | planned tomorrow, carry-over on | the row **leaves** this page's plan (§2) |
-| **Another day ▾** (Tomorrow · This weekend · Next week · Pick date… · No date) | `plan-task { date, from }`; "No date" = `not-today` | planned that day | the row leaves (§2) |
-| **Not today** | `not-today { date: page date }` | paused, `plannedOn` cleared if it was that day; deadline kept (D05) | the row leaves (unchanged: `pause()` already removes it) |
-| **Move to Top 3 / Move to Other** | `plan-task { date: page date, section }` | none | the row moves between the two plan sections |
-| **Cancel task** | `task-status cancelled` | cancelled, restorable | the row stays, shown cancelled (Jazz) |
+| Row | Actions | Commands (all existing) |
+| --- | --- | --- |
+| today's open plan row | Tomorrow · Another day ▸ · Not today · Move to Top 3/Other · Cancel task | `plan-task { date, section, from }` · `not-today { date }` · `plan-task { date: page, section }` · `task-status cancelled` |
+| a future day's open plan row | Another day ▸ · Not on {Wed} · Move to Top 3/Other · Cancel task (no Tomorrow) | the same, with `date` = that page's date for Not on |
+| reference row (Notes) | Plan for today · Another day ▸ · Cancel task | `plan-task { date: today }` (the row stays: it's a reference) · `plan-task` · `task-status` |
+| cancelled row | Restore | `task-status open` |
+| done row, draft row | nothing | — |
+| a past day's row | Bring to today only | `plan-task { date: today }`, no `from`: the past page keeps its row as history |
 
 - **Same meanings as everywhere else (Bumblebee 2).** These are the commands the Tasks screen, the facts strip, the
-  hand-off and the review already send. Not today here and deleting the whole row both end in the same domain
-  `pause()`. Done stays the checkbox.
-- **Which rows** (my proposal, Jazz decides): open plan rows (`role: plan`) on today's page and on future day pages.
-  Reference rows keep their existing "Plan for today" button. Past pages are history: no row actions there. "Tomorrow"
-  always means today + 1, as in the review.
+  hand-off and the review already send. Not today here and deleting the whole row (Backspace) both end in the same
+  domain `pause()` (Jazz §4). Done stays the checkbox.
+- **A moved row keeps its section** on the new day (Jazz §3): `plan-task` already takes `section`, and A12 sends the
+  row's current one. If that's Top 3 and the new day's Top 3 is full, it goes to Other, the hand-off's existing rule
+  (`top3Full`).
+- **"Tomorrow"** is today + 1, as in the review.
 
 ## 2. One finding: a moved row stays on the page it left
 
@@ -64,14 +66,15 @@ at that moment, or its existing refresh reports "Page changed elsewhere · draft
 - **Notices** are the hand-off's, word for word: "Moved to Fri 10/23 · Undo", "Not today — won't carry over · due Fri
   still tracked · Undo", "Cancelled · Undo" (`useTaskActions`).
 
-## 4. Where the actions are reached (engineering constraints for Jazz's states)
+## 4. Where the actions are reached (Jazz §1)
 
-- **Inside the row, not the editor's side handle:** the task row is a custom block (`EditorTask`). A ⋯ button there
-  (non-editable, 44 px at 390) is visible on both widths, with no hover needed (Bumblebee 4), and reuses `RowMenu`, the
-  menu the other screens use. The side drag handle and the phone's touch handle stay drag-only.
-- **Keyboard:** a shortcut while the caret is in a task row opens the same menu. The key is Jazz's call; it must not
-  collide with the editor's own shortcuts.
-- **Tomorrow as one tap** (Bumblebee 1): either a visible action on the row or the menu's first item. That's design.
+- **1280: ⋯ at the end of the row,** shown on hover and while the cursor is in the row, and reachable by Tab. It's a
+  non-editable button inside `EditorTask`, opening the existing `RowMenu`.
+- **390: the grip handle.** Tapping it selects the row, and the bottom selection bar becomes **Tomorrow · Another day ·
+  Not today · ⋯** (44 px each) for a single open task row. Other selections keep "1 selected · Delete". **Jazz §6: yes,
+  the bar can switch by row type:** it's our own React element (`editor-selection-bar`), and the selected block's type,
+  role and task are known from `selected.current`.
+- **Keyboard:** the menu opens from the caret in a task row; the key is in Jazz's doc.
 
 ## 5. Checks before the candidate
 
@@ -81,8 +84,9 @@ at that moment, or its existing refresh reports "Page changed elsewhere · draft
   - Undo of each action restores the row in its section and position, and the task's dates and pause;
   - Not today by action and by deleting the row give the same task and placement state.
 - **Browser, on a copy of his data, 1280 and 390:**
-  - each action from Top 3 and from Other on today and on a future page; the notice text; Undo puts the row back in
-    place;
+  - each action from Top 3 and from Other on today and on a future page, per row type (§1); the notice text; Undo
+    puts the row back in its section and position; a moved row lands in the same section (Other when Top 3 is full);
+  - Backspace on a whole plan row and Not today from the menu leave the same state;
   - type in a line, then use an action at once: the text is saved first, with no "changed elsewhere";
   - the action and the menu are reachable with no hover at 390;
   - the keyboard shortcut;
@@ -93,5 +97,5 @@ at that moment, or its existing refresh reports "Page changed elsewhere · draft
 
 - **Ratchet:** the flush-and-hold sequence (§3); `from` (§2) and its effect on the other callers; Undo's position
   guarantee.
-- **Jazz:** which rows; the entry (⋯, Tomorrow as one tap, keyboard); the cancelled row.
+- **Jazz §6, answered:** the selection bar can switch by row type (§4), and `plan-task` carries the section (§1).
 - **Lead:** whether the review and the facts strip also send `from` in this round (§2).
