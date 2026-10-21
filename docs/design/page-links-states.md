@@ -100,8 +100,27 @@ filled in) and pastes into a day.
   whole blocks with cards in them. Those stay ordinary pastes.
 - Because the source link is a real page link, the quote's page shows up in the source's **Linked from** (P13).
 
-**Not in this round (Lead `a5a33307`):** §4 is A9b, the next round. This round is A9a (`[[`, §1–§3) plus B15 (§5).
-§4 stays here as the design for A9b, and §6 check 7 moves with it.
+**A9b details (2026-10-21, for the A9b plan; A9a + B15 shipped in 9e432f3):**
+
+- **Where the offer appears:** only when the paste lands on an **empty line** or replaces whole lines. A paste into
+  the middle of a sentence is writing, so no offer (the same rule as A2's link paste).
+- **What he copied:**
+  - part of one line → a one-line quote of exactly that excerpt;
+  - several lines → one Quote with the lines kept as line breaks, plain text only;
+  - tasks, cards and `[[` links inside the copy are pasted as their text, so a quote never creates a task or a
+    second reference.
+- **The source line** is the quote's last line: "— " plus the §1 link, in `--ink-2`. If the source is a day page,
+  the link reads its date ("Sun, Oct 18"), as everywhere.
+- **The notice** is the editor's existing strip: "Pasted from {title} · Add source", and after the tap "Added
+  source · Undo". It closes like the other paste notices. Ignoring it leaves the plain paste, and the offer doesn't
+  come back for that paste.
+- **Undo** turns the quote back into exactly the plain paste on the same lines. The source link leaves Linked from
+  with it.
+- **Source later trashed or renamed:** only the link changes (§1 states). The quoted words never do.
+- **Phone:** the same notice, because pasting is how he copies between pages there. No new toolbar.
+
+Checks for A9b: §6 check 7, plus a paste mid-sentence (no offer), a copy that contains a task (no new task) and
+Undo after Add source (the exact plain paste, no Linked from entry).
 
 ## 5. Linked from (B15 and what links add)
 
