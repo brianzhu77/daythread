@@ -712,9 +712,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const before = $from.parent.textBetween(0, $from.parentOffset, undefined, '\ufffc')
     const from = to - (before.endsWith(trigger + query) ? trigger.length + query.length : before.endsWith(trigger) ? trigger.length : 0)
     // One step: `[[query` is replaced by the link node itself, and the cursor goes after it.
+    // A space follows the link unless one is already there: a line ending in a non-editable node has no text position
+    // after it, so a click or End couldn't put the cursor there to keep writing or to Backspace it (as Notion does).
     const view = editor.prosemirrorView, node = view.state.schema.nodes.pageRef!.create({ pageId, refId: crypto.randomUUID(), newTitle: newTitle ?? '' })
-    const tr = view.state.tr.replaceWith(from, to, node)
-    view.dispatch(tr.setSelection(TextSelection.create(tr.doc, from + node.nodeSize)).scrollIntoView())
+    const next = view.state.doc.textBetween(to, Math.min(to + 1, view.state.selection.$from.end()), undefined, '\ufffc')
+    const tr = view.state.tr.replaceWith(from, to, next && /\s/.test(next) ? node : [node, view.state.schema.text(' ')])
+    view.dispatch(tr.setSelection(TextSelection.create(tr.doc, from + node.nodeSize + (next && /\s/.test(next) ? 0 : 1))).scrollIntoView())
     lastTrigger.current = -1
     if (newTitle) void createLinkedPage(pageId, newTitle)
   }
@@ -960,7 +963,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       })
     }}
     onCompositionStartCapture={() => { composing.current = true; clearTimeout(timer.current) }}
-    onCompositionEndCapture={() => { composing.current = false; requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
+    // A9a §3: after the composition, once ProseMirror has finished it (its DOM and decorations are drawn again).
+    onCompositionEndCapture={() => { composing.current = false; setTimeout(maybeOpenLinkList, 50); requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
     onDropCapture={e => {
       // Drops go to the row boundary under the pointer at release. BlockNote's line can lag the pointer when
       // dragover events stop arriving (Ratchet task #49: a long drag stayed put, the line stuck near the start),
@@ -1086,7 +1090,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         } }
         return filterSuggestionItems([taskItem, pageItem, linkItem, ...first, ...rest], query).slice(0, 9)
       }} />
-      {['[[', '【【'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} getItems={async query => linkItems(query, trigger)} onItemClick={item => item.onItemClick()} />)}
+      {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
+          maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}
+      {['[[', '【【'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} shouldOpen={() => false} getItems={async query => linkItems(query, trigger)} onItemClick={item => item.onItemClick()} />)}
       <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />
     </BlockNoteView>
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}
