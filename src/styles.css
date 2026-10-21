@@ -654,7 +654,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-page-card-icon { display: grid; place-items: center; flex: none; width: 18px; height: 1lh; color: var(--ink-3); }
 .editor-page-card-icon svg { width: 18px; height: 18px; }
 .editor-page-card-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-.editor-page-card-title { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.editor-page-card-title { min-width: 0; white-space: normal; overflow-wrap: anywhere; font-weight: 600; }
 /* v0.3 §6.2 "title, short preview": the page's first lines, one quiet line under the title. */
 .editor-page-card-preview { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; line-height: 18px; color: var(--ink-3); }
 .editor-page-card > svg { flex: none; margin-block: calc((1lh - 14px) / 2); color: var(--ink-3); }
@@ -668,7 +668,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-page-card-row .editor-page-card { flex: 1; min-width: 0; }
 .editor-page-card-row.is-link .editor-page-card-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
 .editor-page-card-domain { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; color: var(--ink-3); }
-.editor-page-card-open { display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin: -6px -10px -6px 0; color: var(--ink-3); border-radius: 8px; }
+.editor-page-card-open { display: grid; place-items: center; flex: none; width: 44px; height: 44px; margin: calc((1lh + 6px - 44px) / 2) -10px calc((1lh + 6px - 44px) / 2) 0; color: var(--ink-3); border-radius: 8px; }
 /* BlockNote resets link colour inside the editor (`.bn-shadcn .bn-editor a { color: revert }`); a secondary action is --ink-3. */
 .bn-editor .editor-page-card-row a.editor-page-card-open { color: var(--ink-3); }
 .bn-editor .editor-page-card-row a.editor-page-card-open:hover, .bn-editor .editor-page-card-row a.editor-page-card-open:active { color: var(--app-accent); }
