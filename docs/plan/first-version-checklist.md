@@ -18,10 +18,13 @@ Group B is listed for tracking only and never counts toward M.
   docs-only commit right after the deploy. Bumblebee re-checks the count at each deploy.
 - Status values: `built` · `partial` · `missing` · `regressed` · `settled` (Brian accepted an alternative).
 - Adding or removing a row needs a message from Brian, cited in Source. Team-only deferrals are not allowed.
-- Release gate for any visual change (Brian 6220a8c2, Lead c533c126): before deploy, the design check measures that icons, drag
-  handles, checkboxes and text line up across **every row type on the day page** (heading, bullet, nested bullet, task, done/cancelled
-  task, page card with and without preview, link card), not only the part that changed, at 1280 and 390 on a copy of Brian's data.
-  Ratchet's check confirms it was done. Brian should not be the one who finds basic alignment or spacing defects.
+- **Geometry rule for every visual change** (Brian 6220a8c2; Lead 4b3ce971, effective 2026-10-21): before a change is shown to
+  anyone (Brian, a review, a deploy), measure all row types on the day page, not only the part that changed: heading, task
+  (open, done, cancelled), bullet, nested bullet, page card with and without preview, link card, empty row. Use a copy of
+  Brian's data at 1280 and 390. Pass = text columns line up within 1px, and markers and icons (checkbox, dot, page icon,
+  chevron, drag handle) centre on the first text line within 1px. The design check runs it with the repo's alignment script
+  (pass/fail table, Roadbuster), and Ratchet's acceptance includes it. Brian should not be the one who finds basic alignment
+  or spacing defects.
 
 ## A. First version (counts toward N of M)
 
