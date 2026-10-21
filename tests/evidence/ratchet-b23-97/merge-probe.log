@@ -1,0 +1,2 @@
+pure link base P, draft Q, latest P: [{"id":"ref-line","type":"bulletListItem","props":{},"content":[{"type":"pageRef","props":{"pageId":"Q","refId":"r-Q"}}],"children":[]}]
+checklist base false, draft true, latest false: [{"id":"check","type":"sourceChecklist","props":{"checked":false},"content":[{"type":"text","text":"external checklist","styles":{}}],"children":[]}]

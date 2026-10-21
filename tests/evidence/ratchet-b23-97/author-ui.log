@@ -1,0 +1,26 @@
+(node:26858) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+lines used: "DRIVE Basketball Training #kathy" "奥德赛"
+ok   1. B shows the conflict line with Load latest · Changed in another tab · draft kept | Load latest
+ok   1. no Retry and no Copy draft on a conflict
+ok   1. the database has A's edit, not B's
+ok   2. A's edit kept once
+ok   2. B's line sits right below its line · 7 → 8
+ok   2. notice with Undo · Latest loaded · your changes are below their lines Undo
+ok   2. caret on the inserted line · DRIVE Basketball Training #kathy [B1]
+ok   2. the conflict line is gone
+ok   3. reload: no conflict and no recovered draft · (empty)
+ok   3. both edits once in the database
+ok   4. conflict shown
+ok   4. the new task exists once, as a task · ["new task B4"]
+ok   4. the existing task keeps its title (no second task)
+ok   4. B's new title is a plain line below it · paragraph
+ok   5. A deleted the line itself · "DRIVE Basketball Training #kathy [B1]"
+ok   5. B's text is the last line of the page · DRIVE Basketball Training #kathy [B1] [B5]
+ok   6. Undo leaves the latest page exactly · B5 left: 0
+ok   7. network failure line · Couldn't save · draft kept | Retry saving | Copy draft
+ok   7. Retry saves once the server is back
+ok   8. 390: line and button inside the screen · line 79–370, button 290–370 h44
+ok   8. 390: Load latest keeps both
+ok   no page errors
+all passed
