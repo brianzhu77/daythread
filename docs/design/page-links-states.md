@@ -107,10 +107,21 @@ filled in) and pastes into a day.
 - **What he copied:**
   - part of one line → a one-line quote of exactly that excerpt;
   - several lines → one Quote with the lines kept as line breaks, plain text only;
-  - tasks, cards and `[[` links inside the copy are pasted as their text, so a quote never creates a task or a
-    second reference.
-- **The source line** is the quote's last line: "— " plus the §1 link, in `--ink-2`. If the source is a day page,
-  the link reads its date ("Sun, Oct 18"), as everywhere.
+  - a copy holding a **task row or a card** gets **no offer**; it stays today's plain paste. The plain paste can save
+    before he taps Add source, so a copied task row is already a new task by then, and turning it into a quote
+    would leave a task he never meant to make (Roadbuster a9b plan §4, Lead `4110e3e4`). Part of one task title is
+    copied as text, so it still gets the offer;
+  - `[[` links inside the copy become their title as text, so a quote never adds a second reference.
+- **The source line** is the quote's last line: "— " plus the §1 link, in the quote's own text colour; the link's
+  chip already marks it as a source, so the line needs no style of its own. If the source is a day page, the link
+  reads its date ("Sun, Oct 18"), as everywhere.
+- **The quote's look** (BlockNote's default is grey text at about 4:1 and a bar that pushes the text 1em right, so it
+  needs one rule):
+  - text in `--ink`, upright, the same size as other lines. They are his words, so they don't read as disabled;
+  - the text starts on the **shared top-level text column**, like every other top-level row;
+  - a 2px bar in `--ink-3` sits in the marker gutter, centred where a top-level bullet's dot is, running from the
+    first line's top to the source line's bottom.
+  The geometry check measures exactly this ("quote with source", Jazz `15089bc8`).
 - **The notice** is the editor's existing strip: "Pasted from {title} · Add source", and after the tap "Added
   source · Undo". It closes like the other paste notices. Ignoring it leaves the plain paste, and the offer doesn't
   come back for that paste.
@@ -119,7 +130,7 @@ filled in) and pastes into a day.
 - **Source later trashed or renamed:** only the link changes (§1 states). The quoted words never do.
 - **Phone:** the same notice, because pasting is how he copies between pages there. No new toolbar.
 
-Checks for A9b: §6 check 7, plus a paste mid-sentence (no offer), a copy that contains a task (no new task) and
+Checks for A9b: §6 check 7, plus a paste mid-sentence (no offer), a copy that contains a task (no offer, no new task) and
 Undo after Add source (the exact plain paste, no Linked from entry).
 
 ## 5. Linked from (B15 and what links add)
