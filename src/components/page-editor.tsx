@@ -1026,7 +1026,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const operationId = newOperationId()
     const receipt = await onServer(action, operationId)
     if (!receipt) { notDone('Not done · your text is kept'); return }
-    if (caretHere && !editor.getBlock(blockId) && above && editor.getBlock(above)) { editor.setTextCursorPosition(above, 'end'); editor.focus() }
+    // The menu took focus; give it back to the row (or the line above, if the row left) so ⌘Z and typing go on.
+    const caretTo = editor.getBlock(blockId) ? blockId : above && editor.getBlock(above) ? above : null
+    if (caretTo && (caretHere || document.activeElement === document.body || !editor.domElement?.contains(document.activeElement))) { editor.setTextCursorPosition(caretTo, 'end'); editor.focus() }
     const fallback = receipt.message.indexOf(' · Top 3 is full')
     const text =
       intent.kind === 'move' ? `Moved to ${noticeDate(intent.date)}${fallback >= 0 ? receipt.message.slice(fallback) : ''}`
@@ -1065,7 +1067,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const last = [...range].reverse().find(n => n.type !== 'heading' && (n.type !== 'paragraph' || inlineText(n.content).trim())) ?? range[0]!
       editor.insertBlocks([block as never], last.id, 'after')
     })
-    editor.setTextCursorPosition(blockId, 'end')
+    editor.setTextCursorPosition(blockId, 'end'); editor.focus()
   }
   /**
    * A12 at 390 (Jazz §2): the handle selects one open task row, and the selection bar shows its actions instead of
@@ -1155,6 +1157,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     onKeyDownCapture={e => {
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
       if (historyPending.current) { e.preventDefault(); e.stopPropagation(); return }
+      // A12 keyboard path: the context-menu key (or Shift+F10) opens the caret row's ⋯ menu; Tab keeps indenting.
+      if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+        const block = editor.getTextCursorPosition().block
+        const more = editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"] .editor-row-more`)
+        if (more) { e.preventDefault(); e.stopPropagation(); more.click(); return }
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.nativeEvent.isComposing) {
         e.preventDefault(); e.stopPropagation()
         // A2 §4: right after a paste (its notice still showing, nothing edited since), ⌘Z is the notice's Undo.

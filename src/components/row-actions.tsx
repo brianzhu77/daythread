@@ -62,6 +62,8 @@ export function rowMenu(task: Task, role: string, section: 'top3' | 'other' | nu
     ? { label: `Remove from ${weekday(pageDate)}`, intent: { kind: 'not-today' } }
     : { label: pageDate === today ? 'Not today' : `Not on ${weekday(pageDate)}`, intent: { kind: 'not-today' } }
   const first = pageDate === today && task.plannedOn !== tomorrow ? [{ label: `Tomorrow · ${noticeDate(tomorrow)}`, intent: { kind: 'move', date: tomorrow } as RowIntent }] : []
+  // Tomorrow is its own item on today's rows (Bumblebee 16ce6fe4), so Another day doesn't repeat it.
+  if (first.length) { anotherDayGroup.items = anotherDayGroup.items.filter(i => !(i.intent !== 'pick-date' && i.intent.kind === 'move' && i.intent.date === tomorrow)) }
   const swap = { label: section === 'top3' ? 'Move to Other' : 'Move to Top 3', intent: { kind: 'section', to: section === 'top3' ? 'other' : 'top3' } as RowIntent }
   return {
     primary: [...(first.length ? [{ label: 'Tomorrow', intent: first[0]!.intent }] : []), off],

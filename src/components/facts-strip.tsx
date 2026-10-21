@@ -113,7 +113,7 @@ function PoolRow({ task, today, paused = false }: { task: Task; today: LocalDate
             Not today
           </button>
         )}
-        <RowMenu label={`More for ${task.title}`} groups={[{ title: 'Another day', items: anotherDayItems(task, today, planOn) }]} />
+        <RowMenu label={`More for ${task.title}`} groups={[{ title: 'Another day', items: anotherDayItems(task, today, (t, d) => planOn(t, d, undefined, today)) }]} />
       </span>
     </div>
   )

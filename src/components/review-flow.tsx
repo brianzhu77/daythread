@@ -215,9 +215,9 @@ function PlanCard({ task, date, today, acted, onActed }: { task: Task; date: Loc
       ) : (
         <div className="plan-actions">
           <button type="button" className="secondary" onClick={() => act('Done', () => markDone(task))}>Done</button>
-          <button type="button" className="secondary" onClick={() => act(`Moved to ${shortLabel(addDays(date, 1))}`, () => planOn(task, addDays(date, 1)))}>Tomorrow</button>
+          <button type="button" className="secondary" onClick={() => act(`Moved to ${shortLabel(addDays(date, 1))}`, () => planOn(task, addDays(date, 1), undefined, date))}>Tomorrow</button>
           <button type="button" className="ghost" onClick={() => act('Not today', () => notToday(task, date))}>Not today</button>
-          <RowMenu label={`Another day for ${task.title}`} groups={[{ title: 'Another day', items: anotherDayItems(task, today, (t, d) => act(`Moved to ${shortLabel(d)}`, () => planOn(t, d))) }]} />
+          <RowMenu label={`Another day for ${task.title}`} groups={[{ title: 'Another day', items: anotherDayItems(task, today, (t, d) => act(`Moved to ${shortLabel(d)}`, () => planOn(t, d, undefined, date))) }]} />
         </div>
       )}
     </div>
