@@ -1,6 +1,7 @@
 # A12 · row actions on the day page — plan for review
 
 - Author: Roadbuster · 2026-10-21 · status: **plan, not built**. No code until Ratchet's pre-review.
+- Revised after Ratchet (section and Top 3 fallback on the server; stale row; Undo ownership) and Bumblebee 9462aa55.
 - Inputs:
   - checklist A12 ("Plan-row actions on the day page itself (Not today / Another day / Cancel)", partial: only in
     menus on Tasks, the facts strip, the hand-off and the review);
@@ -29,13 +30,23 @@
 - **Same meanings as everywhere else (Bumblebee 2).** These are the commands the Tasks screen, the facts strip, the
   hand-off and the review already send. Not today here and deleting the whole row (Backspace) both end in the same
   domain `pause()` (Jazz §4). Done stays the checkbox.
-- **A moved row keeps its section** on the new day (Jazz §3): `plan-task` already takes `section`, and A12 sends the
-  row's current one. If that's Top 3 and the new day's Top 3 is full, it goes to Other, the hand-off's existing rule
+- **A moved row keeps its section** on the new day (Jazz §3): A12 sends the row's current `section` explicitly
+  (`place()` defaults to Other, Ratchet). **The server decides the fallback, in the same command:** with `from` set, if
+  the section is Top 3 and the new day's Top 3 is full, `plan-task` places it in Other and its receipt says so. If that's
+  Top 3 and the new day's Top 3 is full, it goes to Other, the hand-off's existing rule
   (`top3Full`), and the notice says so in the morning card's words: "Moved to Wed, Oct 21 · Top 3 is full · added to {Section} · Undo"
   (Bumblebee 5dfb8155, Jazz §3 @ 9f11ad2; if that day has no plan section left, the morning card's "section created" rule).
   The new day never gets a fourth Top 3 row. **Move to Top 3 on the same page** is still allowed with three rows there
   (Jazz): he's choosing it with them in front of him.
 - **"Tomorrow"** is today + 1, as in the review.
+- **Not today / Not on {day} on a row whose task is now planned for another day** (Ratchet 6c… on `pause()` setting
+  `paused` for every day; Bumblebee 9462aa55): `not-today` gets an optional **`onlyThisDay: true`**, which A12 always
+  sends. The server checks, in the same command:
+  - the task is planned for this page's day → D05 as written: clear the date and pause;
+  - it's planned for **another** day → only this page's plan row is removed. The task, its pause and the other day's
+    plan don't change. Receipt: "Removed from Wed · still planned for Fri · Undo".
+  The check is on the server, so a move made on another device a moment earlier can't turn into a pause. Other
+  callers of `not-today` (the facts strip's Continue, the hand-off) don't send it and behave as today.
 
 ## 2. One finding: a moved row stays on the page it left
 
@@ -63,9 +74,16 @@ at that moment, or its existing refresh reports "Page changed elsewhere · draft
 3. **Run the command;** the editor then applies the server's page through the existing external refresh, and editing
    is released.
 
-- **Undo** on the notice is the existing `undo` command (the whole workspace as it was before that action), so the row
-  comes back in its **old section and position** (Bumblebee 3), and the task's dates and pause come back with it. As
-  everywhere, it's refused with "Cannot undo after later changes" if anything was saved since.
+- **Undo belongs to the server, not to editor history (Ratchet):** the notice's Undo is the existing `undo` command
+  (the whole workspace as it was before that action), so the row comes back in its **old section and position**
+  (Bumblebee 3), with the task's dates and pause. It goes through the same flush → hold → command → refresh sequence, so
+  no autosave can follow it and delete the row again. As everywhere, it's refused with "Cannot undo after later changes"
+  if anything was saved since.
+- **The refresh that applies a server change is kept out of editor history.** Today the external refresh's
+  `replaceBlocks` is an ordinary history step, so ⌘Z right after any server-side change to the open page would undo it
+  locally, and the next save would write it back: for A12, a moved row's text would reappear without its placement. The
+  refresh is applied with `addToHistory: false`. That fixes every server-driven refresh (Put back, the hand-off), not only
+  A12, and ⌘Z then never reverses a server action; the notice's Undo does.
 - **Notices** are the hand-off's, word for word: "Moved to Fri 10/23 · Undo", "Not today — won't carry over · due Fri
   still tracked · Undo", "Cancelled · Undo" (`useTaskActions`).
 
@@ -82,8 +100,11 @@ at that moment, or its existing refresh reports "Page changed elsewhere · draft
 ## 5. Checks before the candidate
 
 - **Unit:**
-  - `plan-task` with `from`: the row leaves that page's plan only; without `from`, nothing else changes (the review,
-    the facts strip and past pages behave as today);
+  - `plan-task` with `from`: the row leaves that page's plan only, the section is kept, a full Top 3 falls back to Other
+    with that in the receipt; without `from`, nothing else changes (the review, the facts strip and past pages behave as
+    today);
+  - `not-today` with `onlyThisDay`: planned here → D05; planned for another day → only the row leaves, the task
+    unchanged; without it, as today;
   - Undo of each action restores the row in its section and position, and the task's dates and pause;
   - Not today by action and by deleting the row give the same task and placement state.
 - **Browser, on a copy of his data, 1280 and 390:**
@@ -91,6 +112,8 @@ at that moment, or its existing refresh reports "Page changed elsewhere · draft
     puts the row back in its section and position; a moved row lands in the same section (Other when Top 3 is full);
   - Backspace on a whole plan row and Not today from the menu leave the same state;
   - type in a line, then use an action at once: the text is saved first, with no "changed elsewhere";
+  - an action, then ⌘Z: the row doesn't come back in the editor; the notice's Undo brings it back with its placement,
+    and a following save keeps it;
   - the action and the menu are reachable with no hover at 390;
   - the keyboard shortcut;
   - no page or console errors.
