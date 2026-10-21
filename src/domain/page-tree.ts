@@ -173,6 +173,11 @@ function hasContent(page: Page): boolean {
   return Boolean(page.reviewText.trim()) || page.sections.some((s) => s.blocks.some((b) => b.kind === "task" || b.text.trim()));
 }
 
+/** Days with something written or with subpages, as the sidebar lists them: the header picker's dots. */
+export function writtenDays(ws: Workspace): Set<string> {
+  return new Set(ws.pages.filter((p) => p.type === "daily" && p.date && !p.trashedAt && (hasContent(p) || childPages(ws, p.id).length > 0)).map((p) => p.date!))
+}
+
 /**
  * The sidebar's Days group (layout §1), newest first: this month's days (today always) plus future days, then earlier
  * months by month. A past day is listed when it has content or subpages. A future day is listed only when it has
