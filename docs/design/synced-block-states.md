@@ -112,9 +112,12 @@ same content". The content exists as long as at least one page still shows it.
 - **Linked from:** syncing doesn't link pages to each other. The "On" list in the label menu is how he moves between
   them. A `[[` link *inside* a synced block counts once for **each** page that shows it, because it's on each of
   those pages. Its time is when that page got the block.
-- **Tags:** a tag inside a synced block counts on each page that shows it, same reason. On a tag page the line can
-  therefore appear under two days; that's true to where it is. **Bumblebee to confirm** that's acceptable for the
-  Tags list.
+- **Tags (Bumblebee `8e998433`): a tag in a synced block counts once.** A tag classifies content, and this is one
+  piece of content. The Tags count goes up by 1, and a tag page lists the block once, with "↻ {n} pages", under the
+  **earliest day** among the pages showing it (if no day page shows it, under the page that has shown it longest).
+  Tapping it opens that place; the label's menu reaches the others. If that page stops showing it, it moves to the
+  next one. Day-based reading (review, Draft my day) still sees it on every day that shows it: that's day context,
+  not classification.
 - **Search, lines-from-day readers:** read it as the lines of each page that shows it.
 - **Rollback (format down):** every place becomes ordinary lines with the content as it is at that moment. Nothing he
   wrote is lost; only the syncing stops. The rollback check proves this on a copy of his data.
@@ -151,6 +154,6 @@ same content". The content exists as long as at least one page still shows it.
 
 - **Roadbuster:** simultaneous edits in two places (§5); whether a page "refreshes its data" often enough that he
   won't see stale content when switching tabs.
-- **Bumblebee:** tags counting once per page (§7).
+- ~~**Bumblebee:** tags~~ **Decided:** a tag counts once (§7, Bumblebee `8e998433`).
 - ~~**Lead:** discovery~~ **Decided (Lead `10e9e0f0`):** Brian is told once, in the release report ("select lines →
   Sync in the selection bar → copy the block to another page"), and nowhere in the app: no tip, no onboarding.
