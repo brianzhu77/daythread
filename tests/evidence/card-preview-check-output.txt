@@ -4,6 +4,7 @@ ok   1280: nothing on the page was deleted or saved
 ok   1280: a new empty line is visible while he types in it · {"visible":true,"text":""}
 ok   1280: ArrowDown skips the hidden empty row (it's not on screen) and lands on the next line · {"visible":true,"text":"Good Stuffs"}
 ok   1280: Oct 19 shows no empty rows (its blank TODO - Other task row too)
+ok   1280: Oct 19, ↓ from Good Stuffs lands in its empty row, not in Notes · {"visible":true,"text":""}
 ok   1280: today keeps its empty template rows
 ok   390: Oct 18's empty Events bullet is hidden
 ok   390: the recipe cards show their first line under the title
@@ -11,5 +12,6 @@ ok   390: nothing on the page was deleted or saved
 ok   390: a new empty line is visible while he types in it · {"visible":true,"text":""}
 ok   390: ArrowDown skips the hidden empty row (it's not on screen) and lands on the next line · {"visible":true,"text":"Good Stuffs"}
 ok   390: Oct 19 shows no empty rows (its blank TODO - Other task row too)
+ok   390: Oct 19, ↓ from Good Stuffs lands in its empty row, not in Notes · {"visible":true,"text":""}
 ok   390: today keeps its empty template rows
 ok   no page or console errors
