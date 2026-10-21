@@ -31,7 +31,8 @@
 One action set, two surfaces, so there's nothing to learn twice.
 
 - **Desktop, 1280:** a **⋯** button at the end of the row, shown on hover and while the cursor is in that row (so
-  it's reachable by keyboard: Tab from the row's text lands on it, Enter opens it). It opens the app's existing
+  it's reachable by keyboard: **⌘/** (Ctrl+/ elsewhere) opens the caret row's menu, as Notion's block menu does;
+  Shift+F10 and the Menu key also work. Tab keeps indenting the row (Lead, after Roadbuster and Bumblebee)). It opens the app's existing
   `RowMenu`, the same menu as on the Tasks screen:
   - Tomorrow · Wed, Oct 21
   - Another day ▸ This weekend · Next week · Pick date…
@@ -107,7 +108,8 @@ One action set, two surfaces, so there's nothing to learn twice.
 6. Cancel task → struck through with "Cancelled" → ⋯ → Restore.
 7. 390: tap the handle on a task row → the bar shows Tomorrow / Another day / Not today / ⋯, each at least 44 px,
    and fits at 390 with no overflow. Tap the handle on a text line → "1 selected · Delete" as before.
-8. Keyboard at 1280: from the row's text, Tab reaches ⋯, Enter opens the menu, ↑↓ and Enter choose, Esc closes.
+8. Keyboard at 1280: with the caret in the row's text, ⌘/ opens the ⋯ menu (Shift+F10 too), ↑↓ and Enter choose, Esc closes and
+   returns the caret to the row. Tab still indents.
 9. A future day's row shows "Not on Wed" and no Tomorrow. Move that task to Fri from the Tasks screen → Wed's row
    reads "Do Fri" and offers "Remove from Wed" → "Removed from Wed · still planned for Fri", and Fri's plan and
    carry-over are untouched. A past day's row offers only Bring to today.

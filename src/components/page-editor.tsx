@@ -199,7 +199,7 @@ const touchHandleSize = 44
 // Viewport y of the middle of a block's first line of text. Works for empty blocks and wrapped text alike,
 // since it reads the line box of the inline content rather than the rendered glyphs.
 function firstLineCenter(block: HTMLElement): number {
-  const inline = block.querySelector<HTMLElement>('.bn-inline-content') ?? block
+  const inline = block.querySelector<HTMLElement>('.bn-inline-content, .editor-page-card-title') ?? block
   const style = getComputedStyle(inline)
   const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2
   return inline.getBoundingClientRect().top + lineHeight / 2

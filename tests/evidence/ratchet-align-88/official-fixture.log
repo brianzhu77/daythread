@@ -1,0 +1,3 @@
+(node:4505) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Fixtures on /day/2026-12-31 (revision 175): cancelled task, 13 rows.
