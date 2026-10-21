@@ -1,0 +1,20 @@
+✔ a move from today keeps the section; the row leaves today and lands on the new day (3.6395ms)
+✔ a full Top 3 on the new day sends the row to the plan list, said in the receipt (0.614084ms)
+✔ a task already in the new day's full Top 3 doesn't count against itself (Ratchet) (0.414834ms)
+✔ Move to Top 3 on the same page is allowed with three rows there (no from) (0.401917ms)
+✔ a past page keeps its row: from before today removes nothing (0.143167ms)
+✔ without from, plan-task behaves as before: the old page keeps the row and nothing falls back (0.405209ms)
+✔ from without today is refused (0.261458ms)
+✔ Not on {day} with onlyThisDay: planned here pauses (D05); planned elsewhere only removes the row (0.383041ms)
+✔ not-today without onlyThisDay is unchanged: it pauses even when planned elsewhere (0.152542ms)
+✔ Undo of each action puts the row back in its section and position, with the task's dates and pause (1.617834ms)
+✔ Not today by action and by deleting the whole row leave the same task and placement state (0.644292ms)
+✔ a day with no page yet counts its Top 3 placements: the fourth move falls back to Other (Ratchet b8dac42e) (0.833833ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 86.765125

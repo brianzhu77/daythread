@@ -1,0 +1,12 @@
+target page exists before move false
+fourth receipt Planned for 2026-10-21
+target rows [
+  {
+    kind: 'top3',
+    tasks: [ 'Future 0', 'Future 1', 'Future 2', 'Future 3' ]
+  },
+  { kind: 'other', tasks: [] },
+  { kind: 'events', tasks: [] },
+  { kind: 'good-stuffs', tasks: [] },
+  { kind: 'notes', tasks: [] }
+]

@@ -1,0 +1,10 @@
+card 1
+PASS handoff offers previous unfinished fixture
+PASS handoff inserts current editor row
+PASS A12 Tomorrow removes handoff-added row
+PASS A12 Undo restores handoff-added row
+PASS handoff row persists after reload
+PASS Put back row persisted
+PASS A12 Not today removes Put back row
+PASS A12 command Undo restores Put back row
+PASS Put back row remains after reload

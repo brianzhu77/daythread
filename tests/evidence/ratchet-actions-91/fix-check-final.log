@@ -1,0 +1,16 @@
+(node:6590) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS 1280 cancelled checkbox disabled
+PASS 1280 forced click keeps cancelled
+PASS 1280 Cancelled label adjacent 10
+PASS 1280 keyboard menu opens
+PASS 1280 Esc restores position 2 "QAX final editable row"
+PASS 1280 repeat keyboard menu opens
+PASS 390 cancelled checkbox disabled
+PASS 390 forced click keeps cancelled
+PASS 390 Cancelled label adjacent 10
+PASS 390 keyboard menu opens
+PASS 390 Esc restores position 2 "QAX final editable row"
+PASS 390 repeat keyboard menu opens
+PASS 390 bar controls all >=44px [84.46875,98.46875,83.25,44]
+PASS 390 cancelled bar offers Restore
