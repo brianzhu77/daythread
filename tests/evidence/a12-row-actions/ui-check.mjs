@@ -39,6 +39,16 @@ await choose('Bring to today')
 log((await toast()).includes('On today'), 'Bring to today: notice "On today · Undo"', JSON.stringify(await toast()))
 log(db().task.plannedOn === TODAY && inSection(db().rows(PAST), 'top3'), 'Bring to today: planned today, and Oct 19 keeps its row as history')
 
+// 1b. The evening review's Tomorrow sends `from` too (plan §2, Lead 6c169851): the row leaves today, lands on Wed;
+// the notice's Undo puts it back in place.
+await p.goto(`${base}/review`, { waitUntil: 'networkidle' }); await p.waitForTimeout(900)
+const planCard = p.locator('.plan-card').filter({ hasText: TITLE }).first()
+await planCard.getByRole('button', { name: 'Tomorrow' }).click(); await p.waitForTimeout(1500)
+log(!inSection(db().rows(TODAY), 'other') && !inSection(db().rows(TODAY), 'top3') && db().task.plannedOn === WED, "review Tomorrow: the row left today's page; the task is planned Wed", JSON.stringify(db().rows(TODAY)))
+await p.locator('.toast button', { hasText: 'Undo' }).first().click(); await p.waitForTimeout(1500)
+log(inSection(db().rows(TODAY), 'other') && db().task.plannedOn === TODAY, "review Undo: back in today's Other, planned today")
+await clearToasts()
+
 // 2. Today's open plan row: the menu, in Jazz §2's order; Tomorrow isn't repeated under Another day.
 await open(TODAY)
 const todayItems = await items()

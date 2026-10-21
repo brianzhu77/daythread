@@ -1,6 +1,8 @@
 ok   past day: the menu is only Bring to today · ["Bring to today"]
 ok   Bring to today: notice "On today · Undo" · ["On today"]
 ok   Bring to today: planned today, and Oct 19 keeps its row as history
+ok   review Tomorrow: the row left today's page; the task is planned Wed · {"top3":[],"other":[]}
+ok   review Undo: back in today's Other, planned today
 ok   today's plan row: Tomorrow · Not today · Another day ▸ · Move to Top 3 · Cancel task · ["Tomorrow · Wed, Oct 21","Not today","This weekend · Sat 10/24","Next week · Mon 10/26","Pick date…","Move to Top 3","Cancel task"]
 ok   the ⋯ shows on hover (opacity checked below)
 ok   1280: ⋯ visible on hover
