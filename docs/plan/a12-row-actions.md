@@ -61,7 +61,12 @@ and their presentations in one transaction, so the row should go too.
 - **Why a parameter and not "always":** today, past pages keep their plan rows as history (yesterday's page still
   shows what was planned, and the hand-off reads it), and the review's "Tomorrow" leaves today's row in place. Changing
   `place()` for every caller would change those too. Lead, the review and the facts strip could send `from` as well,
-  so a moved task never still sits in today's Top 3. **Lead 6c169851: yes, this round.** The review and the facts strip
+  so a moved task never still sits in today's Top 3.
+- **Only today and future pages lose the row (Bumblebee c67dfc97):** a past day's page keeps its rows as his record of
+  that day, matching past days offering only Bring to today. One entry point can start from a past page: the evening
+  review opened after midnight acts on yesterday. So `from` travels with **`today`** (the browser's day, as
+  `save-editor` already sends it), and the server removes the row only when `from >= today`.
+- **Lead 6c169851: yes, this round.** The review and the facts strip
   send `from` too, with one test each (A5 review, A8 card): "moved to another day → the row leaves the old page,
   appears on the new one, Undo puts it back in place".
 
@@ -105,7 +110,7 @@ at that moment, or its existing refresh reports "Page changed elsewhere · draft
 ## 5. Checks before the candidate
 
 - **Unit:**
-  - `plan-task` with `from`: the row leaves that page's plan only, the section is kept, a full Top 3 falls back to Other
+  - `plan-task` with `from`: the row leaves that page's plan only (and never when `from` is before `today`), the section is kept, a full Top 3 falls back to Other
     with that in the receipt; without `from`, nothing else changes (the review, the facts strip and past pages behave as
     today);
   - `not-today` with `onlyThisDay`: planned here → D05; planned for another day → only the row leaves, the task
