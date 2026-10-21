@@ -797,9 +797,12 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .day-nav { gap: 4px; }
 .day-nav > :first-child { margin-right: 4px; }
 .day-head { margin-bottom: 20px; }
-/* The one deliberate deviation from HeroUI's defaults (Jazz): days after today haven't happened, they aren't
-   cancelled, so the header picker shows them dimmed without HeroUI's line-through. */
-.day-picker .calendar__cell[data-disabled=true] { text-decoration: none; }
+/* Header picker day states (Brian a6bd90e4): every day is clickable; days that haven't happened yet are grey; a day
+   with something written gets a small, quiet blue dot. Today and the current page keep HeroUI's own states. */
+.day-picker .calendar__cell { cursor: pointer; }
+.day-picker .calendar__cell.is-future:not([data-selected=true]) { color: var(--ink-3); }
+.day-picker .calendar__cell .day-picker-dot { background: var(--blue); opacity: .55; }
+.day-picker .calendar__cell[data-selected=true] .day-picker-dot { background: currentColor; opacity: .8; }
 @media (max-width: 599px) {
   .day-title-trigger { display: inline-grid; grid-template-columns: auto auto; justify-items: start; align-items: center; column-gap: 6px; }
   .day-title-trigger .relative-day { grid-column: 1 / -1; font-size: 13px; line-height: 18px; font-weight: 600; }

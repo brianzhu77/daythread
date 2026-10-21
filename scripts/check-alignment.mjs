@@ -16,6 +16,7 @@
 //      Bullet markers are measured as drawn (screenshot pixels in the zone left of the text), at every level, and
 //      each nested marker's drawn size and gap to its text must match the top-level dot's within 1px.
 //      A marker that can't be found is MISSING, never skipped.
+//   The title's date picker: each day's dot centred under its number (within 1px) and below the digits.
 //   Page card titles must wrap, not clip (link cards may end in an ellipsis).
 //   3. Coverage. Every row type in REQUIRED must appear on the measured pages; one that doesn't is MISSING, never a
 //      pass. Add it to the data copy (or pass a fixture page) and run again.
@@ -162,8 +163,17 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
         row.hovered = after?.cy != null ? after : { missing: true }
       }
     }
+    // The title's date picker (Brian a6bd90e4): a day's dot sits centred under its number, below the digits.
+    await page.locator('.day-title-trigger').click().catch(() => undefined); await page.waitForTimeout(300)
+    const dots = await page.evaluate(() => [...document.querySelectorAll('.day-picker .calendar__cell')].flatMap(c => {
+      const dot = c.querySelector('.day-picker-dot'); if (!dot) return []
+      const range = document.createRange(); range.selectNodeContents(c.firstChild ?? c); const t = range.getBoundingClientRect(), d = dot.getBoundingClientRect(), cell = c.getBoundingClientRect()
+      return [{ day: c.textContent.trim(), dx: (d.left + d.right) / 2 - (cell.left + cell.right) / 2, below: d.top >= t.bottom - 0.5, size: d.width }]
+    }))
+    await page.keyboard.press('Escape').catch(() => undefined)
     await page.close()
     const at = `${width} ${path}`
+    for (const d of dots) results.push({ at, check: `picker dot under day ${d.day}`, ok: Math.abs(d.dx) <= TOLERANCE && d.below, detail: `${d.dx >= 0 ? '+' : ''}${fmt(d.dx)}px from centre, ${d.below ? 'below the digits' : 'overlapping the digits'}, ${fmt(d.size)}px` })
     for (const r of rows) { seen.get(width).add(r.kind); if (r.empty) seen.get(width).add('empty row'); if (r.kind === 'nested bullet' && r.depth >= 2) seen.get(width).add('level 3 bullet') }
     // 1. Columns.
     const top = rows.filter(r => r.depth === 0 && r.kind !== 'heading' && r.kind !== 'paragraph')
