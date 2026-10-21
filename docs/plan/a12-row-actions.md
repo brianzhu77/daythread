@@ -14,7 +14,7 @@
     stays the checkbox; every action with the hand-off's notice + Undo, the row back in its old place; reachable at 390
     with no hover;
   - Jazz `docs/design/day-row-actions-states.md` @ 0f58e8f (the design source: entry, rows, what happens to the row).
-- Base: main 9f11ad2. Brian's data: 5 tasks; Oct 18–19 he carried 3 forward and finished 2 (Bumblebee).
+- Base: main 27763d3. Brian's data: 5 tasks; Oct 18–19 he carried 3 forward and finished 2 (Bumblebee).
 
 ## 1. What each row offers, and the command behind it (Jazz §1–§3)
 
@@ -32,21 +32,22 @@
   domain `pause()` (Jazz §4). Done stays the checkbox.
 - **A moved row keeps its section** on the new day (Jazz §3): A12 sends the row's current `section` explicitly
   (`place()` defaults to Other, Ratchet). **The server decides the fallback, in the same command:** with `from` set, if
-  the section is Top 3 and the new day's Top 3 is full, `plan-task` places it in Other and its receipt says so. If that's
-  Top 3 and the new day's Top 3 is full, it goes to Other, the hand-off's existing rule
-  (`top3Full`), and the notice says so in the morning card's words: "Moved to Wed, Oct 21 · Top 3 is full · added to {Section} · Undo"
+  the section is Top 3 and the new day's Top 3 is full (the hand-off's `top3Full` rule), `plan-task` places it in Other,
+  and the notice says so in the morning card's words: "Moved to Wed, Oct 21 · Top 3 is full · added to {Section} · Undo"
   (Bumblebee 5dfb8155, Jazz §3 @ 9f11ad2; if that day has no plan section left, the morning card's "section created" rule).
   The new day never gets a fourth Top 3 row. **Move to Top 3 on the same page** is still allowed with three rows there
   (Jazz): he's choosing it with them in front of him.
 - **"Tomorrow"** is today + 1, as in the review.
-- **Not today / Not on {day} on a row whose task is now planned for another day** (Ratchet 6c… on `pause()` setting
-  `paused` for every day; Bumblebee 9462aa55): `not-today` gets an optional **`onlyThisDay: true`**, which A12 always
-  sends. The server checks, in the same command:
-  - the task is planned for this page's day → D05 as written: clear the date and pause;
-  - it's planned for **another** day → only this page's plan row is removed. The task, its pause and the other day's
-    plan don't change. Receipt: "Removed from Wed · still planned for Fri · Undo".
-  The check is on the server, so a move made on another device a moment earlier can't turn into a pause. Other
-  callers of `not-today` (the facts strip's Continue, the hand-off) don't send it and behave as today.
+- **A stale plan row** (Wed's row, the task now planned for Fri; Ratchet 9abc4857, Bumblebee 9462aa55, Jazz §4 @
+  27763d3): its menu offers **"Remove from Wed"** instead of "Not on Wed", and "Not today / Not on {day}" (D05) is offered
+  only while the task is planned for that page's day. "Remove from Wed" removes only this row; the task, its pause and
+  Fri's plan don't change. Notice: "Removed from Wed · still planned for Fri · Undo". Backspace on the whole stale row
+  does the same (`save-editor` already pauses only when `plannedOn` is the page's day).
+  - **The server re-checks it**, because the menu is drawn from a workspace that can be a moment old: `not-today` gets an
+    optional **`onlyThisDay: true`**, which A12 always sends. Planned for this day → D05 (clear the date and pause).
+    Planned for another day → only this page's plan row is removed, and the receipt is the "Removed from Wed" line. A move
+    made on another device a moment earlier can't turn into a pause.
+  - Other callers of `not-today` (the facts strip's Continue, the hand-off) don't send it and behave as today.
 
 ## 2. One finding: a moved row stays on the page it left
 
@@ -84,6 +85,8 @@ at that moment, or its existing refresh reports "Page changed elsewhere · draft
   locally, and the next save would write it back: for A12, a moved row's text would reappear without its placement. The
   refresh is applied with `addToHistory: false`. That fixes every server-driven refresh (Put back, the hand-off), not only
   A12, and ⌘Z then never reverses a server action; the notice's Undo does.
+- **⌘Z while the action's notice is showing** runs that same server Undo (Jazz §4), the A2 pattern: a keydown in front of
+  BlockNote's, and only while nothing was edited since the action.
 - **Notices** are the hand-off's, word for word: "Moved to Fri 10/23 · Undo", "Not today — won't carry over · due Fri
   still tracked · Undo", "Cancelled · Undo" (`useTaskActions`).
 
