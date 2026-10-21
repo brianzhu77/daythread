@@ -1,0 +1,23 @@
+(node:21652) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280: a past day with nothing written: black, no dot (17)
+ok   1280: the current page is selected (blue) and has its dot (18)
+ok   1280: a written past day has the dot (19)
+ok   1280: today, not the current page, keeps the light-blue state (20)
+ok   1280: a future day with an empty page: grey, no dot, enabled (21) · rgb(158, 160, 164)
+ok   1280: every day shows the pointer cursor
+ok   1280: a future day opens its preview, and no page is created
+ok   1280: a past day opens with a plain page · pages before: 0
+ok   1280: just opening it doesn't give it a dot
+ok   390: a past day with nothing written: black, no dot (17)
+ok   390: the current page is selected (blue) and has its dot (18)
+ok   390: a written past day has the dot (19)
+ok   390: today, not the current page, keeps the light-blue state (20)
+ok   390: a future day with an empty page: grey, no dot, enabled (21) · rgb(158, 160, 164)
+ok   390: every day shows the pointer cursor
+ok   390: a future day opens its preview, and no page is created
+ok   390: a past day opens with a plain page · pages before: 1
+ok   390: just opening it doesn't give it a dot
+ok   no page or console errors
+
+all passed

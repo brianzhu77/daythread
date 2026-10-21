@@ -1,0 +1,15 @@
+(node:21784) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS 1280 title stays put
+PASS 1280 Escape closes picker
+PASS 1280 future selection navigates without creating new page
+PASS future preview offers Create page
+PASS Create page makes editable plain template
+PASS created future page has no AI draft
+PASS 1280 picker fits viewport
+PASS 1280 no page errors
+PASS 390 title stays put
+PASS 390 Escape closes picker
+PASS 390 future selection navigates without creating new page
+PASS 390 picker fits viewport
+PASS 390 no page errors
