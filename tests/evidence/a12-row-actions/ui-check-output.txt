@@ -29,16 +29,23 @@ ok   it's in Sat's Other, not a fourth Top 3 row · {"top3":["Full A","Full B","
 ok   Cancel: notice "Cancelled · Undo"
 ok   cancelled row: "Cancelled" label, no tick, data-status=cancelled
 ok   cancelled row is struck through
+ok   "Cancelled" sits right after the title (Jazz d0c8df18) · 10px after it
 ok   cancelled row: the menu is only Restore
+ok   cancelled row: the checkbox is disabled, so it can't jump to done (Ratchet 5701d547)
+ok   a forced click on it changes nothing
+ok   390 cancelled row: the bar offers Restore
 ok   Restore: "Restored · Undo", open again
 ok   a done row has no ⋯
 ok   a draft (empty) row has no ⋯
 ok   ⌘/ opens the row menu with focus inside; ↓ moves; Esc closes · Not on Sat → Tomorrow · Wed 10/21
+ok   Esc puts the caret back where it was (row end): the next letter lands there (Jazz d0c8df18)
+ok   mid-row: Esc returns the caret to the same spot (Jazz check 8) · #dQaythread 
+ok   a second ⌘/ after Esc opens the menu again
 ok   failed action: "Not done · your text is kept", editing released, text kept · ["Not done · your text is kept"]
 ok   typing then ⌘Z removes the typing
 ok   A2: paste a URL → link card; ⌘Z with its notice → the line is back · 1 → 0
 ok   390 task row: the bar shows the row's actions · ["Another day","Not on Sat","⋯"]
-ok   390: each button is 44px or more, and the bar fits the screen · {"l":76.6171875,"r":313.3828125,"w":390}
+ok   390: each button is 44px or more each way (⋯ included), and the bar fits the screen · {"bar":{"l":71.6171875,"r":318.3828125,"w":390},"widths":[98.46875,88.296875,44]}
 ok   390: Another day opens upward, on screen
 ok   390 text line: "… selected · Delete" as before
 ok   no page or console errors

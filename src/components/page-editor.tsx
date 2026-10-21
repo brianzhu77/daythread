@@ -1,5 +1,5 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
-import { NodeSelection, TextSelection, type Transaction } from '@tiptap/pm/state'
+import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
@@ -69,13 +69,13 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
   const model = t && rows ? rowMenu(t, role, rows.sectionOf(blockId), rows.pageDate, rows.today) : null
   // data-status: the task's real state, for checks such as scripts/check-alignment.mjs (Lead a2428bb1). Display only.
   return <div className="editor-task" data-role={role} data-draft={t ? undefined : true} data-status={t?.status ?? 'draft'}>
-    <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={t?.status === 'done'} disabled={!t && !taskId.startsWith('editor-task:')} onChange={() => t && void run({ type: 'task-status', taskId, status: t.status === 'done' ? 'open' : 'done' }, r => ({ text: t.status === 'done' ? 'Task reopened' : 'Task completed', undoOperationId: r.operationId }))} />
+    <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={t?.status === 'done'} disabled={(!t && !taskId.startsWith('editor-task:')) || t?.status === 'cancelled'} onChange={() => t && void run({ type: 'task-status', taskId, status: t.status === 'done' ? 'open' : 'done' }, r => ({ text: t.status === 'done' ? 'Task reopened' : 'Task completed', undoOperationId: r.operationId }))} />
     <span ref={contentRef} className={`editor-task-title ${t?.status === 'done' ? 'task-done' : t?.status === 'cancelled' ? 'task-cancelled' : ''}`} data-placeholder="To do" />
     {/* Jazz f58abeaf: done rows are grey and struck through too, so the label is what says Cancelled. */}
     {t?.status === 'cancelled' && <span contentEditable={false} className="editor-cancelled-tag">Cancelled</span>}
     {role === 'reference' && <span contentEditable={false} className="editor-reference-tag">Reference</span>}
     {role === 'reference' && t?.status === 'open' && <button className="editor-plan-action" contentEditable={false} onClick={() => void run({ type: 'plan-task', taskId, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }, r => ({ text: 'Planned for today', undoOperationId: r.operationId }))}>Plan for today</button>}
-    {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent))} /></span>}
+    {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent))} onEscape={() => rows!.focusRow(blockId)} /></span>}
     {t && t.status === 'open' && hasDateFacts(t) && <span contentEditable={false} className="editor-date-tag"><DateTag task={t} today={todayIso()} pageDate={planDate || todayIso()} /></span>}
   </div>
 }
@@ -988,6 +988,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * the draft as it was (Ratchet 980d5695).
    */
   const rowNotice = useRef<{ key: string; operationId: string; fingerprint: string } | null>(null)
+  const menuReturn = useRef<{ blockId: string; selection: ReturnType<Selection['toJSON']> } | null>(null)
   const closeRowNotice = () => { if (rowNotice.current) toast.close(rowNotice.current.key); rowNotice.current = null }
   useEffect(() => () => closeRowNotice(), [])
   async function onServer(action: Action, operationId: string, options?: { inlineRefusal: RegExp; onRefused: (m: string) => void }): Promise<Receipt | null> {
@@ -1079,7 +1080,14 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const id = selected.current[0]!, block = editor.getBlock(id)
     if (block?.type !== 'task') return null
     const t = latestWorkspace.current.tasks.find(x => x.id === block.props.taskId)
-    if (!t || t.status !== 'open') return null
+    if (!t || t.status === 'done') return null
+    const keepFocus = (e: { preventDefault(): void }) => e.preventDefault()
+    // A cancelled row's only way back is Restore (Ratchet 5701d547, Jazz 1358f49b); at 390 the bar is where it lives.
+    if (t.status === 'cancelled') return <div className="editor-selection-bar is-row-actions" onPointerDown={keepFocus}>
+      <button type="button" onClick={() => { selected.current = []; setSelectionLabel(''); void rowAct(id, t, { kind: 'restore' }) }}>Restore</button>
+      <button type="button" onClick={deleteSelected}>Delete line</button>
+    </div>
+    if (t.status !== 'open') return null
     const model = rowMenu(t, block.props.role, sectionOf(id), page.date ?? null, todayIso())
     if (!model) return null
     const choose = (intent: RowIntent) => { selected.current = []; setSelectionLabel(''); void rowAct(id, t, intent) }
@@ -1093,7 +1101,17 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       <RowMenu label="More actions" triggerClass="editor-bar-button" groups={more} />
     </div>
   }
-  const rowActions: RowActions = { pageDate: page.date ?? null, today: todayIso(), sectionOf, act: (id, t, intent) => void rowAct(id, t, intent) }
+  const rowActions: RowActions = {
+    pageDate: page.date ?? null, today: todayIso(), sectionOf, act: (id, t, intent) => void rowAct(id, t, intent),
+    focusRow: id => {
+      if (!editor.getBlock(id)) return
+      const back = menuReturn.current; menuReturn.current = null
+      const view = editor.prosemirrorView
+      // Opened with ⌘/: back to where the caret was. Opened by pointer: the end of the row.
+      if (back?.blockId === id) { try { view.dispatch(view.state.tr.setSelection(Selection.fromJSON(view.state.doc, back.selection))); editor.focus(); return } catch { /* the row changed meanwhile */ } }
+      editor.setTextCursorPosition(id, 'end'); editor.focus()
+    },
+  }
   return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
     onMouseDownCapture={e => { const target = e.target as Element; if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') } }}
@@ -1182,7 +1200,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === '/') || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
         const block = editor.getTextCursorPosition().block
         const more = editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"] .editor-row-more`)
-        if (more) { e.preventDefault(); e.stopPropagation(); more.click(); return }
+        // Esc gives the caret back exactly where ⌘/ was pressed (Jazz check 8).
+        if (more) { e.preventDefault(); e.stopPropagation(); menuReturn.current = { blockId: block.id, selection: editor.prosemirrorState.selection.toJSON() }; more.click(); return }
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.nativeEvent.isComposing) {
         e.preventDefault(); e.stopPropagation()
