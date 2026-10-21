@@ -149,3 +149,21 @@ test('Not today by action and by deleting the whole row leave the same task and 
   assert.deepEqual(strip(byAction.state), strip(byDelete.state))
   assert.deepEqual(rows(byAction.page(today), 'top3'), rows(byDelete.page(today), 'top3'))
 })
+
+test('a day with no page yet counts its Top 3 placements: the fourth move falls back to Other (Ratchet b8dac42e)', () => {
+  const s = setup()
+  const ids = ['One', 'Two', 'Three', 'Four'].map(t => s.add(today, t, 'top3').id)
+  // Friday has no page: the first three moves fill its Top 3 as placements only.
+  for (const id of ids.slice(0, 3)) s.run({ type: 'plan-task', taskId: id, date: friday, section: 'top3', from: today, today })
+  assert.equal(s.state.pages.some(p => p.date === friday), false)
+  const r = s.run({ type: 'plan-task', taskId: ids[3]!, date: friday, section: 'top3', from: today, today })
+  assert.match(r.receipt.message, /Top 3 is full · added to TODO - Other$/)
+  assert.equal(s.state.placements.find(p => p.taskId === ids[3] && p.date === friday)!.section, 'other')
+  // Moving one of the three again doesn't count itself.
+  const again = s.run({ type: 'plan-task', taskId: ids[0]!, date: friday, section: 'top3', from: today, today })
+  assert.equal(again.receipt.message, `Planned for ${friday}`)
+  // When Friday's page is created, it shows three in Top 3 and the fourth in Other.
+  s.day(friday)
+  assert.deepEqual(rows(s.page(friday), 'top3').sort(), ['One', 'Three', 'Two'])
+  assert.deepEqual(rows(s.page(friday), 'other'), ['Four'])
+})

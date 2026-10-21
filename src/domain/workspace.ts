@@ -229,7 +229,11 @@ function place(
 /** Top 3 holds three tasks on that day's page. A task already there doesn't count against itself (Ratchet 980d5695). */
 export function top3Full(state: Workspace, day: string, taskId?: string): boolean {
   const p = state.pages.find((x) => x.type === "daily" && x.date === day);
-  const ids = new Set(p?.sections.filter((s) => s.kind === "top3").flatMap((s) => s.blocks).filter((b) => b.kind === "task" && b.taskId).map((b) => b.taskId!));
+  // A day without a page yet (a future day) holds its plan as placements; its page renders them when created (Ratchet
+  // b8dac42e: counting only page rows let a fourth task into an unopened day's Top 3).
+  const ids = new Set(p
+    ? p.sections.filter((s) => s.kind === "top3").flatMap((s) => s.blocks).filter((b) => b.kind === "task" && b.taskId).map((b) => b.taskId!)
+    : state.placements.filter((x) => x.date === day && x.state === "included" && x.section === "top3").map((x) => x.taskId));
   if (taskId && ids.has(taskId)) return false;
   return ids.size >= 3;
 }
