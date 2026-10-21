@@ -1,0 +1,12 @@
+PASS original two day-page links named
+PASS keyboard focuses sidebar link 0
+PASS Tab follows first sidebar page to second
+PASS Enter opens correct sidebar page 0 /pages vs /pages?page=fa95e8a3-dd0a-4b3c-8fcc-c1129c8c4820
+PASS keyboard focuses sidebar link 1
+PASS Enter opens correct sidebar page 1 /pages vs /pages?page=ee5bd493-980f-4041-ad34-89efa85ed78a
+PASS 1280 final text scrolls completely clear {"lastTop":260.203125,"lastBottom":308.203125,"barTop":0,"fadeTop":796,"barDisplay":"none"}
+PASS 1280 no page errors
+PASS 390 final text scrolls completely clear {"lastTop":214.203125,"lastBottom":310.203125,"barTop":828,"fadeTop":796,"barDisplay":"flex"}
+PASS capture sheet opens
+PASS capture sheet opaque white rgb(255, 255, 255)
+PASS 390 no page errors

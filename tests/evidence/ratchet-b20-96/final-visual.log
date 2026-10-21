@@ -1,0 +1,4 @@
+PASS 2026-10-18 final Review control clears fade by 15.7px
+PASS bar interior pixels unchanged with bright text/background behind it
+PASS capture sheet remains solid white
+PASS 2026-10-19 final Review control clears fade by 15.7px
