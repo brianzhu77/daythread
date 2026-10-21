@@ -1,0 +1,5 @@
+PASS 3 named page rows
+PASS newest day first, today label ["Today","Oct 20","Oct 19"]
+PASS correct remaining count
+PASS long title truncates before day {"truncated":true,"gap":0,"dayWidth":true}
+PASS More link opens Pages
