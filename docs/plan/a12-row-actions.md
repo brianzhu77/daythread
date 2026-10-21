@@ -13,7 +13,7 @@
     stays the checkbox; every action with the hand-off's notice + Undo, the row back in its old place; reachable at 390
     with no hover;
   - Jazz `docs/design/day-row-actions-states.md` @ 0f58e8f (the design source: entry, rows, what happens to the row).
-- Base: main 0f58e8f. Brian's data: 5 tasks; Oct 18–19 he carried 3 forward and finished 2 (Bumblebee).
+- Base: main 9f11ad2. Brian's data: 5 tasks; Oct 18–19 he carried 3 forward and finished 2 (Bumblebee).
 
 ## 1. What each row offers, and the command behind it (Jazz §1–§3)
 
@@ -31,8 +31,10 @@
   domain `pause()` (Jazz §4). Done stays the checkbox.
 - **A moved row keeps its section** on the new day (Jazz §3): `plan-task` already takes `section`, and A12 sends the
   row's current one. If that's Top 3 and the new day's Top 3 is full, it goes to Other, the hand-off's existing rule
-  (`top3Full`), and the notice says so in the morning card's words: "Top 3 is full · added to {Section} · Undo"
-  (Bumblebee 5dfb8155, `morning-card-build.md:81`). The new day never gets a fourth Top 3 row.
+  (`top3Full`), and the notice says so in the morning card's words: "Moved to Wed, Oct 21 · Top 3 is full · added to {Section} · Undo"
+  (Bumblebee 5dfb8155, Jazz §3 @ 9f11ad2; if that day has no plan section left, the morning card's "section created" rule).
+  The new day never gets a fourth Top 3 row. **Move to Top 3 on the same page** is still allowed with three rows there
+  (Jazz): he's choosing it with them in front of him.
 - **"Tomorrow"** is today + 1, as in the review.
 
 ## 2. One finding: a moved row stays on the page it left
