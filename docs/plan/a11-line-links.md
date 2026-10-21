@@ -20,7 +20,7 @@
    | --- | --- | --- |
    | edit, split by Enter (first half), indent/outdent, drag within the page | kept | followed |
    | **task moved to another day** (row menu, review, hand-off, carry-over) | **new row id**, same task | followed **by the task** (§2) |
-   | **cut and paste** (same page or another page) | **new id** (the paste gives every block a fresh id) | followed **if** cut-and-paste keeps ids (§3) |
+   | **cut and paste** (same page or another page) | **new id** (the paste gives every block a fresh id) | **kept from now on** (§3), so followed |
    | **Bring to today** | it's a **copy**; the source line is unchanged | the link stays on the source line (not a move) |
    | merged into the line above (Backspace at its start), deleted | gone | "Line removed · {last page}" |
 
@@ -55,18 +55,27 @@
 The chip's words come from the resolved block's `NoteBlock` text (live, nothing stored), and its "where" from the
 resolved page (day label or title).
 
-## 3. Keeping ids on cut-and-paste moves
+## 3. Keeping ids on cut-and-paste moves (Bumblebee `043938fe`, Lead)
 
-The paste handler already knows a paste is a **move** (`moving`: the clipboard's cut token matches). Today a move
-still gives every block a new id. The plan keeps the ids on a move: `fresh()` keeps `node.id` when `moving`.
-- **Same page:** the cut removed the originals from the same document, so no duplicates.
-- **Another page, same tab:** the cut removes the originals in the source editor first. The two pages save
-  separately, though, so for up to one save (450ms) both pages can hold the id. The resolver prefers the page
-  `pageId` and then any other page, so during that window the link may point at the old copy; it settles at the next
-  save.
-- **@Ratchet: the risk to check** is today's by-id lookups that span pages (capture Undo's `appliedSnapshot`, edit in
-  place) during that window. If it's judged too risky, drop this part: a cut-and-paste move then shows "Line removed
-  · {old page}", and the rest of A11 is unchanged.
+This is how he moves a line between pages today, so it has to keep the id. **No new clipboard data is needed.** Our
+own cut already leaves a note: `copyBlocks` writes the blocks with `cut: true` and a token to our clipboard type, and
+also to `localStorage` (`daythread:cut:<token>`). The paste handler already recognizes a move from it (`moving`). The
+one thing that loses the id is that `fresh()` gives every pasted block a new id even when `moving` is set. The plan:
+
+1. **On cut, save the source page right away** (the existing `registerEditorFlush` save, not the 450ms timer). Today
+   a cut followed by a quick switch to another page leaves the source's deletion unsaved: the editor unmounts and only
+   stashes the draft. So the line would still exist on the old page on the server.
+2. **On a move paste, keep each block's id** if no current page in the workspace still holds that id. If one does (the
+   source's save hasn't landed, or failed), that block gets a new id, as today, and a link to it reads "Line removed".
+   It's never on two pages.
+3. **Only for a cut.** A copy always gets new ids, or two lines would share one. Lead's "short time window" is already
+   in place: a cut can be pasted as a move once, and its note is removed then. A cut from another tab works through
+   the `localStorage` note.
+- This is the same approach as the parked A9b note, already built: the clipboard isn't changed, so other apps are
+  unaffected.
+- **@Ratchet: the risk to check** is anything else that assumes a pasted block always has a new id (B15 card times
+  are already kept on a move; A12 row metadata; capture Undo's by-id `appliedSnapshot`).
+- **Size:** about half a day, including a two-page check.
 
 ## 4. Copy and paste
 
@@ -105,7 +114,7 @@ taps.
 
 Jazz §7 checks 1–10, plus:
 - a task moved to tomorrow with the row menu: the chip follows it (task identity);
-- cut on Oct 18, paste on today: the chip follows it (§3), and the line is never on two pages after both saves;
+- cut on Oct 18, paste on today (also after switching pages at once, and from another tab): the chip follows it (§3); the line is never on two pages; a cut whose source save failed pastes with a new id;
 - Bring to today of a linked line: the link stays on Oct 18's line;
 - merge a linked line into the one above → "Line removed";
 - pasting into a task title gives text (§1);
@@ -117,8 +126,8 @@ Jazz §7 checks 1–10, plus:
 ## 8. Size
 
 **About one build round, smaller than A9a**: no format, migration or rollback script. Most of it is the resolver,
-the chip, three entry points, the paste branch, the jump fallback and Linked from. The cut-and-paste ids (§3) is
-the only part touching existing behaviour.
+the chip, three entry points, the paste branch, the jump fallback and Linked from. The cut-and-paste ids (§3, about half a day)
+are the only part touching existing behaviour.
 
 ## 9. For review
 
