@@ -8,6 +8,7 @@ import { draftMyDay as draftMyDayFn, loadWorkspace, retryCapture as retryCapture
 import { configureDebug, debugClient } from '../lib/debug'
 import { sampleActions } from './fixture'
 import { todayIso } from './dates'
+import { flushAllEditors } from './editor-flush'
 
 export interface Transport {
   load(operationId?: string, triggerOperationId?: string): Promise<Workspace>
@@ -108,6 +109,26 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   }, [refresh])
 
   useEffect(reload, [reload])
+
+  // An open tab only learns of edits made elsewhere (another tab, the phone) when it loads again. Coming back to the
+  // tab loads again, after saving what was typed here, so the refresh never lands on unsaved typing. If that save is
+  // refused (the page changed elsewhere), the editor already shows "changed elsewhere · draft kept" and nothing loads
+  // over it. At most once every 5s.
+  useEffect(() => {
+    let last = 0, running = false
+    const onVisible = async () => {
+      if (document.visibilityState !== 'visible' || running || Date.now() - last < 5000) return
+      running = true; last = Date.now()
+      try {
+        if (!(await flushAllEditors())) return
+        await queue.current
+        await refresh()
+      } catch { /* offline: the next action resyncs */ } finally { running = false }
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => { document.removeEventListener('visibilitychange', onVisible); window.removeEventListener('focus', onVisible) }
+  }, [refresh])
 
   useEffect(() => {
     if (saveState !== 'saved') return
