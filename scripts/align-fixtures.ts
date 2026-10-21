@@ -8,7 +8,7 @@
 //
 // Everything goes through the same commands the app sends (add-task, task-status, create-document, paste-links,
 // save-editor), so a cancelled task is really cancelled. On /day/2026-12-31 it adds: an open task and a cancelled one,
-// a bullet with a nested bullet and an empty nested line, two page cards without preview (one with a long title),
+// a bullet with a nested bullet (and a level-3 one under it) and an empty nested line, two page cards without preview (one with a long title),
 // and a link card.
 // Run it once per copy: a second run refuses, since the scratch page already has its rows.
 import { resolve } from 'node:path'
@@ -59,7 +59,7 @@ const added = [
   { id: emptyCardId, type: 'pageLink', props: { pageId: emptyPageId, url: '', line: '' }, children: [] },
   { id: longCardId, type: 'pageLink', props: { pageId: longPageId, url: '', line: '' }, children: [] },
   { id: linkCardId, type: 'pageLink', props: { pageId: linkPageId, url: 'https://example.com/fixture-link', line: 'paragraph' }, children: [] },
-  bullet('Fixture parent', [bullet('Fixture nested child'), bullet('')]),
+  bullet('Fixture parent', [bullet('Fixture nested child', [bullet('Fixture level 3')]), bullet('')]),
 ] as unknown as EditorNode[]
 const notes = nodes.findIndex(n => n.id === page.sections.find(s => s.kind === 'notes')!.id)
 nodes.splice(notes + 1, 0, ...added)

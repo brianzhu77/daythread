@@ -702,13 +702,25 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* B19: done rows grey out so open ones stand out. The strikethrough is one value, pending Brian's pick (2ea283a3). */
 :root { --done-decoration: line-through; }
 .continuous-editor .editor-task-title.task-done, .continuous-editor .editor-task-title.task-done * { color:var(--ink-3); text-decoration:var(--done-decoration); }
-/* B19: a nested line's text starts one step (24px) right of its parent's text, as in Craft. */
+/* B19: a nested line's text starts one step (24px) right of its parent's text. */
 .continuous-editor .bn-block-group .bn-block-group { margin-left:45px; }
+/* Deeper levels step by the same 24px: the top-level group's 45px already includes the dot column. */
+.continuous-editor .bn-block-group .bn-block-group .bn-block-group { margin-left:24px; }
 /* Top-level bullets share the task rows' columns: the dot on the checkbox centre (23px), text where task text starts (45px).
    Drawn as a circle, since a "•" glyph sits on the font baseline. Nested bullets keep BlockNote's markers. */
 .continuous-editor .bn-editor > .bn-block-group > .bn-block-outer > .bn-block > .bn-block-content[data-content-type="bulletListItem"]::before {
   content:""; flex:none; width:45px; min-width:45px; padding:0; align-self:flex-start; height:var(--bullet-line, 24px);
   background:radial-gradient(circle, currentColor 2.6px, transparent 3px) 20px 50% / 6px 6px no-repeat;
+}
+/* Nested bullets (Brian ec2c2fe1): drawn like the top-level dot, not BlockNote's tiny "◦" glyph. Same 45px box and the same
+   centre-to-text distance (22px) as top level; the box reaches back under the parent's text so nested text stays at +24px.
+   Level 2 is a ring the size of the dot, level 3 and deeper a small square. */
+.continuous-editor .bn-block-group .bn-block-group > .bn-block-outer > .bn-block > .bn-block-content[data-content-type="bulletListItem"]::before {
+  content:""; flex:none; width:45px; min-width:45px; margin-left:-21px; padding:0; align-self:flex-start; height:var(--bullet-line, 24px);
+  background:radial-gradient(circle, transparent 1.5px, currentColor 1.8px, currentColor 2.7px, transparent 3.1px) 20px 50% / 6px 6px no-repeat;
+}
+.continuous-editor .bn-block-group .bn-block-group .bn-block-group > .bn-block-outer > .bn-block > .bn-block-content[data-content-type="bulletListItem"]::before {
+  background:linear-gradient(currentColor, currentColor) 20.5px 50% / 5px 5px no-repeat;
 }
 /* BlockNote's type-specific hints ignore focus; only the bullet being typed in shows one. */
 .continuous-editor .bn-editor .bn-block-content[data-content-type="bulletListItem"][data-is-empty-and-focused]:has(.ProseMirror-trailingBreak:only-child):after { content:"Write…"; }
