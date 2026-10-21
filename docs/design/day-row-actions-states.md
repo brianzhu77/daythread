@@ -63,6 +63,9 @@ One action set, two surfaces, so there's nothing to learn twice.
 - **The row leaves; nothing jumps.** The lines below close up, and the cursor (if it was in the row) goes to the end
   of the line above. The notice is the editor's existing strip, so the phone bar and notice never stack: the
   selection bar closes when an action runs.
+- **Undo comes from the action's own server operation, not the editor's history,** so the restored row stays: the
+  next autosave can't remove it again (Ratchet `9abc4857`). ⌘Z right after an action does the same Undo while its
+  notice is showing, as in A2.
 - **Undo puts the row back exactly** in its old section and position, with its text (Bumblebee 3), and puts the task
   back to its previous plan date and carry-over state. If the page has changed since and the old position is gone,
   it goes to the end of its old section. It never goes into the wrong section.
@@ -79,8 +82,12 @@ One action set, two surfaces, so there's nothing to learn twice.
 
 - **The task was changed on another device** after the page loaded: the action applies to its current state, and
   Undo restores what this action changed (the existing versioned Undo, v0.3 §8 "Undo blocked" if it can't).
-- **The task is also on another day's page:** only this page's row is affected; the other placement follows the
-  task's plan date like every other view.
+- **A row whose task is now planned on another day** (a stale plan row, e.g. Wed's row after the task moved to Fri;
+  Ratchet `9abc4857`): the actions follow the **task's current state**, not the page. That row is shown and treated
+  as a **reference row**: its date tag reads "Do Fri", and it offers Plan for {this day} · Another day ▸ · Cancel
+  task. **No "Not today / Not on {day}"**, because that would pause the carry-over of a plan that lives on another
+  day. Backspace on it removes only the line (it's a reference now), with "Reference removed · Undo".
+- **In general, "Not today / Not on {day}" is offered only when the task is planned on that page's day right now.**
 - **The save is still pending** when he taps an action: flush first, then act (the A2 rule), so the row's latest
   title is what moves.
 - **Read-only pages** (past days, trashed pages): no ⋯ and no bar actions except Bring to today on past days.
@@ -99,7 +106,8 @@ One action set, two surfaces, so there's nothing to learn twice.
 7. 390: tap the handle on a task row → the bar shows Tomorrow / Another day / Not today / ⋯, each at least 44 px,
    and fits at 390 with no overflow. Tap the handle on a text line → "1 selected · Delete" as before.
 8. Keyboard at 1280: from the row's text, Tab reaches ⋯, Enter opens the menu, ↑↓ and Enter choose, Esc closes.
-9. A future day's row shows "Not on Wed" and no Tomorrow. A past day's row offers only Bring to today.
+9. A future day's row shows "Not on Wed" and no Tomorrow. Move that task to Fri from the Tasks screen → Wed's row
+   reads "Do Fri" and offers no "Not on Wed". A past day's row offers only Bring to today.
 10. Done and draft rows show no ⋯.
 
 ## 6. Open questions for the plan
