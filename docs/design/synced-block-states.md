@@ -59,6 +59,10 @@ same content". The content exists as long as at least one page still shows it.
   No colour, no fill: the page stays black, white and grey (Brian `116a40ab`).
 - **Hover, or the caret inside:** the outline darkens to `--ink-3`, and a small label sits on the top edge at the
   right: **"↻ Synced · {n} pages ⌄"** in 12 px `--ink-2`. At 390 the label shows while the caret is inside (no hover).
+- **Room for the outline and label (b21 plan: the container's own row takes no line):** the block always keeps 8 px
+  above its first line and 6 px below its last, hover or not, so nothing shifts when the label appears. The outline
+  runs through that space, and the label straddles the top edge on a `--bg` backing. Its box must clear the first
+  line's text and the line above the block (a geometry check). Only vertical space is added; columns don't change.
 - **"Only here":** when it's on one page, the label reads "↻ Synced · only here". It stays a synced block, so he can
   still copy it elsewhere later.
 - **Tap the label:** a small menu, the app's `RowMenu` style:
@@ -85,10 +89,15 @@ same content". The content exists as long as at least one page still shows it.
 
 - **An edit in any place is the edit.** Typing, formatting, adding or deleting lines inside the block saves as normal
   and shows on every page that shows it.
-- **When another page is open at the same time** (two tabs, or phone and desktop): it shows the new content the next
-  time that page refreshes its data, the same way edits from another tab already arrive. If both places are edited
-  at once, the existing save-conflict handling applies; **Roadbuster to confirm** what that is today and whether a
-  synced block needs anything more. Design asks only that nothing he typed is silently lost.
+- **When another page is open at the same time** (two tabs, or phone and desktop): it shows the new content when that
+  tab becomes visible again (b21 plan §4). The refresh never moves his caret or scroll.
+- **Both places edited before either saw the other** (b21 plan §2 rule 3): the second save would lose. A plain "draft
+  kept" banner has no way out here, because a retry hits the same conflict. So instead, in one step:
+  - the block shows the **latest** content, the version saved elsewhere;
+  - **his version goes right below the block as ordinary lines**, outside the outline, so nothing he typed is lost;
+  - notice: **"Changed on {page} meanwhile · your version is below it"**. No Undo: both texts are on the page, and he
+    keeps, merges or deletes them by hand.
+  This should be rare (one person, two devices), so it doesn't need a merge view.
 - **⌘Z** undoes his own edits on the page where he made them, as today.
 - **Inside a synced block, task-making is off:** `/` → Task, `[] ` and the checklist-paste offer don't apply there; a
   pasted task row arrives as a plain line. The slash menu just doesn't list Task inside it.
@@ -125,9 +134,10 @@ same content". The content exists as long as at least one page still shows it.
 ## 8. Waiting and failure
 
 - **Loading:** the block's lines render with the page; there's no separate spinner.
-- **Couldn't load** (its content missing or unreadable): in its place, one line in `--ink-3`: "Couldn't load this
-  synced block · Retry". The rest of the page works normally. It must never show as empty, because an empty block
-  invites deleting it.
+- **Its shared record is missing or unreadable:** each page keeps its own copy of the lines (b21 plan §1), so the
+  page **shows its last copy**, never an empty box. The lines are read-only while the record is missing, because an
+  edit would have nowhere to go. The label reads **"↻ Sync unavailable ⌄"**, and its menu offers Retry and **Unsync
+  here** (keeps these lines as ordinary, editable lines). The rest of the page works normally.
 - **Save failed:** the editor's existing save-failed banner, nothing new.
 
 ## 9. Checks (copy of his data, 1280 and 390)
@@ -136,7 +146,12 @@ same content". The content exists as long as at least one page still shows it.
    Undo → plain bullets, identical.
 2. Copy (label menu) → paste on an empty line on today's Notes → both labels read "2 pages"; "On" lists the other
    page and opens it at the block.
-3. Edit on today → reload the doc page → the edit is there. Same the other way.
+3. Edit on today → switch to the doc page's tab → the edit is there without a reload, and the caret and scroll there
+   didn't move. Same the other way.
+3b. Two tabs, both edit the block before either refreshes → the second save shows the latest content in the block, its
+   own version as plain lines below, and "Changed on {page} meanwhile · your version is below it". Nothing lost.
+3c. Record missing (on a copy) → the page shows its last copy read-only, "↻ Sync unavailable", and Unsync here makes
+   the lines editable.
 4. Selection holding a task row, a card or Top 3 → Sync → the "can't be synced yet" notice and no change.
 5. Inside a synced block: `/` has no Task; pasting a task row gives a plain line; no new task in SQLite.
 6. Unsync here on today → today's lines are plain, the doc page reads "only here"; Undo restores "2 pages".
@@ -147,13 +162,14 @@ same content". The content exists as long as at least one page still shows it.
 10. A `[[` link inside → the linked page's Linked from lists both pages.
 11. Rollback on a copy: both places become ordinary lines with the latest content.
 12. **Geometry:** "synced block" becomes a required row type in `check-alignment` (rows inside keep the columns they
-    have outside; the outline stays in the margin; the label doesn't overlap text at 1280 or 390), and
+    have outside; the outline stays in the margin; 8 px above / 6 px below; the label clears the first line's text
+    and the line above, at 1280 and 390, shown by hover and by caret), and
     `align-fixtures` puts one on 2026-12-31.
 
 ## 10. Open questions
 
-- **Roadbuster:** simultaneous edits in two places (§5); whether a page "refreshes its data" often enough that he
-  won't see stale content when switching tabs.
+- ~~**Roadbuster:** simultaneous edits~~ **Answered** by b21 plan 1f5f28a (§2 rule 3, §4 refresh on visible); design's
+  recovery for the conflict is §5 above.
 - ~~**Bumblebee:** tags~~ **Decided:** a tag counts once (§7, Bumblebee `8e998433`).
 - ~~**Lead:** discovery~~ **Decided (Lead `10e9e0f0`):** Brian is told once, in the release report ("select lines →
   Sync in the selection bar → copy the block to another page"), and nowhere in the app: no tip, no onboarding.
