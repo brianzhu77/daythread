@@ -1159,7 +1159,24 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
       // Keys inside a row's ⋯ menu belong to the menu (Enter chooses, arrows move), never to the editor's row rules.
       if ((e.target as Element).closest?.('.editor-row-menu')) return
-      if (historyPending.current) { e.preventDefault(); e.stopPropagation(); return }
+      // Line end/start in a task row: the browser's own move can step over the row's non-editable parts (⋯, tags)
+      // into the next block, so typing would land in the next heading. Make the same line move here, synchronously,
+      // and keep it in the row; ProseMirror reads the browser's selection back.
+      if (((e.metaKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) || ((e.key === 'End' || e.key === 'Home') && !e.metaKey && !e.ctrlKey)) && !e.altKey) {
+        const block = editor.getTextCursorPosition().block, sel = window.getSelection()
+        if (block.type === 'task' && sel?.modify) {
+          e.preventDefault()
+          const toEnd = e.key === 'ArrowRight' || e.key === 'End'
+          sel.modify(e.shiftKey ? 'extend' : 'move', toEnd ? 'forward' : 'backward', 'lineboundary')
+          const title = editor.domElement?.querySelector(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"] .editor-task-title`)
+          if (title && !title.contains(sel.focusNode)) {
+            const range = document.createRange(); range.selectNodeContents(title); range.collapse(!toEnd)
+            if (e.shiftKey) sel.extend(range.startContainer, range.startOffset)
+            else { sel.removeAllRanges(); sel.addRange(range) }
+          }
+          return
+        }
+      }
       // A12 keyboard path (Lead b8ec39d5): ⌘/ (Ctrl+/), as Notion's block menu, opens the caret row's ⋯ menu; the
       // context-menu key and Shift+F10 too. Tab keeps indenting.
       if (((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === '/') || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {

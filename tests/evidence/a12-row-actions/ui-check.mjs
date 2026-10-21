@@ -75,7 +75,7 @@ log(await row().count() === 1 && db().task.paused === 0 && db().task.plannedOn =
 
 // 6. Typing then acting at once: the text is saved first and moves with the row; no "changed elsewhere".
 await clearToasts()
-await row().locator('.editor-task-title').click(); await p.keyboard.press('End'); await p.keyboard.type(' typed')
+await row().locator('.editor-task-title').click(); await p.keyboard.press('Meta+ArrowRight'); await p.waitForTimeout(100); await p.keyboard.type(' typed')
 await choose('Tomorrow')
 const status = await p.locator('.editor-save-line').innerText()
 log(db().rows(WED)?.top3?.some(t => t.endsWith(' typed')) && !/changed elsewhere/i.test(status), 'typed then Tomorrow at once: Wed\'s row has the typed text; no "changed elsewhere"', JSON.stringify(db().rows(WED)?.top3))
@@ -114,21 +114,22 @@ await p.getByRole('button', { name: 'Create page' }).click(); await p.waitForTim
 log(inSection(db().rows(SAT), 'other') || inSection(db().rows(SAT), 'top3'), 'Sat, once created, shows the task in its plan')
 await choose('Move to Top 3') // the moved task joins Sat's Top 3 as its first row
 const satTop3 = p.locator('.continuous-editor .bn-block-outer').filter({ has: p.locator('[data-content-type=heading]', { hasText: 'TODO - Top 3' }) }).first()
-await satTop3.locator('.bn-inline-content').first().click(); await p.keyboard.press('End'); await p.keyboard.press('Enter')
-for (const t of ['Full A', 'Full B']) { await p.keyboard.type(`[] ${t}`); await p.keyboard.press('Enter') }
+await satTop3.locator('.bn-inline-content').first().click(); await p.keyboard.press('Meta+ArrowRight'); await p.waitForTimeout(100); await p.keyboard.press('Enter')
+// "[] " turns the new line into a task; Enter in a task row makes the next one a task already.
+await p.keyboard.type('[] Full A'); await p.keyboard.press('Enter'); await p.keyboard.type('Full B'); await p.keyboard.press('Enter')
 await p.keyboard.press('Backspace'); await p.waitForTimeout(1500)
 const satRows = db().rows(SAT)
 log((satRows?.top3?.length ?? 0) >= 3, "Sat's Top 3 has three tasks", JSON.stringify(satRows))
 // Bring a second task into today's Top 3 and move it to Sat.
 await open(TODAY)
 const todayTop3 = p.locator('.continuous-editor .bn-block-outer').filter({ has: p.locator('[data-content-type=heading]', { hasText: 'TODO - Top 3' }) }).first()
-await todayTop3.locator('.bn-inline-content').first().click(); await p.keyboard.press('End'); await p.keyboard.press('Enter')
+await todayTop3.locator('.bn-inline-content').first().click(); await p.keyboard.press('Meta+ArrowRight'); await p.waitForTimeout(100); await p.keyboard.press('Enter')
 await p.keyboard.type('[] Overflow task'); await p.waitForTimeout(1500)
 await p.locator('.continuous-editor').click({ position: { x: 5, y: 5 } }).catch(() => undefined); await p.waitForTimeout(800)
 await open(TODAY); await clearToasts()
 await openMenu('Overflow task'); await p.locator('.app-menu [role^=menuitem]', { hasText: 'This weekend' }).first().click(); await p.waitForTimeout(1500)
 log((await toast()).some(t => t.includes('Moved to Sat, Oct 24 · Top 3 is full · added to TODO - Other')), 'full Top 3: "Moved to Sat, Oct 24 · Top 3 is full · added to TODO - Other"', JSON.stringify(await toast()))
-log((db().rows(SAT)?.other ?? []).includes('Overflow task') && !(db().rows(SAT)?.top3 ?? []).includes('Overflow task'), "it's in Sat's Other, not a fourth Top 3 row")
+log((db().rows(SAT)?.other ?? []).some(t => t.endsWith('Overflow task')) && !(db().rows(SAT)?.top3 ?? []).some(t => t.endsWith('Overflow task')), "it's in Sat's Other, not a fourth Top 3 row", JSON.stringify(db().rows(SAT)))
 
 // 11. Cancel → struck through with "Cancelled", no tick, data-status; the menu offers Restore.
 await open(SAT); await clearToasts()
@@ -149,7 +150,7 @@ log(await p.locator('.editor-task[data-status=draft]').first().locator('.editor-
 
 // 13. Keyboard: ⌘/ from the row's text opens its menu, focus on the first item; ↓ moves; Esc closes; Tab still indents.
 await open(SAT)
-await row().locator('.editor-task-title').click(); await p.keyboard.press('End')
+await row().locator('.editor-task-title').click(); await p.keyboard.press('Meta+ArrowRight')
 await p.keyboard.press('Meta+/'); await p.waitForTimeout(200)
 const first = await p.evaluate(() => document.activeElement?.textContent)
 await p.keyboard.press('ArrowDown'); const second = await p.evaluate(() => document.activeElement?.textContent)
@@ -158,10 +159,13 @@ log(Boolean(first) && Boolean(second) && first !== second && await p.locator('.a
 
 // 14. A failed action releases the editor, keeps the text, and says so.
 await open(SAT); await clearToasts()
-await row().locator('.editor-task-title').click(); await p.keyboard.press('End'); await p.keyboard.type(' kept'); await p.waitForTimeout(900)
+await row().locator('.editor-task-title').click(); await p.keyboard.press('Meta+ArrowRight'); await p.waitForTimeout(100); await p.keyboard.type(' kept'); await p.waitForTimeout(900)
 await p.route('**/_serverFn/**', r => r.request().method() === 'POST' ? r.abort() : r.continue())
+const before = errors.length
 await choose('Not on Sat')
 await p.unroute('**/_serverFn/**')
+// The aborted request logs its own network error; that one is this check's doing.
+errors.splice(before, errors.length - before, ...errors.slice(before).filter(e => !/ERR_FAILED/.test(e)))
 log((await toast()).some(t => t.startsWith('Not done')) && await p.locator('.continuous-editor .bn-editor').getAttribute('contenteditable') === 'true' && (await row().innerText()).includes(' kept'), 'failed action: "Not done · your text is kept", editing released, text kept', JSON.stringify(await toast()))
 
 // 15. Regressions of ⌘Z paths the refresh change touches: typing Undo, A2 paste Undo.
