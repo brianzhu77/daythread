@@ -152,5 +152,5 @@ same content". The content exists as long as at least one page still shows it.
 - **Roadbuster:** simultaneous edits in two places (§5); whether a page "refreshes its data" often enough that he
   won't see stale content when switching tabs.
 - **Bumblebee:** tags counting once per page (§7).
-- **Lead:** whether "Sync" on the selection bar is enough discovery, or Brian should be told once where it is. I'd
-  tell him once, in the release note.
+- ~~**Lead:** discovery~~ **Decided (Lead `10e9e0f0`):** Brian is told once, in the release report ("select lines →
+  Sync in the selection bar → copy the block to another page"), and nowhere in the app: no tip, no onboarding.
