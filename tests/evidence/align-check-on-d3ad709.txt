@@ -1,0 +1,129 @@
+ok      1280 /day/2026-10-18   heading text x: "TODO - Top 3" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-18   done task text x: "#rewind Narwhal Styling" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   done task text x: "#rewind Wire Transaction" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   heading text x: "TODO - Other" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-18   open task text x: "#daythread 优化 Calendar 页" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   done task text x: "驱虫 #ramen" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   heading text x: "Events" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-18   bullet text x: "DRIVE Basketball Trainin" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   bullet text x: "English Lesson #kathy" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   heading text x: "Good Stuffs" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-18   heading text x: "Notes" · x=420.0, expected 420.0 (editor edge), off +0.0
+FAIL    1280 /day/2026-10-18   page card with preview text x: "韩国大酱汤" · x=448.0, expected 465.0 (row column), off -17.0
+FAIL    1280 /day/2026-10-18   page card with preview text x: "佛卡夏披萨" · x=448.0, expected 465.0 (row column), off -17.0
+ok      1280 /day/2026-10-18   bullet text x: "肉酱意面 #recipe" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   bullet text x: "奥德赛" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-18   nested bullet text x: "原生家庭创伤导致的讨好型人格如何解决？（是否强关" · x=489.0, expected 489.0 (parent 465.0 + 24), off +0.0
+ok      1280 /day/2026-10-18   nested bullet text x: "I choose to：绝大多数的事情都是自我选" · x=489.0, expected 489.0 (parent 465.0 + 24), off +0.0
+ok      1280 /day/2026-10-18   heading handle on first line: "TODO - Top 3" · +1.0px
+ok      1280 /day/2026-10-18   done task checkbox on first line: "#rewind Narwhal Styling" · +0.0px
+ok      1280 /day/2026-10-18   done task handle on first line: "#rewind Narwhal Styling" · +0.4px
+ok      1280 /day/2026-10-18   done task checkbox on first line: "#rewind Wire Transaction" · +0.0px
+ok      1280 /day/2026-10-18   open task checkbox on first line: "#daythread 优化 Calendar 页" · +0.0px
+ok      1280 /day/2026-10-18   open task handle on first line: "#daythread 优化 Calendar 页" · -0.3px
+ok      1280 /day/2026-10-18   done task checkbox on first line: "驱虫 #ramen" · +0.0px
+ok      1280 /day/2026-10-18   bullet dot on first line: "DRIVE Basketball Trainin" · +0.0px
+ok      1280 /day/2026-10-18   bullet handle on first line: "DRIVE Basketball Trainin" · +0.1px
+ok      1280 /day/2026-10-18   bullet dot on first line: "English Lesson #kathy" · +0.0px
+FAIL    1280 /day/2026-10-18   page card with preview icon on first line: "韩国大酱汤" · +9.0px
+FAIL    1280 /day/2026-10-18   page card with preview chevron on first line: "韩国大酱汤" · +9.0px
+FAIL    1280 /day/2026-10-18   page card with preview handle on first line: "韩国大酱汤" · -3.2px
+FAIL    1280 /day/2026-10-18   page card with preview icon on first line: "佛卡夏披萨" · +9.0px
+FAIL    1280 /day/2026-10-18   page card with preview chevron on first line: "佛卡夏披萨" · +9.0px
+ok      1280 /day/2026-10-18   bullet dot on first line: "肉酱意面 #recipe" · +0.0px
+ok      1280 /day/2026-10-18   bullet dot on first line: "奥德赛" · +0.0px
+ok      1280 /day/2026-10-18   nested bullet handle on first line: "原生家庭创伤导致的讨好型人格如何解决？（是否强关" · -0.2px
+ok      1280 /day/2026-10-19   heading text x: "TODO - Top 3" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-19   done task text x: "#rewind Narwhal Styling" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-19   done task text x: "#rewind Wire Transaction" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-19   open task text x: "#daythread 优化 Calendar 页" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-19   heading text x: "TODO - Other" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-19   heading text x: "Events" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-19   heading text x: "Good Stuffs" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-19   heading text x: "Notes" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-19   heading handle on first line: "TODO - Top 3" · +1.0px
+ok      1280 /day/2026-10-19   done task checkbox on first line: "#rewind Narwhal Styling" · +0.0px
+ok      1280 /day/2026-10-19   done task handle on first line: "#rewind Narwhal Styling" · +0.4px
+ok      1280 /day/2026-10-19   done task checkbox on first line: "#rewind Wire Transaction" · +0.0px
+ok      1280 /day/2026-10-19   open task checkbox on first line: "#daythread 优化 Calendar 页" · +0.0px
+ok      1280 /day/2026-10-19   open task handle on first line: "#daythread 优化 Calendar 页" · +0.4px
+ok      1280 /day/2026-10-20   heading text x: "TODO - Top 3" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-20   open task text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-20   heading text x: "TODO - Other" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-20   open task text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-20   heading text x: "Events" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-20   bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-20   heading text x: "Good Stuffs" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-20   bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-20   heading text x: "Notes" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-20   bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-20   heading handle on first line: "TODO - Top 3" · +1.0px
+ok      1280 /day/2026-10-20   open task checkbox on first line: "(empty)" · +0.0px
+ok      1280 /day/2026-10-20   open task handle on first line: "(empty)" · +0.4px
+ok      1280 /day/2026-10-20   open task checkbox on first line: "(empty)" · +0.0px
+ok      1280 /day/2026-10-20   bullet dot on first line: "(empty)" · +0.0px
+ok      1280 /day/2026-10-20   bullet dot on first line: "(empty)" · +0.0px
+ok      1280 /day/2026-10-20   bullet dot on first line: "(empty)" · +0.0px
+ok      390 /day/2026-10-18    heading text x: "TODO - Top 3" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-18    done task text x: "#rewind Narwhal Styling" · x=63.0, expected 63.0 (row column), off +0.0
+ok      390 /day/2026-10-18    done task text x: "#rewind Wire Transaction" · x=63.0, expected 63.0 (row column), off +0.0
+ok      390 /day/2026-10-18    heading text x: "TODO - Other" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-18    open task text x: "#daythread 优化 Calendar 页" · x=63.0, expected 63.0 (row column), off +0.0
+ok      390 /day/2026-10-18    done task text x: "驱虫 #ramen" · x=63.0, expected 63.0 (row column), off +0.0
+ok      390 /day/2026-10-18    heading text x: "Events" · x=20.0, expected 20.0 (editor edge), off +0.0
+FAIL    390 /day/2026-10-18    bullet text x: "DRIVE Basketball Trainin" · x=65.0, expected 63.0 (row column), off +2.0
+FAIL    390 /day/2026-10-18    bullet text x: "English Lesson #kathy" · x=65.0, expected 63.0 (row column), off +2.0
+ok      390 /day/2026-10-18    heading text x: "Good Stuffs" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-18    heading text x: "Notes" · x=20.0, expected 20.0 (editor edge), off +0.0
+FAIL    390 /day/2026-10-18    page card with preview text x: "韩国大酱汤" · x=48.0, expected 63.0 (row column), off -15.0
+FAIL    390 /day/2026-10-18    page card with preview text x: "佛卡夏披萨" · x=48.0, expected 63.0 (row column), off -15.0
+FAIL    390 /day/2026-10-18    bullet text x: "肉酱意面 #recipe" · x=65.0, expected 63.0 (row column), off +2.0
+FAIL    390 /day/2026-10-18    bullet text x: "奥德赛" · x=65.0, expected 63.0 (row column), off +2.0
+ok      390 /day/2026-10-18    nested bullet text x: "原生家庭创伤导致的讨好型人格如何解决？（是否强关" · x=89.0, expected 89.0 (parent 65.0 + 24), off +0.0
+ok      390 /day/2026-10-18    nested bullet text x: "I choose to：绝大多数的事情都是自我选" · x=89.0, expected 89.0 (parent 65.0 + 24), off +0.0
+ok      390 /day/2026-10-18    done task checkbox on first line: "#rewind Narwhal Styling" · +0.0px
+ok      390 /day/2026-10-18    done task checkbox on first line: "#rewind Wire Transaction" · +0.0px
+ok      390 /day/2026-10-18    open task checkbox on first line: "#daythread 优化 Calendar 页" · +0.0px
+ok      390 /day/2026-10-18    done task checkbox on first line: "驱虫 #ramen" · +0.0px
+ok      390 /day/2026-10-18    bullet dot on first line: "DRIVE Basketball Trainin" · +0.0px
+ok      390 /day/2026-10-18    bullet dot on first line: "English Lesson #kathy" · +0.0px
+FAIL    390 /day/2026-10-18    page card with preview icon on first line: "韩国大酱汤" · +9.0px
+FAIL    390 /day/2026-10-18    page card with preview chevron on first line: "韩国大酱汤" · +9.0px
+FAIL    390 /day/2026-10-18    page card with preview icon on first line: "佛卡夏披萨" · +9.0px
+FAIL    390 /day/2026-10-18    page card with preview chevron on first line: "佛卡夏披萨" · +9.0px
+ok      390 /day/2026-10-18    bullet dot on first line: "肉酱意面 #recipe" · +0.0px
+ok      390 /day/2026-10-18    bullet dot on first line: "奥德赛" · +0.0px
+ok      390 /day/2026-10-19    heading text x: "TODO - Top 3" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-19    done task text x: "#rewind Narwhal Styling" · x=63.0, expected 63.0 (row column), off +0.0
+ok      390 /day/2026-10-19    done task text x: "#rewind Wire Transaction" · x=63.0, expected 63.0 (row column), off +0.0
+ok      390 /day/2026-10-19    open task text x: "#daythread 优化 Calendar 页" · x=63.0, expected 63.0 (row column), off +0.0
+ok      390 /day/2026-10-19    heading text x: "TODO - Other" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-19    heading text x: "Events" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-19    heading text x: "Good Stuffs" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-19    heading text x: "Notes" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-19    done task checkbox on first line: "#rewind Narwhal Styling" · +0.0px
+ok      390 /day/2026-10-19    done task checkbox on first line: "#rewind Wire Transaction" · +0.0px
+ok      390 /day/2026-10-19    open task checkbox on first line: "#daythread 优化 Calendar 页" · +0.0px
+ok      390 /day/2026-10-20    heading text x: "TODO - Top 3" · x=20.0, expected 20.0 (editor edge), off +0.0
+FAIL    390 /day/2026-10-20    open task text x: "(empty)" · x=63.0, expected 65.0 (row column), off -2.0
+ok      390 /day/2026-10-20    heading text x: "TODO - Other" · x=20.0, expected 20.0 (editor edge), off +0.0
+FAIL    390 /day/2026-10-20    open task text x: "(empty)" · x=63.0, expected 65.0 (row column), off -2.0
+ok      390 /day/2026-10-20    heading text x: "Events" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-20    bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-20    heading text x: "Good Stuffs" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-20    bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-20    heading text x: "Notes" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-20    bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-20    open task checkbox on first line: "(empty)" · +0.0px
+ok      390 /day/2026-10-20    open task checkbox on first line: "(empty)" · +0.0px
+ok      390 /day/2026-10-20    bullet dot on first line: "(empty)" · +0.0px
+ok      390 /day/2026-10-20    bullet dot on first line: "(empty)" · +0.0px
+ok      390 /day/2026-10-20    bullet dot on first line: "(empty)" · +0.0px
+MISSING 1280                   cancelled task: not on any measured page · add it to the copy and run again
+MISSING 1280                   page card without preview: not on any measured page · add it to the copy and run again
+MISSING 1280                   link card: not on any measured page · add it to the copy and run again
+MISSING 390                    cancelled task: not on any measured page · add it to the copy and run again
+MISSING 390                    page card without preview: not on any measured page · add it to the copy and run again
+MISSING 390                    link card: not on any measured page · add it to the copy and run again
+
+102 passed, 19 failed, 6 missing
