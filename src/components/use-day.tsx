@@ -99,7 +99,11 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const refresh = useCallback(async (triggerOperationId?: string) => {
     const operationId=newOperationId(),started=performance.now()
     debugClient('workspace.refresh.start',{operationId,triggerOperationId})
-    try { const next=await transport.load(operationId,triggerOperationId); adopt(next); debugClient('workspace.refresh.finish',{operationId,triggerOperationId,afterRevision:next.revision,elapsedMs:performance.now()-started,result:'ok'}); return next }
+    try { const next=await transport.load(operationId,triggerOperationId)
+      // A load can be overtaken by a command that finished while it was in flight (he typed and it saved): its older
+      // snapshot must not replace the newer one, or the editor would roll his text back (Ratchet #95).
+      if (wsRef.current && next.revision < wsRef.current.revision) { debugClient('workspace.refresh.finish',{operationId,triggerOperationId,afterRevision:next.revision,elapsedMs:performance.now()-started,result:'stale'}); return wsRef.current }
+      adopt(next); debugClient('workspace.refresh.finish',{operationId,triggerOperationId,afterRevision:next.revision,elapsedMs:performance.now()-started,result:'ok'}); return next }
     catch(error) { debugClient('workspace.refresh.finish',{operationId,triggerOperationId,elapsedMs:performance.now()-started,result:'error',error:error instanceof Error?error.name:'UnknownError'}); throw error }
   }, [transport, adopt])
 
