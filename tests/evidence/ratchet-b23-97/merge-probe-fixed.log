@@ -1,0 +1,2 @@
+pure link base P, draft Q, latest P: [{"id":"ref-line","type":"bulletListItem","props":{},"content":[{"type":"pageRef","props":{"pageId":"P","refId":"r-P"}}],"children":[]},{"id":"23a3e1fb-b6c7-4f61-81fc-32c1b2b35f48","type":"bulletListItem","props":{},"content":[{"type":"pageRef","props":{"pageId":"Q","refId":"3ddb55a5-08b1-409e-8af9-6dfe2984213e"}}],"children":[]}]
+checklist base false, draft true, latest false: [{"id":"check","type":"sourceChecklist","props":{"checked":true},"content":[{"type":"text","text":"external checklist","styles":{}}],"children":[]}]

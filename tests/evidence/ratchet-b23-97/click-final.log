@@ -1,0 +1,10 @@
+(node:29446) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+before click conflict: Changed in another tab · draft kept
+Load latest
+editor held during load: true
+after click status: Saved
+click loaded newest text: true
+my draft retained: true
+failed load unlocks editor: true
+failed load keeps draft: true

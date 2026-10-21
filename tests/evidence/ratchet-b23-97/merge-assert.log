@@ -1,0 +1,3 @@
+PASS pure-reference line preserves latest and inserts independently identified draft reference
+PASS tick-only recovery applies in place
+PASS concurrent checklist wording change keeps both versions and local tick
