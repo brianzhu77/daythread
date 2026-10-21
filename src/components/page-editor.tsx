@@ -357,8 +357,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return new Set(deepNodes(initial.current!.nodes).filter(n => ['paragraph', 'bulletListItem', 'numberedListItem', 'task'].includes(n.type) && !inlineText(n.content).trim() && !(Array.isArray(n.content) && n.content.some((c: { type?: string }) => c.type && c.type !== 'text')) && !n.children?.length).map(n => n.id))
   })
   useEffect(() => editor.onSelectionChange(() => {
-    const id = editor.getTextCursorPosition().block.id
-    setHiddenEmpty(ids => ids.has(id) ? new Set([...ids].filter(x => x !== id)) : ids)
+    const block = editor.getTextCursorPosition().block
+    // On a heading, its section's hidden rows show too, so ↓ lands in them instead of renaming the next heading (Lead).
+    const shown = new Set(block.type === 'heading' ? deepNodes(sectionRange(editor.document as unknown as EditorNode[], block.id)).map(n => n.id) : [block.id])
+    setHiddenEmpty(ids => [...ids].some(x => shown.has(x)) ? new Set([...ids].filter(x => !shown.has(x))) : ids)
   }), [editor])
   const selectionFocus = useRef<HTMLDivElement>(null)
   // Browser selection can survive React node-view replacement while ProseMirror's selection moves elsewhere.
