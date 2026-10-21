@@ -43,13 +43,12 @@ ws = await run({ type: 'add-task', pageId: scratch(ws).id, sectionId: section('t
 const cancelled = ws.tasks.at(-1)!
 ws = await run({ type: 'task-status', taskId: cancelled.id, status: 'cancelled' })
 
-// Cards: a page with nothing in it (no preview), and a pasted link, each created first as the editor does.
+// Cards: pages with nothing in them (no preview), created before their cards as /page does; the link comes after.
 const emptyPageId = crypto.randomUUID(), linkPageId = crypto.randomUUID(), emptyCardId = crypto.randomUUID(), linkCardId = crypto.randomUUID()
 ws = await run({ type: 'create-document', title: 'Fixture empty page', body: '', pageId: emptyPageId, parentId: scratch(ws).id })
 // A long title, so a card's wrapping is measured too (Ratchet ba2ad8a5: long titles were clipped at 390).
 const longPageId = crypto.randomUUID(), longCardId = crypto.randomUUID()
 ws = await run({ type: 'create-document', title: 'Fixture page with a very long title that has to wrap onto a second line on a phone 长标题需要换行', body: '', pageId: longPageId, parentId: scratch(ws).id })
-ws = await run({ type: 'paste-links', pageId: scratch(ws).id, today, items: [{ url: 'https://example.com/fixture-link', pageId: linkPageId, cardBlockId: linkCardId, lineType: 'paragraph' }] })
 
 // The editor document: what the page shows now, plus the cards and a nested list under Notes.
 const page = scratch(ws)
@@ -65,6 +64,12 @@ const added = [
 const notes = nodes.findIndex(n => n.id === page.sections.find(s => s.kind === 'notes')!.id)
 nodes.splice(notes + 1, 0, ...added)
 ws = await run({ type: 'save-editor', pageId: page.id, expectedContent: pageContentKey(page), document: JSON.stringify(nodes), today })
+// The link page comes after its card is saved, as in the editor: A2 skips a paste whose card isn't on the page
+// (Ratchet 786198ab), which would leave a Retry card instead of a link card.
+ws = await run({ type: 'paste-links', pageId: scratch(ws).id, today, items: [{ url: 'https://example.com/fixture-link', pageId: linkPageId, cardBlockId: linkCardId, lineType: 'paragraph' }] })
+for (const [id, what] of [[emptyPageId, 'empty page'], [longPageId, 'long-title page'], [linkPageId, 'link page']] as const)
+  if (!ws.pages.some(p => p.id === id && !p.trashedAt)) { console.error(`Fixture ${what} wasn't created.`); process.exit(1) }
+if (!ws.pages.find(p => p.id === linkPageId)!.url) { console.error('Fixture link page has no URL.'); process.exit(1) }
 
 const done = scratch(ws)
 console.log(`Fixtures on /day/${SCRATCH} (revision ${ws.revision}): ${ws.tasks.find(t => t.id === cancelled.id)!.status} task, ${done.sections.flatMap(s => s.blocks).length} rows.`)
