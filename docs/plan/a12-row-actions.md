@@ -31,7 +31,8 @@
   domain `pause()` (Jazz §4). Done stays the checkbox.
 - **A moved row keeps its section** on the new day (Jazz §3): `plan-task` already takes `section`, and A12 sends the
   row's current one. If that's Top 3 and the new day's Top 3 is full, it goes to Other, the hand-off's existing rule
-  (`top3Full`).
+  (`top3Full`), and the notice says so in the morning card's words: "Top 3 is full · added to {Section} · Undo"
+  (Bumblebee 5dfb8155, `morning-card-build.md:81`). The new day never gets a fourth Top 3 row.
 - **"Tomorrow"** is today + 1, as in the review.
 
 ## 2. One finding: a moved row stays on the page it left
