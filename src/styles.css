@@ -791,7 +791,15 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 }
 /* Day header (Jazz f853703): the title is the date-picker trigger and keeps title typography;
    on phones the relative day sits on its own line above the date so the title never wraps. */
-.day-title-trigger { height: auto; min-height: 0; padding: 0 6px; margin-left: -6px; font: inherit; letter-spacing: inherit; gap: 6px; white-space: nowrap; }
+.day-title-trigger { height: auto; min-height: 0; padding: 4px 10px; margin: -4px 0 -4px -10px; border-radius: 12px; font: inherit; letter-spacing: inherit; gap: 6px; white-space: nowrap; }
+/* Brian a6bd90e4: hover and open get a soft neutral fill with room around the 28px title (the text itself doesn't move);
+   the chevron is quiet and points up while the picker is open. */
+.day-title-trigger:hover, .day-title-trigger[aria-expanded=true] { background: #f2f2f4; }
+.day-title-trigger > svg { width: 18px; height: 18px; color: var(--ink-3); transition: transform .15s ease; }
+.day-title-trigger[aria-expanded=true] > svg { transform: rotate(180deg); }
+/* Month arrows use ink like the day buttons (78d18cb), not the accent blue. */
+.day-picker .calendar__nav-button { color: var(--ink); }
+.day-picker .calendar__nav-button[data-disabled] { color: var(--ink-3); }
 /* Scaling a 28px title while its picker is open blurs the text. */
 .day-title-trigger, .day-title-trigger:active, .day-title-trigger[data-pressed=true] { transform: none; }
 .day-nav { gap: 4px; }
