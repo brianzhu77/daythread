@@ -1,0 +1,5 @@
+import {DatabaseSync} from 'node:sqlite';import {chromium} from 'playwright';
+const d=new DatabaseSync('/private/tmp/ratchet86.sqlite');d.prepare("UPDATE tasks SET status='cancelled' WHERE snapshot='current' AND id='editor-task:36be9891-ab8f-4ab2-90f5-88e18c77d2f8'").run();d.close();
+const b=await chromium.launch(),p=await b.newPage();await p.goto('http://127.0.0.1:3397/day/2026-10-18',{waitUntil:'networkidle'});await p.waitForTimeout(500);
+const r=await p.locator('.editor-task').filter({hasText:'驱虫'}).evaluate(e=>({done:e.querySelector('.editor-task-title').classList.contains('task-done'),checked:e.querySelector('input').checked,dec:getComputedStyle(e.querySelector('.editor-task-title')).textDecorationLine}));
+console.log((!r.done&&!r.checked&&!r.dec.includes('line-through')?'PASS':'FAIL')+' cancelled not styled as done '+JSON.stringify(r));console.log('LIMIT existing editor cancelled row has no explicit Cancelled label; unchanged by B19, A12 has planned state treatment.');await b.close();
