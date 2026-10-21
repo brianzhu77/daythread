@@ -308,6 +308,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // The document the server last accepted from this editor, so leaving knows whether anything is still unsaved.
   const lastSaved = useRef<string | null>(null)
   const left = useRef(false)
+  // Settles once the save on its way has finished and set its new starting point; leaving waits for it (Ratchet #99).
+  const inflight = useRef<Promise<void>>(Promise.resolve())
   const undoingPaste = useRef(false)
   // A9a §3: where the last `[[` list opened (so the same characters don't open it twice), and whether text is being pasted.
   const lastTrigger = useRef(-1)
@@ -436,24 +438,28 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     let preview: Workspace
     try { preview = applyCommand(source, { operationId, expectedRevision: source.revision, action }).workspace }
     catch (error) { debugClient('editor.save.rejected',{operationId,pageId:page.id,result:'conflict',error:error instanceof Error?error.name:'UnknownError'}); sending.current = false; setFailed(true); setStatus(error instanceof Error ? error.message : 'Cannot save; draft kept'); return }
-    const result = await run(action,undefined,operationId)
-    sending.current = false
-    if (!result) { debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true); setStatus("Couldn't save · draft kept"); return }
-    pendingSave.current=null; lastSaved.current = document
-    debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
-    for (const t of source.tasks) if (expectedTaskVersions.current.get(t.id) !== t.version) invalidHistoryTasks.current.add(t.id)
-    for (const t of preview.tasks) if (source.tasks.find(old => old.id === t.id)?.version !== t.version) expectedTaskVersions.current.set(t.id, t.version)
-    const savedPage = preview.pages.find(p => p.id === page.id)!
-    base.current = pageContentKey(savedPage)
-    // The editor has closed meanwhile: leaving takes it from here (it needs only the new starting point).
-    if (left.current) return
-    deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
-    dirty.current = JSON.stringify(editor.document) !== document
-    // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
-    const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
-    setFailed(false); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
-    if (dirty.current) { stash(); timer.current = setTimeout(() => void flushRef.current(), 300) }
-    else localStorage.removeItem(key)
+    let settled!: () => void
+    inflight.current = new Promise<void>(resolve => { settled = resolve })
+    try {
+      const result = await run(action,undefined,operationId)
+      sending.current = false
+      if (!result) { debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true); setStatus("Couldn't save · draft kept"); return }
+      pendingSave.current=null; lastSaved.current = document
+      debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
+      for (const t of source.tasks) if (expectedTaskVersions.current.get(t.id) !== t.version) invalidHistoryTasks.current.add(t.id)
+      for (const t of preview.tasks) if (source.tasks.find(old => old.id === t.id)?.version !== t.version) expectedTaskVersions.current.set(t.id, t.version)
+      const savedPage = preview.pages.find(p => p.id === page.id)!
+      base.current = pageContentKey(savedPage)
+      // The editor has closed meanwhile: leaving takes it from here (it needs only the new starting point).
+      if (left.current) return
+      deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
+      dirty.current = JSON.stringify(editor.document) !== document
+      // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
+      const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
+      setFailed(false); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
+      if (dirty.current) { stash(); timer.current = setTimeout(() => void flushRef.current(), 300) }
+      else localStorage.removeItem(key)
+    } finally { settled() }
   }, [editor, key, page.id, run])
   flushRef.current = flush
   useEffect(() => registerEditorFlush(page.id, async () => {
@@ -580,7 +586,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current]
       void (async () => {
         // A save already on its way finishes first, so this one starts from the page it produced.
-        for (let i = 0; sending.current && i < 250; i++) await new Promise(resolve => setTimeout(resolve, 20))
+        await inflight.current
         if (document !== lastSaved.current) {
           const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, today: todayIso() }
           debugClient('editor.save.leave',{pageId:page.id})
