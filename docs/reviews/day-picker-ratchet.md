@@ -13,3 +13,7 @@ Fresh read-only VACUUM of the current local database into /private/tmp/ratchet92
 Screenshots were recaptured after transition completion; initial immediate screenshot captured animation and was replaced. The copy gained Oct 12 and Oct 29 pages solely through these browser checks. Own-check's absent-future fixture assumes the first run; reset the isolated copy for a full rerun.
 
 Next: review only the changed dot CSS and contrast gate on Jazz's next commit. Preserve these passing behaviour checks unless that patch changes navigation or page creation.
+
+## Final candidate 9c6869a — PASS
+
+Merged only the candidate changes into the review branch and rebuilt. Fresh VACUUM copy `/private/tmp/ratchet92-final.sqlite` with the updated fixture script, now at actual local today Oct 21. Ran the complete updated gate independently: **288 passed, zero failed, zero missing**. Dot contrast measured **3.6:1 plain, 5.1:1 today, 3.6:1 selected**, all above the 3:1 requirement; all required dot types and position checks passed at both widths. Change from eac3c01 is dot CSS plus verification/fixture scripts, so earlier navigation and explicit plain-page creation results carry forward. Approved for Lead's separate picker release. No migration or production writes.
