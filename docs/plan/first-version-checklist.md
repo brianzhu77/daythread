@@ -21,8 +21,10 @@ Group B is listed for tracking only and never counts toward M.
 - **Geometry rule for every visual change** (Brian 6220a8c2; Lead 4b3ce971, effective 2026-10-21): before a change is shown to
   anyone (Brian, a review, a deploy), measure all row types on the day page, not only the part that changed: heading, task
   (open, done, cancelled), bullet, nested bullet, page card with and without preview, link card, empty row. Use a copy of
-  Brian's data at 1280 and 390. Pass = text columns line up within 1px, and markers and icons (checkbox, dot, page icon,
-  chevron, drag handle) centre on the first text line within 1px. The design check runs it with the repo's alignment script
+  Brian's data at 1280 and 390. Pass = each row's text starts within 1px of its expected column (headings and nested rows
+  have their own columns), and markers and icons (checkbox, dot, page icon, chevron, drag handle on hover) centre on the
+  first text line within 1px, judged on unrounded coordinates. A row type his data doesn't have is added on the copy as a
+  fixture or reported as missing, never as a pass (Ratchet 74c68e9d). The design check runs it with the repo's alignment script
   (pass/fail table, Roadbuster), and Ratchet's acceptance includes it. Brian should not be the one who finds basic alignment
   or spacing defects.
 
