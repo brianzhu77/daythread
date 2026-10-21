@@ -9,7 +9,7 @@
 // Everything goes through the same commands the app sends (add-task, task-status, create-document, paste-links,
 // save-editor), so a cancelled task is really cancelled. On /day/2026-12-31 it adds: an open task and a cancelled one,
 // a bullet with a nested bullet (and a level-3 one under it) and an empty nested line, two page cards without preview (one with a long title),
-// and a link card.
+// and a link card. Today's page gets one written line if it has none.
 // Run it once per copy: a second run refuses, since the scratch page already has its rows.
 import { resolve } from 'node:path'
 import { getRepository } from '../src/server/storage.ts'
@@ -70,6 +70,16 @@ ws = await run({ type: 'paste-links', pageId: scratch(ws).id, today, items: [{ u
 for (const [id, what] of [[emptyPageId, 'empty page'], [longPageId, 'long-title page'], [linkPageId, 'link page']] as const)
   if (!ws.pages.some(p => p.id === id && !p.trashedAt)) { console.error(`Fixture ${what} wasn't created.`); process.exit(1) }
 if (!ws.pages.find(p => p.id === linkPageId)!.url) { console.error('Fixture link page has no URL.'); process.exit(1) }
+
+// Today's page gets one written line if it has none, so the picker's dot on today is measured (Jazz 27200c3).
+ws = await run({ type: 'ensure-day', date: today })
+const todayPage = ws.pages.find(p => p.type === 'daily' && p.date === today)!
+if (!todayPage.sections.some(s => s.blocks.some(b => b.kind === 'task' || b.text.trim()))) {
+  const doc = editorSeed(todayPage, ws, { templateRows: needsTemplateRows(todayPage, today) }) as EditorNode[]
+  const at = doc.findIndex(n => n.id === todayPage.sections.find(s => s.kind === 'notes')!.id)
+  doc.splice(at + 1, 0, bullet('Fixture line today'))
+  ws = await run({ type: 'save-editor', pageId: todayPage.id, expectedContent: pageContentKey(todayPage), document: JSON.stringify(doc), today })
+}
 
 const done = scratch(ws)
 console.log(`Fixtures on /day/${SCRATCH} (revision ${ws.revision}): ${ws.tasks.find(t => t.id === cancelled.id)!.status} task, ${done.sections.flatMap(s => s.blocks).length} rows.`)

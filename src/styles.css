@@ -809,8 +809,10 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
    with something written gets a small, quiet blue dot. Today and the current page keep HeroUI's own states. */
 .day-picker .calendar__cell { cursor: pointer; }
 .day-picker .calendar__cell.is-future:not([data-selected=true]) { color: var(--ink-3); }
-.day-picker .calendar__cell .day-picker-dot { background: var(--blue); opacity: .55; }
-.day-picker .calendar__cell[data-selected=true] .day-picker-dot { background: currentColor; opacity: .8; }
+/* Dots are small, so their colour carries them: at least 3:1 against their own cell (Lead f5c37a18). Plain days use the
+   accent at full strength; today and the selected day draw it in the cell's own text colour (dark blue / white). */
+.day-picker .calendar__cell .day-picker-dot { background: var(--blue); }
+.day-picker .calendar__cell:is([data-selected=true], [data-today=true]) .day-picker-dot { background: currentColor; }
 @media (max-width: 599px) {
   .day-title-trigger { display: inline-grid; grid-template-columns: auto auto; justify-items: start; align-items: center; column-gap: 6px; }
   .day-title-trigger .relative-day { grid-column: 1 / -1; font-size: 13px; line-height: 18px; font-weight: 600; }

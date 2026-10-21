@@ -29,7 +29,7 @@ if (!base) { console.error('usage: node scripts/check-alignment.mjs <base url> [
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
-const REQUIRED = ['heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'empty row', 'page card with preview', 'page card without preview', 'link card']
+const REQUIRED = ['heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
 
 function measure() {
   const visible = e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 }
@@ -168,12 +168,26 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     const dots = await page.evaluate(() => [...document.querySelectorAll('.day-picker .calendar__cell')].flatMap(c => {
       const dot = c.querySelector('.day-picker-dot'); if (!dot) return []
       const range = document.createRange(); range.selectNodeContents(c.firstChild ?? c); const t = range.getBoundingClientRect(), d = dot.getBoundingClientRect(), cell = c.getBoundingClientRect()
-      return [{ day: c.textContent.trim(), dx: (d.left + d.right) / 2 - (cell.left + cell.right) / 2, below: d.top >= t.bottom - 0.5, size: d.width }]
+      // Contrast of the dot against its own cell, from computed colours: the dot's colour at its opacity composited over
+      // the cell's fill (or the popover's when the cell has none). DPR-independent, unlike reading 3px of anti-aliasing.
+      const rgba = css => { const k = document.createElement('canvas').getContext('2d'); k.fillStyle = '#000'; k.fillStyle = css; k.fillRect(0, 0, 1, 1); const [r, g, b, a] = k.getImageData(0, 0, 1, 1).data; return [r, g, b, a / 255] }
+      const over = (top, under) => top.slice(0, 3).map((v, i) => v * top[3] + under[i] * (1 - top[3]))
+      let under = [255, 255, 255]
+      for (let e = c.parentElement, stack = []; e; e = e.parentElement) { const bg = rgba(getComputedStyle(e).backgroundColor); if (bg[3] > 0) { stack.push(bg); if (bg[3] >= 1) { under = stack.reverse().reduce((u, l) => over(l, u), [255, 255, 255]); break } } }
+      const cellBg = over(rgba(getComputedStyle(c).backgroundColor), under)
+      const ds = getComputedStyle(dot), dc = rgba(ds.backgroundColor), dotRgb = over([dc[0], dc[1], dc[2], dc[3] * parseFloat(ds.opacity)], cellBg)
+      const lum = ([r, g, b]) => [r, g, b].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0)
+      const [hi, lo] = [lum(dotRgb), lum(cellBg)].sort((a, b) => b - a)
+      const kind = c.getAttribute('data-selected') === 'true' ? 'selected' : c.getAttribute('data-today') === 'true' ? 'today' : 'plain'
+      return [{ day: c.textContent.trim(), dx: (d.left + d.right) / 2 - (cell.left + cell.right) / 2, below: d.top >= t.bottom - 0.5, size: d.width, contrast: (hi + 0.05) / (lo + 0.05), kind }]
     }))
     await page.keyboard.press('Escape').catch(() => undefined)
     await page.close()
     const at = `${width} ${path}`
     for (const d of dots) results.push({ at, check: `picker dot under day ${d.day}`, ok: Math.abs(d.dx) <= TOLERANCE && d.below, detail: `${d.dx >= 0 ? '+' : ''}${fmt(d.dx)}px from centre, ${d.below ? 'below the digits' : 'overlapping the digits'}, ${fmt(d.size)}px` })
+    // A dot is a non-text graphic: at least 3:1 against its own cell, on plain, today and selected cells (Lead f5c37a18).
+    for (const d of dots) results.push({ at, check: `picker dot contrast on day ${d.day} (${d.kind})`, ok: d.contrast >= 3, detail: `${fmt(d.contrast)}:1 against its cell` })
+    for (const d of dots) seen.get(width).add(d.kind === 'plain' ? 'picker dot on a plain day' : d.kind === 'today' ? 'picker dot on today' : 'picker dot on the selected day')
     for (const r of rows) { seen.get(width).add(r.kind); if (r.empty) seen.get(width).add('empty row'); if (r.kind === 'nested bullet' && r.depth >= 2) seen.get(width).add('level 3 bullet') }
     // 1. Columns.
     const top = rows.filter(r => r.depth === 0 && r.kind !== 'heading' && r.kind !== 'paragraph')
