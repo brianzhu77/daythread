@@ -134,10 +134,16 @@ A0–A7. Each step ships on its own branch, Ratchet review, live on 3000 before 
 **While this runs:** only fixes and screen changes that don't touch stored data ship between steps. A11, B21 and A7 (Weave)
 wait (Lead f1533bee). A0 runs in Brian's account at S5; we don't create third-party accounts on our own.
 
+**Re-planning 2026-10-22 (Lead 81c582ae):** Brian b15c12ac, "no need to migrate data". The new structure starts empty, and
+today's SQLite file stays as an archive (not deleted). Brian was told that anything written in the current app before the switch
+won't carry over. The stepwise local cleanup existed only to carry his data across, so **S1 is stopped and Ratchet #102 is
+superseded**. Roadbuster re-plans as a direct build of the approved general core (8a07bc4 §4) on Postgres, with no import.
+The rows below are kept for the record and will be replaced by the new steps.
+
 | ID | Step (plan id) | Size | Status |
 | --- | --- | --- | --- |
 | S0 | Latency spike in his own Supabase/Fly account (A0). Moved to S5 (Lead f1533bee); meanwhile a round-trip check from his Mac to Fly `sjc` and AWS us-west-1, times requests per screen, against the budget (day open < 300 ms, save < 200 ms). Done 2026-10-22 (Roadbuster f1710055, estimate from measured round trips, not a live test): day open about 100 ms, save about 60–80 ms, first visit adds about 2 round trips; suggests Oregon (Supabase + Fly `sea`/`pdx`) over California, about 16 ms less per request, to confirm at S5 | half a day | moved to S5; estimate within budget |
-| S1 | Per-aggregate reads, one workspace lock per command, contract suite v2, still on SQLite (A1) | 4–5 days | building (Roadbuster, from 36f0044) |
+| S1 | Per-aggregate reads, one workspace lock per command, contract suite v2, still on SQLite (A1) | 4–5 days | stopped (Lead 81c582ae) |
 | S2 | `operations` with typed undo, legacy receipts imported, `brought_from` / `copied_from` relations (A2) | 4–5 days | missing |
 | S3 | `blocks` as the only content source, versioned BlockNote inline `content`, `links` / `block_tags` indexes (A3) | 3 days | missing |
 | S4 | General core: collections and properties as data, projection layer, `ref` blocks, `history`, templates as pages; lossless import of his data (A4) | 7–8 days | missing |
