@@ -39,8 +39,8 @@
 | "Top 3 is full" | count of refs under `plan-top3` | computed |
 | Plan vs reference look | `task.sys.plan_date == page.sys.date` | computed |
 | History row ("moved to Oct 22", the old day's ref after a move) | the ref stays; its look comes from the task's current plan date and the `operations` fact of the move | ref stored, look computed (Bumblebee 3) |
-| Not today / excluded | an `operations` fact plus the plan date change. Not a field on the ref | fact in `operations` |
-| From earlier days (carry-over) | query: Tasks with `sys.status = open`, plan date before today, no ref on today | computed, written only when he acts |
+| Not today | pauses the task (`sys.paused`) and clears today's plan date (`pause`, workspace.ts 248); where it happened is a history fact | stored property + history (Bumblebee, §4) |
+| From earlier days (carry-over) | query: Tasks with `sys.status = open`, not `sys.paused`, plan date before today, no ref on today | computed, written only when he acts |
 | Event row | a `ref` → a page in **Events** (`sys.date`, `sys.time`, `sys.cancelled`) | stored |
 | Good stuffs, links collected | heading role `collect-links`; each pasted link is a page in **Links** (`sys.url`, unique) shown as a card | stored |
 | Page / link card with preview (B19) | a `ref` → the page; preview = its first lines | computed |
@@ -60,8 +60,8 @@
 | `[[` page link chip | an inline mention in `content`; `relation(kind = mention)` as an index | content stored, index computed |
 | Linked from (newest first, B15) | query relations by `to_id`, ordered by the `operations` time of the first save that held it | computed |
 | Tasks screen (Today, Upcoming, Someday, Done) | a query over Tasks by `sys.status`, `sys.plan_date`, `sys.start_date`, `sys.due_date` | computed |
-| Task statuses: open, done, cancelled, paused | `sys.status` (select). Paused is a status value, not a second flag | stored |
-| Done on day X (A11 target) | `sys.done_at` | stored |
+| Task statuses: open, done, cancelled; paused | `sys.status` (select) and `sys.paused` (checkbox), as today | stored |
+| Done on day X (A11 target) | `sys.done_on`, set when ticked, cleared when unticked; tick/untick events in history | stored property (Bumblebee) |
 | Tags list, tag page | text in content, indexed | computed (Brian's rule) |
 | Calendar dots (something written) | query Days pages by date with any non-empty child | computed |
 | Future day preview + Create page | planned tasks by `sys.plan_date`; Create page copies the template | computed, then stored on create |
@@ -91,8 +91,8 @@
    values (a select option the app doesn't know) render as plain text and are kept.
 2. **Unique properties** (Bumblebee 2): one Day per date, one Link per URL. A schema flag plus an index. Cost: a partial
    expression index per unique system property; fine at his scale.
-3. **History is not content** (Bumblebee 3): moved, excluded, done-on and "first saved at" are facts that screens
-   query. No block holds them. Where they live is Roadbuster's pick (Lead `6edacd5e`): `operations` declared
+3. **History is not content** (Bumblebee 3): moved, where Not today happened, and "first saved at" are facts that
+   screens query (done-on is a task property, not history). No block holds them. Where they live is Roadbuster's pick (Lead `6edacd5e`): `operations` declared
    append-only forever with typed, indexed history rows, or a small generic `activity` (entity, kind, at, data) split
    from the undo/replay log so that log can be pruned. Wherever this doc says "`operations` fact", read that choice.
 4. **One `ref` type** (Bumblebee 4). Rendering by target: a task → task row; a synced container → its lines,
@@ -108,5 +108,5 @@
   bigger? It decides whether the reference model costs days.
 - **Query cost of jsonb system properties** for carry-over and the Tasks screen: an expression index on
   `sys.status` / `sys.plan_date`, or a generated column? The Lead asked for the cost to be stated.
-- **Excluded:** with "Not today" as an `operations` fact plus a plan-date change, does anything still need the
-  per-day excluded state? If carry-over is computed from the plan date alone, it can go.
+- ~~Excluded~~ answered (Bumblebee): no per-day excluded state. Not today pauses the task and clears the plan date;
+  where it happened is history.
