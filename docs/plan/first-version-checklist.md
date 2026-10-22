@@ -152,6 +152,10 @@ C1/C2 branches parked as they are.** Now: 3000 switches to Supabase directly, st
 (Roadbuster `feat/pg-now`: current storage on Postgres, `daythread` schema with RLS and no policies, `DAYTHREAD_STORAGE=postgres`;
 Ratchet fast review; Lead connects at deploy). The SQLite file stays untouched as a backup; no archive screen. Done: empty today
 on 3000, typed text survives a reload, the model works, nothing new written to the local file. Jazz's two empty-start lines follow it.
+**LIVE 2026-10-22 11:19Z: main e1fad7d** (Lead 88bfbc94): 3000 saves to Supabase schema `daythread`, RLS on, `anon` has no
+usage; started empty. Done check passed: today opens at 1280 and 390, model live, `workspace.sqlite` unchanged (Oct 21 19:08 PT,
+2887680 bytes), no process holds it. Brian told. Rollback: `.daythread-local/backups/2026-10-22-before-pg/dist`, restart with
+`DAYTHREAD_STORAGE=sqlite`. Remaining gate: Ratchet #108 review of e1fad7d. Next: Jazz's two empty-start lines.
 
 **Previous plan (passed Ratchet #105, 2026-10-22, now stopped):** `docs/plan/core-build.md` on docs/core-build 3d87017 (Roadbuster),
 report `docs/reviews/core-build-ratchet.md` 31e194e. Direct build of the general core on Postgres, starting empty, no import.
