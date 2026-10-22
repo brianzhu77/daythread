@@ -1,6 +1,6 @@
 import { chromium } from '/Users/dogrod/Developer/daythread/node_modules/playwright/index.mjs'
 import { DatabaseSync } from 'node:sqlite'
-const base='http://127.0.0.1:3411', dbPath='/private/tmp/ratchet99-race-final.sqlite'; const b=await chromium.launch();let failures=0;
+const base='http://127.0.0.1:3411', dbPath=process.argv[2]??'/private/tmp/ratchet99-race-final.sqlite'; const b=await chromium.launch();let failures=0;
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));const check=(ok,name,detail)=>{console.log(ok?'PASS':'FAIL',name,detail??'');if(!ok)failures++};
 const dbText=()=>{const d=new DatabaseSync(dbPath,{readOnly:true});try{return d.prepare("select editorJSON from pages where snapshot='current' and date='2026-10-18'").get().editorJSON}finally{d.close()}};
 const open=async()=>{const c=await b.newContext({viewport:{width:1280,height:1000}});const p=await c.newPage();p.on('pageerror',e=>check(false,'pageerror',e.message));await p.goto(base+'/day/2026-10-18',{waitUntil:'networkidle'});await sleep(600);return {c,p}};
@@ -20,6 +20,7 @@ await p.route('**/_serverFn/**',async r=>{if(r.request().method()==='POST'&&!hel
 await add(p,' [R99LEAVE]');await go(p,'2026-10-21');await arrived;await go(p,'2026-10-18');await add(p,' [R99NEW]');release();await sleep(2600);
 const st=await p.locator('.editor-save-line').innerText();const stash=await p.evaluate(()=>Object.entries(localStorage).filter(([k])=>k.startsWith('daythread:editor:')));
 check((dbText().includes('[R99NEW]')||stash.some(([,v])=>v.includes('[R99NEW]')))&& (await p.locator('.continuous-editor').innerText()).includes('[R99NEW]'),'old leave save cannot clear newer returned draft',st);
+check(dbText().includes('[R99NEW]') && !/Changed|Load latest|draft kept/.test(st),'quick return saves without self conflict',st);
 console.log('RETURN_STATUS',st,'NEW_IN_DB',dbText().includes('[R99NEW]'),'NEW_STASH',stash.some(([,v])=>v.includes('[R99NEW]')));
 if(await p.getByRole('button',{name:'Load latest'}).count()){await p.getByRole('button',{name:'Load latest'}).click();await sleep(1800);check(dbText().includes('[R99NEW]')&&dbText().includes('[R99LEAVE]'),'return-race Load latest saves all words')};await c.close();
 }
