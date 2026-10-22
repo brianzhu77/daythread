@@ -187,6 +187,11 @@ Vercel's login stays on `live`. **Production lock (16:31Z, Lead 98860760):** pau
 unpaused; instead `daythread-nine` domain removed, Production env has **no** `DATABASE_URL`/`OPENROUTER_API_KEY`, and the old
 production deployment is deleted. All production URLs 404; `git-live` 302 to Vercel's login. No domain or secret goes back on
 Production until sign-in passes. Signed-out deployed check on 3abb7e3 passed (gate stops requests before the store).
+**Sign-in merged 2026-10-22 16:36Z: main ed0e011** (PR #4 at 0e1988d + Ratchet 17f123d/a6e6313; Lead 5a075310): 338 pass,
+deployed signed-out smoke + Ratchet's 29 probes pass, Jazz design 20/20 (wrong code clears, auto-submit once per code).
+3000 on ed0e011 with `DAYTHREAD_AUTH=off` (loopback only); rollback `.daythread-local/backups/2026-10-22-before-sign-in/dist`.
+`live` deploy waits on Brian's "done" for 3 Supabase steps (Lead 2f294394: code template, add himself, sign-ups off).
+Then signed-out check on `live`; his first sign-in is the real check. Production stays empty.
 Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
 `fix/capture-late-refresh` 2201274. 3000 runs the same build; rollback `.daythread-local/backups/2026-10-22-before-vercel-now/dist`.
 
