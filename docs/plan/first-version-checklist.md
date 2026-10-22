@@ -156,7 +156,7 @@ at the latest**, if his staging credentials are in by about Nov 5 (Roadbuster 48
 
 | ID | Step | Size | Status |
 | --- | --- | --- | --- |
-| C1 | Schema, migrations, restricted role and RLS, seed at first sign-in (collections, system properties, day template; Jazz `empty-start-states.md` §1) | 4–5 days | building (Roadbuster, feat/c1-schema; generic `unique_values` table and one GIN index with containment queries, ranges by scan measured in C5; pasting a URL whose page is in the trash restores it, refusal as fallback for Trash restores; Lead 6c44c44d) |
+| C1 | Schema, migrations, restricted role and RLS, seed at first sign-in (collections, system properties, day template; Jazz `empty-start-states.md` §1) | 4–5 days | in review (7f96098, PR #2, CI green incl. Postgres 17; 321 pass / 0 fail; 3000 unaffected) (Roadbuster, feat/c1-schema; generic `unique_values` table and one GIN index with containment queries, ranges by scan measured in C5; pasting a URL whose page is in the trash restores it, refusal as fallback for Trash restores; Lead 6c44c44d) |
 | C2 | Postgres repository and projection (patches of known fields only), workspace lock, per-row versions, contract suite v2 (incl. Ratchet's #102 named rows and capture start tokens), alignment fixture `scripts/core-fixtures.ts` | 5–6 days | missing |
 | C3 | `operations` and Undo from before-images (restored content gets a new version), `history` independent of prunable inverses; a resend after a lost reply shows "Saved", not a conflict (Bumblebee ab1b4b0a) | 3 days | missing |
 | C4 | Sign-in by emailed code (Jazz's screens; a non-owner sees the same flow until the code fails), auth gate with server-only writes and RLS; staging gate starts | 4–5 days | missing |
