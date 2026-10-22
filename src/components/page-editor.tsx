@@ -29,7 +29,7 @@ import { displayPageTitle, focusAtEnd } from './page-title'
 import { addDays, fromIso, longLabel, todayIso, weekday } from './dates'
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
-import { rowArrows } from './row-arrows'
+import { endOfLineAbove, rowArrows } from './row-arrows'
 import { isOwnLeaveSave, registerEditorFlush, rememberLeaveSave } from './editor-flush'
 import { RowMenu } from './row-menu'
 import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
@@ -1359,7 +1359,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // Silent, like any key that has nothing to do (Jazz).
         e.preventDefault(); e.stopPropagation()
       } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && editor.prosemirrorState.selection.empty && editor.getTextCursorPosition().block.type === 'task' && !inlineText(editor.getTextCursorPosition().block.content)) {
-        e.preventDefault(); e.stopPropagation(); const id = editor.getTextCursorPosition().block.id; semanticDeletes.current.add(id); editor.removeBlocks([id])
+        // The caret goes to the end of the line above, as when any line is deleted (Brian 301105c0), not to the start of
+        // the line that moves up. Everything above the removed row keeps its positions, so `above` holds after removal.
+        e.preventDefault(); e.stopPropagation(); const id = editor.getTextCursorPosition().block.id
+        const view = editor.prosemirrorView, above = endOfLineAbove(view, view.state.selection.$from.before())
+        semanticDeletes.current.add(id); editor.removeBlocks([id])
+        if (above !== null) view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, above)).scrollIntoView())
       } else if (!['Shift', 'Control', 'Meta', 'Alt'].includes(e.key) && !((e.metaKey || e.ctrlKey) && ['c', 'x'].includes(e.key.toLowerCase()))) { selected.current = []; setSelectionLabel('') }
     }}
     >
