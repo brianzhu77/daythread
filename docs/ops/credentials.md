@@ -25,7 +25,12 @@ Variable names and comments are in `.env.example`.
 3. **Connect → Connection string:**
    - **Direct connection (or Session pooler, port 5432)**, with the `postgres` user and your password, goes into Local only, as `DATABASE_MIGRATION_URL`.
    - **Transaction pooler (port 6543), as the `daythread_app` role**, goes into Vercel Preview and Local as `DATABASE_URL`. The role and its password are created by our first migration. We'll tell you when to copy this one.
-4. **Authentication → Providers → Email:** keep it enabled and **turn off "Allow new users to sign up"**. `DAYTHREAD_OWNER_EMAIL` (your email) goes into Local and Vercel Preview.
+4. **Authentication → Users → Add user → Create new user:** enter your email and tick **Auto Confirm User**. A
+   password isn't needed, because you sign in with the emailed code. With sign-ups off, this is the only way your
+   account can exist, so do it before step 5.
+5. **Authentication → Sign In / Providers → Email:** keep Email enabled and **turn off "Allow new users to sign up"**.
+   From then on a code can only be sent to an existing user, so any other email is refused. `DAYTHREAD_OWNER_EMAIL`
+   (your email) goes into Local and Vercel Preview: the server also refuses any signed-in user who isn't that email.
 
 ## 3. Model key for staging
 
@@ -38,4 +43,5 @@ On openrouter.ai, create a **separate key** for staging with a low credit limit.
 ## Done when
 
 - A PR gets a Vercel preview deploy.
+- Signing in on staging with your email works, and another email gets no code (checked once the sign-in screen exists).
 - `VERCEL_AUTOMATION_BYPASS_SECRET=… node scripts/smoke-staging.mjs <preview url>` prints **all passed**.
