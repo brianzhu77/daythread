@@ -115,8 +115,10 @@ That's the cost Bumblebee priced (Lead `a7554a7d`). **v2 trigger (B29, #142):** 
 - **Paste:** `pasteHandler` checks the line type first, then a `text/plain` that is **this app's own origin** with `page=`
   and `block=`, and inserts a line link at the caret. Both checks run before A2's link paste, so an in-app URL never
   becomes a link card. Other hosts, unknown params and malformed URLs paste as today.
-- **Opening the URL:** when the block isn't on the URL's page, the `?block=` jump calls a small server function that runs
-  `resolveLine` on the full workspace, so the URL lands where the chip would.
+- **Opening the URL: always resolve first, then jump** (Ratchet `26a2ca84`). The `?block=` jump calls a small server
+  function that runs `resolveLine` on the full workspace **every time**, even when the block is still on the URL's page.
+  A task line's old row can still be there as a history row (past day → today), and the URL must land where the chip
+  does: on today's row, not the old one. Only then does it scroll and tint the resolved block.
 
 ## 5. Opening, Linked from, trash
 
@@ -183,7 +185,7 @@ re-read after a **reload**: ids, refIds, Linked from times):
 | `chip and jump` | chip words and page; tap lands a third from the top, tinted; second tap jumps again; keyboard activation and Back |
 | `chip: Line not found` | delete the line → "Line not found · {page}"; tap → the page at the top with "Couldn't find that line" |
 | `chip: cut and paste` | cut a linked plain line to another page → "Line not found · {page}"; a linked task row → followed |
-| `URL: fresh view` | each original plain URL opened in a new context lands where the chip does (server resolver) |
+| `URL: fresh view` | each original plain URL opened in a new context lands where the chip does (server resolver); explicitly a task linked on a **past day whose history row is still there** after it moved to today: the URL lands on today's row, **with and without `task=`** |
 | `Linked from` | counts on the resolved page, once per linking page, with the link's B15 time |
 | `long excerpt at 390` | no overflow, one line, ellipsis |
 | `drag keeps the link` | drag a linked line within its page → the chip still shows its words, not "Line not found" (the one move v1 keeps) |
