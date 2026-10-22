@@ -1908,7 +1908,7 @@ export function applyCommand(
   ) {
     const previous = input.undo;
     if (
-      !previous ||
+      !previous?.before ||
       previous.operationId !== command.action.targetOperationId ||
       previous.revision !== input.revision
     )

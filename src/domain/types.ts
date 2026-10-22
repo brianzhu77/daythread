@@ -258,7 +258,8 @@ export interface Workspace {
   undo?: {
     operationId: string;
     revision: number;
-    before: Omit<Workspace, "undo">;
+    /** Server only: the browser gets the marker without the copy (`src/server/browser-workspace.ts`). */
+    before?: Omit<Workspace, "undo">;
   };
   captures: Capture[];
   receipts: Record<string, Receipt>;
