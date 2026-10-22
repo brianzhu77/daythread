@@ -1,6 +1,8 @@
 # Supabase/data model — independent pre-review
 
 Ratchet · task #101 · 2026-10-22 · **Changes required before implementation**.
+**Superseded by the accepted 8a07bc4 recheck in `supabase-core-ratchet-final.md`; initial findings below are retained as review history.**
+
 Reviewed original 3f01b95 and revision **11497e4**, plus 8c19ac3's offline/usage clarifications, current source and a fresh read-only VACUUM copy of the real database. No application changes, production writes, cloud project creation, deployment or model calls. This is a plan review, not proof that migration/RLS/network tests have run.
 
 ## Recommendation and decision impact
