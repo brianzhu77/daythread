@@ -155,8 +155,12 @@ on 3000, typed text survives a reload, the model works, nothing new written to t
 **LIVE 2026-10-22 11:19Z: main e1fad7d** (Lead 88bfbc94): 3000 saves to Supabase schema `daythread`, RLS on, `anon` has no
 usage; started empty. Done check passed: today opens at 1280 and 390, model live, `workspace.sqlite` unchanged (Oct 21 19:08 PT,
 2887680 bytes), no process holds it. Brian told. Rollback: `.daythread-local/backups/2026-10-22-before-pg/dist`, restart with
-`DAYTHREAD_STORAGE=sqlite`. **Ratchet #108 PASSED** on live e1fad7d: no correctness or data-loss issue (report 697a118,
-`docs/reviews/pg-now-ratchet.md`). Next: Jazz's two empty-start lines.
+`DAYTHREAD_STORAGE=sqlite`. **Ratchet #108 PASSED** on live e1fad7d: no correctness or data-loss issue (report on main 287d300,
+`docs/reviews/pg-now-ratchet.md`).
+**Empty-start lines LIVE 2026-10-22 11:25Z: build 84f888c** (Jazz 3fc30ce; Lead dcc50b68): no morning card until an earlier
+day page or an open task from another day exists; Review with no tasks reads "{day} · nothing planned". Alignment 310 pass /
+0 fail / 0 missing; Ratchet #109 (report main f630a8a). Rollback `.daythread-local/backups/2026-10-22-before-empty-lines/dist`.
+Nothing in flight; the next step waits on Brian.
 
 **Previous plan (passed Ratchet #105, 2026-10-22, now stopped):** `docs/plan/core-build.md` on docs/core-build 3d87017 (Roadbuster),
 report `docs/reviews/core-build-ratchet.md` 31e194e. Direct build of the general core on Postgres, starting empty, no import.
