@@ -90,6 +90,10 @@ versions. Its behaviour doesn't change before the switch.
   again (R6).
   - **The cron endpoint fails closed:** with `CRON_SECRET` unset it refuses every call, and a call without the right
     `Authorization: Bearer` gets 401, with no job touched.
+  - **The schedule must fit the account:** Vercel's Hobby plan allows only daily cron jobs and rejects a five-minute
+    schedule at deploy. C5 checks the account's plan before enabling it; on Hobby the schedule is daily, and the
+    recovery at the start of each request does the timely work (he is the only user). This is an internal check,
+    not a question for Brian.
   - **Testing it on a preview:** Vercel runs cron jobs only on production deployments, so on staging the smoke check
     calls the recovery endpoint itself with the secret (a job with an expired lease is picked up once) and without it
     (refused). Recovery also runs at the start of the next request, so a preview never depends on the schedule. `maxDuration` is 60 s, raised per route if a model call needs more.
@@ -128,12 +132,21 @@ Inverses are bounded and pruned as in §9 of the main plan.
 - **Archive on 3000:** a server flag (`DAYTHREAD_ARCHIVED=1`) makes every command refuse with "Archived · read only",
   before the repository or the model is touched. **Reads write nothing either:** today's load also expires stale
   drafts (`loadWorkspace` → `expireDrafts`), which the flag skips.
-- **Model work already running at the switch:** the flag first stops new model starts; the switch waits until no
-  attempt is still `reserved` (at most `maxDuration` plus a margin). A result that arrives after the flag only settles
-  its cost in the ledger, so the money record stays true, and applies nothing to his pages. Jazz's banner and link (§3) show on every screen.
+- **The archive becomes immutable in one sequence** (Ratchet 3dfcf72):
+  1. On the running app, stop new commands and new model starts.
+  2. Drain: wait for in-flight model runs to finish (bounded by a timeout, since today's SQLite worker has no
+     `maxDuration`). Any attempt still open is marked `unknown` in the ledger **now, before the freeze**.
+  3. **Stop the old server process.** In-process model callbacks die with it, so nothing can arrive late.
+  4. Start it again with `DAYTHREAD_ARCHIVED=1`. In that mode every mutation path is off at startup, including the
+     model service and the boot-time ledger recovery (`markInterruptedModelAttempts`, `recoverUnknownCosts`).
+  - After step 4, **nothing writes pages or the ledger**, not even a cost. If an unknown attempt still needs its cost
+    reconciled, that goes in a separate operational note from the provider's dashboard, never by reopening the
+    archive. Jazz's banner and link (§3) show on every screen.
 - **The archive's check:** every write path is refused, including the editor save, capture, the morning card, Draft my
-  day, Undo, row actions, paste and trash, **and a page load changes nothing** (database file unchanged after reading
-  every screen). A model run started just before the flag settles its cost and applies nothing. The model is never called (the ledger stays unchanged), and reading, the
+  day, Undo, row actions, paste and trash. **Reading every screen changes nothing**, including a day with an expired
+  draft. **A model response held across the transition** and delivered after activation changes nothing either.
+  "Unchanged" is proven by comparing the logical rows of every table (and checkpointing the WAL), not a file checksum
+  alone. The model is never called (the ledger stays unchanged), and reading, the
   sidebar, search and Linked from still work.
 
 ## 8. Checks per step
@@ -150,3 +163,6 @@ Inverses are bounded and pruned as in §9 of the main plan.
 - Ratchet's R4 negative list in C4, which needs zero journal disclosure, zero writes and zero model calls for every
   unauthorized request.
 - C5's gates, with fail numbers, on the staging preview.
+- From Ratchet's report: C3's history stays independent of prunable inverses, and an Undo keeps unrelated-row edits;
+  the lost-reply test also covers a later edit from another tab; C5 runs restart, lease-expiry and double recovery
+  against a fake provider with zero duplicate charges.
