@@ -122,10 +122,10 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
 
       {current === 'plan' && (
         <section className="review-step" aria-labelledby="rs-plan">
+          {/* A day without tasks reads "nothing planned", not "0 open of 0" (empty-start-states §2). */}
           <h2 id="rs-plan">
-            {weekday(date)} · {openCount} open of {placedToday.length}
+            {planCards.length === 0 ? `${weekday(date)} · nothing planned` : `${weekday(date)} · ${openCount} open of ${placedToday.length}`}
           </h2>
-          {planCards.length === 0 && <p className="quiet">Nothing on today’s plan.</p>}
           {planCards.map(t => (
             <PlanCard
               key={t.id}

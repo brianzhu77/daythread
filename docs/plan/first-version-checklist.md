@@ -35,6 +35,10 @@ Group B is listed for tracking only and never counts toward M.
 - **Rollback rule** (Bumblebee 6505644c, Lead 45fbfd99): every rollback message to Brian tells him to **reload the page**. Since the tab refresh (c1ead10),
   an open tab ignores loads older than what it holds, so after a rollback to a lower revision it keeps showing content the server no longer has until reloaded.
 - Each evidence script runs on its own fresh copy of Brian's data; scripts that write markers break each other's database checks (Lead, c1ead10 deploy).
+- **Raft tasks mirror the open rows** (Brian b9a06169 "bring it to raft tasks"; Lead 2026-10-22): task #120 A11, #121 A6b-2, #122 A7,
+  #123 B21 (waiting on Brian), #124 B22, #125 B27, #126 B28 (later · Brian), #127–#140 backlog (B2, B3, B4, B5, B6, B7, B8, B9, B10, B11, B13,
+  B14, B16, B18). Brian reads the board, so a row's status change and its task's status change go together. If Brian closes a
+  task, the row becomes `dropped (Brian closed task #N)`. A new row he asks for gets a task the same day.
 
 ## A. First version (counts toward N of M)
 
@@ -120,6 +124,156 @@ N = D1–D6 + A5 + A1a, A1b, A3 + A4 + A6a + A8 = 13.
 | B22 | Copied task keeps its identity: pasting a task row pastes a **reference row** to the same task (A12 states §1, the existing row type with its menu), not a new task, so ticking it ticks the one task on every page; the notice offers "Pasted as the same task · Make a copy" for when he wants a separate task (Jazz 8561624e, Lead bf166022). The task keeps its own plan day, so the one-day rule holds. Separate from B21; tasks stay out of synced blocks even then. Today a paste makes a new, separate task (Roadbuster copy check b086b86, 25/25; told to Brian 95be492d, fc54f9a7) | Brian fb1fda77 ("ok, improve later") | later |
 | B23 | "Draft kept" split (after B20, about a day, Roadbuster): network/server failure keeps "Couldn't save · Retry saving · Copy draft"; a conflict (page changed in another tab) gets **Load latest**: loads the page and puts his changes below their lines as ordinary lines, "Latest loaded · your changes are below their lines · Undo"; no clipboard (Bumblebee cda199db; same rule as the B21 conflict). His changes = lines that differ from the save's starting point, not from the latest (Jazz 14b0d3a9); new tasks he added stay tasks, tasks already in the latest are not repeated (Bumblebee 79df4242), except a renamed one, which comes back as a plain line with his title under the task (Roadbuster dd2536db). Must clear the browser's saved draft once his version is in the page, or a reload conflicts again (Roadbuster 12c8dc5e notes 1-4 = engineering spec). States: docs/design/save-conflict-states.md ce54bfd (Jazz) Built 2026-10-21 as 795a06c (Lead 5b20cc67, 8b72e06c; from fea48fd; backup before-795a06c, rollback = build dda414e + restart, then tell Brian to reload; Ratchet #97, docs/reviews/b23-ratchet.md, 795a06c, first-round evidence 1f91b60, 312 passed / 0 failed / 0 missing): recovered renamed tasks and headings come back as bullets; Load latest in ink 600; a line holding only a `[[` link is not empty; a tick-only change is applied in place (Jazz c56721b5); Load latest fetches the page when clicked and holds typing during the load | Jazz 7bacfe99, b76290d5; Lead 8781f41f | built |
 | B24 | Tab refresh: switching back to a tab (or the window regaining focus, at most every 5s) saves what was typed first, then loads the latest; a refused save keeps the draft ("changed elsewhere · draft kept"); a load older than the tab's last save is dropped. Found while planning B21 (Roadbuster); a stale tab could never silently overwrite a newer edit even before (two-tab check 3). c1ead10 live 2026-10-21 (Lead 457533aa, 45fbfd99; from 596bf9a; backup before-c1ead10, rollback = build ec9fcd5 + restart, then tell Brian to reload; Ratchet #95, docs/reviews/refresh-on-visible-ratchet.md, aac515d; Chromium 1280 and WebKit 390, Jazz WebKit run). Not checked on a real iPhone: phone access isn't set up; when it is, ask Brian to edit on the Mac and switch to the phone | Lead c02857fc | built |
+| B25 | Save on leave: edits typed in the last moment before switching page (about 450ms) were never saved, and a cut-and-paste across pages could leave the line on both pages (Roadbuster c509e586). Leaving a page now saves what was typed first, even if the save is slow; a refused save (other tab, offline) keeps the draft with Load latest (B23). A page still holding a "Recovered unsaved draft" saves it on open if the page hasn't changed since, else Load latest (Bumblebee 565cad22). Shipped alone, ahead of A11 (Lead). Live 2026-10-22 as 9fd8f80 (from dfd5f7d; backup 2026-10-22-before-9fd8f80, rollback = build 173fa93 + restart, then tell Brian to reload; no migration; Ratchet #99, docs/reviews/save-on-leave-ratchet.md, 7741c28). Brian told f512ab07: his data was checked and not affected | Roadbuster c509e586; Lead f512ab07, ae99bfe1 | built |
+| B26 | Smaller browser payload: the browser gets the workspace without receipts and with undo cut down to its marker, so every load drops from about 3.35–5 MB to about 49 KB and stops growing with each save (Roadbuster). Code only, no data change. Live 2026-10-22 as 7f6f1eb (from 7ca6f95 = cedb663 + Ratchet's report; backup 2026-10-22-before-7f6f1eb, rollback = build 334c748 + restart, then tell Brian to reload; Ratchet #104, docs/reviews/client-payload-ratchet.md, 665b310; live load 48,660 bytes). Known, unchanged: a resend after a lost reply shows a false "Changed in another tab" (words saved once); fixed in C3 | Roadbuster; Lead 6c44c44d | built |
+| B27 | `@date/time` in a line creates a calendar event (Brian, restated 18 s later: "加一个功能 todo：“@日期/时间” 自动创建日历事件。不用立即做"). Later, not first version. Lead's answer to him (1e88abdc thread): "@Fri 3pm dentist" → an Event {date, time} under that day's Events; Google Calendar sync only if he asks. Direction when picked up (b842c6d3 thread): "@" (and full-width "＠") opens a picker like `[[` showing its reading ("@3/4 → Wed, Mar 4"), Return makes a date chip, Esc leaves text, so emails/handles/prices never trigger (Jazz, Roadbuster); line stays with the chip, event links back; date parsing reuses capture's, anchored on the page's date. He already writes this by hand: "PAC Lunch @Nov 20" in Notes on Oct 22 (Lead 04777283). Open: on a TODO row, does "@Fri" make an event or plan the task for Fri (A12 Another day)? | Brian 36cb13a0, 1e88abdc (2026-10-22) | missing (later, his call) |
+| B28 | Better display of sub-tasks on the Tasks screen (Brian: "再记一条，优化 sub task 在 tasks 页面的展示。先不用做"). Later, not first version. Evidence (Brian 91b92ea6 "today's tasks are the example"; Lead 04777283; `docs/evidence/b28-subtasks/`, 3000 revision 105, 1280): on the day page "#rewind log corridor and language" (Top 3) has 3 nested sub-tasks (1 done); Tasks → Today lists "Narwhal PR" and "Rewind App PR" as **flat peers** of their parent, with no parent, no tag context, and they read like extra Top 3 tasks. `Task` has no parent field (nesting lives only in the page tree), so the parent is derived from the page or stored; Roadbuster (c695369c): deriving is ambiguous (one task on several pages), store `parentTaskId` set by the nesting save, latest wins, un-nesting clears; Bumblebee: store, since a sub-task belongs to its parent wherever it shows. Check also: hand-off carries open sub-tasks still nested under their parent. To settle when picked up: nested under the parent (with a done count, e.g. 1/3) vs a parent label on each sub-task | Brian 825efc9f, 91b92ea6 (2026-10-22) | missing (later, his call) |
+
+
+## S. New storage on Supabase (tracked, not counted)
+
+Brian 6148a202 ("switch storage to Supabase, review the whole data structure, no business logic in the data"),
+d3a9c476 (goal: use it from anywhere, without his Mac), d0846999 ("iterate until yes; generalize like Notion").
+Plan: `docs/plan/supabase-data-model.md` 8a07bc4 (Roadbuster), passed Ratchet #101 (`docs/reviews/supabase-core-ratchet-final.md`,
+626bc85); concept map `docs/design/core-mapping.md` 0764d26 (Jazz). Brian told yes, about 4 weeks of cleanup then about 2 to
+the cloud, same screens (Lead 2fb4704a). Rows are named S0–S7 here so they don't clash with group A ids; the plan calls them
+A0–A7. Each step ships on its own branch, Ratchet review, live on 3000 before the next (Lead f1533bee).
+**While this runs:** only fixes and screen changes that don't touch stored data ship between steps. A11, B21 and A7 (Weave)
+wait (Lead f1533bee). A0 runs in Brian's account at S5; we don't create third-party accounts on our own.
+
+**Re-planning 2026-10-22 (Lead 81c582ae):** Brian b15c12ac, "no need to migrate data". The new structure starts empty, and
+today's SQLite file stays as an archive (not deleted). Brian was told that anything written in the current app before the switch
+won't carry over. The stepwise local cleanup existed only to carry his data across, so **S1 is stopped and Ratchet #102 is
+superseded**. Roadbuster re-plans as a direct build of the approved general core (8a07bc4 §4) on Postgres, with no import.
+The new steps are C1–C7 below.
+**Hosting (Brian e8b619b8, Lead 92506a6e): Vercel, not Fly.** Model runs after the response use `waitUntil` on the durable
+job record; Fluid compute in `pdx1` next to Supabase Oregon; transaction-mode pooler; the S5 speed gate still decides. Brian
+provides credentials for local and staging; Roadbuster prepares `.env.example`, CI (GitHub Actions) and the Vercel target,
+Ratchet does a narrow check, and the Lead sends Brian the credential list. Done 2026-10-22: config merged as main 5ae7f12 (PR #1; Ratchet #103, `docs/reviews/vercel-config-ratchet.md`, 377cbff); Brian has `docs/ops/credentials.md` (Lead 6beec5a9). Not yet verified: the live preview smoke behind Deployment Protection (needs his bypass secret) and owner-only sign-in (comes with the direct build). **Simplified 2026-10-22 (Brian cdc9c90c, Lead 7ceb7002):** four variables only (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `DATABASE_URL`, `OPENROUTER_API_KEY`), merged as main 0cc1a89 (Ratchet #106, `docs/reviews/fewer-env-ratchet.md`). Brian c129d176 then asked for the model to be configurable: `OPENROUTER_MODEL` is the fifth listed variable, with the code default as fallback (Lead a96c91df, main 67fe0ec, listing only). No cron: job recovery runs at the start of the next request. The owner boundary on the single `DATABASE_URL` is application-enforced (`withOwner`, role and owner claims set and reset on every request), not database-enforced; revisit for multi-user, next to the workspace lock.
+**Archive at the switch (Lead 92506a6e, Bumblebee ad163028):** today's app stays on 3000 behind a read-only flag,
+"Archived · read only", so he can still read Oct 13 to the switch. It moves no data. It's a small step in the re-plan.
+
+**STOPPED 2026-10-22 05:22Z (Lead be6cc282, Brian a9c4aa01/2fc19345): C1–C7 and the Nov 16–20 target below are stopped;
+C1/C2 branches parked as they are.** Now: 3000 switches to Supabase directly, starting empty, no data moved, same screens
+(Roadbuster `feat/pg-now`: current storage on Postgres, `daythread` schema with RLS and no policies, `DAYTHREAD_STORAGE=postgres`;
+Ratchet fast review; Lead connects at deploy). The SQLite file stays untouched as a backup; no archive screen. Done: empty today
+on 3000, typed text survives a reload, the model works, nothing new written to the local file. Jazz's two empty-start lines follow it.
+**LIVE 2026-10-22 11:19Z: main e1fad7d** (Lead 88bfbc94): 3000 saves to Supabase schema `daythread`, RLS on, `anon` has no
+usage; started empty. Done check passed: today opens at 1280 and 390, model live, `workspace.sqlite` unchanged (Oct 21 19:08 PT,
+2887680 bytes), no process holds it. Brian told. Rollback: `.daythread-local/backups/2026-10-22-before-pg/dist`, restart with
+`DAYTHREAD_STORAGE=sqlite`. **Ratchet #108 PASSED** on live e1fad7d: no correctness or data-loss issue (report on main 287d300,
+`docs/reviews/pg-now-ratchet.md`).
+**Empty-start lines LIVE 2026-10-22 11:25Z: build 84f888c** (Jazz 3fc30ce; Lead dcc50b68): no morning card until an earlier
+day page or an open task from another day exists; Review with no tasks reads "{day} · nothing planned". Alignment 310 pass /
+0 fail / 0 missing; Ratchet #109 (report main f630a8a). Rollback `.daythread-local/backups/2026-10-22-before-empty-lines/dist`.
+Nothing in flight; the next step waits on Brian.
+**Vercel LIVE 2026-10-22 16:10Z: main 0db03a0** (PR #3 + Ratchet #110; Lead 77e61754). Brian confirmed "it works!" from
+outside: https://daythread-git-live-dogrods-projects.vercel.app, locked by his Vercel login (no app sign-in). Same Supabase
+schema as 3000 (pooler, iad1, 120 s functions). Postgres is the default on Vercel; model work kept alive with `waitUntil`
+(verified on Vercel in a throwaway deployment: capture applied 4 s after a 192 ms response); a capture still organizing
+after 5 min ends in "Model unavailable · text saved" + Retry. Env is Preview scoped to branch `live`; `live` deploys go
+through the Lead. **Rule: nobody promotes to Production or puts the pooler URL in Production until there's sign-in.**
+**CORRECTION 2026-10-22 16:14Z:** the Production address https://daythread-nine.vercel.app (created 16:07Z) answered
+anyone with no login (HTTP 200), reading and writing his real data and able to use his model key (Lead 363cbfed, Roadbuster
+4ffa7c6b). The earlier "Production can't reach his data" was wrong. Fix: close it now, then Production holds **no**
+`DATABASE_URL`/`OPENROUTER_API_KEY` at all until sign-in; check logs for non-owner requests since 16:07Z.
+**Closed 16:16Z** (Lead 428cb925): production paused (Vercel `pause`, 503 DEPLOYMENT_PAUSED); the `git-live` link still
+works behind Vercel's login. **Nobody unpauses until sign-in passes.** Hobby keeps no runtime logs for the window, so
+anonymous reads can't be ruled out; the workspace then held only his Top 3 tasks (revision 1→23) and 0 captures. Model use in
+the window: ledger 0 rows and OpenRouter usage today $0.0003 (the Lead's own throwaway check), so no model calls through his
+workspace (Lead 371f7ee0). Anonymous reads remain unknown; Brian told both.
+Next: Jazz `design/tokens` (no visual change), then Roadbuster `feat/sign-in` (30-day sliding, 180-day cap, owner check,
+fake auth endpoint in tests; real check = Brian's own first sign-in with Vercel's lock on), target testable today.
+**Tokens v1 merged 2026-10-22: main acd30ce** (Jazz 783770a, `docs/design/tokens.md`): 20/20 full-page screenshots identical,
+alignment 310/0/0 (Lead 0cd50150); ships with sign-in. HeroUI on our palette app-wide comes after sign-in, own commit + pixel diff.
+**Sign-in in review: PR #4 `feat/sign-in` 81dbd15** (Ratchet #111, Jazz design check). 3000 runs `DAYTHREAD_AUTH=off`
+(refuses to start unless loopback and not on Vercel). Order: #111 + design pass → Lead's deployed check → one message to
+Brian (code template, add himself, sign-ups off, then sign in) → deploy `live` and 3000 → his sign-in is the real check.
+Vercel's login stays on `live`. **Production lock (16:31Z, Lead 98860760):** pausing blocked all builds, so the project is
+unpaused; instead `daythread-nine` domain removed, Production env has **no** `DATABASE_URL`/`OPENROUTER_API_KEY`, and the old
+production deployment is deleted. All production URLs 404; `git-live` 302 to Vercel's login. No domain or secret goes back on
+Production until sign-in passes. Signed-out deployed check on 3abb7e3 passed (gate stops requests before the store).
+**Sign-in merged 2026-10-22 16:36Z: main ed0e011** (PR #4 at 0e1988d + Ratchet 17f123d/a6e6313; Lead 5a075310): 338 pass,
+deployed signed-out smoke + Ratchet's 29 probes pass, Jazz design 20/20 (wrong code clears, auto-submit once per code).
+3000 on ed0e011 with `DAYTHREAD_AUTH=off` (loopback only); rollback `.daythread-local/backups/2026-10-22-before-sign-in/dist`.
+`live` deploy waits on Brian's "done" for 3 Supabase steps (Lead 2f294394: code template, add himself, sign-ups off).
+Then signed-out check on `live`; his first sign-in is the real check. Production stays empty.
+**Password sign-in LIVE 2026-10-22 17:03Z: main 564d622** (PR #5 + Ratchet #112 c0a6ffe; Lead 5c15afa6). Brian skipped the
+code template (needs custom SMTP), so sign-in is email + password (Keychain), code path removed (restorable from 0e1988d).
+340 pass; probes 0 failures on `live`; signed-out smoke passed. Brakes: 10/10 min per IP, global failed backoff 30 s→15 min,
+real wait shown; signed-in devices unaffected. Supabase: one confirmed user, sign-ups off. 3000 same build, auth off;
+rollback `.daythread-local/backups/2026-10-22-before-password/dist`. **Real check pending: Brian's first sign-in.**
+Next: link workspace to his account (user_id bound at first sign-in, rebind refused; not-linked line), then cold-start
+`ALTER TABLE` fix, then HeroUI palette (85f076a). Production stays empty until the Lead says otherwise.
+**Account link LIVE 2026-10-22 17:12Z: main 96040cc** (PR #6 at 585a8b5 + Ratchet #113 8ee5ed0; Lead 8153460d): `workspace.user_id`
+(unique, FK to `auth.users` ON DELETE RESTRICT, nullable for rollback) + trigger refusing relink/unlink; linked at his first
+sign-in; mismatch shows "Your account isn't linked to this workspace · Your notes are safe" (no brake count); 3000 opens the
+single row; cold-start `ALTER TABLE` fixed in the same PR. 347 pass; real-Supabase FK/rollback check passed. Backup
+`.daythread-local/backups/2026-10-22-before-link/` (row json + dist). **Pending: his first sign-in, then check `user_id`.**
+Then: one plain address + lift Vercel's lock (probes, only his user, sign-ups off, Home Screen line; keep old address
+reachable briefly for unsaved drafts), then HeroUI palette 85f076a as its own deploy.
+**Plain address LIVE 2026-10-22 17:22Z: https://daythread-nine.vercel.app** (production d5621s6a9, main c33c55c; Lead 1fc05d35).
+Brian signed in 17:14:24Z; `workspace.user_id` = his only `auth.users` row; sign-ups off. Production env restored (pooler,
+model key, `OWNER_EMAIL`); signed-out smoke + Ratchet's probes pass on the public domain with no bypass. HeroUI tokens
+d67f586 shipped as c33c55c (8 identical, 12 colour-only ≤10/255, alignment 310/0/0); rollback
+`.daythread-local/backups/2026-10-22-before-heroui/dist`. Deploys go to 3000, `live` (kept for a while) and production;
+production deploys only by the Lead, no preview promotes.
+**Stray line fix LIVE 2026-10-22 21:25Z: main 89fe761** (PR #7, merge 30feae8 of 5af3522 + Ratchet 8b494b2; Brian 967fd04b;
+Lead 258c6881). No stray line beside task rows, ↑/↓ one press per row, past day's hidden empty rows skipped; Ratchet #115
+passed, 339 pass, alignment 310/0/0. On 3000, `live` and production; Brian told. Rollback
+`.daythread-local/backups/2026-10-22-before-stray-line/dist`.
+**Section-edge fix LIVE 2026-10-22: main f45d336** (PR #8, merge 62a0438 of a068e72 + Ratchet d5617f8; Ratchet #116 passed,
+343 pass; Lead 0da9cb11). Delete before / Backspace at the start of a role heading do nothing; ⌘Z or paste restores a
+heading's role only if no section on the page has it yet; a day page's template-id heading stored as `custom` regains its
+role on save and in `ensureSection`. His today's Other had become `custom` (revision 64, no text lost, one page, one
+heading); confirmed repaired after his save at 21:58Z (revision 74): `other`, one Other section, his task kept (Lead 1e9583da). Backup `.daythread-local/backups/2026-10-22-before-delete-fix/`.
+Brian told (bb9f0d8e).
+**Typing jump + past-day cursor LIVE 2026-10-22: main c2ba359** (Lead 5f50d5f2). PR #9 shipped as 66b0b70 (merge c552f1c,
+Ratchet #117 e85645b; PR #9 closed unmerged, c4f6b61 superseded): empty task rows 44 px on hover screens; touch rows stay
+38 px with "Plan for today" tap area kept inside its row (32 px tall, wider; no tap plans the neighbouring task); a done
+task keeps its button's space so long titles don't reflow on tick. Brian cf4c4e65 "make sure everything stable": day and
+document rows, first save, tick/untick, Enter, 2nd/3rd task checked at 1280/390/touch. PR #10 0868fd9 (merge 26e6087,
+Ratchet #118 bde5ec6, Jazz pass): a past day opens with no cursor and no empty rows; today and future keep the cursor.
+343 pass, alignment 310/0/0. Rollback `.daythread-local/backups/2026-10-22-before-typing-jump/dist`. Brian told
+(25cb0807), incl. no real-iPhone check. Queue empty; next is what he raises.
+**Caret after deleting a to-do LIVE 2026-10-22: main 450913a** (PR #11, merge c7e1c80 of cd0cc76 + Ratchet ef9999e; Ratchet #119
+passed; Brian 301105c0; Lead 26f9b636). Backspace that removes an empty to-do puts the caret at the end of the nearest on-screen text
+line above (heading text; cards and a past day's hidden rows skipped; end of a wrapping line). ⌘Z restores the same task, included
+and planned for today. "Not today" unchanged. 343 pass, alignment 310/0/0. Rollback `.daythread-local/backups/2026-10-22-before-caret/dist`.
+Brian told (3245b7ac).
+**Success check starts now (7 days from 2026-10-22):** he opens Daythread on his phone away from home at least 3 times and
+no text is lost (usage read Oct 25, reminder 22f37a86).
+Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
+`fix/capture-late-refresh` 2201274. 3000 runs the same build; rollback `.daythread-local/backups/2026-10-22-before-vercel-now/dist`.
+
+**Previous plan (passed Ratchet #105, 2026-10-22, now stopped):** `docs/plan/core-build.md` on docs/core-build 3d87017 (Roadbuster),
+report `docs/reviews/core-build-ratchet.md` 31e194e. Direct build of the general core on Postgres, starting empty, no import.
+Each step on its own branch; C1–C3 pass on PGlite plus the CI Postgres container, staging is the gate from C4 (or earlier if
+his credentials arrive sooner; the date never depends on asking him). 3000 is untouched until C6. No step grows without the
+Lead's say; at the end of C4, Roadbuster reports whether C6 can come earlier. **Target: C6 in the week of Nov 16–20, Nov 24
+at the latest**, if his staging credentials are in by about Nov 5 (Roadbuster 487f00c0).
+Local values in 2026-10-22: Brian put all five in `.env.local`, 3000 restarted on the same build 7f6f1eb, and a read-only
+check passed for all five (Lead 2acad910). The **staging** condition (Vercel Preview env on the staging project from
+`credentials.md`) is not yet known: the Lead checks it at the start of C4 without asking him; it's needed by about Nov 5
+(Lead 1d287e47). Holds: nobody applies migrations or writes to that `DATABASE_URL`
+(his real project, direct URL 5432) until C1 passes and the Lead says so; C1's runner works on both direct and pooler URLs.
+Sign-ups are still on (`disable_signup: false`). Turning them off is Brian's step, and C4 checks it before staging opens.
+
+| ID | Step | Size | Status |
+| --- | --- | --- | --- |
+| C1 | Schema, migrations, restricted role and RLS, seed at first sign-in (collections, system properties, day template; Jazz `empty-start-states.md` §1) | 4–5 days | in review (7f96098, PR #2, CI green incl. Postgres 17; 321 pass / 0 fail; 3000 unaffected) (Roadbuster, feat/c1-schema; generic `unique_values` table and one GIN index with containment queries, ranges by scan measured in C5; pasting a URL whose page is in the trash restores it, refusal as fallback for Trash restores; Lead 6c44c44d) |
+| C2 | Postgres repository and projection (patches of known fields only), workspace lock, per-row versions, contract suite v2 (incl. Ratchet's #102 named rows and capture start tokens), alignment fixture `scripts/core-fixtures.ts`. Spec `docs/plan/c2-projection.md` on feat/c2-repository 640e0db, Ratchet pre-review. Decided (Lead 56ea3ccc + correction): roles `events` and `notes` added to the seed; editor Undo bookkeeping in infrastructure table `app.editor_state`; **placements (a)**: a day with a page = the line under its role heading is the truth; a future day without a page stores only `plan_on`, no page created, no slot kept ("Planned for {day} · choose Top 3 that day"), keeping the preview rule (Bumblebee 64ea9d13); excluded/moved go to `history` | 6–7.5 days (+1–1.5 approved by Lead, within the Nov 16–20 target) | spec in pre-review |
+| C3 | `operations` and Undo from before-images (restored content gets a new version), `history` independent of prunable inverses; a resend after a lost reply shows "Saved", not a conflict (Bumblebee ab1b4b0a) | 3 days | missing |
+| C4 | Sign-in by emailed code through server functions only (Brian c821ad7b: the browser talks only to our server; httpOnly session cookie, nothing Supabase in the client bundle; Lead be5d2b86). Jazz's screens; a non-owner sees the same flow until the code fails. The session refreshes silently and lasts until he signs out; check: idle 7+ days still opens straight to today (Bumblebee 5ad03786). Auth gate with server-only writes; staging gate starts. Negative checks before staging opens: `disable_signup: true`; an unknown email gets the same "Sent to {email}" screen with no error text, and its code fails like a wrong code (Jazz d16d03a3, Lead 0c458a44) | 4–5 days | missing |
+| C5 | Vercel runtime (durable jobs, `waitUntil`, cron checked against his plan), empty states, "Old notes ↗" row, speed and payload gates on staging | 3–4 days | missing |
+| C6 | Switch: stop and drain today's model work, then turn 3000 into the read-only archive ("Archived · read only", banner link to the new app); late callbacks refused | 1 day | missing |
+| C7 | Offline first version after launch (read cache, typing into the draft, capture queue, one status); scope re-checked against real phone use | 5–6 days | later |
+
+Superseded: the S0–S7 rows (stepwise local cleanup with migration), stopped by Brian b15c12ac. Kept in git history (main a4bd854).
+
+Success checks: after C6, the screens are unchanged and day open and save meet the budget; in
+the first 7 days after cutover he opens Daythread on his phone away from home at least 3 times and no text is lost
+(Bumblebee 24f1324a). C7's scope is re-checked against real phone use after the switch (Lead 0dde676a).
 
 ## C. Open questions for Brian
 

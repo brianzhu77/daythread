@@ -99,10 +99,12 @@ export function settleAttempt(db: DatabaseSync, input: SettleInput): ModelAttemp
 
 /**
  * After a restart nothing is in flight any more. A still-reserved attempt never got a reply, so it has no generation id
- * and no cost: estimated at its reservation, and calls go on (Lead 33ae4578).
+ * and no cost: estimated at its reservation, and calls go on (Lead 33ae4578). `olderThan` limits it to attempts
+ * reserved before that time, for a store other live processes may still be working in.
  */
-export function markInterrupted(db: DatabaseSync, now: string): number {
-  return Number(db.prepare("UPDATE model_attempts SET state='estimated', note=COALESCE(note, ?) WHERE state='reserved'").run(`interrupted before ${now}; counted at the reserved upper bound`).changes)
+export function markInterrupted(db: DatabaseSync, now: string, olderThan?: string): number {
+  return Number(db.prepare("UPDATE model_attempts SET state='estimated', note=COALESCE(note, ?) WHERE state='reserved' AND (? IS NULL OR createdAt < ?)")
+    .run(`interrupted before ${now}; counted at the reserved upper bound`, olderThan ?? null, olderThan ?? null).changes)
 }
 
 /** Manual settlement of an unknown or estimated charge: an amount read from OpenRouter, or the reserved worst case. Never an implicit zero. */

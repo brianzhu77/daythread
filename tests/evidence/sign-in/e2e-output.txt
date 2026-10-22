@@ -1,0 +1,48 @@
+ok   signed out: a page redirects to sign-in with next (302 /sign-in?next=%2Ftasks%3Fx%3D1)
+ok   signed out: GET /_serverFn/anything is 401 (401)
+ok   signed out: POST /_serverFn/anything is 401 (401)
+ok   signed out: POST /api/auth/send is 401 (401)
+ok   signed out: POST /api/auth/verify is 401 (401)
+ok   the sign-in screen opens signed out
+ok   a POST from another origin is 403
+ok   Sec-Fetch-Site cross-site is 403
+ok   a POST with neither Origin nor Sec-Fetch-Site is 403
+ok   wrong password, unknown address, verified non-owner: identical 401, no cookie (401 {"ok":false,"error":"wrong"} no-cookie | 401 {"ok":false,"error":"wrong"} no-cookie | 401 {"ok":false,"error":"wrong"} no-cookie)
+ok   Supabase down: 503 "couldn't sign in", not a wrong password
+ok   per address: the 11th try in 10 min is 429 and never reaches Supabase (401,401,429,429,429,429,429,429,429,429,429)
+ok   global: past 5 failures even the right password waits, with the real wait ({"ok":false,"error":"too-many","retryAfter":30})
+ok   a refused try records nothing, so it never pushes the wait out
+ok   the same wait for any address (30 vs 30)
+ok   the brake is on again
+ok   a device signed in before the brake still opens today (200)
+ok   owner: session cookie, HttpOnly, SameSite=Lax, 30 days (daythread_session=<token>; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000)
+ok   a success clears the failure count
+ok   sessions are stored as hashes only
+ok   390: autocomplete username / current-password (username / current-password)
+ok   390: no "Forgot password?"
+ok   390: one line for a refusal (That didn't work · Check the email and password)
+ok   390: the email stays, the password empties
+ok   390: the caret is in the password
+ok   390: Show reveals the password
+ok   390: signs in to next (/tasks) with one request (http://127.0.0.1:3473/tasks?view=today)
+ok   390: the password is never in the URL
+ok   1280: autocomplete username / current-password (username / current-password)
+ok   1280: no "Forgot password?"
+ok   1280: one line for a refusal (That didn't work · Check the email and password)
+ok   1280: the email stays, the password empties
+ok   1280: the caret is in the password
+ok   1280: Show reveals the password
+ok   1280: signs in to next (/tasks) with one request (http://127.0.0.1:3473/tasks?view=today)
+ok   1280: the password is never in the URL
+ok   braked: "Too many tries · Try again in {wait}" (Too many tries · Try again in 30 s)
+ok   sidebar: "{email} · Sign out"
+ok   the refused save sends the page to sign-in with next (http://127.0.0.1:3473/sign-in?next=%2F)
+ok   after signing in: back on today, and the typed text is saved (http://127.0.0.1:3473/)
+ok   no "Load latest" conflict
+ok   Sign out shows the sign-in screen
+ok   the signed-out token, replayed: 401 (401)
+ok   not linked: the calm line in --ink-2 (Your account isn't linked to this workspace · Your notes are safe · rgb(110, 110, 115))
+ok   not linked: both fields keep their values
+ok   not linked: no failure counted
+ok   no password in the server log
+all passed

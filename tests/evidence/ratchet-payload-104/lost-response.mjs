@@ -1,0 +1,10 @@
+import {chromium} from '/Users/dogrod/Developer/daythread/node_modules/playwright/index.mjs';
+import {DatabaseSync} from 'node:sqlite';
+const browser=await chromium.launch(),page=await browser.newPage({viewport:{width:1280,height:1000}});const sleep=ms=>new Promise(r=>setTimeout(r,ms));let lost=false,posts=0;
+await page.goto('http://127.0.0.1:3411/day/2026-10-18',{waitUntil:'networkidle'});await sleep(500);
+await page.route('**/_serverFn/**',async route=>{if(route.request().method()==='POST'){posts++;if(!lost){lost=true;await route.fetch();await route.abort();return}}await route.continue()});
+const line=page.locator('.continuous-editor .bn-inline-content').filter({hasText:'DRIVE Basketball'}).first();await line.click();await page.keyboard.press('Meta+ArrowRight');await page.keyboard.type(' [R104LOST]');await sleep(2400);
+console.log('BEFORE_RETRY',await page.locator('.editor-save-line').innerText(),'POSTS',posts);
+const retry=page.getByRole('button',{name:'Retry saving'});if(await retry.count())await retry.click();await sleep(1800);
+console.log('AFTER_RETRY',await page.locator('.editor-save-line').innerText(),'POSTS',posts);
+const db=new DatabaseSync('/private/tmp/ratchet104/lost.sqlite',{readOnly:true});console.log('IN_DB',db.prepare("select editorJSON from pages where snapshot='current' and date='2026-10-18'").get().editorJSON.includes('[R104LOST]'));db.close();await browser.close();

@@ -1,4 +1,4 @@
-import { createRootRoute, HeadContent, Outlet, Scripts } from '@tanstack/react-router'
+import { createRootRoute, HeadContent, Outlet, Scripts, useRouterState } from '@tanstack/react-router'
 import { AppShell } from '../components/app-shell'
 import '../styles.css'
 
@@ -23,15 +23,19 @@ export const Route = createRootRoute({
 })
 
 function Root() {
+  // The sign-in screen stands alone: the app frame would load the workspace.
+  const signIn = useRouterState({ select: s => s.location.pathname === '/sign-in' })
   return (
     <html lang="en">
       <head>
         <HeadContent />
       </head>
       <body>
-        <AppShell>
-          <Outlet />
-        </AppShell>
+        {signIn ? <Outlet /> : (
+          <AppShell>
+            <Outlet />
+          </AppShell>
+        )}
         <Scripts />
       </body>
     </html>

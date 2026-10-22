@@ -1,0 +1,8 @@
+(node:82512) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS 1280 long title check no rows move
+PASS 1280 long title uncheck no rows move
+PASS 390 long title check no rows move
+PASS 390 long title uncheck no rows move
+PASS touch long title check no rows move
+PASS touch long title uncheck no rows move

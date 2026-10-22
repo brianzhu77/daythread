@@ -1,0 +1,1 @@
+PASS IP brake in isolation: ten successful logins, then 429; exactly ten provider calls; no credential echoed

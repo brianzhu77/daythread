@@ -144,6 +144,17 @@ else is kept as typed. So `https://Example.com` and `https://example.com/` are t
 aren't; tracking parameters are not removed. The page always shows the raw URL from the first paste. One key, one
 page, live or in the trash, including two pastes at the same moment.
 
+**The page is in the trash** (decided 2026-10-22 by the Lead; Jazz `4c9779b3`, Bumblebee `540262c9`):
+- **Pasting its URL restores that page**, not a second one. It keeps its notes, and its `[[` links and Linked from
+  entries come back to life. The card appears where he pasted, as for a live page. The notice reads
+  "**Restored from trash · {title} · Undo**". Undo puts the page back in the trash and leaves the pasted text as a
+  plain link.
+- **Restoring from the Trash screen while another page holds the key** (only possible through a path that bypasses the
+  rule above): refused with "**A page for this link already exists · Open it**". The trashed page stays in Trash, and
+  nothing is merged or renamed.
+- Day pages follow the same idea once they can be trashed (B16): opening that date shows "**This day is in the trash ·
+  Restore**" instead of a fresh template.
+
 ## 6. Checks (fake data, his copy, 1280 and 390)
 
 1. Paste one URL on an empty line of today → card, "Made a page · Undo", the page is a child of today (breadcrumb

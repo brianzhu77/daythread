@@ -1,0 +1,27 @@
+(node:95639) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium 1280 deleted task caret ends preceding text
+PASS chromium 1280 Undo restores same task id, complete title, open status and source block
+PASS chromium 1280 restored task survives reload
+PASS chromium 1280 first document line Backspace returns to title
+PASS chromium 1280 empty paragraph removal keeps preceding text end
+PASS chromium 1280 empty bulletListItem removal keeps preceding text end
+PASS chromium 390 deleted task caret ends preceding text
+PASS chromium 390 Undo restores same task id, complete title, open status and source block
+PASS chromium 390 restored task survives reload
+PASS chromium 390 first document line Backspace returns to title
+PASS chromium 390 empty paragraph removal keeps preceding text end
+PASS chromium 390 empty bulletListItem removal keeps preceding text end
+PASS chromium touch deleted task caret ends preceding text
+PASS chromium touch Undo restores same task id, complete title, open status and source block
+PASS chromium touch restored task survives reload
+PASS chromium touch first document line Backspace returns to title
+PASS chromium touch empty paragraph removal keeps preceding text end
+PASS chromium touch empty bulletListItem removal keeps preceding text end
+PASS webkit touch deleted task caret ends preceding text
+PASS webkit touch Undo restores same task id, complete title, open status and source block
+PASS webkit touch restored task survives reload
+PASS webkit touch first document line Backspace returns to title
+PASS webkit touch empty paragraph removal keeps preceding text end
+PASS webkit touch empty bulletListItem removal keeps preceding text end
+24 checks passed

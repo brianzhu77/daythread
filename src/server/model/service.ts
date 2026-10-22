@@ -1,45 +1,56 @@
 // Server-side wiring for the model: key loading, start-up recovery, status for the browser, and kicking off organizing.
-import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { parseEnv } from 'node:util'
-import { getRepository } from '../storage.ts'
-import { SqliteWorkspaceRepository } from '../sqlite-repository.ts'
+import { readLocalEnv } from '../local-env.ts'
+import { waitUntil } from '@vercel/functions'
+import { getRepository, storageKind } from '../storage.ts'
+import { asOwner, currentOwner } from '../auth/request-owner.ts'
 import { costUnknownCaptureIds, modelStatus } from '../model-ledger.ts'
 import { modelConfig, type ModelConfig } from './openrouter.ts'
-import { organizeCapture } from './organize.ts'
+import { expireStuckCaptures, organizeCapture } from './organize.ts'
 import { recoverUnknownCosts } from './cost-lookup.ts'
 import { draftDayRun, expireStuckDrafts } from './draft-run.ts'
 
 let envLoaded = false
-/**
- * `vite preview` doesn't put .env.local into process.env, so the server reads the model settings itself. Only the
- * OPENROUTER_* and DAYTHREAD_CAPTURE_MODE keys are taken, values already set in the environment win, nothing is logged.
- */
+/** The model settings from .env.local (local-env.ts): OPENROUTER_*, DAYTHREAD_CAPTURE_MODE and DAYTHREAD_DRAFT only. */
 export function loadModelEnv(path = resolve('.env.local')): void {
   if (envLoaded) return
   envLoaded = true
-  if (!existsSync(path)) return
-  const parsed = parseEnv(readFileSync(path, 'utf8'))
-  for (const [key, value] of Object.entries(parsed)) if (/^(OPENROUTER_|DAYTHREAD_CAPTURE_MODE$|DAYTHREAD_DRAFT$)/.test(key) && process.env[key] === undefined) process.env[key] = value
+  readLocalEnv(/^(OPENROUTER_|DAYTHREAD_CAPTURE_MODE$|DAYTHREAD_DRAFT$)/, path)
 }
 
 export type ModelState = 'simulated' | 'ready' | 'paused' | 'budget-used'
 export interface ModelInfo { state: ModelState; model: string | null; mode: 'auto' | 'confirm'; costUnknown: string[] }
 
-let recovered: Promise<void> | null = null
-function sqlite(): SqliteWorkspaceRepository {
-  const repository = getRepository()
-  if (!(repository instanceof SqliteWorkspaceRepository)) throw new Error('The model needs the SQLite store')
-  return repository
-}
 /**
- * Once per server process: attempts a previous process left in flight become estimated; unknown costs (a generation
- * id, no cost) are looked up once in the background, so a pause from before a restart can lift on its own.
+ * Work that goes on after the response is sent. On Vercel the function would otherwise be frozen at that point and a
+ * capture would stay "organizing"; elsewhere waitUntil does nothing and the promise simply runs.
  */
-function ready(): Promise<void> {
-  recovered ??= sqlite().markInterruptedModelAttempts(new Date().toISOString()).then(() => {
+function inBackground(start: () => Promise<unknown>, event: string, fields: Record<string, string>): void {
+  // The signed-in account the request ran as, carried explicitly into work that outlives the response (Ratchet).
+  const owner = currentOwner()
+  waitUntil(asOwner(owner, start).catch(error => console.error(JSON.stringify({ level: 'error', event, ...fields, error: error instanceof Error ? error.message : 'UnknownError' }))))
+}
+
+/**
+ * Postgres can be shared by several live processes (3000 and Vercel instances), so a process starting up must not take
+ * another one's work in flight as interrupted: there, only attempts reserved longer ago than any call can last (60 s
+ * model timeout inside a 120 s function) count, checked at most once a minute. A lone SQLite process takes every
+ * attempt still reserved at its start as interrupted.
+ */
+const sharedStore = () => storageKind() === 'postgres'
+const staleReservationMs = 5 * 60_000, sharedRecheckMs = 60_000
+let recovered: Promise<void> | null = null, recoveredAt = 0, costsLookedUp = false
+/**
+ * Attempts left in flight become estimated; unknown costs (a generation id, no cost) are looked up once in the
+ * background, so a pause from before a restart can lift on its own.
+ */
+function ready(now = Date.now()): Promise<void> {
+  if (recovered && !(sharedStore() && now - recoveredAt >= sharedRecheckMs)) return recovered
+  recoveredAt = now
+  const olderThan = sharedStore() ? new Date(now - staleReservationMs).toISOString() : undefined
+  recovered = getRepository().markInterruptedModelAttempts(new Date(now).toISOString(), olderThan).then(() => {
     const c = config()
-    if (c) void recoverUnknownCosts(sqlite(), c).catch(() => undefined)
+    if (c && !costsLookedUp) { costsLookedUp = true; waitUntil(recoverUnknownCosts(getRepository(), c).catch(() => undefined)) }
   })
   return recovered
 }
@@ -53,7 +64,7 @@ export async function modelInfo(): Promise<ModelInfo> {
   const c = config()
   if (!c) return { state: 'simulated', model: null, mode: captureMode(), costUnknown: [] }
   await ready()
-  const attempts = await sqlite().modelAttempts(), s = modelStatus(attempts, today())
+  const attempts = await getRepository().modelAttempts(), s = modelStatus(attempts, today())
   return { state: s.state, model: c.model, mode: captureMode(), costUnknown: costUnknownCaptureIds(attempts) }
 }
 
@@ -61,11 +72,11 @@ export async function modelInfo(): Promise<ModelInfo> {
 export async function submitCaptureForModel(operationId: string, pageId: string, text: string): Promise<{ captureId: string | null; info: ModelInfo }> {
   const info = await modelInfo()
   if (info.state === 'simulated') return { captureId: null, info }
-  const repository = sqlite(), c = config()!
+  const repository = getRepository(), c = config()!
   const ws = await repository.load()
   const r = await repository.execute({ operationId, expectedRevision: ws.revision, action: { type: 'capture-for-model', pageId, text, model: c.model, capturedAt: new Date().toISOString() } })
   const captureId = r.receipt.entityId ?? null
-  if (captureId) void organizeCapture({ repository, config: c, mode: info.mode }, captureId).catch(error => console.error(JSON.stringify({ level: 'error', event: 'model.organize', captureId, error: error instanceof Error ? error.message : 'UnknownError' })))
+  if (captureId) inBackground(() => organizeCapture({ repository, config: c, mode: info.mode }, captureId), 'model.organize', { captureId })
   return { captureId, info }
 }
 
@@ -74,24 +85,25 @@ export async function retryCaptureForModel(operationId: string, captureId: strin
   const info = await modelInfo()
   // Paused or out of budget: refused before the capture is touched, not only hidden in the receipt (Ratchet #70).
   if (info.state !== 'ready') return { ok: false, info }
-  const repository = sqlite(), c = config()!
+  const repository = getRepository(), c = config()!
   const ws = await repository.load()
   await repository.execute({ operationId, expectedRevision: ws.revision, action: { type: 'retry-capture', captureId } })
-  void organizeCapture({ repository, config: c, mode: info.mode }, captureId).catch(error => console.error(JSON.stringify({ level: 'error', event: 'model.organize', captureId, error: error instanceof Error ? error.message : 'UnknownError' })))
+  inBackground(() => organizeCapture({ repository, config: c, mode: info.mode }, captureId), 'model.organize', { captureId })
   return { ok: true, info }
 }
 
 let draftsRecovered = false
 /**
- * A6b plan §3.5: before the browser reads the workspace, runs stuck on "drafting" end as failed — every one left by an
- * earlier server process the first time, then those 90 s past their tap. A no-op when nothing is drafting.
+ * Before the browser reads the workspace, model runs that can no longer finish end as failed. Drafts (A6b plan §3.5):
+ * every one left by an earlier server process the first time (not on a shared store, where another process may still
+ * be drafting), then those 90 s past their tap. Captures: organizing past captureExpiryMs. A no-op when nothing is running.
  */
-export async function expireDrafts(now = new Date()): Promise<void> {
+export async function expireStuckRuns(now = new Date()): Promise<void> {
   const repository = getRepository()
-  if (!(repository instanceof SqliteWorkspaceRepository)) return
-  const all = !draftsRecovered
+  const all = !draftsRecovered && !sharedStore()
   draftsRecovered = true
   await expireStuckDrafts(repository, now, { all })
+  await expireStuckCaptures(repository, now)
 }
 
 /**
@@ -101,7 +113,7 @@ export async function expireDrafts(now = new Date()): Promise<void> {
  */
 export async function startDraftForDay(operationId: string, date: string): Promise<{ mode: 'simulated' | 'real'; info: ModelInfo }> {
   const info = await modelInfo()
-  const repository = sqlite(), c = config()
+  const repository = getRepository(), c = config()
   if (info.state === 'simulated' || !c || process.env.DAYTHREAD_DRAFT === 'simulated') {
     await repository.executeOnLatest(operationId, { type: 'generate-draft', date, trigger: 'card' })
     return { mode: 'simulated', info }
@@ -111,6 +123,6 @@ export async function startDraftForDay(operationId: string, date: string): Promi
     try { await repository.executeOnLatest(`draft-failed:${operationId}`, { type: 'model-draft-failed', date, runId: operationId, failure: info.state === 'paused' ? 'paused' : 'budget' }) } catch { /* moved on */ }
     return { mode: 'real', info }
   }
-  void draftDayRun({ repository, config: c }, date, operationId).catch(error => console.error(JSON.stringify({ level: 'error', event: 'model.draft', date, error: error instanceof Error ? error.message : 'UnknownError' })))
+  inBackground(() => draftDayRun({ repository, config: c }, date, operationId), 'model.draft', { date })
   return { mode: 'real', info }
 }

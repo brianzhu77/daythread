@@ -1,4 +1,4 @@
-import { dayTemplate, editorSeed, needsTemplateRows, pageContentKey, projectDocument, inlineText, sectionRange, type EditorNode } from "./editor-document.ts";
+import { dayTemplate, editorSeed, needsTemplateRows, pageContentKey, projectDocument, inlineText, sectionRange, templateKind, type EditorNode } from "./editor-document.ts";
 import { isTrashed, moveRefusal, referencesTo as pageReferences, subtreeIds } from "./page-tree.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import { cardsPresent, undoCards, type UndoCard } from "./link-paste.ts";
@@ -138,6 +138,9 @@ function appendBlock(p: Page, s: Section, block: NoteBlock): void {
 }
 function ensureSection(p: Page, kind: Section["kind"]): Section {
   let s = p.sections.find((s) => s.kind === kind);
+  // A template heading stored as custom by the old one-key merge is still this section: planning into it repairs the
+  // role rather than adding a second heading (Brian's Other, 2026-10-22; same rule as projectDocument).
+  if (!s && (s = p.sections.find((x) => x.kind === "custom" && templateKind(p, x.id) === kind))) s.kind = kind;
   if (!s) {
     s = {
       id: newId(),
@@ -982,8 +985,13 @@ function execute(
       const previousBlocks = p.sections.flatMap(s => s.blocks);
       p.editorBlockMetadata ??= {};
       for (const block of previousBlocks) p.editorBlockMetadata[block.id] = structuredClone(block);
-      // A9a §2: a heading's `[[` links outlive the heading too, so Undo or a cut-and-paste move finds their time.
-      for (const sec of p.sections) if (sec.refs?.length) p.editorBlockMetadata[`heading:${sec.id}`] = { id: `heading:${sec.id}`, kind: "paragraph", text: sec.title, refs: structuredClone(sec.refs) };
+      // A9a §2: a heading's `[[` links outlive the heading too, so Undo or a cut-and-paste move finds their time. Its
+      // role does too: a role heading removed by a key or a selection and brought back by ⌘Z is that section again, not
+      // a custom one (Roadbuster bd8e4c13).
+      for (const sec of p.sections) if (sec.refs?.length || sec.kind !== "custom") p.editorBlockMetadata[`heading:${sec.id}`] = {
+        id: `heading:${sec.id}`, kind: "paragraph", text: sec.title,
+        ...(sec.refs?.length ? { refs: structuredClone(sec.refs) } : {}), ...(sec.kind !== "custom" ? { sectionKind: sec.kind } : {}),
+      };
       for (const node of all) {
         if (node.type !== 'task' || state.tasks.some(t => t.id === node.props?.taskId)) continue;
         if (!inlineText(node.content) && node.props?.taskId === `editor-task:${node.id}`) continue;
@@ -1908,7 +1916,7 @@ export function applyCommand(
   ) {
     const previous = input.undo;
     if (
-      !previous ||
+      !previous?.before ||
       previous.operationId !== command.action.targetOperationId ||
       previous.revision !== input.revision
     )

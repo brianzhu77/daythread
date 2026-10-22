@@ -3,9 +3,12 @@
 export interface ModelConfig { apiKey: string; model: string; baseUrl: string }
 export interface ModelCall<T> { value: T; generationId: string | null; costUsd: number | null; promptTokens: number; completionTokens: number; raw: string }
 
-/** Reads the key and model the server was started with; null means "no model: say Simulated". */
+// Used when OPENROUTER_MODEL is unset, so a deploy with only the key still has a model.
+export const DEFAULT_MODEL = 'deepseek/deepseek-v4.1-flash-1017'
+
+/** Reads the key the server was started with; null means "no model: say Simulated". */
 export function modelConfig(env: NodeJS.ProcessEnv = process.env): ModelConfig | null {
-  const apiKey = env.OPENROUTER_API_KEY?.trim(), model = env.OPENROUTER_MODEL?.trim()
+  const apiKey = env.OPENROUTER_API_KEY?.trim(), model = env.OPENROUTER_MODEL?.trim() || DEFAULT_MODEL
   // OPENROUTER_BASE_URL exists so tests can point at a local fake provider; production leaves it unset.
   return apiKey && model ? { apiKey, model, baseUrl: (env.OPENROUTER_BASE_URL?.trim() || 'https://openrouter.ai/api/v1').replace(/\/$/, '') } : null
 }

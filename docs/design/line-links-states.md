@@ -35,7 +35,8 @@ Three ways to reach the same action, all already on screen today:
 ## 2. Pasting it
 
 - **In the app:** pasting it anywhere in a line inserts a **line link**, inline, like a `[[` page link. On an empty line
-  it's the only thing on the line. In a task title it's a link inside the title, as page links are.
+  it's the only thing on the line. **In a task title** it pastes the line's words as plain text: task rows hold no
+  page links (the A9a rule), so they hold no line links either (Roadbuster a11 plan, `e4b7d0ed`).
 - **On the same page as its line:** allowed; it works as a jump within the page.
 - **In another app:** the plain URL, which opens the line when he's on this computer.
 - Undo removes it like any paste.
@@ -72,13 +73,18 @@ Three ways to reach the same action, all already on screen today:
 | What happened to the line | The chip shows | Tap |
 | --- | --- | --- |
 | **edited** | its new words | opens it, as §4 |
-| **moved to another page** (task moved to another day, cut and pasted, Bring to today; whatever keeps its id) | its words · **the page it's on now** | opens it there (follow the line, Bumblebee) |
+| **moved to another page** (cut and pasted, a task moved to another day: followed through its task) | its words · **the page it's on now** | opens it there (follow the line, Bumblebee) |
+| **copied** (Bring to today, copy and paste) | unchanged: the link stays on the original line | opens the original |
+| **a task line whose task moved day** | its words · **the day it's planned for now**, not the history row left on the old day (Jazz `93497700`) | opens that day; the URL from other apps resolves the same way |
+| **a task line whose task has no plan day** (Not today, paused) | its words · the most recent page that still shows its row (Bumblebee `565cad22`) | opens that page |
+| **a task line whose task is done** | its words · the day it was completed on (Bumblebee) | opens that day |
 | **deleted** | "Line removed · {last page}" in `--ink-3`, ↳ icon kept | opens that page at the top, notice "That line was removed" |
 | **its page is in the trash** | its words · {page} in `--ink-3` with the bin icon, like a trashed page link | opens the trashed page (banner + Restore, A4), scrolled to the line |
 | **its page doesn't exist** | "Line not found" in `--ink-3` | nothing |
 
-- **Roadbuster is checking which moves keep a line's id.** Design asks only that a move that keeps the id is
-  followed, and one that doesn't falls into "deleted" with its last page, never a broken chip.
+- **Which moves keep the line** (a11 plan 42a2c3f): edits, Enter, indent and drag within a page; cut and paste
+  (plan §3); a task moved to another day, followed through its task. Bring to today is a copy. Anything else that
+  loses the line falls into "deleted" with its last page, never a broken chip.
 - The text around the chip never changes in any of these cases.
 
 ## 6. Linked from
@@ -108,5 +114,5 @@ Three ways to reach the same action, all already on screen today:
 
 ## 8. Open
 
-- **Roadbuster:** which moves keep the line id (§5); the plain URL's form for other apps.
+- ~~**Roadbuster:** moves, URL form~~ **Answered** by a11 plan 42a2c3f (§5 above; URL `/pages?page=…&block=…`).
 - Size: one inline type plus three entry points; all states reuse page-link ones.

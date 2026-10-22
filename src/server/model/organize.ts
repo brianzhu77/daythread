@@ -1,7 +1,7 @@
 // feat/model step 1: organizes one saved capture with Brian's model. Server only. The model call never sits inside a
 // database transaction: reserve (one transaction) → call → record (one transaction, ledger + workspace together).
 import type { GroundingFlag, ProposalItem, Workspace } from '../../domain/types.ts'
-import type { SqliteWorkspaceRepository } from '../sqlite-repository.ts'
+import type { ServerRepository } from '../repository.ts'
 import { captureMessages, captureSchema, readCaptureAnswer, type CaptureItem } from './capture-prompt.ts'
 import { groundItem } from './grounding.ts'
 import { callStructured, ModelError, requestBody, type ModelConfig } from './openrouter.ts'
@@ -44,7 +44,7 @@ export function toProposal(item: CaptureItem, text: string, openTasks: Workspace
 }
 
 export interface OrganizeDeps {
-  repository: SqliteWorkspaceRepository
+  repository: ServerRepository
   config: ModelConfig
   mode: 'auto' | 'confirm'
   fetchImpl?: typeof fetch
@@ -144,4 +144,28 @@ async function organizeOnce(deps: OrganizeDeps, captureId: string): Promise<Orga
   }
   const r = await repository.recordModelResult({ attemptId, actualUsd: cost, generationId, now: now().toISOString() }, command)
   return r.refused ? 'stale' : 'organized'
+}
+
+/** Longer than any organize run can last: a 60 s model call inside a 120 s function, or 3000's 60 s timeout. */
+export const captureExpiryMs = 5 * 60_000
+/**
+ * A capture whose organize run died (the function frozen or killed, the server restarted) would show "Organizing…"
+ * forever with no Retry. Past the expiry it ends as failed, with its text kept and Retry offered (Jazz c971ce0b, 89dfc3ee: the existing receipt wording); a late
+ * answer for that revision is then refused like any other. The run's start is its model attempt's reservation, or the
+ * capture time for a first run that died before reserving. A Retry that died before reserving has no known start and
+ * is left as it is.
+ */
+export async function expireStuckCaptures(repository: ServerRepository, now: Date): Promise<number> {
+  const organizing = (await repository.load()).captures.filter(c => c.status === 'organizing' && !c.simulated)
+  if (!organizing.length) return 0
+  const attempts = await repository.modelAttempts()
+  let n = 0
+  for (const c of organizing) {
+    const attempt = attempts.find(a => a.captureId === c.id && a.revision === c.proposalRevision)
+    const startedAt = attempt?.createdAt ?? (c.proposalRevision === 1 ? c.capturedAt : undefined)
+    if (!startedAt || now.getTime() - Date.parse(startedAt) < captureExpiryMs) continue
+    const action = { type: 'model-failed' as const, captureId: c.id, revision: c.proposalRevision, failure: 'failure' as const, error: 'Model unavailable · text saved' }
+    try { await repository.executeOnLatest(`capture-expired:${c.id}:${c.proposalRevision}`, action); n++ } catch { /* answered or moved on meanwhile */ }
+  }
+  return n
 }

@@ -29,7 +29,8 @@ import { displayPageTitle, focusAtEnd } from './page-title'
 import { addDays, fromIso, longLabel, todayIso, weekday } from './dates'
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
-import { registerEditorFlush } from './editor-flush'
+import { endOfLineAbove, rowArrows } from './row-arrows'
+import { isOwnLeaveSave, registerEditorFlush, rememberLeaveSave } from './editor-flush'
 import { RowMenu } from './row-menu'
 import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
 
@@ -75,7 +76,8 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
     {/* Jazz f58abeaf: done rows are grey and struck through too, so the label is what says Cancelled. */}
     {t?.status === 'cancelled' && <span contentEditable={false} className="editor-cancelled-tag">Cancelled</span>}
     {role === 'reference' && <span contentEditable={false} className="editor-reference-tag">Reference</span>}
-    {role === 'reference' && t?.status === 'open' && <button className="editor-plan-action" contentEditable={false} onClick={() => void run({ type: 'plan-task', taskId, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }, r => ({ text: 'Planned for today', undoOperationId: r.operationId }))}>Plan for today</button>}
+    {/* A done or cancelled task keeps the button's space, hidden, so a long title doesn't reflow when it's ticked (#9). */}
+    {role === 'reference' && t && <button className="editor-plan-action" contentEditable={false} {...(t.status === 'open' ? { onClick: () => void run({ type: 'plan-task', taskId, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }, r => ({ text: 'Planned for today', undoOperationId: r.operationId })) } : { disabled: true, tabIndex: -1, 'aria-hidden': true, style: { visibility: 'hidden' as const } })}>Plan for today</button>}
     {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent))} onEscape={() => rows!.focusRow(blockId)} /></span>}
     {t && t.status === 'open' && hasDateFacts(t) && <span contentEditable={false} className="editor-date-tag"><DateTag task={t} today={todayIso()} pageDate={planDate || todayIso()} /></span>}
   </div>
@@ -217,6 +219,7 @@ function firstLineCenter(block: HTMLElement): number {
 
 export function PageEditor({ page, workspace }: { page: Page; workspace: Workspace }) {
   const { run, refresh, latest } = useWorkspace()
+  const runRef = useRef(run); runRef.current = run
   const navigate = useNavigate()
   const key = `daythread:editor:${page.id}`
   const initial = useRef<{ nodes: EditorNode[]; base: string; recovered: boolean } | null>(null)
@@ -233,7 +236,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const latestPage = useRef(page); latestPage.current = page
   // Event and link rows keep their own kind on the page; the tag index reads only paragraph and task text.
   const tagCounts = useCallback((id: string) => { const kind = latestPage.current.sections.flatMap(s => s.blocks).find(b => b.id === id)?.kind; return !kind || kind === 'paragraph' || kind === 'task' }, [])
-  const editor = useCreateBlockNote({ schema, extensions: [tagDecorations(tagCounts)], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  // No gap cursor (Brian 967fd04b): BlockNote's custom blocks are `isolating`, so ProseMirror found a gap at every
+  // task row's edge, stopped ↑/↓ there and drew its gap cursor, a blinking 20 px line beside the row. rowArrows moves
+  // the caret between task rows instead. The page has no tables or other blocks that need a gap cursor.
+  const editor = useCreateBlockNote({ schema, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
     pastingNow.current = true; setTimeout(() => { pastingNow.current = false }, 0)
@@ -304,6 +310,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const historyGuardBypass = useRef(false)
   const [historyBusy, setHistoryBusy] = useState(false)
   const lastSent = useRef('')
+  // The document the server last accepted from this editor, so leaving knows whether anything is still unsaved.
+  const lastSaved = useRef<string | null>(null)
+  const left = useRef(false)
+  // Settles once the save on its way has finished and set its new starting point; leaving waits for it (Ratchet #99).
+  const inflight = useRef<Promise<void>>(Promise.resolve())
   const undoingPaste = useRef(false)
   // A9a §3: where the last `[[` list opened (so the same characters don't open it twice), and whether text is being pasted.
   const lastTrigger = useRef(-1)
@@ -374,6 +385,22 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const shown = new Set(block.type === 'heading' ? deepNodes(sectionRange(editor.document as unknown as EditorNode[], block.id)).map(n => n.id) : [block.id])
     setHiddenEmpty(ids => [...ids].some(x => shown.has(x)) ? new Set([...ids].filter(x => !shown.has(x))) : ids)
   }), [editor])
+  /**
+   * A section heading with a role (Top 3, Other, Events, Good Stuffs, Notes) isn't dissolved by one key: Delete at the
+   * end of the line before it, or Backspace at its start, does nothing (Brian's Delete bug, Lead). Selecting across it
+   * and deleting still works, and ⌘Z brings it back with its role. Headings he adds himself edit as usual.
+   */
+  function joinsRoleHeading(key: 'Delete' | 'Backspace'): boolean {
+    const { selection, doc } = editor.prosemirrorState
+    if (!selection.empty) return false
+    const $from = selection.$from
+    const isRoleHeading = ($pos: typeof $from) => $pos.parent.type.name === 'heading'
+      && page.sections.some(s => s.id === $pos.node($pos.depth - 1).attrs.id && s.kind !== 'custom')
+    if (key === 'Backspace') return $from.parentOffset === 0 && isRoleHeading($from)
+    if ($from.parentOffset !== $from.parent.content.size) return false
+    const next = Selection.findFrom(doc.resolve($from.after()), 1, true)
+    return !!next && isRoleHeading(next.$from)
+  }
   const selectionFocus = useRef<HTMLDivElement>(null)
   // Browser selection can survive React node-view replacement while ProseMirror's selection moves elsewhere.
   // Keep stable block IDs and inline offsets instead of positions tied to the replaced document.
@@ -417,7 +444,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const pendingSave = useRef<{ fingerprint: string; operationId: string } | null>(null)
   const flush = useCallback(async () => {
     // A2 §4: while a paste's Undo is out, nothing is sent; typing collects and goes once the reply is applied.
-    if (!dirty.current || sending.current || undoingPaste.current) return
+    if (left.current || !dirty.current || sending.current || undoingPaste.current) return
+    // The page moved on only by his own save from when he last left it: start from that.
+    if (isOwnLeaveSave(page.id, latestPage.current.editorJSON)) base.current = pageContentKey(latestPage.current)
     sending.current = true
     const document = JSON.stringify(editor.document)
     const deletions = [...semanticDeletes.current]
@@ -432,22 +461,28 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     let preview: Workspace
     try { preview = applyCommand(source, { operationId, expectedRevision: source.revision, action }).workspace }
     catch (error) { debugClient('editor.save.rejected',{operationId,pageId:page.id,result:'conflict',error:error instanceof Error?error.name:'UnknownError'}); sending.current = false; setFailed(true); setStatus(error instanceof Error ? error.message : 'Cannot save; draft kept'); return }
-    const result = await run(action,undefined,operationId)
-    sending.current = false
-    if (!result) { debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true); setStatus("Couldn't save · draft kept"); return }
-    pendingSave.current=null
-    debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
-    for (const t of source.tasks) if (expectedTaskVersions.current.get(t.id) !== t.version) invalidHistoryTasks.current.add(t.id)
-    for (const t of preview.tasks) if (source.tasks.find(old => old.id === t.id)?.version !== t.version) expectedTaskVersions.current.set(t.id, t.version)
-    const savedPage = preview.pages.find(p => p.id === page.id)!
-    base.current = pageContentKey(savedPage)
-    deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
-    dirty.current = JSON.stringify(editor.document) !== document
-    // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
-    const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
-    setFailed(false); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
-    if (dirty.current) { stash(); timer.current = setTimeout(() => void flushRef.current(), 300) }
-    else localStorage.removeItem(key)
+    let settled!: () => void
+    inflight.current = new Promise<void>(resolve => { settled = resolve })
+    try {
+      const result = await run(action,undefined,operationId)
+      sending.current = false
+      if (!result) { debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true); setStatus("Couldn't save · draft kept"); return }
+      pendingSave.current=null; lastSaved.current = document
+      debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
+      for (const t of source.tasks) if (expectedTaskVersions.current.get(t.id) !== t.version) invalidHistoryTasks.current.add(t.id)
+      for (const t of preview.tasks) if (source.tasks.find(old => old.id === t.id)?.version !== t.version) expectedTaskVersions.current.set(t.id, t.version)
+      const savedPage = preview.pages.find(p => p.id === page.id)!
+      base.current = pageContentKey(savedPage)
+      // The editor has closed meanwhile: leaving takes it from here (it needs only the new starting point).
+      if (left.current) return
+      deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
+      dirty.current = JSON.stringify(editor.document) !== document
+      // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
+      const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
+      setFailed(false); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
+      if (dirty.current) { stash(); timer.current = setTimeout(() => void flushRef.current(), 300) }
+      else localStorage.removeItem(key)
+    } finally { settled() }
   }, [editor, key, page.id, run])
   flushRef.current = flush
   useEffect(() => registerEditorFlush(page.id, async () => {
@@ -499,6 +534,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // Our own save echoes back with the same document and sections projected from it. Anything else (Put back,
     // Keep from the morning hand-off, another tab) rewrote the page under us and the open editor must follow.
     if (page.editorJSON === lastSent.current && page.editorSections === JSON.stringify(page.sections)) return
+    // His own save from when he left this page landed after he came back: carry on from it, it isn't a conflict.
+    if (dirty.current && isOwnLeaveSave(page.id, page.editorJSON)) { base.current = next; setFailed(false); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0); return }
     if (dirty.current) { debugClient('editor.external-refresh',{operationId:newOperationId(),triggerOperationId:pendingSave.current?.operationId,pageId:page.id,result:'conflict'}); setFailed(true); setStatus('Page changed elsewhere · draft kept; copy it before reloading'); return }
     // Deferred: replacing blocks synchronously inside React's commit triggers a flushSync warning from BlockNote's views.
     queueMicrotask(() => {
@@ -553,10 +590,39 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     editor.domElement?.querySelector(`[data-id="${CSS.escape(merged.inserted[0]!)}"]`)?.scrollIntoView({ block: 'center' })
     setNotice({ text: 'Latest loaded · your changes are below their lines', fingerprint: JSON.stringify(editor.document) })
   }
+  // A draft stashed in this browser from the page exactly as it is now (left unsaved by an earlier version, or a closed
+  // tab) is saved on opening, instead of waiting for Retry. One made from an older page stays for Load latest (B23).
   useEffect(() => {
+    if (initial.current?.recovered && initial.current.base === pageContentKey(page)) timer.current = setTimeout(() => void flushRef.current(), 0)
+  }, [])
+  useEffect(() => {
+    left.current = false // a remount (React's strict check) is open again
     const before = (e: BeforeUnloadEvent) => { if (dirty.current) { stash(); e.preventDefault() } }
     window.addEventListener('beforeunload', before)
-    return () => { clearTimeout(timer.current); if (dirty.current) stash(); window.removeEventListener('beforeunload', before) }
+    return () => {
+      clearTimeout(timer.current); window.removeEventListener('beforeunload', before)
+      left.current = true
+      if (!dirty.current) return
+      // Leaving the page inside the app (another page, another screen) used to only stash the draft here, so an edit
+      // made just before switching stayed unsaved until this page was opened again: a cut line stayed on both pages.
+      // Now the draft is stashed as before and then saved. If that save is refused or fails, the stash stays and
+      // this page shows it on return ("Recovered unsaved draft", or Load latest after a conflict).
+      stash()
+      const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current]
+      void (async () => {
+        // A save already on its way finishes first, so this one starts from the page it produced.
+        await inflight.current
+        if (document !== lastSaved.current) {
+          const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, today: todayIso() }
+          debugClient('editor.save.leave',{pageId:page.id})
+          const result = await runRef.current(action, undefined, newOperationId(), { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => {} })
+          if (!result) return
+          rememberLeaveSave(page.id, document)
+        }
+        // Clear the stash only if it's still this draft: he may already be back on the page and typing.
+        try { if (JSON.parse(localStorage.getItem(key) ?? 'null')?.document === document) localStorage.removeItem(key) } catch { /* keep it */ }
+      })()
+    }
   }, [])
 
   // Read from the browser's caret, not editor state: ProseMirror picks up caret moves (Home, arrows) a moment later.
@@ -981,7 +1047,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // Arriving at a block from a tag focuses nothing, so the view stays on that block.
     // A page just made with `/page` opens to name it: the title field has the cursor (Jazz f69dd341).
     const naming = new URLSearchParams(window.location.search).get('focus') === 'title'
-    if (target && !jumpTo && !naming && window.matchMedia('(pointer: fine)').matches) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
+    // A past day opens to be read, with no cursor: the cursor would show an empty row he never wrote (B19 hides them
+    // until he clicks into a section; Jazz, Bumblebee, Lead).
+    const past = page.type === 'daily' && !!page.date && page.date < todayIso()
+    if (target && !jumpTo && !naming && !past && window.matchMedia('(pointer: fine)').matches) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
   }, [editor, jumpTo])
   useEffect(() => {
     const update = () => {
@@ -1286,8 +1355,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // Jazz's title spec: Backspace at the start of the first line goes up into the title, as in Notion.
         const title = document.querySelector<HTMLElement>('.page-title-field')
         if (title) { e.preventDefault(); e.stopPropagation(); focusAtEnd(title) }
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && !e.nativeEvent.isComposing && !e.altKey && !e.metaKey && !e.ctrlKey && joinsRoleHeading(e.key)) {
+        // Silent, like any key that has nothing to do (Jazz).
+        e.preventDefault(); e.stopPropagation()
       } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && editor.prosemirrorState.selection.empty && editor.getTextCursorPosition().block.type === 'task' && !inlineText(editor.getTextCursorPosition().block.content)) {
-        e.preventDefault(); e.stopPropagation(); const id = editor.getTextCursorPosition().block.id; semanticDeletes.current.add(id); editor.removeBlocks([id])
+        // The caret goes to the end of the line above, as when any line is deleted (Brian 301105c0), not to the start of
+        // the line that moves up. Everything above the removed row keeps its positions, so `above` holds after removal.
+        e.preventDefault(); e.stopPropagation(); const id = editor.getTextCursorPosition().block.id
+        const view = editor.prosemirrorView, above = endOfLineAbove(view, view.state.selection.$from.before())
+        semanticDeletes.current.add(id); editor.removeBlocks([id])
+        if (above !== null) view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, above)).scrollIntoView())
       } else if (!['Shift', 'Control', 'Meta', 'Alt'].includes(e.key) && !((e.metaKey || e.ctrlKey) && ['c', 'x'].includes(e.key.toLowerCase()))) { selected.current = []; setSelectionLabel('') }
     }}
     >

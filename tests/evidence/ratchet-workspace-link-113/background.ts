@@ -1,0 +1,20 @@
+// Local disposable Postgres and a held fake model response only. Never point this at the real journal.
+import assert from 'node:assert/strict';
+import postgres from 'postgres';
+process.env.VERCEL='1';process.env.DAYTHREAD_STORAGE='postgres';process.env.DATABASE_URL='postgres://postgres:fixture@127.0.0.1:54781/review';process.env.DAYTHREAD_PG_SCHEMA='ratchet113bg';process.env.OPENROUTER_API_KEY='fixture';process.env.OPENROUTER_MODEL='fake/model';process.env.OPENROUTER_BASE_URL='https://fake.invalid/api/v1';
+const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222';
+const {asOwner,currentOwner}=await import('../../../src/server/auth/request-owner.ts');
+const {getRepository,postgresSql}=await import('../../../src/server/storage.ts');
+const repo=getRepository() as import('../../../src/server/postgres-repository.ts').PostgresWorkspaceRepository;
+const sql=postgres(process.env.DATABASE_URL!,{prepare:false,onnotice:()=>{}});
+await repo.prepare();await postgresSql().transaction(tx=>repo.link(tx,A));
+const today=new Date().toLocaleDateString('en-CA',{timeZone:'America/Vancouver'});await asOwner(A,()=>repo.execute({operationId:'day',expectedRevision:0,action:{type:'ensure-day',date:today}}));const page=(await asOwner(A,()=>repo.load())).pages[0]!;
+const pending:Promise<unknown>[]=[];(globalThis as any)[Symbol.for('@vercel/request-context')]={get:()=>({waitUntil:(p:Promise<unknown>)=>pending.push(p)})};
+let release!:()=>void,called!:()=>void;let gate:Promise<void>,arrived:Promise<void>;const reset=()=>{gate=new Promise(r=>release=r);arrived=new Promise(r=>called=r)};reset();
+globalThis.fetch=(async(url:any)=>{if(String(url).endsWith('/models'))return Response.json({data:[{id:'fake/model',pricing:{prompt:'0.0000003',completion:'0.0000012'}}]});assert.equal(currentOwner(),A,'fake model work retained owner');called();await gate;return Response.json({id:'gen-fixture',choices:[{message:{content:JSON.stringify({items:[{kind:'task',title:'Scoped fixture',text:null,detail:null,date:null,dateRole:null,time:null,partOfDay:null,url:null,note:null,followUpDate:null,taskId:null,markDone:null,newDate:null}]})},finish_reason:'stop'}],usage:{cost:0.0002,prompt_tokens:20,completion_tokens:20}})}) as typeof fetch;
+const service=await import('../../../src/server/model/service.ts');
+await asOwner(A,()=>service.submitCaptureForModel('capture-first',page.id,'Scoped fixture'));await arrived;assert.equal(currentOwner(),undefined,'request scope ended');release();await Promise.all(pending);assert.equal((await asOwner(A,()=>repo.load())).tasks[0]!.title,'Scoped fixture');console.log('PASS delayed model response after request scope ends: owner retained, task and cost committed');
+reset();const start=pending.length;await asOwner(A,()=>service.submitCaptureForModel('capture-second',page.id,'Second scoped fixture'));await arrived;
+await sql.begin(async tx=>{await tx.unsafe("set local daythread.allow_relink='on'");await tx.unsafe('update ratchet113bg.workspace set user_id=$1::uuid where id=1',[B])});
+const before=(await sql.unsafe('select revision,data::text d,ledger::text l from ratchet113bg.workspace'))[0];release();await Promise.all(pending.slice(start));
+const after=(await sql.unsafe('select revision,data::text d,ledger::text l from ratchet113bg.workspace'))[0];assert.deepEqual(after,before,'old-owner background result must not write into new owner row');await assert.rejects(asOwner(A,()=>repo.load()),/not linked/);assert.ok(await asOwner(B,()=>repo.load()));console.log('PASS relink while model held: old owner result cannot alter new owner document or ledger');await sql.end();process.exit(0);

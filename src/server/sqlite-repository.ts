@@ -2,15 +2,16 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, openSync, closeSync, readFileSync, existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
-import { applyCommand, createEmptyWorkspace, DomainError } from '../domain/workspace.ts'
+import { applyCommand, createEmptyWorkspace } from '../domain/workspace.ts'
 import type { Command, CommandResult, Workspace } from '../domain/types.ts'
-import type { WorkspaceRepository } from './repository.ts'
+import type { ServerRepository } from './repository.ts'
+import { recordModelResult, type CommandOrBuild, type ModelResultOutcome } from './model-result.ts'
 import { readWorkspace, sqliteMigrations, writeWorkspace, verifySqliteLayout } from './sqlite-mapping.ts'
 import { commandLogFields, debugLog, logOperationId } from './debug-log.ts'
-import { bindResult, sha256, markInterrupted, readAttempts, reconcileAttempt, reserveAttempt, settleAttempt, type AttemptState, type ModelAttempt, type ReserveInput, type SettleInput } from './model-ledger.ts'
+import { markInterrupted, readAttempts, reconcileAttempt, reserveAttempt, type AttemptState, type ModelAttempt, type ReserveInput, type SettleInput } from './model-ledger.ts'
 
 const applicationId = 0x44544852
-export class SqliteWorkspaceRepository implements WorkspaceRepository {
+export class SqliteWorkspaceRepository implements ServerRepository {
   private readonly path: string
   private readonly legacyPath?: string
   private readonly allowMissingLegacy: boolean
@@ -83,46 +84,9 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
   /** The ledger is server-only; the browser gets `modelStatus` instead. */
   async modelAttempts(): Promise<ModelAttempt[]> { return this.transact(crypto.randomUUID(), readAttempts) }
   async reserveModelAttempt(input: ReserveInput): Promise<{ attempt: ModelAttempt; replayed: boolean }> { return this.transact(input.id, db => reserveAttempt(db, input)) }
-  /**
-   * Settles an attempt and, in the same transaction, applies the workspace command its result implies. A command the
-   * domain refuses (the capture moved on) leaves the settlement in place and applies nothing; any other failure rolls
-   * back both, so a charge and its applied items never come apart.
-   */
-  async recordModelResult(input: SettleInput, commandOrBuild?: Command | ((current: Workspace) => Command), options: { failAfterWrite?: boolean } = {}): Promise<{ attempt: ModelAttempt; result?: CommandResult; refused?: string }> {
-    return this.transact(input.attemptId, db => {
-      // A builder gets the workspace as it is inside this transaction, so a background result isn't refused just
-      // because he typed meanwhile (its expectedRevision is current). Its own checks (runId, status) still apply.
-      const command = typeof commandOrBuild === 'function' ? (() => { const w = readWorkspace(db); if (!w) throw new Error('Workspace missing'); return commandOrBuild(w) })() : commandOrBuild
-      const attempt = settleAttempt(db, input)
-      let result: CommandResult | undefined, refused: string | undefined
-      // No cost and no result = "outcome not known yet" (timeout, lost reply). That binds nothing, so the real result
-      // arriving later is recorded normally (Ratchet #68 fixed-identity).
-      if (input.actualUsd === null && !command) return { attempt }
-      // A real result without a cost: applied once and counted at the worst case (the reservation): "unknown" (calls
-      // pause) when it has a generation id, "estimated" when it doesn't. Never settled as null or zero (Lead c8706da8, 33ae4578).
-      if (input.actualUsd === null && attempt.state === 'unknown') db.prepare("UPDATE model_attempts SET note=? WHERE id=?").run('result recorded without a cost; counted at worst case until reconciled', input.attemptId)
-      // One attempt, one result: the same result again replays the first receipt; a different one is refused.
-      // Fingerprint = the business result only: what it applies + which generation (Lead, after d25b6c28). Cost is a
-      // ledger field checked separately by settleAttempt, and may be filled in later without touching the result.
-      const fingerprint = sha256(JSON.stringify([command ? command.action : null, input.generationId]))
-      const earlier = bindResult(db, input.attemptId, fingerprint, command?.operationId ?? null)
-      if (earlier !== null) {
-        const current = readWorkspace(db)
-        const receipt = earlier === 'none' ? undefined : current?.receipts[earlier]
-        return { attempt, ...(receipt && current ? { result: { workspace: current, receipt } } : {}), ...(command && !receipt ? { refused: 'Result already recorded for this attempt' } : {}) }
-      }
-      if (command) {
-        const current = readWorkspace(db)
-        if (!current) throw new Error('Workspace missing')
-        try { result = applyCommand(current, command) } catch (error) {
-          if (!(error instanceof DomainError)) throw error
-          refused = error.message
-        }
-        if (result && result.workspace.revision !== current.revision) writeWorkspace(db, current, result.workspace)
-      }
-      if (options.failAfterWrite) throw new Error('injected failure after write') // test hook for the atomicity check
-      return { attempt, result, refused }
-    })
+  /** Settles an attempt and, in the same transaction, applies the workspace command its result implies (model-result.ts). */
+  async recordModelResult(input: SettleInput, commandOrBuild?: CommandOrBuild, options: { failAfterWrite?: boolean } = {}): Promise<ModelResultOutcome> {
+    return this.transact(input.attemptId, db => recordModelResult(db, { read: () => readWorkspace(db), write: (before, after) => writeWorkspace(db, before, after) }, input, commandOrBuild, options))
   }
   /**
    * A server-only command applied to the workspace as it is now, in one transaction: background work (a draft run)
@@ -137,7 +101,7 @@ export class SqliteWorkspaceRepository implements WorkspaceRepository {
       return result
     })
   }
-  async markInterruptedModelAttempts(now: string): Promise<number> { return this.transact(crypto.randomUUID(), db => markInterrupted(db, now)) }
+  async markInterruptedModelAttempts(now: string, olderThan?: string): Promise<number> { return this.transact(crypto.randomUUID(), db => markInterrupted(db, now, olderThan)) }
   async reconcileModelAttempt(attemptId: string, amount: number | 'worst-case', now: string, note?: string, from?: readonly AttemptState[]): Promise<ModelAttempt> { return this.transact(attemptId, db => reconcileAttempt(db, attemptId, amount, now, note, from)) }
   async execute(command: Command): Promise<CommandResult> {
     const started=performance.now(),fields=commandLogFields(command); let db:DatabaseSync|undefined

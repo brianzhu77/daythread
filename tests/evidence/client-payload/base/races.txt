@@ -1,0 +1,10 @@
+(node:29961) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS inflight then more input then leave persists both 
+PASS return after settled save is clean 
+PASS old leave save cannot clear newer returned draft Saved
+PASS quick return saves without self conflict Saved
+RETURN_STATUS Saved NEW_IN_DB true NEW_STASH false
+SLOW_A_DB true SLOW_B_DB true SLOW_B_STASH false
+PASS save slower than five seconds still saves later input on leave 
+failures 0

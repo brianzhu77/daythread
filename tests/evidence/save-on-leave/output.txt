@@ -1,0 +1,13 @@
+ok   1. cut + switch at once + paste: the line is only on today · ["2026-10-21"]
+ok   1. Oct 18 opens without the line and without a recovered draft · ""
+ok   1. still only on today after reopening Oct 18
+ok   2. typing then switching at once is saved · ["2026-10-18"]
+ok   3. quick switching: both edits saved · Q18 ["2026-10-18"] Q19 ["2026-10-19"]
+ok   4. the stale leave-save is refused; A's edit stays · A4 ["2026-10-18"] B4 []
+ok   4. back on Oct 18, B's text is there with Load latest · "Changed in another tab · draft kept\nLoad latest"
+ok   4. Load latest keeps both
+ok   5. offline: not saved
+ok   5. back online and back on the page: the stashed draft saves by itself · "Saved"
+ok   6. a stuck draft from the unchanged page saves on opening · "Saved"
+ok   no page errors
+all passed

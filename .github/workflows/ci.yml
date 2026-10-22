@@ -1,0 +1,42 @@
+# Typecheck, tests and both builds on every PR and on main. No secrets are used, so a PR from a fork can't read any.
+# Deploys are Vercel's Git integration (a preview per PR = staging), not this workflow.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # The tests and the app's day boundaries assume his time zone, as on the Mac.
+      TZ: America/Vancouver
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+        env:
+          FUTURE_DAYS_CONTRACT: '1'
+      - name: Build (the Mac app)
+        run: npm run build
+      - name: Build (Vercel output)
+        run: npm run build
+        env:
+          DAYTHREAD_TARGET: vercel

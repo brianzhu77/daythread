@@ -13,10 +13,13 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as PagesRouteImport } from './routes/pages'
 import { Route as ReviewRouteImport } from './routes/review'
+import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as DayDateRouteImport } from './routes/day.$date'
 import { Route as TagsIndexRouteImport } from './routes/tags.index'
 import { Route as TagsTagRouteImport } from './routes/tags.$tag'
+import { Route as ApiAuthSignInRouteImport } from './routes/api/auth/sign-in'
+import { Route as ApiAuthSignOutRouteImport } from './routes/api/auth/sign-out'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -36,6 +39,11 @@ const PagesRoute = PagesRouteImport.update({
 const ReviewRoute = ReviewRouteImport.update({
   id: '/review',
   path: '/review',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TasksRoute = TasksRouteImport.update({
@@ -58,26 +66,42 @@ const TagsTagRoute = TagsTagRouteImport.update({
   path: '/tags/$tag',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthSignInRoute = ApiAuthSignInRouteImport.update({
+  id: '/api/auth/sign-in',
+  path: '/api/auth/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSignOutRoute = ApiAuthSignOutRouteImport.update({
+  id: '/api/auth/sign-out',
+  path: '/api/auth/sign-out',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/calendar': typeof CalendarRoute
   '/pages': typeof PagesRoute
   '/review': typeof ReviewRoute
+  '/sign-in': typeof SignInRoute
   '/tasks': typeof TasksRoute
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags/': typeof TagsIndexRoute
+  '/api/auth/sign-in': typeof ApiAuthSignInRoute
+  '/api/auth/sign-out': typeof ApiAuthSignOutRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/calendar': typeof CalendarRoute
   '/pages': typeof PagesRoute
   '/review': typeof ReviewRoute
+  '/sign-in': typeof SignInRoute
   '/tasks': typeof TasksRoute
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags': typeof TagsIndexRoute
+  '/api/auth/sign-in': typeof ApiAuthSignInRoute
+  '/api/auth/sign-out': typeof ApiAuthSignOutRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -85,10 +109,13 @@ export interface FileRoutesById {
   '/calendar': typeof CalendarRoute
   '/pages': typeof PagesRoute
   '/review': typeof ReviewRoute
+  '/sign-in': typeof SignInRoute
   '/tasks': typeof TasksRoute
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags/': typeof TagsIndexRoute
+  '/api/auth/sign-in': typeof ApiAuthSignInRoute
+  '/api/auth/sign-out': typeof ApiAuthSignOutRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -97,30 +124,39 @@ export interface FileRouteTypes {
     | '/calendar'
     | '/pages'
     | '/review'
+    | '/sign-in'
     | '/tasks'
     | '/day/$date'
     | '/tags/$tag'
     | '/tags/'
+    | '/api/auth/sign-in'
+    | '/api/auth/sign-out'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/calendar'
     | '/pages'
     | '/review'
+    | '/sign-in'
     | '/tasks'
     | '/day/$date'
     | '/tags/$tag'
     | '/tags'
+    | '/api/auth/sign-in'
+    | '/api/auth/sign-out'
   id:
     | '__root__'
     | '/'
     | '/calendar'
     | '/pages'
     | '/review'
+    | '/sign-in'
     | '/tasks'
     | '/day/$date'
     | '/tags/$tag'
     | '/tags/'
+    | '/api/auth/sign-in'
+    | '/api/auth/sign-out'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -128,10 +164,13 @@ export interface RootRouteChildren {
   CalendarRoute: typeof CalendarRoute
   PagesRoute: typeof PagesRoute
   ReviewRoute: typeof ReviewRoute
+  SignInRoute: typeof SignInRoute
   TasksRoute: typeof TasksRoute
   DayDateRoute: typeof DayDateRoute
   TagsTagRoute: typeof TagsTagRoute
   TagsIndexRoute: typeof TagsIndexRoute
+  ApiAuthSignInRoute: typeof ApiAuthSignInRoute
+  ApiAuthSignOutRoute: typeof ApiAuthSignOutRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -164,6 +203,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReviewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tasks': {
       id: '/tasks'
       path: '/tasks'
@@ -192,6 +238,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TagsTagRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/sign-in': {
+      id: '/api/auth/sign-in'
+      path: '/api/auth/sign-in'
+      fullPath: '/api/auth/sign-in'
+      preLoaderRoute: typeof ApiAuthSignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/sign-out': {
+      id: '/api/auth/sign-out'
+      path: '/api/auth/sign-out'
+      fullPath: '/api/auth/sign-out'
+      preLoaderRoute: typeof ApiAuthSignOutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -200,20 +260,24 @@ const rootRouteChildren: RootRouteChildren = {
   CalendarRoute: CalendarRoute,
   PagesRoute: PagesRoute,
   ReviewRoute: ReviewRoute,
+  SignInRoute: SignInRoute,
   TasksRoute: TasksRoute,
   DayDateRoute: DayDateRoute,
   TagsTagRoute: TagsTagRoute,
   TagsIndexRoute: TagsIndexRoute,
+  ApiAuthSignInRoute: ApiAuthSignInRoute,
+  ApiAuthSignOutRoute: ApiAuthSignOutRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }

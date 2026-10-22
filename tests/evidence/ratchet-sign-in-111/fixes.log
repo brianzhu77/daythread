@@ -1,0 +1,6 @@
+PASS former owner: 302, old session deleted
+PASS next: seven hostile destinations refused; same-site path/search/hash retained
+PASS auth off loopback: 200
+PASS auth off LAN: 403
+PASS auth off forwarded-for: 403
+PASS auth off forwarded: 403

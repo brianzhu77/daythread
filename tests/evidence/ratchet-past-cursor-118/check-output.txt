@@ -1,0 +1,37 @@
+PASS chromium 1280 2026-10-10 initial focus
+PASS chromium 1280 past opens without unused empty rows
+PASS chromium 1280 past section click reveals one empty Other row
+PASS chromium 1280 past explicit click accepts writing
+PASS chromium 1280 2026-10-22 initial focus
+PASS chromium 1280 2026-12-31 initial focus
+PASS chromium 390 2026-10-11 initial focus
+PASS chromium 390 past opens without unused empty rows
+PASS chromium 390 past section click reveals one empty Other row
+PASS chromium 390 past explicit click accepts writing
+PASS chromium 390 2026-10-22 initial focus
+PASS chromium 390 2026-12-31 initial focus
+PASS chromium touch 2026-10-12 initial focus
+PASS chromium touch past opens without unused empty rows
+PASS chromium touch past section click reveals one empty Other row
+PASS chromium touch past explicit click accepts writing
+PASS chromium touch 2026-10-22 initial focus
+PASS chromium touch 2026-12-31 initial focus
+PASS webkit 1280 2026-10-13 initial focus
+PASS webkit 1280 past opens without unused empty rows
+PASS webkit 1280 past section click reveals one empty Other row
+PASS webkit 1280 past explicit click accepts writing
+PASS webkit 1280 2026-10-22 initial focus
+PASS webkit 1280 2026-12-31 initial focus
+PASS webkit 390 2026-10-14 initial focus
+PASS webkit 390 past opens without unused empty rows
+PASS webkit 390 past section click reveals one empty Other row
+PASS webkit 390 past explicit click accepts writing
+PASS webkit 390 2026-10-22 initial focus
+PASS webkit 390 2026-12-31 initial focus
+PASS webkit touch 2026-10-15 initial focus
+PASS webkit touch past opens without unused empty rows
+PASS webkit touch past section click reveals one empty Other row
+PASS webkit touch past explicit click accepts writing
+PASS webkit touch 2026-10-22 initial focus
+PASS webkit touch 2026-12-31 initial focus
+36 checks passed

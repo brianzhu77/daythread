@@ -1,0 +1,4 @@
+(node:13611) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS injected failure after link and session insert: both rolled back, content/revision/ledger unchanged
+PASS admin SET LOCAL does not leak onto reused pool connection

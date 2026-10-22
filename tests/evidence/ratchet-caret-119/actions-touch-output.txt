@@ -1,0 +1,15 @@
+ok   390 touch: typing task 1 moves no row
+ok   390 touch: Enter after task 1 moves neither it nor any row above
+ok   390 touch: typing task 2 moves no row
+ok   390 touch: Enter after task 2 moves neither it nor any row above
+ok   390 touch: typing task 3 moves no row
+ok   390 touch: Enter after task 3 moves neither it nor any row above
+ok   390 touch: ticking a task moves no row
+ok   390 touch: unticking it moves no row
+ok   390 touch: document page: the slash menu made a task (an empty reference row) (task/reference)
+ok   390 touch: document page: typing into a new task moves no row
+ok   390 touch: document page: typing the second task moves no row
+ok   390 touch: document page: ticking a task moves no row
+ok   390 touch: document page: ticking a long, wrapping task moves no row (261.6+102.0 → 261.6+102.0)
+ok   390 touch: document page: unticking it moves no row
+all passed

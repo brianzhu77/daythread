@@ -1,0 +1,17 @@
+(node:13555) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ link: an unlinked workspace takes the first owner account; the same account again is fine; another is refused (618.185334ms)
+✔ the database refuses changing the link, except in one transaction an admin flags on purpose (404.7415ms)
+✔ signed in, the store reads and writes only the row linked to that account; with sign-in off, the one row (389.813542ms)
+✔ on Supabase the link must be a real account, which then can't be deleted while linked (382.133375ms)
+✔ a store with more than one workspace row refuses to start and says why (385.158333ms)
+✔ sign-in: the right password links and issues a session in one go; another account gets not-linked, counted neither way (492.267083ms)
+✔ a session from before the workspace was linked waits for one sign-in; it is not deleted (384.157125ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3153.528084

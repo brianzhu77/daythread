@@ -25,6 +25,8 @@ export interface NoteBlock {
   refs?: PageRefEntry[];
   /** A2 plan §4: what one pasted card did, kept in `editorBlockMetadata["paste:" + cardBlockId]` so Undo can be checked. */
   linkPaste?: LinkPasteRecord;
+  /** On `heading:<id>` entries: the section's role, so a heading that comes back (Undo, cut and paste) keeps it. */
+  sectionKind?: SectionKind;
 }
 /** A9a plan §1–§2: one inline `[[` link. `refId` is this link's identity; `at` the revision that first saw it. */
 export interface PageRefEntry {
@@ -258,7 +260,8 @@ export interface Workspace {
   undo?: {
     operationId: string;
     revision: number;
-    before: Omit<Workspace, "undo">;
+    /** Server only: the browser gets the marker without the copy (`src/server/browser-workspace.ts`). */
+    before?: Omit<Workspace, "undo">;
   };
   captures: Capture[];
   receipts: Record<string, Receipt>;

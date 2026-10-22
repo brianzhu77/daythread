@@ -2,7 +2,13 @@ import { defineConfig } from 'vite'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import viteReact from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { nitro } from 'nitro/vite'
+
+// Vercel builds (and `DAYTHREAD_TARGET=vercel` locally) add Nitro, which emits Vercel's build output. Every other build
+// stays exactly as before, so the app on the Mac (`vite preview` on 3000) is unchanged. Functions run in iad1, next to
+// his Supabase project (us-east-1); 120 s covers a 60 s model call that continues after the response via waitUntil.
+const vercel = process.env.VERCEL === '1' || process.env.DAYTHREAD_TARGET === 'vercel'
 
 export default defineConfig({
-  plugins: [tailwindcss(), tanstackStart(), viteReact()],
+  plugins: [tailwindcss(), tanstackStart(), ...(vercel ? [nitro({ preset: 'vercel', vercel: { functions: { regions: ['iad1'], maxDuration: 120 } } })] : []), viteReact()],
 })

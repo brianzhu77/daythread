@@ -1,0 +1,12 @@
+(node:12453) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ brake: 20 simultaneous tries from 4 instances: only the free ones reach Supabase (152.11825ms)
+✔ link: two first sign-ins racing from two instances link the workspace once (92.399708ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 327.92975

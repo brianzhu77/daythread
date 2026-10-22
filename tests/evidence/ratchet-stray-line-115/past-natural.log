@@ -1,0 +1,5 @@
+ok   past day: unused empty rows are hidden after reopening (4 hidden)
+ok   ↑ from "Events" passes over the hidden empty row to "TODO - Other" (heading "TODO - Other")
+ok   from "TODO - Other", ↓ enters its revealed empty row (task "")
+ok   ↓ from a written task passes over hidden rows to the next heading (heading "Events")
+all passed

@@ -10,13 +10,14 @@ export const loadWorkspace = createServerFn({ method: "GET" })
     const started=performance.now();
     debugLog('request.load.start',data);
     try {
-      const { expireDrafts } = await import("./model/service");
-      await expireDrafts().catch(()=>undefined);
+      const { expireStuckRuns } = await import("./model/service");
+      await expireStuckRuns().catch(()=>undefined);
       const workspace=await withLogOperation(data.operationId,()=>getRepository().load());
       const { modelInfo } = await import("./model/service");
       const model=await modelInfo();
       debugLog('request.load.finish',{...data,afterRevision:workspace.revision,elapsedMs:performance.now()-started,result:'ok'});
-      return {workspace,debug:debugEnabled(),model};
+      const { forBrowser } = await import("./browser-workspace");
+      return {workspace:forBrowser(workspace),debug:debugEnabled(),model};
     } catch(error) {
       debugLog('request.load.finish',{...data,elapsedMs:performance.now()-started,result:'error',error:error instanceof Error?error.name:'UnknownError'});
       throw error;
@@ -26,7 +27,9 @@ export const runCommand = createServerFn({ method: "POST" })
   .validator((input: unknown) => commandSchema.parse(input))
   .handler(async ({ data }) => {
     const { getRepository } = await import("./storage");
-    return getRepository().execute(data);
+    const { forBrowser } = await import("./browser-workspace");
+    const result = await getRepository().execute(data);
+    return { ...result, workspace: forBrowser(result.workspace) };
   });
 
 /**
@@ -54,3 +57,9 @@ export const draftMyDay = createServerFn({ method: "POST" })
     const { startDraftForDay } = await import("./model/service");
     return startDraftForDay(data.operationId, data.date);
   });
+
+/** The signed-in address for "{email} · Sign out"; null when sign-in is off. */
+export const getAccount = createServerFn({ method: "GET" }).handler(async () => {
+  const { currentEmail } = await import("./auth/server");
+  return { email: await currentEmail() };
+});
