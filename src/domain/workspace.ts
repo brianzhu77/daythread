@@ -1,4 +1,4 @@
-import { dayTemplate, editorSeed, needsTemplateRows, pageContentKey, projectDocument, inlineText, sectionRange, type EditorNode } from "./editor-document.ts";
+import { dayTemplate, editorSeed, needsTemplateRows, pageContentKey, projectDocument, inlineText, sectionRange, templateKind, type EditorNode } from "./editor-document.ts";
 import { isTrashed, moveRefusal, referencesTo as pageReferences, subtreeIds } from "./page-tree.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import { cardsPresent, undoCards, type UndoCard } from "./link-paste.ts";
@@ -138,6 +138,9 @@ function appendBlock(p: Page, s: Section, block: NoteBlock): void {
 }
 function ensureSection(p: Page, kind: Section["kind"]): Section {
   let s = p.sections.find((s) => s.kind === kind);
+  // A template heading stored as custom by the old one-key merge is still this section: planning into it repairs the
+  // role rather than adding a second heading (Brian's Other, 2026-10-22; same rule as projectDocument).
+  if (!s && (s = p.sections.find((x) => x.kind === "custom" && templateKind(p, x.id) === kind))) s.kind = kind;
   if (!s) {
     s = {
       id: newId(),
