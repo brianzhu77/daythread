@@ -174,7 +174,8 @@ anyone with no login (HTTP 200), reading and writing his real data and able to u
 **Closed 16:16Z** (Lead 428cb925): production paused (Vercel `pause`, 503 DEPLOYMENT_PAUSED); the `git-live` link still
 works behind Vercel's login. **Nobody unpauses until sign-in passes.** Hobby keeps no runtime logs for the window, so
 anonymous reads can't be ruled out; the workspace then held only his Top 3 tasks (revision 1→23) and 0 captures. Model use in
-the window is shown only by the cost ledger / provider usage, not by the capture count (drafts also call the model; Ratchet 23e6bba9).
+the window: ledger 0 rows and OpenRouter usage today $0.0003 (the Lead's own throwaway check), so no model calls through his
+workspace (Lead 371f7ee0). Anonymous reads remain unknown; Brian told both.
 Next: Jazz `design/tokens` (no visual change), then Roadbuster `feat/sign-in` (30-day sliding, 180-day cap, owner check,
 fake auth endpoint in tests; real check = Brian's own first sign-in with Vercel's lock on), target testable today.
 Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
