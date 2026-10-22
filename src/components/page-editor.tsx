@@ -1047,7 +1047,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // Arriving at a block from a tag focuses nothing, so the view stays on that block.
     // A page just made with `/page` opens to name it: the title field has the cursor (Jazz f69dd341).
     const naming = new URLSearchParams(window.location.search).get('focus') === 'title'
-    if (target && !jumpTo && !naming && window.matchMedia('(pointer: fine)').matches) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
+    // A past day opens to be read, with no cursor: the cursor would show an empty row he never wrote (B19 hides them
+    // until he clicks into a section; Jazz, Bumblebee, Lead).
+    const past = page.type === 'daily' && !!page.date && page.date < todayIso()
+    if (target && !jumpTo && !naming && !past && window.matchMedia('(pointer: fine)').matches) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
   }, [editor, jumpTo])
   useEffect(() => {
     const update = () => {
