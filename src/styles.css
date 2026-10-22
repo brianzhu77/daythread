@@ -145,6 +145,22 @@
   color-scheme: light;
 }
 
+/* HeroUI's theme on our tokens (tokens.md §6): one palette for HeroUI parts and our own rules. On :root, after
+   HeroUI's theme, so its derived variables (--field-focus, --accent-soft, ...) resolve from these. The editor's
+   .bn-shadcn scope still remaps --accent and --muted for its menus. */
+:root {
+  --foreground: var(--ink); --surface-foreground: var(--ink); --overlay-foreground: var(--ink);
+  --field-foreground: var(--ink); --default-foreground: var(--ink); --segment-foreground: var(--ink); --link: var(--ink);
+  --muted: var(--ink-2); --default: var(--fill); --accent: var(--blue); --focus: var(--blue);
+  --accent-foreground: var(--ink-on-blue); --danger: var(--red); --danger-foreground: var(--ink-on-blue);
+  --background: var(--bg-doc); --surface: var(--card); --overlay: var(--card); --segment: var(--card);
+  --surface-secondary: var(--fill-soft);
+  --border: var(--line); --separator: var(--line);
+  --field-background: var(--fill); --field-placeholder: var(--placeholder); --field-radius: var(--radius-block);
+  --field-focus: var(--fill); --field-hover: var(--fill); --field-shadow: none;
+  --disabled-opacity: .4;
+}
+
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
@@ -1222,16 +1238,8 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-selection-bar.is-row-actions .app-menu { top:auto; bottom:calc(100% + 8px); }
 @media(hover:none) { .editor-row-more { display:none; } }
 
-/* Sign-in (empty-start-states.md §2) on the v1 tokens (tokens.md §7). HeroUI's palette maps onto ours on this
-   screen only (§6); app-wide comes after sign-in as its own commit. */
+/* Sign-in (empty-start-states.md §2) on the v1 tokens (tokens.md §7). */
 .sign-in {
-  --foreground: var(--ink); --field-foreground: var(--ink); --default-foreground: var(--ink); --link: var(--blue);
-  --muted: var(--ink-2); --default: var(--fill); --accent: var(--blue); --focus: var(--blue);
-  --accent-foreground: #fff; --danger: var(--red); --danger-foreground: #fff;
-  --background: var(--bg-doc); --surface: var(--card); --surface-secondary: var(--fill-soft);
-  --border: var(--line); --separator: var(--line); --field-background: var(--fill); --field-placeholder: var(--placeholder);
-  --field-radius: var(--radius-block); --disabled-opacity: .4;
-  --field-focus: var(--fill); --field-hover: var(--fill); --field-shadow: none;
   min-height: 100dvh; background: var(--bg-doc); color: var(--ink);
   max-width: 360px; margin: 0 auto; padding: 18vh 18px 0; display: flex; flex-direction: column; gap: 20px;
 }
