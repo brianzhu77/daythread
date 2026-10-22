@@ -20,6 +20,12 @@ if (!checkToday) {
 } else {
   await p.goto(BASE + '/', { waitUntil: 'networkidle' }); await p.waitForTimeout(700)
   log(await focused(), 'today still opens with the cursor in place')
+  // A future day keeps it too (Bumblebee f0cb9653): made with "Create page", then opened again.
+  const future = new Date(Date.now() + 3 * 86_400_000).toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
+  await p.goto(`${BASE}/day/${future}`, { waitUntil: 'networkidle' }); await p.waitForTimeout(500)
+  const create = p.getByRole('button', { name: /create page/i }); if (await create.count()) { await create.first().click(); await p.waitForTimeout(1500) }
+  await p.goto(`${BASE}/day/${future}`, { waitUntil: 'networkidle' }); await p.waitForTimeout(700)
+  log(await focused(), `a future day (${future}) still opens with the cursor in place`)
 }
 await b.close()
 console.log(failed ? `${failed} FAILED` : 'all passed'); process.exit(failed ? 1 : 0)

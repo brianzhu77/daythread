@@ -3,4 +3,5 @@ ok   and shows no empty rows
 ok   clicking "TODO - Other" shows its empty row (day:2026-10-22:other:template:0)
 all passed
 ok   today still opens with the cursor in place
+ok   a future day (2026-10-25) still opens with the cursor in place
 all passed
