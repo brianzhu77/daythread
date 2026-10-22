@@ -1,4 +1,5 @@
 import { useNavigate, useSearch } from '@tanstack/react-router'
+import { AccountRow } from './account-row'
 import { ContinuousPage } from './continuous-page'
 import { displayPageTitle, PageTitleField } from './page-title'
 import { childPages, isTrashed, pagesInDays, parentOf } from '../domain/page-tree'
@@ -60,6 +61,7 @@ export function PagesScreen() {
         </section>
       )}
       <PagesTrashRow workspace={workspace} />
+      <AccountRow className="account-row-phone" />
     </div>
   )
 }

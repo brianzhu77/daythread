@@ -8,6 +8,7 @@ import type { LocalDate } from '../domain/types'
 import { useDay, useWorkspace } from './use-day'
 import { useCreatePage } from './pages-screen'
 import { SidebarTrashRow } from './trash'
+import { AccountRow } from './account-row'
 
 // Highlight only where you are: Today is today's page, not any day (another day highlights its Days row, or nothing).
 const destinations = [
@@ -93,7 +94,7 @@ function PageGroups({ path, openPageId, trashView, today }: { path: string; open
   if (!workspace) return null
   // The Trash row is current on the Trash screen and on a trashed page, which has no row in the tree (layout T3/T4).
   const trashOpen = path.startsWith('/pages') && (trashView || Boolean(openPageId && workspace.pages.find(p => p.id === openPageId)?.trashedAt))
-  return <SidebarTree workspace={workspace} activeId={activeId} today={today} newPageRow={<><NewPageRow /><SidebarTrashRow current={trashOpen} /></>} />
+  return <SidebarTree workspace={workspace} activeId={activeId} today={today} newPageRow={<><NewPageRow /><SidebarTrashRow current={trashOpen} /><AccountRow className="account-row-sidebar" /></>} />
 }
 
 /** Phone capture (craft-v1 §5.3): a bottom sheet with the cursor already in the field. */
