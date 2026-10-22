@@ -662,7 +662,10 @@ SQLite adapter runs v1 until A1 lands, then v2.
 3. **Raw history of removed lines is kept verbatim.** Imported metadata entries for blocks no longer on a page (5 in his
    data, one holding 5 characters of his text) go into `history` as `legacy_block_metadata` rows with the **original
    JSON unchanged** in `data`, next to the block's tombstone. The reverse export (§10 R5) writes them back into
-   `editorBlockMetadata` exactly. New removals keep their content in the operation's inverse while Undo is possible;
+   `editorBlockMetadata` exactly. **When the 14-day rollback window closes** (Bumblebee 6aa4c5df), one recorded job
+   reduces them to the tombstone shape (id and last page), so old deletions don't outlive new ones. Their source pairs
+   stay as `brought_from` relations, since Bring/AI suppression reads those, not the text. This is the one planned
+   change to `history` rows, written as an operation. New removals keep their content in the operation's inverse while Undo is possible;
    once it is pruned, the tombstone keeps only the id and last page, since he deleted the words (keeping deleted text
    forever would be a product decision, not ours to make here).
 
