@@ -150,7 +150,7 @@ async function organizeOnce(deps: OrganizeDeps, captureId: string): Promise<Orga
 export const captureExpiryMs = 5 * 60_000
 /**
  * A capture whose organize run died (the function frozen or killed, the server restarted) would show "Organizing…"
- * forever with no Retry. Past the expiry it ends as failed, with its text kept and Retry offered (Jazz c971ce0b); a late
+ * forever with no Retry. Past the expiry it ends as failed, with its text kept and Retry offered (Jazz c971ce0b, 89dfc3ee: the existing receipt wording); a late
  * answer for that revision is then refused like any other. The run's start is its model attempt's reservation, or the
  * capture time for a first run that died before reserving. A Retry that died before reserving has no known start and
  * is left as it is.
@@ -164,7 +164,7 @@ export async function expireStuckCaptures(repository: ServerRepository, now: Dat
     const attempt = attempts.find(a => a.captureId === c.id && a.revision === c.proposalRevision)
     const startedAt = attempt?.createdAt ?? (c.proposalRevision === 1 ? c.capturedAt : undefined)
     if (!startedAt || now.getTime() - Date.parse(startedAt) < captureExpiryMs) continue
-    const action = { type: 'model-failed' as const, captureId: c.id, revision: c.proposalRevision, failure: 'failure' as const, error: 'Model unavailable · nothing was added' }
+    const action = { type: 'model-failed' as const, captureId: c.id, revision: c.proposalRevision, failure: 'failure' as const, error: 'Model unavailable · text saved' }
     try { await repository.executeOnLatest(`capture-expired:${c.id}:${c.proposalRevision}`, action); n++ } catch { /* answered or moved on meanwhile */ }
   }
   return n

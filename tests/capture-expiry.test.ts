@@ -30,7 +30,7 @@ test('a first run that never reserved fails once the expiry has passed since the
     assert.equal(await expireStuckCaptures(s.repo, at(captureExpiryMs)), 1)
     const c = await s.capture()
     assert.equal(c.status, 'failed'); assert.equal(c.failure, 'failure'); assert.equal(c.text, 'call dentist')
-    assert.equal(c.error, 'Model unavailable · nothing was added')
+    assert.equal(c.error, 'Model unavailable · text saved')
     await s.repo.executeOnLatest('retry', { type: 'retry-capture', captureId: s.id })
     assert.equal((await s.capture()).status, 'organizing')
   } finally { await s.cleanup() }
@@ -45,7 +45,7 @@ test('the run is timed from its model attempt; a late answer for the expired rev
     const late = await s.repo.recordModelResult({ attemptId: 'a1', actualUsd: 0.0001, generationId: 'g', now: at(10 * 60_000).toISOString() },
       w => ({ operationId: 'late', expectedRevision: w.revision, action: { type: 'model-failed', captureId: s.id, revision: 1, failure: 'failure', error: 'late' } }))
     assert.ok(late.refused); assert.equal(late.attempt.state, 'settled')
-    assert.equal((await s.capture()).error, 'Model unavailable · nothing was added')
+    assert.equal((await s.capture()).error, 'Model unavailable · text saved')
   } finally { await s.cleanup() }
 })
 
