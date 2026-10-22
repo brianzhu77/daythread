@@ -1,6 +1,6 @@
 # Supabase storage and data model review
 
-Status: **draft for review** (Ratchet independent check, then Lead summarizes decisions for Brian). No code changes until then.
+Status: **revised after Ratchet #101 (ae37af3), for re-check.** Brian's decisions are with Lead. No code changes until the re-check passes.
 Source: Brian 6148a202 in #daythread:03640f0e: move the storage layer to Supabase, review the whole data structure, keep it
 maintainable and extensible, and do not write specific business logic into the data.
 Basis: main 173fa93, layout 6, the live database read-only at revision 169: **11 pages, 5 tasks, 10 placements, 169
@@ -20,8 +20,9 @@ which added both), 0 events / materials / captures, about 25 KB of page content 
 3. **Recommendation, for his goal "from anywhere": path A with the server hosted at cutover.** Clean up the model in
    shippable steps on the local store (each with the existing migration and rollback discipline), changing the
    repository to per-aggregate reads and writes on the way; then move the clean schema to Supabase and the server to a
-   host in one cutover, with a tested way back. About **3 weeks**. Path B (move and host now, clean up in the cloud)
-   gets him there in **about 1 week** but makes every later model change a live cloud migration (§0a, §5).
+   host in one cutover, with a tested way back. About **5 weeks (4.5–5.5)** after Ratchet's #101 contracts (§10). Path B
+   (move and host now, clean up in the cloud) gets him there in **about 2.5 weeks** but makes every later model change a
+   live cloud migration (§0a, §5).
 4. **§7a sorts every change into "with the move" or "later, no data migration"**, with sizes. **Decisions** are in §7:
    path, hosting, privacy / plan / region, auth, server location, SQLite fallback, and the model choices with product effect.
 
@@ -33,8 +34,8 @@ offline becomes a normal case** on his phone, not a rare one (row 5c).
 
 | Option | Time to "from anywhere" | Cost |
 | --- | --- | --- |
-| **A + host at cutover (recommended)** | About 3 weeks: A1–A4 cleanup locally, then A5 (Postgres, sign-in) and A6 (cutover + hosting, 2–3 more days) | Features wait about 3 weeks; cloud only ever sees the clean schema |
-| **B + host now** | About 1 week: Postgres adapter for today's tables, sign-in, hosting, cutover | Every cleanup after that (blocks, operations, roles) is a migration of live cloud data with a cloud rollback; more total work |
+| **A + host at cutover (recommended)** | About 5 weeks (4.5–5.5): A0–A4 locally, then A5 (Postgres, sign-in gate) and A6 (cutover + hosting) | Features wait about 3 weeks; cloud only ever sees the clean schema |
+| **B + host now** | About 2.5 weeks: Postgres adapter for today's tables (3 days), the sign-in gate (R4, 4–5), cutover fence and hosting (R5–R6, 4–5) | Every cleanup after that (blocks, operations, roles) is a migration of live cloud data with a cloud rollback; more total work |
 
 What made B more viable than it first looked: with the server hosted **in the same region as the database**, a query
 is about a millisecond away, so today's whole-workspace load (25 KB) is cheap there. The global revision stays, but he
@@ -45,8 +46,9 @@ because his request was the clean structure first and the cleanup steps are wher
 to today's app (it only listens on 127.0.0.1 now) with no code change and no data in the cloud: about an hour, his
 devices only. It still needs the Mac on, so it is a bridge, not his goal. His call.
 
-**What pauses during A (about 3 weeks):** every step changes `src/domain/workspace.ts`, so new features wait or rebase:
-A11 (already paused), A7, B21/B22, and the A6b-2 follow-up. The usage reads (Oct 22, Oct 25) are unaffected.
+**What pauses during A (about 5 weeks):** anything that changes stored data waits (A11 line links, synced blocks, B21/B22,
+the A6b-2 follow-up). **Fixes and screen changes that don't touch stored data can still ship between steps** (Lead to
+Brian 9b8bbdd9). The usage reads (Oct 22, Oct 25) are unaffected.
 
 ## 1. What is there today
 
@@ -243,7 +245,7 @@ and one status he can trust.
   offline only matters once the app is hosted and on his phone away from home, and it changes no stored data.
 - **Success check** (Bumblebee): offline sessions, offline captures sent, and "Needs a connection" hits. He has 0
   captures in his real data, so which way to grow is learned, not assumed.
-- **The bridge is A7's evidence** (Bumblebee 24f1324a): while it runs (about 3 weeks), count what he does on the phone
+- **The bridge is A7's evidence** (Bumblebee 24f1324a): while it runs (about 5 weeks), count what he does on the phone
   (pages opened, typing, captures, task ticks) and when it fails because the Mac or home connection is down. Before A7
   starts, check the design against it; if he mostly ticks tasks on the phone, the ticking queue moves into A7.
   Receipts have no time and no device today (Bumblebee), so the counts need a small addition, **with no database
@@ -266,7 +268,8 @@ and one status he can trust.
 ## 4. Proposed schema (Postgres, snake_case)
 
 Ids stay text (existing ids are kept on import, no remapping). All tables: `workspace_id`, `created_at`, `updated_at`,
-`version int`. Positions are fractional-index text so a move writes one row.
+`version int`. Positions are sparse integer ranks (§9). Every reference is a composite `(workspace_id, id)` foreign key,
+so nothing can point into another workspace.
 
 | Table | Columns (besides the common ones) | Replaces |
 | --- | --- | --- |
@@ -274,21 +277,29 @@ Ids stay text (existing ids are kept on import, no remapping). All tables: `work
 | `pages` | `kind` (`day` / `document`), `day_date` (unique per workspace), `title`, `parent_id`, `url`, `url_key` (computed from `url`, unique index), `trashed_at`, `trash_batch_id` | `pages` minus content, review, draft, editor fields |
 | `blocks` | `page_id`, `parent_id`, `position`, `type`, `content jsonb`, `props jsonb`, `task_id` (task line), `source_block_id` (copy/bring) | `editorJSON`, `sections`, `editorSections`, `editorBlockMetadata` |
 | `templates` | `name`, `blocks jsonb` | `dayTemplate`, `templateApplied` |
-| `tasks` | `title`, `status`, `planned_on`, `start_on`, `due_on`, `paused`, `source_block_id` | `tasks` minus `lastPlannedOn` |
+| `tasks` | `title`, `status`, `planned_on`, `last_planned_on`, `start_on`, `due_on`, `paused`, `created_on date`, `source_page_id` | `tasks` (R3: `last_planned_on` is a planning fact, kept; `source_page_id` is a page, kept as a page) |
 | `task_days` | `task_id`, `day`, `state` (`excluded` / `moved`) | `placements` (order and section come from the line) |
 | `events` | `title`, `day`, `time`, `cancelled` | `events` |
-| `follow_ups` | `page_id`, `state`, `next_on`, `skipped_until`, `resurface` | `materials` review fields |
+| `materials` | as today, plus `workspace_id` | `materials` (carried as is; merging into link pages is later, §7a) |
 | `day_reviews` | `day`, `text`, `step`, `source`, `skipped`, `finished_at`, `handoff_done_at` | page review fields |
-| `captures` | `page_id`, `text`, `captured_at`, `mode` | `captures` (user part) |
-| `ai_runs`, `ai_proposals` | see §2.6 | page `draft`, capture model fields |
+| `captures` | as today, plus `workspace_id` | `captures` (carried as is; splitting model fields out is later, §7a) |
+| `ai_runs` | the page draft's run, manifest, proposals, hidden, error | page `draft`, `draftError` |
 | `model_attempts` | unchanged | unchanged |
-| `operations` | `id`, `type`, `fingerprint`, `device`, `result jsonb`, `inverse jsonb` | `receipts`, undo snapshot, in-entity undo records |
-| `links` | `source_block_id`, `ref_id`, `target_page_id`, `target_block_id`, `kind` | `refs`, references index, Linked from scan |
+| `operations` | `id`, `type` (null for legacy), `fingerprint`, `device`, `entity_id`, `simulated`, `result jsonb`, `undo_kind`, `inverse jsonb`, `legacy_text`, `created_at` (null = unknown), `imported_at` | `receipts`, undo snapshot, in-entity undo records (§10 R2) |
+| `block_provenance` | `page_id`, `block_id`, `source_page_id`, `source_block_id`, `kind` (`bring` / `copy` / `ai`), `fingerprint`, `created_at` (null = unknown), `removed_at` | Bring/AI suppression facts in sections and `editorBlockMetadata`, kept after the block is deleted (§10 R2) |
+| `storage_state` | `epoch`, `authority`, `frozen_at` | cutover fence (§10 R5) |
+| `links` | `source_block_id`, `ref_id`, `target_page_id`, `target_block_id`, `kind`, `ref_at` | index rebuilt from the `refs` entries kept in block props (§10 R3) |
 | `block_tags` | `block_id`, `tag_key`, `tag` | tags scan |
-| `activity` | `entity_id`, `kind`, `day`, `data jsonb` | `openedOn`, `dismissedOn`, `decisions` |
 
 `jsonb` is used only where the content is a document (block content, settings, operation patches, AI manifests), never to
 hide relational facts. Check constraints cover closed sets that are facts (`tasks.status`), not product taxonomies.
+
+**Constraints and delete rules:** one day page per `(workspace_id, day_date)`; `url_key` unique per workspace including
+trashed pages (a trashed link page still owns its URL, as today); parents and sources in the same workspace (composite
+FKs); no parent cycles (checked in the command under the workspace lock, plus a trigger as a second wall); `blocks.task_id`
+→ `tasks` with `ON DELETE RESTRICT`; `operations` primary key `(workspace_id, id)`. **Nothing cascades into history:**
+`block_provenance`, `operations` and `model_attempts` have no FK to the rows they describe, so deleting a block, page or
+task never deletes an audit, replay or Undo fact.
 
 ## 5. Paths
 
@@ -298,20 +309,21 @@ hide relational facts. Check constraints cover closed sets that are facts (`task
 | --- | --- | --- |
 | Bridge | (Optional, his call) Tailscale on the Mac mini and his phone: today's app reachable from anywhere, Mac on (§0a) | hours |
 | A0 | Spike, thrown away after: a hello-world on the chosen host + a Supabase project in the same region; measure day-open and save p95 from his Mac and phone against the §8 budget, so a miss shows up in week 1, not week 3 | half a day |
-| A1 | Repository contract becomes per-aggregate (`loadDay`, `loadPage`, `execute`), still on SQLite; domain commands keep working on a loaded slice | 3–4 days |
-| A2 | `operations` table: replay, receipts without stored copy, undo by inverse; drop the undo snapshot and in-entity undo records | 3 days |
+| A1 | Repository contract becomes per-aggregate reads + one workspace lock per command (§10 R1), still on SQLite; contract suite v2 (the different-days test flips); workspace-wide checks read indexes under the lock, never a partial slice | **4–5 days** (was 3–4) |
+| A2 | `operations` table with typed undo families; 169 legacy receipts imported as legacy replay records; `block_provenance` for Bring/AI suppression; undo snapshot transitioned explicitly (§10 R2) | **4–5 days** (was 3) |
 | A3 | `blocks` table as the only content source (the import also builds blocks for day pages that have sections but no `editorJSON`, e.g. Oct 20 and 21; Ratchet); `content` keeps BlockNote's inline shape, versioned (`content_format`), validated, lossless round trip (Ratchet's conditions, §9.2 decided); browser maps rows ↔ editor blocks; `links` / `block_tags` indexes | **3 days** (was 4–5) |
 | A4 | Split page: `day_reviews`, `ai_runs`; heading roles and the computed slot instead of `top3`; `task_days`; templates as data (materials stay as they are, §7a) | 3–4 days |
-| A5 | Postgres adapter for the clean schema (local Supabase in Docker, same contract suite); sign-in by emailed code; every server function requires a session | 3 days |
-| A6 | Cutover + hosting: preview deploy rehearsed, import with round-trip check, switch, keep SQLite read-only; export-back script tested for the rollback window (§3a) | 3–4 days |
-| A7 | Offline first version (§3b), after cutover: reading, typing into the draft, the capture queue, one status | 4–5 days |
+| A5 | Postgres adapter (local Supabase in Docker, contract suite v2); sign-in by emailed code; the auth gate with real RLS on the server's own path and the negative-test list (§10 R4) | **4–5 days** (was 3) |
+| A6 | Cutover + hosting: storage epoch fence, drain, import with defined equivalence, localhost-draft handoff, rollback with cloud edits, durable model jobs on Fly (§3a, §10 R5–R6) | **4–5 days** (was 3–4) |
+| A7 | Offline first version (§3b), after cutover: reading, typing into the draft, the capture queue, one status; caches and queue scoped to his account (§10 R6) | **5–6 days** (was 4–5) |
 
-About **3 weeks** to "from anywhere" on the clean schema (A0–A6), then about 4–5 days for the offline first version (A7). **Step order is
+About **5 weeks (22–27 working days)** to "from anywhere" on the clean schema (A0–A6), then about 5–6 days for the
+offline first version (A7). **Step order is
 otherwise unchanged:** the bridge covers reachability now, so pulling sign-in and hosting earlier would only mean
 hosting today's model (path B's cost) for no gain. **Bridge: engineering recommends yes**, since it gives him the value he
 asked for this week at a cost of hours, touches no data, and is removed at cutover.
 
-About **3 weeks** of build time, each step reviewed by Ratchet and live on 3000 before the next. Benefit: every model
+About **5 weeks** of build time, each step reviewed by Ratchet and live on 3000 before the next. Benefit: every model
 change happens on a local file with our proven migration + rollback scripts and his real data copy; the cloud only ever
 sees the clean schema. Cost: he's not on Supabase until A6. Product work can continue between steps, but each step touches
 `workspace.ts`, so new features would wait or rebase on it.
@@ -319,7 +331,7 @@ sees the clean schema. Cost: he's not on Supabase until A6. Product work can con
 ### B. Move now, clean up in the cloud
 
 Postgres adapter for today's tables (same columns + `workspace_id`, JSON text → `jsonb`), cutover, then A1–A4 as Postgres
-migrations. On Supabase in **3–4 days**. Cost: the global revision and whole-workspace load go over the network (every
+migrations. On Supabase in **about 2.5 weeks** with hosting (R4–R6 apply to B too). Cost: the global revision and whole-workspace load go over the network (every
 command reads all tables), and each later cleanup is a migration of live cloud data with a cloud rollback. Total time is
 higher than A.
 
@@ -347,7 +359,7 @@ the Tailscale bridge now (§0a), and the offline behaviour told to him as decide
 
 | # | Decision | Recommendation | Cost | Reversible? |
 | --- | --- | --- | --- | --- |
-| 1 | Path A (clean up locally, then move) or B (move now, clean up in the cloud) (§5) | **A** | A: about 3 weeks before he is on Supabase; B: 3–4 days, but each later cleanup is a live cloud migration | Either can switch before cutover; after B's cutover, going back means the export script |
+| 1 | Path A (clean up locally, then move) or B (move now, clean up in the cloud) (§5) | **A** | A: about 5 weeks before he is on Supabase; B: about 2.5 weeks, but each later cleanup is a live cloud migration | Either can switch before cutover; after B's cutover, going back means the export script |
 | 2 | Hosted Supabase or local Supabase (Docker on his Mac) | **Hosted** for real use; local Supabase only for development and tests | Hosted: a plan fee, his journal in the cloud. Local: no gain over today's SQLite file | Yes: the same schema runs in both; moving is a dump and restore |
 | 3 | Privacy, region, plan | His own Supabase account, **US West** region, **Pro plan** | **Pro: $25/month** (includes $10 of compute, one Micro instance), **daily backups kept 7 days** (Lead checked the pricing). The free plan pauses after 1 week inactive and has no backups, so it is not an option for his only copy. The repo's rule so far was "private data, never a cloud fallback" (`.gitignore`), so this is his explicit call | Yes while the SQLite copy is kept; data already sent to the cloud stays there until he deletes the project |
 | 4 | Auth and row-level security | **Supabase Auth, his account only, sign-in with an emailed 6-digit code** (not a magic link: on iPhone an email link opens in Safari, which has a session separate from the home-screen app, so he'd be signed in to the wrong place; a code typed into the app avoids that; Jazz 6e1c0707, Bumblebee 24f1324a). **RLS on every table, owner only.** The server keeps all writes and connects with its own role. An expired session mid-edit behaves like a failed save: draft kept, "Signed out · Sign in to save" | About a day in A5; sign-in once per browser | Yes: RLS policies are migrations |
@@ -373,13 +385,13 @@ later. Bumblebee's seven items first, then the rest of §2.
 | 6. Captures, AI draft, budget states | **Split with the move, flow later** | Move `pages.draft` / `draftError` out of the page into `ai_runs` (1 day); captures and `model_attempts` are already their own tables and go as they are | 1 day |
 | 7. Undo as a second copy of every table | **With the move** | The copy can't sensibly go to Postgres. Replace with `operations.inverse` **keeping today's behaviour exactly** (one step, same "edited since" rules). Multi-step undo is a product change: **recommend later** | 3 days (A2) |
 | Content stored three times, BlockNote format (§2.1) | **With the move** | It is the stored format itself | 4–5 days (A3) |
-| Global revision, whole-workspace load (§3) | **With the move** | Required for the network; per-row versions | 3–4 days (A1) |
+| Global revision, whole-workspace load (§3) | **With the move** | Per-page versions under one workspace lock (§10 R1) | 4–5 days (A1) |
 | Revision-number times, title snapshots (§2.5) | **With the move** | Columns change | in A3 |
 | Timezone literal (§2.8) | **With the move** | One column; trivial | in A1 |
 | `links` and `block_tags` indexes (§2.9) | **Later** | Computed from blocks, rebuildable at any time | 1 day when needed |
 | Realtime refresh, multi-step undo, review simplification | **Later** | Behaviour only | — |
 
-Total "with the move" matches path A's steps (§5): about 3 weeks.
+Total "with the move" matches path A's steps (§5): about 5 weeks.
 
 ## 8. Verification plan
 
@@ -396,7 +408,9 @@ Total "with the move" matches path A's steps (§5): about 3 weeks.
 
 ## 9. Open questions for review
 
-- Fractional-index positions vs integer positions with renumbering (Ratchet).
+- **Positions, decided:** sparse integer ranks (gaps of 1024) with a deterministic tie-break on id and a rebalance of
+  one parent's children when a gap closes. A move usually writes one row; a rebalance writes that parent's children, in
+  the same transaction.
 - **`blocks.content`: BlockNote's inline shape or ours** (Lead, Ratchet to weigh in). Both keep `blocks` as rows we own
   (one source, positions, `task_id`, links); only the inline array inside one line differs.
   - **Keep BlockNote's inline shape in jsonb: A3 is about 3 days.** No converter: the browser maps rows to editor
@@ -412,8 +426,155 @@ Total "with the move" matches path A's steps (§5): about 3 weeks.
     `pageRef`/`refId`, unknown nodes never silently dropped).
   - **Engineering recommendation: keep BlockNote's inline shape, with `content_format`.** It saves less than the
     2-day bar Lead set, so it is close; the deciding point is that it removes the riskiest new code from the biggest
-    step. If you take it, A3 drops to about 3 days and path A to about 2.5 weeks.
-- Whether `operations.inverse` needs a size cap (a large paste or delete).
+    step. **Decided** (Lead, per Ratchet): A3 is about 3 days.
+- **Inverse size, decided:** every command's request is bounded before it mutates anything (the existing request limit).
+  An inverse is stored whole or not at all: if it would exceed 5 MB, the command commits **without Undo** and its
+  receipt says so, so Undo is never offered over a truncated inverse. Replay records are kept forever (small); an
+  inverse is pruned once a later undoable operation supersedes it or after 30 days, and pruning never re-enables a
+  model operation (its replay record and fingerprint stay).
+
+## 10. Contracts from Ratchet's #101 review (ae37af3)
+
+Each group says what is decided and which step carries it. Sizes are already in §5.
+
+### R1. Transactions: one workspace lock per command (A1)
+
+**Decided (Lead 24246c87, Ratchet 5a6618b9): every write command takes one lock on his workspace.** He is the only
+user, so writes run one at a time as they do today, but conflicts are checked on the row that changed (a page's version,
+a task's version), not on one global revision. **Multi-user would need this revisited:** the lock is per workspace, so
+separate users never wait on each other, but several people in one workspace would.
+
+Order inside every command, in one transaction:
+1. `SELECT … FROM workspaces WHERE id = $1 FOR UPDATE` (SQLite: `BEGIN IMMEDIATE`, as today). Always first, always the
+   only lock, so there is no lock ordering to get wrong.
+2. Replay check: look up `operations (workspace_id, id)`. Same id and fingerprint returns the stored result; a different
+   fingerprint is refused. Scoped by workspace, so no other workspace's result can leak.
+3. Read what the command needs, check versions, apply the domain change, write rows, insert the `operations` row with
+   its inverse, commit.
+
+Everything that writes goes through this lock: commands, **budget reservations, model results and settlement**, and
+Undo. **External model calls happen outside any transaction:** reserve (locked, short) → call the provider (unlocked)
+→ record the result (locked, short), as the model ledger already does.
+
+**What each command family reads** (representative cases; a check never treats a missing row in a partial read as
+"doesn't exist"):
+
+| Family | Reads under the lock | Version checked | Writes |
+| --- | --- | --- | --- |
+| save-editor | the page, its blocks, tasks named by its task lines, provenance of its blocks | page `version` (today's `expectedContent`) | blocks, tasks created / renamed, provenance, links / tags index rows |
+| plan-task, not-today, row actions | the task, its lines on the source and target day pages, both days' Top 3 role lines | task `version` | lines moved / written, `task_days`, task |
+| Top 3 full | lines under the day's `plan-top3` heading (one indexed query) | — (safe under the lock) | — |
+| paste-links, create-document | `pages` by `url_key` (unique index), the target page | target page `version` | pages, blocks, operations |
+| move / delete / restore page | the page, its ancestors (cycle check) and descendants by `parent_id` | each page's `version` | pages, trash batch |
+| Bring, AI proposals | `block_provenance` by source (indexed), the day page | page `version` | blocks, provenance |
+| capture, model result | the capture / attempt row, the ledger sum for the day | attempt state | ledger, capture, blocks |
+| undo | the operation, every row its inverse touches | each row is still at the version it left | the inverse, an undo record |
+
+Workspace-wide questions (URL dedupe, Linked from, AI context, "was this brought already") are indexed queries run under
+the lock, never inferred from the rows a screen happened to load.
+
+**Contract suite v2.** `tests/repository-contract.ts` asserts today that two clients creating *different* days at
+revision 0 give one stale loser. In v2 that case is **two successes, serialized**. New cases: the same page with a stale
+version is refused and can recover; same-aggregate and cross-aggregate concurrency; two budget reservations racing for
+the last of the budget (exactly one fits); lost-response replay and rollback after an exception, kept from v1. The
+SQLite adapter runs v1 until A1 lands, then v2.
+
+### R2. Operations, legacy receipts, Undo and provenance (A2)
+
+- **Legacy receipts.** The 169 old receipts have no type, payload or time. They are imported as **legacy replay
+  records**: original `id`, `fingerprint`, `entity_id`, `simulated`, the old message as `legacy_text`, `type` null,
+  `created_at` null (unknown), `imported_at` set. Nothing is guessed. A pre-migration operation retried after the
+  migration still replays (test).
+- **Undo families stay typed, each with its own guard** (`undo_kind`): editor task create / delete (today's
+  `editorCreations` / `editorDeletions`), paste-links (made / reused / restored outcomes, material-before), capture
+  apply / remove (the `before` / `appliedSnapshot` checks, carried inside captures), row actions, page trash. A
+  generic patch list is used only inside a family that keeps its "edited since" rule. An Undo that is invalid today
+  never becomes valid after the migration.
+- **The current one-step Undo is transitioned explicitly, not converted:** at the A2 migration, the pending Undo of the
+  last action before it is closed, and its receipt reads "Undo isn't available after the update". A snapshot can't be
+  turned into an inverse safely, so we don't pretend to.
+- **Provenance outlives the block.** `block_provenance` takes every source pair now held in sections and
+  `editorBlockMetadata`, for live and deleted blocks (the 5 orphaned entries in his data included). `wasBrought` and
+  `isLineLinked` read it, so deleting a brought line doesn't re-offer it; a later Undo of the Bring sets `removed_at`,
+  which restores eligibility.
+- **Synthetic fixtures** cover what his data lacks (captures, materials, events, inline refs, each Undo family), in
+  addition to the real copy.
+
+### R3. Facts that joins and row versions can't rebuild (A3, A4)
+
+- **Reference time** (`at` on refs and cards) is kept in the refs entry in block props, with `-1` (unknown) sorting
+  last, through migration, copy, move and index rebuild. The `links` index copies it, so the index stays rebuildable.
+- **`sourceFingerprint`** stays a stored token over kind, text and the page's day basis: moving a page under another day
+  changes it while no block row version changes.
+- **`last_planned_on`** stays a stored planning fact, written only by planning commands; a reference line on a later day
+  (B22) is not planning.
+- **Pending refs** keep `pending` and the provisional title in the refs entry, so pending vs removed and retry / Undo
+  behave as today.
+- **`createdOn`** stays a date; imported rows have `created_at` null.
+
+### R4. The public server's auth gate (A5, release gate)
+
+- **One gate, `requireOwner()`, wraps every server function and SSR loader** (`loadWorkspace`, `runCommand`,
+  `submitCapture`, `retryCapture`, `draftMyDay`, the page loaders) and runs **before any repository or model access**.
+  `getReadiness` stays public and returns nothing sensitive. The GET load that expires drafts runs only after the gate.
+- **Identity is verified on the server** from the Supabase session (signature and expiry checked); a client-sent
+  `workspace_id` or `owner_id` is never trusted. Authenticated but not the owner is refused the same way.
+- **RLS is on the server's own path:** the server connects as a restricted role without `BYPASSRLS` (never the service
+  role for requests) and sets the verified user's claims transaction-locally, so the owner-only policies apply to every
+  query it runs. The privileged role is used only by migrations. Composite tenant FKs back this up.
+- **Sign-up is closed** (his email only); sessions expire and can be revoked; cookies are `HttpOnly`, `Secure`,
+  `SameSite=Lax`, and every state-changing request checks `Origin`. OTP request and verify limits use Supabase's auth
+  rate limits; model calls are throttled per owner through the existing budget ledger, not by IP.
+- **No journal content in public places:** responses are `Cache-Control: private, no-store`; no CDN caching of SSR;
+  no public source maps; logs stay content-free.
+- **Preview** uses sanitized fixtures by default; a real copy goes there only behind the same gate.
+- **Negative tests (A5 gate):** no session; forged or expired session; a valid other user; guessed page / task /
+  operation ids; direct anon and authenticated table calls; a cross-origin state-changing request; replay; concurrent
+  model requests. Each must show **zero journal disclosure, zero writes, zero model calls or reservations.**
+- **Driver:** `postgres` (porsager) over TLS with certificate verification, a pool of 5 on the session-mode pooler or a
+  direct connection, one transaction per command.
+
+### R5. Cutover fence and rollback (A6, release gate)
+
+- **One authority at a time.** `storage_state` holds `epoch` and `authority` (`sqlite` / `supabase`). The server refuses
+  any command whose epoch isn't current; an old tab gets "Daythread was updated · reload", with its text kept as a
+  draft. **No automatic fallback, ever:** two writable stores is the failure this prevents.
+- **Freeze and drain before the snapshot:** refuse new commands ("Moving your data · editing is paused for a few
+  minutes"); wait for in-flight saves, model results and budget settlements; attempts still open are left `unknown` and
+  recovered later by generation id (no second charge). Then `VACUUM INTO`, import, compare, switch the authority.
+- **Equivalence for the compare:** export the new schema back into today's `Workspace` shape and compare it with the
+  source, field by field, except a listed set of known differences (receipt text moved to `legacy_text`, unknown
+  timestamps null, the closed one-step Undo). Order, provenance and `-1` reference times must match exactly.
+- **Rollback with cloud edits:** the same freeze and drain on Supabase, then `export-to-sqlite` (current pages, blocks,
+  operations and inverses, provenance, the model ledger), validated the same way, then one authority switch. Rehearsed
+  before cutover with successful cloud writes and a refused command.
+- **Recovery point and time:** Supabase daily backups (7 days on Pro) plus a nightly export to the Mac mini, so two
+  independent copies at most a day old; restoring is rehearsed and takes about an hour. The 14-day SQLite file is the
+  pre-cutover copy, not a live fallback.
+- **Drafts on the old address:** localStorage doesn't move from `127.0.0.1:3000` to the new address. Before switching,
+  the old app is opened once on each device he used; save-on-leave's "stuck drafts save on opening" sends them, and a
+  check shows zero unsent drafts (or exports them to a file) before the old address is retired.
+- **Supported pairs:** each A-step ships as build N with layout N and a rollback script to N-1, as today; after cutover
+  the export rebuilds the latest local layout.
+
+### R6. Durable model work on Fly, and account-scoped offline data (A6, A7)
+
+- **One machine, no auto-stop** (`min = max = 1`), and a `SIGTERM` drain: stop starting model runs, wait up to 30 s for
+  running ones, leave the rest as they are in the ledger.
+- **Recovery on boot**, using what already exists: `markInterruptedModelAttempts` and `recoverUnknownCosts`
+  (`src/server/model/service.ts`, `cost-lookup.ts`) settle unknown costs by generation id without calling again. A
+  capture left organizing shows as failed with Retry: never re-sent automatically, so never charged twice.
+- **A lease on each attempt** (`lease_owner`, `lease_until`) so a deploy overlap can't run one attempt twice.
+- **Test:** kill the process after the provider answered but before the result was recorded → the attempt is
+  recovered, no second charge, the capture offers Retry.
+- **A7 is scoped to the account:** cache and queue keys include user and workspace; the service worker caches only the
+  static app shell, never personalized HTML or server-function responses. Sign-out or an account change purges the
+  cache; sign-out with changes waiting asks first ("2 changes waiting · send or copy them first"). An expired session
+  offline still reads his own cache on that device until the next online check.
+- **Queue records** hold an immutable `operationId`, `capturedAt`, the time zone and day, text, mode and workspace.
+  Unknown network outcome → resend with the same id; expired session → held until he signs in; a refused item stops
+  the queue and shows "Couldn't send · Copy text · Discard" on it, so it never blocks silently. `persist()` may be
+  denied, so the status shows unsent changes until the server acknowledges them.
 
 ## Appendix: every stored field
 
@@ -424,39 +585,38 @@ Verdict: **keep** (a fact), **move** (a fact, wrong place), **derive** (computab
 | meta.schemaVersion, meta.revision | drop | layout version → migration table; global revision → row versions (§3) |
 | meta.timezone | move | `workspaces.timezone` (Bumblebee: fine as data; only the literal type is the problem) |
 | meta.undoOperationId / undoRevision, every `snapshot='undo'` row | drop | `operations.inverse` (§2.4) |
-| *.position, *.present | drop | adapter details; positions move to `blocks.position` / `task_days.position` |
+| *.position, *.present | drop | adapter details; positions move to `blocks.position` |
 | pages.id, title, parentId, url, trashedAt, trashId | keep | `trashId` → `trash_batch_id` |
 | pages.type, date | keep | `kind`, `day_date` |
 | pages.sections | derive | from `blocks`; at import, the **source** of blocks for pages without `editorJSON` |
 | pages.editorJSON | move | becomes `blocks` rows (§2.1) |
 | pages.editorSections | drop | consistency copy |
 | pages.editorBlockMetadata | move | live blocks' entries → block props; `paste:` records → `operations`. **Entries for blocks no longer in the page (5 in his data; Ratchet) are history, not props:** they stop Bring and the AI from suggesting the same line again and keep reference times and Undo working, so they map to `activity` / `operations`, never dropped |
-| pages.editorCreations / editorDeletions | drop | `operations.inverse` |
+| pages.editorCreations / editorDeletions | move | the editor-task Undo family in `operations` (typed, same guards; §10 R2) |
 | pages.templateApplied | drop | a day page gets the template once, when created |
-| pages.reviewText, reviewSaved, reviewStep, reviewSource, reviewSkipped, handoffDone | move | `day_reviews`: text, finished_at, handoff_done_at; step / source / skipped derived or dropped |
+| pages.reviewText, reviewSaved, reviewStep, reviewSource, reviewSkipped, handoffDone | move | `day_reviews`, **all six as they are**, including partly present step/source; simplifying is a later product change (§7a) |
 | pages.draft, draftError | move | `ai_runs`, `ai_proposals` |
-| NoteBlock.kind, text, taskId, eventId, targetPageId, sourcePageId/BlockId | keep | `blocks.type`, `content`, `task_id`, `source_block_id`; `materialId` → a link page |
+| NoteBlock.kind, text, taskId, eventId, materialId, targetPageId | keep | `blocks.type`, `content`, `task_id`, props (`eventId`, `materialId` while those tables are supported) |
+| NoteBlock.sourcePageId / sourceBlockId | move | `blocks.source_block_id` + `block_provenance` (kept after the block is deleted, §10 R2) |
 | NoteBlock.planRole | derive | planned for this page's day or not (§2.2) |
-| NoteBlock.at, PageRefEntry.at | move | `created_at` |
-| NoteBlock.refs, Section.refs | derive | `links` index from block content |
-| PageRefEntry.title, pending | drop | join on `pages` |
-| NoteBlock.sourceFingerprint | drop | row `version` |
-| NoteBlock.linkPaste | move | `operations` |
+| NoteBlock.at, PageRefEntry.at | keep | the reference-created order, kept as is in the refs entry / block props, `-1` = unknown sorts last (§10 R3) |
+| NoteBlock.refs, Section.refs | keep | refs entries kept in block props (refId, pageId, at, title, pending); `links` is an index rebuilt from them |
+| PageRefEntry.title, pending | keep | in the refs entry: the title is what the line's text was compared with; `pending` is the provisional creation intent (§10 R3) |
+| NoteBlock.sourceFingerprint | keep | a content-and-context token (kind, text, the page's day basis), stored with the provenance; a row version can't replace it (§10 R3) |
+| NoteBlock.linkPaste | move | the paste-links Undo family in `operations` (made / reused / restored, material-before; §10 R2) |
 | Section.kind | move | heading block `role` prop, set by the template (§2.2) |
-| tasks.title, status, plannedOn, deadlineOn, attentionOn, paused, createdOn, sourcePageId | keep | `due_on`, `start_on`, `created_at`, `source_block_id` |
+| tasks.title, status, plannedOn, deadlineOn, attentionOn, paused, sourcePageId | keep | `due_on`, `start_on`, `source_page_id` (a page identity, kept as one) |
+| tasks.createdOn | keep | `created_on date`; `created_at` stays null (unknown), never a guessed instant |
 | tasks.version | keep | the common `version` column |
-| tasks.lastPlannedOn | derive | from `task_days` |
+| tasks.lastPlannedOn | keep | `last_planned_on`, written by planning commands only; a reference line on a later day is not planning (R3, B22) |
 | placements.taskId, date | keep | `task_days` |
 | placements.order | derive | the line's position |
 | placements.state | keep | `excluded` and `moved` are facts (`task_days`); `included` is the line itself |
 | placements.section | derive | from the role heading the line sits under (§2.2) |
 | events.* | keep | 0 rows |
-| materials.url, title, body, savedOn, sources | move | a link page, later (decision 7c, §7a) |
-| materials.reviewState, nextReviewOn, skippedUntil, resurface, lastDecisionOn, taskId | move | `follow_ups` |
-| materials.openedOn, dismissedOn, decisions | move | `activity` |
+| materials.* | keep | carried as is; merging into link pages, `follow_ups` and an activity log is later (§7a) |
 | captures.id, pageId, text, capturedAt | keep | |
-| captures.status, failure, error, model, mode, proposals, proposalRevision, contextLine, simulated, proposedTitle, taskId | move | `ai_runs` / `ai_proposals` |
-| ProposalItem.before, appliedSnapshot, appliedVersion | drop | `operations.inverse` + row versions |
-| receipts.operationId, fingerprint, entityId, simulated | move | `operations` |
-| receipts.message | drop | UI copy, rendered from type + data |
+| captures.status, failure, error, model, mode, proposals, proposalRevision, contextLine, simulated, proposedTitle, taskId | keep | carried as is, including `ProposalItem.before` / `appliedSnapshot` / `appliedVersion` (the capture Undo guards); the split is later (§7a) |
+| receipts.operationId, fingerprint, entityId, simulated | move | `operations`, as legacy replay records (§10 R2) |
+| receipts.message | move | `operations.legacy_text` for the 169 old receipts only; new operations render their text from type + data |
 | model_attempts.* | keep | already a ledger beside the workspace |
