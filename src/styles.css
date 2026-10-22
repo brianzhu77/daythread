@@ -713,6 +713,10 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-save-line.is-conflict { font-size:var(--text-meta); }
 .editor-save-line.is-conflict button { color:var(--ink); font-weight:var(--weight-semibold); font-size:var(--text-meta); }
 .editor-task { display:flex; align-items:center; gap:10px; min-height:32px; width:100%; }
+/* Where the ⋯ shows (a pointer that hovers), a saved task's row is as tall as its 44px ⋯ (global button min-height);
+   an empty draft row has no ⋯ yet, so it takes that height up front and no longer grows under his first letter
+   (Brian cf4c4e65). Touch screens hide the ⋯, so their rows keep their height. */
+@media (hover:hover) { .editor-task { min-height:44px; } }
 /* Page card (Jazz): one quiet row in the note, no border or fill; hover/selection come from the block like any other. */
 /* Same columns as a task row: icon in the checkbox/dot column, title on the text column; icon and chevron centre on the title's first line. */
 .editor-page-card { display: flex; align-items: flex-start; gap: 13px; width: 100%; min-height: 32px; padding: 3px 0 3px 14px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
@@ -806,6 +810,11 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor .bn-block-content[data-content-type=task] { border-left:2px solid transparent; padding-left:8px; }
 .editor-reference-tag,.editor-plan-tag { font-size:11px;color:var(--ink-2);white-space:nowrap; }
 .editor-plan-action { background:transparent;color:var(--blue-text);border:0;font-size:var(--text-caption);padding:2px 4px; }
+/* Plan for today appears when a document task saves (open reference tasks only). It no longer takes the global 44px
+   min-height, so the row keeps its height when it appears or goes (Ratchet #117, 390 touch +12px). Its tap area is the
+   full height of its own row (stretch) and 6px wider each side; never taller, or a tap would plan the next task (Lead). */
+.editor-plan-action { position:relative; min-height:0; align-self:stretch; display:flex; align-items:center; }
+.editor-plan-action::after { content:''; position:absolute; inset:0 -6px; }
 .continuous-editor .bn-block-content[data-content-type=task]:has(.editor-task:is([data-role=reference],[data-draft])) { border-left-color:transparent; }
 @media(max-width:700px) { .editor-task { flex-wrap:wrap;column-gap:10px; } .editor-task-title { min-width:130px; } .editor-plan-tag { display:none; } }
 .continuous-editor .bn-editor { padding-left:0; padding-right:0; }

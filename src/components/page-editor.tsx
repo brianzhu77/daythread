@@ -76,7 +76,8 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
     {/* Jazz f58abeaf: done rows are grey and struck through too, so the label is what says Cancelled. */}
     {t?.status === 'cancelled' && <span contentEditable={false} className="editor-cancelled-tag">Cancelled</span>}
     {role === 'reference' && <span contentEditable={false} className="editor-reference-tag">Reference</span>}
-    {role === 'reference' && t?.status === 'open' && <button className="editor-plan-action" contentEditable={false} onClick={() => void run({ type: 'plan-task', taskId, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }, r => ({ text: 'Planned for today', undoOperationId: r.operationId }))}>Plan for today</button>}
+    {/* A done or cancelled task keeps the button's space, hidden, so a long title doesn't reflow when it's ticked (#9). */}
+    {role === 'reference' && t && <button className="editor-plan-action" contentEditable={false} {...(t.status === 'open' ? { onClick: () => void run({ type: 'plan-task', taskId, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }, r => ({ text: 'Planned for today', undoOperationId: r.operationId })) } : { disabled: true, tabIndex: -1, 'aria-hidden': true, style: { visibility: 'hidden' as const } })}>Plan for today</button>}
     {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent))} onEscape={() => rows!.focusRow(blockId)} /></span>}
     {t && t.status === 'open' && hasDateFacts(t) && <span contentEditable={false} className="editor-date-tag"><DateTag task={t} today={todayIso()} pageDate={planDate || todayIso()} /></span>}
   </div>
