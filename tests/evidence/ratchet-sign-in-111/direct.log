@@ -1,0 +1,30 @@
+PASS anonymous page /: 302 expected 302
+PASS anonymous page /tasks: 302 expected 302
+PASS anonymous page /pages: 302 expected 302
+PASS anonymous page /calendar: 302 expected 302
+PASS anonymous page /review: 302 expected 302
+PASS anonymous direct GET /api/unknown: 401 expected 401
+PASS anonymous direct GET /_serverFn/nonexistent: 401 expected 401
+PASS anonymous real server function 1 GET: 401 expected 401
+PASS anonymous real server function 1 POST: 401 expected 401
+PASS anonymous real server function 2 GET: 401 expected 401
+PASS anonymous real server function 2 POST: 401 expected 401
+PASS anonymous real server function 3 GET: 401 expected 401
+PASS anonymous real server function 3 POST: 401 expected 401
+PASS anonymous real server function 4 GET: 401 expected 401
+PASS anonymous real server function 4 POST: 401 expected 401
+PASS anonymous real server function 5 GET: 401 expected 401
+PASS anonymous real server function 5 POST: 401 expected 401
+PASS anonymous real server function 6 GET: 401 expected 401
+PASS anonymous real server function 6 POST: 401 expected 401
+PASS cross-origin /api/auth/send: 403 expected 403
+PASS cross-site /api/auth/send: 403 expected 403
+PASS no-origin /api/auth/send: 403 expected 403
+PASS cross-origin /api/auth/verify: 403 expected 403
+PASS cross-site /api/auth/verify: 403 expected 403
+PASS no-origin /api/auth/verify: 403 expected 403
+PASS cross-origin /api/auth/sign-out: 403 expected 403
+PASS cross-site /api/auth/sign-out: 403 expected 403
+PASS no-origin /api/auth/sign-out: 403 expected 403
+PASS public sign-in page: 200 expected 200
+0 failures
