@@ -51,11 +51,13 @@ starts. The old app on 3000 is never touched until C6.
 | **C1** Schema and harness | SQL migrations (`db/migrations/*.sql`) and a runner on `DATABASE_MIGRATION_URL`; the §4 tables in a schema the Data API doesn't expose; the restricted role `daythread_app` (no `BYPASSRLS`; `anon` / `authenticated` get nothing); owner-only RLS with `FORCE ROW LEVEL SECURITY`; constraints and partial unique indexes (§4.2); `app.create_workspace(owner)` seeding Jazz's §1: the five collections with their system properties, the day template with roles, nothing else. PGlite + CI-container harness | 4–5 days |
 | **C2** Repository and projection | `PostgresWorkspaceRepository` on `postgres` (postgres.js, `prepare: false` for the transaction pooler); load = rows → the typed `Workspace` the domain and screens use today; execute = lock → versions → `applyCommand` → **patches of known fields only**; per-row versions and `namedRows` (§4 here); contract suite v2 on PGlite and the CI container; `DAYTHREAD_STORAGE=postgres` | 5–6 days |
 | **C3** Operations and Undo | `operations`: replay by SHA-256 fingerprint; Undo from the before-images the projection captured (§6); `history` rows written by the commands that create facts (moved, not today, ticked) | 3 days |
-| **C4** Sign-in and the auth gate | Jazz's sign-in screen (email → code, "Sent to {email}", 30 s "No code?"); Supabase OTP from the browser with the publishable key; `requireOwner()` on every server function and SSR loader before any database or model access; owner email check; `Origin` check on writes; `Cache-Control: private, no-store`; "Signed out · Sign in to save" through the draft-kept path; the R4 negative tests; Jazz's capture conflict line | 4–5 days |
-| **C5** Vercel runtime and gates | model work as durable `jobs` rows (§5) run with `waitUntil`, recovered by a cron; `model_attempts` on Postgres; Jazz's empty states; the speed gate (day open under 300 ms p95 on Fast 4G) and payload gate (under 150 KB gzipped) on the staging preview; staging smoke with the bypass secret | 3–4 days |
-| **C6** Switch | production env vars; his user, then sign-ups off; his workspace seeded; production deploys from `main` turned on (`vercel.json`); the **archive flag** on 3000; production smoke | 1 day |
+| **C4** Sign-in and the auth gate | Jazz's sign-in screen (email → code, "Sent to {email}", 30 s "No code?"); Supabase OTP from the browser with the publishable key; `requireOwner()` on every server function and SSR loader before any database or model access; owner email check; `Origin` check on writes; `Cache-Control: private, no-store`; "Signed out · Sign in to save" through the draft-kept path; the R4 negative tests, including **a non-owner flow that looks identical to the owner's until the code fails** (no owner check ever shows on screen; Jazz); Jazz's capture conflict line | 4–5 days |
+| **C5** Vercel runtime and gates | model work as durable `jobs` rows (§5) run with `waitUntil`, recovered by a cron; `model_attempts` on Postgres; Jazz's empty states and the **"Old notes ↗" row** (the new app reads the archive banner's marker, keeps it in this browser only, and shows the row; Jazz §3); the speed gate (day open under 300 ms p95 on Fast 4G) and payload gate (under 150 KB gzipped) on the staging preview; staging smoke with the bypass secret | 3–4 days |
+| **C6** Switch | production env vars; his user, then sign-ups off; his workspace seeded; production deploys from `main` turned on (`vercel.json`); the **archive flag** and its banner with the marker link on 3000; production smoke | 1 day |
 
-**About 20–24 working days: roughly 4.5 weeks to "from anywhere"**. Offline (§3b) is about 5–6 more days after launch.
+**About 20–24 working days: roughly 4.5 weeks to "from anywhere".** Starting around Oct 22, the switch lands in the
+**week of Nov 16 (latest Nov 24)**, if Brian's staging credentials are in by C4 (around Nov 5); later credentials move
+it by as much. No step grows without Lead's say; at the end of C4 we report whether C6 can move earlier (Bumblebee). Offline (§3b) is about 5–6 more days after launch.
 
 ## 4. Versions and named rows (the #102 findings carried over)
 
@@ -109,6 +111,12 @@ Inverses are bounded and pruned as in §9 of the main plan.
   sidebar, search and Linked from still work.
 
 ## 8. Checks per step
+
+- **Design check before Ratchet's** for every step that changes screens (C4 sign-in, C5 empty states and the Old notes
+  row, C6 archive banner): Jazz at 390 and 1280 on a **fresh seeded workspace**.
+- **Geometry gate fixture (C2):** `scripts/core-fixtures.ts` seeds a workspace through `app.create_workspace` on
+  PGlite, then adds the fixture rows `check-alignment` needs (a day with every row type, cancelled task, card with and
+  without preview, link card, nested bullets, long titles), so the gate runs without a SQLite copy.
 
 - Unit and contract tests on PGlite, and the concurrency and RLS tests on the CI container, all in CI on every PR.
 - The browser checks that exist today (two-tabs, B23, save-on-leave, races, undo, alignment) run against a
