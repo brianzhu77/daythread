@@ -320,7 +320,14 @@ in normal use, so every relation and provenance fact keeps a valid target.
 - **Query cost:** hot system properties (plan date, status, day date, URL key) get expression indexes on
   `properties -> '<property id>'`; others use one GIN index. At his size (hundreds of blocks) any query is instant; at
   100k blocks the expression indexes keep the screens' queries indexed. Queries read slightly less directly than columns
-  would (`properties -> 'p_…' ? '2026-10-22'`); the projection layer (§4.4) hides that from the domain code.
+  would (`properties -> 'p_…' ? '2026-10-22'`); the projection layer (§4.5) hides that from the domain code.
+- **First-value indexes only fit one-value properties** (Lead 11781210): `(properties -> '<id>' ->> 0)` sees only the
+  first element. Queries on a property whose `cardinality` is `many` use containment (`properties -> '<id>' @> '["2026-10-22"]'`)
+  on the GIN index, and the query builder picks the form from `cardinality`, so turning `plan_on` to many changes no row
+  and gives no wrong results. A test covers a two-date task found by its second date.
+- **Roles are app vocabulary in data, like `system_key`** (Lead): `props.role` values (`plan-top3`, `plan-other`,
+  `review`, `collect-links`) are kept as they are when a build doesn't know them, and such a heading renders and behaves
+  as a plain heading. A newer build's role never breaks an older one.
 
 ### 4.3 How today's concepts map
 
