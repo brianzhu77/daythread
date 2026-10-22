@@ -562,13 +562,13 @@ SQLite adapter runs v1 until A1 lands, then v2.
 
 ### R3. Facts that joins and row versions can't rebuild (A3, A4)
 
-- **Reference time** (`at` on refs and cards) is kept in the refs entry in block props, with `-1` (unknown) sorting
-  last, through migration, copy, move and index rebuild. The `links` index copies it, so the index stays rebuildable.
-- **`sourceFingerprint`** stays a stored token over kind, text and the page's day basis: moving a page under another day
+- **Reference time** (`at` on refs and cards) is kept on the inline node and its `mention` relation (`relations.at`), with `-1` (unknown) sorting
+  last, through migration, copy, move and index rebuild. Rebuilding the relations from content keeps it, because the inline node carries it.
+- **`sourceFingerprint`** stays a stored token over kind, text and the page's day basis (in the `brought_from` relation's `data`): moving a page under another day
   changes it while no block row version changes.
 - **`last_planned_on`** stays a stored planning fact, written only by planning commands; a reference line on a later day
   (B22) is not planning.
-- **Pending refs** keep `pending` and the provisional title in the refs entry, so pending vs removed and retry / Undo
+- **Pending refs** keep `pending` and the provisional title on the inline node, so pending vs removed and retry / Undo
   behave as today.
 - **`createdOn`** stays a date; imported rows have `created_at` null.
 
