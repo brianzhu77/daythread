@@ -167,6 +167,10 @@ schema as 3000 (pooler, iad1, 120 s functions). Postgres is the default on Verce
 (verified on Vercel in a throwaway deployment: capture applied 4 s after a 192 ms response); a capture still organizing
 after 5 min ends in "Model unavailable · text saved" + Retry. Env is Preview scoped to branch `live`; `live` deploys go
 through the Lead. **Rule: nobody promotes to Production or puts the pooler URL in Production until there's sign-in.**
+**CORRECTION 2026-10-22 16:14Z:** the Production address https://daythread-nine.vercel.app (created 16:07Z) answered
+anyone with no login (HTTP 200), reading and writing his real data and able to use his model key (Lead 363cbfed, Roadbuster
+4ffa7c6b). The earlier "Production can't reach his data" was wrong. Fix: close it now, then Production holds **no**
+`DATABASE_URL`/`OPENROUTER_API_KEY` at all until sign-in; check logs for non-owner requests since 16:07Z.
 Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
 `fix/capture-late-refresh` 2201274. 3000 runs the same build; rollback `.daythread-local/backups/2026-10-22-before-vercel-now/dist`.
 
