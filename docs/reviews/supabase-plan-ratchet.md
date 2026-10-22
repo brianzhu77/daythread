@@ -100,3 +100,7 @@ For A7, scope caches/drafts/queued captures to the authenticated user and worksp
 ## Review closure
 
 11497e4 closes the original count and editorJSON-only import omissions at intent level and adopts the lower-risk inline format. Revise R1–R6 into explicit contracts and acceptance cases, mark size changes, then return a single version for re-review. No implementation or public preview is approved by this report. All local evidence scripts only read the copied database; no QA servers were started.
+
+### Post-review scope simplification (Lead 442f159f, Ratchet 5a6618b9)
+
+A single transaction-scoped **workspace lock** is accepted instead of fine-grained lock keys for this one-user product. Take it before authoritative reads, then validate/write/append operations; commands, Undo, budget reservation and model-result settlement must all use it. External provider calls stay outside the transaction. Retain the read-set specification and per-page conflict tokens. New contract tests: writes to different pages serialize and both succeed; stale writes to the same page are refused. Revisit the coarse lock if multi-user load requires it. This narrows R1 implementation complexity without removing its safety requirements.
