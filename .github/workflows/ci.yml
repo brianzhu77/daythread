@@ -18,9 +18,21 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      # A real Postgres 17 (Supabase's version) for the tests PGlite's single connection can't run: the workspace lock
+      # between two connections, unique-value races, role reset, RLS on the server path. Disposable, no secrets.
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: daythread_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       # The tests and the app's day boundaries assume his time zone, as on the Mac.
       TZ: America/Vancouver
+      DATABASE_TEST_URL: postgres://postgres:postgres@localhost:5432/daythread_test
     steps:
       - uses: actions/checkout@v4
         with:
