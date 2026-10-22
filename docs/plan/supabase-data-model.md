@@ -239,7 +239,8 @@ large change with no shippable checkpoints and the longest time without real use
 
 ## 6. Cutover and rollback (applies to A6 or B)
 
-1. Freeze writes (a server flag that refuses commands with a clear message), take a SQLite backup (`VACUUM INTO`).
+1. Freeze writes (a server flag that refuses commands), with the line "Moving your data · editing is paused for a few
+   minutes" (Jazz), keeping whatever he is typing as a draft. Take a SQLite backup (`VACUUM INTO`).
 2. Import into Supabase in one transaction; read back and deep-compare with the source; abort on any mismatch.
 3. Switch `DAYTHREAD_STORAGE=supabase`; the SQLite file stays untouched as the fallback.
 4. Rollback window (proposed 14 days): `export-to-sqlite` rebuilds a layout-N SQLite file from Supabase, round-trip
@@ -249,16 +250,19 @@ large change with no shippable checkpoints and the longest time without real use
 
 ## 7. Decisions (Lead to summarize)
 
-**For Brian:** the goal (§0a) with the path and hosting (rows 1 and 5), and cloud privacy with a monthly fee (rows 2 and 3).
+**For Brian:** the goal (§0a) with the path and hosting (rows 1, 5, 5b), cloud privacy with a monthly fee (rows 2 and 3),
+and that saves need the internet (row 5c).
 **The team's call, reported to him as outcomes:** auth/RLS, the SQLite fallback, the model choices (rows 4, 6, 7).
 
 | # | Decision | Recommendation | Cost | Reversible? |
 | --- | --- | --- | --- | --- |
 | 1 | Path A (clean up locally, then move) or B (move now, clean up in the cloud) (§5) | **A** | A: about 3 weeks before he is on Supabase; B: 3–4 days, but each later cleanup is a live cloud migration | Either can switch before cutover; after B's cutover, going back means the export script |
 | 2 | Hosted Supabase or local Supabase (Docker on his Mac) | **Hosted** for real use; local Supabase only for development and tests | Hosted: a plan fee, his journal in the cloud. Local: no gain over today's SQLite file | Yes: the same schema runs in both; moving is a dump and restore |
-| 3 | Privacy, region, plan | His own Supabase account, **US West** region, a **paid plan with daily backups** (to verify on Supabase's pricing page: the free plan pauses inactive projects and has no automatic backups) | A monthly fee; the repo's rule so far was "private data, never a cloud fallback" (`.gitignore`), so this is his explicit call | Yes while the SQLite copy is kept; data already sent to the cloud stays there until he deletes the project |
-| 4 | Auth and row-level security | **Supabase Auth with his account only; RLS on every table, owner only.** The server keeps all writes and connects with its own role | About a day in A5; sign-in once per browser | Yes: RLS policies are migrations |
+| 3 | Privacy, region, plan | His own Supabase account, **US West** region, **Pro plan** | **Pro: $25/month** (includes $10 of compute, one Micro instance), **daily backups kept 7 days** (Lead checked the pricing). The free plan pauses after 1 week inactive and has no backups, so it is not an option for his only copy. The repo's rule so far was "private data, never a cloud fallback" (`.gitignore`), so this is his explicit call | Yes while the SQLite copy is kept; data already sent to the cloud stays there until he deletes the project |
+| 4 | Auth and row-level security | **Supabase Auth, his account only, sign-in with an emailed 6-digit code** (not a magic link: his phone opens the Mac's LAN address and a link's redirect won't land there; Jazz 6e1c0707). **RLS on every table, owner only.** The server keeps all writes and connects with its own role. An expired session mid-edit behaves like a failed save: draft kept, "Signed out · Sign in to save" | About a day in A5; sign-in once per browser | Yes: RLS policies are migrations |
 | 5 | Where the server runs | **Stays on his Mac** (only the database moves) | None now; phone use still needs the Mac, as today | Yes: hosting the server later needs only #4 to be in place |
+| 5b | **Server hosted too** (only if his goal is "from anywhere", §0a) | A small **always-on Node host** in the same region as the database (for example Fly.io or Render; TanStack Start builds a Node server). Not serverless: model runs can take tens of seconds and cold starts would eat the 300 ms day-open budget | Host fee, roughly **$5–10/month** (to verify for the chosen host). **2–3 days:** sign-in becomes **required** on every request (the server checks the Supabase session and scopes every command to his workspace); secrets (database URL, model key) move to the host's env; HTTPS; the `VERCEL`/`NETLIFY` refusal in `storage.ts` becomes "hosted mode requires sign-in"; a deploy from GitHub `main` with the previous release kept for rollback | Yes: the same build runs on his Mac again by pointing it at the same database |
+| 5c | **No internet** (Jazz 6e1c0707): today the database is a file on his Mac, so saves never fail; after cutover every save needs the internet | **(a)** saves fail visibly and keep his text with the existing "Couldn't save · draft kept · Retry saving"; a page that isn't loaded shows "Can't reach your data · Retry". (b), a local write queue that syncs later, only if he writes offline | (a): small, the draft machinery exists (B23, save-on-leave). (b): several days plus conflict rules | Yes: (b) can be added later without a data migration |
 | 6 | SQLite after cutover | **Read-only fallback for a 14-day rollback window**, with a tested export from Supabase back to SQLite; then archived, not deleted | The export script (part of A6) | That is the point of it; after the window, rollback means restoring from Supabase backups |
 | 7 | Model choices with product effect: (a) Top 3 is where the line sits (under the heading with the Top 3 role), computed per day; (b) special headings bound by a role prop, so renaming keeps behaviour; (c) saved links (materials, 0 rows) merged into link pages | **(a) and (b) with the move; (c) later** (§7a) | (a)+(b) are part of A4; screens look the same | (a)+(b): cheap before cutover; (c) is free while there are 0 materials |
 
@@ -288,6 +292,8 @@ Total "with the move" matches path A's steps (§5): about 3 weeks.
 
 ## 8. Verification plan
 
+- Session expiry mid-edit and no internet behave like a failed save (draft kept, the right line), added to the
+  save-on-leave checks in A5 (Jazz).
 - Contract suite + import round-trip on every adapter and every step; real-data copy round-trip (old layout → new → old).
 - Per step: unit tests, existing browser checks (`two-tabs`, B23, save-on-leave, A12, A9a, alignment gate), Ratchet review.
 - Postgres: the contract suite against local Supabase; concurrency tests with two connections (row-version conflicts,
@@ -300,7 +306,20 @@ Total "with the move" matches path A's steps (§5): about 3 weeks.
 ## 9. Open questions for review
 
 - Fractional-index positions vs integer positions with renumbering (Ratchet).
-- Whether `blocks.content` should keep BlockNote's inline shape (cheaper adapter, editor-coupled) or ours (§2.1).
+- **`blocks.content`: BlockNote's inline shape or ours** (Lead, Ratchet to weigh in). Both keep `blocks` as rows we own
+  (one source, positions, `task_id`, links); only the inline array inside one line differs.
+  - **Keep BlockNote's inline shape in jsonb: A3 is about 3 days.** No converter: the browser maps rows to editor
+    blocks by moving fields, and the inline array passes through unchanged.
+  - **Our own inline format: about 4.5–5 days.** It adds a two-way converter for text styles, links and `pageRef`
+    (about 1 day), plus a round-trip check over his real pages and every mark (about half a day to a day), and every
+    later inline feature has to extend the converter.
+  - **The difference is about 1.5–2 days.** It doesn't store product rules: an inline array is text with marks. The cost
+    is that a BlockNote change to its inline schema becomes a migration of `content` alone. Mitigations: a
+    `content_format` column (e.g. `bn-1`), so such a change can be converted per row and lazily; and all readers of
+    inline content (tags, line text, AI context) go through one module, as `inlineText` / `lineText` largely do today.
+  - **Engineering recommendation: keep BlockNote's inline shape, with `content_format`.** It saves less than the
+    2-day bar Lead set, so it is close; the deciding point is that it removes the riskiest new code from the biggest
+    step. If you take it, A3 drops to about 3 days and path A to about 2.5 weeks.
 - Whether `operations.inverse` needs a size cap (a large paste or delete).
 
 ## Appendix: every stored field
