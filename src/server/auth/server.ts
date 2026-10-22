@@ -1,5 +1,5 @@
 // Server side of sign-in: the gate's checks, the session cookie, and the /api/auth handlers.
-import { getCookie, appendResponseHeader } from '@tanstack/react-start/server'
+import { getCookie, appendResponseHeader, getRequestIP } from '@tanstack/react-start/server'
 import { z } from 'zod'
 import { postgresSql } from '../storage.ts'
 import { authConfig, authRequired } from './config.ts'
@@ -43,10 +43,20 @@ export function sameOrigin(request: Request): boolean {
   return origin !== null && origin === new URL(request.url).origin
 }
 
+/**
+ * With sign-in off (DAYTHREAD_AUTH=off, the Mac's 3000), only connections from this machine are served, whatever
+ * address the server was started on; anything through a proxy or from another device is refused (Bumblebee 71719581).
+ * Fails closed when the connection's address is unknown.
+ */
+export function fromThisMachine(request: Request, ip: string | undefined): boolean {
+  if (request.headers.has('x-forwarded-for') || request.headers.has('forwarded')) return false
+  return !!ip && /^(127\.\d+\.\d+\.\d+|::1|::ffff:127\.\d+\.\d+\.\d+)$/.test(ip)
+}
+
 /** A response that stops the request, or undefined to let it through. */
 export async function checkRequest(request: Request, handlerType: 'serverFn' | 'router'): Promise<Response | undefined> {
   if (!sameOrigin(request)) return new Response('Forbidden', { status: 403 })
-  if (!authRequired()) return undefined
+  if (!authRequired()) return fromThisMachine(request, getRequestIP()) ? undefined : new Response('Sign-in is off: this machine only', { status: 403 })
   const url = new URL(request.url)
   if (isPublic(url.pathname)) return undefined
   const session = await sessions().check(tokenOf(request))

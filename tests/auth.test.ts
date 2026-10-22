@@ -86,3 +86,12 @@ test('sign-in can be switched off only off a hosting platform', () => {
   assert.throws(() => authRequired({ DAYTHREAD_AUTH: 'off', VERCEL: '1' }), /refused on a hosting platform/)
   assert.equal(authRequired({ DAYTHREAD_AUTH: 'anything-else' }), true)
 })
+
+test('with sign-in off, only connections from this machine are served', async () => {
+  const { fromThisMachine } = await import('../src/server/auth/server.ts')
+  const req = (headers: Record<string, string> = {}) => new Request('http://127.0.0.1:3000/', { headers })
+  for (const ip of ['127.0.0.1', '127.1.2.3', '::1', '::ffff:127.0.0.1']) assert.equal(fromThisMachine(req(), ip), true, ip)
+  for (const ip of [undefined, '', '192.168.1.20', '10.0.0.5', '::ffff:192.168.1.20', '1127.0.0.1', '127.0.0.1.evil']) assert.equal(fromThisMachine(req(), ip), false, String(ip))
+  assert.equal(fromThisMachine(req({ 'x-forwarded-for': '127.0.0.1' }), '127.0.0.1'), false, 'behind a proxy')
+  assert.equal(fromThisMachine(req({ forwarded: 'for=1.2.3.4' }), '127.0.0.1'), false)
+})

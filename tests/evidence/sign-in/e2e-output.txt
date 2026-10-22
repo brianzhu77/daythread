@@ -1,0 +1,27 @@
+ok   signed out: a page redirects to sign-in with next (302 /sign-in?next=%2Ftasks%3Fx%3D1)
+ok   signed out: GET /_serverFn/anything is 401 (401)
+ok   signed out: POST /_serverFn/anything is 401 (401)
+ok   signed out: GET /api/other is 401 (401)
+ok   the sign-in screen opens signed out
+ok   a POST from another origin is 403
+ok   Sec-Fetch-Site cross-site is 403
+ok   a POST with neither Origin nor Sec-Fetch-Site is 403
+ok   unknown address, owner, owner in cooldown: identical replies (200 {"ok":true} | 200 {"ok":true} | 200 {"ok":true})
+ok   project email limit: "Couldn't send a code" for every address (503)
+ok   a 6th code request from one address within 10 min is refused (200,200,200,200,200,429)
+ok   wrong code: 401, no cookie
+ok   expired code: 401
+ok   a verified non-owner account: 401, no session (401)
+ok   owner code: session cookie, HttpOnly, SameSite=Lax, 30 days (daythread_session=<token>; Path=/; HttpOnly; SameSite=Lax; Max-Age=2591999)
+ok   the same code again: 401
+ok   one session stored, as a hash only
+ok   signed in: today opens (200)
+ok   signed in in the browser: today loads
+ok   sidebar: "{email} · Sign out"
+ok   the refused save sends the page to sign-in with next (http://127.0.0.1:3473/sign-in?next=%2F)
+ok   after signing in: back on today, and the typed text is saved (http://127.0.0.1:3473/)
+ok   no "Load latest" conflict
+ok   Sign out shows the sign-in screen
+ok   the signed-out token, replayed: 401 (401)
+ok   no session row left
+all passed
