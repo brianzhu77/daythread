@@ -45,7 +45,7 @@ There is no Docker on the Mac mini, and nothing gets installed on his machine:
 
 Each step gets its own branch from main and Ratchet's review. **C1–C3 are verified on PGlite and the CI Postgres
 container** (no credentials needed). **From C4 on, each step also runs on the staging preview** before the next starts,
-since staging needs Brian's credentials and sign-in exists from C4 (Ratchet 4efe3189). The old app on 3000 is never
+since staging needs Brian's credentials and sign-in exists from C4 (Ratchet 4efe3189). If his credentials arrive earlier, staging is used earlier; the date never depends on asking him sooner (Bumblebee d3b52122). The old app on 3000 is never
 touched until C6.
 
 | Step | What ships | Size |
