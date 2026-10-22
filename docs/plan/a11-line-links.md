@@ -1,6 +1,12 @@
 # A11 · link to a line — plan for review (revision 2)
 
-- Author: Roadbuster · revised 2026-10-22 · status: **plan, not built**. No code until Ratchet re-reviews (task #120).
+- Author: Roadbuster · revised 2026-10-22 (rev 3) · status: **plan, not built**. No code until Ratchet's #141 passes
+  (task #120).
+- **Rev 3 (Ratchet #141, Lead `00ff189d`, Bumblebee `7fa4d1fb`, `f9abca12`):** a renamed duplicate is a real copy (new
+  refIds and a new task) and derived ids are checked for freeness (§3); the shared cut note is the only move record (§4);
+  `seen` is stamped on first save and on custom headings, with a rule for entries without it (§2); task targets come
+  before trash, with the B16 case stated (§2); no server pruning, browser trim only (§2a); the rollback claim is
+  narrowed to what the evidence shows (§7).
 - Inputs: Brian `c5c9142e` #1 ("block-level reference like Notion"); Lead `4aa0a79b`, `5a74c8cd` (rollback degradation
   accepted), `2735c328` (bounds for #98 points 2–3), `a0c0a578` (this revision); Bumblebee `961b5f0f`, `565cad22`
   (task-link rules); Jazz `docs/design/line-links-states.md` @ 173fa93 (the design source).
@@ -40,11 +46,15 @@ jump, the plain URL and Linked from all call it, so they can't disagree.
 **Two durable lookups it relies on** (no format change; both live in the JSON document):
 
 - **A line's last holder.** `save-editor` already copies every block of the page's previous projection into
-  `editorBlockMetadata` and never prunes it. It now also stamps `seen: <revision>` on each copy. A block still on the page
-  keeps getting a new `seen`, and a removed one keeps the revision of the last save that still had it. So, for any
-  `lineId`: **live holder** = the page whose current projection has it. **Last holder** = the page whose metadata entry
-  for it has the highest `seen`, tie-broken by page id. This also gives a removed line's `taskId` (it's on the
-  `NoteBlock`).
+  `editorBlockMetadata` and never prunes it. A11 adds two things (Ratchet #141):
+  - **Every save also writes an entry for each block and custom heading of the *new* projection, stamped `seen: <this
+    save's revision>`.** So a line gets its stamp the first time it's saved, not one save later, and a custom heading
+    gets one too (as `heading:<id>`, beside its `[[` refs and #8's role). A block still on the page keeps getting a new
+    `seen`, and a removed one keeps the revision of the last save that had it.
+  - **Live holder** = the page whose current projection has the id. **Last holder** = the page whose entry for it has
+    the highest `seen`. **Entries without `seen`** (written by an older build, §7) rank below any with one. Among
+    those, the link's own `pageId` wins if it has an entry, then page id order. This also gives a removed line's
+    `taskId` (it's on the `NoteBlock`).
 - **A task's done day.** `Task` gains `doneOn: LocalDate | null`, set by every path that marks it done (the
   `task-status` command and the editor tick) and cleared when it's reopened or cancelled. Tasks done before A11 have no
   `doneOn`. For those it's derived as the latest `included` placement date, else `plannedOn`, else `lastPlannedOn`.
@@ -54,15 +64,21 @@ jump, the plain URL and Linked from all call it, so they can't disagree.
 1. **Which task, if any:** the link's `taskId`; else the URL's `task=` (§5); else, if `lineId` is a task row on its live
    holder, that row's task; else the `taskId` on its last-holder metadata entry. A task found this way is followed even
    after every row the link was made on has gone (Ratchet 1: "not merely while the original history row exists").
-2. **A task:** pick its row by the first rule that has a row on a non-trashed page:
-   1. **Open and planned:** the page of its `plannedOn` day.
-   2. **Done:** the page of its `doneOn` day (Bumblebee).
-   3. **No plan day** (Not today, paused) **or none of the above has a row:** the most recent page still showing a row
-      for it. That's daily pages by date, newest first, then document pages by the highest `seen` of the row's block,
-      tie-broken by page id. Never workspace array order (Ratchet 1).
-   4. Two rows for the task on that page (rare): the first in document order.
+2. **A task:** the **target is chosen first, and trash applies after** (Ratchet #141, Bumblebee `f9abca12`):
+   1. **Open and planned:** the page of its `plannedOn` day, if it has a row for the task.
+   2. **Done:** the page of its `doneOn` day, if it has a row (Bumblebee).
+   3. Otherwise (no plan day, i.e. Not today or paused, or no row there): **the newest live row**. That's daily pages by
+      date, newest first, then document pages by the highest `seen` of the row's block, then page id. Never workspace
+      array order (Ratchet 1). If **only trashed rows** exist → **trashed**, naming the newest trashed page by the same
+      order.
+   4. Two rows for the task on one page (rare): the first in document order.
    → **live**, or **moved** when that page isn't `pageId`. A cancelled task resolves like a done one, using its last
    included day.
+   - **Day pages can't be trashed today** (A4 is document pages only), so a plan or done target is never trashed now.
+     **When B16 (deleting a day) lands:** a trashed plan or done day shows **trashed** for that day, never a silent jump
+     to an older row, because that's where he last put the task. Stated now so B16 doesn't decide it by accident.
+   - **Examples:** only trashed rows → "trashed · {newest trashed page}". Plan day trashed while a history row is live
+     (only possible after B16) → trashed for the plan day, not the history row.
 3. **Not a task:** the live holder of `lineId`, which is a block **or a custom heading** (a `Section` whose kind is
    `custom`; template role headings are never targets, Ratchet 5) → **live**, or **moved** when it isn't `pageId`.
 4. **Holder state applies even when the line is found (Ratchet 4):** if the resolved page is trashed → **trashed**
@@ -80,35 +96,42 @@ projection, never stored editor JSON or metadata (Ratchet 5). A removed line sho
 - **Today, before A11:** `editorBlockMetadata` is already never pruned, and it holds a copy of **every block a page has
   ever had** (each save copies the whole previous projection), live ones included. **It goes to the browser in full**:
   B26's `forBrowser` drops only receipts and the undo copy. The browser reads one thing from it, the `paste:` records
-  (`page-editor.tsx` "first made"). A11 adds one number (`seen`) per entry. So the growth is pre-existing, and A11 is
-  where it gets bounded.
-- **Server, pruned by links, not by age (Bumblebee):** at each save of a page, a metadata entry for a block **no longer
-  on that page** is dropped unless something still needs it:
-  - a line link (`refs[].lineId`, any page) points at that block id;
-  - it's a `paste:` record, a `heading:` entry (refs, role), a brought copy (`sourcePageId`/`sourceBlockId`, which
-    `wasBrought` relies on), or it carries `refs` or a card's `at` (B15/A9a times reused by Undo and moves);
-  - it was removed **in this save or the one before**, so Undo and a cut followed by a paste still find it.
-  Entries for blocks still on the page are kept. They're needed as the "previous" copy, but they're the page's own size,
-  not growth. So retained removed entries are bounded by his links and the kinds above, not by his deletions.
+  (`page-editor.tsx` "first made"). A11 adds one number (`seen`) per entry. So the growth is pre-existing, and A11
+  bounds what the browser gets.
+- **Server: nothing is pruned (Ratchet #141, Bumblebee `7fa4d1fb`).** Entries keep other jobs: `wasBrought` uses them
+  so a Bring-to-today line he deleted isn't offered again, and B15/A9a reuse their times on Undo and moves. So A11 drops
+  no entry. Server-side growth stays what it is today, roughly the text he has ever written, in one row. That's
+  measured in §8, and it's a separate decision if it ever matters.
 - **Browser, trimmed like B26:** `forBrowser` sends `paste:` records and **only** the removed-line entries that a line
   link or URL points at, slimmed to `{ id, seen, taskId? }`. That's what `resolveLine` needs on the client. Everything
   else stays on the server. The load size stays at today's ~49 KB plus a few bytes per line link.
-- **What pruning costs (Bumblebee, Jazz):** a URL he pasted outside Daythread, to a line later deleted with no link to it
-  inside the app, opens the URL's own page at the top with "That line was removed" (§2 step 5). Following a line that
-  moved to another page before it was deleted is the only thing lost.
-- **Checks:** delete lines with and without links, save twice, and confirm the right entries are kept or dropped;
-  confirm Undo two saves later still restores B15 card times and `[[` link times; Bring to today is not re-offered for a
-  deleted copy; the browser payload carries no unlinked entries; payload size before and after on a copy of his data.
+- **What the trim costs:** none for links inside the app. A URL he pasted outside Daythread, to a line later deleted, is
+  resolved by the server when he opens it (the jump asks the server), so it still finds the last holder.
+- **Checks:** the browser payload carries no metadata beyond `paste:` records and the linked removed-line stubs; payload
+  size before and after on a copy of his data; the server row's metadata size on that copy; Bring to today still not
+  re-offered for a deleted copy; Undo two saves later still restores B15 card times and `[[` link times.
 
 ## 3. The server is the only authority on line-id uniqueness (Ratchet 2, Lead 2735c328)
 
 - **Rule, in `save-editor`, under the workspace lock:** if a block id (or custom-heading id) in the incoming document is
-  **already live on another page**, trashed pages included, the server gives it a **new id** before projecting. The new
-  id is derived (`sha256(oldId + pageId)` as a UUID), so a client that misses the rename and saves again gets the same
-  answer, and nothing ever flips back and forth. The page that already holds the id keeps it, so the first saver wins.
-- **The save reply carries `renamedIds: { old: new }`.** The editor applies it to its own blocks (a `setNodeMarkup` on the
-  block container's `id`), outside its own Undo history, and restashes the draft. A link to the old id now resolves to
-  wherever the original lives, which is the point.
+  **already live on another page**, trashed pages included, the server gives it a **new id** before projecting. The page
+  that already holds the id keeps it, so the first saver wins.
+- **The new id is derived and checked:** candidate *n* = `sha256(oldId + pageId + n)` as a UUID, for n = 0, 1, 2…. The
+  first candidate that is **free** (not live on any other page, and not used anywhere in the incoming document) is
+  taken, all in the same locked pass (Ratchet #141: A holds x; B's x becomes d; d is cut to C; B's old draft saves x
+  again and would get d again, so it gets the next free candidate). A client that misses the rename and saves again gets
+  the same answer, so nothing flips back and forth.
+- **A renamed block becomes a real copy, not a partial move (Ratchet #141 ①):**
+  - each `pageRef` inside it gets a derived new `refId` (same scheme), so it's a new reference with its own B15 time;
+  - **a renamed task row becomes a new task**: its `taskId` prop becomes `editor-task:<new id>` (role `reference`, no
+    plan date), exactly what the paste handler gives a copy today, and the normal create path makes the task. The
+    original task stays with the original row.
+  - So "source Undo after a move" brings the line back as a **copy** (a new task, if it was a task row), and the moved
+    line keeps the identity. That's honest: the line exists twice, the identity once.
+- **The save reply carries `renamed: { blocks: { old: new }, refs: { old: new }, tasks: { old: new } }`.** The editor
+  applies it to its own nodes (`setNodeMarkup` on the block container's `id` and the inline nodes' props), outside Undo
+  history, and restashes the draft. A link to the old id now resolves to wherever the original lives, which is the
+  point.
 - **What it settles:**
   - A two-tab paste race, a delayed source save, or a reloaded source draft: whichever saves second gets a new id. There
     are never two lines with one id, and no client-side snapshot check (rev 1's `latestWorkspace` check is dropped).
@@ -117,10 +140,9 @@ projection, never stored editor JSON or metadata (Ratchet 5). A removed line sho
   - A failed source save: the line stays on the source with its id, and the destination's copy is renamed when it
     saves. That's an honest **copy**, and the link stays on the source. Rev 1's "never on two pages" claim is
     withdrawn. The text can appear on both pages; the identity can't.
-- **Task rows:** a task's identity is its `taskId`, not the row's block id, and tasks legitimately have rows on several
-  pages (history rows). A renamed task row keeps its `taskId`, exactly as today's cut-and-paste move does. A pasted
-  **copy** already gets a new task (`editor-task:<newId>`) from the paste handler, and that's unchanged. So a renamed
-  row never turns a copy into a second identity-preserving task (Ratchet 2).
+- **Task rows that aren't renamed:** a task's identity is its `taskId`, and tasks legitimately have rows on several
+  pages (history rows). A cut-and-paste **move** keeps its `taskId`, as today. A client-side **copy** already gets a new
+  task from the paste handler. Only a server rename turns a kept `taskId` into a copy (above).
 - **Size:** the rename pass, plus the reply field and the editor applying it, is about ½ day with tests.
 
 ## 4. Cut and paste keeps ids only for whole lines, once, within 2 minutes (Ratchet 3, Lead 2735c328)
@@ -134,10 +156,12 @@ then gives every block a new id. The change:
    ids**, as do partial task titles (already turned into paragraphs). Whole blocks keep their ids, nested children
    included. A handle selection (whole rows) keeps all of them.
 2. **The note gets a time and is consumed once.** The note is `{ blocks, at, token }`. A paste is a move only if
-   `now − at ≤ 2 min` and the note is still in `localStorage` (or this tab's token set). The first such paste removes it
-   from both. An expired, reused or missing note pastes as a **copy**, with fresh block ids and fresh `[[` refIds.
-3. **Cross-tab disagreement is allowed:** tab A's in-memory token can outlive tab B's removal of the storage note. Both
-   pastes then try to keep the ids, and §3 renames the second save. That's correct, so no cross-tab locking.
+   `now − at ≤ 2 min` **and the note is still in `localStorage`**. That shared note is the one record of "not yet
+   pasted"; this tab's in-memory token counts only when `localStorage` is unavailable. The first such paste removes the
+   note. An expired, reused or missing note pastes as a **copy**, with fresh block ids, fresh `[[` refIds and new tasks.
+   So the original tab's stale token is a copy, not a second move (Ratchet #141 ①).
+3. **Cross-tab races left:** two tabs pasting within the same moment can both see the note. The server then renames
+   the second save into a real copy (§3), which is the right result. No cross-tab locking.
 4. **On cut, save the source page right away** (`registerEditorFlush`), now that save-on-leave has shipped, so the
    source normally saves first.
 5. External clipboard behaviour is unchanged: `text/plain` and `text/html` are written as now.
@@ -151,9 +175,10 @@ then gives every block a new id. The change:
 - **Paste:** `pasteHandler` checks the line type first, then a `text/plain` that is **this app's own origin** with
   `page=` and `block=`, and inserts a line link at the caret. Both checks run before A2's link paste, so an in-app URL
   never becomes a link card. Other hosts, unknown params and malformed URLs paste as they do today.
-- **Opening the URL** (from another app, or a reload): the `?block=` jump asks `resolveLine` with the URL's page, block
-  and task, so a plain URL lands exactly where the chip does. A removed line opens its last holder, at the top, with
-  "That line was removed".
+- **Opening the URL** (from another app, or a reload): when the block isn't on the URL's page, the `?block=` jump calls a
+  small server function that runs the same `resolveLine` on the full workspace. The browser only carries metadata stubs
+  for lines linked inside the app (§2a), so a plain URL still lands exactly where the chip would, last holder included.
+  A removed line opens its last holder, at the top, with "That line was removed".
 
 ## 6. Opening, Linked from, trash
 
@@ -176,10 +201,16 @@ then gives every block a new id. The change:
   - The old build's first save of that page **drops `lineId` and `taskId` from both links**: their props are then exactly
     `newTitle+pageId+refId`, read from the saved editor JSON. Both links remain as page links, as Lead accepted in
     `5a74c8cd`. (The check's earlier `taskIdPropAfterOldSave: true` was the task **row's** own `taskId`, a different
-    field. The check now reads the links' props directly.) Lead repeated this on Supabase with the same result. Rolling forward again doesn't bring the line part back. The rollback note to
-    Brian says so, plus "reload".
-  - The old build **keeps** `doneOn` and the `seen` stamps through its save. So after rolling forward, the resolver
-    still has them.
+    field. The check now reads the links' props directly.) Lead repeated the links part on Supabase with the same result. Rolling forward again doesn't bring the line part back.
+    The rollback note to Brian says so, plus "reload".
+  - **`seen`, narrowed (Ratchet #141 ②):** the old build keeps `doneOn`. It keeps `seen` **only on entries for lines
+    already removed** (the probe keeps 7). Its save **rewrites the entries for the page's live blocks without `seen`**
+    (all 3 lost it). So after rolling forward:
+    - live lines get `seen` again at the A11 build's first save of that page;
+    - lines removed **while rolled back** have entries without `seen`. The resolver ranks those below stamped ones
+      (§2), so their last holder can be imprecise only when the same id has entries on several pages, which takes a
+      move during the rollback window. The rollback note can say that line links made before the rollback may point at
+      an older page for lines moved and deleted while it was rolled back.
   - Schemas dropped afterwards. Lead can repeat this on Supabase, on a copy of his row, as for #6.
 
 ## 8. Checks before the candidate (copy of his data, 1280 / 390 / 390 touch)

@@ -28,8 +28,15 @@ doc.splice(notes + 1, 0,
 ws = await run({ type: 'save-editor', pageId: day.id, expectedContent: pageContentKey(dayNow), document: JSON.stringify(doc), today })
 // The rest of what the A11 build adds lives only in the JSON document: a done day on tasks, a `seen` revision on
 // retained line metadata, lineId/taskId on refs. Written here as the new build would, then left to the old build.
-await sql.unsafe(`update ${schema}.workspace set data = (jsonb_set(jsonb_set(data::jsonb,
-  '{tasks,0,doneOn}', to_jsonb($1::text)), '{pages,0,editorBlockMetadata}', coalesce(data::jsonb #> '{pages,0,editorBlockMetadata}', '{}'::jsonb) || jsonb_build_object('a11-probe', jsonb_build_object('id','a11-probe','kind','paragraph','text','probe','seen', 7))))::json where id = 1`, [today])
+// `seen` on EVERY entry of the day page's metadata (its live blocks and a removed-line probe), as the A11 build writes
+// it, so the old build's effect on both kinds shows (Ratchet #141 ②).
+const cur = JSON.parse((await sql.unsafe(`select data::text as d from ${schema}.workspace`))[0]!.d) as Workspace
+const dayPage = cur.pages.find(p => p.id === day.id)!
+const meta = Object.fromEntries(Object.entries(dayPage.editorBlockMetadata ?? {}).map(([k, v]) => [k, { ...v, seen: 6 }]))
+meta['a11-probe'] = { id: 'a11-probe', kind: 'paragraph', text: 'probe', seen: 7 } as never
+dayPage.editorBlockMetadata = meta as never
+const t0 = cur.tasks.find(t => t.id === task.id)! as unknown as Record<string, unknown>; t0.doneOn = today
+await sql.unsafe(`update ${schema}.workspace set data = $1::text::json where id = 1`, [JSON.stringify(cur)])
 const saved = (await repo.load()).pages.find(p => p.id === day.id)!
 console.log(JSON.stringify({ today, dayId: day.id, linesStored: (saved.editorJSON!.match(/"lineId"/g) ?? []).length, taskIdStored: saved.editorJSON!.includes('"taskId":"' + task.id), refs: saved.sections.flatMap(s => s.blocks).filter(b => b.refs?.length).map(b => b.refs!.map(r => r.pageId)) }))
 await sql.end()

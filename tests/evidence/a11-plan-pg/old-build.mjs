@@ -20,6 +20,11 @@ console.log(JSON.stringify({
   // The links' own props, read from the saved editor JSON (a task row's own `taskId` prop is a different field).
   linkPropsAfterOldSave: (function walk(nodes, out = []) { for (const n of nodes ?? []) { for (const c of Array.isArray(n.content) ? n.content : []) if (c?.type === 'pageRef') out.push(Object.keys(c.props ?? {}).sort().join('+')); walk(n.children, out) } return out })(JSON.parse(ej)),
   lineIdAfterOldSave: (ej.match(/"lineId"/g) ?? []).length, linksStillThere: (ej.match(/"pageRef"/g) ?? []).length,
-  doneOnKept: d.tasks.some(t => 'doneOn' in t), seenProbeKept: !!day.editorBlockMetadata?.['a11-probe'], errors,
+  doneOnKept: d.tasks.some(t => 'doneOn' in t),
+  // `seen` on the removed-line probe vs on entries for blocks still on the page, after the old build's save.
+  seenOnRemovedProbe: day.editorBlockMetadata?.['a11-probe']?.seen ?? null,
+  liveEntriesWithSeen: Object.entries(day.editorBlockMetadata ?? {}).filter(([k, v]) => k !== 'a11-probe' && !k.includes(':') && v.seen !== undefined).length,
+  liveEntriesWithoutSeen: Object.entries(day.editorBlockMetadata ?? {}).filter(([k, v]) => k !== 'a11-probe' && !k.includes(':') && v.seen === undefined).length,
+  errors,
 }))
 await b.close(); await sql.end()
