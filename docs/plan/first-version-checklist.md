@@ -123,7 +123,7 @@ N = D1–D6 + A5 + A1a, A1b, A3 + A4 + A6a + A8 = 13.
 | B25 | Save on leave: edits typed in the last moment before switching page (about 450ms) were never saved, and a cut-and-paste across pages could leave the line on both pages (Roadbuster c509e586). Leaving a page now saves what was typed first, even if the save is slow; a refused save (other tab, offline) keeps the draft with Load latest (B23). A page still holding a "Recovered unsaved draft" saves it on open if the page hasn't changed since, else Load latest (Bumblebee 565cad22). Shipped alone, ahead of A11 (Lead). Live 2026-10-22 as 9fd8f80 (from dfd5f7d; backup 2026-10-22-before-9fd8f80, rollback = build 173fa93 + restart, then tell Brian to reload; no migration; Ratchet #99, docs/reviews/save-on-leave-ratchet.md, 7741c28). Brian told f512ab07: his data was checked and not affected | Roadbuster c509e586; Lead f512ab07, ae99bfe1 | built |
 
 
-## S. Storage cleanup and move to Supabase (tracked, not counted)
+## S. New storage on Supabase (tracked, not counted)
 
 Brian 6148a202 ("switch storage to Supabase, review the whole data structure, no business logic in the data"),
 d3a9c476 (goal: use it from anywhere, without his Mac), d0846999 ("iterate until yes; generalize like Notion").
@@ -138,7 +138,7 @@ wait (Lead f1533bee). A0 runs in Brian's account at S5; we don't create third-pa
 today's SQLite file stays as an archive (not deleted). Brian was told that anything written in the current app before the switch
 won't carry over. The stepwise local cleanup existed only to carry his data across, so **S1 is stopped and Ratchet #102 is
 superseded**. Roadbuster re-plans as a direct build of the approved general core (8a07bc4 §4) on Postgres, with no import.
-The rows below are kept for the record and will be replaced by the new steps.
+The new steps are C1–C7 below.
 **Hosting (Brian e8b619b8, Lead 92506a6e): Vercel, not Fly.** Model runs after the response use `waitUntil` on the durable
 job record; Fluid compute in `pdx1` next to Supabase Oregon; transaction-mode pooler; the S5 speed gate still decides. Brian
 provides credentials for local and staging; Roadbuster prepares `.env.example`, CI (GitHub Actions) and the Vercel target,
@@ -146,20 +146,28 @@ Ratchet does a narrow check, and the Lead sends Brian the credential list. Done 
 **Archive at the switch (Lead 92506a6e, Bumblebee ad163028):** today's app stays on 3000 behind a read-only flag,
 "Archived · read only", so he can still read Oct 13 to the switch. It moves no data. It's a small step in the re-plan.
 
-| ID | Step (plan id) | Size | Status |
-| --- | --- | --- | --- |
-| S0 | Latency spike in his own Supabase/Fly account (A0). Moved to S5 (Lead f1533bee); meanwhile a round-trip check from his Mac to Fly `sjc` and AWS us-west-1, times requests per screen, against the budget (day open < 300 ms, save < 200 ms). Done 2026-10-22 (Roadbuster f1710055, estimate from measured round trips, not a live test): day open about 100 ms, save about 60–80 ms, first visit adds about 2 round trips; suggests Oregon (Supabase + Fly `sea`/`pdx`) over California, about 16 ms less per request, to confirm at S5 | half a day | moved to S5; estimate within budget |
-| S1 | Per-aggregate reads, one workspace lock per command, contract suite v2, still on SQLite (A1) | 4–5 days | stopped (Lead 81c582ae) |
-| S2 | `operations` with typed undo, legacy receipts imported, `brought_from` / `copied_from` relations (A2) | 4–5 days | missing |
-| S3 | `blocks` as the only content source, versioned BlockNote inline `content`, `links` / `block_tags` indexes (A3) | 3 days | missing |
-| S4 | General core: collections and properties as data, projection layer, `ref` blocks, `history`, templates as pages; lossless import of his data (A4) | 7–8 days | missing |
-| S5 | Postgres adapter, sign-in by emailed code, auth gate with server-only writes and RLS (A5); latency check in his account | 4–5 days | missing |
-| S6 | Cutover and hosting on Fly next to Supabase: fence, import, localhost-draft handoff, 14-day rollback with export, durable model jobs (A6) | 4–5 days | missing |
-| S7 | Offline first version after cutover: read cache, typing into the draft, capture queue, one status (A7) | 5–6 days | missing |
+**Current plan (passed Ratchet #105, 2026-10-22):** `docs/plan/core-build.md` on docs/core-build 3d87017 (Roadbuster),
+report `docs/reviews/core-build-ratchet.md` 31e194e. Direct build of the general core on Postgres, starting empty, no import.
+Each step on its own branch; C1–C3 pass on PGlite plus the CI Postgres container, staging is the gate from C4 (or earlier if
+his credentials arrive sooner; the date never depends on asking him). 3000 is untouched until C6. No step grows without the
+Lead's say; at the end of C4, Roadbuster reports whether C6 can come earlier. **Target: C6 in the week of Nov 16–20, Nov 24
+at the latest**, if his staging credentials are in by about Nov 5 (Roadbuster 487f00c0).
 
-Success checks: after S6, his data round-trips exactly, the screens are unchanged, day open and save meet the budget; in
+| ID | Step | Size | Status |
+| --- | --- | --- | --- |
+| C1 | Schema, migrations, restricted role and RLS, seed at first sign-in (collections, system properties, day template; Jazz `empty-start-states.md` §1) | 4–5 days | missing |
+| C2 | Postgres repository and projection (patches of known fields only), workspace lock, per-row versions, contract suite v2 (incl. Ratchet's #102 named rows and capture start tokens), alignment fixture `scripts/core-fixtures.ts` | 5–6 days | missing |
+| C3 | `operations` and Undo from before-images (restored content gets a new version), `history` independent of prunable inverses; a resend after a lost reply shows "Saved", not a conflict (Bumblebee ab1b4b0a) | 3 days | missing |
+| C4 | Sign-in by emailed code (Jazz's screens; a non-owner sees the same flow until the code fails), auth gate with server-only writes and RLS; staging gate starts | 4–5 days | missing |
+| C5 | Vercel runtime (durable jobs, `waitUntil`, cron checked against his plan), empty states, "Old notes ↗" row, speed and payload gates on staging | 3–4 days | missing |
+| C6 | Switch: stop and drain today's model work, then turn 3000 into the read-only archive ("Archived · read only", banner link to the new app); late callbacks refused | 1 day | missing |
+| C7 | Offline first version after launch (read cache, typing into the draft, capture queue, one status); scope re-checked against real phone use | 5–6 days | later |
+
+Superseded: the S0–S7 rows (stepwise local cleanup with migration), stopped by Brian b15c12ac. Kept in git history (main a4bd854).
+
+Success checks: after C6, the screens are unchanged and day open and save meet the budget; in
 the first 7 days after cutover he opens Daythread on his phone away from home at least 3 times and no text is lost
-(Bumblebee 24f1324a). S7's scope is re-checked against real phone use after the move (Lead 0dde676a).
+(Bumblebee 24f1324a). C7's scope is re-checked against real phone use after the switch (Lead 0dde676a).
 
 ## C. Open questions for Brian
 
