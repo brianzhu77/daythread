@@ -1,0 +1,23 @@
+1280 past initially hidden 4
+1280 past heading ↓ { text: '', hidden: false, gap: false, off: 0 }
+1280 wrapped first line ↓ {
+  text: 'A long wrapped task with enough words to occupy multiple visual lines on a narrow screen. A long wrapped task with enough words to occupy multiple visual lines on a narrow screen. A long wrapped task with enough words to occupy multiple visual lines on a narrow screen. A long wrapped task with enough words to occupy multiple visual lines on a narrow screen. ',
+  hidden: false,
+  gap: false,
+  off: 86
+}
+1280 wrapped bottom ↓ { text: 'Following row', hidden: false, gap: false, off: 13 }
+1280 wrapped return ↑ stays on last visual line 342
+1280 synthetic composition does not move selection { same: true, prevented: false }
+390 past initially hidden 4
+390 past heading ↓ { text: '', hidden: false, gap: false, off: 0 }
+390 wrapped first line ↓ {
+  text: 'A long wrapped task with enough words to occupy multiple visual lines on a narrow screen. A long wrapped task with enough words to occupy multiple visual lines on a narrow screen. A long wrapped task with enough words to occupy multiple visual lines on a narrow screen. A long wrapped task with enough words to occupy multiple visual lines on a narrow screen. ',
+  hidden: false,
+  gap: false,
+  off: 35
+}
+390 wrapped bottom ↓ { text: 'Following row', hidden: false, gap: false, off: 13 }
+390 wrapped return ↑ stays on last visual line 358
+390 synthetic composition does not move selection { same: true, prevented: false }
+PASS extra past-day and wrapped-line checks

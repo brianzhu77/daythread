@@ -211,7 +211,13 @@ Brian signed in 17:14:24Z; `workspace.user_id` = his only `auth.users` row; sign
 model key, `OWNER_EMAIL`); signed-out smoke + Ratchet's probes pass on the public domain with no bypass. HeroUI tokens
 d67f586 shipped as c33c55c (8 identical, 12 colour-only ≤10/255, alignment 310/0/0); rollback
 `.daythread-local/backups/2026-10-22-before-heroui/dist`. Deploys go to 3000, `live` (kept for a while) and production;
-production deploys only by the Lead, no preview promotes. Open: stray line while editing a to-do (Roadbuster).
+production deploys only by the Lead, no preview promotes.
+**Stray line fix LIVE 2026-10-22 21:25Z: main 89fe761** (PR #7, merge 30feae8 of 5af3522 + Ratchet 8b494b2; Brian 967fd04b;
+Lead 258c6881). No stray line beside task rows, ↑/↓ one press per row, past day's hidden empty rows skipped; Ratchet #115
+passed, 339 pass, alignment 310/0/0. On 3000, `live` and production; Brian told. Rollback
+`.daythread-local/backups/2026-10-22-before-stray-line/dist`. Next (Roadbuster, same reviewers): 1) Delete at a section's
+end before a heading does nothing, ⌘Z restores the heading with its role; 2) a past day opens with no cursor (desktop
+revealed an empty Top 3 row on open), done = at 1280 a past day opened without clicking shows no empty rows.
 **Success check starts now (7 days from 2026-10-22):** he opens Daythread on his phone away from home at least 3 times and
 no text is lost (usage read Oct 25, reminder 22f37a86).
 Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
