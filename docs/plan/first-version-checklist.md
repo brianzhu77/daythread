@@ -147,7 +147,13 @@ Ratchet does a narrow check, and the Lead sends Brian the credential list. Done 
 **Archive at the switch (Lead 92506a6e, Bumblebee ad163028):** today's app stays on 3000 behind a read-only flag,
 "Archived · read only", so he can still read Oct 13 to the switch. It moves no data. It's a small step in the re-plan.
 
-**Current plan (passed Ratchet #105, 2026-10-22):** `docs/plan/core-build.md` on docs/core-build 3d87017 (Roadbuster),
+**STOPPED 2026-10-22 05:22Z (Lead be6cc282, Brian a9c4aa01/2fc19345): C1–C7 and the Nov 16–20 target below are stopped;
+C1/C2 branches parked as they are.** Now: 3000 switches to Supabase directly, starting empty, no data moved, same screens
+(Roadbuster `feat/pg-now`: current storage on Postgres, `daythread` schema with RLS and no policies, `DAYTHREAD_STORAGE=postgres`;
+Ratchet fast review; Lead connects at deploy). The SQLite file stays untouched as a backup; no archive screen. Done: empty today
+on 3000, typed text survives a reload, the model works, nothing new written to the local file. Jazz's two empty-start lines follow it.
+
+**Previous plan (passed Ratchet #105, 2026-10-22, now stopped):** `docs/plan/core-build.md` on docs/core-build 3d87017 (Roadbuster),
 report `docs/reviews/core-build-ratchet.md` 31e194e. Direct build of the general core on Postgres, starting empty, no import.
 Each step on its own branch; C1–C3 pass on PGlite plus the CI Postgres container, staging is the gate from C4 (or earlier if
 his credentials arrive sooner; the date never depends on asking him). 3000 is untouched until C6. No step grows without the
