@@ -10,6 +10,11 @@ export const dayTemplate: readonly { kind: SectionKind; title: string; rows: rea
   { kind: 'notes', title: 'Notes', rows: ['bullet'] },
 ]
 
+/** A day page's template heading is `<page id>:<kind>`, the role it was made with; undefined for any other heading. */
+export function templateKind(page: Page, sectionId: string): SectionKind | undefined {
+  return page.type === 'daily' ? dayTemplate.find(t => sectionId === `${page.id}:${t.kind}`)?.kind : undefined
+}
+
 export interface EditorNode {
   id: string
   type: string
@@ -109,6 +114,7 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
     return { refId: ref.refId, pageId: ref.pageId, at: known?.at ?? revision, title, ...(!target && (ref.newTitle || known?.pending) ? { pending: true } : {}) }
   })
   let current: Section | undefined
+  const restored: [Section, SectionKind][] = []
   function visit(node: EditorNode) {
     if (!node.id || ids.has(node.id)) throw new Error('Duplicate editor block identity')
     ids.add(node.id)
@@ -116,8 +122,11 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
       // A heading holds `[[` links like any line: checked, timed and stored on the section.
       const refs = refsOf(node)
       const title = refs.length ? lineText(node.content, ref => refs.find(r => r.refId === ref.refId)?.title ?? '') : inlineText(node.content)
-      current = { id: node.id, kind: page.sections.find(s => s.id === node.id)?.kind ?? 'custom', title, blocks: [], ...(refs.length ? { refs } : {}) }
+      const stored = page.sections.find(s => s.id === node.id)?.kind
+      current = { id: node.id, kind: stored ?? 'custom', title, blocks: [], ...(refs.length ? { refs } : {}) }
       sections.push(current)
+      const role = (stored ? undefined : page.editorBlockMetadata?.[`heading:${node.id}`]?.sectionKind) ?? (stored === 'custom' || !stored ? templateKind(page, node.id) : undefined)
+      if (role && role !== 'custom') restored.push([current, role])
     } else {
       if (!current) { current = { id: `intro:${page.id}`, kind: 'custom', title: '', blocks: [] }; sections.push(current) }
       if (node.type === 'pageLink') {
@@ -159,5 +168,9 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
     node.children?.forEach(visit)
   }
   nodes.forEach(visit)
+  // A heading's role comes back (⌘Z or cut and paste via its metadata, or a day page's template heading stored as
+  // custom by the old one-key merge, Brian's Other 2026-10-22) only where no section on the page has that role yet,
+  // so a page never gets two Other sections (Ratchet #116).
+  for (const [section, role] of restored) if (!sections.some(s => s.kind === role)) section.kind = role
   return sections
 }

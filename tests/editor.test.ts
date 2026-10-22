@@ -114,3 +114,67 @@ test('text added to Notes goes above its empty template bullet', () => {
   ws = run(ws, { type: 'add-text', pageId: p.id, sectionId: notes.id, text: 'Captured thought' })
   assert.deepEqual(ws.pages[0]!.sections.find(s => s.kind === 'notes')!.blocks.map(b => b.text), ['Captured thought', ''])
 })
+test('a role heading that comes back after being removed is that section again, not a custom one', () => {
+  let ws = fixture(); const p = ws.pages[0]!, doc = editorSeed(p, ws)
+  const other = p.sections.find(s => s.kind === 'other')!
+  const kinds = () => ws.pages[0]!.sections.map(s => s.kind).join(',')
+  // Deleted (Delete merged it into the line above, or a selection across it), then ⌘Z.
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify(doc.filter(n => n.id !== other.id)) })
+  assert.equal(kinds().includes('other'), false)
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify(doc) })
+  assert.equal(ws.pages[0]!.sections.find(s => s.id === other.id)?.kind, 'other')
+  // Turned into a plain line (Backspace at its start), then ⌘Z.
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify(doc.map(n => n.id === other.id ? { ...n, type: 'paragraph', props: {} } : n)) })
+  assert.equal(kinds().includes('other'), false)
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify(doc) })
+  assert.equal(ws.pages[0]!.sections.find(s => s.id === other.id)?.kind, 'other')
+  // A heading he adds himself stays custom.
+  const mine = { id: 'my-heading', type: 'heading', props: { level: 2 }, content: [{ type: 'text', text: 'Reading', styles: {} }], children: [] }
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify([...doc, mine]) })
+  assert.equal(ws.pages[0]!.sections.find(s => s.id === 'my-heading')?.kind, 'custom')
+})
+test('a template heading stored as custom by the old one-key merge gets its role back on the next save', () => {
+  let ws = fixture(); const p = ws.pages[0]!, doc = editorSeed(p, ws)
+  const other = p.sections.find(s => s.kind === 'other')!
+  // Brian's page at revision 64: the heading kept its id `<page>:other` but was saved as custom, with no metadata.
+  ws = structuredClone(ws); ws.pages[0]!.sections.find(s => s.id === other.id)!.kind = 'custom'
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify(doc) })
+  assert.equal(ws.pages[0]!.sections.find(s => s.id === other.id)?.kind, 'other')
+  assert.equal(ws.pages[0]!.sections.filter(s => s.kind === 'other').length, 1)
+  // If another section already has the role, the template heading stays custom: never two Other sections.
+  ws = structuredClone(ws); const page = ws.pages[0]!
+  page.sections.find(s => s.id === other.id)!.kind = 'custom'
+  const extra = { id: 'other-again', type: 'heading', props: { level: 2 }, content: [{ type: 'text', text: 'TODO - Other', styles: {} }], children: [] }
+  page.sections.push({ id: 'other-again', kind: 'other', title: 'TODO - Other', blocks: [] })
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(page), document: JSON.stringify([...doc, extra]) })
+  assert.equal(ws.pages[0]!.sections.find(s => s.id === other.id)?.kind, 'custom')
+  assert.deepEqual(ws.pages[0]!.sections.filter(s => s.kind === 'other').map(s => s.id), ['other-again'])
+})
+test('planning into a template section stored as custom repairs it instead of adding a second heading', () => {
+  let ws = fixture(); const p = ws.pages[0]!
+  const other = p.sections.find(s => s.kind === 'other')!
+  ws = run(ws, { type: 'add-task', pageId: p.id, sectionId: p.sections[0]!.id, title: 'Reply comments' })
+  const task = ws.tasks.find(t => t.title === 'Reply comments')!
+  ws = structuredClone(ws); ws.pages[0]!.sections.find(s => s.id === other.id)!.kind = 'custom'
+  const before = ws.pages[0]!.sections.length
+  ws = run(ws, { type: 'plan-tasks', date: p.date!, items: [{ taskId: task.id, section: 'other' }] })
+  const page = ws.pages[0]!
+  assert.equal(page.sections.length, before)
+  assert.deepEqual(page.sections.filter(s => s.kind === 'other').map(s => s.id), [other.id])
+})
+test('a role heading brought back while the page already has that role stays custom (Ratchet #116)', () => {
+  let ws = fixture(); const p = ws.pages[0]!, doc = editorSeed(p, ws)
+  const other = p.sections.find(s => s.kind === 'other')!
+  ws = run(ws, { type: 'add-task', pageId: p.id, sectionId: p.sections[0]!.id, title: 'Reply comments' })
+  const task = ws.tasks.find(t => t.title === 'Reply comments')!
+  // Other deleted and saved (its metadata remembers the role), then a task planned into Other makes a new Other.
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify(editorSeed(ws.pages[0]!, ws).filter(n => n.id !== other.id)) })
+  ws = run(ws, { type: 'plan-tasks', date: p.date!, items: [{ taskId: task.id, section: 'other' }] })
+  const fresh = ws.pages[0]!.sections.find(s => s.kind === 'other')!
+  assert.notEqual(fresh.id, other.id)
+  // ⌘Z brings the old heading back: its text returns, but the role stays with the section that has it.
+  const original = doc.find(n => n.id === other.id)!
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify([...editorSeed(ws.pages[0]!, ws), original]) })
+  assert.deepEqual(ws.pages[0]!.sections.filter(s => s.kind === 'other').map(s => s.id), [fresh.id])
+  assert.equal(ws.pages[0]!.sections.find(s => s.id === other.id)?.kind, 'custom')
+})
