@@ -810,10 +810,11 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor .bn-block-content[data-content-type=task] { border-left:2px solid transparent; padding-left:8px; }
 .editor-reference-tag,.editor-plan-tag { font-size:11px;color:var(--ink-2);white-space:nowrap; }
 .editor-plan-action { background:transparent;color:var(--blue-text);border:0;font-size:var(--text-caption);padding:2px 4px; }
-/* Plan for today appears when a document task saves (open reference tasks only). Its 44px tap area comes from ::after, not
-   its box, so the row keeps its height when the button appears, goes on Plan or tick (Ratchet #117, 390 touch +12px). */
-.editor-plan-action { position:relative; min-height:0; }
-.editor-plan-action::after { content:''; position:absolute; inset:-12px -6px; }
+/* Plan for today appears when a document task saves (open reference tasks only). It no longer takes the global 44px
+   min-height, so the row keeps its height when it appears or goes (Ratchet #117, 390 touch +12px). Its tap area is the
+   full height of its own row (stretch) and 6px wider each side; never taller, or a tap would plan the next task (Lead). */
+.editor-plan-action { position:relative; min-height:0; align-self:stretch; display:flex; align-items:center; }
+.editor-plan-action::after { content:''; position:absolute; inset:0 -6px; }
 .continuous-editor .bn-block-content[data-content-type=task]:has(.editor-task:is([data-role=reference],[data-draft])) { border-left-color:transparent; }
 @media(max-width:700px) { .editor-task { flex-wrap:wrap;column-gap:10px; } .editor-task-title { min-width:130px; } .editor-plan-tag { display:none; } }
 .continuous-editor .bn-editor { padding-left:0; padding-right:0; }
@@ -1226,6 +1227,10 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* A12 row actions (Jazz day-row-actions-states §2). Desktop: a ⋯ at the end of a task row, shown on hover and while
    the caret is in the row; it sits left of the date tag so the tag never jumps. */
 .editor-row-menu { flex:none; display:inline-flex; order:0; }
+/* A done row has no ⋯; this keeps its room where the ⋯ shows, so a long title wraps the same before and after a tick. */
+.editor-row-menu-slot { display:none; }
+@media (hover:hover) { .editor-row-menu-slot { display:inline-flex; flex:none; width:28px; } }
+.editor-plan-action[aria-hidden] { visibility:hidden; }
 .editor-row-more { width:28px; height:24px; padding:0; border:0; border-radius:var(--radius-control); background:transparent; color:var(--ink-3); font-size:var(--text-row); line-height:1; opacity:0; }
 .editor-row-more:hover, .editor-row-more:focus-visible { background:var(--app-surface); color:var(--ink); }
 .bn-block-outer:hover .editor-row-more, .editor-task:focus-within .editor-row-more, .bn-block-outer:has(.ProseMirror-selectednode, [data-is-empty-and-focused]) .editor-row-more,
