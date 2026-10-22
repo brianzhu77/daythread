@@ -1,0 +1,6 @@
+ok   an open task to tick · #daythread 优化 Calendar 页面
+ok   ticked: done in the database
+ok   the notice offers Undo
+ok   Undo: open again in the database
+ok   no page errors
+all passed
