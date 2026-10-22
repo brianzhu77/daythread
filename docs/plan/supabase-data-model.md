@@ -643,6 +643,28 @@ SQLite adapter runs v1 until A1 lands, then v2.
   the queue and shows "Couldn't send · Copy text · Discard" on it, so it never blocks silently. `persist()` may be
   denied, so the status shows unsent changes until the server acknowledges them.
 
+### R7. Closing points from the re-check (Ratchet 7c660aa6)
+
+1. **The projection writes patches, never rebuilt trees.** It reads the raw rows (blocks, properties, relations) and
+   keeps them beside the typed objects it hands to `workspace.ts`. On write it diffs each typed object against what it
+   projected and applies only the changed **known** fields (by `system_key`, `content`, `position`, `parent_id`) to the
+   raw row. Anything it doesn't know is never touched: other property ids, block types, relation kinds, `props` keys.
+   - *Example:* he later adds an "Energy" property to Tasks (`p_energy = ["high"]`). An old build runs `task-status`
+     on that task: the patch sets only `status`, the version and a `history` row; `p_energy` is still `["high"]`.
+   - *Unknown block types* (say a future `table` block on a day page): the editor seeds them as a read-only
+     placeholder holding the raw row, so a `save-editor` from an old build sends them back unchanged and never reads
+     their absence as a deletion. Contract test for both.
+2. **Only the server writes.** `anon` and `authenticated` get **no** insert, update or delete on any table, and no
+   select either: the tables live in a schema the Data API doesn't expose, so property validation, versions and
+   `history` can't be bypassed through it. The only writer is the restricted server role that runs commands (no
+   `BYPASSRLS`, verified claims set per transaction, §10 R4); migrations use a separate privileged role. RLS stays as the
+   second wall. The A5 negative tests add direct Data API inserts and updates with a valid session (must be refused).
+3. **Raw history of removed lines is kept verbatim.** Imported metadata entries for blocks no longer on a page (5 in his
+   data, one holding 5 characters of his text) go into `history` as `legacy_block_metadata` rows with the **original
+   JSON unchanged** in `data`, next to the block's tombstone. The reverse export (§10 R5) writes them back into
+   `editorBlockMetadata` exactly. New removals keep their content in the operation's inverse while Undo is possible,
+   and a tombstone's last content in a `history` row when the inverse is pruned, so nothing he wrote disappears.
+
 ## 11. Future items: additions, not reshapes (bar 2)
 
 Each line: what it adds, and that **no existing row changes**. Only what would otherwise force a reshape is built in now,
