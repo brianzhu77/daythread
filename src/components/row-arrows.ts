@@ -12,12 +12,22 @@ const isRow = (node: Node) => node.type.name === 'task' || node.type.name === 's
 /** A suggestion menu (#, [[), a row menu or a picker handles its own arrows. */
 const menuOpen = () => !!document.querySelector('.bn-suggestion-menu, [role="menu"], [role="listbox"], [role="dialog"]')
 
+/** Whether the block holding `pos` is laid out (not display:none, like a past day's hidden empty row). */
+function shown(view: EditorView, pos: number): boolean {
+  const node = view.domAtPos(pos).node
+  const block = (node instanceof Element ? node : node.parentElement)?.closest('[data-node-type="blockContainer"]')
+  return !!block && block.getClientRects().length > 0
+}
+
 export function moveVertically(view: EditorView, dir: -1 | 1): boolean {
   const { selection, doc } = view.state
   if (!(selection instanceof TextSelection) || !selection.empty) return false
   const $from = selection.$from
   if (!$from.parent.isTextblock || !view.endOfTextblock(dir < 0 ? 'up' : 'down')) return false
-  const target = Selection.findFrom(doc.resolve(dir < 0 ? $from.before() : $from.after()), dir, true)
+  // Past days hide unused empty rows (B19); ↓/↑ passes over them, as the browser does, rather than revealing them.
+  let target = Selection.findFrom(doc.resolve(dir < 0 ? $from.before() : $from.after()), dir, true)
+  while (target instanceof TextSelection && !shown(view, target.$from.start()))
+    target = Selection.findFrom(doc.resolve(dir < 0 ? target.$from.before() : target.$from.after()), dir, true)
   if (!(target instanceof TextSelection)) return false
   if (!isRow($from.parent) && !isRow(target.$from.parent)) return false
   const start = target.$from.start(), end = target.$from.end()
