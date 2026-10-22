@@ -35,6 +35,10 @@ Group B is listed for tracking only and never counts toward M.
 - **Rollback rule** (Bumblebee 6505644c, Lead 45fbfd99): every rollback message to Brian tells him to **reload the page**. Since the tab refresh (c1ead10),
   an open tab ignores loads older than what it holds, so after a rollback to a lower revision it keeps showing content the server no longer has until reloaded.
 - Each evidence script runs on its own fresh copy of Brian's data; scripts that write markers break each other's database checks (Lead, c1ead10 deploy).
+- **Raft tasks mirror the open rows** (Brian b9a06169 "bring it to raft tasks"; Lead 2026-10-22): task #120 A11, #121 A6b-2, #122 A7,
+  #123 B21 (waiting on Brian), #124 B22, #125 B27, #126 B28 (later · Brian), #127–#140 backlog (B2, B3, B4, B5, B6, B7, B8, B9, B10, B11, B13,
+  B14, B16, B18). Brian reads the board, so a row's status change and its task's status change go together. If Brian closes a
+  task, the row becomes `dropped (Brian closed task #N)`. A new row he asks for gets a task the same day.
 
 ## A. First version (counts toward N of M)
 
