@@ -142,7 +142,7 @@ The rows below are kept for the record and will be replaced by the new steps.
 **Hosting (Brian e8b619b8, Lead 92506a6e): Vercel, not Fly.** Model runs after the response use `waitUntil` on the durable
 job record; Fluid compute in `pdx1` next to Supabase Oregon; transaction-mode pooler; the S5 speed gate still decides. Brian
 provides credentials for local and staging; Roadbuster prepares `.env.example`, CI (GitHub Actions) and the Vercel target,
-Ratchet does a narrow check, and the Lead sends Brian the credential list.
+Ratchet does a narrow check, and the Lead sends Brian the credential list. Done 2026-10-22: config merged as main 5ae7f12 (PR #1; Ratchet #103, `docs/reviews/vercel-config-ratchet.md`, 377cbff); Brian has `docs/ops/credentials.md` (Lead 6beec5a9). Not yet verified: the live preview smoke behind Deployment Protection (needs his bypass secret) and owner-only sign-in (comes with the direct build).
 **Archive at the switch (Lead 92506a6e, Bumblebee ad163028):** today's app stays on 3000 behind a read-only flag,
 "Archived · read only", so he can still read Oct 13 to the switch. It moves no data. It's a small step in the re-plan.
 
