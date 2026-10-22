@@ -183,7 +183,10 @@ alignment 310/0/0 (Lead 0cd50150); ships with sign-in. HeroUI on our palette app
 **Sign-in in review: PR #4 `feat/sign-in` 81dbd15** (Ratchet #111, Jazz design check). 3000 runs `DAYTHREAD_AUTH=off`
 (refuses to start unless loopback and not on Vercel). Order: #111 + design pass → Lead's deployed check → one message to
 Brian (code template, add himself, sign-ups off, then sign in) → deploy `live` and 3000 → his sign-in is the real check.
-Vercel's login stays on `live`; Production stays paused.
+Vercel's login stays on `live`. **Production lock (16:31Z, Lead 98860760):** pausing blocked all builds, so the project is
+unpaused; instead `daythread-nine` domain removed, Production env has **no** `DATABASE_URL`/`OPENROUTER_API_KEY`, and the old
+production deployment is deleted. All production URLs 404; `git-live` 302 to Vercel's login. No domain or secret goes back on
+Production until sign-in passes. Signed-out deployed check on 3abb7e3 passed (gate stops requests before the store).
 Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
 `fix/capture-late-refresh` 2201274. 3000 runs the same build; rollback `.daythread-local/backups/2026-10-22-before-vercel-now/dist`.
 
