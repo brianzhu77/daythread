@@ -220,16 +220,29 @@ can be rebuilt from blocks at any time. These are also the edges of the content 
   limits (Supabase's built-in auth limits, plus a per-IP limit on our endpoints); the model endpoints are server-only
   actions behind the same session check and the existing budget ledger, so nobody else can spend his money.
 
-## 3b. Offline reading (A7, after cutover)
+## 3b. Offline first version (A7, after cutover)
 
-The joint direction (Bumblebee, Jazz, Lead): **read offline, keep typing into the existing draft, task actions disabled
-with "Needs a connection", a write queue only on evidence.**
-- New scope: a **service worker** caching the app shell, and an **IndexedDB cache** of today, the next 7 days' plan, the
-  last 7 day pages and recently opened pages, refreshed on each online load. "Offline · saved copy from 10:42" marker
-  (Jazz's states). Typing on a cached page uses the existing draft (B23 / save-on-leave): it saves on reconnect, or goes
-  to Load latest if the page changed elsewhere.
-- **Size: about 3–4 days**, plus Jazz's states. **It can ship after cutover:** it reads what the server already returns
-  and writes nothing new, so it needs no data change. Reachable first, offline reading second.
+**Decided (Lead, from Bumblebee's and Jazz's joint recommendation):** read offline, keep typing into the existing draft,
+**captures queued**, everything else greyed with "Needs a connection" (ticking tasks included, until usage shows a need),
+and one status he can trust.
+- **Reading:** a **service worker** caches the app shell; an **IndexedDB cache** holds today, the next 7 days' plan, the
+  last 7 day pages and recently opened pages, refreshed on each online load. A page outside it reads "Not on this phone
+  yet · opens when you're back online".
+- **Typing on a cached page:** the existing draft (B23 / save-on-leave); on reconnect it saves, or goes to Load latest if
+  the page changed elsewhere. No new conflict rules.
+- **Capture queue** (a capture only adds a line, so it needs no conflict rules):
+  - each queued capture gets its `operationId` and `capturedAt` (the phone's clock) **when it is typed**, and is stored in
+    IndexedDB; a resend after a flaky reconnect is deduplicated by the existing replay;
+  - it lands on **the day it was made**, not the day it is sent (captured 23:50, sent 07:00 → yesterday's page); if that
+    isn't today, the receipt names the day (Bumblebee);
+  - the model step (Auto) runs only once the capture has reached the server, never offline (Lead);
+  - sent in typing order, one at a time, stopping at the first refusal so nothing is reordered.
+- **One status** in the page's status spot (Jazz): "Offline · copy from 10:42" while reading, "Offline · 2 changes
+  waiting" once he has typed or captured, "Saved" once sent.
+- **Size: about 4–5 days** (reading 3–4, the capture queue about 1 more), plus Jazz's states. **It ships after cutover:**
+  offline only matters once the app is hosted and on his phone away from home, and it changes no stored data.
+- **Success check** (Bumblebee): offline sessions, offline captures sent, and "Needs a connection" hits. He has 0
+  captures in his real data, so which way to grow is learned, not assumed.
 - **iPhone storage (checked, partly):** WebKit's 2020 policy deletes a site's script-written storage after 7 days of
   Safari use without visiting it, with home-screen web apps on their own counter. WebKit's 2023 storage-policy post
   still lists this kind of eviction ("not interacted with by the user for some time", no number given), and says
@@ -276,13 +289,13 @@ hide relational facts. Check constraints cover closed sets that are facts (`task
 | A0 | Spike, thrown away after: a hello-world on the chosen host + a Supabase project in the same region; measure day-open and save p95 from his Mac and phone against the §8 budget, so a miss shows up in week 1, not week 3 | half a day |
 | A1 | Repository contract becomes per-aggregate (`loadDay`, `loadPage`, `execute`), still on SQLite; domain commands keep working on a loaded slice | 3–4 days |
 | A2 | `operations` table: replay, receipts without stored copy, undo by inverse; drop the undo snapshot and in-entity undo records | 3 days |
-| A3 | `blocks` table as the only content source; `content` keeps BlockNote's inline shape, versioned (`content_format`), validated, lossless round trip (Ratchet's conditions, §9.2 decided); browser maps rows ↔ editor blocks; `links` / `block_tags` indexes | **3 days** (was 4–5) |
+| A3 | `blocks` table as the only content source (the import also builds blocks for day pages that have sections but no `editorJSON`, e.g. Oct 20 and 21; Ratchet); `content` keeps BlockNote's inline shape, versioned (`content_format`), validated, lossless round trip (Ratchet's conditions, §9.2 decided); browser maps rows ↔ editor blocks; `links` / `block_tags` indexes | **3 days** (was 4–5) |
 | A4 | Split page: `day_reviews`, `ai_runs`; heading roles and the computed slot instead of `top3`; `task_days`; templates as data (materials stay as they are, §7a) | 3–4 days |
 | A5 | Postgres adapter for the clean schema (local Supabase in Docker, same contract suite); sign-in by emailed code; every server function requires a session | 3 days |
 | A6 | Cutover + hosting: preview deploy rehearsed, import with round-trip check, switch, keep SQLite read-only; export-back script tested for the rollback window (§3a) | 3–4 days |
-| A7 | Offline reading (§3b), after cutover | 3–4 days |
+| A7 | Offline first version (§3b), after cutover: reading, typing into the draft, the capture queue, one status | 4–5 days |
 
-About **3 weeks** to "from anywhere" on the clean schema (A0–A6), then about 4 days for offline reading. **Step order is
+About **3 weeks** to "from anywhere" on the clean schema (A0–A6), then about 4–5 days for the offline first version (A7). **Step order is
 otherwise unchanged:** the bridge covers reachability now, so pulling sign-in and hosting earlier would only mean
 hosting today's model (path B's cost) for no gain. **Bridge: engineering recommends yes**, since it gives him the value he
 asked for this week at a cost of hours, touches no data, and is removed at cutover.
@@ -403,10 +416,10 @@ Verdict: **keep** (a fact), **move** (a fact, wrong place), **derive** (computab
 | *.position, *.present | drop | adapter details; positions move to `blocks.position` / `task_days.position` |
 | pages.id, title, parentId, url, trashedAt, trashId | keep | `trashId` → `trash_batch_id` |
 | pages.type, date | keep | `kind`, `day_date` |
-| pages.sections | derive | from `blocks` |
+| pages.sections | derive | from `blocks`; at import, the **source** of blocks for pages without `editorJSON` |
 | pages.editorJSON | move | becomes `blocks` rows (§2.1) |
 | pages.editorSections | drop | consistency copy |
-| pages.editorBlockMetadata | move | block props; `paste:` records → `operations` |
+| pages.editorBlockMetadata | move | live blocks' entries → block props; `paste:` records → `operations`. **Entries for blocks no longer in the page (5 in his data; Ratchet) are history, not props:** they stop Bring and the AI from suggesting the same line again and keep reference times and Undo working, so they map to `activity` / `operations`, never dropped |
 | pages.editorCreations / editorDeletions | drop | `operations.inverse` |
 | pages.templateApplied | drop | a day page gets the template once, when created |
 | pages.reviewText, reviewSaved, reviewStep, reviewSource, reviewSkipped, handoffDone | move | `day_reviews`: text, finished_at, handoff_done_at; step / source / skipped derived or dropped |
