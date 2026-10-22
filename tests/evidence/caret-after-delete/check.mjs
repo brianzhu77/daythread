@@ -5,6 +5,9 @@
 //   node tests/evidence/caret-after-delete/check.mjs <base> <width> [touch] cards    (scripts/align-fixtures.ts)
 // Past fixture: today's page with "past task", an empty row, then "after", moved to 2026-10-20 (see stray-line).
 import { chromium } from '@playwright/test'
+import { DatabaseSync } from 'node:sqlite'
+// DB=<the server's SQLite path> also checks the task itself in the database after ⌘Z (Bumblebee a484cfac).
+const DB = process.env.DB
 const [BASE, W, mode1, mode2] = process.argv.slice(2), width = Number(W ?? 1280), touch = [mode1, mode2].includes('touch'), past = [mode1, mode2].includes('past'), cards = [mode1, mode2].includes('cards')
 const b = await chromium.launch(); const ctx = await b.newContext({ viewport: { width, height: 900 }, ...(touch ? { hasTouch: true, isMobile: true } : {}) }); const p = await ctx.newPage()
 let failed = 0
@@ -47,8 +50,20 @@ if (cards) {
   const tasksBefore = await p.locator('[data-content-type="task"]').count()
   // ⌘Z right after deleting a row brings it back.
   await p.keyboard.press('Enter'); await p.keyboard.type('undo me'); await p.waitForTimeout(1800)
-  await deleteLine('undo me'.length); await p.waitForTimeout(1200)
-  await p.keyboard.press('Meta+z'); await p.waitForTimeout(1500)
+  await p.waitForTimeout(400)
+  // Deleting a to-do's row on a day page takes it off the day (its placement is excluded, plannedOn cleared); the task
+  // itself stays. ⌘Z must put the same task back on the day.
+  const task = () => { if (!DB) return null; const db = new DatabaseSync(DB, { readOnly: true })
+    const r = db.prepare("select t.id, t.status, t.plannedOn as planned, p.state from tasks t left join placements p on p.snapshot = 'current' and p.taskId = t.id where t.snapshot = 'current' and t.title = 'undo me'").all(); db.close(); return r }
+  const saved = task()
+  await deleteLine('undo me'.length); await p.waitForTimeout(2000)
+  const gone = task()
+  await p.keyboard.press('Meta+z'); await p.waitForTimeout(2500)
+  if (DB) {
+    const back = task(), on = r => r?.length === 1 && r[0].status === 'open' && r[0].state === 'included' && !!r[0].planned
+    log(on(saved) && gone?.[0]?.state === 'excluded' && !gone[0].planned && on(back) && back[0].id === saved[0].id,
+      '⌘Z puts the same task back on the day (database: included and planned again)', `before ${JSON.stringify(saved)} · deleted ${JSON.stringify(gone)} · after ⌘Z ${JSON.stringify(back)}`)
+  }
   const rows = await p.locator('[data-content-type="task"] .bn-inline-content').allTextContents()
   log(rows.some(t => t.startsWith('undo me') || t.startsWith('undo m')) || rows.length > tasksBefore, '⌘Z brings the deleted row back', rows.join(' | ').slice(0, 120))
   // The line above is a section heading: the only row under "TODO - Other".
