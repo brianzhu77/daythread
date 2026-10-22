@@ -86,7 +86,7 @@ log(page.url().includes('/sign-in?next=%2F'), 'the refused save sends the page t
 await fetch(`${AUTH}/__reset`)
 await page.fill('input[type=email]', 'owner@example.com'); await page.click('button[type=submit]')
 await page.waitForSelector('input[autocomplete=one-time-code]')
-await page.fill('input[autocomplete=one-time-code]', await code('owner@example.com')); await page.click('button[type=submit]')
+await page.fill('input[autocomplete=one-time-code]', await code('owner@example.com')) // the 6th digit submits
 await page.waitForURL(u => !u.pathname.startsWith('/sign-in'), { timeout: 15000 }).catch(() => undefined)
 await page.waitForTimeout(4000)
 const saved = JSON.stringify((await sql.unsafe(`select data from ${SCHEMA}.workspace`))[0]?.data ?? '').includes('typed while the session was gone')

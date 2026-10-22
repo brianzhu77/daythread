@@ -1231,6 +1231,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
   --background: var(--bg-doc); --surface: var(--card); --surface-secondary: var(--fill-soft);
   --border: var(--line); --separator: var(--line); --field-background: var(--fill); --field-placeholder: var(--placeholder);
   --field-radius: var(--radius-block); --disabled-opacity: .4;
+  --field-focus: var(--fill); --field-hover: var(--fill); --field-shadow: none;
   min-height: 100dvh; background: var(--bg-doc); color: var(--ink);
   max-width: 360px; margin: 0 auto; padding: 18vh 18px 0; display: flex; flex-direction: column; gap: 20px;
 }
@@ -1245,6 +1246,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .sign-in-error { font-size: var(--text-meta); color: var(--red); margin: 0; }
 .sign-in .link { color: var(--blue); }
 .link { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
-.account-row { color: var(--ink-3, #888); font-size: 0.85em; margin: 1rem 0 0; }
+.account-row { color: var(--ink-3); font-size: var(--text-meta); margin: 1rem 0 0; }
+.account-row-sidebar { padding: 0 10px; } /* the same left edge as .side-label */
 .account-row-phone { display: none; }
 @media (max-width: 599px) { .account-row-phone { display: block; } }
