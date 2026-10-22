@@ -3,7 +3,7 @@
 export interface ModelConfig { apiKey: string; model: string; baseUrl: string }
 export interface ModelCall<T> { value: T; generationId: string | null; costUsd: number | null; promptTokens: number; completionTokens: number; raw: string }
 
-// The model is a code decision, not deployment config; OPENROUTER_MODEL remains only as an override for tests.
+// Used when OPENROUTER_MODEL is unset, so a deploy with only the key still has a model.
 export const DEFAULT_MODEL = 'deepseek/deepseek-v4.1-flash-1017'
 
 /** Reads the key the server was started with; null means "no model: say Simulated". */

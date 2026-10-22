@@ -1,6 +1,6 @@
 # Credentials: what to create and where it goes
 
-Four values. Each goes **directly** into `.env.local` on the Mac and/or the Vercel project's environment variables
+Five values. Each goes **directly** into `.env.local` on the Mac and/or the Vercel project's environment variables
 (scope **Preview** = staging). None goes into chat or git. GitHub needs nothing.
 
 | Variable | Where it comes from | Local `.env.local` | Vercel Preview |
@@ -9,6 +9,7 @@ Four values. Each goes **directly** into `.env.local` on the Mac and/or the Verc
 | `SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API → Publishable key | yes | yes |
 | `DATABASE_URL` | Supabase → Connect → Transaction pooler (port 6543), `postgres` user with your password | yes | yes |
 | `OPENROUTER_API_KEY` | openrouter.ai → Keys. For staging, a separate key with a low credit limit | your current key | the staging key |
+| `OPENROUTER_MODEL` | The model id, e.g. `deepseek/deepseek-v4.1-flash-1017`. Optional: unset uses the code default | yes | yes |
 
 ## Supabase staging project (once)
 

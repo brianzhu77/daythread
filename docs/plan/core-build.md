@@ -8,17 +8,17 @@ Sources:
 - Jazz's `docs/design/empty-start-states.md` (2bac9b6);
 - the Vercel setup on main 5ae7f12 (#103).
 
-## 0. Configuration: four variables (Brian e149f925, af787ab9)
+## 0. Configuration: five variables (Brian e149f925, af787ab9, c129d176)
 
-The app reads only `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `DATABASE_URL` and `OPENROUTER_API_KEY`
-(`.env.example`). This supersedes every other variable named below: there is no migration URL (migrations run on
+The app reads only `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `DATABASE_URL`, `OPENROUTER_API_KEY` and
+`OPENROUTER_MODEL` (`.env.example`; the model falls back to a code default when unset). This supersedes every other variable named below: there is no migration URL (migrations run on
 `DATABASE_URL`; request transactions `SET LOCAL ROLE daythread_app` through `withOwner(tx)`). With one privileged
 credential this is an **application-enforced boundary**, not a database-enforced one: the raw client stays private to
 the repository module, every request transaction sets role and owner and resets on success or error, and a test proves
 it. The wall in front of his data is the server's sign-in gate on every request. Revisit with the workspace lock if a
 second user ever exists. There is no owner-email variable
 (the owner is the only Supabase user; sign-ups off), no `CRON_SECRET` and no cron (job recovery runs at the start of the
-next request), the model id is a code constant, and the server hands the two public Supabase values to the browser.
+next request), and the server hands the two public Supabase values to the browser.
 
 ## 1. What changes with "no migration"
 
