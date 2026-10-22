@@ -153,6 +153,10 @@ Each step on its own branch; C1–C3 pass on PGlite plus the CI Postgres contain
 his credentials arrive sooner; the date never depends on asking him). 3000 is untouched until C6. No step grows without the
 Lead's say; at the end of C4, Roadbuster reports whether C6 can come earlier. **Target: C6 in the week of Nov 16–20, Nov 24
 at the latest**, if his staging credentials are in by about Nov 5 (Roadbuster 487f00c0).
+Credentials condition **met 2026-10-22**: Brian put all five values in `.env.local`, 3000 restarted on the same build 7f6f1eb,
+and a read-only check passed for all five (Lead 2acad910). Holds: nobody applies migrations or writes to that `DATABASE_URL`
+(his real project, direct URL 5432) until C1 passes and the Lead says so; C1's runner works on both direct and pooler URLs.
+Sign-ups are still on (`disable_signup: false`). Turning them off is Brian's step, and C4 checks it before staging opens.
 
 | ID | Step | Size | Status |
 | --- | --- | --- | --- |
