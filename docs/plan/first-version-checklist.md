@@ -220,7 +220,7 @@ passed, 339 pass, alignment 310/0/0. On 3000, `live` and production; Brian told.
 343 pass; Lead 0da9cb11). Delete before / Backspace at the start of a role heading do nothing; ⌘Z or paste restores a
 heading's role only if no section on the page has it yet; a day page's template-id heading stored as `custom` regains its
 role on save and in `ensureSection`. His today's Other had become `custom` (revision 64, no text lost, one page, one
-heading); Lead confirms `other` after his next save. Backup `.daythread-local/backups/2026-10-22-before-delete-fix/`.
+heading); confirmed repaired after his save at 21:58Z (revision 74): `other`, one Other section, his task kept (Lead 1e9583da). Backup `.daythread-local/backups/2026-10-22-before-delete-fix/`.
 Brian told (bb9f0d8e). Next: PR #9 typing jump 7aa3973 (empty task rows 44 px on hover screens; ships when the widened
 `stable-check` and Ratchet #117 pass: document pages, tick/untick, Enter, 2nd/3rd new task; Brian cf4c4e65 "make sure
 everything stable"), then a past day opens with no cursor (done = at 1280 a past day opened without clicking shows no
