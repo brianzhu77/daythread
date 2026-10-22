@@ -160,5 +160,11 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
     node.children?.forEach(visit)
   }
   nodes.forEach(visit)
+  // A day page's template heading is `<page id>:<kind>`, so it keeps that role. One stored as custom by the old one-key
+  // merge (Brian's Other, 2026-10-22) gets it back on the next save, unless another section on the page has the role.
+  if (page.type === 'daily') for (const section of sections) {
+    const role = dayTemplate.find(t => section.id === `${page.id}:${t.kind}`)?.kind
+    if (role && section.kind === 'custom' && !sections.some(s => s.kind === role)) section.kind = role
+  }
   return sections
 }

@@ -133,3 +133,20 @@ test('a role heading that comes back after being removed is that section again, 
   ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify([...doc, mine]) })
   assert.equal(ws.pages[0]!.sections.find(s => s.id === 'my-heading')?.kind, 'custom')
 })
+test('a template heading stored as custom by the old one-key merge gets its role back on the next save', () => {
+  let ws = fixture(); const p = ws.pages[0]!, doc = editorSeed(p, ws)
+  const other = p.sections.find(s => s.kind === 'other')!
+  // Brian's page at revision 64: the heading kept its id `<page>:other` but was saved as custom, with no metadata.
+  ws = structuredClone(ws); ws.pages[0]!.sections.find(s => s.id === other.id)!.kind = 'custom'
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify(doc) })
+  assert.equal(ws.pages[0]!.sections.find(s => s.id === other.id)?.kind, 'other')
+  assert.equal(ws.pages[0]!.sections.filter(s => s.kind === 'other').length, 1)
+  // If another section already has the role, the template heading stays custom: never two Other sections.
+  ws = structuredClone(ws); const page = ws.pages[0]!
+  page.sections.find(s => s.id === other.id)!.kind = 'custom'
+  const extra = { id: 'other-again', type: 'heading', props: { level: 2 }, content: [{ type: 'text', text: 'TODO - Other', styles: {} }], children: [] }
+  page.sections.push({ id: 'other-again', kind: 'other', title: 'TODO - Other', blocks: [] })
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(page), document: JSON.stringify([...doc, extra]) })
+  assert.equal(ws.pages[0]!.sections.find(s => s.id === other.id)?.kind, 'custom')
+  assert.deepEqual(ws.pages[0]!.sections.filter(s => s.kind === 'other').map(s => s.id), ['other-again'])
+})
