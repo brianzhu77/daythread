@@ -1,0 +1,5 @@
+(node:12949) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS delayed model response after request scope ends: owner retained, task and cost committed
+{"level":"error","event":"model.organize","captureId":"33307469-89fb-4f57-b8c7-86b6a4c127be","error":"Workspace not linked to this account"}
+PASS relink while model held: old owner result cannot alter new owner document or ledger

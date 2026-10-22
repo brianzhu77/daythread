@@ -1,0 +1,13 @@
+ok   new build: owner signs in (200)
+ok   new build: the workspace is linked to his account
+ok   new build: typed line saved and shown after reload
+ok   old build: starts on the linked database and signs in (200)
+ok   old build: saves and reloads, both lines shown
+(node:12641) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   old build: model ledger written
+ok   old build: the link is untouched
+ok   new build: the old build's session (same account) still opens today (200)
+ok   new build: all three lines shown
+ok   new build: link and ledger kept (user_id 0aaaaaaa-0000-4000-8000-000000000001)
+all passed
