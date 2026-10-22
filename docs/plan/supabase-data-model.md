@@ -651,7 +651,7 @@ marked **now**.
 | Item | Adds | Existing rows |
 | --- | --- | --- |
 | A11 line links (Jazz 1) | an inline node with `blockId` + a `mention` relation to the block. **Now:** a move keeps the block id (update `parent_id`, never delete + insert), and removals leave a tombstone with `deleted_from` | unchanged |
-| B21 synced blocks (Jazz 2) | a `ref` block (the same type as a task row, Bumblebee 4) pointing at the source block, with the last copy in `props.cache` | unchanged. **A deliberate exception to "stored once":** the cache is a read-only fallback, refreshed on every save of the source, never edited, so a missing source shows its last words instead of nothing |
+| B21 synced blocks (Jazz 2, 4b339c74) | **no original:** the shared lines live in a container block (a new block type) under the workspace's synced root, not on any page; every page that shows them holds a `ref` to the container (the same `ref` type as a task row, Bumblebee 4), with its last copy in `props.cache`. Trashing a page or deleting one `ref` never breaks the other copies | unchanged. **A deliberate exception to "stored once":** the cache is a read-only fallback, refreshed on every save of the container, never edited, so a missing container shows its last words instead of nothing |
 | B22 task on several pages | another `ref` block to the same task | unchanged |
 | Multi-day planning (Ratchet) | `plan_on` cardinality one → many: one `properties` row changes; values are already arrays | unchanged |
 | A second template, renamed headings | a template page named in Days' `settings`; roles stay in `props.role` | unchanged |
