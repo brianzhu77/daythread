@@ -206,6 +206,14 @@ single row; cold-start `ALTER TABLE` fixed in the same PR. 347 pass; real-Supaba
 `.daythread-local/backups/2026-10-22-before-link/` (row json + dist). **Pending: his first sign-in, then check `user_id`.**
 Then: one plain address + lift Vercel's lock (probes, only his user, sign-ups off, Home Screen line; keep old address
 reachable briefly for unsaved drafts), then HeroUI palette 85f076a as its own deploy.
+**Plain address LIVE 2026-10-22 17:22Z: https://daythread-nine.vercel.app** (production d5621s6a9, main c33c55c; Lead 1fc05d35).
+Brian signed in 17:14:24Z; `workspace.user_id` = his only `auth.users` row; sign-ups off. Production env restored (pooler,
+model key, `OWNER_EMAIL`); signed-out smoke + Ratchet's probes pass on the public domain with no bypass. HeroUI tokens
+d67f586 shipped as c33c55c (8 identical, 12 colour-only ≤10/255, alignment 310/0/0); rollback
+`.daythread-local/backups/2026-10-22-before-heroui/dist`. Deploys go to 3000, `live` (kept for a while) and production;
+production deploys only by the Lead, no preview promotes. Open: stray line while editing a to-do (Roadbuster).
+**Success check starts now (7 days from 2026-10-22):** he opens Daythread on his phone away from home at least 3 times and
+no text is lost (usage read Oct 25, reminder 22f37a86).
 Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
 `fix/capture-late-refresh` 2201274. 3000 runs the same build; rollback `.daythread-local/backups/2026-10-22-before-vercel-now/dist`.
 
