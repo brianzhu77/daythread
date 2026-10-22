@@ -713,6 +713,10 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-save-line.is-conflict { font-size:var(--text-meta); }
 .editor-save-line.is-conflict button { color:var(--ink); font-weight:var(--weight-semibold); font-size:var(--text-meta); }
 .editor-task { display:flex; align-items:center; gap:10px; min-height:32px; width:100%; }
+/* Where the ⋯ shows (a pointer that hovers), a saved task's row is as tall as its 44px ⋯ (global button min-height);
+   an empty draft row has no ⋯ yet, so it takes that height up front and no longer grows under his first letter
+   (Brian cf4c4e65). Touch screens hide the ⋯, so their rows keep their height. */
+@media (hover:hover) { .editor-task { min-height:44px; } }
 /* Page card (Jazz): one quiet row in the note, no border or fill; hover/selection come from the block like any other. */
 /* Same columns as a task row: icon in the checkbox/dot column, title on the text column; icon and chevron centre on the title's first line. */
 .editor-page-card { display: flex; align-items: flex-start; gap: 13px; width: 100%; min-height: 32px; padding: 3px 0 3px 14px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }

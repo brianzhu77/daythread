@@ -1,0 +1,18 @@
+ok   1280 /: typing into the empty task under "TODO - Top 3" moves nothing
+ok   1280 /: typing into the empty task under "TODO - Other" moves nothing
+ok   1280 /: typing into the empty bulletListItem under "Events" moves nothing
+ok   1280 /: typing into the empty bulletListItem under "Good Stuffs" moves nothing
+ok   1280 /: typing into the empty bulletListItem under "Notes" moves nothing
+all passed
+ok   390 /: typing into the empty task under "TODO - Top 3" moves nothing
+ok   390 /: typing into the empty task under "TODO - Other" moves nothing
+ok   390 /: typing into the empty bulletListItem under "Events" moves nothing
+ok   390 /: typing into the empty bulletListItem under "Good Stuffs" moves nothing
+ok   390 /: typing into the empty bulletListItem under "Notes" moves nothing
+all passed
+ok   390 touch /: typing into the empty task under "TODO - Top 3" moves nothing
+ok   390 touch /: typing into the empty task under "TODO - Other" moves nothing
+ok   390 touch /: typing into the empty bulletListItem under "Events" moves nothing
+ok   390 touch /: typing into the empty bulletListItem under "Good Stuffs" moves nothing
+ok   390 touch /: typing into the empty bulletListItem under "Notes" moves nothing
+all passed
