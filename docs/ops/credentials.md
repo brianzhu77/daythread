@@ -1,47 +1,25 @@
 # Credentials: what to create and where it goes
 
-For Brian. Every value goes **directly** into the place named below. None of them goes into chat, git or this file.
-Variable names and comments are in `.env.example`.
+Four values. Each goes **directly** into `.env.local` on the Mac and/or the Vercel project's environment variables
+(scope **Preview** = staging). None goes into chat or git. GitHub needs nothing.
 
-**Places:**
-- **Local:** `.env.local` in the repo folder on the Mac mini. It's ignored by git.
-- **Vercel Preview:** the Vercel project, Settings → Environment Variables, scope **Preview**. This is staging: every PR gets a preview deploy.
-- **Vercel Production:** the same screen, scope **Production**. Leave it empty until the switch.
-- **GitHub:** nothing. CI needs no secrets.
+| Variable | Where it comes from | Local `.env.local` | Vercel Preview |
+| --- | --- | --- | --- |
+| `SUPABASE_URL` | Supabase → Project Settings → API → Project URL | yes | yes |
+| `SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API → Publishable key | yes | yes |
+| `DATABASE_URL` | Supabase → Connect → Transaction pooler (port 6543), `postgres` user with your password | yes | yes |
+| `OPENROUTER_API_KEY` | openrouter.ai → Keys. For staging, a separate key with a low credit limit | your current key | the staging key |
 
-## 1. Vercel project (once)
+## Supabase staging project (once)
 
-1. On vercel.com, **Add New → Project** and import `brianzhu77/daythread`. The framework is detected as TanStack Start with Nitro. Leave the build settings at their defaults, and leave Node.js at 24 (it comes from `package.json`).
-2. **Settings → Deployment Protection:** keep **Vercel Authentication** on for previews. Then create **Protection Bypass for Automation** and copy its secret into Local as `VERCEL_AUTOMATION_BYPASS_SECRET`, so the smoke check can reach previews.
-3. **Settings → Functions:** confirm the region is **Portland, USA (pdx1)**. The build also sets it.
-4. Production deploys from `main` are off for now (`vercel.json`) and get turned on at the switch.
+1. Create a project named `daythread-staging` in **West US (Oregon)**. The free plan is fine for staging.
+2. **Authentication → Users → Add user:** your email, tick **Auto Confirm User**. Do this before step 3.
+3. **Authentication → Sign In / Providers → Email:** keep Email on and **turn off "Allow new users to sign up"**. Only
+   your account can sign in from then on.
 
-## 2. Supabase staging project (once)
+## Vercel
 
-1. On supabase.com, create a new project named `daythread-staging`, region **West US (Oregon)**. The free plan is fine for staging because it holds no real data. Save the database password in your password manager.
-2. **Project Settings → API:**
-   - Project URL → `VITE_SUPABASE_URL` in Local and in Vercel Preview.
-   - Publishable key → `VITE_SUPABASE_PUBLISHABLE_KEY` in Local and in Vercel Preview.
-3. **Connect → Connection string:**
-   - **Direct connection (or Session pooler, port 5432)**, with the `postgres` user and your password, goes into Local only, as `DATABASE_MIGRATION_URL`.
-   - **Transaction pooler (port 6543), as the `daythread_app` role**, goes into Vercel Preview and Local as `DATABASE_URL`. The role and its password are created by our first migration. We'll tell you when to copy this one.
-4. **Authentication → Users → Add user → Create new user:** enter your email and tick **Auto Confirm User**. A
-   password isn't needed, because you sign in with the emailed code. With sign-ups off, this is the only way your
-   account can exist, so do it before step 5.
-5. **Authentication → Sign In / Providers → Email:** keep Email enabled and **turn off "Allow new users to sign up"**.
-   From then on a code can only be sent to an existing user, so any other email is refused. `DAYTHREAD_OWNER_EMAIL`
-   (your email) goes into Local and Vercel Preview: the server also refuses any signed-in user who isn't that email.
-
-## 3. Model key for staging
-
-On openrouter.ai, create a **separate key** for staging with a low credit limit. Put it in Vercel Preview as `OPENROUTER_API_KEY`, and set `OPENROUTER_MODEL` to the same model id you use now. Your current key stays in Local.
-
-## 4. Cron secret
-
-`CRON_SECRET` is any long random string, for example from `openssl rand -hex 32`. It goes into Vercel Preview. The endpoint that uses it comes with the direct build.
-
-## Done when
-
-- A PR gets a Vercel preview deploy.
-- Signing in on staging with your email works, and another email gets no code (checked once the sign-in screen exists).
-- `VERCEL_AUTOMATION_BYPASS_SECRET=… node scripts/smoke-staging.mjs <preview url>` prints **all passed**.
+The project is already linked and builds a preview for every PR. Production deploys stay off until the switch.
+Optional, only if you want us to run the staging check against protected previews: create **Settings → Deployment
+Protection → Protection Bypass for Automation** and pass it to the script when running it:
+`VERCEL_AUTOMATION_BYPASS_SECRET=… node scripts/smoke-staging.mjs <preview url>`. It is not app configuration.
