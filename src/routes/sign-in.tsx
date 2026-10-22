@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Button, InputOTP, Input, Label, REGEXP_ONLY_DIGITS, TextField } from '@heroui/react'
 import { useEffect, useState, type FormEvent } from 'react'
+import { safeNext } from '../lib/safe-next'
 
 export const Route = createFileRoute('/sign-in')({
   validateSearch: (search: Record<string, unknown>) => ({ next: typeof search.next === 'string' ? search.next : undefined }),
@@ -9,8 +10,6 @@ export const Route = createFileRoute('/sign-in')({
 
 /** Matches Supabase's per-address cooldown, so Resend really sends; change both together (Roadbuster 96638974). */
 const resendAfterMs = 60_000
-/** Only a path on this site, never another origin. */
-const safeNext = (next: string | undefined) => next && next.startsWith('/') && !next.startsWith('//') && !next.startsWith('/sign-in') ? next : '/'
 
 async function post(path: string, body: unknown): Promise<{ ok: boolean; error?: string }> {
   try {
@@ -52,7 +51,7 @@ function SignIn() {
     event.preventDefault()
     setBusy(true); setError(null)
     const r = await post('/api/auth/verify', { email, code })
-    if (r.ok) return window.location.assign(safeNext(next))
+    if (r.ok) return window.location.assign(safeNext(next, window.location.origin))
     setBusy(false)
     setError(r.error === 'unavailable' ? "Couldn't sign in · Try again" : "That code didn't work · Send a new code")
   }

@@ -95,3 +95,28 @@ test('with sign-in off, only connections from this machine are served', async ()
   assert.equal(fromThisMachine(req({ 'x-forwarded-for': '127.0.0.1' }), '127.0.0.1'), false, 'behind a proxy')
   assert.equal(fromThisMachine(req({ forwarded: 'for=1.2.3.4' }), '127.0.0.1'), false)
 })
+
+test('after sign-in, only a path on this site: nothing the browser would resolve to another origin', async () => {
+  const { safeNext } = await import('../src/lib/safe-next.ts')
+  const origin = 'https://daythread.example'
+  for (const bad of [undefined, '', 'evil.example', '//evil.example', '/\\evil.example', '/\\/evil.example', '\\\\evil.example', 'https://evil.example/x', '/sign-in', '/sign-in?next=/x', 'javascript:alert(1)'])
+    assert.equal(safeNext(bad, origin), '/', String(bad))
+  assert.equal(safeNext('/tasks?view=today#x', origin), '/tasks?view=today#x')
+  assert.equal(safeNext('/day/2026-10-22', origin), '/day/2026-10-22')
+})
+
+test('a session issued to an earlier owner is ended, not honoured, once OWNER_EMAIL changes', async () => {
+  const { ownerSession, useSessionStore } = await import('../src/server/auth/server.ts')
+  const db = await PGlite.create()
+  const store = new SessionStore(pgliteClient(db))
+  useSessionStore(store)
+  const saved = { ...process.env }
+  Object.assign(process.env, { SUPABASE_URL: 'https://auth.test', SUPABASE_PUBLISHABLE_KEY: 'pk', OWNER_EMAIL: 'owner@example.com' })
+  try {
+    const { token } = await store.create('u1', 'owner@example.com')
+    assert.equal((await ownerSession(token))?.email, 'owner@example.com')
+    process.env.OWNER_EMAIL = 'new-owner@example.com'
+    assert.equal(await ownerSession(token), null)
+    assert.equal((await db.query<{ n: number }>('select count(*)::int as n from daythread.sessions')).rows[0]!.n, 0, 'the old session row is gone')
+  } finally { process.env = saved; useSessionStore(undefined); await db.close() }
+})

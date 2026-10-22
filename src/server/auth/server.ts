@@ -3,7 +3,7 @@ import { getCookie, appendResponseHeader, getRequestIP } from '@tanstack/react-s
 import { z } from 'zod'
 import { postgresSql } from '../storage.ts'
 import { authConfig, authRequired } from './config.ts'
-import { SessionStore } from './sessions.ts'
+import { SessionStore, type CheckedSession } from './sessions.ts'
 import { sendCode, verifyCode } from './supabase.ts'
 
 /** Reachable without a session: the sign-in screen and the calls it makes; build assets are public code. */
@@ -59,7 +59,7 @@ export async function checkRequest(request: Request, handlerType: 'serverFn' | '
   if (!authRequired()) return fromThisMachine(request, getRequestIP()) ? undefined : new Response('Sign-in is off: this machine only', { status: 403 })
   const url = new URL(request.url)
   if (isPublic(url.pathname)) return undefined
-  const session = await sessions().check(tokenOf(request))
+  const session = await ownerSession(tokenOf(request))
   if (session) {
     if (session.renewed) appendResponseHeader('set-cookie', sessionCookie(request, tokenOf(request)!, session.expiresAt))
     return undefined
@@ -69,11 +69,23 @@ export async function checkRequest(request: Request, handlerType: 'serverFn' | '
   return new Response(null, { status: 302, headers: { location: `/sign-in?next=${encodeURIComponent(url.pathname + url.search)}`, 'cache-control': 'no-store' } })
 }
 
+/**
+ * A live session that still belongs to the current owner. If OWNER_EMAIL has changed since it was issued, the session
+ * is ended rather than honoured (Ratchet 4f235d84).
+ */
+export async function ownerSession(token: string | undefined): Promise<CheckedSession | null> {
+  const session = await sessions().check(token)
+  if (!session) return null
+  if (session.email === authConfig().ownerEmail) return session
+  await sessions().delete(token)
+  return null
+}
+
 /** The signed-in address, for "{email} · Sign out"; null when sign-in is off or the session is gone. */
 export async function currentEmail(): Promise<string | null> {
   if (!authRequired()) return null
   const name = secureCookieNames.find(n => getCookie(n))
-  const session = name ? await sessions().check(getCookie(name)) : null
+  const session = name ? await ownerSession(getCookie(name)) : null
   return session?.email ?? null
 }
 const secureCookieNames = ['__Host-daythread_session', 'daythread_session']
