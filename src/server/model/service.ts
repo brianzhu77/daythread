@@ -6,7 +6,7 @@ import { waitUntil } from '@vercel/functions'
 import { getRepository, storageKind } from '../storage.ts'
 import { costUnknownCaptureIds, modelStatus } from '../model-ledger.ts'
 import { modelConfig, type ModelConfig } from './openrouter.ts'
-import { organizeCapture } from './organize.ts'
+import { expireStuckCaptures, organizeCapture } from './organize.ts'
 import { recoverUnknownCosts } from './cost-lookup.ts'
 import { draftDayRun, expireStuckDrafts } from './draft-run.ts'
 
@@ -97,15 +97,16 @@ export async function retryCaptureForModel(operationId: string, captureId: strin
 
 let draftsRecovered = false
 /**
- * A6b plan §3.5: before the browser reads the workspace, runs stuck on "drafting" end as failed — every one left by an
- * earlier server process the first time (not on a shared store, where another process may still be drafting), then
- * those 90 s past their tap. A no-op when nothing is drafting.
+ * Before the browser reads the workspace, model runs that can no longer finish end as failed. Drafts (A6b plan §3.5):
+ * every one left by an earlier server process the first time (not on a shared store, where another process may still
+ * be drafting), then those 90 s past their tap. Captures: organizing past captureExpiryMs. A no-op when nothing is running.
  */
-export async function expireDrafts(now = new Date()): Promise<void> {
+export async function expireStuckRuns(now = new Date()): Promise<void> {
   const repository = getRepository()
   const all = !draftsRecovered && !sharedStore()
   draftsRecovered = true
   await expireStuckDrafts(repository, now, { all })
+  await expireStuckCaptures(repository, now)
 }
 
 /**

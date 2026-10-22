@@ -10,8 +10,8 @@ export const loadWorkspace = createServerFn({ method: "GET" })
     const started=performance.now();
     debugLog('request.load.start',data);
     try {
-      const { expireDrafts } = await import("./model/service");
-      await expireDrafts().catch(()=>undefined);
+      const { expireStuckRuns } = await import("./model/service");
+      await expireStuckRuns().catch(()=>undefined);
       const workspace=await withLogOperation(data.operationId,()=>getRepository().load());
       const { modelInfo } = await import("./model/service");
       const model=await modelInfo();
