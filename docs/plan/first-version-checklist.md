@@ -199,6 +199,13 @@ real wait shown; signed-in devices unaffected. Supabase: one confirmed user, sig
 rollback `.daythread-local/backups/2026-10-22-before-password/dist`. **Real check pending: Brian's first sign-in.**
 Next: link workspace to his account (user_id bound at first sign-in, rebind refused; not-linked line), then cold-start
 `ALTER TABLE` fix, then HeroUI palette (85f076a). Production stays empty until the Lead says otherwise.
+**Account link LIVE 2026-10-22 17:12Z: main 96040cc** (PR #6 at 585a8b5 + Ratchet #113 8ee5ed0; Lead 8153460d): `workspace.user_id`
+(unique, FK to `auth.users` ON DELETE RESTRICT, nullable for rollback) + trigger refusing relink/unlink; linked at his first
+sign-in; mismatch shows "Your account isn't linked to this workspace · Your notes are safe" (no brake count); 3000 opens the
+single row; cold-start `ALTER TABLE` fixed in the same PR. 347 pass; real-Supabase FK/rollback check passed. Backup
+`.daythread-local/backups/2026-10-22-before-link/` (row json + dist). **Pending: his first sign-in, then check `user_id`.**
+Then: one plain address + lift Vercel's lock (probes, only his user, sign-ups off, Home Screen line; keep old address
+reachable briefly for unsaved drafts), then HeroUI palette 85f076a as its own deploy.
 Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
 `fix/capture-late-refresh` 2201274. 3000 runs the same build; rollback `.daythread-local/backups/2026-10-22-before-vercel-now/dist`.
 
