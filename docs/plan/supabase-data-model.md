@@ -192,6 +192,53 @@ can be rebuilt from blocks at any time. These are also the edges of the content 
 - **Realtime (later, optional).** Postgres changes on `pages` / `blocks` could replace the 5-second refresh on focus. Not
   in scope; the schema allows it.
 
+## 3a. Hosting (his goal A)
+
+**Recommendation: a long-running Node server on Fly.io, in the region next to the Supabase database; not Vercel.**
+
+- **Why not serverless (Vercel):** the model runs are fire-and-forget after the response
+  (`src/server/model/service.ts` 68, 80, 114: `void organizeCapture(…)`, `void draftDayRun(…)`). A serverless function
+  may be frozen once it has answered, which would cut them off; fixing that means a queue or `waitUntil` everywhere.
+  Cold starts also eat the 300 ms day-open budget, and serverless needs Supabase's transaction-mode pooler, which doesn't
+  support session features.
+- **Postgres from the host:** a small pool (about 5 connections) on Supabase's **session-mode pooler (port 5432)** or a
+  direct connection, both meant for long-lived servers; not the transaction-mode pooler (6543), which is meant for
+  serverless. Commands run as one transaction each (`BEGIN … COMMIT`, row versions checked with `SELECT … FOR UPDATE`).
+- **Region:** the database in Supabase's US West region and the server in the nearest Fly region (San Jose), so a query
+  is about a millisecond away, and Vancouver is a short hop from both.
+- **Secrets:** the database URL, the model key and the Supabase keys live only in **Fly secrets** (encrypted, injected
+  as environment variables). Locally they stay in `.env.local` (ignored by git). `loadModelEnv` reads env first, the file
+  only in development. Nothing in the repo or the image.
+- **Cost on top of Supabase Pro ($25):** a shared-CPU machine runs about **$3–7/month** (Fly's table: 512 MB about $3.19,
+  1 GB about $6–7 in US regions). Recommend 1 GB for Node + model calls: total about **$32/month**.
+- **Deploy and rollback:** the rehearse → deploy discipline stays. A **preview app** (`daythread-preview`) pointed at a
+  second, disposable Supabase project with a copy of his data gets every candidate first; Lead rehearses there; then the
+  same image deploys to the live app. Rollback = redeploy the previous release's image (kept by Fly), one command,
+  about a minute. Database changes keep their own rollback scripts, as today.
+- **Exposure (Ratchet's #101 scope):** his journal is on a public URL, so: no unauthenticated path at all (every server
+  function checks the session before anything else); RLS owner-only on every table as a second wall; sign-in rate
+  limits (Supabase's built-in auth limits, plus a per-IP limit on our endpoints); the model endpoints are server-only
+  actions behind the same session check and the existing budget ledger, so nobody else can spend his money.
+
+## 3b. Offline reading (A7, after cutover)
+
+The joint direction (Bumblebee, Jazz, Lead): **read offline, keep typing into the existing draft, task actions disabled
+with "Needs a connection", a write queue only on evidence.**
+- New scope: a **service worker** caching the app shell, and an **IndexedDB cache** of today, the next 7 days' plan, the
+  last 7 day pages and recently opened pages, refreshed on each online load. "Offline · saved copy from 10:42" marker
+  (Jazz's states). Typing on a cached page uses the existing draft (B23 / save-on-leave): it saves on reconnect, or goes
+  to Load latest if the page changed elsewhere.
+- **Size: about 3–4 days**, plus Jazz's states. **It can ship after cutover:** it reads what the server already returns
+  and writes nothing new, so it needs no data change. Reachable first, offline reading second.
+- **iPhone storage (checked, partly):** WebKit's 2020 policy deletes a site's script-written storage after 7 days of
+  Safari use without visiting it, with home-screen web apps on their own counter. WebKit's 2023 storage-policy post
+  still lists this kind of eviction ("not interacted with by the user for some time", no number given), and says
+  `navigator.storage.persist()` is granted by heuristics such as being a home-screen web app, and that persistent
+  origins are excluded from eviction. A 2022 WebKit bug reports a home-screen app's cookies cleared after 7 days, which
+  I couldn't confirm as fixed. So: **"Add to Home Screen" goes in the release message**, the app calls
+  `navigator.storage.persist()`, and the release message says unsent offline text is safest once it has synced. The
+  risk is only to drafts that never reached the server.
+
 ## 4. Proposed schema (Postgres, snake_case)
 
 Ids stay text (existing ids are kept on import, no remapping). All tables: `workspace_id`, `created_at`, `updated_at`,
@@ -225,12 +272,20 @@ hide relational facts. Check constraints cover closed sets that are facts (`task
 
 | Step | What ships | Rough size |
 | --- | --- | --- |
+| Bridge | (Optional, his call) Tailscale on the Mac mini and his phone: today's app reachable from anywhere, Mac on (§0a) | hours |
+| A0 | Spike, thrown away after: a hello-world on the chosen host + a Supabase project in the same region; measure day-open and save p95 from his Mac and phone against the §8 budget, so a miss shows up in week 1, not week 3 | half a day |
 | A1 | Repository contract becomes per-aggregate (`loadDay`, `loadPage`, `execute`), still on SQLite; domain commands keep working on a loaded slice | 3–4 days |
 | A2 | `operations` table: replay, receipts without stored copy, undo by inverse; drop the undo snapshot and in-entity undo records | 3 days |
-| A3 | `blocks` table as the only content source; browser BlockNote adapter; `links` / `block_tags` indexes | 4–5 days |
+| A3 | `blocks` table as the only content source; `content` keeps BlockNote's inline shape, versioned (`content_format`), validated, lossless round trip (Ratchet's conditions, §9.2 decided); browser maps rows ↔ editor blocks; `links` / `block_tags` indexes | **3 days** (was 4–5) |
 | A4 | Split page: `day_reviews`, `ai_runs`; heading roles and the computed slot instead of `top3`; `task_days`; templates as data (materials stay as they are, §7a) | 3–4 days |
-| A5 | Postgres adapter for the clean schema, run against local Supabase (Docker) through the same contract suite | 2 days |
-| A6 | Cutover: import with round-trip check, switch, keep SQLite read-only; export-back script tested for the rollback window | 1–2 days |
+| A5 | Postgres adapter for the clean schema (local Supabase in Docker, same contract suite); sign-in by emailed code; every server function requires a session | 3 days |
+| A6 | Cutover + hosting: preview deploy rehearsed, import with round-trip check, switch, keep SQLite read-only; export-back script tested for the rollback window (§3a) | 3–4 days |
+| A7 | Offline reading (§3b), after cutover | 3–4 days |
+
+About **3 weeks** to "from anywhere" on the clean schema (A0–A6), then about 4 days for offline reading. **Step order is
+otherwise unchanged:** the bridge covers reachability now, so pulling sign-in and hosting earlier would only mean
+hosting today's model (path B's cost) for no gain. **Bridge: engineering recommends yes**, since it gives him the value he
+asked for this week at a cost of hours, touches no data, and is removed at cutover.
 
 About **3 weeks** of build time, each step reviewed by Ratchet and live on 3000 before the next. Benefit: every model
 change happens on a local file with our proven migration + rollback scripts and his real data copy; the cloud only ever
@@ -263,7 +318,7 @@ large change with no shippable checkpoints and the longest time without real use
 ## 7. Decisions (Lead to summarize)
 
 **For Brian:** the path (row 1, A vs B for his goal, §0a), cloud privacy with the monthly fees (rows 2, 3, 5b), and
-whether he wants the offline queue (row 5c (b)) and the Tailscale bridge (§0a).
+the Tailscale bridge now (§0a), and the offline behaviour told to him as decided (row 5c).
 **The team's call:** where to host (row 5b), auth details (row 4), the SQLite fallback (row 6), the model choices (row 7).
 
 | # | Decision | Recommendation | Cost | Reversible? |
@@ -273,8 +328,8 @@ whether he wants the offline queue (row 5c (b)) and the Tailscale bridge (§0a).
 | 3 | Privacy, region, plan | His own Supabase account, **US West** region, **Pro plan** | **Pro: $25/month** (includes $10 of compute, one Micro instance), **daily backups kept 7 days** (Lead checked the pricing). The free plan pauses after 1 week inactive and has no backups, so it is not an option for his only copy. The repo's rule so far was "private data, never a cloud fallback" (`.gitignore`), so this is his explicit call | Yes while the SQLite copy is kept; data already sent to the cloud stays there until he deletes the project |
 | 4 | Auth and row-level security | **Supabase Auth, his account only, sign-in with an emailed 6-digit code** (not a magic link: his phone opens the Mac's LAN address and a link's redirect won't land there; Jazz 6e1c0707). **RLS on every table, owner only.** The server keeps all writes and connects with its own role. An expired session mid-edit behaves like a failed save: draft kept, "Signed out · Sign in to save" | About a day in A5; sign-in once per browser | Yes: RLS policies are migrations |
 | 5 | Where the server runs | **Hosted** (his goal A), see 5b. Until cutover it stays on his Mac | See 5b | Yes |
-| 5b | **Server hosted** (in scope: his goal A) | A small **always-on Node host** in the same region as the database (for example Fly.io or Render; TanStack Start builds a Node server). Not serverless: model runs can take tens of seconds and cold starts would eat the 300 ms day-open budget | Host fee, roughly **$5–10/month** (to verify for the chosen host). **2–3 days:** sign-in becomes **required** on every request (the server checks the Supabase session and scopes every command to his workspace); secrets (database URL, model key) move to the host's env; HTTPS; the `VERCEL`/`NETLIFY` refusal in `storage.ts` becomes "hosted mode requires sign-in"; a deploy from GitHub `main` with the previous release kept for rollback | Yes: the same build runs on his Mac again by pointing it at the same database |
-| 5c | **No internet.** With the app on his phone away from home, being offline is a normal case. Today a save never fails (a file on his Mac); after cutover every save needs the network | **At cutover: (a)** saves fail visibly and keep his text ("Couldn't save · draft kept · Retry saving"; a page not loaded shows "Can't reach your data · Retry"; Jazz 6e1c0707). **Then (b) as its own step:** a write queue in the browser that sends saved edits when he's back online. It needs no data migration: commands already carry their own `operationId` (replay-safe), and per-row versions send a real conflict to Load latest | (a): small, the draft machinery exists (B23, save-on-leave). (b): about 3–4 days, plus Jazz's states for "waiting to sync" | Yes: (b) is browser-only |
+| 5b | **Server hosted** (in scope: his goal A) | **Fly.io, long-running Node, next to the database** (§3a); not Vercel | About **$6–7/month** (1 GB) on top of Supabase Pro: about **$32/month** total. Build in A6 | Yes: the same build runs on his Mac again, pointed at the same database |
+| 5c | **Offline** (now a normal case on his phone) | **Read offline + keep typing into the draft; task actions disabled with "Needs a connection"; no write queue until usage shows he needs one** (joint direction, §3b). Ships as A7 after cutover | A7: about 3–4 days. A queue for ticking only, if he hits "Needs a connection" more than about twice a week | Yes: none of it changes stored data |
 | 6 | SQLite after cutover | **Read-only fallback for a 14-day rollback window**, with a tested export from Supabase back to SQLite; then archived, not deleted | The export script (part of A6) | That is the point of it; after the window, rollback means restoring from Supabase backups |
 | 7 | Model choices with product effect: (a) Top 3 is where the line sits (under the heading with the Top 3 role), computed per day; (b) special headings bound by a role prop, so renaming keeps behaviour; (c) saved links (materials, 0 rows) merged into link pages | **(a) and (b) with the move; (c) later** (§7a) | (a)+(b) are part of A4; screens look the same | (a)+(b): cheap before cutover; (c) is free while there are 0 materials |
 
