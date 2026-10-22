@@ -139,6 +139,12 @@ today's SQLite file stays as an archive (not deleted). Brian was told that anyth
 won't carry over. The stepwise local cleanup existed only to carry his data across, so **S1 is stopped and Ratchet #102 is
 superseded**. Roadbuster re-plans as a direct build of the approved general core (8a07bc4 §4) on Postgres, with no import.
 The rows below are kept for the record and will be replaced by the new steps.
+**Hosting (Brian e8b619b8, Lead 92506a6e): Vercel, not Fly.** Model runs after the response use `waitUntil` on the durable
+job record; Fluid compute in `pdx1` next to Supabase Oregon; transaction-mode pooler; the S5 speed gate still decides. Brian
+provides credentials for local and staging; Roadbuster prepares `.env.example`, CI (GitHub Actions) and the Vercel target,
+Ratchet does a narrow check, and the Lead sends Brian the credential list.
+**Archive at the switch (Lead 92506a6e, Bumblebee ad163028):** today's app stays on 3000 behind a read-only flag,
+"Archived · read only", so he can still read Oct 13 to the switch. It moves no data. It's a small step in the re-plan.
 
 | ID | Step (plan id) | Size | Status |
 | --- | --- | --- | --- |
