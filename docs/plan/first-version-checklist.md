@@ -178,6 +178,12 @@ the window: ledger 0 rows and OpenRouter usage today $0.0003 (the Lead's own thr
 workspace (Lead 371f7ee0). Anonymous reads remain unknown; Brian told both.
 Next: Jazz `design/tokens` (no visual change), then Roadbuster `feat/sign-in` (30-day sliding, 180-day cap, owner check,
 fake auth endpoint in tests; real check = Brian's own first sign-in with Vercel's lock on), target testable today.
+**Tokens v1 merged 2026-10-22: main acd30ce** (Jazz 783770a, `docs/design/tokens.md`): 20/20 full-page screenshots identical,
+alignment 310/0/0 (Lead 0cd50150); ships with sign-in. HeroUI on our palette app-wide comes after sign-in, own commit + pixel diff.
+**Sign-in in review: PR #4 `feat/sign-in` 81dbd15** (Ratchet #111, Jazz design check). 3000 runs `DAYTHREAD_AUTH=off`
+(refuses to start unless loopback and not on Vercel). Order: #111 + design pass → Lead's deployed check → one message to
+Brian (code template, add himself, sign-ups off, then sign in) → deploy `live` and 3000 → his sign-in is the real check.
+Vercel's login stays on `live`; Production stays paused.
 Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
 `fix/capture-late-refresh` 2201274. 3000 runs the same build; rollback `.daythread-local/backups/2026-10-22-before-vercel-now/dist`.
 
