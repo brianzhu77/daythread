@@ -3,8 +3,10 @@
 Status: **draft for review** (Ratchet independent check, then Lead summarizes decisions for Brian). No code changes until then.
 Source: Brian 6148a202 in #daythread:03640f0e: move the storage layer to Supabase, review the whole data structure, keep it
 maintainable and extensible, and do not write specific business logic into the data.
-Basis: main 173fa93, layout 6, the live database read-only at revision 169 (22 pages, 10 tasks, 20 placements, 337 receipts,
-0 events / materials / captures, about 25 KB of page content in total).
+Basis: main 173fa93, layout 6, the live database read-only at revision 169: **11 pages, 5 tasks, 10 placements, 169
+receipts** in the current data (each table also holds the same again as the undo copy; Ratchet corrected my first count,
+which added both), 0 events / materials / captures, about 25 KB of page content including the undo copy.
+**Brian's goal (d3a9c476): A, use Daythread from anywhere without the Mac running.** So the server is hosted too (§0a).
 
 ## 0. Summary
 
@@ -15,23 +17,33 @@ Basis: main 173fa93, layout 6, the live database read-only at revision 169 (22 p
 2. **Whole-workspace load does not survive the move as is.** Every command loads every table, runs `applyCommand` on the
    whole workspace and diffs it back, under one global revision. Locally that costs microseconds; over the network it is
    a round trip per table per command, and one global revision makes any two writes conflict (§3).
-3. **Recommendation: path A.** Clean up the model in shippable steps on the local store (each with the existing migration
-   and rollback discipline), changing the repository to per-aggregate reads and writes on the way; then move the clean
-   schema to Supabase in one cutover with a tested way back. Path B (move now, clean up in the cloud) is faster to "on
-   Supabase" but makes every later model change a live cloud migration (§5).
+3. **Recommendation, for his goal "from anywhere": path A with the server hosted at cutover.** Clean up the model in
+   shippable steps on the local store (each with the existing migration and rollback discipline), changing the
+   repository to per-aggregate reads and writes on the way; then move the clean schema to Supabase and the server to a
+   host in one cutover, with a tested way back. About **3 weeks**. Path B (move and host now, clean up in the cloud)
+   gets him there in **about 1 week** but makes every later model change a live cloud migration (§0a, §5).
 4. **§7a sorts every change into "with the move" or "later, no data migration"**, with sizes. **Decisions** are in §7:
    path, hosting, privacy / plan / region, auth, server location, SQLite fallback, and the model choices with product effect.
 
-## 0a. First question for Brian: what should Supabase make possible?
+## 0a. His goal: use it from anywhere (answered: A)
 
-Bumblebee 87fc110c: with the server still on his Mac, nothing changes that he can feel, so the goal decides path,
-hosting and urgency. Engineering view of each answer:
+Brian d3a9c476 chose "use Daythread from anywhere without the Mac running". That puts three things in scope that were
+optional before: **the server is hosted** (§7 row 5b), **sign-in is required** on every request (row 4), and **being
+offline becomes a normal case** on his phone, not a rare one (row 5c).
 
-| Goal | What it needs | Path |
+| Option | Time to "from anywhere" | Cost |
 | --- | --- | --- |
-| Use it from anywhere, without the Mac on | The **server moves too** (a host for the app, e.g. a small Node host or serverless), and sign-in becomes **required**, not optional. Extra build: about 2–3 days (auth, deploy, secrets) on top of the move, plus a host fee | Argues for getting there sooner: B, or A with the hosting step pulled forward |
-| His data backed up and safe | A paid plan with daily backups. Nothing else changes | A, no rush |
-| A clean base before more features, or other users later | The clean schema, RLS per owner | A (the 3 weeks are the investment) |
+| **A + host at cutover (recommended)** | About 3 weeks: A1–A4 cleanup locally, then A5 (Postgres, sign-in) and A6 (cutover + hosting, 2–3 more days) | Features wait about 3 weeks; cloud only ever sees the clean schema |
+| **B + host now** | About 1 week: Postgres adapter for today's tables, sign-in, hosting, cutover | Every cleanup after that (blocks, operations, roles) is a migration of live cloud data with a cloud rollback; more total work |
+
+What made B more viable than it first looked: with the server hosted **in the same region as the database**, a query
+is about a millisecond away, so today's whole-workspace load (25 KB) is cheap there. The global revision stays, but he
+is one user. B's real cost is not speed; it is doing the cleanup on live cloud data. **A stays the recommendation**,
+because his request was the clean structure first and the cleanup steps are where the risk is.
+
+**Optional bridge while A runs:** a private network such as Tailscale on the Mac mini and his phone gives phone access
+to today's app (it only listens on 127.0.0.1 now) with no code change and no data in the cloud: about an hour, his
+devices only. It still needs the Mac on, so it is a bridge, not his goal. His call.
 
 **What pauses during A (about 3 weeks):** every step changes `src/domain/workspace.ts`, so new features wait or rebase:
 A11 (already paused), A7, B21/B22, and the A6b-2 follow-up. The usage reads (Oct 22, Oct 25) are unaffected.
@@ -250,9 +262,9 @@ large change with no shippable checkpoints and the longest time without real use
 
 ## 7. Decisions (Lead to summarize)
 
-**For Brian:** the goal (§0a) with the path and hosting (rows 1, 5, 5b), cloud privacy with a monthly fee (rows 2 and 3),
-and that saves need the internet (row 5c).
-**The team's call, reported to him as outcomes:** auth/RLS, the SQLite fallback, the model choices (rows 4, 6, 7).
+**For Brian:** the path (row 1, A vs B for his goal, §0a), cloud privacy with the monthly fees (rows 2, 3, 5b), and
+whether he wants the offline queue (row 5c (b)) and the Tailscale bridge (§0a).
+**The team's call:** where to host (row 5b), auth details (row 4), the SQLite fallback (row 6), the model choices (row 7).
 
 | # | Decision | Recommendation | Cost | Reversible? |
 | --- | --- | --- | --- | --- |
@@ -260,9 +272,9 @@ and that saves need the internet (row 5c).
 | 2 | Hosted Supabase or local Supabase (Docker on his Mac) | **Hosted** for real use; local Supabase only for development and tests | Hosted: a plan fee, his journal in the cloud. Local: no gain over today's SQLite file | Yes: the same schema runs in both; moving is a dump and restore |
 | 3 | Privacy, region, plan | His own Supabase account, **US West** region, **Pro plan** | **Pro: $25/month** (includes $10 of compute, one Micro instance), **daily backups kept 7 days** (Lead checked the pricing). The free plan pauses after 1 week inactive and has no backups, so it is not an option for his only copy. The repo's rule so far was "private data, never a cloud fallback" (`.gitignore`), so this is his explicit call | Yes while the SQLite copy is kept; data already sent to the cloud stays there until he deletes the project |
 | 4 | Auth and row-level security | **Supabase Auth, his account only, sign-in with an emailed 6-digit code** (not a magic link: his phone opens the Mac's LAN address and a link's redirect won't land there; Jazz 6e1c0707). **RLS on every table, owner only.** The server keeps all writes and connects with its own role. An expired session mid-edit behaves like a failed save: draft kept, "Signed out · Sign in to save" | About a day in A5; sign-in once per browser | Yes: RLS policies are migrations |
-| 5 | Where the server runs | **Stays on his Mac** (only the database moves) | None now; phone use still needs the Mac, as today | Yes: hosting the server later needs only #4 to be in place |
-| 5b | **Server hosted too** (only if his goal is "from anywhere", §0a) | A small **always-on Node host** in the same region as the database (for example Fly.io or Render; TanStack Start builds a Node server). Not serverless: model runs can take tens of seconds and cold starts would eat the 300 ms day-open budget | Host fee, roughly **$5–10/month** (to verify for the chosen host). **2–3 days:** sign-in becomes **required** on every request (the server checks the Supabase session and scopes every command to his workspace); secrets (database URL, model key) move to the host's env; HTTPS; the `VERCEL`/`NETLIFY` refusal in `storage.ts` becomes "hosted mode requires sign-in"; a deploy from GitHub `main` with the previous release kept for rollback | Yes: the same build runs on his Mac again by pointing it at the same database |
-| 5c | **No internet** (Jazz 6e1c0707): today the database is a file on his Mac, so saves never fail; after cutover every save needs the internet | **(a)** saves fail visibly and keep his text with the existing "Couldn't save · draft kept · Retry saving"; a page that isn't loaded shows "Can't reach your data · Retry". (b), a local write queue that syncs later, only if he writes offline | (a): small, the draft machinery exists (B23, save-on-leave). (b): several days plus conflict rules | Yes: (b) can be added later without a data migration |
+| 5 | Where the server runs | **Hosted** (his goal A), see 5b. Until cutover it stays on his Mac | See 5b | Yes |
+| 5b | **Server hosted** (in scope: his goal A) | A small **always-on Node host** in the same region as the database (for example Fly.io or Render; TanStack Start builds a Node server). Not serverless: model runs can take tens of seconds and cold starts would eat the 300 ms day-open budget | Host fee, roughly **$5–10/month** (to verify for the chosen host). **2–3 days:** sign-in becomes **required** on every request (the server checks the Supabase session and scopes every command to his workspace); secrets (database URL, model key) move to the host's env; HTTPS; the `VERCEL`/`NETLIFY` refusal in `storage.ts` becomes "hosted mode requires sign-in"; a deploy from GitHub `main` with the previous release kept for rollback | Yes: the same build runs on his Mac again by pointing it at the same database |
+| 5c | **No internet.** With the app on his phone away from home, being offline is a normal case. Today a save never fails (a file on his Mac); after cutover every save needs the network | **At cutover: (a)** saves fail visibly and keep his text ("Couldn't save · draft kept · Retry saving"; a page not loaded shows "Can't reach your data · Retry"; Jazz 6e1c0707). **Then (b) as its own step:** a write queue in the browser that sends saved edits when he's back online. It needs no data migration: commands already carry their own `operationId` (replay-safe), and per-row versions send a real conflict to Load latest | (a): small, the draft machinery exists (B23, save-on-leave). (b): about 3–4 days, plus Jazz's states for "waiting to sync" | Yes: (b) is browser-only |
 | 6 | SQLite after cutover | **Read-only fallback for a 14-day rollback window**, with a tested export from Supabase back to SQLite; then archived, not deleted | The export script (part of A6) | That is the point of it; after the window, rollback means restoring from Supabase backups |
 | 7 | Model choices with product effect: (a) Top 3 is where the line sits (under the heading with the Top 3 role), computed per day; (b) special headings bound by a role prop, so renaming keeps behaviour; (c) saved links (materials, 0 rows) merged into link pages | **(a) and (b) with the move; (c) later** (§7a) | (a)+(b) are part of A4; screens look the same | (a)+(b): cheap before cutover; (c) is free while there are 0 materials |
 
@@ -300,7 +312,7 @@ Total "with the move" matches path A's steps (§5): about 3 weeks.
   replay); RLS test with the anon key reading nothing.
 - **Cutover success check** (Bumblebee): the import round trip matches exactly, the screens are unchanged, and from his
   Mac against the chosen region, over 50 runs each, **opening a day page is under 300 ms and a save is under 200 ms at
-  p95** (server time, measured in A5). A5 fails, and the cutover waits, if either is missed. Today's local figures are
+  p95**, measured end to end from his browser to the hosted server (A5 measures it against a test host first). A5 fails, and the cutover waits, if either is missed. Today's local figures are
   measured the same way first, as the baseline.
 
 ## 9. Open questions for review
@@ -317,6 +329,8 @@ Total "with the move" matches path A's steps (§5): about 3 weeks.
     is that a BlockNote change to its inline schema becomes a migration of `content` alone. Mitigations: a
     `content_format` column (e.g. `bn-1`), so such a change can be converted per row and lazily; and all readers of
     inline content (tags, line text, AI context) go through one module, as `inlineText` / `lineText` largely do today.
+  - **Ratchet agrees (b842c6d3):** keep it, versioned, with validation and a lossless round trip (styles,
+    `pageRef`/`refId`, unknown nodes never silently dropped).
   - **Engineering recommendation: keep BlockNote's inline shape, with `content_format`.** It saves less than the
     2-day bar Lead set, so it is close; the deciding point is that it removes the riskiest new code from the biggest
     step. If you take it, A3 drops to about 3 days and path A to about 2.5 weeks.
