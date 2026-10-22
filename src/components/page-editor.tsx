@@ -29,6 +29,7 @@ import { displayPageTitle, focusAtEnd } from './page-title'
 import { addDays, fromIso, longLabel, todayIso, weekday } from './dates'
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
+import { rowArrows } from './row-arrows'
 import { isOwnLeaveSave, registerEditorFlush, rememberLeaveSave } from './editor-flush'
 import { RowMenu } from './row-menu'
 import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
@@ -234,7 +235,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const latestPage = useRef(page); latestPage.current = page
   // Event and link rows keep their own kind on the page; the tag index reads only paragraph and task text.
   const tagCounts = useCallback((id: string) => { const kind = latestPage.current.sections.flatMap(s => s.blocks).find(b => b.id === id)?.kind; return !kind || kind === 'paragraph' || kind === 'task' }, [])
-  const editor = useCreateBlockNote({ schema, extensions: [tagDecorations(tagCounts)], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  // No gap cursor (Brian 967fd04b): BlockNote's custom blocks are `isolating`, so ProseMirror found a gap at every
+  // task row's edge, stopped ↑/↓ there and drew its gap cursor, a blinking 20 px line beside the row. rowArrows moves
+  // the caret between task rows instead. The page has no tables or other blocks that need a gap cursor.
+  const editor = useCreateBlockNote({ schema, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
     pastingNow.current = true; setTimeout(() => { pastingNow.current = false }, 0)
