@@ -1,7 +1,6 @@
 # Daythread design tokens
 
-Status: **v1 = commit on `design/tokens`, no visual change (§8). §9 is a proposal with small visible changes, not
-applied.** Values come from what Today renders on main 216a565. Brian (247ee3f3, Oct 22): "first build our design system and
+Status: **v1 merged (acd30ce), no visual change (§8). v1.1 item 1 (§6 app-wide) on `design/heroui-tokens`.** Values come from what Today renders on main 216a565. Brian (247ee3f3, Oct 22): "first build our design system and
 tokens based on the current design on today's route, then build the login page". This file replaces `craft-v1.md` §2
 as the source of truth for values; craft-v1 stays as the record of where they came from.
 
@@ -184,7 +183,13 @@ Run on a copy of Brian's SQLite data with `align-fixtures.ts`, built app, Chromi
 3. In `styles.css` outside `:root`, the raw values left are those listed in §3 and §4, plus three shadow colours on
    the phone toolbar, selection bar and paste notice (`#0002`, `#0003`, `.04`).
 
-## 9. Proposal: v1.1, small visible changes (not applied, needs Lead's go)
+## 9. v1.1: small visible changes
+
+**Item 1 is built on `design/heroui-tokens`** (from ed0e011; Lead agreed after sign-in, eb6bc379). Measured on a copy of
+Brian's data, 20 full-page shots at 390/1280: Pages, Tasks, Review, Tags and sign-in are byte-identical. The day
+pages, Calendar and the capture sheet change only in colour, with at most 10/255 per channel: day title
+`#18181b`→`#1c1c1e`, nav and icon buttons `#ebebec`→`#efeef5`, Calendar weekdays `#71717a`→`#6e6e73`, and
+HeroUI's accent text `#1e63ae`→`#2164b5`. `check-alignment` is 0 fail / 0 missing. Item 2 is still open.
 
 To finish "one system", these would change pixels slightly:
 
