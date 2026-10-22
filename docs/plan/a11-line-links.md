@@ -186,6 +186,14 @@ re-read after a **reload**: ids, refIds, Linked from times):
 | `URL: fresh view` | each original plain URL opened in a new context lands where the chip does (server resolver) |
 | `Linked from` | counts on the resolved page, once per linking page, with the link's B15 time |
 | `long excerpt at 390` | no overflow, one line, ellipsis |
+| `drag keeps the link` | drag a linked line within its page → the chip still shows its words, not "Line not found" (the one move v1 keeps) |
+| `chip: trashed page` | trash the page holding a linked line → bin icon in `--ink-3`; tap opens the trashed page with Restore |
+| `copy: not offered` | an empty line, a page or link card, and two selected lines offer no "Copy link to line" (template headings above) |
+| `edit and task move` | edit the line → the chip's words change after a reload; move a linked task to tomorrow → the chip names that day |
+
+**Geometry:** "line link" becomes a required inline type in `scripts/check-alignment.mjs`, with a fixture on 2026-12-31
+in `scripts/align-fixtures.ts` (Jazz §7 check 10, the standing alignment rule). The candidate's alignment run must show it
+present with 0 fails at 1280 and 390.
 
 **Rollback — `tests/evidence/a11-plan-pg/old-build.mjs`**, rerun on the candidate: link props `newTitle+pageId+refId`
 after the old save, `doneOn` kept, `seen` as in §6, no errors.
