@@ -28,3 +28,9 @@ C6 acceptance: hold an old model response across the transition, attempt to deli
 - C4/C5/C6 design checks and fresh seeded fixtures as named in the plan. Cloud authorization, RLS, browser functionality, speed, real phone usage and release remain unverified until their steps.
 
 Sources checked: [Vercel production-only cron](https://vercel.com/docs/cron-jobs/quickstart), [Nitro cron authentication](https://nitro.build/deploy/providers/vercel#secure-cron-job-endpoints), [cron plan limits](https://vercel.com/docs/cron-jobs/usage-and-pricing), [PGlite single connection](https://pglite.dev/docs/).
+
+## Final recheck: 3d87017
+
+**PASS, plan ready for implementation.** The remaining archive contract is resolved: block new work, drain or mark unresolved attempts before freezing, terminate the old worker, then start archived mode with boot-time and request-side mutation paths disabled. Logical-row/WAL-aware checks and the held-response transition case are explicit. Cron account compatibility and the additional recovery/Undo cases are included.
+
+This approves the C1–C6 execution plan only. It does not certify PGlite compatibility, implemented row contracts, production security, deployment recovery or speed; each remains a named step gate. No database, cloud account, application code or live process was changed in this plan review.
