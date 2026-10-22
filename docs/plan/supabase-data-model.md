@@ -528,7 +528,7 @@ Undo. **External model calls happen outside any transaction:** reserve (locked, 
 
 | Family | Reads under the lock | Version checked | Writes |
 | --- | --- | --- | --- |
-| save-editor | the page, its blocks, tasks named by its task lines, provenance of its blocks | page `version` (today's `expectedContent`) | blocks, tasks created / renamed, provenance, links / tags index rows |
+| save-editor | the page, its blocks, the **targets of its `ref` blocks** (tasks), relations of its blocks | page `version` **and, for every `ref` whose target's words changed, the target block's `version` as the editor loaded it** (Ratchet 71b0756e) | blocks, target titles, relations, tags index rows |
 | plan-task, not-today, row actions | the task, its `ref` lines on the source and target day pages, both days' Top 3 role lines | task `version` | `ref` lines moved / written, task properties, `history` |
 | Top 3 full | lines under the day's `plan-top3` heading (one indexed query) | — (safe under the lock) | — |
 | paste-links, create-document | `pages` by `url_key` (unique index), the target page | target page `version` | pages, blocks, operations |
@@ -536,6 +536,11 @@ Undo. **External model calls happen outside any transaction:** reserve (locked, 
 | Bring, AI proposals | `brought_from` relations by source (indexed), the day page | page `version` | blocks, relations |
 | capture, model result | the capture / attempt row, the ledger sum for the day | attempt state | ledger, capture, blocks |
 | undo | the operation, every row its inverse touches | each row is still at the version it left | the inverse, an undo record |
+
+A save that edits a task title through a `ref` carries the target's starting version: the workspace lock only runs the
+two saves one after the other, it can't tell that the second was typed over an old title. **Acceptance case:** the same
+task shown through `ref`s on two pages, both edited; the second save is refused because the task's version moved, its
+draft is kept and offered with Load latest, and the first title stands.
 
 Workspace-wide questions (URL dedupe, Linked from, AI context, "was this brought already") are indexed queries run under
 the lock, never inferred from the rows a screen happened to load.
