@@ -1,0 +1,5 @@
+import {SqliteWorkspaceRepository} from '../../../src/server/sqlite-repository.ts';
+import {pageContentKey} from '../../../src/domain/editor-document.ts';
+const repo=new SqliteWorkspaceRepository('/private/tmp/ratchet117/fixture.sqlite');
+const run=async(action:any)=>{const w=await repo.load();return(await repo.execute({operationId:crypto.randomUUID(),expectedRevision:w.revision,action})).workspace};
+for(const width of ['1280','390','touch']){const id='stable-doc4-'+width;let w=await run({type:'create-document',pageId:id,title:'Stability '+width,body:''});let p=w.pages.find(p=>p.id===id)!;await run({type:'save-editor',pageId:id,expectedContent:pageContentKey(p),today:'2026-10-22',document:JSON.stringify([{id:id+'-above',type:'paragraph',content:'Above unchanged'},{id:id+'-task',type:'task',props:{taskId:'editor-task:'+id+'-task',role:'reference',planDate:''},content:''},{id:id+'-bullet',type:'bulletListItem',content:''},{id:id+'-below',type:'paragraph',content:'Below marker'}])});}console.log('seeded docs');

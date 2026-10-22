@@ -1,0 +1,40 @@
+(node:83147) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+chromium above {
+  x: 309.609375,
+  y: 145,
+  r0: { x: 20, y: 109, width: 330, height: 38 },
+  r1: { x: 20, y: 147, width: 330, height: 38 },
+  b0: { x: 269.21875, y: 112, width: 80.78125, height: 32 },
+  b1: { x: 269.21875, y: 150, width: 80.78125, height: 32 }
+}
+PASS chromium above only intended task planned
+chromium below {
+  x: 309.609375,
+  y: 149,
+  r0: { x: 20, y: 109, width: 330, height: 38 },
+  r1: { x: 20, y: 147, width: 330, height: 38 },
+  b0: { x: 269.21875, y: 112, width: 80.78125, height: 32 },
+  b1: { x: 269.21875, y: 150, width: 80.78125, height: 32 }
+}
+PASS chromium below only intended task planned
+webkit above {
+  x: 309.609375,
+  y: 145,
+  r0: { x: 20, y: 109, width: 330, height: 38 },
+  r1: { x: 20, y: 147, width: 330, height: 38 },
+  b0: { x: 269.21875, y: 112, width: 80.78125, height: 32 },
+  b1: { x: 269.21875, y: 150, width: 80.78125, height: 32 }
+}
+PASS webkit above padding tap does not plan
+PASS webkit above button centre plans intended task
+webkit below {
+  x: 309.609375,
+  y: 149,
+  r0: { x: 20, y: 109, width: 330, height: 38 },
+  r1: { x: 20, y: 147, width: 330, height: 38 },
+  b0: { x: 269.21875, y: 112, width: 80.78125, height: 32 },
+  b1: { x: 269.21875, y: 150, width: 80.78125, height: 32 }
+}
+PASS webkit below padding tap does not plan
+PASS webkit below button centre plans intended task
