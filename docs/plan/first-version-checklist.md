@@ -232,6 +232,11 @@ document rows, first save, tick/untick, Enter, 2nd/3rd task checked at 1280/390/
 Ratchet #118 bde5ec6, Jazz pass): a past day opens with no cursor and no empty rows; today and future keep the cursor.
 343 pass, alignment 310/0/0. Rollback `.daythread-local/backups/2026-10-22-before-typing-jump/dist`. Brian told
 (25cb0807), incl. no real-iPhone check. Queue empty; next is what he raises.
+**Caret after deleting a to-do LIVE 2026-10-22: main 450913a** (PR #11, merge c7e1c80 of cd0cc76 + Ratchet ef9999e; Ratchet #119
+passed; Brian 301105c0; Lead 26f9b636). Backspace that removes an empty to-do puts the caret at the end of the nearest on-screen text
+line above (heading text; cards and a past day's hidden rows skipped; end of a wrapping line). ⌘Z restores the same task, included
+and planned for today. "Not today" unchanged. 343 pass, alignment 310/0/0. Rollback `.daythread-local/backups/2026-10-22-before-caret/dist`.
+Brian told (3245b7ac).
 **Success check starts now (7 days from 2026-10-22):** he opens Daythread on his phone away from home at least 3 times and
 no text is lost (usage read Oct 25, reminder 22f37a86).
 Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
