@@ -91,6 +91,18 @@ versions. Its behaviour doesn't change before the switch.
   `DATABASE_MIGRATION_URL` never goes to Vercel. Migrations run from the Mac, or from a CI job only if Lead later wants
   one.
 
+## 5a. A lost reply is not a conflict (C2/C3; Ratchet, Bumblebee ab1b4b0a)
+
+Today, when a save commits but its reply is lost, the editor shows "Changed in another tab · draft kept" even though its
+own save landed (Ratchet's payload review; identical before and after the payload fix). On a phone network this
+won't be rare. Requirement:
+- the editor resends with the **same `operationId`**, never a new one, whether it retries or reloads first;
+- the server deduplicates and returns the **original result**, with the page as that save left it;
+- the editor treats a replayed receipt for its own pending save as **"Saved"**, and adopts that page as its new
+  starting point, so no conflict line shows;
+- a page that changed elsewhere *after* that save still goes to Load latest, as today.
+**Contract and browser test:** commit, drop the response, resend → "Saved", no conflict line, the words saved once.
+
 ## 6. Undo without a snapshot
 
 Today Undo restores a full copy of the workspace when nothing has changed since. In the new store, every command
