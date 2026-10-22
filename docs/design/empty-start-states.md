@@ -41,8 +41,11 @@ What the build shows today, and the change for each. Only text and visibility ch
 
 The old app keeps running read-only on his Mac (3000). Every screen there shows one line at the top, "**Archived · read
 only · your new Daythread is at {url}**". Write entry points (+ capture, the morning card, Draft my day, the editor) stay
-visible but inert. Edits are refused with the same line, and nothing else changes. No link
-from the new app to the archive: it would bring the old data back into view as if it were part of the new one.
+visible but inert. Edits are refused with the same line, and nothing else changes. One way back, from the new app (Bumblebee `58a76f87`): a single quiet row at the bottom of the
+desktop sidebar, under Trash, in `--ink-3`: "**Old notes (before {switch date}) · on your Mac mini**". It opens the
+archive URL in a new tab. Desktop only, since the phone can't reach that address. It's a plain link out, never a list of
+old pages inside the new app, so the old data never looks like part of the new one. If the archive doesn't answer, the
+browser's own error shows; the row stays, because the Mac may just be asleep.
 
 ## 4. Checks
 
