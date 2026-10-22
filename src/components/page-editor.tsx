@@ -29,7 +29,7 @@ import { displayPageTitle, focusAtEnd } from './page-title'
 import { addDays, fromIso, longLabel, todayIso, weekday } from './dates'
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
-import { registerEditorFlush } from './editor-flush'
+import { isOwnLeaveSave, registerEditorFlush, rememberLeaveSave } from './editor-flush'
 import { RowMenu } from './row-menu'
 import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
 
@@ -217,6 +217,7 @@ function firstLineCenter(block: HTMLElement): number {
 
 export function PageEditor({ page, workspace }: { page: Page; workspace: Workspace }) {
   const { run, refresh, latest } = useWorkspace()
+  const runRef = useRef(run); runRef.current = run
   const navigate = useNavigate()
   const key = `daythread:editor:${page.id}`
   const initial = useRef<{ nodes: EditorNode[]; base: string; recovered: boolean } | null>(null)
@@ -304,6 +305,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const historyGuardBypass = useRef(false)
   const [historyBusy, setHistoryBusy] = useState(false)
   const lastSent = useRef('')
+  // The document the server last accepted from this editor, so leaving knows whether anything is still unsaved.
+  const lastSaved = useRef<string | null>(null)
+  const left = useRef(false)
+  // Settles once the save on its way has finished and set its new starting point; leaving waits for it (Ratchet #99).
+  const inflight = useRef<Promise<void>>(Promise.resolve())
   const undoingPaste = useRef(false)
   // A9a §3: where the last `[[` list opened (so the same characters don't open it twice), and whether text is being pasted.
   const lastTrigger = useRef(-1)
@@ -417,7 +423,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const pendingSave = useRef<{ fingerprint: string; operationId: string } | null>(null)
   const flush = useCallback(async () => {
     // A2 §4: while a paste's Undo is out, nothing is sent; typing collects and goes once the reply is applied.
-    if (!dirty.current || sending.current || undoingPaste.current) return
+    if (left.current || !dirty.current || sending.current || undoingPaste.current) return
+    // The page moved on only by his own save from when he last left it: start from that.
+    if (isOwnLeaveSave(page.id, latestPage.current.editorJSON)) base.current = pageContentKey(latestPage.current)
     sending.current = true
     const document = JSON.stringify(editor.document)
     const deletions = [...semanticDeletes.current]
@@ -432,22 +440,28 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     let preview: Workspace
     try { preview = applyCommand(source, { operationId, expectedRevision: source.revision, action }).workspace }
     catch (error) { debugClient('editor.save.rejected',{operationId,pageId:page.id,result:'conflict',error:error instanceof Error?error.name:'UnknownError'}); sending.current = false; setFailed(true); setStatus(error instanceof Error ? error.message : 'Cannot save; draft kept'); return }
-    const result = await run(action,undefined,operationId)
-    sending.current = false
-    if (!result) { debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true); setStatus("Couldn't save · draft kept"); return }
-    pendingSave.current=null
-    debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
-    for (const t of source.tasks) if (expectedTaskVersions.current.get(t.id) !== t.version) invalidHistoryTasks.current.add(t.id)
-    for (const t of preview.tasks) if (source.tasks.find(old => old.id === t.id)?.version !== t.version) expectedTaskVersions.current.set(t.id, t.version)
-    const savedPage = preview.pages.find(p => p.id === page.id)!
-    base.current = pageContentKey(savedPage)
-    deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
-    dirty.current = JSON.stringify(editor.document) !== document
-    // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
-    const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
-    setFailed(false); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
-    if (dirty.current) { stash(); timer.current = setTimeout(() => void flushRef.current(), 300) }
-    else localStorage.removeItem(key)
+    let settled!: () => void
+    inflight.current = new Promise<void>(resolve => { settled = resolve })
+    try {
+      const result = await run(action,undefined,operationId)
+      sending.current = false
+      if (!result) { debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true); setStatus("Couldn't save · draft kept"); return }
+      pendingSave.current=null; lastSaved.current = document
+      debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
+      for (const t of source.tasks) if (expectedTaskVersions.current.get(t.id) !== t.version) invalidHistoryTasks.current.add(t.id)
+      for (const t of preview.tasks) if (source.tasks.find(old => old.id === t.id)?.version !== t.version) expectedTaskVersions.current.set(t.id, t.version)
+      const savedPage = preview.pages.find(p => p.id === page.id)!
+      base.current = pageContentKey(savedPage)
+      // The editor has closed meanwhile: leaving takes it from here (it needs only the new starting point).
+      if (left.current) return
+      deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
+      dirty.current = JSON.stringify(editor.document) !== document
+      // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
+      const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
+      setFailed(false); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
+      if (dirty.current) { stash(); timer.current = setTimeout(() => void flushRef.current(), 300) }
+      else localStorage.removeItem(key)
+    } finally { settled() }
   }, [editor, key, page.id, run])
   flushRef.current = flush
   useEffect(() => registerEditorFlush(page.id, async () => {
@@ -499,6 +513,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // Our own save echoes back with the same document and sections projected from it. Anything else (Put back,
     // Keep from the morning hand-off, another tab) rewrote the page under us and the open editor must follow.
     if (page.editorJSON === lastSent.current && page.editorSections === JSON.stringify(page.sections)) return
+    // His own save from when he left this page landed after he came back: carry on from it, it isn't a conflict.
+    if (dirty.current && isOwnLeaveSave(page.id, page.editorJSON)) { base.current = next; setFailed(false); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0); return }
     if (dirty.current) { debugClient('editor.external-refresh',{operationId:newOperationId(),triggerOperationId:pendingSave.current?.operationId,pageId:page.id,result:'conflict'}); setFailed(true); setStatus('Page changed elsewhere · draft kept; copy it before reloading'); return }
     // Deferred: replacing blocks synchronously inside React's commit triggers a flushSync warning from BlockNote's views.
     queueMicrotask(() => {
@@ -553,10 +569,39 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     editor.domElement?.querySelector(`[data-id="${CSS.escape(merged.inserted[0]!)}"]`)?.scrollIntoView({ block: 'center' })
     setNotice({ text: 'Latest loaded · your changes are below their lines', fingerprint: JSON.stringify(editor.document) })
   }
+  // A draft stashed in this browser from the page exactly as it is now (left unsaved by an earlier version, or a closed
+  // tab) is saved on opening, instead of waiting for Retry. One made from an older page stays for Load latest (B23).
   useEffect(() => {
+    if (initial.current?.recovered && initial.current.base === pageContentKey(page)) timer.current = setTimeout(() => void flushRef.current(), 0)
+  }, [])
+  useEffect(() => {
+    left.current = false // a remount (React's strict check) is open again
     const before = (e: BeforeUnloadEvent) => { if (dirty.current) { stash(); e.preventDefault() } }
     window.addEventListener('beforeunload', before)
-    return () => { clearTimeout(timer.current); if (dirty.current) stash(); window.removeEventListener('beforeunload', before) }
+    return () => {
+      clearTimeout(timer.current); window.removeEventListener('beforeunload', before)
+      left.current = true
+      if (!dirty.current) return
+      // Leaving the page inside the app (another page, another screen) used to only stash the draft here, so an edit
+      // made just before switching stayed unsaved until this page was opened again: a cut line stayed on both pages.
+      // Now the draft is stashed as before and then saved. If that save is refused or fails, the stash stays and
+      // this page shows it on return ("Recovered unsaved draft", or Load latest after a conflict).
+      stash()
+      const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current]
+      void (async () => {
+        // A save already on its way finishes first, so this one starts from the page it produced.
+        await inflight.current
+        if (document !== lastSaved.current) {
+          const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, today: todayIso() }
+          debugClient('editor.save.leave',{pageId:page.id})
+          const result = await runRef.current(action, undefined, newOperationId(), { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => {} })
+          if (!result) return
+          rememberLeaveSave(page.id, document)
+        }
+        // Clear the stash only if it's still this draft: he may already be back on the page and typing.
+        try { if (JSON.parse(localStorage.getItem(key) ?? 'null')?.document === document) localStorage.removeItem(key) } catch { /* keep it */ }
+      })()
+    }
   }, [])
 
   // Read from the browser's caret, not editor state: ProseMirror picks up caret moves (Home, arrows) a moment later.
