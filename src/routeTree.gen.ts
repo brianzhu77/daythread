@@ -18,9 +18,8 @@ import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as DayDateRouteImport } from './routes/day.$date'
 import { Route as TagsIndexRouteImport } from './routes/tags.index'
 import { Route as TagsTagRouteImport } from './routes/tags.$tag'
-import { Route as ApiAuthSendRouteImport } from './routes/api/auth/send'
+import { Route as ApiAuthSignInRouteImport } from './routes/api/auth/sign-in'
 import { Route as ApiAuthSignOutRouteImport } from './routes/api/auth/sign-out'
-import { Route as ApiAuthVerifyRouteImport } from './routes/api/auth/verify'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -67,19 +66,14 @@ const TagsTagRoute = TagsTagRouteImport.update({
   path: '/tags/$tag',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiAuthSendRoute = ApiAuthSendRouteImport.update({
-  id: '/api/auth/send',
-  path: '/api/auth/send',
+const ApiAuthSignInRoute = ApiAuthSignInRouteImport.update({
+  id: '/api/auth/sign-in',
+  path: '/api/auth/sign-in',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSignOutRoute = ApiAuthSignOutRouteImport.update({
   id: '/api/auth/sign-out',
   path: '/api/auth/sign-out',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAuthVerifyRoute = ApiAuthVerifyRouteImport.update({
-  id: '/api/auth/verify',
-  path: '/api/auth/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -93,9 +87,8 @@ export interface FileRoutesByFullPath {
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags/': typeof TagsIndexRoute
-  '/api/auth/send': typeof ApiAuthSendRoute
+  '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
-  '/api/auth/verify': typeof ApiAuthVerifyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -107,9 +100,8 @@ export interface FileRoutesByTo {
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags': typeof TagsIndexRoute
-  '/api/auth/send': typeof ApiAuthSendRoute
+  '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
-  '/api/auth/verify': typeof ApiAuthVerifyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -122,9 +114,8 @@ export interface FileRoutesById {
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags/': typeof TagsIndexRoute
-  '/api/auth/send': typeof ApiAuthSendRoute
+  '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
-  '/api/auth/verify': typeof ApiAuthVerifyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -138,9 +129,8 @@ export interface FileRouteTypes {
     | '/day/$date'
     | '/tags/$tag'
     | '/tags/'
-    | '/api/auth/send'
+    | '/api/auth/sign-in'
     | '/api/auth/sign-out'
-    | '/api/auth/verify'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -152,9 +142,8 @@ export interface FileRouteTypes {
     | '/day/$date'
     | '/tags/$tag'
     | '/tags'
-    | '/api/auth/send'
+    | '/api/auth/sign-in'
     | '/api/auth/sign-out'
-    | '/api/auth/verify'
   id:
     | '__root__'
     | '/'
@@ -166,9 +155,8 @@ export interface FileRouteTypes {
     | '/day/$date'
     | '/tags/$tag'
     | '/tags/'
-    | '/api/auth/send'
+    | '/api/auth/sign-in'
     | '/api/auth/sign-out'
-    | '/api/auth/verify'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -181,9 +169,8 @@ export interface RootRouteChildren {
   DayDateRoute: typeof DayDateRoute
   TagsTagRoute: typeof TagsTagRoute
   TagsIndexRoute: typeof TagsIndexRoute
-  ApiAuthSendRoute: typeof ApiAuthSendRoute
+  ApiAuthSignInRoute: typeof ApiAuthSignInRoute
   ApiAuthSignOutRoute: typeof ApiAuthSignOutRoute
-  ApiAuthVerifyRoute: typeof ApiAuthVerifyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -251,11 +238,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TagsTagRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/auth/send': {
-      id: '/api/auth/send'
-      path: '/api/auth/send'
-      fullPath: '/api/auth/send'
-      preLoaderRoute: typeof ApiAuthSendRouteImport
+    '/api/auth/sign-in': {
+      id: '/api/auth/sign-in'
+      path: '/api/auth/sign-in'
+      fullPath: '/api/auth/sign-in'
+      preLoaderRoute: typeof ApiAuthSignInRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/sign-out': {
@@ -263,13 +250,6 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/sign-out'
       fullPath: '/api/auth/sign-out'
       preLoaderRoute: typeof ApiAuthSignOutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/auth/verify': {
-      id: '/api/auth/verify'
-      path: '/api/auth/verify'
-      fullPath: '/api/auth/verify'
-      preLoaderRoute: typeof ApiAuthVerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -285,9 +265,8 @@ const rootRouteChildren: RootRouteChildren = {
   DayDateRoute: DayDateRoute,
   TagsTagRoute: TagsTagRoute,
   TagsIndexRoute: TagsIndexRoute,
-  ApiAuthSendRoute: ApiAuthSendRoute,
+  ApiAuthSignInRoute: ApiAuthSignInRoute,
   ApiAuthSignOutRoute: ApiAuthSignOutRoute,
-  ApiAuthVerifyRoute: ApiAuthVerifyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

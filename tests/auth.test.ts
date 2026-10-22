@@ -2,8 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PGlite } from '@electric-sql/pglite'
 import { pgliteClient } from '../src/server/db/sql.ts'
-import { SessionStore, absoluteMs, renewEveryMs, slidingMs } from '../src/server/auth/sessions.ts'
-import { sendCode, verifyCode } from '../src/server/auth/supabase.ts'
+import { SessionStore, absoluteMs, freeFailures, maxWaitMs, renewEveryMs, slidingMs } from '../src/server/auth/sessions.ts'
+import { verifyPassword } from '../src/server/auth/supabase.ts'
 import { authRequired } from '../src/server/auth/config.ts'
 
 // Sign-in (Brian 247ee3f3; Ratchet f6dc9688, d1ec5845; Bumblebee 869d3f42). The gate itself is checked end to end
@@ -53,31 +53,59 @@ const fakeFetch = (reply: (path: string, body: Record<string, unknown>) => Reply
     return new Response(JSON.stringify(r.body), { status: r.status })
   }) as typeof fetch
 
-test('send: an unknown address and the per-address cooldown look like a send; failures for everyone are failures', async () => {
-  const cases: [Reply, 'sent' | 'failed'][] = [
-    [{ status: 200, body: {} }, 'sent'],
-    [{ status: 422, body: { error_code: 'otp_disabled', msg: 'Signups not allowed for otp' } }, 'sent'],
-    [{ status: 429, body: { error_code: 'over_request_rate_limit', msg: 'For security purposes, you can only request this after 41 seconds.' } }, 'sent'],
-    [{ status: 429, body: { error_code: 'over_email_send_rate_limit', msg: 'Email rate limit exceeded' } }, 'failed'],
-    [{ status: 500, body: {} }, 'failed'],
-  ]
-  for (const [reply, expected] of cases) assert.equal(await sendCode(config, 'x@example.com', fakeFetch(() => reply)), expected, JSON.stringify(reply))
-  assert.equal(await sendCode(config, 'x@example.com', (async () => { throw new Error('network') }) as typeof fetch), 'failed')
-  let sent: Record<string, unknown> = {}
-  await sendCode(config, ' Owner@Example.com ', fakeFetch((_p, b) => { sent = b; return { status: 200, body: {} } }))
-  assert.deepEqual(sent, { email: 'owner@example.com', create_user: false }, 'never creates an account')
-})
-
-test('verify: wrong, expired, malformed and non-owner codes are all the same refusal; Supabase\'s session is ended', async () => {
+test('password: wrong, unknown and non-owner are the same refusal; Supabase down throws; its session is ended', async () => {
   const calls: string[] = []
   const ok = (email: string) => () => ({ status: 200, body: { access_token: 'at', user: { id: 'u-' + email, email } } })
-  assert.deepEqual(await verifyCode(config, 'owner@example.com', '123456', fakeFetch(ok('Owner@example.com'), calls)), { ok: true, userId: 'u-Owner@example.com', email: 'owner@example.com' })
-  assert.ok(calls.includes('logout?scope=local'))
-  assert.deepEqual(await verifyCode(config, 'other@example.com', '123456', fakeFetch(ok('other@example.com'))), { ok: false })
-  assert.deepEqual(await verifyCode(config, 'owner@example.com', '123456', fakeFetch(() => ({ status: 403, body: { error_code: 'otp_expired', msg: 'Token has expired or is invalid' } }))), { ok: false })
+  assert.deepEqual(await verifyPassword(config, ' Owner@Example.com ', 'pw', fakeFetch(ok('owner@example.com'), calls)), { ok: true, userId: 'u-owner@example.com', email: 'owner@example.com' })
+  assert.deepEqual(calls, ['token?grant_type=password', 'logout?scope=local'])
+  assert.deepEqual(await verifyPassword(config, 'other@example.com', 'pw', fakeFetch(ok('other@example.com'))), { ok: false })
+  assert.deepEqual(await verifyPassword(config, 'owner@example.com', 'bad', fakeFetch(() => ({ status: 400, body: { error_code: 'invalid_credentials', msg: 'Invalid login credentials' } }))), { ok: false })
+  for (const status of [429, 500, 503]) await assert.rejects(verifyPassword(config, 'owner@example.com', 'pw', fakeFetch(() => ({ status, body: {} }))))
   const none: string[] = []
-  for (const code of ['12345', '1234567', 'abcdef', '']) assert.deepEqual(await verifyCode(config, 'owner@example.com', code, fakeFetch(ok('owner@example.com'), none)), { ok: false })
-  assert.equal(none.length, 0, 'a malformed code never reaches Supabase')
+  for (const password of ['', 'x'.repeat(1025)]) assert.deepEqual(await verifyPassword(config, 'owner@example.com', password, fakeFetch(ok('owner@example.com'), none)), { ok: false })
+  assert.equal(none.length, 0, 'an empty or oversized password never reaches Supabase')
+})
+
+test('brake: after 5 failures each try waits, doubling to 15 min; refused tries never push it out; success clears', async () => {
+  const db = await PGlite.create()
+  const store = new SessionStore(pgliteClient(db))
+  let clock = t0.getTime(), calls = 0
+  const now = () => new Date(clock)
+  const wrong = async () => { calls++; return false }, right = async () => { calls++; return true }
+  for (let i = 0; i < freeFailures; i++) assert.deepEqual(await store.attempt(wrong, now), { ok: false, waitMs: 0 })
+  assert.deepEqual(await store.attempt(wrong, now), { ok: false, waitMs: 30_000 }, '6th try waits 30 s')
+  assert.equal(calls, freeFailures, 'a braked try never reaches Supabase')
+  clock += 10_000
+  assert.equal((await store.attempt(right, now)).waitMs, 20_000, 'refused tries record nothing: still 20 s left, not 30')
+  clock += 20_000
+  assert.deepEqual(await store.attempt(wrong, now), { ok: false, waitMs: 0 })
+  assert.equal((await store.attempt(wrong, now)).waitMs, 60_000, 'doubles')
+  for (let i = 0; i < 10; i++) { clock += maxWaitMs; await store.attempt(wrong, now) }
+  assert.ok((await store.attempt(wrong, now)).waitMs <= maxWaitMs, 'never more than 15 min')
+  clock += maxWaitMs
+  assert.deepEqual(await store.attempt(right, now), { ok: true, waitMs: 0 })
+  assert.deepEqual(await store.attempt(wrong, now), { ok: false, waitMs: 0 }, 'a success cleared the count')
+  await db.close()
+})
+
+test('brake: simultaneous tries are taken one at a time, so only the free ones reach Supabase', async () => {
+  const db = await PGlite.create()
+  const store = new SessionStore(pgliteClient(db))
+  let calls = 0
+  const results = await Promise.all(Array.from({ length: 20 }, () => store.attempt(async () => { calls++; await new Promise(r => setTimeout(r, 5)); return false })))
+  assert.equal(calls, freeFailures)
+  assert.equal(results.filter(r => r.waitMs > 0).length, 20 - freeFailures)
+  await db.close()
+})
+
+test('brake: a signed-in session keeps working while new sign-ins wait', async () => {
+  const db = await PGlite.create()
+  const store = new SessionStore(pgliteClient(db))
+  const { token } = await store.create('u1', 'owner@example.com', t0)
+  for (let i = 0; i <= freeFailures; i++) await store.attempt(async () => false, () => at(1000))
+  assert.ok((await store.attempt(async () => true, () => at(2000))).waitMs > 0)
+  assert.equal((await store.check(token, at(3000)))?.email, 'owner@example.com')
+  await db.close()
 })
 
 test('sign-in can be switched off only off a hosting platform', () => {

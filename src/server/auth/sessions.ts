@@ -9,6 +9,9 @@ import { schemaName } from '../postgres-repository.ts'
 export const slidingMs = 30 * 24 * 3600_000
 export const absoluteMs = 180 * 24 * 3600_000
 export const renewEveryMs = 3600_000
+export const failureWindowMs = 15 * 60_000
+export const freeFailures = 5
+export const maxWaitMs = 15 * 60_000
 
 export interface Session { email: string; expiresAt: Date }
 export interface CheckedSession extends Session { renewed: boolean }
@@ -20,12 +23,23 @@ export class SessionStore {
   private ready?: Promise<void>
   private readonly sql: SqlClient
   private readonly table: string
-  constructor(sql: SqlClient, schema = schemaName()) { this.sql = sql; this.table = `${schema}.sessions` }
+  private readonly failures: string
+  constructor(sql: SqlClient, schema = schemaName()) { this.sql = sql; this.table = `${schema}.sessions`; this.failures = `${schema}.sign_in_failures` }
 
+  /**
+   * Once per process. The tables are created only if missing, re-checked under the lock: ALTER TABLE takes an
+   * exclusive lock, so running it on every cold start would stall, or deadlock with, sign-ins on other instances.
+   */
   private init(): Promise<void> {
-    this.ready ??= this.sql.transaction(async tx => {
-      const schema = this.table.split('.')[0]!
+    // A plain catalog query, not to_regclass: an advisory lock doesn't refresh the catalog cache that to_regclass
+    // reads, so after waiting for another instance's setup it could still report the tables missing.
+    const [schema, sessions] = this.table.split('.'), failures = this.failures.split('.')[1]
+    const exists = async (sql: SqlClient) => (await sql.query<{ n: number }>(
+      `select count(*)::int as n from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = $1 and c.relname = any($2::text[]) and c.relrowsecurity`, [schema, [sessions, failures]]))[0]?.n === 2
+    this.ready ??= exists(this.sql).then(ok => ok ? undefined : this.sql.transaction(async tx => {
       await tx.query("select pg_advisory_xact_lock(hashtext('daythread.init'))")
+      if (await exists(tx)) return
       await tx.exec(`create schema if not exists ${schema};
         create table if not exists ${this.table} (
           token_hash text primary key,
@@ -36,8 +50,11 @@ export class SessionStore {
           expires_at timestamptz not null
         );
         create index if not exists sessions_expires_at on ${this.table} (expires_at);
-        alter table ${this.table} enable row level security;`)
-    })
+        alter table ${this.table} enable row level security;
+        create table if not exists ${this.failures} (at timestamptz not null);
+        create index if not exists sign_in_failures_at on ${this.failures} (at);
+        alter table ${this.failures} enable row level security;`)
+    }))
     return this.ready
   }
 
@@ -69,5 +86,28 @@ export class SessionStore {
     if (!token || !isToken(token)) return
     await this.init()
     await this.sql.query(`delete from ${this.table} where token_hash = $1`, [hash(token)])
+  }
+
+  /**
+   * One sign-in try against the failures of every instance and address (Lead 48163c61). Tries run one at a time under
+   * a transaction lock, so simultaneous requests can't all read the old count and get through (Ratchet). After
+   * `freeFailures` in the window, each further try waits 30 s, doubling per failure, up to 15 min after the last
+   * failure; a refused try records nothing, so it never pushes the wait out. A success clears the count. Only new
+   * sign-ins wait: existing sessions are never touched (Bumblebee 2cef8a00).
+   */
+  async attempt(verify: () => Promise<boolean>, now = () => new Date()): Promise<{ ok: boolean; waitMs: number }> {
+    await this.init()
+    return this.sql.transaction(async tx => {
+      await tx.query("select pg_advisory_xact_lock(hashtext('daythread.sign-in'))")
+      const at = now()
+      const [row] = await tx.query<{ n: number; last: string | Date | null }>(
+        `select count(*)::int as n, max(at) as last from ${this.failures} where at > $1`, [new Date(at.getTime() - failureWindowMs).toISOString()])
+      const waitMs = row && row.n >= freeFailures && row.last ? Math.max(0, new Date(row.last).getTime() + Math.min(30_000 * 2 ** (row.n - freeFailures), maxWaitMs) - at.getTime()) : 0
+      if (waitMs > 0) return { ok: false, waitMs }
+      if (await verify()) { await tx.query(`delete from ${this.failures}`); return { ok: true, waitMs: 0 } }
+      await tx.query(`insert into ${this.failures} (at) values ($1)`, [at.toISOString()])
+      await tx.query(`delete from ${this.failures} where at < $1`, [new Date(at.getTime() - failureWindowMs).toISOString()])
+      return { ok: false, waitMs: 0 }
+    })
   }
 }

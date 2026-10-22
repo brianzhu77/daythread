@@ -4,10 +4,10 @@ import { z } from 'zod'
 import { postgresSql } from '../storage.ts'
 import { authConfig, authRequired } from './config.ts'
 import { SessionStore, type CheckedSession } from './sessions.ts'
-import { sendCode, verifyCode } from './supabase.ts'
+import { verifyPassword, type VerifyResult } from './supabase.ts'
 
 /** Reachable without a session: the sign-in screen and the calls it makes; build assets are public code. */
-const publicPaths = new Set(['/sign-in', '/api/auth/send', '/api/auth/verify', '/api/auth/sign-out'])
+const publicPaths = new Set(['/sign-in', '/api/auth/sign-in', '/api/auth/sign-out'])
 const isPublic = (path: string) => publicPaths.has(path) || path.startsWith('/assets/') || /^\/[\w-]+\.(ico|png|svg|webmanifest)$/.test(path)
 
 let store: SessionStore | undefined
@@ -90,34 +90,36 @@ export async function currentEmail(): Promise<string | null> {
 }
 const secureCookieNames = ['__Host-daythread_session', 'daythread_session']
 
-// Per-instance brake on code requests from one address; Supabase's own limits stay the real ones.
-const sends = new Map<string, number[]>()
-function tooMany(ip: string, now = Date.now()): boolean {
-  const recent = (sends.get(ip) ?? []).filter(t => now - t < 10 * 60_000)
-  recent.push(now); sends.set(ip, recent)
-  return recent.length > 5
+// Per-address brake on sign-in tries (failed or not) within one instance; the global failure backoff is in the store.
+const tries = new Map<string, number[]>()
+const ipWindowMs = 10 * 60_000, ipLimit = 10
+function ipWaitMs(ip: string, now = Date.now()): number {
+  const recent = (tries.get(ip) ?? []).filter(t => now - t < ipWindowMs)
+  if (recent.length >= ipLimit) { tries.set(ip, recent); return recent[0]! + ipWindowMs - now }
+  recent.push(now); tries.set(ip, recent)
+  return 0
 }
 const clientIp = (request: Request) => request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'local'
 
-const emailBody = z.object({ email: z.string().trim().email().max(320) })
-const verifyBody = emailBody.extend({ code: z.string().trim().regex(/^\d{6}$/) })
+const signInBody = z.object({ email: z.string().trim().email().max(320), password: z.string().min(1).max(1024) })
 const noStore = { 'cache-control': 'no-store' }
+const refuse = (status: number, error: string, extra: Record<string, unknown> = {}) => Response.json({ ok: false, error, ...extra }, { status, headers: noStore })
 
-export async function handleSend(request: Request): Promise<Response> {
-  const body = emailBody.safeParse(await request.json().catch(() => null))
-  if (!body.success) return Response.json({ ok: false, error: 'invalid-email' }, { status: 400, headers: noStore })
-  if (tooMany(clientIp(request))) return Response.json({ ok: false, error: 'send-failed' }, { status: 429, headers: noStore })
-  const result = await sendCode(authConfig(), body.data.email)
-  return result === 'sent' ? Response.json({ ok: true }, { headers: noStore }) : Response.json({ ok: false, error: 'send-failed' }, { status: 503, headers: noStore })
-}
-
-export async function handleVerify(request: Request): Promise<Response> {
-  const body = verifyBody.safeParse(await request.json().catch(() => null))
-  if (!body.success) return Response.json({ ok: false, error: 'wrong-code' }, { status: 401, headers: noStore })
-  let result
-  try { result = await verifyCode(authConfig(), body.data.email, body.data.code) }
-  catch { return Response.json({ ok: false, error: 'unavailable' }, { status: 503, headers: noStore }) }
-  if (!result.ok) return Response.json({ ok: false, error: 'wrong-code' }, { status: 401, headers: noStore })
+/**
+ * Email + password. Wrong password, unknown address and non-owner are one identical 401; a brake is 429 with the real
+ * wait (the same for every address); Supabase unreachable is 503. The password is never logged or echoed.
+ */
+export async function handleSignIn(request: Request): Promise<Response> {
+  const body = signInBody.safeParse(await request.json().catch(() => null))
+  if (!body.success) return refuse(401, 'wrong')
+  const tooMany = (ms: number) => refuse(429, 'too-many', { retryAfter: Math.ceil(ms / 1000) })
+  const ipWait = ipWaitMs(clientIp(request))
+  if (ipWait > 0) return tooMany(ipWait)
+  let result = { ok: false } as VerifyResult, attempt
+  try { attempt = await sessions().attempt(async () => (result = await verifyPassword(authConfig(), body.data.email, body.data.password)).ok) }
+  catch { return refuse(503, 'unavailable') }
+  if (attempt.waitMs > 0) return tooMany(attempt.waitMs)
+  if (!result.ok) return refuse(401, 'wrong')
   const { token, expiresAt } = await sessions().create(result.userId, result.email)
   return Response.json({ ok: true }, { headers: { ...noStore, 'set-cookie': sessionCookie(request, token, expiresAt) } })
 }
