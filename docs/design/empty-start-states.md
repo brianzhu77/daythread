@@ -41,11 +41,15 @@ What the build shows today, and the change for each. Only text and visibility ch
 
 The old app keeps running read-only on his Mac (3000). Every screen there shows one line at the top, "**Archived · read
 only · your new Daythread is at {url}**". Write entry points (+ capture, the morning card, Draft my day, the editor) stay
-visible but inert. Edits are refused with the same line, and nothing else changes. One way back, from the new app (Bumblebee `58a76f87`): a single quiet row at the bottom of the
-desktop sidebar, under Trash, in `--ink-3`: "**Old notes (before {switch date}) · on your Mac mini**". It opens the
-archive URL in a new tab. Desktop only, since the phone can't reach that address. It's a plain link out, never a list of
-old pages inside the new app, so the old data never looks like part of the new one. If the archive doesn't answer, the
-browser's own error shows; the row stays, because the Mac may just be asleep.
+visible but inert. Edits are refused with the same line, and nothing else changes. One way back, from the new app (Bumblebee `58a76f87`, Ratchet `a63389b9`): a single quiet row at the bottom of the
+desktop sidebar, under Trash, in `--ink-3`. "Desktop" can't tell which computer it is (another Mac's
+`localhost:3000` is itself), so the link is **enabled per browser, on the Mac mini only**:
+- **Default, every device:** plain text, not a link: "**Old notes (before {switch date}) are on your Mac mini**".
+  Clicking it opens a small popover: "They're in the old app at localhost:3000 · **This is my Mac mini**".
+- **"This is my Mac mini"** stores a flag in that browser's local storage, with nothing on the server. From then on,
+  that browser shows the row as a link, "Old notes (before {switch date}) ↗", opening the archive in a new tab.
+- It's never shown on the phone. It's a plain link out, never old pages inside the new app. If the archive doesn't
+  answer, the browser's own error shows; the row stays, because the Mac may just be asleep.
 
 ## 4. Checks
 
