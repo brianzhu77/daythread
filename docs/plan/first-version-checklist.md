@@ -136,7 +136,7 @@ wait (Lead f1533bee). A0 runs in Brian's account at S5; we don't create third-pa
 
 | ID | Step (plan id) | Size | Status |
 | --- | --- | --- | --- |
-| S0 | Latency spike in his own Supabase/Fly account (A0). Moved to S5 (Lead f1533bee); meanwhile a round-trip check from his Mac to Fly `sjc` and AWS us-west-1, times requests per screen, against the budget (day open < 300 ms, save < 200 ms) | half a day | moved to S5 |
+| S0 | Latency spike in his own Supabase/Fly account (A0). Moved to S5 (Lead f1533bee); meanwhile a round-trip check from his Mac to Fly `sjc` and AWS us-west-1, times requests per screen, against the budget (day open < 300 ms, save < 200 ms). Done 2026-10-22 (Roadbuster f1710055, estimate from measured round trips, not a live test): day open about 100 ms, save about 60–80 ms, first visit adds about 2 round trips; suggests Oregon (Supabase + Fly `sea`/`pdx`) over California, about 16 ms less per request, to confirm at S5 | half a day | moved to S5; estimate within budget |
 | S1 | Per-aggregate reads, one workspace lock per command, contract suite v2, still on SQLite (A1) | 4–5 days | building (Roadbuster, from 36f0044) |
 | S2 | `operations` with typed undo, legacy receipts imported, `brought_from` / `copied_from` relations (A2) | 4–5 days | missing |
 | S3 | `blocks` as the only content source, versioned BlockNote inline `content`, `links` / `block_tags` indexes (A3) | 3 days | missing |
