@@ -246,6 +246,12 @@ and one status he can trust.
 - **The bridge is A7's evidence** (Bumblebee 24f1324a): while it runs (about 3 weeks), count what he does on the phone
   (pages opened, typing, captures, task ticks) and when it fails because the Mac or home connection is down. Before A7
   starts, check the design against it; if he mostly ticks tasks on the phone, the ticking queue moves into A7.
+  Receipts have no time and no device today (Bumblebee), so the counts need a small addition, **with no database
+  change**: the server appends one content-free line per command to `.daythread-local/usage.jsonl` (time, command
+  type, `phone` / `desktop` from the user agent, outcome), beside the existing content-free debug log fields
+  (`src/server/debug-log.ts`). Failures can't reach the server, so the phone counts "couldn't reach" locally (times
+  only, no text) and sends the count with its next successful request. About 2 hours plus a narrow Ratchet check.
+  From A2 on, `operations` carries `created_at` and `device` itself.
 - **Goal A success check after cutover:** in the first 7 days he opens Daythread on his phone away from home at least 3
   times, and no text is lost.
 - **iPhone storage (checked, partly):** WebKit's 2020 policy deletes a site's script-written storage after 7 days of
@@ -276,7 +282,7 @@ Ids stay text (existing ids are kept on import, no remapping). All tables: `work
 | `captures` | `page_id`, `text`, `captured_at`, `mode` | `captures` (user part) |
 | `ai_runs`, `ai_proposals` | see §2.6 | page `draft`, capture model fields |
 | `model_attempts` | unchanged | unchanged |
-| `operations` | `id`, `type`, `fingerprint`, `result jsonb`, `inverse jsonb` | `receipts`, undo snapshot, in-entity undo records |
+| `operations` | `id`, `type`, `fingerprint`, `device`, `result jsonb`, `inverse jsonb` | `receipts`, undo snapshot, in-entity undo records |
 | `links` | `source_block_id`, `ref_id`, `target_page_id`, `target_block_id`, `kind` | `refs`, references index, Linked from scan |
 | `block_tags` | `block_id`, `tag_key`, `tag` | tags scan |
 | `activity` | `entity_id`, `kind`, `day`, `data jsonb` | `openedOn`, `dismissedOn`, `decisions` |
