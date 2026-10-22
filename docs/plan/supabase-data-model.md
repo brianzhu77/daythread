@@ -207,7 +207,7 @@ can be rebuilt from blocks at any time. These are also the edges of the content 
 - **Region:** the database in Supabase's US West region and the server in the nearest Fly region (San Jose), so a query
   is about a millisecond away, and Vancouver is a short hop from both.
 - **Secrets:** the database URL, the model key and the Supabase keys live only in **Fly secrets** (encrypted, injected
-  as environment variables). Locally they stay in `.env.local` (ignored by git). `loadModelEnv` reads env first, the file
+  as environment variables). Locally they stay in `.env.local` (ignored by git). `loadModelEnv` will read the environment first and the file
   only in development. Nothing in the repo or the image.
 - **Cost on top of Supabase Pro ($25):** a shared-CPU machine runs about **$3–7/month** (Fly's table: 512 MB about $3.19,
   1 GB about $6–7 in US regions). Recommend 1 GB for Node + model calls: total about **$32/month**.
