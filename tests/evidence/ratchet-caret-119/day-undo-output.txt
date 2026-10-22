@@ -1,0 +1,59 @@
+(node:97315) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+1280 before {
+  title: 'Undo day task',
+  status: 'open',
+  plannedOn: '2026-10-22',
+  placement: 'included'
+}
+1280 after-delete {
+  title: 'Undo day task',
+  status: 'open',
+  plannedOn: null,
+  placement: 'excluded'
+}
+1280 after-undo {
+  title: 'Undo day task',
+  status: 'open',
+  plannedOn: '2026-10-22',
+  placement: 'included'
+}
+PASS 1280 day Undo restores same task, placement and plan through reload
+390 before {
+  title: 'Undo day task',
+  status: 'open',
+  plannedOn: '2026-10-22',
+  placement: 'included'
+}
+390 after-delete {
+  title: 'Undo day task',
+  status: 'open',
+  plannedOn: null,
+  placement: 'excluded'
+}
+390 after-undo {
+  title: 'Undo day task',
+  status: 'open',
+  plannedOn: '2026-10-22',
+  placement: 'included'
+}
+PASS 390 day Undo restores same task, placement and plan through reload
+touch before {
+  title: 'Undo day task',
+  status: 'open',
+  plannedOn: '2026-10-22',
+  placement: 'included'
+}
+touch after-delete {
+  title: 'Undo day task',
+  status: 'open',
+  plannedOn: null,
+  placement: 'excluded'
+}
+touch after-undo {
+  title: 'Undo day task',
+  status: 'open',
+  plannedOn: '2026-10-22',
+  placement: 'included'
+}
+PASS touch day Undo restores same task, placement and plan through reload

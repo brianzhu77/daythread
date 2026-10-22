@@ -1,0 +1,10 @@
+ok   1280: a task deleted letter by letter: the caret is at the end of the (wrapping) line above (task "a long second line that wraps onto another visual line at phone width so the end is on its last line" @100)
+ok   1280: and typing continues that line
+ok   1280: ⌘Z brings the deleted row back (first | a long second line that wraps onto another visual line at phone width so the end is on its last line | undo me |)
+ok   1280: the line above is a section heading: the caret is at the end of its text (heading "TODO - Other" @12)
+all passed
+ok   1280: past day: deleting "after" skips the hidden empty row above and lands at the end of "past task" (task "past task" @9)
+all passed
+ok   1280: an empty to-do right under the cards
+ok   1280: the lines above are cards: the caret goes to the nearest text line above them (heading "Notes" @5)
+all passed

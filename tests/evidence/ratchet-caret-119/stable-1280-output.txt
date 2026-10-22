@@ -1,0 +1,6 @@
+ok   1280 /day/2026-12-29: typing into the empty task under "TODO - Top 3" moves nothing
+ok   1280 /day/2026-12-29: typing into the empty task under "TODO - Other" moves nothing
+ok   1280 /day/2026-12-29: typing into the empty bulletListItem under "Events" moves nothing
+ok   1280 /day/2026-12-29: typing into the empty bulletListItem under "Good Stuffs" moves nothing
+ok   1280 /day/2026-12-29: typing into the empty bulletListItem under "Notes" moves nothing
+all passed
