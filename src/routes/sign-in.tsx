@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { Button, InputOTP, Input, Label, REGEXP_ONLY_DIGITS, TextField } from '@heroui/react'
 import { useEffect, useState, type FormEvent } from 'react'
 
 export const Route = createFileRoute('/sign-in')({
@@ -56,28 +57,35 @@ function SignIn() {
     setError(r.error === 'unavailable' ? "Couldn't sign in · Try again" : "That code didn't work · Send a new code")
   }
 
+  const wrongCode = error === "That code didn't work · Send a new code"
   return (
     <main className="sign-in">
-      <h1>Daythread</h1>
+      <p className="sign-in-brand">Daythread</p>
       {step === 'email' ? (
         <form onSubmit={send}>
-          <label htmlFor="sign-in-email">Email</label>
-          <input id="sign-in-email" type="email" autoComplete="email" inputMode="email" required value={email} onChange={e => setEmail(e.target.value)} autoFocus />
+          <h1>Sign in</h1>
+          <TextField type="email" autoComplete="email" inputMode="email" isRequired value={email} onChange={setEmail} autoFocus fullWidth>
+            <Label>Email</Label>
+            <Input />
+          </TextField>
           {error && <p className="sign-in-error" role="alert">{error}</p>}
-          <button type="submit" disabled={busy || !email.trim()}>Send code</button>
+          <Button type="submit" variant="primary" fullWidth isPending={busy} isDisabled={!email.trim()}>Send code</Button>
         </form>
       ) : (
         <form onSubmit={verify}>
-          <p>Enter the 6-digit code we sent to</p>
-          <p className="sign-in-address">Sent to {email.trim()}</p>
-          <label htmlFor="sign-in-code">Code</label>
-          <input id="sign-in-code" inputMode="numeric" autoComplete="one-time-code" pattern="\d{6}" maxLength={6} required value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} autoFocus />
-          {error && <p className="sign-in-error" role="alert">{error === "That code didn't work · Send a new code"
+          <h1>Enter the 6-digit code</h1>
+          <p className="sign-in-meta sign-in-address">Sent to {email.trim()}</p>
+          <InputOTP maxLength={6} pattern={REGEXP_ONLY_DIGITS} value={code} onChange={setCode} isInvalid={wrongCode} autoFocus aria-label="Code" autoComplete="one-time-code">
+            <InputOTP.Group>
+              {[0, 1, 2, 3, 4, 5].map(i => <InputOTP.Slot key={i} index={i} />)}
+            </InputOTP.Group>
+          </InputOTP>
+          {error && <p className="sign-in-meta sign-in-error" role="alert">{wrongCode
             ? <>That code didn't work · <button type="button" className="link" onClick={() => void send()}>Send a new code</button></>
             : error}</p>}
-          <button type="submit" disabled={busy || code.length !== 6}>Sign in</button>
+          <Button type="submit" variant="primary" fullWidth isPending={busy} isDisabled={code.length !== 6}>Sign in</Button>
           {now - sentAt >= resendAfterMs && (
-            <p className="sign-in-help">No code? · <button type="button" className="link" onClick={() => { setStep('email'); setError(null) }}>Use a different email</button> · <button type="button" className="link" onClick={() => void send()}>Resend</button></p>
+            <p className="sign-in-meta">No code? · <button type="button" className="link" onClick={() => { setStep('email'); setError(null) }}>Use a different email</button> · <button type="button" className="link" onClick={() => void send()}>Resend</button></p>
           )}
         </form>
       )}

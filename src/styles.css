@@ -1222,14 +1222,29 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-selection-bar.is-row-actions .app-menu { top:auto; bottom:calc(100% + 8px); }
 @media(hover:none) { .editor-row-more { display:none; } }
 
-/* Sign-in (empty-start-states.md §2). Placeholder styling until Jazz's tokens land; Jazz owns the final look. */
-.sign-in { max-width: 22rem; margin: 18vh auto 0; padding: 0 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
-.sign-in form { display: flex; flex-direction: column; gap: 0.6rem; }
-.sign-in input { font: inherit; padding: 0.6rem 0.75rem; border: 1px solid var(--line, #ddd); border-radius: 8px; }
-.sign-in button[type='submit'] { font: inherit; padding: 0.6rem; border-radius: 8px; }
-.sign-in-address { color: var(--ink, inherit); word-break: break-all; }
-.sign-in-error, .sign-in-help { font-size: 0.9em; }
-.link { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
+/* Sign-in (empty-start-states.md §2) on the v1 tokens (tokens.md §7). HeroUI's palette maps onto ours on this
+   screen only (§6); app-wide comes after sign-in as its own commit. */
+.sign-in {
+  --foreground: var(--ink); --field-foreground: var(--ink); --default-foreground: var(--ink); --link: var(--blue);
+  --muted: var(--ink-2); --default: var(--fill); --accent: var(--blue); --focus: var(--blue);
+  --accent-foreground: #fff; --danger: var(--red); --danger-foreground: #fff;
+  --background: var(--bg-doc); --surface: var(--card); --surface-secondary: var(--fill-soft);
+  --border: var(--line); --separator: var(--line); --field-background: var(--fill); --field-placeholder: var(--placeholder);
+  --field-radius: var(--radius-block); --disabled-opacity: .4;
+  min-height: 100dvh; background: var(--bg-doc); color: var(--ink);
+  max-width: 360px; margin: 0 auto; padding: 18vh 18px 0; display: flex; flex-direction: column; gap: 20px;
+}
+.sign-in-brand { font-size: var(--text-ui); font-weight: var(--weight-semibold); margin: 0; }
+.sign-in h1 { font-size: var(--text-title); font-weight: var(--weight-bold); margin: 0; }
+.sign-in form { display: flex; flex-direction: column; gap: 14px; }
+.sign-in input { height: 48px; font-size: var(--text-body); }
+.sign-in [data-slot='input-otp-slot'] { width: 44px; height: 52px; font-size: var(--text-title); background: var(--fill); }
+.sign-in button[type='submit'] { height: 48px; border-radius: var(--radius-pill); background: var(--blue); color: #fff; font-size: var(--text-body); }
+.sign-in-meta { font-size: var(--text-meta); color: var(--ink-2); margin: 0; }
+.sign-in-address { color: var(--ink); word-break: break-all; }
+.sign-in-error { font-size: var(--text-meta); color: var(--red); margin: 0; }
+.sign-in .link { color: var(--blue); }
+.link { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
 .account-row { color: var(--ink-3, #888); font-size: 0.85em; margin: 1rem 0 0; }
 .account-row-phone { display: none; }
 @media (max-width: 599px) { .account-row-phone { display: block; } }
