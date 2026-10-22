@@ -19,6 +19,17 @@ function shown(view: EditorView, pos: number): boolean {
   return !!block && block.getClientRects().length > 0
 }
 
+/**
+ * The end of the nearest text line above `pos` that is on screen: page cards and other blocks without text are passed
+ * over, and so are a past day's hidden empty rows. Null when there is none (the first line of the page).
+ */
+export function endOfLineAbove(view: EditorView, pos: number): number | null {
+  let target = Selection.findFrom(view.state.doc.resolve(pos), -1, true)
+  while (target instanceof TextSelection && !shown(view, target.$from.start()))
+    target = Selection.findFrom(view.state.doc.resolve(target.$from.before()), -1, true)
+  return target instanceof TextSelection ? target.$from.end() : null
+}
+
 export function moveVertically(view: EditorView, dir: -1 | 1): boolean {
   const { selection, doc } = view.state
   if (!(selection instanceof TextSelection) || !selection.empty) return false
