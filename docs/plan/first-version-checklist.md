@@ -171,6 +171,11 @@ through the Lead. **Rule: nobody promotes to Production or puts the pooler URL i
 anyone with no login (HTTP 200), reading and writing his real data and able to use his model key (Lead 363cbfed, Roadbuster
 4ffa7c6b). The earlier "Production can't reach his data" was wrong. Fix: close it now, then Production holds **no**
 `DATABASE_URL`/`OPENROUTER_API_KEY` at all until sign-in; check logs for non-owner requests since 16:07Z.
+**Closed 16:16Z** (Lead 428cb925): production paused (Vercel `pause`, 503 DEPLOYMENT_PAUSED); the `git-live` link still
+works behind Vercel's login. **Nobody unpauses until sign-in passes.** Hobby keeps no runtime logs for the window, so
+anonymous reads can't be ruled out; the workspace then held only his Top 3 tasks (revision 1→23), 0 captures, no model calls.
+Next: Jazz `design/tokens` (no visual change), then Roadbuster `feat/sign-in` (30-day sliding, 180-day cap, owner check,
+fake auth endpoint in tests; real check = Brian's own first sign-in with Vercel's lock on), target testable today.
 Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
 `fix/capture-late-refresh` 2201274. 3000 runs the same build; rollback `.daythread-local/backups/2026-10-22-before-vercel-now/dist`.
 
