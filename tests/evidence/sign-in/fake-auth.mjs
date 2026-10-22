@@ -2,7 +2,7 @@
 // /__down makes it answer 503; /__calls counts password checks, so a test can see which tries reached it.
 import { createServer } from 'node:http'
 const port = Number(process.argv[2] ?? 54999)
-const users = new Map([['owner@example.com', { id: 'u-owner', password: 'owner-pass-1' }], ['other@example.com', { id: 'u-other', password: 'other-pass-1' }]])
+const users = new Map([['owner@example.com', { id: '0aaaaaaa-0000-4000-8000-000000000001', password: 'owner-pass-1' }], ['other@example.com', { id: '0bbbbbbb-0000-4000-8000-000000000002', password: 'other-pass-1' }]])
 let down = false, calls = 0
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)) }
 createServer(async (req, res) => {

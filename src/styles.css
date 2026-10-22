@@ -1245,6 +1245,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .sign-in-password input { width: 100%; padding-right: 64px; }
 .sign-in-show { position: absolute; right: 0; top: 0; height: 48px; min-width: 56px; padding: 0 12px; font-size: var(--text-meta); }
 .sign-in-error { font-size: var(--text-meta); color: var(--red); margin: 0; }
+.sign-in-note { font-size: var(--text-meta); color: var(--ink-2); margin: 0; }
 .sign-in .link { color: var(--blue); }
 .link { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
 .account-row { color: var(--ink-3); font-size: var(--text-meta); margin: 1rem 0 0; }
