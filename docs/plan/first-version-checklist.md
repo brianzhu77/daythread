@@ -161,6 +161,14 @@ usage; started empty. Done check passed: today opens at 1280 and 390, model live
 day page or an open task from another day exists; Review with no tasks reads "{day} · nothing planned". Alignment 310 pass /
 0 fail / 0 missing; Ratchet #109 (report main f630a8a). Rollback `.daythread-local/backups/2026-10-22-before-empty-lines/dist`.
 Nothing in flight; the next step waits on Brian.
+**Vercel LIVE 2026-10-22 16:10Z: main 0db03a0** (PR #3 + Ratchet #110; Lead 77e61754). Brian confirmed "it works!" from
+outside: https://daythread-git-live-dogrods-projects.vercel.app, locked by his Vercel login (no app sign-in). Same Supabase
+schema as 3000 (pooler, iad1, 120 s functions). Postgres is the default on Vercel; model work kept alive with `waitUntil`
+(verified on Vercel in a throwaway deployment: capture applied 4 s after a 192 ms response); a capture still organizing
+after 5 min ends in "Model unavailable · text saved" + Retry. Env is Preview scoped to branch `live`; `live` deploys go
+through the Lead. **Rule: nobody promotes to Production or puts the pooler URL in Production until there's sign-in.**
+Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
+`fix/capture-late-refresh` 2201274. 3000 runs the same build; rollback `.daythread-local/backups/2026-10-22-before-vercel-now/dist`.
 
 **Previous plan (passed Ratchet #105, 2026-10-22, now stopped):** `docs/plan/core-build.md` on docs/core-build 3d87017 (Roadbuster),
 report `docs/reviews/core-build-ratchet.md` 31e194e. Direct build of the general core on Postgres, starting empty, no import.
