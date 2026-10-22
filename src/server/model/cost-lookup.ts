@@ -1,7 +1,7 @@
 // Settles an "unknown" charge from OpenRouter's own record of the generation (GET /generation?id=). An unknown attempt
 // has a generation id but no cost; this is the automatic recovery, `scripts/model-reconcile.ts` stays the manual one.
 // Never an implicit zero: no answer, a non-number or an error leaves the attempt unknown and calls paused.
-import type { SqliteWorkspaceRepository } from '../sqlite-repository.ts'
+import type { ServerRepository } from '../repository.ts'
 import type { ModelConfig } from './openrouter.ts'
 
 export async function lookupGenerationCost(config: ModelConfig, generationId: string, fetchImpl: typeof fetch = fetch, timeoutMs = 10_000): Promise<number | null> {
@@ -32,7 +32,7 @@ export interface RecoverOptions {
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 /** Returns how many unknown attempts were settled. */
-export async function recoverUnknownCosts(repository: SqliteWorkspaceRepository, config: ModelConfig, options: RecoverOptions = {}): Promise<number> {
+export async function recoverUnknownCosts(repository: ServerRepository, config: ModelConfig, options: RecoverOptions = {}): Promise<number> {
   const now = options.now ?? (() => new Date())
   const open = (await repository.modelAttempts()).filter(a => a.state === 'unknown' && a.generationId && (!options.attemptId || a.id === options.attemptId))
   let settled = 0

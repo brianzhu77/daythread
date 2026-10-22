@@ -3,7 +3,6 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { parseEnv } from 'node:util'
 import { getRepository } from '../storage.ts'
-import { SqliteWorkspaceRepository } from '../sqlite-repository.ts'
 import { costUnknownCaptureIds, modelStatus } from '../model-ledger.ts'
 import { modelConfig, type ModelConfig } from './openrouter.ts'
 import { organizeCapture } from './organize.ts'
@@ -27,19 +26,14 @@ export type ModelState = 'simulated' | 'ready' | 'paused' | 'budget-used'
 export interface ModelInfo { state: ModelState; model: string | null; mode: 'auto' | 'confirm'; costUnknown: string[] }
 
 let recovered: Promise<void> | null = null
-function sqlite(): SqliteWorkspaceRepository {
-  const repository = getRepository()
-  if (!(repository instanceof SqliteWorkspaceRepository)) throw new Error('The model needs the SQLite store')
-  return repository
-}
 /**
  * Once per server process: attempts a previous process left in flight become estimated; unknown costs (a generation
  * id, no cost) are looked up once in the background, so a pause from before a restart can lift on its own.
  */
 function ready(): Promise<void> {
-  recovered ??= sqlite().markInterruptedModelAttempts(new Date().toISOString()).then(() => {
+  recovered ??= getRepository().markInterruptedModelAttempts(new Date().toISOString()).then(() => {
     const c = config()
-    if (c) void recoverUnknownCosts(sqlite(), c).catch(() => undefined)
+    if (c) void recoverUnknownCosts(getRepository(), c).catch(() => undefined)
   })
   return recovered
 }
@@ -53,7 +47,7 @@ export async function modelInfo(): Promise<ModelInfo> {
   const c = config()
   if (!c) return { state: 'simulated', model: null, mode: captureMode(), costUnknown: [] }
   await ready()
-  const attempts = await sqlite().modelAttempts(), s = modelStatus(attempts, today())
+  const attempts = await getRepository().modelAttempts(), s = modelStatus(attempts, today())
   return { state: s.state, model: c.model, mode: captureMode(), costUnknown: costUnknownCaptureIds(attempts) }
 }
 
@@ -61,7 +55,7 @@ export async function modelInfo(): Promise<ModelInfo> {
 export async function submitCaptureForModel(operationId: string, pageId: string, text: string): Promise<{ captureId: string | null; info: ModelInfo }> {
   const info = await modelInfo()
   if (info.state === 'simulated') return { captureId: null, info }
-  const repository = sqlite(), c = config()!
+  const repository = getRepository(), c = config()!
   const ws = await repository.load()
   const r = await repository.execute({ operationId, expectedRevision: ws.revision, action: { type: 'capture-for-model', pageId, text, model: c.model, capturedAt: new Date().toISOString() } })
   const captureId = r.receipt.entityId ?? null
@@ -74,7 +68,7 @@ export async function retryCaptureForModel(operationId: string, captureId: strin
   const info = await modelInfo()
   // Paused or out of budget: refused before the capture is touched, not only hidden in the receipt (Ratchet #70).
   if (info.state !== 'ready') return { ok: false, info }
-  const repository = sqlite(), c = config()!
+  const repository = getRepository(), c = config()!
   const ws = await repository.load()
   await repository.execute({ operationId, expectedRevision: ws.revision, action: { type: 'retry-capture', captureId } })
   void organizeCapture({ repository, config: c, mode: info.mode }, captureId).catch(error => console.error(JSON.stringify({ level: 'error', event: 'model.organize', captureId, error: error instanceof Error ? error.message : 'UnknownError' })))
@@ -88,7 +82,6 @@ let draftsRecovered = false
  */
 export async function expireDrafts(now = new Date()): Promise<void> {
   const repository = getRepository()
-  if (!(repository instanceof SqliteWorkspaceRepository)) return
   const all = !draftsRecovered
   draftsRecovered = true
   await expireStuckDrafts(repository, now, { all })
@@ -101,7 +94,7 @@ export async function expireDrafts(now = new Date()): Promise<void> {
  */
 export async function startDraftForDay(operationId: string, date: string): Promise<{ mode: 'simulated' | 'real'; info: ModelInfo }> {
   const info = await modelInfo()
-  const repository = sqlite(), c = config()
+  const repository = getRepository(), c = config()
   if (info.state === 'simulated' || !c || process.env.DAYTHREAD_DRAFT === 'simulated') {
     await repository.executeOnLatest(operationId, { type: 'generate-draft', date, trigger: 'card' })
     return { mode: 'simulated', info }

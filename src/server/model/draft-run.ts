@@ -2,7 +2,7 @@
 // model call is never inside a database transaction — record request → reserve → call → record (ledger + draft in one
 // transaction). Only the run still drafting under its runId is ever changed; everything else just settles its cost.
 import type { DraftFailure, LocalDate, Workspace } from '../../domain/types.ts'
-import type { SqliteWorkspaceRepository } from '../sqlite-repository.ts'
+import type { ServerRepository } from '../repository.ts'
 import { dailyCapUsd, sha256 } from '../model-ledger.ts'
 import { callStructured, ModelError, type ModelConfig } from './openrouter.ts'
 import { recoverUnknownCosts } from './cost-lookup.ts'
@@ -13,7 +13,7 @@ import { buildDraftRequest, draftMaxTokens, draftSchema, readDraftAnswer } from 
 export const draftExpiryMs = 90_000
 
 export interface DraftDeps {
-  repository: SqliteWorkspaceRepository
+  repository: ServerRepository
   config: ModelConfig
   fetchImpl?: typeof fetch
   now?: () => Date
@@ -27,7 +27,7 @@ export type DraftOutcome = 'drafted' | 'failed' | 'stale'
 const runOf = (ws: Workspace, date: LocalDate) => ws.pages.find(p => p.type === 'daily' && p.date === date)?.draft?.run
 
 /** Ends the run as failed (only if it's still drafting under this runId); a refusal means it already moved on. */
-async function failRun(repository: SqliteWorkspaceRepository, date: LocalDate, runId: string, failure: DraftFailure, extra: { expired?: boolean; costUnknown?: boolean } = {}) {
+async function failRun(repository: ServerRepository, date: LocalDate, runId: string, failure: DraftFailure, extra: { expired?: boolean; costUnknown?: boolean } = {}) {
   try { await repository.executeOnLatest(`draft-failed:${runId}`, { type: 'model-draft-failed', date, runId, failure, ...extra }) } catch { /* moved on */ }
 }
 
@@ -78,7 +78,7 @@ async function draftOnce(deps: DraftDeps, date: LocalDate, runId: string): Promi
   }
 
   // The ledger settles whatever happens; the draft changes only while this run is still drafting.
-  const record = (actualUsd: number | null, generationId: string | null, action: (w: Workspace) => Parameters<SqliteWorkspaceRepository['executeOnLatest']>[1], note?: string) =>
+  const record = (actualUsd: number | null, generationId: string | null, action: (w: Workspace) => Parameters<ServerRepository['executeOnLatest']>[1], note?: string) =>
     repository.recordModelResult({ attemptId, actualUsd, generationId, now: now().toISOString(), ...(note ? { note } : {}) },
       w => ({ operationId: `draft-result:${runId}`, expectedRevision: w.revision, action: action(w) }))
   const failed = (failure: DraftFailure, costUnknown = false) => () => ({ type: 'model-draft-failed' as const, date, runId, failure, ...(costUnknown ? { costUnknown } : {}) })
@@ -117,7 +117,7 @@ async function lookup(deps: DraftDeps, attemptId: string) {
  * ledger's rules: still reserved (no reply, no id) → estimated at the reservation, freed, "Model unavailable" + Retry;
  * an id without a cost (unknown) → "Model paused", no Retry.
  */
-export async function expireStuckDrafts(repository: SqliteWorkspaceRepository, now: Date, options: { all?: boolean } = {}): Promise<number> {
+export async function expireStuckDrafts(repository: ServerRepository, now: Date, options: { all?: boolean } = {}): Promise<number> {
   const ws = await repository.load()
   const stuck = ws.pages.filter(p => p.draft?.run?.status === 'drafting' && (options.all || now.getTime() - Date.parse(p.draft.run.startedAt) >= draftExpiryMs))
   let n = 0

@@ -1,7 +1,7 @@
 // feat/model step 1: organizes one saved capture with Brian's model. Server only. The model call never sits inside a
 // database transaction: reserve (one transaction) → call → record (one transaction, ledger + workspace together).
 import type { GroundingFlag, ProposalItem, Workspace } from '../../domain/types.ts'
-import type { SqliteWorkspaceRepository } from '../sqlite-repository.ts'
+import type { ServerRepository } from '../repository.ts'
 import { captureMessages, captureSchema, readCaptureAnswer, type CaptureItem } from './capture-prompt.ts'
 import { groundItem } from './grounding.ts'
 import { callStructured, ModelError, requestBody, type ModelConfig } from './openrouter.ts'
@@ -44,7 +44,7 @@ export function toProposal(item: CaptureItem, text: string, openTasks: Workspace
 }
 
 export interface OrganizeDeps {
-  repository: SqliteWorkspaceRepository
+  repository: ServerRepository
   config: ModelConfig
   mode: 'auto' | 'confirm'
   fetchImpl?: typeof fetch
