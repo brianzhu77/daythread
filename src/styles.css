@@ -813,7 +813,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* Plan for today appears when a document task saves (open reference tasks only). Its 44px tap area comes from ::after, not
    its box, so the row keeps its height when the button appears, goes on Plan or tick (Ratchet #117, 390 touch +12px). */
 .editor-plan-action { position:relative; min-height:0; }
-.editor-plan-action::after { content:''; position:absolute; inset:-10px -6px; }
+.editor-plan-action::after { content:''; position:absolute; inset:-12px -6px; }
 .continuous-editor .bn-block-content[data-content-type=task]:has(.editor-task:is([data-role=reference],[data-draft])) { border-left-color:transparent; }
 @media(max-width:700px) { .editor-task { flex-wrap:wrap;column-gap:10px; } .editor-task-title { min-width:130px; } .editor-plan-tag { display:none; } }
 .continuous-editor .bn-editor { padding-left:0; padding-right:0; }
