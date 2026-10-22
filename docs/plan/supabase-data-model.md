@@ -20,7 +20,7 @@ which added both), 0 events / materials / captures, about 25 KB of page content 
 3. **Recommendation, for his goal "from anywhere": path A with the server hosted at cutover.** Clean up the model in
    shippable steps on the local store (each with the existing migration and rollback discipline), changing the
    repository to per-aggregate reads and writes on the way; then move the clean schema to Supabase and the server to a
-   host in one cutover, with a tested way back. About **5 weeks (4.5–5.5)** after Ratchet's #101 contracts (§10). Path B
+   host in one cutover, with a tested way back. About **6 weeks** with Ratchet's #101 contracts (§10) and the general core (§4); the cleanup part is about 4 weeks. Path B
    (move and host now, clean up in the cloud) gets him there in **about 2.5 weeks** but makes every later model change a
    live cloud migration (§0a, §5).
 4. **§7a sorts every change into "with the move" or "later, no data migration"**, with sizes. **Decisions** are in §7:
@@ -42,9 +42,8 @@ is about a millisecond away, so today's whole-workspace load (25 KB) is cheap th
 is one user. B's real cost is not speed; it is doing the cleanup on live cloud data. **A stays the recommendation**,
 because his request was the clean structure first and the cleanup steps are where the risk is.
 
-**Optional bridge while A runs:** a private network such as Tailscale on the Mac mini and his phone gives phone access
-to today's app (it only listens on 127.0.0.1 now) with no code change and no data in the cloud: about an hour, his
-devices only. It still needs the Mac on, so it is a bridge, not his goal. His call.
+**Bridge: parked** (Lead, after Brian 6acf76c5: he asked only whether the structure is ready). Tailscale and its usage
+counting are not planned; A7's scope is re-checked against real phone use after the move instead.
 
 **What pauses during A (about 5 weeks):** anything that changes stored data waits (A11 line links, synced blocks, B21/B22,
 the A6b-2 follow-up). **Fixes and screen changes that don't touch stored data can still ship between steps** (Lead to
@@ -66,7 +65,8 @@ unchanged as the gate for any new adapter.
 
 ## 2. Findings: business logic and duplication in the data
 
-Each finding: what is stored, why it is a problem, what to store instead.
+Each finding: what is stored, why it is a problem, what to store instead. **Where a proposal here names a product
+table (`tasks`, `task_days`, `day_reviews`, `follow_ups`, `templates`), §4's general core replaces it.**
 
 ### 2.1 Page content is stored three times, in an editor's format
 
@@ -265,41 +265,101 @@ and one status he can trust.
   `navigator.storage.persist()`, and the release message says unsent offline text is safest once it has synced. The
   risk is only to drafts that never reached the server.
 
-## 4. Proposed schema (Postgres, snake_case)
+## 4. The general core (Notion-like; Brian d0846999)
 
-Ids stay text (existing ids are kept on import, no remapping). All tables: `workspace_id`, `created_at`, `updated_at`,
-`version int`. Positions are sparse integer ranks (§9). Every reference is a composite `(workspace_id, id)` foreign key,
-so nothing can point into another workspace.
+**Brian's rule:** don't shape the data for specific product logic, and generalize like Notion while we're early.
+**The bar for "yes"** (Lead): (1) no table or column named after a product concept; (2) every future item is a new
+collection, property, block type or relation, with **zero migrations of existing rows** (§11); (3) his real data maps
+losslessly (Ratchet's import points still apply). This section supersedes the product-shaped tables proposed in §2.
 
-| Table | Columns (besides the common ones) | Replaces |
+### 4.1 Content tables
+
+| Table | Columns | Notes |
 | --- | --- | --- |
-| `workspaces` | `owner_id`, `timezone`, `settings jsonb` | `meta`, literal timezone |
-| `pages` | `kind` (`day` / `document`), `day_date` (unique per workspace), `title`, `parent_id`, `url`, `url_key` (computed from `url`, unique index), `trashed_at`, `trash_batch_id` | `pages` minus content, review, draft, editor fields |
-| `blocks` | `page_id`, `parent_id`, `position`, `type`, `content jsonb`, `props jsonb`, `task_id` (task line), `source_block_id` (copy/bring) | `editorJSON`, `sections`, `editorSections`, `editorBlockMetadata` |
-| `templates` | `name`, `blocks jsonb` | `dayTemplate`, `templateApplied` |
-| `tasks` | `title`, `status`, `planned_on`, `last_planned_on`, `start_on`, `due_on`, `paused`, `created_on date`, `source_page_id` | `tasks` (R3: `last_planned_on` is a planning fact, kept; `source_page_id` is a page, kept as a page) |
-| `task_days` | `task_id`, `day`, `state` (`excluded` / `moved`) | `placements` (order and section come from the line) |
-| `events` | `title`, `day`, `time`, `cancelled` | `events` |
-| `materials` | as today, plus `workspace_id` | `materials` (carried as is; merging into link pages is later, §7a) |
-| `day_reviews` | `day`, `text`, `step`, `source`, `skipped`, `finished_at`, `handoff_done_at` | page review fields |
-| `captures` | as today, plus `workspace_id` | `captures` (carried as is; splitting model fields out is later, §7a) |
-| `ai_runs` | the page draft's run, manifest, proposals, hidden, error | page `draft`, `draftError` |
-| `model_attempts` | unchanged | unchanged |
-| `operations` | `id`, `type` (null for legacy), `fingerprint`, `device`, `entity_id`, `simulated`, `result jsonb`, `undo_kind`, `inverse jsonb`, `legacy_text`, `created_at` (null = unknown), `imported_at` | `receipts`, undo snapshot, in-entity undo records (§10 R2) |
-| `block_provenance` | `page_id`, `block_id`, `source_page_id`, `source_block_id`, `kind` (`bring` / `copy` / `ai`), `fingerprint`, `created_at` (null = unknown), `removed_at` | Bring/AI suppression facts in sections and `editorBlockMetadata`, kept after the block is deleted (§10 R2) |
-| `storage_state` | `epoch`, `authority`, `frozen_at` | cutover fence (§10 R5) |
-| `links` | `source_block_id`, `ref_id`, `target_page_id`, `target_block_id`, `kind`, `ref_at` | index rebuilt from the `refs` entries kept in block props (§10 R3) |
-| `block_tags` | `block_id`, `tag_key`, `tag` | tags scan |
+| `blocks` | `id`, `workspace_id`, `parent_id` (null = top level), `position`, `type`, `content` (inline jsonb, BlockNote shape), `content_format`, `props` (display props: heading level, `role`), `collection_id` (null unless it is an item of a collection), `properties` (jsonb, values keyed by **property id**), `created_by` (`user` / `model`), `trashed_at`, `trash_batch_id`, `deleted_at`, `deleted_from` (the page it was last on), `created_at`, `updated_at`, `version` | **Everything he writes is a block; a page is a block of type `page`**, its title in `content`. |
+| `collections` | `id`, `workspace_id`, `system_key` (null for his own), `name`, `settings` (jsonb: template page id, …), `schema_version` | Notion databases. "Days", "Tasks", "Events", "Links" are rows, not tables. |
+| `properties` | `id` (stable, opaque), `collection_id`, `system_key` (null for his own), `name` (display, renamable), `type`, `cardinality` (`one` / `many`), `config` (select options with stable option ids, relation target), `required`, `default`, `unique_scope` (`none` / `live` / `all`) | The property schema as data. |
+| `relations` | `workspace_id`, `from_block`, `to_block`, `kind`, `property_id` (null unless a relation property), `ref_id`, `at`, `data` (jsonb) | Every edge: inline `[[` mentions, line links, reference blocks, relation properties, `copied_from` / `brought_from` provenance. |
+| `block_tags` | `block_id`, `tag_key`, `tag` | An index of tags found in text (Brian's rule: tags are text), rebuilt from content at any time. |
 
-`jsonb` is used only where the content is a document (block content, settings, operation patches, AI manifests), never to
-hide relational facts. Check constraints cover closed sets that are facts (`tasks.status`), not product taxonomies.
+**Infrastructure, allowed to be specific** (Lead): `workspaces` (`owner_id`, `timezone`, `settings`), `operations`
+(§10 R2), `ai_runs` (captures' and drafts' model state), `model_attempts` (unchanged), `history` (`block_id`, `kind`,
+`day`, `at`, `data`, `operation_id`: facts about what happened, e.g. "moved off Oct 18", "not today on Oct 20",
+"ticked", "first saved"),
+`storage_state` (§10 R5). None of these is his content.
 
-**Constraints and delete rules:** one day page per `(workspace_id, day_date)`; `url_key` unique per workspace including
-trashed pages (a trashed link page still owns its URL, as today); parents and sources in the same workspace (composite
-FKs); no parent cycles (checked in the command under the workspace lock, plus a trigger as a second wall); `blocks.task_id`
-→ `tasks` with `ON DELETE RESTRICT`; `operations` primary key `(workspace_id, id)`. **Nothing cascades into history:**
-`block_provenance`, `operations` and `model_attempts` have no FK to the rows they describe, so deleting a block, page or
-task never deletes an audit, replay or Undo fact.
+**Why `history` is its own table and not read from `operations`** (Lead 6edacd5e): screens read history (carry-over
+order, the review, "still planned for…"), so it must stay small, typed and indexed, and it is **append-only, never
+pruned**. `operations` holds replay records (kept) and Undo inverses, which are **pruned** (§9). Reading history out of
+the operation log would forbid ever pruning it, and inverses would grow with it. Each command writes both in the same
+transaction.
+
+**Two kinds of removal** (Bumblebee 5): **trash** (`trashed_at`, `trash_batch_id`) is restorable with its children, as A4
+today; a **tombstone** (`deleted_at`, `deleted_from`, content cleared, the content kept in the operation's inverse for
+Undo) is what a removed line leaves, so a line link can say "Line removed · {last page}". Blocks are never hard-deleted
+in normal use, so every relation and provenance fact keeps a valid target.
+
+### 4.2 Property rules (Ratchet 5a13e4cd, Bumblebee 1–2)
+
+- **The app refers to properties by `system_key`, never by name.** Renaming "Status" changes `name` only. A system
+  property can't be deleted, and its type can't change.
+- **Values are always arrays**, whatever the cardinality (`[ "2026-10-22" ]`). `cardinality` is a validation rule, so
+  turning "Plan date" from one to many is a change to one `properties` row, with **no change to any value**.
+- **Types:** `text`, `number`, `checkbox`, `date`, `datetime`, `select`, `multi_select`, `url`, `relation`. Select values
+  store **option ids**, so renaming an option changes no value. Relation values are mirrored into `relations` (FK-checked),
+  the array in `properties` being the ordered list.
+- **Missing, default and unknown:** a missing value reads as the property's `default` (or empty). A value for a property
+  id the app doesn't know (a newer schema, a deleted property) is **kept as it is**, never dropped, and round-trips.
+  `schema_version` on the collection lets a build refuse a schema newer than it understands, instead of guessing.
+- **Validation in one place:** a single `validateProperties(collection, values)` in the write path of every command,
+  under the workspace lock. The database can't check jsonb values against the schema; that is the main cost of the
+  general model.
+- **Uniqueness is a schema rule, not code that knows about Days** (Bumblebee 2): `unique_scope` on the property, enforced
+  by a partial unique index on the property's value, created by the migration that adds the property. Days' date is
+  `all` (one day page per date, as today); Links' URL key is `all` (a trashed link page still owns its URL, A2).
+- **Query cost:** hot system properties (plan date, status, day date, URL key) get expression indexes on
+  `properties -> '<property id>'`; others use one GIN index. At his size (hundreds of blocks) any query is instant; at
+  100k blocks the expression indexes keep the screens' queries indexed. Queries read slightly less directly than columns
+  would (`properties -> 'p_…' ? '2026-10-22'`); the projection layer (§4.4) hides that from the domain code.
+
+### 4.3 How today's concepts map
+
+| Concept | In the core |
+| --- | --- |
+| Day page | a `page` block in **Days**, property `date` (system, unique) |
+| Document page | a `page` block with no collection; subpages are child pages |
+| Link page (A2) | a `page` block in **Links**, properties `url`, `url_key` (unique, `all`) |
+| Task | a `page` block in **Tasks**: title in `content` (the only source, Jazz), properties `status` (select), `plan_on`, `last_planned_on` (written by planning commands only, §10 R3), `due_on`, `start_on`, `paused`, `done_on` (set when ticked, cleared when unticked; a current fact, Bumblebee; empty for tasks done before the import, since that date was never stored), `created_on`, `source_page` (relation) |
+| Task row on a day page | a block of type **`ref`** with a `relations` row (`kind = embed`) to the task; no text of its own |
+| Top 3 / Other | computed: which heading with `props.role` (`plan-top3`, `plan-other`) the `ref` sits under |
+| Not today, moved off a day | `history` rows (`not_today`, `moved_off`, with the day). **No per-day "excluded" state:** "Not today" already pauses the task and clears the plan date (`workspace.ts` ~248), so carry-over = open, not paused, plan date before today, and no `ref` on today (Bumblebee). The 5 `moved` placements in his data, 2 with no line left, import as history (Bumblebee 3) |
+| Event | a `page` block in **Events**, properties `date`, `time`, `cancelled` |
+| Saved link / material (0 rows) | a Links page with follow-up properties (`review_state` select, `next_review_on`, `resurface`, `skipped_until`) |
+| `[[` page link, line link | inline node in `content` (refId, pageId / blockId, `at`, title, pending, as today) plus a `relations` row (`kind = mention`) |
+| Bring / copy / AI provenance | `relations` rows (`brought_from`, `copied_from`) with the fingerprint in `data`; they survive because blocks are tombstoned, not deleted |
+| Evening review | his review text becomes blocks under the day page, under a heading with `props.role = review` (Bumblebee 6); `review_done_at`, `handoff_done_at` are Days properties (facts: Oct 19–21 have handoffs). The wizard step is UI state; the partly stored step / source / skipped import as one `history` row each, so nothing is lost |
+| Capture | a block he wrote (`created_by = user`, `captured_at` property on the day it lands); the model's proposals and status in `ai_runs` (Bumblebee 6) |
+| AI draft on the day | `ai_runs` |
+| Day template | a template page (blocks with roles) named in Days' `settings`; applied once when a day page is created |
+| Receipts, Undo | `operations` (§10 R2) |
+
+### 4.4 Jazz's questions (core-mapping.md 3eaf466 §4)
+
+- **Editing a task title through a `ref`:** small. The editor already keeps a task row's words in its task node and the
+  save copies them to `Task.title` (`workspace.ts` ~997). With a `ref`, the editor seeds the row from the task's title
+  and the save writes the words to the **task page's `content`**, not to the `ref`. About half a day inside A4. Two
+  `ref`s to one task on the same page (B22, later) get the same rule plus a test.
+- **Index or generated column for status and plan date: an expression index.** A generated column would be a column
+  named after a product concept (bar 1) with the property id baked into the DDL. An index on
+  `(properties -> '<id>' ->> 0)` gives the same lookup speed, can be dropped or added per property by a migration that
+  touches no rows, and ISO dates compare correctly as text.
+- **Is per-day "excluded" still needed?** No, as state (Bumblebee's answer above); it stays a `history` fact.
+
+### 4.5 The domain code: a projection layer, not a rewrite
+
+`src/domain/workspace.ts` keeps working on its typed objects (`Task`, `Page`, `Event`, …). A projection module maps
+them to and from blocks, properties and relations by `system_key`. That keeps the 1944 lines of command logic and their
+tests largely as they are; screens can move to generic views later, one at a time, without data changes.
 
 ## 5. Paths
 
@@ -307,23 +367,23 @@ task never deletes an audit, replay or Undo fact.
 
 | Step | What ships | Rough size |
 | --- | --- | --- |
-| Bridge | (Optional, his call) Tailscale on the Mac mini and his phone: today's app reachable from anywhere, Mac on (§0a) | hours |
 | A0 | Spike, thrown away after: a hello-world on the chosen host + a Supabase project in the same region; measure day-open and save p95 from his Mac and phone against the §8 budget, so a miss shows up in week 1, not week 3 | half a day |
 | A1 | Repository contract becomes per-aggregate reads + one workspace lock per command (§10 R1), still on SQLite; contract suite v2 (the different-days test flips); workspace-wide checks read indexes under the lock, never a partial slice | **4–5 days** (was 3–4) |
-| A2 | `operations` table with typed undo families; 169 legacy receipts imported as legacy replay records; `block_provenance` for Bring/AI suppression; undo snapshot transitioned explicitly (§10 R2) | **4–5 days** (was 3) |
+| A2 | `operations` table with typed undo families; 169 legacy receipts imported as legacy replay records; `brought_from` / `copied_from` relations for Bring/AI suppression; undo snapshot transitioned explicitly (§10 R2) | **4–5 days** (was 3) |
 | A3 | `blocks` table as the only content source (the import also builds blocks for day pages that have sections but no `editorJSON`, e.g. Oct 20 and 21; Ratchet); `content` keeps BlockNote's inline shape, versioned (`content_format`), validated, lossless round trip (Ratchet's conditions, §9.2 decided); browser maps rows ↔ editor blocks; `links` / `block_tags` indexes | **3 days** (was 4–5) |
-| A4 | Split page: `day_reviews`, `ai_runs`; heading roles and the computed slot instead of `top3`; `task_days`; templates as data (materials stay as they are, §7a) | 3–4 days |
+| A4 | The general core (§4): collections and properties as data, projection layer, tasks / days / events / links / placements / reviews moved into items, `ref` blocks, `history`, templates as pages; lossless import of his data | **7–8 days** (was 3–4) |
 | A5 | Postgres adapter (local Supabase in Docker, contract suite v2); sign-in by emailed code; the auth gate with real RLS on the server's own path and the negative-test list (§10 R4) | **4–5 days** (was 3) |
 | A6 | Cutover + hosting: storage epoch fence, drain, import with defined equivalence, localhost-draft handoff, rollback with cloud edits, durable model jobs on Fly (§3a, §10 R5–R6) | **4–5 days** (was 3–4) |
 | A7 | Offline first version (§3b), after cutover: reading, typing into the draft, the capture queue, one status; caches and queue scoped to his account (§10 R6) | **5–6 days** (was 4–5) |
 
-About **5 weeks (22–27 working days)** to "from anywhere" on the clean schema (A0–A6), then about 5–6 days for the
+About **6 weeks (26–31 working days)** to "from anywhere" on the clean schema (A0–A6; the cleanup A1–A4 is about
+4 weeks), then about 5–6 days for the
 offline first version (A7). **Step order is
-otherwise unchanged:** the bridge covers reachability now, so pulling sign-in and hosting earlier would only mean
-hosting today's model (path B's cost) for no gain. **Bridge: engineering recommends yes**, since it gives him the value he
-asked for this week at a cost of hours, touches no data, and is removed at cutover.
+otherwise unchanged:** pulling sign-in and hosting earlier would only mean hosting today's model (path B's cost).
+**Bridge: parked** (§0a). (Was: engineering recommended it, since it gives him the value he
+asked for this week at a cost of hours, touches no data, and is removed at cutover.)
 
-About **5 weeks** of build time, each step reviewed by Ratchet and live on 3000 before the next. Benefit: every model
+About **6 weeks** of build time, each step reviewed by Ratchet and live on 3000 before the next. Benefit: every model
 change happens on a local file with our proven migration + rollback scripts and his real data copy; the cloud only ever
 sees the clean schema. Cost: he's not on Supabase until A6. Product work can continue between steps, but each step touches
 `workspace.ts`, so new features would wait or rebase on it.
@@ -377,12 +437,12 @@ later. Bumblebee's seven items first, then the rest of §2.
 
 | Item | When | Why | Size |
 | --- | --- | --- | --- |
-| 1. Day template: section kinds, English titles, template-built ids | **With the move** | Kinds become heading `role`s; titles are already heading text. Existing ids are kept as opaque strings (no rewrite); only new ids stop encoding the template | 2 days (in A3/A4) |
-| 2. Task and days (B22-ready) | **With the move** | Changes what a placement row is; the slot and order become computed | 2 days (A4) |
-| 3. Review wizard fields on the page | **Shape with the move, behaviour later** | Move the six fields as they are into `day_reviews` (mechanical). Reducing them to "text + done at" changes the review flow: a product change, **recommend later** | 1 day now |
+| 1. Day template: section kinds, English titles, template-built ids | **With the move** | Kinds become heading `props.role`; the template is a page named in Days' settings; existing ids kept as opaque strings | in A3 / A4 |
+| 2. Task and days (B22-ready) | **With the move** | Tasks become Tasks items; rows on a day become `ref` blocks; not-today / moved become `history` (§4.3) | in A4 |
+| 3. Review wizard fields on the page | **With the move** | Review text becomes blocks under the `review` heading; done / handoff become Days properties; step / source / skipped import as `history` (§4.3) | in A4 |
 | 4. `receipts.message` and no time | **With the move** | Part of `operations`; the UI renders the wording | 1 day (in A2) |
-| 5. Materials (0 rows) | **Later** | A feature-level change to Good Stuffs. Carry the table as is (empty); merging into link pages stays free while it has 0 rows | 0 now |
-| 6. Captures, AI draft, budget states | **Split with the move, flow later** | Move `pages.draft` / `draftError` out of the page into `ai_runs` (1 day); captures and `model_attempts` are already their own tables and go as they are | 1 day |
+| 5. Materials (0 rows) | **With the move** | With the general core it is just Links items with follow-up properties, and free while there are 0 rows | in A4 |
+| 6. Captures, AI draft, budget states | **With the move** | Capture text becomes a block; model state and the day draft go to `ai_runs`; `model_attempts` unchanged (0 captures today) | in A4 |
 | 7. Undo as a second copy of every table | **With the move** | The copy can't sensibly go to Postgres. Replace with `operations.inverse` **keeping today's behaviour exactly** (one step, same "edited since" rules). Multi-step undo is a product change: **recommend later** | 3 days (A2) |
 | Content stored three times, BlockNote format (§2.1) | **With the move** | It is the stored format itself | 4–5 days (A3) |
 | Global revision, whole-workspace load (§3) | **With the move** | Per-page versions under one workspace lock (§10 R1) | 4–5 days (A1) |
@@ -462,11 +522,11 @@ Undo. **External model calls happen outside any transaction:** reserve (locked, 
 | Family | Reads under the lock | Version checked | Writes |
 | --- | --- | --- | --- |
 | save-editor | the page, its blocks, tasks named by its task lines, provenance of its blocks | page `version` (today's `expectedContent`) | blocks, tasks created / renamed, provenance, links / tags index rows |
-| plan-task, not-today, row actions | the task, its lines on the source and target day pages, both days' Top 3 role lines | task `version` | lines moved / written, `task_days`, task |
+| plan-task, not-today, row actions | the task, its `ref` lines on the source and target day pages, both days' Top 3 role lines | task `version` | `ref` lines moved / written, task properties, `history` |
 | Top 3 full | lines under the day's `plan-top3` heading (one indexed query) | — (safe under the lock) | — |
 | paste-links, create-document | `pages` by `url_key` (unique index), the target page | target page `version` | pages, blocks, operations |
 | move / delete / restore page | the page, its ancestors (cycle check) and descendants by `parent_id` | each page's `version` | pages, trash batch |
-| Bring, AI proposals | `block_provenance` by source (indexed), the day page | page `version` | blocks, provenance |
+| Bring, AI proposals | `brought_from` relations by source (indexed), the day page | page `version` | blocks, relations |
 | capture, model result | the capture / attempt row, the ledger sum for the day | attempt state | ledger, capture, blocks |
 | undo | the operation, every row its inverse touches | each row is still at the version it left | the inverse, an undo record |
 
@@ -493,10 +553,10 @@ SQLite adapter runs v1 until A1 lands, then v2.
 - **The current one-step Undo is transitioned explicitly, not converted:** at the A2 migration, the pending Undo of the
   last action before it is closed, and its receipt reads "Undo isn't available after the update". A snapshot can't be
   turned into an inverse safely, so we don't pretend to.
-- **Provenance outlives the block.** `block_provenance` takes every source pair now held in sections and
+- **Provenance outlives the block.** `brought_from` / `copied_from` relations (§4; blocks are tombstoned, never deleted) take every source pair now held in sections and
   `editorBlockMetadata`, for live and deleted blocks (the 5 orphaned entries in his data included). `wasBrought` and
-  `isLineLinked` read it, so deleting a brought line doesn't re-offer it; a later Undo of the Bring sets `removed_at`,
-  which restores eligibility.
+  `isLineLinked` read them, so deleting a brought line doesn't re-offer it; a later Undo of the Bring removes the
+  relation, which restores eligibility.
 - **Synthetic fixtures** cover what his data lacks (captures, materials, events, inline refs, each Undo family), in
   addition to the real copy.
 
@@ -576,47 +636,65 @@ SQLite adapter runs v1 until A1 lands, then v2.
   the queue and shows "Couldn't send · Copy text · Discard" on it, so it never blocks silently. `persist()` may be
   denied, so the status shows unsent changes until the server acknowledges them.
 
-## Appendix: every stored field
+## 11. Future items: additions, not reshapes (bar 2)
 
-Verdict: **keep** (a fact), **move** (a fact, wrong place), **derive** (computable, stop storing), **drop**.
+Each line: what it adds, and that **no existing row changes**. Only what would otherwise force a reshape is built in now,
+marked **now**.
 
-| Table.field | Verdict | Note |
+| Item | Adds | Existing rows |
 | --- | --- | --- |
-| meta.schemaVersion, meta.revision | drop | layout version → migration table; global revision → row versions (§3) |
-| meta.timezone | move | `workspaces.timezone` (Bumblebee: fine as data; only the literal type is the problem) |
-| meta.undoOperationId / undoRevision, every `snapshot='undo'` row | drop | `operations.inverse` (§2.4) |
-| *.position, *.present | drop | adapter details; positions move to `blocks.position` |
-| pages.id, title, parentId, url, trashedAt, trashId | keep | `trashId` → `trash_batch_id` |
-| pages.type, date | keep | `kind`, `day_date` |
-| pages.sections | derive | from `blocks`; at import, the **source** of blocks for pages without `editorJSON` |
-| pages.editorJSON | move | becomes `blocks` rows (§2.1) |
+| A11 line links (Jazz 1) | an inline node with `blockId` + a `mention` relation to the block. **Now:** a move keeps the block id (update `parent_id`, never delete + insert), and removals leave a tombstone with `deleted_from` | unchanged |
+| B21 synced blocks (Jazz 2) | a `ref` block (the same type as a task row, Bumblebee 4) pointing at the source block, with the last copy in `props.cache` | unchanged. **A deliberate exception to "stored once":** the cache is a read-only fallback, refreshed on every save of the source, never edited, so a missing source shows its last words instead of nothing |
+| B22 task on several pages | another `ref` block to the same task | unchanged |
+| Multi-day planning (Ratchet) | `plan_on` cardinality one → many: one `properties` row changes; values are already arrays | unchanged |
+| A second template, renamed headings | a template page named in Days' `settings`; roles stay in `props.role` | unchanged |
+| AI pages (A7 Weave) | pages with `created_by = model` (**now**: the column exists, all current rows `user`); "Copy to your pages" = a new block tree + `copied_from` relations | unchanged |
+| Tags as AI hints, content graph | queries over `block_tags` and `relations` | unchanged |
+| A6b-2 one-hop context | one query: `relations` from the day page's blocks + the previous Days page by date index | unchanged |
+| B2 events as records | Events items; a line can be a `ref` to an event page | unchanged |
+| B3 JSON export | an export of blocks, collections, properties, relations with `content_format` and `schema_version` | unchanged |
+| B16 delete a day page | trash works on any page block | unchanged |
+| B14 manual sibling order | `position` already orders siblings, pages included | unchanged |
+| His own collections, properties, views | new `collections` / `properties` rows; a `views` table (filter, sort, group) when screens become views | unchanged |
+| Multi-user | `workspace_id` is everywhere; revisit the workspace lock (§10 R1); a `person` property type | unchanged |
+| Task details / notes | children blocks of the task page | unchanged |
+
+## Appendix: every stored field → the general core
+
+Verdict: **keep**, **move**, **derive** (computable, stop storing), **drop**. Targets refer to §4.
+
+| Today | Verdict | In the core |
+| --- | --- | --- |
+| meta.schemaVersion, revision | drop | migrations table; row versions + the workspace lock (§10 R1) |
+| meta.timezone | move | `workspaces.timezone` |
+| meta.undo*, every `snapshot='undo'` row | drop | the one-step Undo is closed explicitly at A2 (§10 R2) |
+| *.position, *.present | drop | `blocks.position` |
+| pages.id, title | keep | `page` block id; title in `content` |
+| pages.type, date | move | Days item with `date`, or a plain page |
+| pages.parentId, trashedAt, trashId | keep | `parent_id`, `trashed_at`, `trash_batch_id` |
+| pages.url (+ derived urlKey) | move | Links item: `url`, `url_key` (unique `all`) |
+| pages.editorJSON, sections | move | child blocks; pages without `editorJSON` (Oct 20, 21) built from `sections` (Ratchet) |
 | pages.editorSections | drop | consistency copy |
-| pages.editorBlockMetadata | move | live blocks' entries → block props; `paste:` records → `operations`. **Entries for blocks no longer in the page (5 in his data; Ratchet) are history, not props:** they stop Bring and the AI from suggesting the same line again and keep reference times and Undo working, so they map to `activity` / `operations`, never dropped |
-| pages.editorCreations / editorDeletions | move | the editor-task Undo family in `operations` (typed, same guards; §10 R2) |
-| pages.templateApplied | drop | a day page gets the template once, when created |
-| pages.reviewText, reviewSaved, reviewStep, reviewSource, reviewSkipped, handoffDone | move | `day_reviews`, **all six as they are**, including partly present step/source; simplifying is a later product change (§7a) |
-| pages.draft, draftError | move | `ai_runs`, `ai_proposals` |
-| NoteBlock.kind, text, taskId, eventId, materialId, targetPageId | keep | `blocks.type`, `content`, `task_id`, props (`eventId`, `materialId` while those tables are supported) |
-| NoteBlock.sourcePageId / sourceBlockId | move | `blocks.source_block_id` + `block_provenance` (kept after the block is deleted, §10 R2) |
-| NoteBlock.planRole | derive | planned for this page's day or not (§2.2) |
-| NoteBlock.at, PageRefEntry.at | keep | the reference-created order, kept as is in the refs entry / block props, `-1` = unknown sorts last (§10 R3) |
-| NoteBlock.refs, Section.refs | keep | refs entries kept in block props (refId, pageId, at, title, pending); `links` is an index rebuilt from them |
-| PageRefEntry.title, pending | keep | in the refs entry: the title is what the line's text was compared with; `pending` is the provisional creation intent (§10 R3) |
-| NoteBlock.sourceFingerprint | keep | a content-and-context token (kind, text, the page's day basis), stored with the provenance; a row version can't replace it (§10 R3) |
-| NoteBlock.linkPaste | move | the paste-links Undo family in `operations` (made / reused / restored, material-before; §10 R2) |
-| Section.kind | move | heading block `role` prop, set by the template (§2.2) |
-| tasks.title, status, plannedOn, deadlineOn, attentionOn, paused, sourcePageId | keep | `due_on`, `start_on`, `source_page_id` (a page identity, kept as one) |
-| tasks.createdOn | keep | `created_on date`; `created_at` stays null (unknown), never a guessed instant |
-| tasks.version | keep | the common `version` column |
-| tasks.lastPlannedOn | keep | `last_planned_on`, written by planning commands only; a reference line on a later day is not planning (R3, B22) |
-| placements.taskId, date | keep | `task_days` |
-| placements.order | derive | the line's position |
-| placements.state | keep | `excluded` and `moved` are facts (`task_days`); `included` is the line itself |
-| placements.section | derive | from the role heading the line sits under (§2.2) |
-| events.* | keep | 0 rows |
-| materials.* | keep | carried as is; merging into link pages, `follow_ups` and an activity log is later (§7a) |
-| captures.id, pageId, text, capturedAt | keep | |
-| captures.status, failure, error, model, mode, proposals, proposalRevision, contextLine, simulated, proposedTitle, taskId | keep | carried as is, including `ProposalItem.before` / `appliedSnapshot` / `appliedVersion` (the capture Undo guards); the split is later (§7a) |
-| receipts.operationId, fingerprint, entityId, simulated | move | `operations`, as legacy replay records (§10 R2) |
-| receipts.message | move | `operations.legacy_text` for the 169 old receipts only; new operations render their text from type + data |
-| model_attempts.* | keep | already a ledger beside the workspace |
+| pages.editorBlockMetadata | move | live blocks → props / relations; entries for removed lines (5) → tombstones + `brought_from` relations; `paste:` records → `operations` |
+| pages.editorCreations / editorDeletions | move | the editor-task Undo family in `operations` |
+| pages.templateApplied | drop | the template is applied once at creation |
+| pages.reviewText | move | blocks under the `review` role heading |
+| pages.reviewSaved, handoffDone | move | Days properties `review_done_at`, `handoff_done_at` (time unknown for imported rows: date only) |
+| pages.reviewStep, reviewSource, reviewSkipped | move | one `history` row each (UI state, kept for losslessness, not read by the app) |
+| pages.draft, draftError | move | `ai_runs` |
+| Section.kind, title | move | a heading block, `props.role`, title in `content` |
+| Section.refs, NoteBlock.refs | keep | inline nodes in `content` + `mention` relations (at, title, pending kept; `-1` sorts last) |
+| NoteBlock.kind, text | keep | `type`, `content` |
+| NoteBlock.taskId, eventId, materialId, targetPageId | move | a `ref` block + `embed` relation |
+| NoteBlock.planRole | derive | planned for this day or not |
+| NoteBlock.sourcePageId / sourceBlockId, sourceFingerprint | move | `brought_from` / `copied_from` relation, fingerprint in `data` |
+| NoteBlock.at | keep | `relations.at` on the card's relation |
+| NoteBlock.linkPaste | move | the paste-links Undo family in `operations` |
+| tasks.* | move | Tasks item: title in `content`; `status`, `plan_on`, `last_planned_on`, `due_on`, `start_on`, `paused`, `created_on`, `source_page`; `version` = block version |
+| placements (included) + order + section | derive | the `ref` line, its position, its role heading |
+| placements (excluded / moved) | move | `history` rows `not_today` / `moved_off` with the day |
+| events.* | move | Events item (0 rows) |
+| materials.* | move | Links item with follow-up properties (0 rows); opened / dismissed / decisions → `history` |
+| captures.* | move | a block + `ai_runs` (0 rows) |
+| receipts.* | move | `operations`: legacy replay records, message in `legacy_text` (§10 R2) |
+| model_attempts.* | keep | unchanged |
