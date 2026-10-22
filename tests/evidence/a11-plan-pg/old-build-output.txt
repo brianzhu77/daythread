@@ -1,3 +1,3 @@
-{"today":"2026-10-22","dayId":"day:2026-10-22","linesStored":2,"taskIdStored":true,"refs":[["f8b9d634-87c3-4672-9ad7-ae34fb9b3bdf"],["day:2026-10-22"]]}
+{"today":"2026-10-22","dayId":"day:2026-10-22","linesStored":2,"taskIdStored":true,"refs":[["562f8b23-5caa-45e6-bb45-c18af76304bc"],["day:2026-10-22"]]}
 renders as: ["line link: \nTarget page\n","task link: \nToday\n"]
-{"revisions":"4 → 5","lineIdAfterOldSave":0,"taskIdPropAfterOldSave":true,"linksStillThere":2,"doneOnKept":true,"seenProbeKept":true,"errors":[]}
+{"revisions":"4 → 5","linkPropsAfterOldSave":["newTitle+pageId+refId","newTitle+pageId+refId"],"lineIdAfterOldSave":0,"linksStillThere":2,"doneOnKept":true,"seenProbeKept":true,"errors":[]}

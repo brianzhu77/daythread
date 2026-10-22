@@ -17,7 +17,9 @@ const after = await row(), d = JSON.parse(after.data), day = d.pages.find(x => x
 const ej = day.editorJSON
 console.log(JSON.stringify({
   revisions: `${before.revision} → ${after.revision}`,
-  lineIdAfterOldSave: (ej.match(/"lineId"/g) ?? []).length, taskIdPropAfterOldSave: ej.includes('"taskId":"editor-task'), linksStillThere: (ej.match(/"pageRef"/g) ?? []).length,
+  // The links' own props, read from the saved editor JSON (a task row's own `taskId` prop is a different field).
+  linkPropsAfterOldSave: (function walk(nodes, out = []) { for (const n of nodes ?? []) { for (const c of Array.isArray(n.content) ? n.content : []) if (c?.type === 'pageRef') out.push(Object.keys(c.props ?? {}).sort().join('+')); walk(n.children, out) } return out })(JSON.parse(ej)),
+  lineIdAfterOldSave: (ej.match(/"lineId"/g) ?? []).length, linksStillThere: (ej.match(/"pageRef"/g) ?? []).length,
   doneOnKept: d.tasks.some(t => 'doneOn' in t), seenProbeKept: !!day.editorBlockMetadata?.['a11-probe'], errors,
 }))
 await b.close(); await sql.end()

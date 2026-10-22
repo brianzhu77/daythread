@@ -68,11 +68,37 @@ jump, the plain URL and Linked from all call it, so they can't disagree.
 4. **Holder state applies even when the line is found (Ratchet 4):** if the resolved page is trashed → **trashed**
    (chip and jump both go there, with Jazz's trashed chip). A restore needs nothing new.
 5. **Gone:** no live holder → **removed**, naming the **last holder** from the metadata (A→B→delete says "Line removed ·
-   B" and opens B). If the last holder is trashed → **trashed**. With no metadata at all → `pageId`.
-6. Otherwise → **not found**.
+   B" and opens B). If the last holder is trashed → **trashed**. With no metadata (pruned, §2a, or never seen) → the
+   link's or URL's own page, `pageId`, opened at the top with "That line was removed" (Jazz `569d9180`).
+6. **Not found** only when that page doesn't exist either.
 
 **Words:** from the resolved block's projected `NoteBlock` text, or the section title for a heading. Always the current
 projection, never stored editor JSON or metadata (Ratchet 5). A removed line shows no words, just the state.
+
+## 2a. How big the retained metadata gets, and what the browser gets (Lead `109312d3`, Bumblebee `0392b629`)
+
+- **Today, before A11:** `editorBlockMetadata` is already never pruned, and it holds a copy of **every block a page has
+  ever had** (each save copies the whole previous projection), live ones included. **It goes to the browser in full**:
+  B26's `forBrowser` drops only receipts and the undo copy. The browser reads one thing from it, the `paste:` records
+  (`page-editor.tsx` "first made"). A11 adds one number (`seen`) per entry. So the growth is pre-existing, and A11 is
+  where it gets bounded.
+- **Server, pruned by links, not by age (Bumblebee):** at each save of a page, a metadata entry for a block **no longer
+  on that page** is dropped unless something still needs it:
+  - a line link (`refs[].lineId`, any page) points at that block id;
+  - it's a `paste:` record, a `heading:` entry (refs, role), a brought copy (`sourcePageId`/`sourceBlockId`, which
+    `wasBrought` relies on), or it carries `refs` or a card's `at` (B15/A9a times reused by Undo and moves);
+  - it was removed **in this save or the one before**, so Undo and a cut followed by a paste still find it.
+  Entries for blocks still on the page are kept. They're needed as the "previous" copy, but they're the page's own size,
+  not growth. So retained removed entries are bounded by his links and the kinds above, not by his deletions.
+- **Browser, trimmed like B26:** `forBrowser` sends `paste:` records and **only** the removed-line entries that a line
+  link or URL points at, slimmed to `{ id, seen, taskId? }`. That's what `resolveLine` needs on the client. Everything
+  else stays on the server. The load size stays at today's ~49 KB plus a few bytes per line link.
+- **What pruning costs (Bumblebee, Jazz):** a URL he pasted outside Daythread, to a line later deleted with no link to it
+  inside the app, opens the URL's own page at the top with "That line was removed" (§2 step 5). Following a line that
+  moved to another page before it was deleted is the only thing lost.
+- **Checks:** delete lines with and without links, save twice, and confirm the right entries are kept or dropped;
+  confirm Undo two saves later still restores B15 card times and `[[` link times; Bring to today is not re-offered for a
+  deleted copy; the browser payload carries no unlinked entries; payload size before and after on a copy of his data.
 
 ## 3. The server is the only authority on line-id uniqueness (Ratchet 2, Lead 2735c328)
 
@@ -147,8 +173,10 @@ then gives every block a new id. The change:
   b0c80ef standing in as the rollback build (`scripts/exp-a11-pg-seed.ts`, `tests/evidence/a11-plan-pg/`):
   - A11-shaped data (a line link, a task line link, `doneOn`, a `seen` stamp) **opens with no errors**. The links render
     as page links ("Target page", "Today").
-  - The old build's first save of that page **drops `lineId`/`taskId` from both links**, and both links remain as page
-    links, as Lead accepted in `5a74c8cd`. Rolling forward again doesn't bring the line part back. The rollback note to
+  - The old build's first save of that page **drops `lineId` and `taskId` from both links**: their props are then exactly
+    `newTitle+pageId+refId`, read from the saved editor JSON. Both links remain as page links, as Lead accepted in
+    `5a74c8cd`. (The check's earlier `taskIdPropAfterOldSave: true` was the task **row's** own `taskId`, a different
+    field. The check now reads the links' props directly.) Lead repeated this on Supabase with the same result. Rolling forward again doesn't bring the line part back. The rollback note to
     Brian says so, plus "reload".
   - The old build **keeps** `doneOn` and the `seen` stamps through its save. So after rolling forward, the resolver
     still has them.
