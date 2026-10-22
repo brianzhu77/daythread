@@ -30,3 +30,13 @@ Candidate: `08dacb0`, `chore/vercel-ci`. Reviewer: Ratchet. 2026-10-22.
 Roadbuster fixes the smoke and owner setup instructions and supplies PR CI result. Ratchet checks the revised diff and negative cases. No Vercel/Supabase accounts, secrets, deployment, sign-in, RLS, cron recovery, or real cloud region/latency have been exercised here.
 
 References checked: [Nitro Vercel preset/runtime](https://nitro.build/deploy/providers/vercel), [Vercel response headers](https://vercel.com/docs/headers/response-headers#x-vercel-id), [Git deployment configuration](https://vercel.com/docs/project-configuration/git-configuration).
+
+## Recheck: 17ce0a2, 2026-10-22
+
+**PASS for the configuration/credential handoff.** All three findings above are resolved in the revised candidate. Owner provisioning is explicitly before signup is disabled. Smoke requests no longer follow redirects, require the app shell and a route marker, parse the function region independently of the edge, and skip cloud header checks only with explicit `--local`.
+
+Independently executed `node --test tests/smoke-staging.test.ts`: 6 pass / 0 fail. These run the actual script against fixture servers, including both previously reproduced false positives, redirects, missing cloud headers, and missing route markers.
+
+Independently queried private PR #1: head `17ce0a2f3a7264e25ed98dd20b703ceee393e9ff`; GitHub CI `check` SUCCESS, run39717489094/job119622993800, 03:33:29–03:34:41Z. Vercel deployment status also SUCCESS. This verifies a deployment completed, not that protected app screens or the database work.
+
+Remaining limitations are intentional: preview protection prevents the live smoke without Brian's bypass secret; auth, DB/RLS, model recovery and real cloud region/latency remain direct-build acceptance work. HTTP shell smoke is not browser hydration, authenticated-data loading, or successful editing proof. No secrets, deployment, app writes or changes to 3000 were performed by this reviewer.
