@@ -29,7 +29,8 @@ Three ways to reach the same action, all already on screen today:
 - **Not offered on:** an empty line, a page or link card (link the page itself with `[[`), and the day's template
   headings (Top 3, Other, Notes are structure; link a line under them instead). Ordinary headings on pages can be
   linked; they're the natural target for "that section".
-- **After copying:** notice "**Link to line copied**", no Undo (nothing changed). The clipboard holds the app's link
+- **After copying:** notice "**Link to line copied**", no Undo (nothing changed). If the clipboard write fails:
+  "**Couldn't copy**", and never "copied" (a11 plan rev 2 §5). The clipboard holds the app's link
   (for pasting in the app) and a plain URL (`…/day/2026-10-18?block=…` or `…/pages?page=…&block=…`) for other apps.
 
 ## 2. Pasting it
@@ -82,8 +83,9 @@ Three ways to reach the same action, all already on screen today:
 | **its page is in the trash** | its words · {page} in `--ink-3` with the bin icon, like a trashed page link | opens the trashed page (banner + Restore, A4), scrolled to the line |
 | **its page doesn't exist** | "Line not found" in `--ink-3` | nothing |
 
-- **Which moves keep the line** (a11 plan 42a2c3f): edits, Enter, indent and drag within a page; cut and paste
-  (plan §3); a task moved to another day, followed through its task. Bring to today is a copy. Anything else that
+- **Which moves keep the line** (a11 plan 42a2c3f, rev 2 f1d5be8): edits, Enter, indent and drag within a page; cut
+  and paste of **whole lines, pasted once within 2 minutes** (plan §4; a later or second paste is a copy, so the
+  original falls into "deleted"); a task moved to another day, followed through its task. Bring to today is a copy. Anything else that
   loses the line falls into "deleted" with its last page, never a broken chip.
 - The text around the chip never changes in any of these cases.
 
