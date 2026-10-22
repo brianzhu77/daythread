@@ -114,3 +114,22 @@ test('text added to Notes goes above its empty template bullet', () => {
   ws = run(ws, { type: 'add-text', pageId: p.id, sectionId: notes.id, text: 'Captured thought' })
   assert.deepEqual(ws.pages[0]!.sections.find(s => s.kind === 'notes')!.blocks.map(b => b.text), ['Captured thought', ''])
 })
+test('a role heading that comes back after being removed is that section again, not a custom one', () => {
+  let ws = fixture(); const p = ws.pages[0]!, doc = editorSeed(p, ws)
+  const other = p.sections.find(s => s.kind === 'other')!
+  const kinds = () => ws.pages[0]!.sections.map(s => s.kind).join(',')
+  // Deleted (Delete merged it into the line above, or a selection across it), then ⌘Z.
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify(doc.filter(n => n.id !== other.id)) })
+  assert.equal(kinds().includes('other'), false)
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify(doc) })
+  assert.equal(ws.pages[0]!.sections.find(s => s.id === other.id)?.kind, 'other')
+  // Turned into a plain line (Backspace at its start), then ⌘Z.
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify(doc.map(n => n.id === other.id ? { ...n, type: 'paragraph', props: {} } : n)) })
+  assert.equal(kinds().includes('other'), false)
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify(doc) })
+  assert.equal(ws.pages[0]!.sections.find(s => s.id === other.id)?.kind, 'other')
+  // A heading he adds himself stays custom.
+  const mine = { id: 'my-heading', type: 'heading', props: { level: 2 }, content: [{ type: 'text', text: 'Reading', styles: {} }], children: [] }
+  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(ws.pages[0]!), document: JSON.stringify([...doc, mine]) })
+  assert.equal(ws.pages[0]!.sections.find(s => s.id === 'my-heading')?.kind, 'custom')
+})

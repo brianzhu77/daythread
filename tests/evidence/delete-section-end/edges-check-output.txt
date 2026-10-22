@@ -1,0 +1,14 @@
+ok   1280: Delete at the end of the last Top 3 task does nothing; every role kept (top3,other,events,good-stuffs,notes)
+ok   1280: Backspace at the start of "TODO - Other" does nothing (top3,other,events,good-stuffs,notes)
+ok   1280: Delete at the end of a bullet before "Good Stuffs" does nothing (top3,other,events,good-stuffs,notes)
+ok   1280: a selection across "TODO - Other" deletes it (top3,events,good-stuffs,notes)
+ok   1280: ⌘Z brings it back as the Other section, not custom (top3,other,events,good-stuffs,notes)
+ok   1280: still Other after a reload (top3,other,events,good-stuffs,notes)
+all passed
+ok   390: Delete at the end of the last Top 3 task does nothing; every role kept (top3,other,events,good-stuffs,notes)
+ok   390: Backspace at the start of "TODO - Other" does nothing (top3,other,events,good-stuffs,notes)
+ok   390: Delete at the end of a bullet before "Good Stuffs" does nothing (top3,other,events,good-stuffs,notes)
+ok   390: a selection across "TODO - Other" deletes it (top3,events,good-stuffs,notes)
+ok   390: ⌘Z brings it back as the Other section, not custom (top3,other,events,good-stuffs,notes)
+ok   390: still Other after a reload (top3,other,events,good-stuffs,notes)
+all passed

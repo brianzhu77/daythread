@@ -116,7 +116,8 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
       // A heading holds `[[` links like any line: checked, timed and stored on the section.
       const refs = refsOf(node)
       const title = refs.length ? lineText(node.content, ref => refs.find(r => r.refId === ref.refId)?.title ?? '') : inlineText(node.content)
-      current = { id: node.id, kind: page.sections.find(s => s.id === node.id)?.kind ?? 'custom', title, blocks: [], ...(refs.length ? { refs } : {}) }
+      const kind = page.sections.find(s => s.id === node.id)?.kind ?? page.editorBlockMetadata?.[`heading:${node.id}`]?.sectionKind ?? 'custom'
+      current = { id: node.id, kind, title, blocks: [], ...(refs.length ? { refs } : {}) }
       sections.push(current)
     } else {
       if (!current) { current = { id: `intro:${page.id}`, kind: 'custom', title: '', blocks: [] }; sections.push(current) }

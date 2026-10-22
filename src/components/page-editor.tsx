@@ -380,6 +380,22 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const shown = new Set(block.type === 'heading' ? deepNodes(sectionRange(editor.document as unknown as EditorNode[], block.id)).map(n => n.id) : [block.id])
     setHiddenEmpty(ids => [...ids].some(x => shown.has(x)) ? new Set([...ids].filter(x => !shown.has(x))) : ids)
   }), [editor])
+  /**
+   * A section heading with a role (Top 3, Other, Events, Good Stuffs, Notes) isn't dissolved by one key: Delete at the
+   * end of the line before it, or Backspace at its start, does nothing (Brian's Delete bug, Lead). Selecting across it
+   * and deleting still works, and ⌘Z brings it back with its role. Headings he adds himself edit as usual.
+   */
+  function joinsRoleHeading(key: 'Delete' | 'Backspace'): boolean {
+    const { selection, doc } = editor.prosemirrorState
+    if (!selection.empty) return false
+    const $from = selection.$from
+    const isRoleHeading = ($pos: typeof $from) => $pos.parent.type.name === 'heading'
+      && page.sections.some(s => s.id === $pos.node($pos.depth - 1).attrs.id && s.kind !== 'custom')
+    if (key === 'Backspace') return $from.parentOffset === 0 && isRoleHeading($from)
+    if ($from.parentOffset !== $from.parent.content.size) return false
+    const next = Selection.findFrom(doc.resolve($from.after()), 1, true)
+    return !!next && isRoleHeading(next.$from)
+  }
   const selectionFocus = useRef<HTMLDivElement>(null)
   // Browser selection can survive React node-view replacement while ProseMirror's selection moves elsewhere.
   // Keep stable block IDs and inline offsets instead of positions tied to the replaced document.
@@ -1331,6 +1347,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // Jazz's title spec: Backspace at the start of the first line goes up into the title, as in Notion.
         const title = document.querySelector<HTMLElement>('.page-title-field')
         if (title) { e.preventDefault(); e.stopPropagation(); focusAtEnd(title) }
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && !e.nativeEvent.isComposing && !e.altKey && !e.metaKey && !e.ctrlKey && joinsRoleHeading(e.key)) {
+        // Silent, like any key that has nothing to do (Jazz).
+        e.preventDefault(); e.stopPropagation()
       } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && editor.prosemirrorState.selection.empty && editor.getTextCursorPosition().block.type === 'task' && !inlineText(editor.getTextCursorPosition().block.content)) {
         e.preventDefault(); e.stopPropagation(); const id = editor.getTextCursorPosition().block.id; semanticDeletes.current.add(id); editor.removeBlocks([id])
       } else if (!['Shift', 'Control', 'Meta', 'Alt'].includes(e.key) && !((e.metaKey || e.ctrlKey) && ['c', 'x'].includes(e.key.toLowerCase()))) { selected.current = []; setSelectionLabel('') }
