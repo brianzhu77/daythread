@@ -93,7 +93,11 @@ export function cardLines(view: DayView, workspace: Workspace) {
 export function hasHandoffContent(view: DayView, workspace: Workspace, today: LocalDate): boolean {
   const page = view.page
   // Draft my day needs a place to be tapped: while today has no draft and no failure, the card shows (Jazz §2).
-  const needsDraftLink = Boolean(page && !page.draft && !page.draftError)
+  // Not on day one: with no earlier day and no open task from another day, "from last night" is false and Draft my day
+  // has nothing to read (empty-start-states §2). Tasks planned today don't count, so typing one doesn't push the page down.
+  const hasStartingPoint =
+    Boolean(previousDailyPage(workspace, today)) || workspace.tasks.some(t => t.status === 'open' && !isBlankTask(t) && t.plannedOn !== today)
+  const needsDraftLink = Boolean(page && !page.draft && !page.draftError && hasStartingPoint)
   const runShowing = Boolean(page?.draft?.run && page.draft.run.status !== 'ready') || Boolean(page?.draftError)
   // A Draft my day result stays on the card even when it found nothing, until Done or Later (Ratchet #80, Jazz 8437503d):
   // the card vanishing after his tap would look like a failure.
