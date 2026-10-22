@@ -19,8 +19,8 @@ Basis: main 173fa93, layout 6, the live database read-only at revision 169 (22 p
    and rollback discipline), changing the repository to per-aggregate reads and writes on the way; then move the clean
    schema to Supabase in one cutover with a tested way back. Path B (move now, clean up in the cloud) is faster to "on
    Supabase" but makes every later model change a live cloud migration (§5).
-4. **Decisions that need Brian** are in §7: path, privacy / plan / region, whether the server stays on his Mac, and three
-   product-shaped model choices.
+4. **§7a sorts every change into "with the move" or "later, no data migration"**, with sizes. **Decisions** are in §7:
+   path, hosting, privacy / plan / region, auth, server location, SQLite fallback, and the model choices with product effect.
 
 ## 1. What is there today
 
@@ -62,10 +62,19 @@ Each finding: what is stored, why it is a problem, what to store instead.
   `templateApplied` flag on the page.
 - Ids must be opaque: block and task ids built from the template (`day:2026-10-18:top3:template:0`, `editor-task:day:…`)
   encode it, so changing the template would change identities (Bumblebee 929b6b74).
-- Instead: a heading is just a block. **The fact** is what's stored: a task is on a day with a `priority` (1, 2, 3 …) or
-  none; "Top 3" is the app's rule for showing the first three. The template is user data (a `templates` row holding
-  blocks), and the few behaviours that need a place (where new links are collected) bind to a block id in
-  `workspace.settings`, not to a kind string.
+- Instead (Jazz 58c58e6e, Lead da982802): a heading is an ordinary block whose text is his. A heading the template made
+  may carry an optional **`role`** prop (`plan-top3`, `plan-other`, `collect-links`). The role, not the text or the id,
+  is what the screens branch on, so renaming keeps the behaviour.
+- **One source of truth for Top 3:** where he put the task line. A line under the `plan-top3` heading of a day page is
+  that day's Top 3. The slot is computed, never stored. Storing it would buy nothing: "Top 3 is full" reads one day's
+  blocks (a handful of rows), and no screen asks for Top 3 across days. Top 3 is per day, never on the task, because a
+  task can show on several pages (B22, Brian fb1fda77).
+- Plan vs reference look: computed as "the task is planned for this page's day". `planRole` stops being stored.
+- He deletes the Top 3 heading (Bumblebee): its tasks are Other for that day; the next "Move to Top 3" recreates the
+  heading with its role. Nothing is lost or hidden.
+- Today every placement has its day page (checked: 0 of 10 on a page-less day), and planning a task onto a day that has
+  no page creates the page and the line, so the line is always there to be the truth.
+- The template is user data (a `templates` row holding blocks with roles), applied once when a day page is created.
 
 ### 2.3 The day page is a god object
 
@@ -103,11 +112,14 @@ Instead: `captures` keeps what he wrote and when; `ai_runs` (kind, model, status
 
 ### 2.7 Overlapping facts
 
-- Task timing (Bumblebee: "store what he did, compute the rules"): `plannedOn`, `lastPlannedOn`, `attentionOn`, `deadlineOn`, plus `placements` with `included | excluded |
-  moved`. `lastPlannedOn` and parts of placement state are derivable. Proposal: `tasks.planned_on` is the current plan;
-  `task_days` (task, day, priority, position, state) is the per-day record; `lastPlannedOn`, carry-over and "moved" derived. Depends on
-  decision 7 (one task on several pages).
-- Saved links: A2 made a link a page with `url`; `materials` is a second "saved link" entity with its own title, url and
+- Task timing (Bumblebee: "store what he did, compute the rules"): `plannedOn`, `lastPlannedOn`, `attentionOn`,
+  `deadlineOn`, plus `placements` with `included | excluded | moved` and `section`. Proposal: **a task's identity is
+  separate from where it shows** (B22, already decided by Brian fb1fda77). `tasks.planned_on` is the current plan; a task
+  line is a block with `task_id`, and several lines on several pages may point at one task. `task_days` keeps only the
+  per-day facts a line can't hold: he said "not today" for that day (`excluded`), and the history of days it was moved
+  off (`moved`; in his data 5 of 10 placements, 2 of them with no line left). `lastPlannedOn`, carry-over and the slot
+  are computed.
+- Saved links (later, §7a): A2 made a link a page with `url`; `materials` is a second "saved link" entity with its own title, url and
   sources. Proposal: a material becomes a page with `url` plus a `follow_ups` row (review state, next date, history in
   `activity`). Today there are **0 materials** in his data, so this costs nothing to migrate now and more later.
 - `Material.openedOn[]`, `dismissedOn[]`, `decisions[]` grow without bound inside one row; they are an activity log.
@@ -152,7 +164,7 @@ Ids stay text (existing ids are kept on import, no remapping). All tables: `work
 | `blocks` | `page_id`, `parent_id`, `position`, `type`, `content jsonb`, `props jsonb`, `task_id` (task line), `source_block_id` (copy/bring) | `editorJSON`, `sections`, `editorSections`, `editorBlockMetadata` |
 | `templates` | `name`, `blocks jsonb` | `dayTemplate`, `templateApplied` |
 | `tasks` | `title`, `status`, `planned_on`, `start_on`, `due_on`, `paused`, `source_block_id` | `tasks` minus `lastPlannedOn` |
-| `task_days` | `task_id`, `day`, `state`, `priority`, `position` | `placements` |
+| `task_days` | `task_id`, `day`, `state` (`excluded` / `moved`) | `placements` (order and section come from the line) |
 | `events` | `title`, `day`, `time`, `cancelled` | `events` |
 | `follow_ups` | `page_id`, `state`, `next_on`, `skipped_until`, `resurface` | `materials` review fields |
 | `day_reviews` | `day`, `text`, `step`, `source`, `skipped`, `finished_at`, `handoff_done_at` | page review fields |
@@ -176,7 +188,7 @@ hide relational facts. Check constraints cover closed sets that are facts (`task
 | A1 | Repository contract becomes per-aggregate (`loadDay`, `loadPage`, `execute`), still on SQLite; domain commands keep working on a loaded slice | 3–4 days |
 | A2 | `operations` table: replay, receipts without stored copy, undo by inverse; drop the undo snapshot and in-entity undo records | 3 days |
 | A3 | `blocks` table as the only content source; browser BlockNote adapter; `links` / `block_tags` indexes | 4–5 days |
-| A4 | Split page: `day_reviews`, `ai_runs` / `ai_proposals`; priority instead of `top3`; templates as data; materials → link pages + `follow_ups` | 3–4 days |
+| A4 | Split page: `day_reviews`, `ai_runs`; heading roles and the computed slot instead of `top3`; `task_days`; templates as data (materials stay as they are, §7a) | 3–4 days |
 | A5 | Postgres adapter for the clean schema, run against local Supabase (Docker) through the same contract suite | 2 days |
 | A6 | Cutover: import with round-trip check, switch, keep SQLite read-only; export-back script tested for the rollback window | 1–2 days |
 
@@ -217,8 +229,31 @@ large change with no shippable checkpoints and the longest time without real use
 | 4 | Auth and row-level security | **Supabase Auth with his account only; RLS on every table, owner only.** The server keeps all writes and connects with its own role | About a day in A5; sign-in once per browser | Yes: RLS policies are migrations |
 | 5 | Where the server runs | **Stays on his Mac** (only the database moves) | None now; phone use still needs the Mac, as today | Yes: hosting the server later needs only #4 to be in place |
 | 6 | SQLite after cutover | **Read-only fallback for a 14-day rollback window**, with a tested export from Supabase back to SQLite; then archived, not deleted | The export script (part of A6) | That is the point of it; after the window, rollback means restoring from Supabase backups |
-| 7 | Can one task show on several pages at once (B22, Bumblebee)? | Decide **before** the schema: if yes, a task line is a reference to the task and `task_days` holds every day it shows on | None now; changing it after cutover is a migration | Cheap now, costly later |
-| 8 | Model choices with product effect: (a) Top 3 as a priority on the task's day, not a section; (b) special headings (Good Stuffs) bound by a setting, not a kind; (c) saved links (materials, 0 rows) merged into link pages | **All three** | Part of A4; screens look the same | Yes before cutover; after, a migration |
+| 7 | Model choices with product effect: (a) Top 3 is where the line sits (under the heading with the Top 3 role), computed per day; (b) special headings bound by a role prop, so renaming keeps behaviour; (c) saved links (materials, 0 rows) merged into link pages | **(a) and (b) with the move; (c) later** (§7a) | (a)+(b) are part of A4; screens look the same | (a)+(b): cheap before cutover; (c) is free while there are 0 materials |
+
+## 7a. With the move, or later without a data migration
+
+Rule: anything that changes the **shape of stored data** goes with the move, so the cloud starts on the clean shape and
+we never migrate live cloud data for it. Anything that is **computed, an index, or a feature's behaviour** can change
+later. Bumblebee's seven items first, then the rest of §2.
+
+| Item | When | Why | Size |
+| --- | --- | --- | --- |
+| 1. Day template: section kinds, English titles, template-built ids | **With the move** | Kinds become heading `role`s; titles are already heading text. Existing ids are kept as opaque strings (no rewrite); only new ids stop encoding the template | 2 days (in A3/A4) |
+| 2. Task and days (B22-ready) | **With the move** | Changes what a placement row is; the slot and order become computed | 2 days (A4) |
+| 3. Review wizard fields on the page | **Shape with the move, behaviour later** | Move the six fields as they are into `day_reviews` (mechanical). Reducing them to "text + done at" changes the review flow: a product change, **recommend later** | 1 day now |
+| 4. `receipts.message` and no time | **With the move** | Part of `operations`; the UI renders the wording | 1 day (in A2) |
+| 5. Materials (0 rows) | **Later** | A feature-level change to Good Stuffs. Carry the table as is (empty); merging into link pages stays free while it has 0 rows | 0 now |
+| 6. Captures, AI draft, budget states | **Split with the move, flow later** | Move `pages.draft` / `draftError` out of the page into `ai_runs` (1 day); captures and `model_attempts` are already their own tables and go as they are | 1 day |
+| 7. Undo as a second copy of every table | **With the move** | The copy can't sensibly go to Postgres. Replace with `operations.inverse` **keeping today's behaviour exactly** (one step, same "edited since" rules). Multi-step undo is a product change: **recommend later** | 3 days (A2) |
+| Content stored three times, BlockNote format (§2.1) | **With the move** | It is the stored format itself | 4–5 days (A3) |
+| Global revision, whole-workspace load (§3) | **With the move** | Required for the network; per-row versions | 3–4 days (A1) |
+| Revision-number times, title snapshots (§2.5) | **With the move** | Columns change | in A3 |
+| Timezone literal (§2.8) | **With the move** | One column; trivial | in A1 |
+| `links` and `block_tags` indexes (§2.9) | **Later** | Computed from blocks, rebuildable at any time | 1 day when needed |
+| Realtime refresh, multi-step undo, review simplification | **Later** | Behaviour only | — |
+
+Total "with the move" matches path A's steps (§5): about 3 weeks.
 
 ## 8. Verification plan
 
@@ -255,21 +290,22 @@ Verdict: **keep** (a fact), **move** (a fact, wrong place), **derive** (computab
 | pages.reviewText, reviewSaved, reviewStep, reviewSource, reviewSkipped, handoffDone | move | `day_reviews`: text, finished_at, handoff_done_at; step / source / skipped derived or dropped |
 | pages.draft, draftError | move | `ai_runs`, `ai_proposals` |
 | NoteBlock.kind, text, taskId, eventId, targetPageId, sourcePageId/BlockId | keep | `blocks.type`, `content`, `task_id`, `source_block_id`; `materialId` → a link page |
-| NoteBlock.planRole | keep | a block prop |
+| NoteBlock.planRole | derive | planned for this page's day or not (§2.2) |
 | NoteBlock.at, PageRefEntry.at | move | `created_at` |
 | NoteBlock.refs, Section.refs | derive | `links` index from block content |
 | PageRefEntry.title, pending | drop | join on `pages` |
 | NoteBlock.sourceFingerprint | drop | row `version` |
 | NoteBlock.linkPaste | move | `operations` |
-| Section.kind | drop | headings are blocks; behaviour bound in settings (§2.2) |
+| Section.kind | move | heading block `role` prop, set by the template (§2.2) |
 | tasks.title, status, plannedOn, deadlineOn, attentionOn, paused, createdOn, sourcePageId | keep | `due_on`, `start_on`, `created_at`, `source_block_id` |
 | tasks.version | keep | the common `version` column |
 | tasks.lastPlannedOn | derive | from `task_days` |
-| placements.taskId, date, order | keep | `task_days` |
-| placements.state | keep / derive | `excluded` is a fact; `moved` derived (decision 7) |
-| placements.section | move | `priority` (decision 8a) |
+| placements.taskId, date | keep | `task_days` |
+| placements.order | derive | the line's position |
+| placements.state | keep | `excluded` and `moved` are facts (`task_days`); `included` is the line itself |
+| placements.section | derive | from the role heading the line sits under (§2.2) |
 | events.* | keep | 0 rows |
-| materials.url, title, body, savedOn, sources | move | a link page (decision 8c) |
+| materials.url, title, body, savedOn, sources | move | a link page, later (decision 7c, §7a) |
 | materials.reviewState, nextReviewOn, skippedUntil, resurface, lastDecisionOn, taskId | move | `follow_ups` |
 | materials.openedOn, dismissedOn, decisions | move | `activity` |
 | captures.id, pageId, text, capturedAt | keep | |
