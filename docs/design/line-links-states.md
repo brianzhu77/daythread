@@ -1,6 +1,10 @@
 # A11 · Link to a line: states
 
 - Author: Jazz (Design) · 2026-10-21 · status: **design states for review**. Base main 48cfcaa.
+- **v1 scope (Lead 2026-10-22, A11 thread `#daythread:4685e651`):** no cross-page move identity. A paste always gets
+  fresh ids, as today; only task links follow their task. A plain line that is cut and pasted (to another page or
+  within the same page) or deleted reads "**Line not found · {page}**". Move identity is v2, triggered by Bumblebee's
+  usage-read count.
 - Inputs:
   - Brian `c5c9142e` #1 (Oct 18): "block-level query and reference like Notion";
   - Lead `4aa0a79b` (A11 next: Copy link to line in the row ⋯ menu and ⌘/, inline look next to a `[[` page link,
@@ -74,27 +78,27 @@ Three ways to reach the same action, all already on screen today:
 | What happened to the line | The chip shows | Tap |
 | --- | --- | --- |
 | **edited** | its new words | opens it, as §4 |
-| **moved to another page** (cut and pasted, a task moved to another day: followed through its task) | its words · **the page it's on now** | opens it there (follow the line, Bumblebee) |
+| ~~**moved to another page** (cut and pasted)~~ | **v2.** In v1 a cut-and-pasted plain line reads as "not found" below; task lines follow their task (rows below) | |
 | **copied** (Bring to today, copy and paste) | unchanged: the link stays on the original line | opens the original |
 | **a task line whose task moved day** | its words · **the day it's planned for now**, not the history row left on the old day (Jazz `93497700`) | opens that day; the URL from other apps resolves the same way |
 | **a task line whose task has no plan day** (Not today, paused) | its words · the most recent page that still shows its row (Bumblebee `565cad22`) | opens that page |
 | **a task line whose task is done** | its words · the day it was completed on (Bumblebee) | opens that day |
-| **deleted** | "Line removed · {last page}" in `--ink-3`, ↳ icon kept | opens that page at the top, notice "That line was removed" |
+| **deleted, or cut and pasted** (to another page or within the same page; v1) | "**Line not found · {last page}**" in `--ink-3`, ↳ icon kept. Not "removed": in v1 the line may still exist with a new id | opens that page at the top, notice "**Couldn't find that line**" |
 | **its page is in the trash** | its words · {page} in `--ink-3` with the bin icon, like a trashed page link | opens the trashed page (banner + Restore, A4), scrolled to the line |
-| **its page doesn't exist** | "Line not found" in `--ink-3` | nothing |
+| **its page doesn't exist** | "**Page not found**" in `--ink-3` | nothing |
 
-- **Which moves keep the line** (a11 plan 42a2c3f, rev 2 f1d5be8): edits, Enter, indent and drag within a page; cut
-  and paste of **whole lines, pasted once within 2 minutes** (plan §4; a later or second paste is a copy, so the
-  original falls into "deleted"); a task moved to another day, followed through its task. Bring to today is a copy. Anything else that
-  loses the line falls into "deleted" with its last page, never a broken chip.
+- **Which moves keep the line (v1):** edits, Enter, indent and **drag** within a page; a task moved to another day
+  (row menu, hand-off), followed through its task. Bring to today is a copy. **Cut and paste never keeps it in v1**
+  (fresh ids, as today), including reordering within a page: drag instead. Anything that loses the line reads "Line
+  not found · {last page}", never a broken chip.
 - The text around the chip never changes in any of these cases.
 
 ## 6. Linked from
 
 - A line link counts as a link to **its page** (the page the line is on now). The page's Linked from lists the
   linking page once, newest first (B15 rule, unchanged), whether it links the page, a line on it, or both.
-- When the line moves to another page, the entry moves with it: the old page loses it, the new page gains it (with
-  the time the link was made, not the move).
+- When a linked **task** moves to another day, the entry moves with it: the old page loses it, the new page gains it
+  (with the time the link was made, not the move). A plain line's link stays on its last page (v1).
 - No per-line backlink count in the first version.
 
 ## 7. Checks (copy of his data, 1280 and 390)
@@ -105,7 +109,9 @@ Three ways to reach the same action, all already on screen today:
    tinted; at 390 clear of both bars; nothing focused.
 3. Edit the line → the chip's words change on reload of today.
 4. Move a linked task to tomorrow → the chip says "· Oct 22" (or its date) and opens it there.
-5. Delete the line → "Line removed · Oct 18"; tap → Oct 18 at the top with "That line was removed".
+5. Delete the line → "Line not found · Oct 18"; tap → Oct 18 at the top with "Couldn't find that line".
+   Same for cutting the line and pasting it lower on Oct 18, or onto today (v1). Dragging it within Oct 18 keeps the
+   link.
 6. Trash the page holding a linked line → bin chip, opens the trashed page.
 7. Oct 18's Linked from lists Today once (with a page link and a line link to it from Today, still once).
 8. Not offered: empty line, card, Top 3 heading, two lines selected.
