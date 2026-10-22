@@ -119,6 +119,20 @@ Instead: `captures` keeps what he wrote and when; `ai_runs` (kind, model, status
   per-day facts a line can't hold: he said "not today" for that day (`excluded`), and the history of days it was moved
   off (`moved`; in his data 5 of 10 placements, 2 of them with no line left). `lastPlannedOn`, carry-over and the slot
   are computed.
+- **Carry-over and planned tasks without a line** (Lead 2d081f9b; Bumblebee b6c7ea12, Jazz 363fb869 agree). Recommendation
+  **(a): computed, written only when he acts.** This is already how carry-over works today: `dayView` computes `carry`
+  and opening a day writes nothing (`src/domain/workspace.ts` ~679). The only data change is that `lastPlannedOn` stops
+  being stored: it is the latest day the task had a line or a `moved` record. (b) would store a product rule as page
+  content and add rows he didn't write. One mechanism covers three cases:
+  1. **Carried tasks** show in "From earlier days" right under Other (Jazz), each with its day; acting on one (Top 3,
+     Other, Tomorrow, Not today) writes the line, with no notice.
+  2. **Planned for a day that has a page, by an explicit action** ("Plan for today" from Tasks, the morning card): the
+     action writes the line under the `plan-other` heading (recreated with its role if he deleted it), in the same
+     transaction. It is something he did.
+  3. **Planned for a future day with no page yet:** only `tasks.planned_on` is stored (his decision). The preview shows
+     the task computed; nothing is written when the page is first opened. Choosing Top 3 for that day is an action on the
+     page, so it creates the page with the line, as future-day actions already create the page today.
+  Usage check to add (Bumblebee): how many carried tasks he acts on vs. leaves.
 - Saved links (later, §7a): A2 made a link a page with `url`; `materials` is a second "saved link" entity with its own title, url and
   sources. Proposal: a material becomes a page with `url` plus a `follow_ups` row (review state, next date, history in
   `activity`). Today there are **0 materials** in his data, so this costs nothing to migrate now and more later.
