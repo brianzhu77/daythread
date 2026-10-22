@@ -215,9 +215,16 @@ production deploys only by the Lead, no preview promotes.
 **Stray line fix LIVE 2026-10-22 21:25Z: main 89fe761** (PR #7, merge 30feae8 of 5af3522 + Ratchet 8b494b2; Brian 967fd04b;
 Lead 258c6881). No stray line beside task rows, ↑/↓ one press per row, past day's hidden empty rows skipped; Ratchet #115
 passed, 339 pass, alignment 310/0/0. On 3000, `live` and production; Brian told. Rollback
-`.daythread-local/backups/2026-10-22-before-stray-line/dist`. Next (Roadbuster, same reviewers): 1) Delete at a section's
-end before a heading does nothing, ⌘Z restores the heading with its role; 2) a past day opens with no cursor (desktop
-revealed an empty Top 3 row on open), done = at 1280 a past day opened without clicking shows no empty rows.
+`.daythread-local/backups/2026-10-22-before-stray-line/dist`.
+**Section-edge fix LIVE 2026-10-22: main f45d336** (PR #8, merge 62a0438 of a068e72 + Ratchet d5617f8; Ratchet #116 passed,
+343 pass; Lead 0da9cb11). Delete before / Backspace at the start of a role heading do nothing; ⌘Z or paste restores a
+heading's role only if no section on the page has it yet; a day page's template-id heading stored as `custom` regains its
+role on save and in `ensureSection`. His today's Other had become `custom` (revision 64, no text lost, one page, one
+heading); Lead confirms `other` after his next save. Backup `.daythread-local/backups/2026-10-22-before-delete-fix/`.
+Brian told (bb9f0d8e). Next: PR #9 typing jump 7aa3973 (empty task rows 44 px on hover screens; ships when the widened
+`stable-check` and Ratchet #117 pass: document pages, tick/untick, Enter, 2nd/3rd new task; Brian cf4c4e65 "make sure
+everything stable"), then a past day opens with no cursor (done = at 1280 a past day opened without clicking shows no
+empty rows).
 **Success check starts now (7 days from 2026-10-22):** he opens Daythread on his phone away from home at least 3 times and
 no text is lost (usage read Oct 25, reminder 22f37a86).
 Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
