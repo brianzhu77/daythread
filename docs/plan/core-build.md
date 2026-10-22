@@ -43,8 +43,10 @@ There is no Docker on the Mac mini, and nothing gets installed on his machine:
 
 ## 3. Steps
 
-Each step gets its own branch from main and Ratchet's review. Each one runs on the staging preview before the next
-starts. The old app on 3000 is never touched until C6.
+Each step gets its own branch from main and Ratchet's review. **C1–C3 are verified on PGlite and the CI Postgres
+container** (no credentials needed). **From C4 on, each step also runs on the staging preview** before the next starts,
+since staging needs Brian's credentials and sign-in exists from C4 (Ratchet 4efe3189). The old app on 3000 is never
+touched until C6.
 
 | Step | What ships | Size |
 | --- | --- | --- |
@@ -85,7 +87,12 @@ versions. Its behaviour doesn't change before the switch.
   attempts) in the same transaction as the command, then runs it with `waitUntil` from `@vercel/functions`. A Vercel
   Cron every 5 minutes (Nitro `scheduledTasks`, protected by `CRON_SECRET`) picks up jobs whose lease expired. Recovery
   uses the ledger's existing rules: an outcome that might have been charged is settled by generation id, never called
-  again (R6). `maxDuration` is 60 s, raised per route if a model call needs more.
+  again (R6).
+  - **The cron endpoint fails closed:** with `CRON_SECRET` unset it refuses every call, and a call without the right
+    `Authorization: Bearer` gets 401, with no job touched.
+  - **Testing it on a preview:** Vercel runs cron jobs only on production deployments, so on staging the smoke check
+    calls the recovery endpoint itself with the secret (a job with an expired lease is picked up once) and without it
+    (refused). Recovery also runs at the start of the next request, so a preview never depends on the schedule. `maxDuration` is 60 s, raised per route if a model call needs more.
 - **Cold starts:** Fluid compute, with functions in `pdx1`. The C5 speed gate decides whether anything more is needed.
 - **Secrets:** Vercel env only, scoped Preview or Production, as `docs/ops/credentials.md` lists them.
   `DATABASE_MIGRATION_URL` never goes to Vercel. Migrations run from the Mac, or from a CI job only if Lead later wants
@@ -108,7 +115,9 @@ won't be rare. Requirement:
 Today Undo restores a full copy of the workspace when nothing has changed since. In the new store, every command
 already produces exact before and after images of the rows it changed (the projection's patches). The `operations`
 row keeps the before-images as its inverse. Undo applies them only if every one of those rows is still at the version
-the command left it. That is today's behaviour for that command's rows. The editor's own history guards
+the command left it. **Undo restores the content, never the version number:** each restored row gets
+`version = current + 1`, so a client still holding the pre-command version can't match it and overwrite the undo
+(Ratchet). That is today's behaviour for that command's rows. The editor's own history guards
 (`historyTaskVersions`, `editorDeletions`, paste and capture records) stay in the domain, unchanged.
 Inverses are bounded and pruned as in §9 of the main plan.
 
@@ -117,9 +126,14 @@ Inverses are bounded and pruned as in §9 of the main plan.
 - **New app:** his user is created (auto-confirmed), then sign-ups go off, then his workspace is seeded. Production
   deploys from `main` are turned on, and production smoke is run.
 - **Archive on 3000:** a server flag (`DAYTHREAD_ARCHIVED=1`) makes every command refuse with "Archived · read only",
-  before the repository or the model is touched. Jazz's banner and link (§3) show on every screen.
+  before the repository or the model is touched. **Reads write nothing either:** today's load also expires stale
+  drafts (`loadWorkspace` → `expireDrafts`), which the flag skips.
+- **Model work already running at the switch:** the flag first stops new model starts; the switch waits until no
+  attempt is still `reserved` (at most `maxDuration` plus a margin). A result that arrives after the flag only settles
+  its cost in the ledger, so the money record stays true, and applies nothing to his pages. Jazz's banner and link (§3) show on every screen.
 - **The archive's check:** every write path is refused, including the editor save, capture, the morning card, Draft my
-  day, Undo, row actions, paste and trash. The model is never called (the ledger stays unchanged), and reading, the
+  day, Undo, row actions, paste and trash, **and a page load changes nothing** (database file unchanged after reading
+  every screen). A model run started just before the flag settles its cost and applies nothing. The model is never called (the ledger stays unchanged), and reading, the
   sidebar, search and Linked from still work.
 
 ## 8. Checks per step
