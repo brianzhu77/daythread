@@ -1,0 +1,8 @@
+{
+  fixture: 'explicit display:none boundary; not a natural Top3 reproduction',
+  width: 390,
+  text: 'TODO - Other',
+  id: 'day:2026-10-16:other',
+  hidden: false,
+  staysHidden: true
+}
