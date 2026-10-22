@@ -15,7 +15,7 @@ ok   a refused try records nothing, so it never pushes the wait out
 ok   the same wait for any address (30 vs 30)
 ok   the brake is on again
 ok   a device signed in before the brake still opens today (200)
-ok   owner: session cookie, HttpOnly, SameSite=Lax, 30 days (daythread_session=<token>; Path=/; HttpOnly; SameSite=Lax; Max-Age=2591999)
+ok   owner: session cookie, HttpOnly, SameSite=Lax, 30 days (daythread_session=<token>; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000)
 ok   a success clears the failure count
 ok   sessions are stored as hashes only
 ok   390: autocomplete username / current-password (username / current-password)
@@ -41,5 +41,8 @@ ok   after signing in: back on today, and the typed text is saved (http://127.0.
 ok   no "Load latest" conflict
 ok   Sign out shows the sign-in screen
 ok   the signed-out token, replayed: 401 (401)
+ok   not linked: the calm line in --ink-2 (Your account isn't linked to this workspace · Your notes are safe · rgb(110, 110, 115))
+ok   not linked: both fields keep their values
+ok   not linked: no failure counted
 ok   no password in the server log
 all passed

@@ -24,3 +24,25 @@ The project is already linked and builds a preview for every PR. Production depl
 Optional, only if you want us to run the staging check against protected previews: create **Settings → Deployment
 Protection → Protection Bypass for Automation** and pass it to the script when running it:
 `VERCEL_AUTOMATION_BYPASS_SECRET=… node scripts/smoke-staging.mjs <preview url>`. It is not app configuration.
+
+## The workspace's linked account
+
+Brian's first successful sign-in links the workspace to his Supabase account (`daythread.workspace.user_id`). From
+then on only that account can open it. The database refuses any change to the link (trigger `workspace_user_id_guard`),
+so a stray update can't hand the workspace to another account.
+
+If he ever signs in with the right password and sees **"Your account isn't linked to this workspace · Your notes are
+safe"**, his Supabase account was recreated and has a new id. His notes are untouched, and 3000 on the Mac still opens
+them. **After confirming with him**, relink it to his current account in the Supabase SQL editor, as one transaction:
+
+```sql
+begin;
+set local daythread.allow_relink = 'on';  -- this transaction only; nothing else can set it
+update daythread.workspace
+   set user_id = (select id from auth.users where email = '<his sign-in email>')
+ where id = 1;
+commit;
+```
+
+The flag lasts only until `commit`. Sessions of the old account stop working at their next request, and he signs in
+once more.

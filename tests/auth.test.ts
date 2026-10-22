@@ -71,20 +71,20 @@ test('brake: after 5 failures each try waits, doubling to 15 min; refused tries 
   const store = new SessionStore(pgliteClient(db))
   let clock = t0.getTime(), calls = 0
   const now = () => new Date(clock)
-  const wrong = async () => { calls++; return false }, right = async () => { calls++; return true }
-  for (let i = 0; i < freeFailures; i++) assert.deepEqual(await store.attempt(wrong, now), { ok: false, waitMs: 0 })
-  assert.deepEqual(await store.attempt(wrong, now), { ok: false, waitMs: 30_000 }, '6th try waits 30 s')
+  const wrong = async () => { calls++; return 'fail' as const }, right = async () => { calls++; return 'ok' as const }
+  for (let i = 0; i < freeFailures; i++) assert.deepEqual(await store.attempt(wrong, now), { outcome: 'fail', waitMs: 0 })
+  assert.deepEqual(await store.attempt(wrong, now), { outcome: 'fail', waitMs: 30_000 }, '6th try waits 30 s')
   assert.equal(calls, freeFailures, 'a braked try never reaches Supabase')
   clock += 10_000
   assert.equal((await store.attempt(right, now)).waitMs, 20_000, 'refused tries record nothing: still 20 s left, not 30')
   clock += 20_000
-  assert.deepEqual(await store.attempt(wrong, now), { ok: false, waitMs: 0 })
+  assert.deepEqual(await store.attempt(wrong, now), { outcome: 'fail', waitMs: 0 })
   assert.equal((await store.attempt(wrong, now)).waitMs, 60_000, 'doubles')
   for (let i = 0; i < 10; i++) { clock += maxWaitMs; await store.attempt(wrong, now) }
   assert.ok((await store.attempt(wrong, now)).waitMs <= maxWaitMs, 'never more than 15 min')
   clock += maxWaitMs
-  assert.deepEqual(await store.attempt(right, now), { ok: true, waitMs: 0 })
-  assert.deepEqual(await store.attempt(wrong, now), { ok: false, waitMs: 0 }, 'a success cleared the count')
+  assert.deepEqual(await store.attempt(right, now), { outcome: 'ok', waitMs: 0 })
+  assert.deepEqual(await store.attempt(wrong, now), { outcome: 'fail', waitMs: 0 }, 'a success cleared the count')
   await db.close()
 })
 
@@ -92,7 +92,7 @@ test('brake: simultaneous tries are taken one at a time, so only the free ones r
   const db = await PGlite.create()
   const store = new SessionStore(pgliteClient(db))
   let calls = 0
-  const results = await Promise.all(Array.from({ length: 20 }, () => store.attempt(async () => { calls++; await new Promise(r => setTimeout(r, 5)); return false })))
+  const results = await Promise.all(Array.from({ length: 20 }, () => store.attempt(async () => { calls++; await new Promise(r => setTimeout(r, 5)); return 'fail' as const })))
   assert.equal(calls, freeFailures)
   assert.equal(results.filter(r => r.waitMs > 0).length, 20 - freeFailures)
   await db.close()
@@ -102,8 +102,8 @@ test('brake: a signed-in session keeps working while new sign-ins wait', async (
   const db = await PGlite.create()
   const store = new SessionStore(pgliteClient(db))
   const { token } = await store.create('u1', 'owner@example.com', t0)
-  for (let i = 0; i <= freeFailures; i++) await store.attempt(async () => false, () => at(1000))
-  assert.ok((await store.attempt(async () => true, () => at(2000))).waitMs > 0)
+  for (let i = 0; i <= freeFailures; i++) await store.attempt(async () => 'fail' as const, () => at(1000))
+  assert.ok((await store.attempt(async () => 'ok' as const, () => at(2000))).waitMs > 0)
   assert.equal((await store.check(token, at(3000)))?.email, 'owner@example.com')
   await db.close()
 })
@@ -134,17 +134,22 @@ test('after sign-in, only a path on this site: nothing the browser would resolve
 })
 
 test('a session issued to an earlier owner is ended, not honoured, once OWNER_EMAIL changes', async () => {
-  const { ownerSession, useSessionStore } = await import('../src/server/auth/server.ts')
+  const { ownerSession, useSessionStore, useWorkspaceStore } = await import('../src/server/auth/server.ts')
+  const { PostgresWorkspaceRepository } = await import('../src/server/postgres-repository.ts')
   const db = await PGlite.create()
-  const store = new SessionStore(pgliteClient(db))
-  useSessionStore(store)
+  const repo = new PostgresWorkspaceRepository(pgliteClient(db))
+  const store = new SessionStore(pgliteClient(db), 'daythread', { workspace: 'daythread.workspace' })
+  useSessionStore(store); useWorkspaceStore(repo)
   const saved = { ...process.env }
   Object.assign(process.env, { SUPABASE_URL: 'https://auth.test', SUPABASE_PUBLISHABLE_KEY: 'pk', OWNER_EMAIL: 'owner@example.com' })
   try {
-    const { token } = await store.create('u1', 'owner@example.com')
+    await repo.prepare()
+    const owner = '11111111-1111-4111-8111-111111111111'
+    await pgliteClient(db).transaction(tx => repo.link(tx, owner))
+    const { token } = await store.create(owner, 'owner@example.com')
     assert.equal((await ownerSession(token))?.email, 'owner@example.com')
     process.env.OWNER_EMAIL = 'new-owner@example.com'
     assert.equal(await ownerSession(token), null)
     assert.equal((await db.query<{ n: number }>('select count(*)::int as n from daythread.sessions')).rows[0]!.n, 0, 'the old session row is gone')
-  } finally { process.env = saved; useSessionStore(undefined); await db.close() }
+  } finally { process.env = saved; useSessionStore(undefined); useWorkspaceStore(undefined); await db.close() }
 })

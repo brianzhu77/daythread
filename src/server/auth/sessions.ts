@@ -13,8 +13,11 @@ export const failureWindowMs = 15 * 60_000
 export const freeFailures = 5
 export const maxWaitMs = 15 * 60_000
 
-export interface Session { email: string; expiresAt: Date }
-export interface CheckedSession extends Session { renewed: boolean }
+export interface Session { email: string; userId: string; expiresAt: Date }
+/** `linkedUserId`: the account the workspace is linked to, read in the same query (null when not linked). */
+export interface CheckedSession extends Session { renewed: boolean; linkedUserId: string | null }
+/** A sign-in try: the password failed, it passed, or it passed but can't be used (not linked): counted neither way. */
+export type Outcome = 'ok' | 'fail' | 'neutral'
 
 const hash = (token: string) => createHash('sha256').update(token).digest('hex')
 const isToken = (token: string) => /^[A-Za-z0-9_-]{43}$/.test(token)
@@ -24,7 +27,11 @@ export class SessionStore {
   private readonly sql: SqlClient
   private readonly table: string
   private readonly failures: string
-  constructor(sql: SqlClient, schema = schemaName()) { this.sql = sql; this.table = `${schema}.sessions`; this.failures = `${schema}.sign_in_failures` }
+  private readonly workspace: string | undefined
+  /** `workspace`: the workspace table whose link every check reads; omitted, sessions stand alone (tests). */
+  constructor(sql: SqlClient, schema = schemaName(), options: { workspace?: string } = {}) {
+    this.sql = sql; this.table = `${schema}.sessions`; this.failures = `${schema}.sign_in_failures`; this.workspace = options.workspace
+  }
 
   /**
    * Once per process. The tables are created only if missing, re-checked under the lock: ALTER TABLE takes an
@@ -58,13 +65,13 @@ export class SessionStore {
     return this.ready
   }
 
-  /** A new session for a verified owner; returns the token for the cookie (shown nowhere else). */
-  async create(userId: string, email: string, now = new Date()): Promise<{ token: string; expiresAt: Date }> {
+  /** A new session for a verified owner; returns the token for the cookie (shown nowhere else). `tx`: inside a sign-in. */
+  async create(userId: string, email: string, now = new Date(), tx: SqlClient = this.sql): Promise<{ token: string; expiresAt: Date }> {
     await this.init()
     const token = randomBytes(32).toString('base64url'), expiresAt = new Date(now.getTime() + slidingMs)
-    await this.sql.query(`insert into ${this.table} (token_hash, user_id, email, created_at, renewed_at, expires_at) values ($1, $2, $3, $4, $4, $5)`,
+    await tx.query(`insert into ${this.table} (token_hash, user_id, email, created_at, renewed_at, expires_at) values ($1, $2, $3, $4, $4, $5)`,
       [hash(token), userId, email, now.toISOString(), expiresAt.toISOString()])
-    await this.sql.query(`delete from ${this.table} where expires_at < $1`, [now.toISOString()])
+    await tx.query(`delete from ${this.table} where expires_at < $1`, [now.toISOString()])
     return { token, expiresAt }
   }
 
@@ -72,14 +79,16 @@ export class SessionStore {
   async check(token: string | undefined, now = new Date()): Promise<CheckedSession | null> {
     if (!token || !isToken(token)) return null
     await this.init()
-    const [row] = await this.sql.query<{ email: string; created_at: string | Date; renewed_at: string | Date; expires_at: string | Date }>(
-      `select email, created_at, renewed_at, expires_at from ${this.table} where token_hash = $1`, [hash(token)])
+    const [row] = await this.sql.query<{ email: string; user_id: string; linked: string | null; created_at: string | Date; renewed_at: string | Date; expires_at: string | Date }>(
+      `select email, user_id, ${this.workspace ? `(select user_id::text from ${this.workspace} where id = 1)` : 'null::text'} as linked,
+        created_at, renewed_at, expires_at from ${this.table} where token_hash = $1`, [hash(token)])
     if (!row || new Date(row.expires_at).getTime() <= now.getTime()) return null
     const createdAt = new Date(row.created_at), expiresAt = new Date(row.expires_at)
-    if (now.getTime() - new Date(row.renewed_at).getTime() < renewEveryMs) return { email: row.email, expiresAt, renewed: false }
+    const session = { email: row.email, userId: row.user_id, linkedUserId: row.linked }
+    if (now.getTime() - new Date(row.renewed_at).getTime() < renewEveryMs) return { ...session, expiresAt, renewed: false }
     const next = new Date(Math.min(now.getTime() + slidingMs, createdAt.getTime() + absoluteMs))
     await this.sql.query(`update ${this.table} set renewed_at = $2, expires_at = $3 where token_hash = $1`, [hash(token), now.toISOString(), next.toISOString()])
-    return { email: row.email, expiresAt: next, renewed: true }
+    return { ...session, expiresAt: next, renewed: true }
   }
 
   async delete(token: string | undefined): Promise<void> {
@@ -92,10 +101,12 @@ export class SessionStore {
    * One sign-in try against the failures of every instance and address (Lead 48163c61). Tries run one at a time under
    * a transaction lock, so simultaneous requests can't all read the old count and get through (Ratchet). After
    * `freeFailures` in the window, each further try waits 30 s, doubling per failure, up to 15 min after the last
-   * failure; a refused try records nothing, so it never pushes the wait out. A success clears the count. Only new
-   * sign-ins wait: existing sessions are never touched (Bumblebee 2cef8a00).
+   * failure; a refused try records nothing, so it never pushes the wait out. A success clears the count; a
+   * 'neutral' outcome (right password, workspace linked to another account) does neither (Bumblebee fb275f23). Only
+   * new sign-ins wait: existing sessions are never touched (Bumblebee 2cef8a00). `verify` runs in the same
+   * transaction, so whatever it writes (the link, the new session) commits or rolls back with the try.
    */
-  async attempt(verify: () => Promise<boolean>, now = () => new Date()): Promise<{ ok: boolean; waitMs: number }> {
+  async attempt(verify: (tx: SqlClient) => Promise<Outcome>, now = () => new Date()): Promise<{ outcome: Outcome; waitMs: number }> {
     await this.init()
     return this.sql.transaction(async tx => {
       await tx.query("select pg_advisory_xact_lock(hashtext('daythread.sign-in'))")
@@ -103,11 +114,14 @@ export class SessionStore {
       const [row] = await tx.query<{ n: number; last: string | Date | null }>(
         `select count(*)::int as n, max(at) as last from ${this.failures} where at > $1`, [new Date(at.getTime() - failureWindowMs).toISOString()])
       const waitMs = row && row.n >= freeFailures && row.last ? Math.max(0, new Date(row.last).getTime() + Math.min(30_000 * 2 ** (row.n - freeFailures), maxWaitMs) - at.getTime()) : 0
-      if (waitMs > 0) return { ok: false, waitMs }
-      if (await verify()) { await tx.query(`delete from ${this.failures}`); return { ok: true, waitMs: 0 } }
-      await tx.query(`insert into ${this.failures} (at) values ($1)`, [at.toISOString()])
-      await tx.query(`delete from ${this.failures} where at < $1`, [new Date(at.getTime() - failureWindowMs).toISOString()])
-      return { ok: false, waitMs: 0 }
+      if (waitMs > 0) return { outcome: 'fail' as const, waitMs }
+      const outcome = await verify(tx)
+      if (outcome === 'ok') await tx.query(`delete from ${this.failures}`)
+      if (outcome === 'fail') {
+        await tx.query(`insert into ${this.failures} (at) values ($1)`, [at.toISOString()])
+        await tx.query(`delete from ${this.failures} where at < $1`, [new Date(at.getTime() - failureWindowMs).toISOString()])
+      }
+      return { outcome, waitMs: 0 }
     })
   }
 }

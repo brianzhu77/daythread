@@ -142,6 +142,19 @@ await app.waitForURL(/\/sign-in/, { timeout: 10000 }).catch(() => undefined)
 log(app.url().startsWith(BASE + '/sign-in'), 'Sign out shows the sign-in screen')
 r = await fetch(BASE + '/_serverFn/anything', { method: 'POST', redirect: 'manual', headers: { origin: BASE, cookie: `${name}=${tokenBefore}` } })
 log(r.status === 401, 'the signed-out token, replayed: 401', String(r.status))
+// Linked to another account (his Supabase account recreated): a distinct, calm line; nothing counted (Bumblebee
+// fb275f23, Jazz ac124ed).
+await sql.begin(async tx => { await tx.unsafe("set local daythread.allow_relink = 'on'"); await tx.unsafe(`update ${SCHEMA}.workspace set user_id = '0ccccccc-0000-4000-8000-000000000003' where id = 1`) })
+const failuresBefore = (await sql.unsafe(`select count(*)::int as n from ${SCHEMA}.sign_in_failures`))[0].n
+const linkPage = await browser.newPage({ viewport: { width: 390, height: 844 } })
+await linkPage.goto(BASE + '/sign-in', { waitUntil: 'networkidle' })
+await linkPage.fill('input[type=email]', 'owner@example.com'); await linkPage.fill('input[name=password]', 'owner-pass-1'); await linkPage.click('button[type=submit]')
+await linkPage.waitForSelector('.sign-in-note')
+const note = await linkPage.textContent('.sign-in-note'), color = await linkPage.locator('.sign-in-note').evaluate(e => getComputedStyle(e).color)
+log(note === "Your account isn't linked to this workspace · Your notes are safe" && color === 'rgb(110, 110, 115)', 'not linked: the calm line in --ink-2', `${note} · ${color}`)
+log(await linkPage.inputValue('input[type=email]') === 'owner@example.com' && await linkPage.inputValue('input[name=password]') === 'owner-pass-1', 'not linked: both fields keep their values')
+log((await sql.unsafe(`select count(*)::int as n from ${SCHEMA}.sign_in_failures`))[0].n === failuresBefore, 'not linked: no failure counted')
+if (SHOTS) await linkPage.screenshot({ path: `${SHOTS}/sign-in-not-linked-390.png` })
 await browser.close(); await sql.end()
 const serverLog = process.env.SERVER_LOG ? (await import('node:fs')).readFileSync(process.env.SERVER_LOG, 'utf8') : null
 if (serverLog !== null) log(!/owner-pass-1|other-pass-1|Not-The-Pass-7/.test(serverLog), 'no password in the server log')

@@ -1,9 +1,10 @@
 // Server side of sign-in: the gate's checks, the session cookie, and the /api/auth handlers.
 import { getCookie, appendResponseHeader, getRequestIP } from '@tanstack/react-start/server'
 import { z } from 'zod'
-import { postgresSql } from '../storage.ts'
+import { getRepository, postgresSql } from '../storage.ts'
+import { PostgresWorkspaceRepository, schemaName } from '../postgres-repository.ts'
 import { authConfig, authRequired } from './config.ts'
-import { SessionStore, type CheckedSession } from './sessions.ts'
+import { SessionStore, type CheckedSession, type Outcome } from './sessions.ts'
 import { verifyPassword, type VerifyResult } from './supabase.ts'
 
 /** Reachable without a session: the sign-in screen and the calls it makes; build assets are public code. */
@@ -11,7 +12,17 @@ const publicPaths = new Set(['/sign-in', '/api/auth/sign-in', '/api/auth/sign-ou
 const isPublic = (path: string) => publicPaths.has(path) || path.startsWith('/assets/') || /^\/[\w-]+\.(ico|png|svg|webmanifest)$/.test(path)
 
 let store: SessionStore | undefined
-export const sessions = () => store ??= new SessionStore(postgresSql())
+export const sessions = () => store ??= new SessionStore(postgresSql(), schemaName(), { workspace: `${schemaName()}.workspace` })
+let repo: PostgresWorkspaceRepository | undefined
+/** Sign-in needs the Postgres store: sessions sit beside the workspace and are checked against its link. */
+function workspaceStore(): PostgresWorkspaceRepository {
+  if (repo) return repo
+  const r = getRepository()
+  if (!(r instanceof PostgresWorkspaceRepository)) throw new Error('Sign-in needs DAYTHREAD_STORAGE=postgres')
+  return repo = r
+}
+/** For tests: a workspace store on another database. */
+export function useWorkspaceStore(next: PostgresWorkspaceRepository | undefined): void { repo = next }
 /** For tests: a store on another database. */
 export function useSessionStore(next: SessionStore | undefined): void { store = next }
 
@@ -53,16 +64,19 @@ export function fromThisMachine(request: Request, ip: string | undefined): boole
   return !!ip && /^(127\.\d+\.\d+\.\d+|::1|::ffff:127\.\d+\.\d+\.\d+)$/.test(ip)
 }
 
-/** A response that stops the request, or undefined to let it through. */
-export async function checkRequest(request: Request, handlerType: 'serverFn' | 'router'): Promise<Response | undefined> {
+/**
+ * A response that stops the request, or what to let it through with: the account it was signed in as, under which
+ * the workspace store reads and writes (none with sign-in off, or on the public sign-in paths).
+ */
+export async function checkRequest(request: Request, handlerType: 'serverFn' | 'router'): Promise<Response | { owner?: string }> {
   if (!sameOrigin(request)) return new Response('Forbidden', { status: 403 })
-  if (!authRequired()) return fromThisMachine(request, getRequestIP()) ? undefined : new Response('Sign-in is off: this machine only', { status: 403 })
+  if (!authRequired()) return fromThisMachine(request, getRequestIP()) ? {} : new Response('Sign-in is off: this machine only', { status: 403 })
   const url = new URL(request.url)
-  if (isPublic(url.pathname)) return undefined
+  if (isPublic(url.pathname)) return {}
   const session = await ownerSession(tokenOf(request))
   if (session) {
     if (session.renewed) appendResponseHeader('set-cookie', sessionCookie(request, tokenOf(request)!, session.expiresAt))
-    return undefined
+    return { owner: session.userId }
   }
   if (handlerType === 'serverFn' || url.pathname.startsWith('/api/') || request.method !== 'GET')
     return Response.json({ error: 'signed-out' }, { status: 401 })
@@ -70,14 +84,18 @@ export async function checkRequest(request: Request, handlerType: 'serverFn' | '
 }
 
 /**
- * A live session that still belongs to the current owner. If OWNER_EMAIL has changed since it was issued, the session
- * is ended rather than honoured (Ratchet 4f235d84).
+ * A live session that still belongs to the current owner and to the account the workspace is linked to, read in the
+ * same query. A session whose OWNER_EMAIL has changed (Ratchet 4f235d84), or whose account the workspace is no longer
+ * linked to (an admin relink), is ended rather than honoured. One from before the link existed waits for a sign-in,
+ * which links the workspace.
  */
 export async function ownerSession(token: string | undefined): Promise<CheckedSession | null> {
+  if (!token) return null
+  await workspaceStore().prepare()
   const session = await sessions().check(token)
   if (!session) return null
-  if (session.email === authConfig().ownerEmail) return session
-  await sessions().delete(token)
+  if (session.email === authConfig().ownerEmail && session.userId === session.linkedUserId) return session
+  if (session.linkedUserId !== null || session.email !== authConfig().ownerEmail) await sessions().delete(token)
   return null
 }
 
@@ -107,7 +125,10 @@ const refuse = (status: number, error: string, extra: Record<string, unknown> = 
 
 /**
  * Email + password. Wrong password, unknown address and non-owner are one identical 401; a brake is 429 with the real
- * wait (the same for every address); Supabase unreachable is 503. The password is never logged or echoed.
+ * wait (the same for every address); Supabase unreachable is 503. The password is never logged or echoed. The right
+ * password links the workspace (first time) and issues the session in the same transaction as the try, so nothing is
+ * left half done; if the workspace is linked to another account, it's 403 'not-linked', counted neither way
+ * (Bumblebee fb275f23).
  */
 export async function handleSignIn(request: Request): Promise<Response> {
   const body = signInBody.safeParse(await request.json().catch(() => null))
@@ -115,13 +136,21 @@ export async function handleSignIn(request: Request): Promise<Response> {
   const tooMany = (ms: number) => refuse(429, 'too-many', { retryAfter: Math.ceil(ms / 1000) })
   const ipWait = ipWaitMs(clientIp(request))
   if (ipWait > 0) return tooMany(ipWait)
-  let result = { ok: false } as VerifyResult, attempt
-  try { attempt = await sessions().attempt(async () => (result = await verifyPassword(authConfig(), body.data.email, body.data.password)).ok) }
-  catch { return refuse(503, 'unavailable') }
+  let issued: { token: string; expiresAt: Date } | undefined, attempt
+  try {
+    await workspaceStore().prepare()
+    attempt = await sessions().attempt(async (tx): Promise<Outcome> => {
+      const result: VerifyResult = await verifyPassword(authConfig(), body.data.email, body.data.password)
+      if (!result.ok) return 'fail'
+      if (await workspaceStore().link(tx, result.userId) === 'not-linked') return 'neutral'
+      issued = await sessions().create(result.userId, result.email, new Date(), tx)
+      return 'ok'
+    })
+  } catch { return refuse(503, 'unavailable') }
   if (attempt.waitMs > 0) return tooMany(attempt.waitMs)
-  if (!result.ok) return refuse(401, 'wrong')
-  const { token, expiresAt } = await sessions().create(result.userId, result.email)
-  return Response.json({ ok: true }, { headers: { ...noStore, 'set-cookie': sessionCookie(request, token, expiresAt) } })
+  if (attempt.outcome === 'neutral') return refuse(403, 'not-linked')
+  if (attempt.outcome !== 'ok' || !issued) return refuse(401, 'wrong')
+  return Response.json({ ok: true }, { headers: { ...noStore, 'set-cookie': sessionCookie(request, issued.token, issued.expiresAt) } })
 }
 
 export async function handleSignOut(request: Request): Promise<Response> {
