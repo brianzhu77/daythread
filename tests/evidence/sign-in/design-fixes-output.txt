@@ -1,0 +1,18 @@
+ok   390: focused email field is --fill (rgb(239, 238, 245))
+ok   390: no required marker
+ok   390: after a wrong code the boxes are empty
+ok   390: and the caret is back in the code
+ok   390: typing again works straight away (12)
+ok   390: the error clears as he types
+ok   390: the right code signs in without a tap (http://127.0.0.1:3473/)
+ok   390: account row in --text-meta (13px)
+ok   1280: focused email field is --fill (rgb(239, 238, 245))
+ok   1280: no required marker
+ok   1280: after a wrong code the boxes are empty
+ok   1280: and the caret is back in the code
+ok   1280: typing again works straight away (12)
+ok   1280: the error clears as he types
+ok   1280: the right code signs in without a tap (http://127.0.0.1:3473/)
+ok   1280: account row in --text-meta (13px)
+ok   1280: account row text starts on the label edge (20 vs 20)
+all passed

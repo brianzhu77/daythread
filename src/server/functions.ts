@@ -57,3 +57,9 @@ export const draftMyDay = createServerFn({ method: "POST" })
     const { startDraftForDay } = await import("./model/service");
     return startDraftForDay(data.operationId, data.date);
   });
+
+/** The signed-in address for "{email} · Sign out"; null when sign-in is off. */
+export const getAccount = createServerFn({ method: "GET" }).handler(async () => {
+  const { currentEmail } = await import("./auth/server");
+  return { email: await currentEmail() };
+});

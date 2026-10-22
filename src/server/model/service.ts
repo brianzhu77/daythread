@@ -1,7 +1,6 @@
 // Server-side wiring for the model: key loading, start-up recovery, status for the browser, and kicking off organizing.
-import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { parseEnv } from 'node:util'
+import { readLocalEnv } from '../local-env.ts'
 import { waitUntil } from '@vercel/functions'
 import { getRepository, storageKind } from '../storage.ts'
 import { costUnknownCaptureIds, modelStatus } from '../model-ledger.ts'
@@ -11,16 +10,11 @@ import { recoverUnknownCosts } from './cost-lookup.ts'
 import { draftDayRun, expireStuckDrafts } from './draft-run.ts'
 
 let envLoaded = false
-/**
- * `vite preview` doesn't put .env.local into process.env, so the server reads the model settings itself. Only the
- * OPENROUTER_* and DAYTHREAD_CAPTURE_MODE keys are taken, values already set in the environment win, nothing is logged.
- */
+/** The model settings from .env.local (local-env.ts): OPENROUTER_*, DAYTHREAD_CAPTURE_MODE and DAYTHREAD_DRAFT only. */
 export function loadModelEnv(path = resolve('.env.local')): void {
   if (envLoaded) return
   envLoaded = true
-  if (!existsSync(path)) return
-  const parsed = parseEnv(readFileSync(path, 'utf8'))
-  for (const [key, value] of Object.entries(parsed)) if (/^(OPENROUTER_|DAYTHREAD_CAPTURE_MODE$|DAYTHREAD_DRAFT$)/.test(key) && process.env[key] === undefined) process.env[key] = value
+  readLocalEnv(/^(OPENROUTER_|DAYTHREAD_CAPTURE_MODE$|DAYTHREAD_DRAFT$)/, path)
 }
 
 export type ModelState = 'simulated' | 'ready' | 'paused' | 'budget-used'
