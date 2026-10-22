@@ -662,8 +662,9 @@ SQLite adapter runs v1 until A1 lands, then v2.
 3. **Raw history of removed lines is kept verbatim.** Imported metadata entries for blocks no longer on a page (5 in his
    data, one holding 5 characters of his text) go into `history` as `legacy_block_metadata` rows with the **original
    JSON unchanged** in `data`, next to the block's tombstone. The reverse export (§10 R5) writes them back into
-   `editorBlockMetadata` exactly. New removals keep their content in the operation's inverse while Undo is possible,
-   and a tombstone's last content in a `history` row when the inverse is pruned, so nothing he wrote disappears.
+   `editorBlockMetadata` exactly. New removals keep their content in the operation's inverse while Undo is possible;
+   once it is pruned, the tombstone keeps only the id and last page, since he deleted the words (keeping deleted text
+   forever would be a product decision, not ours to make here).
 
 ## 11. Future items: additions, not reshapes (bar 2)
 
