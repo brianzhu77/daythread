@@ -271,10 +271,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const polls = useRef(0)
   useEffect(() => {
     if (!workspace?.captures.some(c => c.status === 'organizing')) { polls.current = 0; return }
-    // The server ends a run still organizing 5 min after it started as failed with Retry: one last look just after that,
-    // for when he stays on the page (Jazz 26baa98f).
-    if (polls.current > 75) return
-    const t = setTimeout(() => { polls.current++; void refresh().catch(() => undefined) }, polls.current === 75 ? 225_000 : 1200)
+    if (polls.current >= 75) return
+    const t = setTimeout(() => { polls.current++; void refresh().catch(() => undefined) }, 1200)
     return () => clearTimeout(t)
   }, [workspace, refresh])
 
