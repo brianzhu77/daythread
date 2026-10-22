@@ -14,7 +14,7 @@ Created once, in the same transaction as the workspace, so no screen ever meets 
 | Seed | Why a screen needs it |
 | --- | --- |
 | Collections **Days, Tasks, Events, Links, Templates**, each with its system properties (`sys.date` unique, `sys.status`, `sys.plan_date` as an array, `sys.paused`, `sys.done_on`, `sys.url` unique, …) | every screen queries them; a missing one would be an error, not an empty list |
-| **The day template**: one Templates page with today's five headings (**TODO - Top 3** `plan-top3`, **TODO - Other** `plan-other`, **Events**, **Good Stuffs** `collect-links`, **Notes**). No review heading in the template: it's created, with role `review`, the first time a review is saved, so day pages look as they do now | keeps his day page exactly as it looks now; the titles are his wording, kept as text he can rename |
+| **The day template**: one Templates page with today's five headings (**TODO - Top 3** `plan-top3`, **TODO - Other** `plan-other`, **Events** `events`, **Good Stuffs** `collect-links`, **Notes** `notes`). No review heading in the template: it's created, with role `review`, the first time a review is saved, so day pages look as they do now | keeps his day page exactly as it looks now; the titles are his wording, kept as text he can rename |
 | Nothing else. **No sample page, no sample task, no welcome text** | he knows the app; sample content would be something to delete |
 
 A day page is **not** created at sign-in. It's created the first time a day is opened, as today ("Create page"

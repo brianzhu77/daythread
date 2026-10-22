@@ -17,7 +17,7 @@
 | **Block** | `id, parent_id, position, type, content (versioned inline jsonb), properties jsonb, created_by (him / model), created_at, version` | Pages are blocks (type `page`). Ids opaque. |
 | **Collection** | a block (type `collection`) whose `properties.schema` lists properties by **stable id**: name (his, renamable), type, cardinality, default, `unique`, `system` | A page belongs to at most one collection (`properties.collection_id`). |
 | **System property** | a property with a fixed id the app reads (`sys.status`, `sys.plan_date`, `sys.date`, `sys.url` …), name shown and renamable | Bumblebee 1, Ratchet. Same idea as heading roles: behaviour hangs on the id, never the name. |
-| **Role** | `properties.role` on a block (`plan-top3`, `plan-other`, `collect-links`, `review`) | Set by the template; text stays his. |
+| **Role** | `properties.role` on a block (`plan-top3`, `plan-other`, `events`, `collect-links`, `notes`, `review`) | Set by the template; text stays his. |
 | **Reference block** | type `ref`, `properties.target_id` | **One type** for task rows, synced blocks and pasted tasks (Bumblebee 4). How it renders depends on what it points at. |
 | **Relation** | `from_id, to_id, kind, created_at` (`mention`, `line_link`, `copied_from`, `source`) | A derived index where the fact lives in content (mentions); a stored fact where it doesn't (`copied_from`). |
 | **Trash** | `properties.trashed_at, trash_id` on a page block | Restorable with its children (A4). |
@@ -32,7 +32,7 @@
 | --- | --- | --- |
 | The day page | a page in the **Days** collection, `sys.date` (unique) | stored |
 | One page per date | `unique: true` on `sys.date`, enforced by a partial index on the jsonb value | schema rule, not code that knows Days (Bumblebee 2) |
-| Template headings (Top 3, Other, Events, Good stuffs, Notes) | heading blocks with a `role` where behaviour depends on it; Events and Notes need none | stored (his text) |
+| Template headings (Top 3, Other, Events, Good stuffs, Notes) | heading blocks with a `role` where behaviour depends on it (`plan-top3`, `plan-other`, `events`, `collect-links`, `notes`; Roadbuster C2 §4: the domain uses every section) | stored (his text) |
 | Lines, bullets, checklist lines | blocks (`paragraph`, `bullet`, `check` with `properties.checked`) | stored |
 | Task row | a `ref` block → the task page. Words = the task's title only (Jazz `7b02b1e6`); editing the row edits the title | stored (ref), title on the task |
 | Top 3 vs Other | which role heading the ref sits under | computed |
