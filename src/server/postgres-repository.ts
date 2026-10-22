@@ -65,7 +65,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
           begin
             if old.user_id is not null and new.user_id is distinct from old.user_id
                and coalesce(current_setting('daythread.allow_relink', true), '') <> 'on' then
-              raise exception 'This workspace is linked to another account';
+              raise exception 'The workspace''s account link can''t be changed (see credentials.md)';
             end if;
             return new;
           end $guard$;

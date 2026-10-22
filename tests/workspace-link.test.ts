@@ -36,11 +36,11 @@ test('link: an unlinked workspace takes the first owner account; the same accoun
 test('the database refuses changing the link, except in one transaction an admin flags on purpose', async () => {
   const { db, sql, repo, linked } = await setup()
   await sql.transaction(tx => repo.link(tx, A))
-  await assert.rejects(db.query(`update daythread.workspace set user_id = '${B}'`), /linked to another account/)
-  await assert.rejects(db.query('update daythread.workspace set user_id = null'), /linked to another account/)
+  await assert.rejects(db.query(`update daythread.workspace set user_id = '${B}'`), /account link can't be changed/)
+  await assert.rejects(db.query('update daythread.workspace set user_id = null'), /account link can't be changed/)
   await db.exec(`begin; set local daythread.allow_relink = 'on'; update daythread.workspace set user_id = '${B}' where id = 1; commit;`)
   assert.equal(await linked(), B)
-  await assert.rejects(db.query(`update daythread.workspace set user_id = '${A}'`), /linked to another account/, 'the flag ended with its transaction')
+  await assert.rejects(db.query(`update daythread.workspace set user_id = '${A}'`), /account link can't be changed/, 'the flag ended with its transaction')
   // An older build's writes don't name user_id, so the trigger never fires for them.
   await db.query(`update daythread.workspace set revision = revision + 1, data = data where id = 1`)
   await db.query(`insert into daythread.workspace (id, revision, data) values (1, 0, '{}') on conflict (id) do nothing`)
