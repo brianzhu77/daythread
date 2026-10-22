@@ -169,6 +169,19 @@ test('after a restart, an attempt still marked in flight never got a reply: esti
   } finally { await s.cleanup() }
 })
 
+test('on a store other processes share, only reservations older than the cutoff count as interrupted', async () => {
+  const s = await store()
+  try {
+    await reserve(s.repo, 'a1', s.captureId) // reserved at 17:00
+    const repo = new SqliteWorkspaceRepository(s.path)
+    // Another process may still be waiting on the model for an attempt reserved after the cutoff.
+    assert.equal(await repo.markInterruptedModelAttempts('2026-10-19T17:01:00.000Z', '2026-10-19T16:56:00.000Z'), 0)
+    assert.equal((await s.repo.modelAttempts())[0]!.state, 'reserved')
+    assert.equal(await repo.markInterruptedModelAttempts('2026-10-19T17:06:00.000Z', '2026-10-19T17:01:00.000Z'), 1)
+    assert.equal((await s.repo.modelAttempts())[0]!.state, 'estimated')
+  } finally { await s.cleanup() }
+})
+
 test('the browser cannot send ledger operations: they are not commands', () => {
   const command = (action: object) => ({ operationId: 'op', expectedRevision: 0, action })
   assert.equal(commandSchema.safeParse(command({ type: 'discard-capture', captureId: 'c' })).success, true) // the check can pass

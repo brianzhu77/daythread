@@ -2,7 +2,7 @@
 //   VERCEL_AUTOMATION_BYPASS_SECRET=… node scripts/smoke-staging.mjs https://<preview-url>
 //   node scripts/smoke-staging.mjs --local http://127.0.0.1:<port>   (a local DAYTHREAD_TARGET=vercel build)
 // Each screen must be Daythread's own page for that route (not a login wall, an error page or a redirect elsewhere),
-// the server function must run in pdx1 (next to the database) and assets must be immutable. Only --local skips the two
+// the server function must run in iad1 (next to the database) and assets must be immutable. Only --local skips the two
 // checks that need Vercel's headers. Negative cases: tests/smoke-staging.test.ts.
 const args = process.argv.slice(2)
 const local = args.includes('--local')
@@ -32,7 +32,7 @@ for (const { path, marker } of screens) {
   // x-vercel-id is "<edge>::<function region>::<request id>" for a function response, "<edge>::<request id>" otherwise.
   const segments = (r.headers.get('x-vercel-id') ?? '').split('::')
   if (local) continue
-  if (segments.length >= 3) { sawFunction = true; log(segments[1] === 'pdx1', `${path} ran its function in pdx1`, `function region ${segments[1]}`) }
+  if (segments.length >= 3) { sawFunction = true; log(segments[1] === 'iad1', `${path} ran its function in iad1`, `function region ${segments[1]}`) }
   else log(false, `${path} has a function region`, segments[0] ? `x-vercel-id ${segments.join('::')}` : 'no x-vercel-id')
 }
 if (!local) {

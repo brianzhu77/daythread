@@ -17,6 +17,6 @@ export interface ServerRepository extends WorkspaceRepository {
   reserveModelAttempt(input: ReserveInput): Promise<{ attempt: ModelAttempt; replayed: boolean }>;
   recordModelResult(input: SettleInput, commandOrBuild?: CommandOrBuild, options?: { failAfterWrite?: boolean }): Promise<ModelResultOutcome>;
   executeOnLatest(operationId: string, action: Command["action"]): Promise<CommandResult>;
-  markInterruptedModelAttempts(now: string): Promise<number>;
+  markInterruptedModelAttempts(now: string, olderThan?: string): Promise<number>;
   reconcileModelAttempt(attemptId: string, amount: number | "worst-case", now: string, note?: string, from?: readonly AttemptState[]): Promise<ModelAttempt>;
 }

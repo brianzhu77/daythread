@@ -5,10 +5,16 @@ import { SqliteWorkspaceRepository } from './sqlite-repository.ts'
 import { PostgresWorkspaceRepository } from './postgres-repository.ts'
 import { postgresClient } from './db/sql.ts'
 let repository: ServerRepository | undefined
-/** DAYTHREAD_STORAGE picks the store: `postgres` (DATABASE_URL must be set in the environment) or `sqlite`. */
+/**
+ * DAYTHREAD_STORAGE picks the store: `postgres` (DATABASE_URL must be set in the environment) or `sqlite`. On Vercel
+ * it defaults to `postgres`, so a deployment needs no extra setting (Bumblebee 0c8cc69e).
+ */
+export function storageKind(): string | undefined {
+  return process.env.DAYTHREAD_STORAGE ?? (process.env.VERCEL ? 'postgres' : undefined)
+}
 export function getRepository(): ServerRepository {
   if (repository) return repository
-  const storage = process.env.DAYTHREAD_STORAGE
+  const storage = storageKind()
   if (storage === 'postgres') {
     const url = process.env.DATABASE_URL
     if (!url) throw new Error('DAYTHREAD_STORAGE=postgres needs DATABASE_URL in the environment')

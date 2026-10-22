@@ -84,3 +84,29 @@ test('Postgres: the model ledger lives outside the workspace, keeps micro-USD ex
   assert.equal(await repo.markInterruptedModelAttempts('2026-10-22T06:00:00Z'), 0)
   await db.close()
 })
+
+test('Postgres: a reservation younger than the cutoff is left to the process still working on it', async () => {
+  const db = await PGlite.create()
+  const repo = new PostgresWorkspaceRepository(pgliteClient(db))
+  await repo.reserveModelAttempt({ id: 'live', subject: { kind: 'capture', id: 'c', revision: 1 }, day: '2026-10-22', upperBoundUsd: 0.004, model: 'fake/model', requestHash: 'h', now: '2026-10-22T05:00:00.000Z' })
+  assert.equal(await repo.markInterruptedModelAttempts('2026-10-22T05:01:00.000Z', '2026-10-22T04:56:00.000Z'), 0)
+  assert.equal((await repo.modelAttempts())[0]!.state, 'reserved')
+  assert.equal(await repo.markInterruptedModelAttempts('2026-10-22T05:06:00.000Z', '2026-10-22T05:01:00.000Z'), 1)
+  assert.equal((await repo.modelAttempts())[0]!.state, 'estimated')
+  await db.close()
+})
+
+test('storage: Postgres by default on Vercel; an explicit DAYTHREAD_STORAGE still wins', async () => {
+  const { storageKind } = await import('../src/server/storage.ts')
+  const saved = { VERCEL: process.env.VERCEL, DAYTHREAD_STORAGE: process.env.DAYTHREAD_STORAGE }
+  try {
+    delete process.env.DAYTHREAD_STORAGE; delete process.env.VERCEL
+    assert.equal(storageKind(), undefined)
+    process.env.VERCEL = '1'
+    assert.equal(storageKind(), 'postgres')
+    process.env.DAYTHREAD_STORAGE = 'sqlite'
+    assert.equal(storageKind(), 'sqlite')
+  } finally {
+    for (const [key, value] of Object.entries(saved)) if (value === undefined) delete process.env[key]; else process.env[key] = value
+  }
+})

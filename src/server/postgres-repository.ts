@@ -122,7 +122,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
 
   async modelAttempts(): Promise<ModelAttempt[]> { return this.withLedger(readAttempts) }
   async reserveModelAttempt(input: ReserveInput): Promise<{ attempt: ModelAttempt; replayed: boolean }> { return this.withLedger(ledger => reserveAttempt(ledger, input)) }
-  async markInterruptedModelAttempts(now: string): Promise<number> { return this.withLedger(ledger => markInterrupted(ledger, now)) }
+  async markInterruptedModelAttempts(now: string, olderThan?: string): Promise<number> { return this.withLedger(ledger => markInterrupted(ledger, now, olderThan)) }
   async reconcileModelAttempt(attemptId: string, amount: number | 'worst-case', now: string, note?: string, from?: readonly AttemptState[]): Promise<ModelAttempt> {
     return this.withLedger(ledger => reconcileAttempt(ledger, attemptId, amount, now, note, from))
   }

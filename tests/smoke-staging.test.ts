@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 // The smoke check against fixture servers: it must fail on a login wall, a redirect, an error page, a function in the
-// wrong region or missing Vercel headers, and pass only on Daythread's own screens served from pdx1 (Ratchet #103).
+// wrong region or missing Vercel headers, and pass only on Daythread's own screens served from iad1 (Ratchet #103).
 const script = fileURLToPath(new URL('../scripts/smoke-staging.mjs', import.meta.url))
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const shell = (marker: string) => `<html><head><title>Daythread</title></head><body><main class="app-main"></main>${marker}<script src="/assets/app-1.js"></script></body></html>`
@@ -32,24 +32,24 @@ async function smoke(fixture: Fixture, flags: string[] = []): Promise<{ code: nu
   } finally { server.close() }
 }
 const asset = { headers: { 'cache-control': 'public, max-age=31536000, immutable' }, body: '' }
-const good: Fixture = path => path.startsWith('/assets/') ? asset : { body: daythread[path], headers: { 'x-vercel-id': 'sfo1::pdx1::abc-1' } }
+const good: Fixture = path => path.startsWith('/assets/') ? asset : { body: daythread[path], headers: { 'x-vercel-id': 'sfo1::iad1::abc-1' } }
 
-test('passes on Daythread screens rendered in pdx1 with immutable assets', async () => {
+test('passes on Daythread screens rendered in iad1 with immutable assets', async () => {
   const r = await smoke(good)
   assert.equal(r.code, 0, r.out)
 })
 test('fails on a login wall that returns 200 HTML', async () => {
-  const r = await smoke(path => path.startsWith('/assets/') ? asset : { body: '<html><head><title>Login – Vercel</title></head><body>Log in</body></html>', headers: { 'x-vercel-id': 'sfo1::pdx1::x' } })
+  const r = await smoke(path => path.startsWith('/assets/') ? asset : { body: '<html><head><title>Login – Vercel</title></head><body>Log in</body></html>', headers: { 'x-vercel-id': 'sfo1::iad1::x' } })
   assert.equal(r.code, 1, r.out)
 })
 test('fails on a redirect to a login page', async () => {
   const r = await smoke(path => path.startsWith('/assets/') ? asset : { status: 307, headers: { location: 'https://vercel.com/login', 'x-vercel-id': 'sfo1::x' } })
   assert.equal(r.code, 1, r.out)
 })
-test('fails when the function runs outside pdx1, even if the edge is pdx1', async () => {
-  const r = await smoke(path => path.startsWith('/assets/') ? asset : { body: daythread[path], headers: { 'x-vercel-id': 'pdx1::iad1::abc' } })
+test('fails when the function runs outside iad1, even if the edge is iad1', async () => {
+  const r = await smoke(path => path.startsWith('/assets/') ? asset : { body: daythread[path], headers: { 'x-vercel-id': 'iad1::pdx1::abc' } })
   assert.equal(r.code, 1, r.out)
-  assert.match(r.out, /function region iad1/)
+  assert.match(r.out, /function region pdx1/)
 })
 test('fails without Vercel headers unless --local is given', async () => {
   const bare: Fixture = path => path.startsWith('/assets/') ? asset : { body: daythread[path] }
@@ -57,6 +57,6 @@ test('fails without Vercel headers unless --local is given', async () => {
   assert.equal((await smoke(bare, ['--local'])).code, 0)
 })
 test('fails on the right shell without the route marker (another screen or an error boundary)', async () => {
-  const r = await smoke(path => path.startsWith('/assets/') ? asset : { body: shell(''), headers: { 'x-vercel-id': 'sfo1::pdx1::abc' } })
+  const r = await smoke(path => path.startsWith('/assets/') ? asset : { body: shell(''), headers: { 'x-vercel-id': 'sfo1::iad1::abc' } })
   assert.equal(r.code, 1, r.out)
 })

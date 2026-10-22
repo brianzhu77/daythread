@@ -101,7 +101,7 @@ export class SqliteWorkspaceRepository implements ServerRepository {
       return result
     })
   }
-  async markInterruptedModelAttempts(now: string): Promise<number> { return this.transact(crypto.randomUUID(), db => markInterrupted(db, now)) }
+  async markInterruptedModelAttempts(now: string, olderThan?: string): Promise<number> { return this.transact(crypto.randomUUID(), db => markInterrupted(db, now, olderThan)) }
   async reconcileModelAttempt(attemptId: string, amount: number | 'worst-case', now: string, note?: string, from?: readonly AttemptState[]): Promise<ModelAttempt> { return this.transact(attemptId, db => reconcileAttempt(db, attemptId, amount, now, note, from)) }
   async execute(command: Command): Promise<CommandResult> {
     const started=performance.now(),fields=commandLogFields(command); let db:DatabaseSync|undefined
