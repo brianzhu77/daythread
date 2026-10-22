@@ -91,8 +91,10 @@
    values (a select option the app doesn't know) render as plain text and are kept.
 2. **Unique properties** (Bumblebee 2): one Day per date, one Link per URL. A schema flag plus an index. Cost: a partial
    expression index per unique system property; fine at his scale.
-3. **History is not content** (Bumblebee 3): moved, excluded, done-on and "first saved at" are `operations` facts that
-   screens query. No block holds them.
+3. **History is not content** (Bumblebee 3): moved, excluded, done-on and "first saved at" are facts that screens
+   query. No block holds them. Where they live is Roadbuster's pick (Lead `6edacd5e`): `operations` declared
+   append-only forever with typed, indexed history rows, or a small generic `activity` (entity, kind, at, data) split
+   from the undo/replay log so that log can be pruned. Wherever this doc says "`operations` fact", read that choice.
 4. **One `ref` type** (Bumblebee 4). Rendering by target: a task → task row; a synced container → its lines,
    editable; a page → a card. Editing through a ref writes the target, so there's one source of truth for words.
 5. **Trash ≠ tombstone** (Bumblebee 5).
