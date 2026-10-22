@@ -22,6 +22,20 @@ Basis: main 173fa93, layout 6, the live database read-only at revision 169 (22 p
 4. **§7a sorts every change into "with the move" or "later, no data migration"**, with sizes. **Decisions** are in §7:
    path, hosting, privacy / plan / region, auth, server location, SQLite fallback, and the model choices with product effect.
 
+## 0a. First question for Brian: what should Supabase make possible?
+
+Bumblebee 87fc110c: with the server still on his Mac, nothing changes that he can feel, so the goal decides path,
+hosting and urgency. Engineering view of each answer:
+
+| Goal | What it needs | Path |
+| --- | --- | --- |
+| Use it from anywhere, without the Mac on | The **server moves too** (a host for the app, e.g. a small Node host or serverless), and sign-in becomes **required**, not optional. Extra build: about 2–3 days (auth, deploy, secrets) on top of the move, plus a host fee | Argues for getting there sooner: B, or A with the hosting step pulled forward |
+| His data backed up and safe | A paid plan with daily backups. Nothing else changes | A, no rush |
+| A clean base before more features, or other users later | The clean schema, RLS per owner | A (the 3 weeks are the investment) |
+
+**What pauses during A (about 3 weeks):** every step changes `src/domain/workspace.ts`, so new features wait or rebase:
+A11 (already paused), A7, B21/B22, and the A6b-2 follow-up. The usage reads (Oct 22, Oct 25) are unaffected.
+
 ## 1. What is there today
 
 | Layer | Today |
@@ -233,7 +247,10 @@ large change with no shippable checkpoints and the longest time without real use
 5. Credentials: the database URL and service role key live only in `.env.local` on the server machine; nothing in git
    (`.env.*` is already ignored).
 
-## 7. Decisions for Brian (Lead to summarize)
+## 7. Decisions (Lead to summarize)
+
+**For Brian:** the goal (§0a) with the path and hosting (rows 1 and 5), and cloud privacy with a monthly fee (rows 2 and 3).
+**The team's call, reported to him as outcomes:** auth/RLS, the SQLite fallback, the model choices (rows 4, 6, 7).
 
 | # | Decision | Recommendation | Cost | Reversible? |
 | --- | --- | --- | --- | --- |
@@ -275,7 +292,10 @@ Total "with the move" matches path A's steps (§5): about 3 weeks.
 - Per step: unit tests, existing browser checks (`two-tabs`, B23, save-on-leave, A12, A9a, alignment gate), Ratchet review.
 - Postgres: the contract suite against local Supabase; concurrency tests with two connections (row-version conflicts,
   replay); RLS test with the anon key reading nothing.
-- Latency budget measured, not assumed: day load and a save against the chosen region from his Mac, before cutover.
+- **Cutover success check** (Bumblebee): the import round trip matches exactly, the screens are unchanged, and from his
+  Mac against the chosen region, over 50 runs each, **opening a day page is under 300 ms and a save is under 200 ms at
+  p95** (server time, measured in A5). A5 fails, and the cutover waits, if either is missed. Today's local figures are
+  measured the same way first, as the baseline.
 
 ## 9. Open questions for review
 
