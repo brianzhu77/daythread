@@ -60,3 +60,22 @@ test('fails on the right shell without the route marker (another screen or an er
   const r = await smoke(path => path.startsWith('/assets/') ? asset : { body: shell(''), headers: { 'x-vercel-id': 'sfo1::iad1::abc' } })
   assert.equal(r.code, 1, r.out)
 })
+
+// Sign-in on, no session (Lead, sign-in deploy check).
+const signedOutFixture = (open = false, crossOrigin = 403): Fixture => path => {
+  const vercel = { 'x-vercel-id': 'sfo1::iad1::so' }
+  if (path.startsWith('/assets/')) return asset
+  if (path === '/sign-in') return { body: '<html><head><title>Daythread</title></head><body><main class="sign-in"></main><script src="/assets/app-1.js"></script></body></html>', headers: vercel }
+  if (path.startsWith('/_serverFn/') || path.startsWith('/api/smoke')) return { status: 401, body: '{}', headers: vercel }
+  if (path === '/api/auth/send') return { status: crossOrigin, headers: vercel }
+  if (open) return { body: daythread[path], headers: vercel }
+  return { status: 302, headers: { ...vercel, location: `/sign-in?next=${encodeURIComponent(path)}` } }
+}
+test('signed-out mode passes when every screen goes to sign-in and the rest is refused', async () => {
+  const r = await smoke(signedOutFixture(), ['--signed-out'])
+  assert.equal(r.code, 0, r.out)
+})
+test('signed-out mode fails when a screen opens without a session, or a cross-origin POST goes through', async () => {
+  assert.notEqual((await smoke(signedOutFixture(true), ['--signed-out'])).code, 0)
+  assert.notEqual((await smoke(signedOutFixture(false, 200), ['--signed-out'])).code, 0)
+})
