@@ -192,6 +192,13 @@ deployed signed-out smoke + Ratchet's 29 probes pass, Jazz design 20/20 (wrong c
 3000 on ed0e011 with `DAYTHREAD_AUTH=off` (loopback only); rollback `.daythread-local/backups/2026-10-22-before-sign-in/dist`.
 `live` deploy waits on Brian's "done" for 3 Supabase steps (Lead 2f294394: code template, add himself, sign-ups off).
 Then signed-out check on `live`; his first sign-in is the real check. Production stays empty.
+**Password sign-in LIVE 2026-10-22 17:03Z: main 564d622** (PR #5 + Ratchet #112 c0a6ffe; Lead 5c15afa6). Brian skipped the
+code template (needs custom SMTP), so sign-in is email + password (Keychain), code path removed (restorable from 0e1988d).
+340 pass; probes 0 failures on `live`; signed-out smoke passed. Brakes: 10/10 min per IP, global failed backoff 30 s→15 min,
+real wait shown; signed-in devices unaffected. Supabase: one confirmed user, sign-ups off. 3000 same build, auth off;
+rollback `.daythread-local/backups/2026-10-22-before-password/dist`. **Real check pending: Brian's first sign-in.**
+Next: link workspace to his account (user_id bound at first sign-in, rebind refused; not-linked line), then cold-start
+`ALTER TABLE` fix, then HeroUI palette (85f076a). Production stays empty until the Lead says otherwise.
 Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
 `fix/capture-late-refresh` 2201274. 3000 runs the same build; rollback `.daythread-local/backups/2026-10-22-before-vercel-now/dist`.
 
