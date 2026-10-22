@@ -122,6 +122,33 @@ N = D1–D6 + A5 + A1a, A1b, A3 + A4 + A6a + A8 = 13.
 | B24 | Tab refresh: switching back to a tab (or the window regaining focus, at most every 5s) saves what was typed first, then loads the latest; a refused save keeps the draft ("changed elsewhere · draft kept"); a load older than the tab's last save is dropped. Found while planning B21 (Roadbuster); a stale tab could never silently overwrite a newer edit even before (two-tab check 3). c1ead10 live 2026-10-21 (Lead 457533aa, 45fbfd99; from 596bf9a; backup before-c1ead10, rollback = build ec9fcd5 + restart, then tell Brian to reload; Ratchet #95, docs/reviews/refresh-on-visible-ratchet.md, aac515d; Chromium 1280 and WebKit 390, Jazz WebKit run). Not checked on a real iPhone: phone access isn't set up; when it is, ask Brian to edit on the Mac and switch to the phone | Lead c02857fc | built |
 | B25 | Save on leave: edits typed in the last moment before switching page (about 450ms) were never saved, and a cut-and-paste across pages could leave the line on both pages (Roadbuster c509e586). Leaving a page now saves what was typed first, even if the save is slow; a refused save (other tab, offline) keeps the draft with Load latest (B23). A page still holding a "Recovered unsaved draft" saves it on open if the page hasn't changed since, else Load latest (Bumblebee 565cad22). Shipped alone, ahead of A11 (Lead). Live 2026-10-22 as 9fd8f80 (from dfd5f7d; backup 2026-10-22-before-9fd8f80, rollback = build 173fa93 + restart, then tell Brian to reload; no migration; Ratchet #99, docs/reviews/save-on-leave-ratchet.md, 7741c28). Brian told f512ab07: his data was checked and not affected | Roadbuster c509e586; Lead f512ab07, ae99bfe1 | built |
 
+
+## S. Storage cleanup and move to Supabase (tracked, not counted)
+
+Brian 6148a202 ("switch storage to Supabase, review the whole data structure, no business logic in the data"),
+d3a9c476 (goal: use it from anywhere, without his Mac), d0846999 ("iterate until yes; generalize like Notion").
+Plan: `docs/plan/supabase-data-model.md` 8a07bc4 (Roadbuster), passed Ratchet #101 (`docs/reviews/supabase-core-ratchet-final.md`,
+626bc85); concept map `docs/design/core-mapping.md` 0764d26 (Jazz). Brian told yes, about 4 weeks of cleanup then about 2 to
+the cloud, same screens (Lead 2fb4704a). Rows are named S0–S7 here so they don't clash with group A ids; the plan calls them
+A0–A7. Each step ships on its own branch, Ratchet review, live on 3000 before the next (Lead f1533bee).
+**While this runs:** only fixes and screen changes that don't touch stored data ship between steps. A11, B21 and A7 (Weave)
+wait (Lead f1533bee). A0 runs in Brian's account at S5; we don't create third-party accounts on our own.
+
+| ID | Step (plan id) | Size | Status |
+| --- | --- | --- | --- |
+| S0 | Latency spike in his own Supabase/Fly account (A0). Moved to S5 (Lead f1533bee); meanwhile a round-trip check from his Mac to Fly `sjc` and AWS us-west-1, times requests per screen, against the budget (day open < 300 ms, save < 200 ms) | half a day | moved to S5 |
+| S1 | Per-aggregate reads, one workspace lock per command, contract suite v2, still on SQLite (A1) | 4–5 days | building (Roadbuster, from 36f0044) |
+| S2 | `operations` with typed undo, legacy receipts imported, `brought_from` / `copied_from` relations (A2) | 4–5 days | missing |
+| S3 | `blocks` as the only content source, versioned BlockNote inline `content`, `links` / `block_tags` indexes (A3) | 3 days | missing |
+| S4 | General core: collections and properties as data, projection layer, `ref` blocks, `history`, templates as pages; lossless import of his data (A4) | 7–8 days | missing |
+| S5 | Postgres adapter, sign-in by emailed code, auth gate with server-only writes and RLS (A5); latency check in his account | 4–5 days | missing |
+| S6 | Cutover and hosting on Fly next to Supabase: fence, import, localhost-draft handoff, 14-day rollback with export, durable model jobs (A6) | 4–5 days | missing |
+| S7 | Offline first version after cutover: read cache, typing into the draft, capture queue, one status (A7) | 5–6 days | missing |
+
+Success checks: after S6, his data round-trips exactly, the screens are unchanged, day open and save meet the budget; in
+the first 7 days after cutover he opens Daythread on his phone away from home at least 3 times and no text is lost
+(Bumblebee 24f1324a). S7's scope is re-checked against real phone use after the move (Lead 0dde676a).
+
 ## C. Open questions for Brian
 
 Asked 2026-10-19 02:18Z (9e538364 572b3c3a); Brian answered 02:20Z (a4fd5686). Re-ask any future question within 24 h if unanswered.
