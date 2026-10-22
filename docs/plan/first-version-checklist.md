@@ -221,10 +221,15 @@ passed, 339 pass, alignment 310/0/0. On 3000, `live` and production; Brian told.
 heading's role only if no section on the page has it yet; a day page's template-id heading stored as `custom` regains its
 role on save and in `ensureSection`. His today's Other had become `custom` (revision 64, no text lost, one page, one
 heading); confirmed repaired after his save at 21:58Z (revision 74): `other`, one Other section, his task kept (Lead 1e9583da). Backup `.daythread-local/backups/2026-10-22-before-delete-fix/`.
-Brian told (bb9f0d8e). Next: PR #9 typing jump 7aa3973 (empty task rows 44 px on hover screens; ships when the widened
-`stable-check` and Ratchet #117 pass: document pages, tick/untick, Enter, 2nd/3rd new task; Brian cf4c4e65 "make sure
-everything stable"), then a past day opens with no cursor (done = at 1280 a past day opened without clicking shows no
-empty rows).
+Brian told (bb9f0d8e).
+**Typing jump + past-day cursor LIVE 2026-10-22: main c2ba359** (Lead 5f50d5f2). PR #9 shipped as 66b0b70 (merge c552f1c,
+Ratchet #117 e85645b; PR #9 closed unmerged, c4f6b61 superseded): empty task rows 44 px on hover screens; touch rows stay
+38 px with "Plan for today" tap area kept inside its row (32 px tall, wider; no tap plans the neighbouring task); a done
+task keeps its button's space so long titles don't reflow on tick. Brian cf4c4e65 "make sure everything stable": day and
+document rows, first save, tick/untick, Enter, 2nd/3rd task checked at 1280/390/touch. PR #10 0868fd9 (merge 26e6087,
+Ratchet #118 bde5ec6, Jazz pass): a past day opens with no cursor and no empty rows; today and future keep the cursor.
+343 pass, alignment 310/0/0. Rollback `.daythread-local/backups/2026-10-22-before-typing-jump/dist`. Brian told
+(25cb0807), incl. no real-iPhone check. Queue empty; next is what he raises.
 **Success check starts now (7 days from 2026-10-22):** he opens Daythread on his phone away from home at least 3 times and
 no text is lost (usage read Oct 25, reminder 22f37a86).
 Known gaps (later): a Retry that dies before reserving stays "Organizing…"; refresh at ~5 min 10 s kept on
