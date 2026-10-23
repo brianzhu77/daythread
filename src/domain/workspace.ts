@@ -651,6 +651,24 @@ export function getCalendarTasks(state: Workspace, day: string): Task[] {
 export function isBlankTask(t: Task): boolean {
   return !t.title.trim();
 }
+/**
+ * B34a (Jazz rule 3, Lead cbbabf88): where a carried task lands on the next day: Top 3 if its row on `from` is a
+ * top-level row in Top 3, Other otherwise. A row nested under another row isn't a Top 3 item; it lands in Other until
+ * B34b carries the nesting. Placements can't say this: dragging a row into Top 3 doesn't change its placement.
+ */
+export function carrySection(from: Page | undefined, taskId: string): "top3" | "other" {
+  const top3 = from?.sections.find((s) => s.kind === "top3");
+  const row = top3?.blocks.find((b) => b.kind === "task" && b.taskId === taskId);
+  if (!from || !row) return "other";
+  if (!from.editorJSON) return "top3";
+  try {
+    const topLevel = (JSON.parse(from.editorJSON) as EditorNode[]).some((n) => n.id === row.id);
+    return topLevel ? "top3" : "other";
+  } catch {
+    return "top3";
+  }
+}
+
 export function getDayView(state: Workspace, day: string): DayView {
   date(day);
   const current =
