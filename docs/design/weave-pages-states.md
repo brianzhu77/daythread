@@ -109,6 +109,8 @@ The counts in the list row ("6 lines · 3 days") are live too, so the list never
 - **Why day links, not a link per line:** an A11 chip after every line would show each line's words twice, and a small inline
   "jump" mark would be a new kind of inline element. Day links keep the copy calm and add nothing new. *If Bumblebee needs
   per-line links, I'd use a trailing ↳ link with no words, as a second step.*
+- **While copying:** the button reads **"Copying…"** and is disabled, so a second tap or click does nothing. Only one copy
+  per tap, even if the save is slow (Ratchet 81088b91; the plan makes a retry safe on the server too).
 - **Then:** the Weave page shows **You have a copy ›** in place of the button, and it opens the copy.
 - **Copy in the trash:** "Your copy is in the trash ›" opens it on the trashed-page screen with Restore (A4).
   **Deleted forever, or the copy undone with ⌘Z:** the button is back. The copy's state is read live, never stored.
@@ -155,7 +157,7 @@ The counts in the list row ("6 lines · 3 days") are live too, so the list never
    it: the line is gone, the counts drop, and the summary hides if it cited that line. Editing a cited line also hides the summary.
 7. Trash the page holding a gathered line: the line is hidden. Restore: it's back.
 8. Copy to my pages: the receipt "Copied to your pages · Open"; the copy is at the top level of Mine, editable, with day
-   headings linking to the days; the Weave page shows "You have a copy ›". Trash the copy: "Your copy is in the trash ›".
+   headings linking to the days; the Weave page shows "You have a copy ›". Double-clicking the button makes one copy. Trash the copy: "Your copy is in the trash ›".
 9. Old link to a dropped topic: "This Weave page was removed at the last update · See Weave".
 10. Geometry: the Weave list row, the band and a gathered line pass `check-alignment` as required types, with a fixture on
     2026-12-31 (the standing alignment rule). At 390, the last line clears the tab bar's fade (B20).
