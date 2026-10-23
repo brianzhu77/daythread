@@ -1,0 +1,8 @@
+(node:45887) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280: a new to-do with a line on another page: "Removed from today · still in Doc" (Saved | Removed from today · still in Doc
+Undo | Removed from today · still in Doc)
+ok   1280: and the task really stays
+ok   1280: one of two lines on the same page: no notice (Lead 2fd18667) (Saved)
+ok   1280: and the task stays planned for today (its other line is still here) (2026-10-23)
+all passed
