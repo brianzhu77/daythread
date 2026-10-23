@@ -1,0 +1,1 @@
+Executed Chromium6c7fad1, separate actual opener tabs. Both sessionStorage daythread.tab values identical. One shared recovery slot held B only. After both closed and fresh tab opened: recoveredA=false, recoveredB=true. Full raw log was /tmp/ratchet166-opener.log; omitted large synthetic document dump.
