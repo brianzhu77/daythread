@@ -97,17 +97,20 @@ if (!phone) {
   log(!strFromU8(liveZip[root + 'workspace.json']).includes('LIVE_TAB_MARKER') && claimed.length === 1 && claimed[0] === null, 'another open tab\'s unsaved text is left alone (not exported, not claimed)', JSON.stringify(claimed))
   await other.close()
   // A tab that's gone (closed with saves failing) left its text in a draft: Export saves it the way opening the page
-  // would, from a screen where that page isn't open.
+  // would.
+  // Ratchet 95eb05f4: the exporting tab already has that page (Today) open, so its editor won't merge the draft itself.
+  await p.goto(base + '/', { waitUntil: 'networkidle' }); await p.waitForTimeout(600)
   const gone = await ctx.newPage(); await gone.goto(base + '/', { waitUntil: 'networkidle' }); await gone.waitForTimeout(800)
   await gone.route('**/_serverFn/**', r => r.request().method() === 'POST' ? r.abort('failed') : r.continue())
   const goneLine = gone.locator('.continuous-editor .bn-inline-content').last()
   await goneLine.scrollIntoViewIfNeeded(); await goneLine.click(); await gone.keyboard.press(`${process.platform === 'darwin' ? 'Meta' : 'Control'}+ArrowRight`); await gone.keyboard.type(' GONE_TAB_MARKER'); await gone.waitForTimeout(800)
   await gone.close({ runBeforeUnload: true })
-  await p.goto(base + '/pages', { waitUntil: 'networkidle' }); await p.waitForTimeout(600)
+  await p.bringToFront()
   const fromGone = p.waitForEvent('download')
   await p.locator('.account-row:visible').getByRole('button', { name: 'Export' }).click()
   const goneZip = unzipSync(readFileSync(await (await fromGone).path()))
-  log(strFromU8(goneZip[root + 'workspace.json']).includes('GONE_TAB_MARKER'), 'a closed tab\'s unsaved text is saved and exported')
+  log(strFromU8(goneZip[root + 'workspace.json']).includes('GONE_TAB_MARKER'), 'a closed tab\'s unsaved text is saved and exported, its page open here')
+  log((await p.locator('.continuous-editor').innerText()).includes('GONE_TAB_MARKER'), 'and the open page shows it')
 }
 await p.screenshot({ path: `/tmp/rb-b3-row-${width}.png` })
 log(errors.length === 0, 'no page errors', errors.slice(0, 2).join(' / '))
