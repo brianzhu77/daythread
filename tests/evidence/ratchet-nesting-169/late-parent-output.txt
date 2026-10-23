@@ -1,0 +1,26 @@
+{"top":["c","X","Y"],"other":["P"],"outline":["#TODO - Top 3","c","X","Y","#TODO - Other","P"]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: late parent must share its child slot, not overflow
++ actual - expected
+
++ [
++   'P'
++ ]
+- []
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-top3-nesting/tests/evidence/ratchet-nesting-169/late-parent.ts:49:192
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [ 'P' ],
+  expected: [],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
