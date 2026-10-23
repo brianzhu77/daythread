@@ -22,7 +22,10 @@
 Three ways to reach the same action, all already on screen today:
 
 - **⌘/ (Ctrl+/) on any line:** the row menu gains **Copy link to line**. On a task row it goes last, under a divider,
-  after the task actions; on other lines it's the only item.
+  after the task actions; on other lines it's the only item. **Where the menu opens:** under the line's own box, at its
+  text start, like the row ⋯ menu; if there's no room below (a line near the bottom of the screen, which is where he
+  types at the end of a page), it opens above the line. Never anchored to the caret alone, and never partly off-screen
+  (build check of f672ba9).
 - **The ⋯ on task rows** (A12) is the same menu, so it has it too. Other lines don't get a ⋯; the page stays quiet.
 - **Selection bar, with exactly one line selected** (desktop: click the handle; 390: tap the handle):
   ```
@@ -73,6 +76,9 @@ Three ways to reach the same action, all already on screen today:
 - **390:** the line lands clear of the top bar and above the bottom bar's fade (B20), never under it.
 - **On the same page:** scrolls and tints, no navigation.
 - Back (browser or the app's back) returns to where he tapped it, as any page link.
+- **The lookup fails** (offline, a server error): don't jump anywhere. Open the page named in the URL at the top, with the
+  notice "**Couldn't check where that line is now · Retry**", and keep the URL as it is, so Retry or a reload tries again
+  (Bumblebee 499095e0; the app's offline rule: say what couldn't happen, never guess). Never land on an old row silently.
 
 ## 5. When the line changes
 
