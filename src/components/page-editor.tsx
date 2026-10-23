@@ -1187,14 +1187,17 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // Toolbar taps must not take focus from the line: WebKit still sends mousedown after a prevented touch pointerdown,
   // which blurred the editor, hid the toolbar and dropped the click (B5 check, Playwright WebKit at 390).
   const keepCaret = { onPointerDown: (e: React.PointerEvent) => e.preventDefault(), onMouseDown: (e: React.MouseEvent) => e.preventDefault() }
-  // Whether the phone toolbar's indent / outdent can act on the caret's line, read the same way Tab does.
+  // A heading starts a section, so nothing nests into or under one: indenting a section's first line would move it out
+  // of its section (a Top 3 task would silently leave Top 3). Tab and the phone toolbar both ask this.
+  const canIndent = () => {
+    const { block, prevBlock } = editor.getTextCursorPosition()
+    return editor.canNestBlock() && block.type !== 'heading' && prevBlock?.type !== 'heading'
+  }
+  // Whether the phone toolbar's indent / outdent can act on the caret's line.
   const [nesting, setNesting] = useState({ in: false, out: false })
   useEffect(() => {
     const update = () => {
-      // A heading starts a section, so nothing nests into or under one: indenting a section's first line would move it
-      // out of its section.
-      const { block, prevBlock } = editor.getTextCursorPosition()
-      const next = { in: editor.canNestBlock() && block.type !== 'heading' && prevBlock?.type !== 'heading', out: editor.canUnnestBlock() }
+      const next = { in: canIndent(), out: editor.canUnnestBlock() }
       setNesting(previous => previous.in === next.in && previous.out === next.out ? previous : next)
     }
     const offSelection = editor.onSelectionChange(update)
@@ -1487,6 +1490,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           return
         }
       }
+      // Tab where nesting would leave the section does nothing (and keeps focus in the editor), as the toolbar's Indent.
+      if (e.key === 'Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !canIndent()) { e.preventDefault(); e.stopPropagation(); return }
       // A12 keyboard path (Lead b8ec39d5): ⌘/ (Ctrl+/), as Notion's block menu, opens the caret row's ⋯ menu; the
       // context-menu key and Shift+F10 too. Tab keeps indenting.
       if (((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === '/') || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {

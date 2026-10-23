@@ -1,5 +1,5 @@
 // B5 check: the phone toolbar's indent / outdent nest the caret's line like Tab / Shift+Tab, keep the caret, save, and
-// are off where nesting would leave a section (first line under a heading, the heading itself).
+// are off where nesting would leave a section (first line under a heading, the heading itself); desktop Tab too.
 // Run against an isolated server on a disposable store (it types two task rows on today's page), never live.
 // Usage: node scripts/phone-indent-check.mjs <base-url> [chromium|webkit]
 import assert from 'node:assert/strict'
@@ -61,8 +61,17 @@ try {
   await page.locator('[data-content-type="heading"]', { hasText: 'Other' }).first().locator('.bn-inline-content').tap({ position: { x: 8, y: 8 } })
   await page.waitForTimeout(300)
   assert.equal((await tools()).indent, false, 'a heading never indents')
+  // Desktop Tab follows the same rule: on a section's first line it does nothing and keeps focus in the editor.
+  const desk = await browser.newPage({ viewport: { width: 1280, height: 900 } })
+  await desk.goto(base, { waitUntil: 'networkidle' })
+  const deskRow = desk.locator('[data-node-type="blockContainer"]', { hasText: parent }).last()
+  await deskRow.locator('.bn-inline-content').first().click({ position: { x: 12, y: 8 } })
+  await desk.keyboard.press('Tab')
+  await desk.waitForTimeout(300)
+  assert.equal(await deskRow.evaluate(el => Boolean(el.parentElement.closest('[data-node-type="blockContainer"]'))), false, 'Tab never nests a section\'s first line')
+  assert.equal(await desk.evaluate(() => Boolean(document.activeElement?.closest('.bn-editor'))), true)
   assert.deepEqual(errors, [])
-  console.log(JSON.stringify({ engine, indent: 'nests and saves, same task', outdent: 'unnests and saves', undoRedo: 'ok', caretKept: true, offAtSectionStartAndHeading: true, pageErrors: 0 }))
+  console.log(JSON.stringify({ engine, indent: 'nests and saves, same task', outdent: 'unnests and saves', undoRedo: 'ok', caretKept: true, offAtSectionStartAndHeading: true, desktopTabAtSectionStart: 'no-op', pageErrors: 0 }))
 } finally {
   await browser.close()
 }
