@@ -55,7 +55,7 @@ These rows sit in group B and don't change N of M.
 | 4 | B35 Saving recovers by itself | #159 | Roadbuster (sizes it when starting) |
 | 5 | B34b Carrying tasks keeps nesting, card shows the tree (about 2 d) | #158 | Roadbuster |
 | 6 | B3 Export (Markdown plus JSON from Settings) | #128 | Roadbuster |
-| 2c | B5 Phone indent/outdent on the toolbar (390, alignment gate) | #130 | Jazz, right after B37, parallel to Roadbuster; Ratchet reviews (Lead b863fd0c; moves to Roadbuster after B35 if it needs editor internals) |
+| 2c | B5 Phone indent/outdent on the toolbar (390, alignment gate) | #130 | **live** b29fe55 |
 | – | B36 Real-day typing replay and iOS Simulator check | #155 | Ratchet (test code, Roadbuster reviews). Simulator input not verified: needs a macOS Accessibility/Screen Recording grant from Brian (Lead asks, low priority) unless a no-grant route works |
 
 Build order (Lead ad9ce400, B34 split cbbabf88): B32 → B33 → B34a → B35 → B34b → export. Brian's answer can still reorder it.
@@ -127,7 +127,7 @@ N = D1–D6 + A5 + A1a, A1b, A3 + A4 + A6a + A8 = 13.
 | B2 | Events as records | v0.3 scope 6 | missing |
 | B3 | JSON export | v0.3 scope 13 | missing · **Basics 6**: Markdown plus JSON, downloaded from Settings (task #128) |
 | B4 | "/" menu Link and Separator; "Paragraph" → "Body" | editor spec F13 | missing |
-| B5 | Phone toolbar: Aa, indent/outdent, hide keyboard | editor spec F16 | partial · **Basics 2c** (indent/outdent first, Jazz after B37; task #130) |
+| B5 | Phone toolbar: Aa, indent/outdent, hide keyboard | editor spec F16 | partial · **Basics 2c: indent/outdent built** (live 2026-10-23 as main b29fe55, Jazz `design/phone-indent` a30d3f7; buttons in F16 order, same task kept, off on a heading and a section's first line; desktop Tab follows the same rule; WebKit toolbar taps no longer lost to blur; Ratchet #163 report 4123bfc; alignment 318/0/0; backup `backups/2026-10-23-before-b5/`; real iPhone not checked, #155). Aa and hide keyboard still open. Success check: at least one line he nests on the phone within about 5 writing days (task #130 done) |
 | B6 | Dark mode | craft-v1 | missing |
 | B7 | Review as a sheet | craft-v1 step 5, Brian 0a58be58 | missing. **Brian's evidence (2026-10-23, 0a58be58):** the review's structure is too rigid for him; he opens it "just to see what's there", then closes it; 0 saves in 10 days (5 opens, desktop sidebar only). A sheet that keeps the same steps would not fix this; any redo starts from "show me what happened today", not a form (Lead 06:11). Same finding as B31 (task #150) |
 | B8 | Capture type chips Auto · Task · Page | craft-v1; C4 = Auto | missing |
