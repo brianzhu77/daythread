@@ -3,8 +3,14 @@
 // save here; such a command first saves what was typed and does nothing if that save fails (Lead 5f3615d0).
 const flushers = new Map<string, () => Promise<boolean>>()
 
+// B40: an editor that is mounting has read (or is about to read) this tab's draft for its page, so a background save
+// must leave that page alone from the first render, not only once the editor has registered its flush.
+const mounting = new Set<string>()
+export const noteEditorMounting = (pageId: string) => { mounting.add(pageId) }
+export const doneEditorMounting = (pageId: string) => { mounting.delete(pageId) }
+
 export function registerEditorFlush(pageId: string, flush: () => Promise<boolean>): () => void {
-  flushers.set(pageId, flush)
+  flushers.set(pageId, flush); mounting.delete(pageId)
   return () => { if (flushers.get(pageId) === flush) flushers.delete(pageId) }
 }
 
@@ -26,7 +32,9 @@ export function trackLeaveSave(save: Promise<unknown>): void {
 }
 
 /** Pages with an editor open in this tab: their drafts are theirs to save. */
-export const openEditorPages = (): Set<string> => new Set(flushers.keys())
+export const openEditorPages = (): Set<string> => new Set([...flushers.keys(), ...mounting])
+/** True while a closing editor's save is still on its way (its draft isn't "kept" yet). */
+export const leaveSavesPending = (): boolean => leaving.size > 0
 
 /** Saves every open editor and waits for closing ones to finish; true when no open editor is left unsaved. */
 export async function flushAllEditors(): Promise<boolean> {

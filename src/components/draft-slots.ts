@@ -16,6 +16,8 @@ export interface DraftSlot {
   closed?: boolean
   /** Set by the tab that merged this slot; the owner, if it comes back, must not save its copy. */
   claimedBy?: string
+  /** B40: set while a tab is saving this gone tab's draft (`claimedBy` is that tab); a save that never finished frees it. */
+  taking?: number
 }
 
 const prefix = (pageId: string) => `daythread:editor:${pageId}`
@@ -136,7 +138,8 @@ export function orphans(pageId: string, now = Date.now()): { key: string; slot: 
     const key = localStorage.key(i)
     if (!key || key === own || !(key === legacy || key.startsWith(`${legacy}:`))) continue
     const slot = parse(localStorage.getItem(key))
-    if (!slot || slot.claimedBy) continue
+    // A tab that took it to save and never finished (closed mid-save) frees it again after a minute.
+    if (!slot || (slot.claimedBy && !(slot.taking && now - slot.taking > 60_000))) continue
     // The old one-slot key had no owner or time: it belongs to whichever tab opens the page next.
     if (key === legacy || slot.closed || now - (slot.seen ?? 0) > goneAfter()) out.push({ key, slot })
   }
@@ -148,7 +151,28 @@ export function claim(pageId: string, key: string): void {
   try {
     if (key === prefix(pageId)) { localStorage.removeItem(key); return }
     const slot = parse(localStorage.getItem(key))
-    if (slot) localStorage.setItem(key, JSON.stringify({ ...slot, document: '', claimedBy: tabId(), seen: Date.now() }))
+    if (slot) { const { taking: _, ...rest } = slot; localStorage.setItem(key, JSON.stringify({ ...rest, document: '', claimedBy: tabId(), seen: Date.now() })) }
+  } catch { /* storage unavailable */ }
+}
+
+/**
+ * B40: marks a gone tab's draft as being saved by this tab, so an editor opening the page in another tab doesn't merge
+ * it at the same time; false when it's no longer free. `release` gives it back after a failed save.
+ */
+export function take(pageId: string, key: string): boolean {
+  try {
+    if (!orphans(pageId).some(o => o.key === key)) return false
+    if (key === prefix(pageId)) return true
+    const slot = parse(localStorage.getItem(key))
+    if (slot) localStorage.setItem(key, JSON.stringify({ ...slot, claimedBy: tabId(), taking: Date.now() }))
+    return true
+  } catch { return false }
+}
+export function release(pageId: string, key: string): void {
+  try {
+    if (key === prefix(pageId)) return
+    const slot = parse(localStorage.getItem(key))
+    if (slot?.taking && slot.claimedBy === tabId()) { const { claimedBy: _c, taking: _t, ...rest } = slot; localStorage.setItem(key, JSON.stringify(rest)) }
   } catch { /* storage unavailable */ }
 }
 

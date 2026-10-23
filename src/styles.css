@@ -1307,3 +1307,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
   .editor-unsaved-line { transition:transform .15s ease-out; }
   body:has(.app-toasts [data-slot="toast"]) .editor-unsaved-line { transform:translateY(-52px); }
 }
+/* B40 (Jazz): a page's unsaved text shows from any screen. Its line uses B38's look; on the phone, the open page's own
+   line wins the spot above the tab bar. The tab where he'd find that page carries the same dot. */
+.editor-unsaved-line.is-elsewhere { overflow:hidden; text-overflow:ellipsis; }
+@media(max-width:899px) { .bottom-dock:has(.editor-dock .editor-unsaved-line) > .editor-unsaved-line.is-elsewhere { display:none; } }
+.tab.has-unsaved { position:relative; }
+.tab.has-unsaved::after { content:''; position:absolute; top:9px; left:calc(50% + 7px); width:7px; height:7px; border-radius:50%; background:var(--warn); box-shadow:0 0 0 2px var(--bg); pointer-events:none; }

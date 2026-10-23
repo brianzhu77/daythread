@@ -35,7 +35,8 @@ import { addDays, fromIso, longLabel, todayIso, weekday } from './dates'
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
 import { endOfLineAbove, rowArrows } from './row-arrows'
-import { isOwnLeaveSave, registerEditorFlush, rememberLeaveSave, trackLeaveSave } from './editor-flush'
+import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, rememberLeaveSave, trackLeaveSave } from './editor-flush'
+import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
 import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
 
@@ -240,10 +241,6 @@ function LineRefChip({ target }: { target: LineTarget }) {
   </span>
 }
 /** B35: a failure the network caused (worth retrying), not a refusal from the server (which would refuse again). */
-function isNetworkFailure(message: string): boolean {
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
-  return /failed to fetch|networkerror|network error|load failed|fetch failed|timed? ?out|unavailable|bad gateway|gateway|\b50[234]\b|connection/i.test(message)
-}
 /** The host without `www.`, for the card's quiet domain. */
 function hostLabel(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' }
@@ -300,6 +297,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const key = `daythread:editor:${page.id}`
   const initial = useRef<{ nodes: EditorNode[]; base: string; recovered: boolean; cutTaskIds: string[] } | null>(null)
   if (!initial.current) {
+    // B40: from here on, a background save of kept drafts leaves this page's draft to this editor.
+    noteEditorMounting(page.id)
     const base = pageContentKey(page)
     let nodes = editorSeed(page, workspace, { templateRows: needsTemplateRows(page, todayIso()) }), recovered = false, savedBase = base, cutTaskIds: string[] = []
     // B35: this tab's own slot; drafts other tabs left behind are merged in after mount. A recovered draft brings back
@@ -700,6 +699,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const back = () => { if (document.visibilityState === 'visible') claimedAway() }
     window.addEventListener('pagehide', gone); document.addEventListener('visibilitychange', back)
     return () => { clearInterval(alive); window.removeEventListener('pagehide', gone); document.removeEventListener('visibilitychange', back) }
+  }, [page.id])
+  useEffect(() => () => doneEditorMounting(page.id), [page.id])
+  // B40 (Bumblebee, Lead a0173c36): a closed tab's text that a background save or Export put into this page says so
+  // once, the way merging it on opening does; his own tab's text needs no notice.
+  useEffect(() => {
+    if (takeRecoveredNotice(page.id)) toast('Added unsaved text from another tab', { timeout: 6000 })
+    const heard = (e: Event) => { if ((e as CustomEvent<string>).detail === page.id && takeRecoveredNotice(page.id)) toast('Added unsaved text from another tab', { timeout: 6000 }) }
+    window.addEventListener(recoveredEvent, heard)
+    return () => window.removeEventListener(recoveredEvent, heard)
   }, [page.id])
   // Drafts other tabs left behind on this page (closed, or gone quiet) are merged in on opening, the way Load latest
   // merges ("your lines are below theirs"), then claimed, so the tab that left them can't save them again.
