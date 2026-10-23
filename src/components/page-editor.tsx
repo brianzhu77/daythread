@@ -13,7 +13,7 @@ import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, templateKind, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
-import { announceSave, changedBy, claim, clearOwn, listenForSaves, orphans, ownClaimed, readOwn, sweepClaims, touchOwn, writeOwn } from './draft-slots'
+import { announceSave, changedBy, claim, clearOwn, listenForSaves, orphans, ownClaimed, readOwn, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn } from './draft-slots'
 import { applyCommand, bornHere, deletesWithLine, pasteRecords } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
@@ -587,7 +587,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const ws = await refresh(), latest = ws.pages.find(p => p.id === page.id)
         if (latest) applyServerPage(latest, ws)
       } finally { claimHandled.current = false }
-      setFailed(false); setStatus('Latest loaded · your text was saved from another tab')
+      setFailed(false); setStatus("Latest loaded · this tab's text was already saved")
     })()
     return true
   }
@@ -647,7 +647,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (!result) {
         debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true)
         offlineFailure.current = isNetworkFailure(failure)
-        if (offlineFailure.current) { setStatus("Couldn't save · trying again · draft kept"); scheduleRetry() }
+        // Jazz bebe67e3: what happened · what's kept, short enough for 390; Retry stays for an impatient moment.
+        if (offlineFailure.current) { setStatus(navigator.onLine === false ? "Offline · saves when you're back" : 'Not saved yet · trying again'); scheduleRetry() }
         else setStatus("Couldn't save · draft kept")
         return
       }
@@ -676,8 +677,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // another tab claimed it meanwhile.
   useEffect(() => {
     listenForSaves()
-    const alive = setInterval(() => touchOwn(page.id), 15_000)
-    const gone = () => touchOwn(page.id, true)
+    const alive = setInterval(() => { touchOwn(page.id); touchTab() }, 15_000)
+    const gone = () => { touchOwn(page.id, true); touchTab(true) }
     const back = () => { if (document.visibilityState === 'visible') claimedAway() }
     window.addEventListener('pagehide', gone); document.addEventListener('visibilitychange', back)
     return () => { clearInterval(alive); window.removeEventListener('pagehide', gone); document.removeEventListener('visibilitychange', back) }
@@ -694,7 +695,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       try {
         const [baseSections, baseJSON] = JSON.parse(slot.base) as [Page['sections'], string | null]
         const started = { ...current, sections: baseSections, editorJSON: baseJSON ?? undefined, editorSections: JSON.stringify(baseSections) } as Page
-        const merged = mergeDraft(editorSeed(started, ws, { templateRows: needsTemplateRows(started, todayIso()) }) as EditorNode[], JSON.parse(slot.document) as EditorNode[], doc, known)
+        const draft = withoutSaved(JSON.parse(slot.document) as EditorNode[], doc, inlineText)
+        const merged = mergeDraft(editorSeed(started, ws, { templateRows: needsTemplateRows(started, todayIso()) }) as EditorNode[], draft, doc, known)
         doc = merged.document; inserted += merged.inserted.length
         // Its cuts were moves too (B33): the save that carries its text mustn't delete them.
         for (const id of slot.cutTaskIds ?? []) cutTasks.current.add(id)
@@ -705,7 +707,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     editor.transact(tr => { closeHistory(tr); editor.replaceBlocks(editor.document, doc as never) })
     // This runs before the editor's change listener is attached, so save it here (it isn't saved anywhere yet).
     dirty.current = true; stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0)
-    setNotice({ text: 'Recovered text from a closed tab · below its lines', fingerprint: JSON.stringify(editor.document) })
+    setNotice({ text: 'Added unsaved text from another tab', fingerprint: JSON.stringify(editor.document) })
   }, [])
   // Back online, or back to this tab: a save waiting on the network goes now.
   useEffect(() => {
