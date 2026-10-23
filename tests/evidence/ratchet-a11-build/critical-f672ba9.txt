@@ -1,0 +1,33 @@
+PASS URL: fresh view without task= 1280
+PASS URL: fresh view with task= 1280
+FAIL URL: fresh view from trashed task source 1280: Expected values to be strictly equal:
++ actual - expected
+
++ '/pages'
+- '/day/2026-10-22'
+
+PASS chip and jump 1280
+PASS long excerpt at 390 1280
+PASS chip: trashed page 1280
+PASS URL: fresh view without task= 390
+PASS URL: fresh view with task= 390
+FAIL URL: fresh view from trashed task source 390: Expected values to be strictly equal:
++ actual - expected
+
++ '/pages'
+- '/day/2026-10-22'
+
+PASS chip and jump 390
+PASS long excerpt at 390 390
+PASS chip: trashed page 390
+PASS URL: fresh view without task= 390 touch
+PASS URL: fresh view with task= 390 touch
+FAIL URL: fresh view from trashed task source 390 touch: Expected values to be strictly equal:
++ actual - expected
+
++ '/pages'
+- '/day/2026-10-22'
+
+PASS chip and jump 390 touch
+PASS long excerpt at 390 390 touch
+PASS chip: trashed page 390 touch
