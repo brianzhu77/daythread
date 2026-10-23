@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {withoutSaved} from '../../../src/components/draft-slots.ts'
 import {mergeDraft} from '../../../src/domain/draft-merge.ts'
 import {inlineText,type EditorNode} from '../../../src/domain/editor-document.ts'
-const recover=(base:EditorNode[],draft:EditorNode[],latest=base,known=new Set<string>())=>mergeDraft(base,withoutSaved(draft,latest,inlineText),latest,known)
+const recover=(base:EditorNode[],draft:EditorNode[],latest=base,known=new Set<string>())=>mergeDraft(base,withoutSaved(draft,latest),latest,known)
 test('unchanged parent retains newly typed child',()=>{
  const p:EditorNode={id:'p',type:'paragraph',content:'Parent',children:[]};
  const result=recover([p],[{...p,children:[{id:'c',type:'paragraph',content:'UNSAVED CHILD'}]}]);

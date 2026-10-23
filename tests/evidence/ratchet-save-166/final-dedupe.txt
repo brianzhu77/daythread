@@ -1,0 +1,12 @@
+✔ unchanged parent retains newly typed child (0.756791ms)
+✔ intentional same-words text with a different block id survives (0.1345ms)
+✔ intentional same-words task with a different task id survives (0.094958ms)
+✔ offline checklist tick survives even when words and block id match (0.090125ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 74.397

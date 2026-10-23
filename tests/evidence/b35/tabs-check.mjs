@@ -12,6 +12,7 @@ const copies = text => { const db = new DatabaseSync(DB, { readOnly: true }); tr
 // A new line at the end of Notes: click the end of its last line (a click mid-line would type into that line).
 const typeInNotes = async (p, text) => {
   const last = p.locator('[data-node-type="blockContainer"]:has(> [data-content-type="bulletListItem"]) .bn-inline-content').last()
+  await last.scrollIntoViewIfNeeded()
   const box = await last.boundingBox()
   await p.mouse.click(box.x + box.width - 1, box.y + box.height / 2); await p.waitForTimeout(200); await p.keyboard.press(`${mod}+ArrowRight`); await p.waitForTimeout(100)
   if ((await last.textContent()).trim()) { await p.keyboard.press('Enter'); await p.waitForTimeout(100) }

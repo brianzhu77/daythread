@@ -1,3 +1,21 @@
+# B35 task166 — final cea4e5f
+
+**PASS.** The two confirmed loss defects from previous heads are fixed: copied opener tabs independently recover both drafts, and an unchanged parent's unsaved child is retained and nested. Checklist ticks and distinct same-word text/task identities pass the reviewer invariants. Source diff inspected through cea4e5f; own app changes: none.
+
+Independent final evidence on newly seeded disposable stores:
+
+- Full suite406 passed/0 failed/11 skipped/4 todo(421 total); typecheck and production build pass.
+- Real-day writing replay10/10, plus cut/conflict/reload: original task id and done state retained.
+- Reviewer nested-recovery, opener-slots and frozen-recovery browser scripts pass. Frozen tab is recovered once and resumes with one copy and the latest-loaded notice.
+- Actual lost reply then close/reopen: normal/trailing-space/trailing-empty-line cases all retain one copy.
+- Dedupe invariants4/4: unchanged-parent/new-child, intentional duplicate text, distinct same-word task, checklist tick.
+- Save-on-leave gate12/12 on a fresh synthetic relative-day store, including refusal/recovery paths.
+- Author tabs runner11/11 independently repeated **after one reviewer test-only fix**: scroll the Notes target into view before measuring/clicking. Original run failed6 cases because the target was below the viewport (y894, click906 in a900 viewport), activeElement was body and no marker was typed. This was diagnosed with actual selection/focus, then repeated on another fresh store. The test-only scroll fix needs author review before merging; it does not alter cea4e5f app code.
+
+Final outputs are preserved under tests/evidence/ratchet-save-166/final-*.txt. Jazz9006449b confirms status/notice text unchanged from her862a5df390/1280 check. Hidden desktop10-minute timing and native WebKit/app-switcher kill behavior remain unverified, explicitly nonblocking per Product94a437ad/Leade3b62bd7; task155 holds native verification. No production writes/deployments by Ratchet. Lead owns release/integration.
+
+## Prior-head findings and investigation
+
 # B35 task166 — 862a5df follow-up
 
 **REVISE: deduplication discards unsaved children and semantic changes.** The copied-tab identity blocker is fixed in actual Chromium: distinct ids, two slots, both markers recovered. This replacement introduces confirmed loss in `withoutSaved`: an unchanged parent's server node replaces the draft node together with all draft children. Reviewer browser run on fresh v4 fixture typed/nested a child under unchanged Parent note with saves blocked, closed/reopened: recovered=false, retainedInSlot=false, claimed=1. The words were gone from both UI and recovery storage. Script `nested-recovery.mjs` and output are preserved; the cursor offset11 confirms the unchanged parent text. Earlier attempts that split/cleared the parent were harness errors and excluded.
