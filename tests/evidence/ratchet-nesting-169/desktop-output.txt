@@ -1,0 +1,9 @@
+(node:27422) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280: the card lists the tree in page order (["A","B","b1","b1x","C","D"])
+ok   1280: sub-tasks are indented one step per level ([0,0,24,48,0,0])
+ok   1280: an added sub-task's strip keeps its indent ([0,48])
+ok   1280: Top 3 holds A, B and C with B's sub-tasks (no slot); D stays in Other (["B","b1","b1x","A","C"] ["D"])
+ok   1280: taps: today's page shows the same tree after a reload (["B","  b1","    b1x","A","C","D"])
+ok   1280: no page errors
+all passed
