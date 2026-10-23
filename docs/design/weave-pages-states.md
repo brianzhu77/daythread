@@ -94,7 +94,7 @@ Because the lines are live links, his edits show straight away, with no "out of 
 | Trashed the page holding lines | those lines are **hidden** while it's in the trash, and come back on Restore |
 | A day group lost all its lines | the date heading goes too |
 | Every line gone | the topic is **hidden** from the list straight away (plan 0c8baa0 §3); an open page or old link shows §7's removed screen |
-| A cited line gone, or **edited** (even a typo fix) | the summary line hides (§3.2) until the next run rewrites it. No placeholder |
+| A cited line gone, or **edited** (even a typo fix) | the summary line hides (§3.2) until the next run rewrites it. No placeholder. Renaming a page the line links to is not an edit of the line, so the summary stays (Roadbuster 6f924b2d) |
 | Moved a task to another day | the task line follows it into that day's group (A11 task follow) |
 
 The counts in the list row ("6 lines · 3 days") are live too, so the list never contradicts the page.
