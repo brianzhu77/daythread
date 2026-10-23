@@ -139,7 +139,9 @@ The counts in the list row ("6 lines · 3 days") are live too, so the list never
 1. **Task lines are in** (decided, Bumblebee 0869f63e): words plus a muted status, no control (§3).
 2. **Lines under a tag only:** a tagged line whose topic page exists shows on both the Tags list and Weave. That's fine, and
    it's the Lead's note 2: the check is whether Weave also shows what Tags can't.
-3. **Empty, one-character and tags-only lines** are never gathered (brief §5; Bumblebee e4d5c42d).
+3. **Empty, one-character and tags-only lines** are never gathered (brief §5; Bumblebee e4d5c42d). One exception: a
+   line that is a **single CJK character** (累, 爽) counts, since in Chinese one character can be a whole note. The noise the
+   brief names is Latin typing ("a", "aa" tasks with no day). The script follows this rule (Ratchet 53319671).
 
 ## 9. Checks (for Ratchet and the build check, 1280 and 390, on a copy of his data)
 
