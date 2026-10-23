@@ -254,6 +254,16 @@ export function bornHere(state: Workspace, t: Task, p: Page): boolean {
   if ((t.plannedOn && t.plannedOn !== day) || (t.lastPlannedOn && t.lastPlannedOn !== day)) return false;
   return state.placements.every(x => x.taskId !== t.id || x.date === day);
 }
+/**
+ * B33, the whole decision, shared by the save and the editor's notice so they can't disagree (Ratchet 164): the task
+ * goes with its line only if it was born on this page, no row of it is left on this page (`remaining`: the task ids
+ * still on the page after the change), and no other page holds a row of it.
+ */
+export function deletesWithLine(state: Workspace, p: Page, taskId: string, remaining: ReadonlySet<string>): boolean {
+  const t = state.tasks.find((x) => x.id === taskId);
+  if (!t || !bornHere(state, t, p) || remaining.has(taskId)) return false;
+  return !state.pages.some((o) => o.id !== p.id && o.sections.some((s) => s.blocks.some((x) => x.taskId === taskId)));
+}
 function removePlanRows(state: Workspace, taskId: string, day: string) {
   const p = state.pages.find((x) => x.type === "daily" && x.date === day);
   if (p)
@@ -1040,12 +1050,11 @@ function execute(
       // (a key, a block selection, a selection across lines, a whole section). A task with history keeps the rules
       // below (Not today; "Planned · not in note"). A cut is a move and never deletes (Jazz's fallback).
       const cut = new Set(action.cutTaskIds ?? []);
+      const remaining = new Set(all.filter(n => n.type === "task").map(n => String(n.props?.taskId)));
       for (const b of previousBlocks) {
         if (b.kind !== "task" || !b.taskId || present.has(b.id) || cut.has(b.taskId)) continue;
-        const t = state.tasks.find(x => x.id === b.taskId);
-        if (!t || !bornHere(state, t, p)) continue;
-        if (all.some(n => n.type === "task" && n.props?.taskId === t.id)) continue;
-        if (state.pages.some(o => o.id !== p.id && o.sections.some(s => s.blocks.some(x => x.taskId === t.id)))) continue;
+        if (!deletesWithLine(state, p, b.taskId, remaining)) continue;
+        const t = task(state, b.taskId);
         (p.editorDeletions ??= {})[b.id] = { task: structuredClone(t), placements: structuredClone(state.placements.filter(x => x.taskId === t.id)), afterVersion: t.version, afterPlacements: [], deleted: true };
         state.tasks = state.tasks.filter(x => x.id !== t.id);
         state.placements = state.placements.filter(x => x.taskId !== t.id);
@@ -1054,7 +1063,8 @@ function execute(
        if (!present.has(singleDeleteId) && p.date === action.today) {
         const b = previousBlocks.find(b => b.id === singleDeleteId);
         const isPlan = b?.planRole === 'plan' || b?.planRole === undefined && p.sections.some(s => (s.kind === 'top3' || s.kind === 'other') && s.blocks.some(x => x.id === b?.id));
-        if (b?.taskId && isPlan && state.tasks.some(x => x.id === b.taskId)) {
+        // Another line of the same task is still on this page: deleting one copy doesn't take the task off the day.
+        if (b?.taskId && isPlan && state.tasks.some(x => x.id === b.taskId) && !remaining.has(b.taskId)) {
           const t = task(state, b.taskId);
           if (t.plannedOn === p.date) {
             const beforeTask = structuredClone(t), beforePlacements = structuredClone(state.placements.filter(x => x.taskId === t.id));

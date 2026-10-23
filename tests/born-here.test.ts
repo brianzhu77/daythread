@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { applyCommand, createEmptyWorkspace } from '../src/domain/workspace.ts'
+import { applyCommand, createEmptyWorkspace, deletesWithLine } from '../src/domain/workspace.ts'
 import { editorSeed, pageContentKey, type EditorNode } from '../src/domain/editor-document.ts'
 import type { Action, Workspace } from '../src/domain/types.ts'
 
@@ -120,4 +120,21 @@ test('cleanup: only orphans born on their page, all or nothing; Undo restores th
   assert.equal(has(s.ws, keep.id), true)
   s.run({ type: 'undo', targetOperationId: 'cleanup' })
   assert.equal(has(s.ws, junk.id), true)
+})
+
+test('the editor\'s notice and the save decide the same way: another page, another line here (Ratchet 164)', () => {
+  const s = setup(), shared = s.add('Also on a doc'), twice = s.add('Twice here')
+  s.run({ type: 'create-document', title: 'Doc', body: '', pageId: 'doc' })
+  const doc = s.ws.pages.find(p => p.id === 'doc')!
+  s.run({ type: 'save-editor', pageId: 'doc', expectedContent: pageContentKey(doc), document: JSON.stringify([...editorSeed(doc, s.ws), { id: 'doc-row', type: 'task', props: { taskId: shared.id }, content: 'Also on a doc' }]) })
+  const d = editorSeed(s.page(today), s.ws), at = d.findIndex(n => n.props?.taskId === twice.id)
+  s.save(today, () => [...d.slice(0, at + 1), { id: 'twice-2', type: 'task', props: { taskId: twice.id, role: 'reference' }, content: 'Twice here' } as EditorNode, ...d.slice(at + 1)])
+  for (const t of [shared, twice]) {
+    const row = s.rowOf(t.id).id, after = editorSeed(s.page(today), s.ws).filter(n => n.id !== row)
+    const predicted = deletesWithLine(s.ws, s.page(today), t.id, new Set(after.filter(n => n.type === 'task').map(n => String(n.props?.taskId))))
+    s.save(today, () => after, { singleDeleteIds: [row] })
+    assert.equal(predicted, false, t.title)
+    assert.equal(has(s.ws, t.id), !predicted, `${t.title}: the save did what the notice said`)
+  }
+  assert.equal(s.ws.tasks.find(t => t.id === twice.id)!.plannedOn, today, 'a copy deleted on the page doesn\'t take the task off the day')
 })
