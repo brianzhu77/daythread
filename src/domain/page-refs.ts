@@ -77,16 +77,22 @@ const allBlocks = (page: Page) => page.sections.flatMap((s) => s.blocks)
 function taskRows(ws: Workspace, taskId: string): Row[] {
   return ws.pages.flatMap((page) => allBlocks(page).flatMap((b, order) => b.kind === 'task' && b.taskId === taskId ? [{ page, blockId: b.id, text: b.text, order }] : []))
 }
-/** Most recent first: daily pages by date, then document pages by the row's `seen`, then page id (plan §2 rule 2.3); on one page, document order. */
-function byRecency(a: Row, b: Row): number {
+/**
+ * Most recent first (plan §2 rule 2.3): daily pages by date, then document pages by their newest `seen` among this
+ * task's rows, then page id; on one page, document order (rule 2.4). One recency key per page keeps the order total,
+ * so it never depends on the pages' array order (Ratchet #143).
+ */
+function byRecency(rows: Row[]): Row[] {
+  const seen = new Map<string, number>()
+  for (const r of rows) seen.set(r.page.id, Math.max(seen.get(r.page.id) ?? -1, r.page.editorBlockMetadata?.[r.blockId]?.seen ?? -1))
   const daily = (r: Row) => r.page.type === 'daily' && r.page.date ? 0 : 1
-  if (daily(a) !== daily(b)) return daily(a) - daily(b)
-  if (daily(a) === 0 && a.page.date !== b.page.date) return a.page.date! < b.page.date! ? 1 : -1
-  // Two rows on one page: the first in document order, whatever their stamps (§2 rule 2.4, Ratchet #143).
-  if (a.page.id === b.page.id) return a.order - b.order
-  const seen = (r: Row) => r.page.editorBlockMetadata?.[r.blockId]?.seen ?? -1
-  if (seen(a) !== seen(b)) return seen(b) - seen(a)
-  return a.page.id < b.page.id ? -1 : 1
+  return [...rows].sort((a, b) => {
+    if (daily(a) !== daily(b)) return daily(a) - daily(b)
+    if (daily(a) === 0 && a.page.date !== b.page.date) return a.page.date! < b.page.date! ? 1 : -1
+    if (a.page.id === b.page.id) return a.order - b.order
+    if (seen.get(a.page.id) !== seen.get(b.page.id)) return seen.get(b.page.id)! - seen.get(a.page.id)!
+    return a.page.id < b.page.id ? -1 : 1
+  })
 }
 /** The day a done or cancelled task counts as finished: `doneOn`, else its latest included day, plan day, last plan day. */
 export function finishedOn(ws: Workspace, task: Workspace['tasks'][number]): string | null {
@@ -106,7 +112,7 @@ function taskOf(ws: Workspace, target: LineTarget): string | undefined {
 export function resolveLine(ws: Workspace, target: LineTarget): ResolvedLine {
   const taskId = taskOf(ws, target), task = taskId ? ws.tasks.find((t) => t.id === taskId) : undefined
   if (task) {
-    const rows = taskRows(ws, task.id).sort(byRecency)
+    const rows = byRecency(taskRows(ws, task.id))
     const onDay = (day: string | null) => day ? rows.find((r) => r.page.type === 'daily' && r.page.date === day) : undefined
     // The target first (plan day, then the day it was finished), trash after (Ratchet #141, Bumblebee f9abca12).
     const chosen = (task.status === 'open' && task.plannedOn ? onDay(task.plannedOn) : undefined)

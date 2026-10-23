@@ -167,6 +167,23 @@ test('task: two rows on one page', () => {
   assert.deepEqual([r.state, r.blockId], ['live', 'first'])
 })
 
+test('task: rows on two pages, either array order', () => {
+  // Ratchet #143: page A's rows stamped 1 and 10, page B's row 5. A is newer (10), and on A the first row wins.
+  const s = setup(), t = s.add(today, 'Spread')
+  s.run({ type: 'not-today', taskId: t.id, date: today })
+  s.doc('A'); s.doc('B')
+  s.save('A', nodes => [...nodes, taskNode('a-first', t.id, 'Spread'), taskNode('a-second', t.id, 'Spread')])
+  s.save('B', nodes => [...nodes, taskNode('b-only', t.id, 'Spread')])
+  const ws = structuredClone(s.state), meta = (id: string) => ws.pages.find(p => p.id === id)!.editorBlockMetadata!
+  meta('A')['a-first']!.seen = 1; meta('A')['a-second']!.seen = 10; meta('B')['b-only']!.seen = 5
+  const a = ws.pages.findIndex(p => p.id === 'A'), b = ws.pages.findIndex(p => p.id === 'B')
+  const swapped = structuredClone(ws); [swapped.pages[a], swapped.pages[b]] = [swapped.pages[b]!, swapped.pages[a]!]
+  for (const w of [ws, swapped]) {
+    const r = resolveLine(w, { pageId: 'B', lineId: 'b-only', taskId: t.id })
+    assert.deepEqual([r.pageId, r.blockId], ['A', 'a-first'])
+  }
+})
+
 test('task: B16 note', () => {
   const s = setup(), t = s.add(yesterday, 'Planned')
   const source = s.page(yesterday), lineId = rowOf(source, t.id)!.id
