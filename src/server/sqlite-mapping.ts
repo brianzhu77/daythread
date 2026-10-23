@@ -8,7 +8,7 @@ type Kind = 'text' | 'number' | 'boolean' | 'json'
 type Fields<T> = Record<keyof T, Kind>
 // Exhaustive maps intentionally fail typecheck whenever a domain field is added without a storage mapping.
 const pages = { id:'text',type:'text',url:'text',date:'text',title:'text',sections:'json',editorJSON:'text',templateApplied:'boolean',editorSections:'text',editorBlockMetadata:'json',editorCreations:'json',editorDeletions:'json',reviewText:'text',reviewSaved:'boolean',handoffDone:'boolean',reviewStep:'number',reviewSource:'text',reviewSkipped:'boolean',draftError:'text',draft:'json',parentId:'text',trashedAt:'text',trashId:'text' } satisfies Fields<Page>
-const tasks = { id:'text',title:'text',status:'text',version:'number',plannedOn:'text',attentionOn:'text',deadlineOn:'text',paused:'boolean',createdOn:'text',lastPlannedOn:'text',sourcePageId:'text' } satisfies Fields<Task>
+const tasks = { id:'text',title:'text',status:'text',version:'number',plannedOn:'text',attentionOn:'text',deadlineOn:'text',paused:'boolean',createdOn:'text',lastPlannedOn:'text',sourcePageId:'text',doneOn:'text' } satisfies Fields<Task>
 const placements = { taskId:'text',date:'text',state:'text',order:'number',section:'text' } satisfies Fields<Placement>
 const events = { id:'text',title:'text',date:'text',time:'text',cancelled:'boolean' } satisfies Fields<Event>
 const materials = { id:'text',url:'text',title:'text',body:'text',savedOn:'text',reviewState:'text',nextReviewOn:'text',resurface:'boolean',lastDecisionOn:'text',skippedUntil:'text',taskId:'text',openedOn:'json',dismissedOn:'json',decisions:'json',sources:'json' } satisfies Fields<Material>
@@ -36,6 +36,7 @@ const addedColumns: readonly { table: typeof specs[number]['name']; column: stri
   { table: 'pages', column: 'trashedAt', kind: 'text', layout: 4 },
   { table: 'pages', column: 'trashId', kind: 'text', layout: 4 },
   { table: 'pages', column: 'url', kind: 'text', layout: 5 },
+  { table: 'tasks', column: 'doneOn', kind: 'text', layout: 7 },
 ]
 /**
  * The model budget ledger (03 E3). Deliberately outside the current/undo snapshot scheme: Undo restores a whole
@@ -83,6 +84,11 @@ export const sqliteMigrations: readonly ((db: DatabaseSync) => void)[] = [db => 
   const restored = restoreHeldPageLinks(db)
   const stamped = stampUntimedReferences(db)
   if (restored || stamped) console.info(JSON.stringify({ level: 'info', event: 'storage.page-links-upgrade', ...(restored ?? {}), stamped }))
+}, db => {
+  // A11 layout 7 (docs/plan/a11-line-links.md §6): the day a task was done. Existing rows have none and use the
+  // derived day; a layout-6 build reading this database ignores the column only if it's dropped (rollback step).
+  const { table, column, kind } = addedColumns[7]!
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${quote(column)} ${columnType(kind)}`)
 }]
 
 const workspaceFields = {schemaVersion:true,revision:true,timezone:true,pages:true,tasks:true,placements:true,events:true,materials:true,captures:true,receipts:true,undo:true} satisfies Record<keyof Workspace,boolean>

@@ -1,0 +1,17 @@
+A11 rollback rerun on the candidate, local Postgres 17 (embedded, throwaway schema daythread_check_a11_cand), 2026-10-23.
+Candidate: feat/a11-line-links (step 2 working tree). Previous build: origin/main 51de465.
+
+1. node tests/evidence/a11/pg-rollback-seed.ts <url> daythread_check_a11_cand   (the candidate's own commands)
+{"today":"2026-10-22","dayId":"day:2026-10-22","lineIdsInDocument":2,"refs":[["d7828c1d-36ea-43a4-a045-366d6f51645c","f44684c2-a090-437d-994c-afae8e62de85",null],["day:2026-10-22","0732d20c-230e-48b5-a9d8-2de3e748fa1f","77fa210e-7f6b-4ed4-a45b-3c989a83e33f"]],"doneOn":"2026-10-22","seenOnLiveTaskRow":6,"seenOnRemovedProbe":5}
+
+2. previous build served on that schema (DAYTHREAD_AUTH=off, loopback), then
+   node tests/evidence/a11-plan-pg/old-build.mjs http://127.0.0.1:3472 <url> daythread_check_a11_cand
+renders as: ["line link: \nTarget page\n","task link: \nToday\n"]
+{"revisions":"7 → 8","linkPropsAfterOldSave":["newTitle+pageId+refId","newTitle+pageId+refId"],"lineIdAfterOldSave":0,"linksStillThere":2,"doneOnKept":true,"seenOnRemovedProbe":5,"liveEntriesWithSeen":0,"liveEntriesWithoutSeen":3,"errors":[]}
+
+3. node tests/evidence/a11/pg-roll-forward.ts <url> daythread_check_a11_cand
+{"rollForward":"candidate loads the old build's save","revision":8,"refs":[["d7828c1d-36ea-43a4-a045-366d6f51645c",null],["day:2026-10-22",null]],"doneOn":"2026-10-22"}
+{"candidateCommandAfterRollForward":9}
+
+Reads as plan §6: line links degrade to page links on the old build's save (not restored on roll-forward), doneOn kept,
+`seen` kept only on the removed-line entry, no errors. Schema dropped afterwards; no other schema touched.

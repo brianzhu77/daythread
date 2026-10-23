@@ -32,11 +32,12 @@ async function store() {
   // Rollbacks run newest first, so a layout-5 store goes 5 → 4 (link pages) before the trash step under test.
   const script = (...args: string[]) => {
     const db = new DatabaseSync(path), version = Number(db.prepare('PRAGMA user_version').get()!.user_version); db.close()
-    if (version === 6) { const pl = spawnSync(process.execPath, ['scripts/sqlite-rollback-page-links.ts', path], { encoding: 'utf8' }); if (pl.status !== 0) return pl }
+    if (version === 7) { const dn = spawnSync(process.execPath, ['scripts/sqlite-rollback-done-on.ts', path], { encoding: 'utf8' }); if (dn.status !== 0) return dn }
+    if (version >= 6) { const pl = spawnSync(process.execPath, ['scripts/sqlite-rollback-page-links.ts', path], { encoding: 'utf8' }); if (pl.status !== 0) return pl }
     if (version >= 5) { const links = spawnSync(process.execPath, ['scripts/sqlite-rollback-link-pages.ts', path], { encoding: 'utf8' }); if (links.status !== 0) return links }
     return spawnSync(process.execPath, ['scripts/sqlite-rollback-trash.ts', path, ...args], { encoding: 'utf8' })
   }
-  const toLayout4 = () => { const pl = spawnSync(process.execPath, ['scripts/sqlite-rollback-page-links.ts', path], { encoding: 'utf8' }); return pl.status !== 0 ? pl : spawnSync(process.execPath, ['scripts/sqlite-rollback-link-pages.ts', path], { encoding: 'utf8' }) }
+  const toLayout4 = () => { const dn = spawnSync(process.execPath, ['scripts/sqlite-rollback-done-on.ts', path], { encoding: 'utf8' }); if (dn.status !== 0) return dn; const pl = spawnSync(process.execPath, ['scripts/sqlite-rollback-page-links.ts', path], { encoding: 'utf8' }); return pl.status !== 0 ? pl : spawnSync(process.execPath, ['scripts/sqlite-rollback-link-pages.ts', path], { encoding: 'utf8' }) }
   return { dir, path, repo, day, exec, script, toLayout4, cleanup: () => rm(dir, { recursive: true, force: true }) }
 }
 const sql = (path: string, fn: (db: DatabaseSync) => void) => { const db = new DatabaseSync(path); try { fn(db) } finally { db.close() } }

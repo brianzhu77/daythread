@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { LocalDate, Task } from '../domain/types'
-import { anotherDayOptions, shortLabel, weekday } from './dates'
+import { anotherDayOptions, shortLabel, todayIso, weekday } from './dates'
 import { DateTag } from './date-tag'
 import { RowMenu, type MenuItem } from './row-menu'
 import { useWorkspace } from './use-day'
@@ -12,7 +12,7 @@ export function useTaskActions(today: LocalDate) {
 
   const markDone = (task: Task) => {
     const done = task.status !== 'done'
-    return run({ type: 'task-status', taskId: task.id, status: done ? 'done' : 'open' }, r => ({
+    return run({ type: 'task-status', taskId: task.id, status: done ? 'done' : 'open', today: todayIso() }, r => ({
       text: done ? 'Done' : 'Reopened',
       undoOperationId: r.operationId,
     }))

@@ -1,0 +1,3 @@
+{"today":"2026-10-22","dayId":"day:2026-10-22","linesStored":2,"taskIdStored":true,"refs":[["6b988cd7-6507-4f3b-87cb-f4cf41860c36"],["day:2026-10-22"]]}
+renders as: ["line link: \nTarget page\n","task link: \nToday\n"]
+{"revisions":"4 → 5","linkPropsAfterOldSave":["newTitle+pageId+refId","newTitle+pageId+refId"],"lineIdAfterOldSave":0,"linksStillThere":2,"doneOnKept":true,"seenOnRemovedProbe":7,"liveEntriesWithSeen":0,"liveEntriesWithoutSeen":3,"errors":[]}

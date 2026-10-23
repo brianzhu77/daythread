@@ -1,0 +1,13 @@
+# main 0cf83e7 build, fresh copy of Brian's data. Cut the 奥德赛 line on Oct 18 (handle → ⌘X), switch to today via the sidebar (no reload), paste, reload.
+## switch at once (0 ms after the cut)
+before: ["2026-10-18"]
+after paste, on days: ["2026-10-18","2026-10-21"]
+after reload, on days: ["2026-10-18","2026-10-21"]
+Oct 18 editor shows the line again: false | status: "Recovered unsaved draft\nRetry saving\nCopy draft"
+after reopening Oct 18 (its stashed draft recovered and saved?), on days: ["2026-10-18","2026-10-21"]
+## switch after 1000 ms (the 450 ms save had run)
+before: ["2026-10-18"]
+after paste, on days: ["2026-10-21"]
+after reload, on days: ["2026-10-21"]
+Oct 18 editor shows the line again: false | status: ""
+after reopening Oct 18 (its stashed draft recovered and saved?), on days: ["2026-10-21"]

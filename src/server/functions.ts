@@ -63,3 +63,18 @@ export const getAccount = createServerFn({ method: "GET" }).handler(async () => 
   const { currentEmail } = await import("./auth/server");
   return { email: await currentEmail() };
 });
+
+/**
+ * A11 §4: where a plain line URL goes. Always asked before the jump, even when the block is still on the URL's page
+ * (a task's history row stays on a past day; Ratchet 26a2ca84). Resolved here on the full workspace.
+ */
+export const resolveLineLink = createServerFn({ method: "GET" })
+  .validator((input: unknown) => z.object({ pageId: z.string().min(1).max(200), lineId: z.string().min(1).max(200), taskId: z.string().min(1).max(200).optional() }).parse(input))
+  .handler(async ({ data }) => {
+    const { getRepository } = await import("./storage");
+    const { resolveLine } = await import("../domain/page-refs");
+    const { pagePath } = await import("../domain/line-link");
+    const ws = await getRepository().load(), resolved = resolveLine(ws, data), page = ws.pages.find((p) => p.id === resolved.pageId);
+    // The address to open, from the server's own data: the browser's copy may not have the page yet (Ratchet #146).
+    return { ...resolved, href: page ? pagePath(page, resolved.blockId) : null };
+  });

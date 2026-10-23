@@ -9,7 +9,7 @@
 // Everything goes through the same commands the app sends (add-task, task-status, create-document, paste-links,
 // save-editor), so a cancelled task is really cancelled. On /day/2026-12-31 it adds: an open task and a cancelled one,
 // a bullet with a nested bullet (and a level-3 one under it) and an empty nested line, two page cards without preview (one with a long title),
-// and a link card. Today's page gets one written line if it has none.
+// a link card, and a line with a link to another line (A11), with plain text before it so its baseline is measured. Today's page gets one written line if it has none.
 // Run it once per copy: a second run refuses, since the scratch page already has its rows.
 import { resolve } from 'node:path'
 import { getRepository } from '../src/server/storage.ts'
@@ -55,11 +55,13 @@ const page = scratch(ws)
 const nodes = editorSeed(page, ws, { templateRows: needsTemplateRows(page, today) }) as EditorNode[]
 const text = (t: string) => (t ? [{ type: 'text', text: t, styles: {} }] : [])
 const bullet = (t: string, children: EditorNode[] = []) => ({ id: crypto.randomUUID(), type: 'bulletListItem', props: {}, content: text(t), children }) as unknown as EditorNode
+const lineTarget = crypto.randomUUID()
 const added = [
   { id: emptyCardId, type: 'pageLink', props: { pageId: emptyPageId, url: '', line: '' }, children: [] },
   { id: longCardId, type: 'pageLink', props: { pageId: longPageId, url: '', line: '' }, children: [] },
   { id: linkCardId, type: 'pageLink', props: { pageId: linkPageId, url: 'https://example.com/fixture-link', line: 'paragraph' }, children: [] },
-  bullet('Fixture parent', [bullet('Fixture nested child', [bullet('Fixture level 3')]), bullet('')]),
+  { ...bullet('Fixture parent', [bullet('Fixture nested child', [bullet('Fixture level 3')]), bullet('')]), id: lineTarget },
+  { id: crypto.randomUUID(), type: 'bulletListItem', props: {}, content: [...text('See '), { type: 'pageRef', props: { pageId: page.id, refId: crypto.randomUUID(), newTitle: '', lineId: lineTarget, taskId: '' } }, ...text(' for the list')], children: [] },
 ] as unknown as EditorNode[]
 const notes = nodes.findIndex(n => n.id === page.sections.find(s => s.kind === 'notes')!.id)
 nodes.splice(notes + 1, 0, ...added)

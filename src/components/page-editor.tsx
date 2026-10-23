@@ -1,6 +1,6 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
 import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
 import { BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
@@ -11,15 +11,19 @@ import { BlockNoteView } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
-import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, type EditorNode } from '../domain/editor-document'
+import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, templateKind, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
 import { applyCommand, pasteRecords } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
 import { cardsPresent, urlLine, type UndoCard } from '../domain/link-paste'
 import { recentPages, visiblePages, parentOf } from '../domain/page-tree'
-import { pageRefView } from './line-text'
-import { pageLabel } from './page-tree'
+import { lineRefView, pageRefView } from './line-text'
+import { lineClipboardType, lineLinkPath, parseLineClipboard, parseLineUrl } from '../domain/line-link'
+import type { LineTarget } from '../domain/page-refs'
+import { pageHref, pageLabel } from './page-tree'
+import { jumpInPage, jumpToBlock, lookupFailed, registerEditor, visibleArea } from './line-jump'
+import { resolveLineLink } from '../server/functions'
 import { newOperationId, useWorkspace } from './use-day'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
@@ -52,9 +56,14 @@ const pageLink = createReactBlockSpec({ type: 'pageLink', propSchema: { pageId: 
 })()
 // A9a (Jazz page-links-states §1): a `[[` link is one inline unit, icon + the page's current title on a quiet chip.
 // Backspace removes it whole (it has no content of its own). It reads its title live, so nothing is stored as text.
-const pageRef = createReactInlineContentSpec({ type: 'pageRef', propSchema: { pageId: { default: '' }, refId: { default: '' }, newTitle: { default: '' } }, content: 'none' }, {
-  render: ({ inlineContent }) => <PageRefChip pageId={inlineContent.props.pageId} refId={inlineContent.props.refId} newTitle={inlineContent.props.newTitle} />,
-  toExternalHTML: ({ inlineContent }) => <a href={`/pages?page=${encodeURIComponent(inlineContent.props.pageId)}`}>{inlineContent.props.newTitle || 'Page'}</a>,
+// A11: with `lineId` it's a link to one line on that page (`taskId` when the line is a task row), drawn as a line chip.
+const pageRef = createReactInlineContentSpec({ type: 'pageRef', propSchema: { pageId: { default: '' }, refId: { default: '' }, newTitle: { default: '' }, lineId: { default: '' }, taskId: { default: '' } }, content: 'none' }, {
+  render: ({ inlineContent: { props } }) => props.lineId
+    ? <LineRefChip target={{ pageId: props.pageId, lineId: props.lineId, ...(props.taskId ? { taskId: props.taskId } : {}) }} />
+    : <PageRefChip pageId={props.pageId} refId={props.refId} newTitle={props.newTitle} />,
+  toExternalHTML: ({ inlineContent: { props } }) => props.lineId
+    ? <a href={lineLinkPath({ pageId: props.pageId, lineId: props.lineId, ...(props.taskId ? { taskId: props.taskId } : {}) })}>Line</a>
+    : <a href={`/pages?page=${encodeURIComponent(props.pageId)}`}>{props.newTitle || 'Page'}</a>,
 })
 const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef } })
 /** Lines a `[[` link can live in (plan §1): never a task row. */
@@ -69,16 +78,18 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
   const t = workspace?.tasks.find(t => t.id === taskId)
   // A12: the row's actions, on a ⋯ at the end of the row (Jazz §2). Done and draft rows have none.
   const model = t && rows ? rowMenu(t, role, rows.sectionOf(blockId), rows.pageDate, rows.today) : null
+  // A11: last, under a divider, after the task's own actions (Jazz line-links-states §1).
+  const copy = model ? rows!.copyLink(blockId) : null
   // data-status: the task's real state, for checks such as scripts/check-alignment.mjs (Lead a2428bb1). Display only.
   return <div className="editor-task" data-role={role} data-draft={t ? undefined : true} data-status={t?.status ?? 'draft'}>
-    <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={t?.status === 'done'} disabled={(!t && !taskId.startsWith('editor-task:')) || t?.status === 'cancelled'} onChange={() => t && void run({ type: 'task-status', taskId, status: t.status === 'done' ? 'open' : 'done' }, r => ({ text: t.status === 'done' ? 'Task reopened' : 'Task completed', undoOperationId: r.operationId }))} />
+    <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={t?.status === 'done'} disabled={(!t && !taskId.startsWith('editor-task:')) || t?.status === 'cancelled'} onChange={() => t && void run({ type: 'task-status', taskId, status: t.status === 'done' ? 'open' : 'done', today: todayIso() }, r => ({ text: t.status === 'done' ? 'Task reopened' : 'Task completed', undoOperationId: r.operationId }))} />
     <span ref={contentRef} className={`editor-task-title ${t?.status === 'done' ? 'task-done' : t?.status === 'cancelled' ? 'task-cancelled' : ''}`} data-placeholder="To do" />
     {/* Jazz f58abeaf: done rows are grey and struck through too, so the label is what says Cancelled. */}
     {t?.status === 'cancelled' && <span contentEditable={false} className="editor-cancelled-tag">Cancelled</span>}
     {role === 'reference' && <span contentEditable={false} className="editor-reference-tag">Reference</span>}
     {/* A done or cancelled task keeps the button's space, hidden, so a long title doesn't reflow when it's ticked (#9). */}
     {role === 'reference' && t && <button className="editor-plan-action" contentEditable={false} {...(t.status === 'open' ? { onClick: () => void run({ type: 'plan-task', taskId, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }, r => ({ text: 'Planned for today', undoOperationId: r.operationId })) } : { disabled: true, tabIndex: -1, 'aria-hidden': true, style: { visibility: 'hidden' as const } })}>Plan for today</button>}
-    {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent))} onEscape={() => rows!.focusRow(blockId)} /></span>}
+    {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={[...menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent)), ...(copy ? [{ items: [{ label: 'Copy link to line', onSelect: copy }] }] : [])]} onEscape={() => rows!.focusRow(blockId)} /></span>}
     {t && t.status === 'open' && hasDateFacts(t) && <span contentEditable={false} className="editor-date-tag"><DateTag task={t} today={todayIso()} pageDate={planDate || todayIso()} /></span>}
   </div>
 }
@@ -168,6 +179,65 @@ function PageRefChip({ pageId, refId, newTitle }: { pageId: string; refId: strin
     {state === 'failed' && <span className="page-ref-failed">Not created · Retry</span>}
   </span>
 }
+/**
+ * ⌘/ on a line without a ⋯: the row menu's look, with its one item, under the line's box at its text start; above it
+ * when there's no room below; never partly off the visible area (Jazz states §1). Esc or a click away closes it.
+ */
+function LineMenu({ anchor, onClose, onCopy }: { anchor: { top: number; bottom: number; left: number }; onClose: (refocus: boolean) => void; onCopy: () => void }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const close = useRef(onClose); close.current = onClose
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null)
+  useLayoutEffect(() => {
+    const menu = ref.current?.getBoundingClientRect()
+    if (!menu) return
+    const { top, bottom } = visibleArea(), gap = 4, edge = 8
+    const below = anchor.bottom + gap, above = anchor.top - gap - menu.height
+    const y = below + menu.height <= bottom - edge ? below : above >= top + edge ? above : Math.max(top + edge, Math.min(below, bottom - edge - menu.height))
+    setAt({ top: y, left: Math.max(edge, Math.min(anchor.left, window.innerWidth - menu.width - edge)) })
+  }, [anchor])
+  // Focus once it's placed: a hidden element can't take focus.
+  const placed = at !== null
+  useEffect(() => { if (placed) ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus({ preventScroll: true }) }, [placed])
+  useEffect(() => {
+    const away = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) close.current(false) }
+    document.addEventListener('pointerdown', away)
+    return () => document.removeEventListener('pointerdown', away)
+  }, [])
+  return createPortal(<div ref={ref} className="app-menu line-menu" role="menu" aria-label="Line actions" style={{ position: 'fixed', top: at?.top ?? anchor.bottom + 4, left: at?.left ?? anchor.left, visibility: at ? 'visible' : 'hidden' }}
+    onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(true) } }}>
+    <button type="button" role="menuitem" onClick={onCopy}>Copy link to line</button>
+  </div>, document.body)
+}
+/**
+ * A11 (Jazz line-links-states §3-§5): a link to one line. It shows the line's current words and where it is now, from
+ * the same resolver as the URL and Linked from. Tap: jump in place when that page is open, else open it at the line;
+ * a line that's gone opens its page at the top with "Couldn't find that line"; a page that's gone does nothing.
+ */
+function LineRefChip({ target }: { target: LineTarget }) {
+  const { workspace } = useWorkspace()
+  const navigate = useNavigate()
+  const view = lineRefView(workspace, target), r = view.resolved
+  const open = () => {
+    const page = r && workspace?.pages.find(p => p.id === r.pageId)
+    if (!r || !page) return
+    if (r.state === 'line-not-found' || !r.blockId) {
+      toast("Couldn't find that line", { timeout: 4000 })
+      if (new URLSearchParams(window.location.search).get('page') === page.id || window.location.pathname === `/day/${page.date}`) window.scrollTo({ top: 0 })
+      else void navigate({ href: pageHref(page) })
+      return
+    }
+    // Nothing stays focused after a jump, so a phone keyboard goes down (Jazz §4).
+    if (!page.trashedAt && jumpInPage(page.id, r.blockId)) { (document.activeElement as HTMLElement | null)?.blur(); return }
+    void navigate({ href: pageHref(page, r.blockId), resetScroll: false })
+  }
+  const live = view.state !== 'page-not-found'
+  return <span className={`page-ref line-ref is-${view.state}`} contentEditable={false} title={view.full} role={live ? 'link' : undefined} tabIndex={live ? -1 : undefined}
+    onMouseDown={e => e.preventDefault()} onClick={open} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); open() } }}>
+    <span className="page-ref-icon">{view.icon}</span>
+    <span className="line-ref-words">{view.words}</span>
+    {view.where && <span className="line-ref-where">{`\u00a0· ${view.where}`}</span>}
+  </span>
+}
 /** The host without `www.`, for the card's quiet domain. */
 function hostLabel(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' }
@@ -251,6 +321,28 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const content = Fragment.fromArray(blocks.map(block => blockToNode(block as never, view.state.schema)))
       view.dispatch(closeHistory(view.state.tr).replaceSelection(new Slice(content, 0, 0)).scrollIntoView())
     }
+    // A11 §4: a link to a line (the app's type, or this app's own line URL as text) is checked first, so an in-app URL
+    // never becomes a link card. Other hosts, unknown params and malformed URLs paste as before.
+    const line = parseLineClipboard(data.getData(lineClipboardType)) ?? parseLineUrl(data.getData('text/plain'), window.location.origin)
+    // A link to a page that no longer exists has nothing to point at: it pastes as its text.
+    if (line && !data.getData(clipboardType) && lineRefView(latestWorkspace.current, line).state !== 'page-not-found') {
+      const at = editor.getTextCursorPosition().block
+      // A task title holds no links (A9a): the line's words, as text.
+      if (at.type === 'task') {
+        const words = lineRefView(latestWorkspace.current, line).resolved?.words.trim()
+        if (!words) return defaultPasteHandler()
+        editor.insertInlineContent(words)
+        return true
+      }
+      if (!linkableLines.has(at.type)) return defaultPasteHandler()
+      const view = editor.prosemirrorView, { from, to } = view.state.selection
+      const node = view.state.schema.nodes.pageRef!.create({ pageId: line.pageId, refId: crypto.randomUUID(), newTitle: '', lineId: line.lineId, taskId: line.taskId ?? '' })
+      // A space follows the chip unless one is there already, as after a `[[` link.
+      const next = view.state.doc.textBetween(to, Math.min(to + 1, view.state.selection.$to.end()), undefined, '\ufffc')
+      const tr = closeHistory(view.state.tr).replaceWith(from, to, next && /\s/.test(next) ? node : [node, view.state.schema.text(' ')])
+      view.dispatch(tr.setSelection(TextSelection.create(tr.doc, from + node.nodeSize + (next && /\s/.test(next) ? 0 : 1))).scrollIntoView())
+      return true
+    }
     const internal = data.getData(clipboardType)
     if (internal) {
       try {
@@ -260,7 +352,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // A9a §1: a pasted copy's `[[` links are new references (new refIds); a cut-and-paste move keeps them. A task row
         // can't hold a link, so there it becomes the page's title as text.
         const freshContent = (node: EditorNode): unknown => !Array.isArray(node.content) ? node.content : (node.content as { type?: string; props?: Record<string, string> }[]).map(c => c?.type !== 'pageRef' ? c
-          : node.type === 'task' ? { type: 'text', text: pageRefView(latestWorkspace.current, c.props?.pageId ?? '', c.props?.newTitle || undefined).label, styles: {} }
+          : node.type === 'task' ? { type: 'text', text: c.props?.lineId ? lineRefView(latestWorkspace.current, { pageId: c.props.pageId ?? '', lineId: c.props.lineId, ...(c.props.taskId ? { taskId: c.props.taskId } : {}) }).resolved?.words ?? '' : pageRefView(latestWorkspace.current, c.props?.pageId ?? '', c.props?.newTitle || undefined).label, styles: {} }
           : moving ? c : { ...c, props: { ...c.props, refId: crypto.randomUUID() } })
         const fresh = (node: EditorNode): EditorNode => {
           const id = crypto.randomUUID()
@@ -332,28 +424,58 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const [failed, setFailed] = useState(initial.current.recovered)
   const [drop, setDrop] = useState<{ id: string; end: boolean; top: number } | null>(null)
   const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 899px)').matches)
-  // Opened from a tag (?block=id): bring that block into view and tint it briefly. Nothing is focused, so a phone
-  // keyboard stays down. The parameter is dropped once shown, so a refresh doesn't replay it; until then a remount
-  // (the page loading under the editor) still finds it.
+  // Opened at a line (?block=id, from a tag or a line link): bring that block into view a third from the top and tint
+  // it briefly (line-jump.ts). Nothing is focused, so a phone keyboard stays down. The parameter is dropped once shown,
+  // so a refresh doesn't replay it; until then a remount (the page loading under the editor) still finds it.
   const [jumpTo] = useState(() => typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('block'))
+  const blockElement = useCallback((id: string) => editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(id)}"]`) ?? null, [editor])
+  const jumpCleanup = useRef<(() => void) | null>(null)
+  useEffect(() => () => jumpCleanup.current?.(), [])
+  const jumpWithin = useCallback((id: string) => {
+    const el = blockElement(id)
+    if (!el) return false
+    jumpCleanup.current?.(); jumpCleanup.current = jumpToBlock(el)
+    return true
+  }, [blockElement])
+  // A11 §5: a line link to this page jumps here without navigating, a second time too.
+  useEffect(() => registerEditor(page.id, jumpWithin), [page.id, jumpWithin])
   useEffect(() => {
     const id = jumpTo
     if (!id) return
-    let frame = 0, tries = 0, timer: ReturnType<typeof setTimeout> | undefined, settle: ReturnType<typeof setTimeout> | undefined
-    const find = () => {
-      const el = editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(id)}"]`)
-      if (!el) { if (++tries < 120) frame = requestAnimationFrame(find); return }
-      const url = new URL(window.location.href); url.searchParams.delete('block'); window.history.replaceState(window.history.state, '', url)
-      el.scrollIntoView({ block: 'center' })
-      // The page can still be growing as the editor lays out (and a client-side navigation may restore scroll after
-      // this runs), so check again once things settle and bring the block back into view if it drifted out.
-      settle = setTimeout(() => { const r = el.getBoundingClientRect(); if (r.top < 0 || r.bottom > window.innerHeight) el.scrollIntoView({ block: 'center' }) }, 350)
-      el.classList.add('block-flash')
-      timer = setTimeout(() => el.classList.remove('block-flash'), 1600)
+    let frame = 0, tries = 0, cancelled = false
+    const dropParam = () => { const url = new URL(window.location.href); for (const k of ['block', 'task', 'from']) url.searchParams.delete(k); window.history.replaceState(window.history.state, '', url) }
+    const search = new URLSearchParams(window.location.search)
+    const isLineUrl = window.location.pathname === '/pages' && search.get('page') === page.id
+    // From the Tags list: the line on the page the list names; only a row that's gone follows its task (Bumblebee
+    // 54096b19). Anything else opened at a line (a day page's tag) just finds it here.
+    const fromTags = isLineUrl && search.get('from') === 'tags'
+    const find = (blockId: string) => {
+      if (cancelled) return
+      if (!jumpWithin(blockId)) { if (++tries < 120) frame = requestAnimationFrame(() => find(blockId)); return }
+      dropParam()
     }
-    frame = requestAnimationFrame(find)
-    return () => { cancelAnimationFrame(frame); clearTimeout(timer); clearTimeout(settle) }
-  }, [editor, jumpTo])
+    if (!isLineUrl) { frame = requestAnimationFrame(() => find(id)); return () => { cancelled = true; cancelAnimationFrame(frame) } }
+    if (fromTags && editor.getBlock(id)) { frame = requestAnimationFrame(() => find(id)); return () => { cancelled = true; cancelAnimationFrame(frame) } }
+    // A11 §4: a line URL (`/pages?page=…&block=…[&task=…]`) is always resolved on the server first, so it lands where
+    // the chip does, even when the block is still on the URL's page (a task's history row on a past day).
+    const attempt = () => void resolveLineLink({ data: { pageId: page.id, lineId: id, ...(search.get('task') ? { taskId: search.get('task')! } : {}) } }).then(r => {
+      if (cancelled) return
+      // Go to the server's address. A page this browser's copy doesn't have yet (made since it loaded, e.g. the day a
+      // task was just moved to) gets a full load, so the route reads fresh data before jumping (Ratchet #146, Lead).
+      const go = (href: string) => { if (latestWorkspace.current.pages.some(p => p.id === r.pageId)) void navigate({ href, replace: true, resetScroll: false }); else window.location.replace(href) }
+      const elsewhere = r.pageId !== page.id || page.type === 'daily'
+      if (r.state === 'line-not-found' || r.state === 'page-not-found' || !r.blockId) {
+        dropParam(); window.scrollTo({ top: 0 }); toast("Couldn't find that line", { timeout: 4000 })
+        if (r.href && elsewhere) go(r.href)
+        return
+      }
+      // Somewhere else now (a task's plan day), or a day page opened by its id: go to its own address.
+      if (r.href && elsewhere) { go(r.href); return }
+      find(r.blockId)
+    }, () => { if (!cancelled) lookupFailed(attempt) })
+    attempt()
+    return () => { cancelled = true; cancelAnimationFrame(frame) }
+  }, [editor, jumpTo, jumpWithin, page.id, navigate])
   useEffect(() => { const media = window.matchMedia('(max-width: 899px)'); const update = () => setCompact(media.matches); media.addEventListener('change', update); return () => media.removeEventListener('change', update) }, [])
   const [touchHandle, setTouchHandle] = useState<{ id: string; top: number } | null>(null)
   const [touchDragging, setTouchDragging] = useState(false)
@@ -1194,7 +1316,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const choose = (intent: RowIntent) => { selected.current = []; setSelectionLabel(''); void rowAct(id, t, intent) }
     const keep = (e: { preventDefault(): void }) => e.preventDefault()
     const [tomorrow, ...rest] = model.primary[0]?.label === 'Tomorrow' ? model.primary : [null, ...model.primary]
-    const more = [...menuGroups(model, todayIso(), choose).filter(g => g.title !== 'Another day').map(g => ({ ...g, items: g.items.filter(i => !model.primary.some(p => p.label === i.label) && !i.label.startsWith('Tomorrow')) })).filter(g => g.items.length), { items: [{ label: 'Delete line', danger: true, onSelect: deleteSelected }] }]
+    const more = [...menuGroups(model, todayIso(), choose).filter(g => g.title !== 'Another day').map(g => ({ ...g, items: g.items.filter(i => !model.primary.some(p => p.label === i.label) && !i.label.startsWith('Tomorrow')) })).filter(g => g.items.length), ...(lineLinkTarget(id) ? [{ items: [{ label: 'Copy link to line', onSelect: () => { selected.current = []; setSelectionLabel(''); copyLineLink(id) } }] }] : []), { items: [{ label: 'Delete line', danger: true, onSelect: deleteSelected }] }]
     return <div className="editor-selection-bar is-row-actions" onPointerDown={keep}>
       {tomorrow && <button type="button" onClick={() => choose(tomorrow.intent)}>{tomorrow.label}</button>}
       {model.anotherDay && <RowMenu label="Another day" triggerClass="editor-bar-button" trigger="Another day" groups={menuGroups({ ...model, groups: model.groups.filter(g => g.title === 'Another day') }, todayIso(), choose)} />}
@@ -1202,8 +1324,58 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       <RowMenu label="More actions" triggerClass="editor-bar-button" groups={more} />
     </div>
   }
+  /** A11 §4 (Jazz §1): the line "Copy link to line" points at, or null where it isn't offered. */
+  const lineLinkTarget = (blockId: string): LineTarget | null => {
+    const block = editor.getBlock(blockId)
+    if (!block || !['paragraph', 'bulletListItem', 'numberedListItem', 'checkListItem', 'heading', 'quote', 'task'].includes(block.type)) return null
+    if (!inlineText(block.content as EditorNode['content']).trim()) return null
+    // The day's role headings (Top 3, Other, Notes…) are structure; a heading he wrote is a target.
+    const section = latestPage.current.sections.find(x => x.id === blockId)
+    if (block.type === 'heading' && ((section && section.kind !== 'custom') || templateKind(latestPage.current, blockId))) return null
+    const taskId = block.type === 'task' ? String(block.props.taskId ?? '') : ''
+    return { pageId: page.id, lineId: blockId, ...(taskId && !taskId.startsWith('editor-task:') ? { taskId } : {}) }
+  }
+  /**
+   * Writes the app's line type and the plain URL. A copy event carries both (the app type only reaches this app); where
+   * that can't run, the URL alone, which pastes as a line link too. A failed write says so, never "copied".
+   */
+  const copyLineLink = (blockId: string) => {
+    const target = lineLinkTarget(blockId)
+    if (!target) return
+    const url = `${window.location.origin}${lineLinkPath(target)}`
+    let wrote = false
+    const onCopy = (e: ClipboardEvent) => {
+      if (!e.clipboardData) return
+      e.preventDefault(); e.stopImmediatePropagation()
+      e.clipboardData.setData(lineClipboardType, JSON.stringify(target)); e.clipboardData.setData('text/plain', url)
+      wrote = true
+    }
+    document.addEventListener('copy', onCopy, true)
+    try { document.execCommand('copy') } catch { /* not supported: the URL below */ } finally { document.removeEventListener('copy', onCopy, true) }
+    const notice = (ok: boolean) => { toast(ok ? 'Link to line copied' : "Couldn't copy", { timeout: 4000 }); if (ok) void flush() }
+    if (wrote) { notice(true); return }
+    if (!navigator.clipboard?.writeText) { notice(false); return }
+    navigator.clipboard.writeText(url).then(() => notice(true), () => notice(false))
+  }
+  /** ⌘/ on a line with no ⋯ (any line but an open task on a day page): a menu with Copy link to line (Jazz §1). */
+  const [lineMenu, setLineMenu] = useState<{ blockId: string; anchor: { top: number; bottom: number; left: number } } | null>(null)
+  const closeLineMenu = (refocus: boolean) => {
+    const open = lineMenu
+    setLineMenu(null)
+    if (refocus && open) rowActions.focusRow(open.blockId)
+  }
+  const openLineMenu = (blockId: string) => {
+    // The line's own box, at its text start (Jazz states §1), not the caret: a click on a bullet's dot can leave the
+    // caret's reported position far from the line.
+    const line = blockElement(blockId), content = line?.querySelector<HTMLElement>('.bn-block-content'), text = line?.querySelector<HTMLElement>('.bn-inline-content')
+    if (!content) return false
+    const box = content.getBoundingClientRect()
+    setLineMenu({ blockId, anchor: { top: box.top, bottom: box.bottom, left: (text ?? content).getBoundingClientRect().left } })
+    return true
+  }
   const rowActions: RowActions = {
     pageDate: page.date ?? null, today: todayIso(), sectionOf, act: (id, t, intent) => void rowAct(id, t, intent),
+    copyLink: id => lineLinkTarget(id) ? () => copyLineLink(id) : null,
     focusRow: id => {
       if (!editor.getBlock(id)) return
       const back = menuReturn.current; menuReturn.current = null
@@ -1305,6 +1477,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const more = editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"] .editor-row-more`)
         // Esc gives the caret back exactly where ⌘/ was pressed (Jazz check 8).
         if (more) { e.preventDefault(); e.stopPropagation(); menuReturn.current = { blockId: block.id, selection: editor.prosemirrorState.selection.toJSON() }; more.click(); return }
+        // Any other line: a menu of its own, when the line can be linked (A11).
+        if (lineLinkTarget(block.id)) { e.preventDefault(); e.stopPropagation(); menuReturn.current = { blockId: block.id, selection: editor.prosemirrorState.selection.toJSON() }; if (openLineMenu(block.id)) return }
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.nativeEvent.isComposing) {
         e.preventDefault(); e.stopPropagation()
@@ -1418,7 +1592,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null) }}><GripIcon /></button>}
     <div className="editor-phone-toolbar" aria-label="Editor tools"><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('undo')} aria-label="Undo"><UndoIcon /></button><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('redo')} aria-label="Redo"><RedoIcon /></button><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }} aria-label="Insert block"><PlusIcon /></button></div>
     {dock && createPortal(<>
-      {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span><button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
+      {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span>{selected.current.length === 1 && lineLinkTarget(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyLineLink(id) }}>Copy link</button>}<button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
+      {lineMenu && <LineMenu anchor={lineMenu.anchor} onClose={closeLineMenu} onCopy={() => { const id = lineMenu.blockId; closeLineMenu(true); copyLineLink(id) }} />}
     {pastedChecklistIds.length > 0 && <div className="editor-paste-notice" role="status">{pastedChecklistIds.length} checklist {pastedChecklistIds.length === 1 ? 'line' : 'lines'} · <button onClick={() => {
       let count = 0, planned = 0
       editor.transact(tr => {

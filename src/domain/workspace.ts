@@ -135,6 +135,8 @@ function appendBlock(p: Page, s: Section, block: NoteBlock): void {
   let at = s.blocks.length;
   while (at > 0 && isEmptyRow(s.blocks[at - 1]!)) at--;
   s.blocks.splice(at, 0, block);
+  // A11: a task row placed outside the editor is remembered too, so a link to it finds its task after a move removes it.
+  if (block.kind === "task") (p.editorBlockMetadata ??= {})[block.id] ??= structuredClone(block);
 }
 function ensureSection(p: Page, kind: Section["kind"]): Section {
   let s = p.sections.find((s) => s.kind === kind);
@@ -778,8 +780,12 @@ function applyProposal(state: Workspace, c: Capture, p: Page, proposal: Proposal
     case "update-task": {
       const t = task(state, proposal.taskId!);
       if (proposal.expectedVersion !== undefined && t.version !== proposal.expectedVersion) throw new DomainError("Task changed; not applied");
-      proposal.before = { status: t.status, plannedOn: t.plannedOn, deadlineOn: t.deadlineOn, attentionOn: t.attentionOn, placements: structuredClone(state.placements.filter((x) => x.taskId === t.id)) };
-      if (proposal.status) t.status = proposal.status;
+      proposal.before = { status: t.status, doneOn: t.doneOn ?? null, plannedOn: t.plannedOn, deadlineOn: t.deadlineOn, attentionOn: t.attentionOn, placements: structuredClone(state.placements.filter((x) => x.taskId === t.id)) };
+      if (proposal.status) {
+        // A11: a capture that finishes a task finishes it on the capture's day.
+        t.doneOn = proposal.status !== "done" ? null : t.status === "done" ? t.doneOn ?? null : p.date ?? null;
+        t.status = proposal.status;
+      }
       if (proposal.date) {
         // An update's date without a role is a move to that day (Lead 6ea38307).
         const role = proposal.dateRole ?? "do";
@@ -900,7 +906,7 @@ function removeApplied(state: Workspace, proposal: ProposalItem): void {
       const t = state.tasks.find((x) => x.id === id);
       if (!t || !proposal.before) break;
       if (t.version !== proposal.appliedVersion) throw new DomainError("Can't undo · edited since");
-      Object.assign(t, { status: proposal.before.status, plannedOn: proposal.before.plannedOn, deadlineOn: proposal.before.deadlineOn, attentionOn: proposal.before.attentionOn });
+      Object.assign(t, { status: proposal.before.status, doneOn: proposal.before.status === "done" ? proposal.before.doneOn ?? null : null, plannedOn: proposal.before.plannedOn, deadlineOn: proposal.before.deadlineOn, attentionOn: proposal.before.attentionOn });
       state.placements = state.placements.filter((x) => x.taskId !== t.id).concat(structuredClone(proposal.before.placements));
       t.version++;
       delete proposal.before;
@@ -984,7 +990,11 @@ function execute(
       }
       const previousBlocks = p.sections.flatMap(s => s.blocks);
       p.editorBlockMetadata ??= {};
-      for (const block of previousBlocks) p.editorBlockMetadata[block.id] = structuredClone(block);
+      // A11: a task row's `seen` (its last save on this page) survives being copied here again.
+      for (const block of previousBlocks) {
+        const seen = p.editorBlockMetadata[block.id]?.seen;
+        p.editorBlockMetadata[block.id] = { ...structuredClone(block), ...(seen !== undefined ? { seen } : {}) };
+      }
       // A9a §2: a heading's `[[` links outlive the heading too, so Undo or a cut-and-paste move finds their time. Its
       // role does too: a role heading removed by a key or a selection and brought back by ⌘Z is that section again, not
       // a custom one (Roadbuster bd8e4c13).
@@ -1021,6 +1031,9 @@ function execute(
       }
       }
       p.sections = projectDocument(nodes, p, state);
+      // A11 §2: each task row on the page now is stamped with this save's revision, from its first save on, so a link
+      // to its task can pick the most recent document page that shows it.
+      for (const b of p.sections.flatMap(s => s.blocks)) if (b.kind === "task") p.editorBlockMetadata[b.id] = { ...structuredClone(b), seen: state.revision + 1 };
       linkMaterialLines(state, p, all, flat(JSON.parse(p.editorJSON ?? "[]")));
       const ordered = p.sections.flatMap(s => s.blocks).filter(b => b.kind === 'task' && b.planRole === 'plan');
       ordered.forEach((b, order) => {
@@ -1181,6 +1194,8 @@ function execute(
       if (!["open", "done", "cancelled"].includes(action.status))
         throw new DomainError("Invalid task status");
       t.status = action.status;
+      // A11: the day it was done, where a link to the task goes; a reopened or cancelled task has none.
+      t.doneOn = action.status === "done" ? (action.today ? date(action.today) : t.doneOn ?? null) : null;
       t.version++;
       return { message: `Task ${action.status}`, entityId: t.id };
     }

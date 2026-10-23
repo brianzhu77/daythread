@@ -1,0 +1,283 @@
+A11 fixture added (today 2026-10-22, past 2026-10-18, tomorrow 2026-10-23); ids in /tmp/a11-check.FSuajZ/1280.sqlite.a11.json
+ok   1280 · copy: three entry points: ⌘/ on a line opens its menu with Copy link to line
+ok   1280 · copy: three entry points: ⌘/: "Link to line copied"
+ok   1280 · copy: three entry points: ⌘/: the clipboard text is the line URL (http://127.0.0.1:3471/pages?page=a11-target&block=a11-line)
+ok   1280 · copy: three entry points: ⌘/ menu: under its line, at the text start ({"m":{"top":315.640625,"bottom":367.640625,"left":420,"h":900},"fill":{"top":281.640625,"bottom":311.640625,"left":420}})
+ok   1280 · copy: three entry points: ⌘/ menu on a line at the bottom of the screen: above the line, fully in view ({"m":{"top":802.28125,"bottom":854.28125,"left":420,"h":900},"low":{"top":858.28125,"bottom":888.28125,"left":420}})
+ok   1280 · copy: three entry points: ⌘/ on a custom heading offers it
+ok   1280 · copy: three entry points: selection bar with one line: Copy link
+ok   1280 · copy: three entry points: selection bar: the clipboard text is the line URL
+ok   1280 · copy: three entry points: task menu: Copy link to line in its own group, last (before Delete line on the phone) ([["Tomorrow · Fri, Oct 23","Not today"],["This weekend · Sat 10/24","Next week · Mon 10/26","Pick date…"],["Move to Top 3"],["Cancel task"],["Copy link to line"]])
+ok   1280 · copy: three entry points: task: the URL carries task= (http://127.0.0.1:3471/pages?page=day%3A2026-10-22&block=5af112ea-bd22-4f37-9e33-b463dd340f1c&task=baa1fd46-8b5c-4f40-9bd3-3ce3e1c9c8d6)
+ok   1280 · copy: three entry points: template heading (Notes): no Copy link to line
+ok   1280 · copy: clipboard fails: "Couldn't copy"
+ok   1280 · copy: clipboard fails: no "copied" notice
+ok   1280 · paste: line type / own URL / foreign URL: the copied line makes a chip (["The linked line · A11 target"])
+ok   1280 · paste: line type / own URL / foreign URL: it carried the line type (["text/plain","application/x-daythread-line"])
+ok   1280 · paste: line type / own URL / foreign URL: an own-origin line URL makes a chip (["Reading · A11 target"])
+ok   1280 · paste: line type / own URL / foreign URL: another host: no chip, no link card (r https://example.com/pages?page=a11-target&block=a11-line)
+ok   1280 · paste: line type / own URL / foreign URL: an unknown param: no chip, no link card (r http://127.0.0.1:3471/pages?page=a11-target&block=a11-line&view=trash)
+ok   1280 · paste: line type / own URL / foreign URL: no block: no chip, no link card (r http://127.0.0.1:3471/pages?page=a11-target)
+ok   1280 · paste: line type / own URL / foreign URL: a malformed URL: no chip, no link card (r http://127.0.0.1:3471/pages?page=a11 target&block=a11-line)
+ok   1280 · paste: into a task title: the line's words, as text (A11 past task — The linked line)
+ok   1280 · chip and jump: chip: the line's words · its page (The linked line · A11 target)
+ok   1280 · chip and jump: tap: tinted
+ok   1280 · chip and jump: tap: about a third from the top (top 300 of 900)
+ok   1280 · chip and jump: tap: clear of the top bar and the bottom bar's fade (top 300, bar 0, tab 900)
+ok   1280 · chip and jump: tap: nothing focused
+ok   1280 · chip and jump: Back returns to the link
+ok   1280 · chip and jump: second tap: tinted
+ok   1280 · chip and jump: second tap: about a third from the top (top 300 of 900)
+ok   1280 · chip and jump: second tap: clear of the top bar and the bottom bar's fade (top 300, bar 0, tab 900)
+ok   1280 · chip and jump: second tap: nothing focused
+ok   1280 · chip and jump: keyboard: Enter on the chip opens it
+ok   1280 · chip and jump: same page: tinted
+ok   1280 · chip and jump: same page: about a third from the top (top 252 of 900)
+ok   1280 · chip and jump: same page: clear of the top bar and the bottom bar's fade (top 252, bar 0, tab 900)
+ok   1280 · chip and jump: same page: nothing focused
+ok   1280 · chip and jump: same page, again: tinted
+ok   1280 · chip and jump: same page, again: about a third from the top (top 252 of 900)
+ok   1280 · chip and jump: same page, again: clear of the top bar and the bottom bar's fade (top 252, bar 0, tab 900)
+ok   1280 · chip and jump: same page, again: nothing focused
+ok   1280 · chip and jump: same page: no navigation
+ok   1280 · chip and jump: after a reload: refIds, lineIds and times unchanged ([["b3611668-0bd8-4b81-9b05-8304e12f4833","a11-line",null,22],["119c55d9-aa59-4131-b6a9-373d41311367","a11-long",null,22]])
+ok   1280 · chip: Line not found: "Line not found · {page}"
+ok   1280 · chip: Line not found: "Couldn't find that line"
+ok   1280 · chip: Line not found: opens the page at the top
+ok   1280 · chip: Line not found: "Page not found"
+ok   1280 · chip: Line not found: "Page not found": tapping does nothing
+ok   1280 · chip: trashed page: its words · page, with the bin icon (On a trashed page · A11 trashed)
+ok   1280 · chip: trashed page: in --ink-3 (rgb(158, 160, 164) / rgb(158, 160, 164))
+ok   1280 · chip: trashed page: opens the trashed page with Restore
+ok   1280 · chip: trashed page: trashed page: tinted
+ok   1280 · chip: trashed page: trashed page: about a third from the top (top 221 of 900)
+ok   1280 · chip: trashed page: trashed page: clear of the top bar and the bottom bar's fade (top 221, bar 0, tab 900)
+ok   1280 · chip: trashed page: trashed page: nothing focused
+ok   1280 · URL: fresh view: a plain line: lands where the chip does (/pages?page=a11-target)
+ok   1280 · URL: fresh view: a task linked on a past day (history row still there), with task=: lands where the chip does (/day/2026-10-22)
+ok   1280 · URL: fresh view: the same, without task=: lands where the chip does (/day/2026-10-22)
+ok   1280 · URL: fresh view: a task moved to tomorrow: lands where the chip does (/day/2026-10-23)
+ok   1280 · URL: fresh view: a task row on a trashed page, with task= (its task is planned today): lands where the chip does (/day/2026-10-22)
+ok   1280 · URL: fresh view: the same, without task=: lands where the chip does (/day/2026-10-22)
+ok   1280 · URL: fresh view: a plain line on a trashed page stays there: lands where the chip does (/pages?page=a11-trash)
+ok   1280 · tags: the page the list names: a tagged task row on a document page opens that page, though its task is planned today (/pages?page=a11-target)
+ok   1280 · tags: the page the list names: tag jump: tinted
+ok   1280 · tags: the page the list names: tag jump: about a third from the top (top 300 of 900)
+ok   1280 · tags: the page the list names: tag jump: clear of the top bar and the bottom bar's fade (top 300, bar 0, tab 900)
+ok   1280 · tags: the page the list names: tag jump: nothing focused
+ok   1280 · tags: the page the list names: a row that's gone follows its task (/day/2026-10-22)
+ok   1280 · tags: the page the list names: tag jump, row gone: tinted
+ok   1280 · tags: the page the list names: tag jump, row gone: about a third from the top (top 300 of 900)
+ok   1280 · tags: the page the list names: tag jump, row gone: clear of the top bar and the bottom bar's fade (top 300, bar 0, tab 900)
+ok   1280 · tags: the page the list names: tag jump, row gone: nothing focused
+ok   1280 · URL: lookup fails: no jump to the old row (blocked 1)
+ok   1280 · URL: lookup fails: "Couldn't check where that line is now"
+ok   1280 · URL: lookup fails: the URL's page at the top, the URL kept (http://127.0.0.1:3471/pages?page=day%3A2026-10-18&block=3e030c62-45c6-4516-a891-39bde32f7d7d&task=baa1fd46-8b5c-4f40-9bd3-3ce3e1c9c8d6)
+ok   1280 · URL: lookup fails: Retry, once it answers: lands where the chip does (/day/2026-10-22)
+ok   1280 · URL: task moved to a page made after loading: lands on the page the server names, though this tab had never loaded it (/day/2026-11-01)
+ok   1280 · URL: task moved to a page made after loading: and tints the task row there
+ok   1280 · Linked from: the linking page once (a page link and line links to it) (["A11 links"])
+ok   1280 · Linked from: a moved task's link counts on its new day (["A11 links"])
+ok   1280 · Linked from: with the link's own time ([["20e35cf4-aafc-4dff-b2b1-7be95797e4c1","40122b56-bbc4-4ab3-9d5a-5ca473125ce1","9011f27b-6690-4362-a0e1-ab0a532c8190",22]])
+ok   1280 · long excerpt at 390: no overflow (1074 ≤ 1074)
+ok   1280 · long excerpt at 390: one line (20px)
+ok   1280 · long excerpt at 390: the words end in an ellipsis; the place shows whole
+ok   1280 · edit and task move: edit the line → the chip's words change after a reload
+ok   1280 · edit and task move: a task moved to tomorrow → the chip names that day (A11 moving task · Oct 23)
+ok   1280 · edit and task move: moved task: tinted
+ok   1280 · edit and task move: moved task: about a third from the top (top 311 of 900)
+ok   1280 · edit and task move: moved task: clear of the top bar and the bottom bar's fade (top 311, bar 0, tab 900)
+ok   1280 · edit and task move: moved task: nothing focused
+ok   1280 · drag keeps the link: the line moved up the page (31)
+ok   1280 · drag keeps the link: the chip still shows its words, not "Line not found" (A line to drag · A11 target)
+ok   1280 · chip: cut and paste: a cut-and-pasted plain line → "Line not found · {page}" (v1) (Line not found · A11 target)
+ok   1280 · chip: cut and paste: a cut-and-pasted task row → still followed by its task (A11 past task · Oct 18)
+ok   1280 · copy: not offered: an empty line: no menu, nothing written
+ok   1280 · copy: not offered: two lines selected: no Copy link (2 blocks selected Delete)
+no page errors
+all passed
+A11 fixture added (today 2026-10-22, past 2026-10-18, tomorrow 2026-10-23); ids in /tmp/a11-check.FSuajZ/390.sqlite.a11.json
+ok   390 · copy: three entry points: ⌘/ on a line opens its menu with Copy link to line
+ok   390 · copy: three entry points: ⌘/: "Link to line copied"
+ok   390 · copy: three entry points: ⌘/: the clipboard text is the line URL (http://127.0.0.1:3471/pages?page=a11-target&block=a11-line)
+ok   390 · copy: three entry points: ⌘/ menu: under its line, at the text start ({"m":{"top":315.640625,"bottom":367.640625,"left":20,"h":900},"fill":{"top":281.640625,"bottom":311.640625,"left":20}})
+ok   390 · copy: three entry points: ⌘/ menu on a line at the bottom of the screen: above the line, fully in view ({"m":{"top":802.28125,"bottom":854.28125,"left":20,"h":900},"low":{"top":858.28125,"bottom":888.28125,"left":20}})
+ok   390 · copy: three entry points: ⌘/ on a custom heading offers it
+ok   390 · copy: three entry points: selection bar with one line: Copy link
+ok   390 · copy: three entry points: selection bar: the clipboard text is the line URL
+ok   390 · copy: three entry points: task menu: Copy link to line in its own group, last (before Delete line on the phone) ([["Tomorrow · Fri, Oct 23","Not today"],["This weekend · Sat 10/24","Next week · Mon 10/26","Pick date…"],["Move to Top 3"],["Cancel task"],["Copy link to line"]])
+ok   390 · copy: three entry points: task: the URL carries task= (http://127.0.0.1:3471/pages?page=day%3A2026-10-22&block=c760f5f2-6a87-4922-b312-2026065d75cd&task=8c0f8f37-c2e2-4b20-bf7d-331670cb7f68)
+ok   390 · copy: three entry points: template heading (Notes): no Copy link to line
+ok   390 · copy: clipboard fails: "Couldn't copy"
+ok   390 · copy: clipboard fails: no "copied" notice
+ok   390 · paste: line type / own URL / foreign URL: the copied line makes a chip (["The linked line · A11 target"])
+ok   390 · paste: line type / own URL / foreign URL: it carried the line type (["text/plain","application/x-daythread-line"])
+ok   390 · paste: line type / own URL / foreign URL: an own-origin line URL makes a chip (["Reading · A11 target"])
+ok   390 · paste: line type / own URL / foreign URL: another host: no chip, no link card (r https://example.com/pages?page=a11-target&block=a11-line)
+ok   390 · paste: line type / own URL / foreign URL: an unknown param: no chip, no link card (r https://example.com/pages?page=a11-target&block=a11-line)
+ok   390 · paste: line type / own URL / foreign URL: no block: no chip, no link card (r https://example.com/pages?page=a11-target&block=a11-line)
+ok   390 · paste: line type / own URL / foreign URL: a malformed URL: no chip, no link card (r https://example.com/pages?page=a11-target&block=a11-line)
+ok   390 · paste: into a task title: the line's words, as text (A11 past task — The linked line)
+ok   390 · chip and jump: chip: the line's words · its page (The linked line · A11 target)
+ok   390 · chip and jump: tap: tinted
+ok   390 · chip and jump: tap: about a third from the top (top 260 of 900)
+ok   390 · chip and jump: tap: clear of the top bar and the bottom bar's fade (top 260, bar 0, tab 828)
+ok   390 · chip and jump: tap: nothing focused
+ok   390 · chip and jump: Back returns to the link
+ok   390 · chip and jump: second tap: tinted
+ok   390 · chip and jump: second tap: about a third from the top (top 260 of 900)
+ok   390 · chip and jump: second tap: clear of the top bar and the bottom bar's fade (top 260, bar 0, tab 828)
+ok   390 · chip and jump: second tap: nothing focused
+ok   390 · chip and jump: keyboard: Enter on the chip opens it
+ok   390 · chip and jump: same page: tinted
+ok   390 · chip and jump: same page: about a third from the top (top 252 of 900)
+ok   390 · chip and jump: same page: clear of the top bar and the bottom bar's fade (top 252, bar 0, tab 828)
+ok   390 · chip and jump: same page: nothing focused
+ok   390 · chip and jump: same page, again: tinted
+ok   390 · chip and jump: same page, again: about a third from the top (top 252 of 900)
+ok   390 · chip and jump: same page, again: clear of the top bar and the bottom bar's fade (top 252, bar 0, tab 828)
+ok   390 · chip and jump: same page, again: nothing focused
+ok   390 · chip and jump: same page: no navigation
+ok   390 · chip and jump: after a reload: refIds, lineIds and times unchanged ([["e1333231-8a61-4f47-94df-c0ef97323de0","a11-line",null,22],["83d01032-8507-42c1-a92c-1b78a924bc09","a11-long",null,22]])
+ok   390 · chip: Line not found: "Line not found · {page}"
+ok   390 · chip: Line not found: "Couldn't find that line"
+ok   390 · chip: Line not found: opens the page at the top
+ok   390 · chip: Line not found: "Page not found"
+ok   390 · chip: Line not found: "Page not found": tapping does nothing
+ok   390 · chip: trashed page: its words · page, with the bin icon (On a trashed page · A11 trashed)
+ok   390 · chip: trashed page: in --ink-3 (rgb(158, 160, 164) / rgb(158, 160, 164))
+ok   390 · chip: trashed page: opens the trashed page with Restore
+ok   390 · chip: trashed page: trashed page: tinted
+ok   390 · chip: trashed page: trashed page: about a third from the top (top 233 of 900)
+ok   390 · chip: trashed page: trashed page: clear of the top bar and the bottom bar's fade (top 233, bar 0, tab 828)
+ok   390 · chip: trashed page: trashed page: nothing focused
+ok   390 · URL: fresh view: a plain line: lands where the chip does (/pages?page=a11-target)
+ok   390 · URL: fresh view: a task linked on a past day (history row still there), with task=: lands where the chip does (/day/2026-10-22)
+ok   390 · URL: fresh view: the same, without task=: lands where the chip does (/day/2026-10-22)
+ok   390 · URL: fresh view: a task moved to tomorrow: lands where the chip does (/day/2026-10-23)
+ok   390 · URL: fresh view: a task row on a trashed page, with task= (its task is planned today): lands where the chip does (/day/2026-10-22)
+ok   390 · URL: fresh view: the same, without task=: lands where the chip does (/day/2026-10-22)
+ok   390 · URL: fresh view: a plain line on a trashed page stays there: lands where the chip does (/pages?page=a11-trash)
+ok   390 · tags: the page the list names: a tagged task row on a document page opens that page, though its task is planned today (/pages?page=a11-target)
+ok   390 · tags: the page the list names: tag jump: tinted
+ok   390 · tags: the page the list names: tag jump: about a third from the top (top 260 of 900)
+ok   390 · tags: the page the list names: tag jump: clear of the top bar and the bottom bar's fade (top 260, bar 0, tab 828)
+ok   390 · tags: the page the list names: tag jump: nothing focused
+ok   390 · tags: the page the list names: a row that's gone follows its task (/day/2026-10-22)
+ok   390 · tags: the page the list names: tag jump, row gone: tinted
+ok   390 · tags: the page the list names: tag jump, row gone: about a third from the top (top 260 of 900)
+ok   390 · tags: the page the list names: tag jump, row gone: clear of the top bar and the bottom bar's fade (top 260, bar 0, tab 828)
+ok   390 · tags: the page the list names: tag jump, row gone: nothing focused
+ok   390 · URL: lookup fails: no jump to the old row (blocked 1)
+ok   390 · URL: lookup fails: "Couldn't check where that line is now"
+ok   390 · URL: lookup fails: the URL's page at the top, the URL kept (http://127.0.0.1:3471/pages?page=day%3A2026-10-18&block=0aa5938e-8f65-4401-ab84-4166dfa7c417&task=8c0f8f37-c2e2-4b20-bf7d-331670cb7f68)
+ok   390 · URL: lookup fails: Retry, once it answers: lands where the chip does (/day/2026-10-22)
+ok   390 · URL: task moved to a page made after loading: lands on the page the server names, though this tab had never loaded it (/day/2026-11-01)
+ok   390 · URL: task moved to a page made after loading: and tints the task row there
+ok   390 · Linked from: the linking page once (a page link and line links to it) (["A11 links"])
+ok   390 · Linked from: a moved task's link counts on its new day (["A11 links"])
+ok   390 · Linked from: with the link's own time ([["d94fb45a-90c1-499e-ad14-2e7948a420e3","657e6c1c-3d21-49e5-9266-fcc4ec202642","c4ff5172-827c-487a-af16-edafadeecbbe",22]])
+ok   390 · long excerpt at 390: no overflow (350 ≤ 350)
+ok   390 · long excerpt at 390: one line (20px)
+ok   390 · long excerpt at 390: the words end in an ellipsis; the place shows whole
+ok   390 · edit and task move: edit the line → the chip's words change after a reload
+ok   390 · edit and task move: a task moved to tomorrow → the chip names that day (A11 moving task · Oct 23)
+ok   390 · edit and task move: moved task: tinted
+ok   390 · edit and task move: moved task: about a third from the top (top 260 of 900)
+ok   390 · edit and task move: moved task: clear of the top bar and the bottom bar's fade (top 260, bar 0, tab 828)
+ok   390 · edit and task move: moved task: nothing focused
+skip 390 · drag keeps the link: the desktop grip drag runs at 1280; a phone drag isn't driven here
+ok   390 · chip: cut and paste: a cut-and-pasted plain line → "Line not found · {page}" (v1) (Line not found · A11 target)
+ok   390 · chip: cut and paste: a cut-and-pasted task row → still followed by its task (A11 past task · Oct 18)
+ok   390 · copy: not offered: an empty line: no menu, nothing written
+skip 390 · copy: not offered: two lines selected is driven at 1280 only
+no page errors
+all passed
+A11 fixture added (today 2026-10-22, past 2026-10-18, tomorrow 2026-10-23); ids in /tmp/a11-check.FSuajZ/390-touch.sqlite.a11.json
+ok   390 touch · copy: three entry points: selection bar with one line: Copy link
+ok   390 touch · copy: three entry points: selection bar: the clipboard text is the line URL
+ok   390 touch · copy: three entry points: task menu: Copy link to line in its own group, last (before Delete line on the phone) ([["Move to Top 3"],["Cancel task"],["Copy link to line"],["Delete line"]])
+ok   390 touch · copy: three entry points: task: the URL carries task= (http://127.0.0.1:3471/pages?page=day%3A2026-10-22&block=38fdbc8e-b0e5-4b9c-8f90-b31cd49fa6b4&task=3ed9c422-5a0f-44fe-be25-6eb808968662)
+ok   390 touch · copy: clipboard fails: "Couldn't copy"
+ok   390 touch · copy: clipboard fails: no "copied" notice
+ok   390 touch · paste: line type / own URL / foreign URL: the copied line makes a chip (["The linked line · A11 target"])
+ok   390 touch · paste: line type / own URL / foreign URL: it carried the line type (["text/plain","application/x-daythread-line"])
+ok   390 touch · paste: line type / own URL / foreign URL: an own-origin line URL makes a chip (["Reading · A11 target"])
+ok   390 touch · paste: line type / own URL / foreign URL: another host: no chip, no link card (r https://example.com/pages?page=a11-target&block=a11-line)
+ok   390 touch · paste: line type / own URL / foreign URL: an unknown param: no chip, no link card (r https://example.com/pages?page=a11-target&block=a11-line)
+ok   390 touch · paste: line type / own URL / foreign URL: no block: no chip, no link card (r https://example.com/pages?page=a11-target&block=a11-line)
+ok   390 touch · paste: line type / own URL / foreign URL: a malformed URL: no chip, no link card (r https://example.com/pages?page=a11-target&block=a11-line)
+ok   390 touch · paste: into a task title: the line's words, as text (A11 past task — The linked line)
+ok   390 touch · chip and jump: chip: the line's words · its page (The linked line · A11 target)
+ok   390 touch · chip and jump: tap: tinted
+ok   390 touch · chip and jump: tap: about a third from the top (top 260 of 900)
+ok   390 touch · chip and jump: tap: clear of the top bar and the bottom bar's fade (top 260, bar 0, tab 828)
+ok   390 touch · chip and jump: tap: nothing focused
+ok   390 touch · chip and jump: Back returns to the link
+ok   390 touch · chip and jump: second tap: tinted
+ok   390 touch · chip and jump: second tap: about a third from the top (top 260 of 900)
+ok   390 touch · chip and jump: second tap: clear of the top bar and the bottom bar's fade (top 260, bar 0, tab 828)
+ok   390 touch · chip and jump: second tap: nothing focused
+ok   390 touch · chip and jump: keyboard: Enter on the chip opens it
+ok   390 touch · chip and jump: same page: tinted
+ok   390 touch · chip and jump: same page: about a third from the top (top 252 of 900)
+ok   390 touch · chip and jump: same page: clear of the top bar and the bottom bar's fade (top 252, bar 0, tab 828)
+ok   390 touch · chip and jump: same page: nothing focused
+ok   390 touch · chip and jump: same page, again: tinted
+ok   390 touch · chip and jump: same page, again: about a third from the top (top 252 of 900)
+ok   390 touch · chip and jump: same page, again: clear of the top bar and the bottom bar's fade (top 252, bar 0, tab 828)
+ok   390 touch · chip and jump: same page, again: nothing focused
+ok   390 touch · chip and jump: same page: no navigation
+ok   390 touch · chip and jump: after a reload: refIds, lineIds and times unchanged ([["9cebf6d8-d2b3-4e98-be20-4342271fc07a","a11-line",null,22],["cab63dec-8eff-4c73-907b-e480ba4381d9","a11-long",null,22]])
+ok   390 touch · chip: Line not found: "Line not found · {page}"
+ok   390 touch · chip: Line not found: "Couldn't find that line"
+ok   390 touch · chip: Line not found: opens the page at the top
+ok   390 touch · chip: Line not found: "Page not found"
+ok   390 touch · chip: Line not found: "Page not found": tapping does nothing
+ok   390 touch · chip: trashed page: its words · page, with the bin icon (On a trashed page · A11 trashed)
+ok   390 touch · chip: trashed page: in --ink-3 (rgb(158, 160, 164) / rgb(158, 160, 164))
+ok   390 touch · chip: trashed page: opens the trashed page with Restore
+ok   390 touch · chip: trashed page: trashed page: tinted
+ok   390 touch · chip: trashed page: trashed page: about a third from the top (top 233 of 900)
+ok   390 touch · chip: trashed page: trashed page: clear of the top bar and the bottom bar's fade (top 233, bar 0, tab 828)
+ok   390 touch · chip: trashed page: trashed page: nothing focused
+ok   390 touch · URL: fresh view: a plain line: lands where the chip does (/pages?page=a11-target)
+ok   390 touch · URL: fresh view: a task linked on a past day (history row still there), with task=: lands where the chip does (/day/2026-10-22)
+ok   390 touch · URL: fresh view: the same, without task=: lands where the chip does (/day/2026-10-22)
+ok   390 touch · URL: fresh view: a task moved to tomorrow: lands where the chip does (/day/2026-10-23)
+ok   390 touch · URL: fresh view: a task row on a trashed page, with task= (its task is planned today): lands where the chip does (/day/2026-10-22)
+ok   390 touch · URL: fresh view: the same, without task=: lands where the chip does (/day/2026-10-22)
+ok   390 touch · URL: fresh view: a plain line on a trashed page stays there: lands where the chip does (/pages?page=a11-trash)
+ok   390 touch · tags: the page the list names: a tagged task row on a document page opens that page, though its task is planned today (/pages?page=a11-target)
+ok   390 touch · tags: the page the list names: tag jump: tinted
+ok   390 touch · tags: the page the list names: tag jump: about a third from the top (top 260 of 900)
+ok   390 touch · tags: the page the list names: tag jump: clear of the top bar and the bottom bar's fade (top 260, bar 0, tab 828)
+ok   390 touch · tags: the page the list names: tag jump: nothing focused
+ok   390 touch · tags: the page the list names: a row that's gone follows its task (/day/2026-10-22)
+ok   390 touch · tags: the page the list names: tag jump, row gone: tinted
+ok   390 touch · tags: the page the list names: tag jump, row gone: about a third from the top (top 260 of 900)
+ok   390 touch · tags: the page the list names: tag jump, row gone: clear of the top bar and the bottom bar's fade (top 260, bar 0, tab 828)
+ok   390 touch · tags: the page the list names: tag jump, row gone: nothing focused
+ok   390 touch · URL: lookup fails: no jump to the old row (blocked 1)
+ok   390 touch · URL: lookup fails: "Couldn't check where that line is now"
+ok   390 touch · URL: lookup fails: the URL's page at the top, the URL kept (http://127.0.0.1:3471/pages?page=day%3A2026-10-18&block=be7b0f3e-be27-42a0-a272-a923e90f5015&task=3ed9c422-5a0f-44fe-be25-6eb808968662)
+ok   390 touch · URL: lookup fails: Retry, once it answers: lands where the chip does (/day/2026-10-22)
+ok   390 touch · URL: task moved to a page made after loading: lands on the page the server names, though this tab had never loaded it (/day/2026-11-01)
+ok   390 touch · URL: task moved to a page made after loading: and tints the task row there
+ok   390 touch · Linked from: the linking page once (a page link and line links to it) (["A11 links"])
+ok   390 touch · Linked from: a moved task's link counts on its new day (["A11 links"])
+ok   390 touch · Linked from: with the link's own time ([["134892f8-82ab-482c-a590-ee1705677a1e","a54e5bba-faa3-4917-a026-f2748facc982","53fdfeeb-c2d9-47bb-b261-7d20f32e658e",22]])
+ok   390 touch · long excerpt at 390: no overflow (350 ≤ 350)
+ok   390 touch · long excerpt at 390: one line (20px)
+ok   390 touch · long excerpt at 390: the words end in an ellipsis; the place shows whole
+ok   390 touch · edit and task move: edit the line → the chip's words change after a reload
+ok   390 touch · edit and task move: a task moved to tomorrow → the chip names that day (A11 moving task · Oct 23)
+ok   390 touch · edit and task move: moved task: tinted
+ok   390 touch · edit and task move: moved task: about a third from the top (top 260 of 900)
+ok   390 touch · edit and task move: moved task: clear of the top bar and the bottom bar's fade (top 260, bar 0, tab 828)
+ok   390 touch · edit and task move: moved task: nothing focused
+skip 390 touch · drag keeps the link: the desktop grip drag runs at 1280; a phone drag isn't driven here
+skip 390 touch · chip: cut and paste: cut and paste by keyboard runs at 1280 and 390
+skip 390 touch · copy: not offered: two lines selected is driven at 1280 only
+no page errors
+all passed

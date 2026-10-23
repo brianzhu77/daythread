@@ -23,6 +23,8 @@ export interface RowActions {
   /** The plan section the row is in on this page, if any. */
   sectionOf(blockId: string): 'top3' | 'other' | null
   act(blockId: string, task: Task, intent: RowIntent): void
+  /** A11: copies a link to the line, or null where Copy link to line isn't offered. */
+  copyLink(blockId: string): (() => void) | null
   /** Puts the caret back at the end of the row (Esc from its menu, Jazz A12 check 8). */
   focusRow(blockId: string): void
 }

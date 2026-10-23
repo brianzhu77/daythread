@@ -1,10 +1,13 @@
 import { useNavigate } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { editorSeed, inlineText, type EditorNode } from '../domain/editor-document'
 import { isTrashed, parentOf, subtreeIds, trashBatch, trashBatches, trashedChildPages } from '../domain/page-tree'
 import type { Page, Receipt, Workspace } from '../domain/types'
 import { longLabel, toIso } from './dates'
 import { flushEditor } from './editor-flush'
+import { jumpToBlock, lookupFailed } from './line-jump'
+import { resolveLineLink } from '../server/functions'
+import { toast } from '@heroui/react'
 import { ChevronRightIcon, PageKindIcon, TrashIcon } from './icons'
 import { LinkUrlRow } from './link-url-row'
 import { InlineWithRefs } from './line-text'
@@ -159,22 +162,51 @@ export function TrashedPage({ page, workspace }: { page: Page; workspace: Worksp
 /** The body as saved, without an editor: a trashed page can't change until it's restored. */
 function ReadOnlyBody({ page, workspace }: { page: Page; workspace: Workspace }) {
   const nodes = editorSeed(page, workspace)
+  const body = useRef<HTMLDivElement>(null)
+  const navigate = useNavigate()
+  const latest = useRef(workspace); latest.current = workspace
+  // A11 (Jazz line-links-states §5): a link to a line on a trashed page opens it scrolled to the line. As everywhere
+  // (§4), the URL is resolved on the server first: a task row here may be followed to its plan day (Ratchet #146).
+  useEffect(() => {
+    const url = new URL(window.location.href), id = url.searchParams.get('block'), taskId = url.searchParams.get('task')
+    if (!id) return
+    let cancelled = false, cleanup: (() => void) | undefined
+    const dropParams = () => { for (const k of ['block', 'task', 'from']) url.searchParams.delete(k); window.history.replaceState(window.history.state, '', url) }
+    const jumpHere = (blockId: string) => {
+      const el = body.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(blockId)}"]`)
+      dropParams()
+      if (el) cleanup = jumpToBlock(el)
+      else { window.scrollTo({ top: 0 }); toast("Couldn't find that line", { timeout: 4000 }) }
+    }
+    const attempt = () => void resolveLineLink({ data: { pageId: page.id, lineId: id, ...(taskId ? { taskId } : {}) } }).then(r => {
+      if (cancelled) return
+      // The server's address; a page this browser's copy doesn't have yet gets a full load (Ratchet #146, Lead).
+      if (r.blockId && r.href && r.pageId !== page.id) {
+        if (latest.current.pages.some(p => p.id === r.pageId)) void navigate({ href: r.href, replace: true, resetScroll: false })
+        else window.location.replace(r.href)
+        return
+      }
+      jumpHere(r.blockId ?? id)
+    }, () => { if (!cancelled) lookupFailed(attempt) })
+    attempt()
+    return () => { cancelled = true; cleanup?.() }
+  }, [page.id, navigate])
   const render = (n: EditorNode): ReactNode => {
     const children = n.children?.length ? <div className="ro-children">{n.children.map(render)}</div> : null
-    if (n.type === 'heading') return <div key={n.id}><h2 className={`ro-heading level-${n.props?.level ?? 2}`}><InlineWithRefs content={n.content} workspace={workspace} /></h2>{children}</div>
+    if (n.type === 'heading') return <div key={n.id} data-id={n.id}><h2 className={`ro-heading level-${n.props?.level ?? 2}`}><InlineWithRefs content={n.content} workspace={workspace} /></h2>{children}</div>
     if (n.type === 'pageLink') {
       const target = workspace.pages.find(p => p.id === n.props?.pageId)
-      return <div key={n.id}>{target
+      return <div key={n.id} data-id={n.id}>{target
         ? <PageLink className={`editor-page-card ${isTrashed(target) ? 'in-trash' : ''}`} href={pageHref(target)}><span className="editor-page-card-icon"><PageKindIcon url={target.url} /></span><span className="editor-page-card-title">{displayPageTitle(target)}</span>{isTrashed(target) && <span className="in-trash-tag">In trash</span>}<ChevronRightIcon /></PageLink>
         : <p className="ro-line quiet">Page not found</p>}{children}</div>
     }
     if (!inlineText(n.content) && !children) return null
     if (n.type === 'task') {
       const done = workspace.tasks.find(t => t.id === n.props?.taskId)?.status === 'done'
-      return <div key={n.id}><p className={`ro-line ro-task ${done ? 'done' : ''}`}><span className="ro-box" aria-hidden="true">{done ? '☑' : '☐'}</span><InlineWithRefs content={n.content} workspace={workspace} /></p>{children}</div>
+      return <div key={n.id} data-id={n.id}><p className={`ro-line ro-task ${done ? 'done' : ''}`}><span className="ro-box" aria-hidden="true">{done ? '☑' : '☐'}</span><InlineWithRefs content={n.content} workspace={workspace} /></p>{children}</div>
     }
     const marker = n.type === 'bulletListItem' ? '•' : n.type === 'numberedListItem' ? '–' : n.type === 'checkListItem' ? (n.props?.checked ? '☑' : '☐') : null
-    return <div key={n.id}><p className="ro-line">{marker && <span className="ro-box" aria-hidden="true">{marker}</span>}<InlineWithRefs content={n.content} workspace={workspace} /></p>{children}</div>
+    return <div key={n.id} data-id={n.id}><p className="ro-line">{marker && <span className="ro-box" aria-hidden="true">{marker}</span>}<InlineWithRefs content={n.content} workspace={workspace} /></p>{children}</div>
   }
-  return <div className="ro-body">{nodes.map(render)}</div>
+  return <div className="ro-body" ref={body}>{nodes.map(render)}</div>
 }

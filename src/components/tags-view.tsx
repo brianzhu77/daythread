@@ -58,7 +58,7 @@ export function TagScreen({ tagKey }: { tagKey: string }) {
   const back = <Link to="/tags" className="back-link">‹ Tags</Link>
   if (!entry) return <div className="list-screen tag-screen">{back}<h1 className="large-title"><span className="tag-plain-mark">#</span>{tagKey}</h1><p className="quiet">No blocks have this tag any more.</p></div>
   const days = new Set(entry.occurrences.map(o => o.date).filter(Boolean)).size
-  const open = (o: TagOccurrence) => void navigate({ href: o.date ? `/day/${o.date}?block=${encodeURIComponent(o.blockId)}` : `/pages?page=${encodeURIComponent(o.pageId)}&block=${encodeURIComponent(o.blockId)}` })
+  const open = (o: TagOccurrence) => void navigate({ href: o.date ? `/day/${o.date}?block=${encodeURIComponent(o.blockId)}` : `/pages?page=${encodeURIComponent(o.pageId)}&block=${encodeURIComponent(o.blockId)}&from=tags` })
   return (
     <div className="list-screen tag-screen">
       {back}

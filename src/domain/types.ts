@@ -27,6 +27,8 @@ export interface NoteBlock {
   linkPaste?: LinkPasteRecord;
   /** On `heading:<id>` entries: the section's role, so a heading that comes back (Undo, cut and paste) keeps it. */
   sectionKind?: SectionKind;
+  /** A11: on a task row's metadata entry, the revision of the last save that had the row on this page (recency order). */
+  seen?: number;
 }
 /** A9a plan §1–§2: one inline `[[` link. `refId` is this link's identity; `at` the revision that first saw it. */
 export interface PageRefEntry {
@@ -37,6 +39,9 @@ export interface PageRefEntry {
   title: string;
   /** A link to a page still being created (plan §4); readers go by whether the page exists, not by this. */
   pending?: boolean;
+  /** A11: a link to one line of that page (block or custom heading id), and the line's task when it's a task row. */
+  lineId?: string;
+  taskId?: string;
 }
 /** A2 plan §4: the outcome of one URL of a paste. Never pruned, so it outlives the card. */
 export interface LinkPasteRecord {
@@ -156,6 +161,8 @@ export interface Task {
   createdOn: LocalDate;
   lastPlannedOn: LocalDate | null;
   sourcePageId: string;
+  /** A11: the day it was marked done (where a link to it goes); null when open or cancelled, absent before A11. */
+  doneOn?: LocalDate | null;
 }
 export interface Event {
   id: string;
@@ -239,7 +246,7 @@ export interface ProposalItem {
   /** For a saved task or link: the line this capture added. */
   blockId?: string;
   /** For an applied update: what the task was before, so Remove / Undo all can put it back if nothing changed since. */
-  before?: { status: Task["status"]; plannedOn: LocalDate | null; deadlineOn: LocalDate | null; attentionOn: LocalDate | null; placements: Placement[] };
+  before?: { status: Task["status"]; doneOn?: LocalDate | null; plannedOn: LocalDate | null; deadlineOn: LocalDate | null; attentionOn: LocalDate | null; placements: Placement[] };
 }
 export interface Receipt {
   operationId: string;
@@ -305,7 +312,7 @@ export type Action =
       attentionOn?: LocalDate | null;
       deadlineOn?: LocalDate | null;
     }
-  | { type: "task-status"; taskId: string; status: Task["status"] }
+  | { type: "task-status"; taskId: string; status: Task["status"]; today?: LocalDate }
   | {
       type: "plan-task";
       taskId: string;

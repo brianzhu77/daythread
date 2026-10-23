@@ -26,9 +26,11 @@ async function store() {
   }
   await exec({ type: 'ensure-day', date: '2026-10-19' }); await exec({ type: 'ensure-day', date: '2026-10-20' })
   for (const [id, title] of [['R', '韩国大酱汤'], ['X', 'X'], ['D', 'D']]) await exec({ type: 'create-document', title: title!, body: '', pageId: id })
-  const script = () => spawnSync(process.execPath, ['scripts/sqlite-rollback-page-links.ts', path], { encoding: 'utf8' })
+  // Rollbacks run newest first: a layout-7 store goes 7 → 6 (A11's doneOn) before the page-links step under test.
+  const toLayout6 = () => { const db = new DatabaseSync(path), v = Number(db.prepare('PRAGMA user_version').get()!.user_version); db.close(); return v === 7 ? spawnSync(process.execPath, ['scripts/sqlite-rollback-done-on.ts', path], { encoding: 'utf8' }) : null }
+  const script = () => { const dn = toLayout6(); if (dn && dn.status !== 0) return dn; return spawnSync(process.execPath, ['scripts/sqlite-rollback-page-links.ts', path], { encoding: 'utf8' }) }
   const reopen = async () => { repo = new SqliteWorkspaceRepository(path); return repo.load() }
-  return { dir, path, exec, save, script, reopen, cleanup: () => rm(dir, { recursive: true, force: true }) }
+  return { dir, path, exec, save, script, toLayout6, reopen, cleanup: () => rm(dir, { recursive: true, force: true }) }
 }
 const sql = <T>(path: string, fn: (db: DatabaseSync) => T): T => { const db = new DatabaseSync(path); try { return fn(db) } finally { db.close() } }
 const row = (path: string, id: string) => sql(path, db => db.prepare("SELECT sections, editorJSON, editorSections FROM pages WHERE snapshot='current' AND id=?").get(id)!) as { sections: string; editorJSON: string; editorSections: string }
@@ -141,6 +143,7 @@ test('the 6 → 5 script refuses a store that isn\'t layout 6, and changes nothi
   const s = await store()
   try {
     await s.save('day:2026-10-20', doc => [...doc, line('l', ref('R', 'r'))])
+    s.toLayout6()
     const snap = () => sql(s.path, db => JSON.stringify([db.prepare('PRAGMA user_version').get(), db.prepare('SELECT * FROM pages ORDER BY snapshot, id').all()]))
     const before = snap()
     const bad = spawnSync(process.execPath, ['scripts/sqlite-rollback-page-links.ts', s.path, '--backup', join(s.dir, 'missing', 'b.sqlite')], { encoding: 'utf8' })
