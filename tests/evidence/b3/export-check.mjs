@@ -47,6 +47,38 @@ await p.unroute('**/api/export')
 const again = p.waitForEvent('download')
 await row.getByRole('button', { name: 'Try again' }).click()
 log(Boolean(await (await again).path()), 'Try again downloads it')
+// Typing still waiting for autosave is in the export (Ratchet 8b6615ff); if it can't be saved, no zip and the row says
+// so (Jazz 8c4c749b). Desktop: the editor stays open beside the row. Phone: he types on Today, opens Pages (the editor
+// closes and saves as it goes), then taps Export.
+const typeThenExport = async text => {
+  if (phone) { await p.goto(base + '/', { waitUntil: 'networkidle' }); await p.waitForTimeout(800) }
+  const last = p.locator('.continuous-editor .bn-inline-content').last()
+  await last.scrollIntoViewIfNeeded(); await last.click(); await p.keyboard.press(`${process.platform === 'darwin' ? 'Meta' : 'Control'}+ArrowRight`); await p.keyboard.type(text)
+  if (phone) { await p.locator('a[href="/pages"]:visible').first().click(); await p.waitForTimeout(150) }
+  await p.locator('.account-row:visible').getByRole('button', { name: 'Export' }).click()
+}
+await p.route('**/_serverFn/**', async r => { if (r.request().method() === 'POST') await new Promise(res => setTimeout(res, 1800)); await r.continue() })
+const pending = p.waitForEvent('download')
+await typeThenExport(' PENDING_EXPORT_MARKER')
+const pendingZip = unzipSync(readFileSync(await (await pending).path()))
+log(strFromU8(pendingZip[root + 'workspace.json']).includes('PENDING_EXPORT_MARKER') && strFromU8(pendingZip[`${root}days/${today}.md`]).includes('PENDING_EXPORT_MARKER'), 'typing still waiting for autosave is in the export')
+await p.unroute('**/_serverFn/**'); await p.route('**/_serverFn/**', r => r.request().method() === 'POST' ? r.abort('failed') : r.continue())
+let downloaded = false; p.on('download', () => { downloaded = true })
+const posts = []; p.on('request', r => { if (r.method() === 'POST') posts.push(r.url().split('/').pop().slice(0, 40)) })
+await typeThenExport(' UNSAVABLE_MARKER'); await p.waitForTimeout(4500)
+if (process.env.DEBUG_B3) console.log(JSON.stringify({ posts, stash: await p.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('daythread:editor:'))) }))
+const refused = (await p.locator('.account-row:visible').innerText()).trim()
+log(!downloaded && refused === 'Not exported · latest text not saved yet · Try again', 'typing that can\'t be saved: no download, "Not exported · latest text not saved yet · Try again"', JSON.stringify({ refused, downloaded }))
+await p.unroute('**/_serverFn/**')
+// Back online: desktop taps Try again (the open editor saves first); on the phone the text waits in Today's draft, so
+// he opens Today (it's saved there) and exports again. Either way the zip now holds it.
+if (phone) { await p.goto(base + '/', { waitUntil: 'networkidle' }); await p.waitForTimeout(2500)
+  if (process.env.DEBUG_B3) console.log(JSON.stringify({ line: await p.locator('.editor-save-line').innerText().catch(() => '?'), shown: (await p.locator('.continuous-editor').innerText()).includes('UNSAVABLE_MARKER'), slots: await p.evaluate(() => Object.entries(localStorage).filter(([k]) => k.startsWith('daythread:editor:')).map(([k, v]) => [k.slice(-8), v.includes('UNSAVABLE'), JSON.parse(v).claimedBy ?? null])) }))
+  await p.locator('a[href="/pages"]:visible').first().click(); await p.waitForTimeout(300) }
+const recovered = p.waitForEvent('download')
+await p.locator('.account-row:visible').getByRole('button', { name: phone ? 'Export' : 'Try again' }).click()
+const recoveredZip = unzipSync(readFileSync(await (await recovered).path()))
+log(strFromU8(recoveredZip[root + 'workspace.json']).includes('UNSAVABLE_MARKER'), 'once it can save again, the export includes that text')
 await p.screenshot({ path: `/tmp/rb-b3-row-${width}.png` })
 log(errors.length === 0, 'no page errors', errors.slice(0, 2).join(' / '))
 await browser.close()

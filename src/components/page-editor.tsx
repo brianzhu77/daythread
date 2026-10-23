@@ -35,7 +35,7 @@ import { addDays, fromIso, longLabel, todayIso, weekday } from './dates'
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
 import { endOfLineAbove, rowArrows } from './row-arrows'
-import { isOwnLeaveSave, registerEditorFlush, rememberLeaveSave } from './editor-flush'
+import { isOwnLeaveSave, registerEditorFlush, rememberLeaveSave, trackLeaveSave } from './editor-flush'
 import { RowMenu } from './row-menu'
 import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
 
@@ -839,19 +839,20 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // this page shows it on return ("Recovered unsaved draft", or Load latest after a conflict).
       stash()
       const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
-      void (async () => {
+      trackLeaveSave(page.id, (async () => {
         // A save already on its way finishes first, so this one starts from the page it produced.
         await inflight.current
         if (document !== lastSaved.current) {
           const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), today: todayIso() }
           debugClient('editor.save.leave',{pageId:page.id})
           const result = await runRef.current(action, undefined, newOperationId(), { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => {} })
-          if (!result) return
+          if (!result) return false
           rememberLeaveSave(page.id, document)
         }
         // Clear the stash only if it's still this draft: he may already be back on the page and typing.
         clearOwn(page.id, document)
-      })()
+        return true
+      })())
     }
   }, [])
 

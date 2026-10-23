@@ -14,10 +14,26 @@ export async function flushEditor(pageId: string): Promise<boolean> {
   return flush ? flush() : true
 }
 
-/** Saves every open editor; true when nothing is left unsaved anywhere. */
+// Saves an editor sends as it closes (leaving the page). On the phone he types on a page, opens Pages and taps Export:
+// that page's editor is already gone, and its save may still be on its way, or may have failed and left the text only
+// in this device's draft (Ratchet 8b6615ff). Export waits for the first and refuses while any of the second remain.
+const leaving = new Set<Promise<boolean>>()
+const unsavedPages = new Set<string>()
+/** Registers a closing editor's save; it resolves true once saved (or nothing needed saving). */
+export function trackLeaveSave(pageId: string, save: Promise<boolean>): void {
+  leaving.add(save)
+  void save.then(saved => { if (saved) unsavedPages.delete(pageId); else unsavedPages.add(pageId) }, () => unsavedPages.add(pageId)).finally(() => leaving.delete(save))
+}
+
+/**
+ * Saves every open editor and waits for closing ones; true when nothing is left unsaved anywhere. A page whose save
+ * failed as it closed counts as unsaved until its editor, opened again, has saved it.
+ */
 export async function flushAllEditors(): Promise<boolean> {
-  const results = await Promise.all([...flushers.values()].map(flush => flush()))
-  return results.every(Boolean)
+  const open = [...flushers.entries()]
+  const [saved] = await Promise.all([Promise.all(open.map(([, flush]) => flush())), Promise.allSettled([...leaving])])
+  open.forEach(([pageId], i) => { if (saved[i]) unsavedPages.delete(pageId) })
+  return saved.every(Boolean) && unsavedPages.size === 0
 }
 
 // The document each page's editor last saved as it closed. When he comes back before that save lands, the page then

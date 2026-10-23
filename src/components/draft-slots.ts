@@ -47,6 +47,9 @@ export function tabId(): string {
       sessionStorage.setItem('daythread.tab', id)
     }
     localStorage.setItem(ownerKey(id), JSON.stringify({ instance, seen: Date.now() }))
+    // Released whenever this load goes, from any screen, so a reload keeps the id: a reload from Pages (no editor open)
+    // used to find its own record still live, take a new id, and leave its draft unrecovered for 10 minutes.
+    globalThis.addEventListener?.('pagehide', () => touchTab(true))
     return resolvedTab = id
   } catch {
     return resolvedTab = 'tab'
