@@ -114,6 +114,8 @@ function ensureDay(state: Workspace, day: string): Page {
       if (!t || t.status !== "open" || t.plannedOn !== day) continue;
       appendBlock(p, ensureSection(p, placement.section), { id: newId(), kind: "task", taskId: t.id, text: t.title });
     }
+    // B34b: what was planned before the page existed lands nested too.
+    for (const { placement } of planned) if (p.sections.some((s) => s.blocks.some((b) => b.taskId === placement.taskId))) nestCarried(state, p, placement.taskId);
   }
   return p;
 }
@@ -687,21 +689,98 @@ export function carrySection(from: Page | undefined, taskId: string): "top3" | "
 }
 /** B34a: the task a row sat under on `from` (its top-level ancestor row's task), or null for a top-level row. */
 export function carryAncestor(from: Page | undefined, taskId: string): string | null {
-  if (!from?.editorJSON) return null;
-  let nodes: EditorNode[];
-  try { nodes = JSON.parse(from.editorJSON) as EditorNode[]; } catch { return null; }
-  const holds = (n: EditorNode): boolean => (n.children ?? []).some((c) => (c.type === "task" && c.props?.taskId === taskId) || holds(c));
-  const top = nodes.find((n) => holds(n));
-  return top?.type === "task" && typeof top.props?.taskId === "string" && top.props.taskId !== taskId ? top.props.taskId : null;
+  return carryAncestors(from, taskId).at(-1) ?? null;
 }
 /**
- * B34a: where a task goes on `day` because it sat under another task on the previous day page: the section its
- * top-level ancestor is in on `day`, or null (not a sub-task there, or its ancestor isn't on `day`). Worked out from
+ * B34b: the task rows a task's row sat under on `from`, nearest first (other lines in between are skipped). Read from
+ * the page itself, so a carried row nested there carries its ancestry to the next morning (Ratchet second-day.ts).
+ */
+export function carryAncestors(from: Page | undefined, taskId: string): string[] {
+  if (!from?.editorJSON) return [];
+  let nodes: EditorNode[];
+  try { nodes = JSON.parse(from.editorJSON) as EditorNode[]; } catch { return []; }
+  const rowTask = (n: EditorNode) => (n.type === "task" && typeof n.props?.taskId === "string" ? n.props.taskId : null);
+  const find = (list: EditorNode[], above: string[]): string[] | null => {
+    for (const n of list) {
+      if (rowTask(n) === taskId) return above;
+      const own = rowTask(n), found = find(n.children ?? [], own && own !== taskId ? [own, ...above] : above);
+      if (found) return found;
+    }
+    return null;
+  };
+  return find(nodes, []) ?? [];
+}
+/**
+ * B34a/B34b: where a task goes on `day` because it sat under another task on the previous day page: the section of its
+ * nearest ancestor that is on `day`, or null (not a sub-task there, or no ancestor of it is on `day`). Worked out from
  * the stored pages each time, never from the client (Bumblebee 191829ca, Lead f74ab962).
  */
 export function followSection(state: Workspace, day: string, taskId: string): "top3" | "other" | null {
-  const ancestor = carryAncestor(previousDayPage(state, day), taskId);
-  return ancestor ? sectionOn(state, day, ancestor) : null;
+  for (const ancestor of carryAncestors(previousDayPage(state, day), taskId)) {
+    const section = sectionOn(state, day, ancestor);
+    if (section) return section;
+  }
+  return null;
+}
+/**
+ * B34b (Jazz rule 3, cb79b4f0): a carried sub-task lands under its parent when the parent is on the day too, at any
+ * depth, in the order they had on the previous page; and a parent that arrives after its sub-tasks takes them under it.
+ * Only a row at the top of the page, or under a farther ancestor, moves; a row he has nested elsewhere himself is left
+ * alone. The nesting is written to the page's editor document, which is what the next morning's carry reads.
+ */
+function nestOnDay(state: Workspace, day: string, taskId: string): void {
+  const p = state.pages.find((x) => x.type === "daily" && x.date === day);
+  if (p) nestCarried(state, p, taskId);
+}
+function nestCarried(state: Workspace, p: Page, taskId: string): void {
+  const from = previousDayPage(state, p.date ?? "");
+  if (!from?.editorJSON) return;
+  const plan = p.sections.filter((s) => s.kind === "top3" || s.kind === "other");
+  const rowOf = (id: string) => {
+    for (const s of plan) { const b = s.blocks.find((x) => x.kind === "task" && x.taskId === id); if (b) return { block: b, section: s }; }
+    return null;
+  };
+  const doc = editorSeed(p, state);
+  const byId = new Map<string, { node: EditorNode; parent: EditorNode | null }>();
+  const remember = (n: EditorNode, parent: EditorNode | null) => { byId.set(n.id, { node: n, parent }); n.children?.forEach((c) => remember(c, n)); };
+  doc.forEach((n) => remember(n, null));
+  // Where each task stood on the previous page: siblings keep this order under their new parent.
+  const order = new Map<string, number>();
+  const walk = (list: EditorNode[]) => list.forEach((n) => { if (n.type === "task" && typeof n.props?.taskId === "string" && !order.has(n.props.taskId)) order.set(n.props.taskId, order.size); walk(n.children ?? []); });
+  try { walk(JSON.parse(from.editorJSON) as EditorNode[]); } catch { return; }
+  let moved = false;
+  const nest = (childTask: string) => {
+    const row = rowOf(childTask), at = row && byId.get(row.block.id);
+    if (!row || !at) return;
+    const ancestors = carryAncestors(from, childTask);
+    // A row already under one of its ancestors moves only to a nearer one; under anything else, it's where he put it.
+    const current = at.parent ? ancestors.indexOf(String(at.parent.props?.taskId ?? "")) : ancestors.length;
+    if (current < 0) return;
+    for (const ancestor of ancestors.slice(0, current)) {
+      const top = rowOf(ancestor), under = top && byId.get(top.block.id);
+      if (!top || !under) continue;
+      if (top.section !== row.section) return;
+      const siblings = at.parent ? at.parent.children! : doc;
+      siblings.splice(siblings.indexOf(at.node), 1);
+      const kids = (under.node.children ??= []), mine = order.get(childTask) ?? Infinity;
+      const before = kids.findIndex((k) => (order.get(String(k.props?.taskId ?? "")) ?? -1) > mine);
+      kids.splice(before < 0 ? kids.length : before, 0, at.node);
+      byId.set(at.node.id, { node: at.node, parent: under.node });
+      moved = true;
+      return;
+    }
+  };
+  nest(taskId);
+  // Sub-tasks that came before their parent (a + tapped child first): they go under it now, from the top of the page
+  // or from under a farther ancestor that came earlier.
+  for (const s of plan) for (const b of [...s.blocks]) if (b.kind === "task" && b.taskId && b.taskId !== taskId && carryAncestors(from, b.taskId).includes(taskId)) nest(b.taskId);
+  if (!moved) return;
+  p.editorJSON = JSON.stringify(doc);
+  // The plan rows follow the document's order, so a parent comes before its sub-tasks wherever they're listed.
+  const index = new Map<string, number>();
+  const number = (list: EditorNode[]) => list.forEach((n) => { index.set(n.id, index.size); number(n.children ?? []); });
+  number(doc);
+  for (const s of plan) s.blocks = s.blocks.map((b, i) => ({ b, i })).sort((x, y) => (index.get(x.b.id) ?? x.i) - (index.get(y.b.id) ?? y.i) || x.i - y.i).map(({ b }) => b);
 }
 /** The section a task's row is in on a day (its page; or its placement while the day has no page). */
 function sectionOn(state: Workspace, day: string, taskId: string): "top3" | "other" | null {
@@ -1306,6 +1385,7 @@ function execute(
       const follow = followSection(state, action.date, t.id);
       const full = !follow && action.from !== undefined && action.from !== action.date && action.section === "top3" && top3Full(state, action.date, t.id);
       place(state, t, action.date, follow ?? (full ? "other" : action.section));
+      nestOnDay(state, action.date, t.id);
       if (action.from !== undefined) {
         if (!action.today) throw new DomainError("A move from a day page needs today's date");
         date(action.from);
@@ -1330,8 +1410,9 @@ function execute(
         ids.add(t.id);
         // B34a: a sub-task goes where its parent landed that day, Top 3 or Other, and takes no Top 3 slot.
         const follow = followSection(state, action.date, t.id);
-        if (follow) { place(state, t, action.date, follow); continue; }
-        place(state, t, action.date, item.section === "top3" && top3Full(state, action.date, t.id) ? "other" : item.section);
+        if (follow) place(state, t, action.date, follow);
+        else place(state, t, action.date, item.section === "top3" && top3Full(state, action.date, t.id) ? "other" : item.section);
+        nestOnDay(state, action.date, t.id);
       }
       return { message: `Added ${action.items.length} tasks` };
     }

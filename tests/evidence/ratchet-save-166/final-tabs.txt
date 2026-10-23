@@ -1,0 +1,14 @@
+(node:25227) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280: two tabs keep two slots (2)
+ok   1280: a fresh tab brings back both and saves each once (1, 1)
+ok   1280: and says "Added unsaved text from another tab"
+ok   1280: another tab merges the suspended tab's text and saves it (1)
+ok   1280: the suspended tab resumes and doesn't save its copy again (1)
+ok   1280: and it shows the line once, from the latest page (1)
+ok   1280: a closed tab whose save went through adds nothing twice (even with a trailing space and an empty line) (1)
+ok   1280: an unsaved child under an unchanged parent comes back nested and is saved once (nested true, child 1, parent 1)
+ok   1280: a tab opened from another gets its own id (["28e4200e-c447-4c2b-acd2-1e6ce896d67a","4c054c9d-39ad-4033-9f95-cc8e1ffc5274"])
+ok   1280: a reload keeps its id and its unsaved text (true)
+ok   1280: a tab that is still open is never taken over (claimed 0)
+all passed

@@ -1,0 +1,54 @@
+✖ unchanged parent retains newly typed child (3.400792ms)
+✔ intentional same-words text with a different block id survives (0.120208ms)
+✔ intentional same-words task with a different task id survives (0.076625ms)
+✖ offline checklist tick survives even when words and block id match (0.184375ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 2
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 69.580959
+
+✖ failing tests:
+
+test at tests/evidence/ratchet-save-166/dedupe-semantics.ts:7:1
+✖ unchanged parent retains newly typed child (3.400792ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(JSON.stringify(result.document).includes('UNSAVED CHILD'))
+  
+      at TestContext.<anonymous> (file:///Users/dogrod/Developer/daythread-ratchet-save-recovery/tests/evidence/ratchet-save-166/dedupe-semantics.ts:10:9)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.start (node:internal/test_runner/test:1015:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:358:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests/evidence/ratchet-save-166/dedupe-semantics.ts:21:1
+✖ offline checklist tick survives even when words and block id match (0.184375ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///Users/dogrod/Developer/daythread-ratchet-save-recovery/tests/evidence/ratchet-save-166/dedupe-semantics.ts:23:65)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
