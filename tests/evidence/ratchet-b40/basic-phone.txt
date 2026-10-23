@@ -1,0 +1,9 @@
+webkit390 | failing, on Pages: {"line":{"text":"Thu, Oct 22 not saved yet · trying again","box":[64,724,326,754]},"dots":["Calendar · not saved yet"],"header":[],"path":"/pages"}
+webkit390 | failing, on Tasks: {"line":{"text":"Thu, Oct 22 not saved yet · trying again","box":[64,724,326,754]},"dots":["Calendar · not saved yet"],"header":[],"path":"/tasks"}
+webkit390 | offline, on Tasks: {"line":{"text":"Offline · Thu, Oct 22 saves when you're back","box":[49,724,341,754]},"dots":["Calendar · not saved yet"],"header":[],"path":"/tasks"}
+webkit390 | back online: {"line":null,"dots":[],"header":[],"path":"/tasks"}
+webkit390 | slots left: []
+webkit390 | Oct 22: text there: 1
+webkit390 | Oct 22: notices: []
+webkit390 | Oct 22: status: 
+errors: none
