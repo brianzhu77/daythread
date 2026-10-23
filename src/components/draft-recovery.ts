@@ -22,13 +22,16 @@ export function recoveredDocument(ws: Workspace, page: Page, slot: DraftSlot, ow
 
 type Run = (action: Action, notice?: undefined, operationId?: string, options?: { inlineRefusal?: RegExp; onRefused?: () => void }) => Promise<Receipt | null>
 
-/** Saves every kept draft for a page with no editor open in this tab; true when none is left unsaved. */
+/** Saves every kept draft (this tab's, for pages not open here; gone tabs', for any page); true when none is left. */
 export async function saveKeptDrafts(refresh: () => Promise<Workspace>, run: Run, skip: Set<string>): Promise<boolean> {
   let ws = await refresh()
+  // A page open here keeps its own draft in its editor (just saved by flushAllEditors); a gone tab's draft for it is
+  // still saved here, since the editor only merges those as it opens (Ratchet 95eb05f4). The open editor, clean after
+  // the flush, then follows the saved page.
   const kept = [
-    ...ownDrafts().map(d => ({ ...d, key: null as string | null })),
+    ...ownDrafts().filter(d => !skip.has(d.pageId)).map(d => ({ ...d, key: null as string | null })),
     ...ws.pages.flatMap(p => orphans(p.id).map(o => ({ pageId: p.id, slot: o.slot, key: o.key as string | null }))),
-  ].filter(d => !skip.has(d.pageId))
+  ]
   for (const { pageId, slot, key } of kept) {
     const page = ws.pages.find(p => p.id === pageId)
     // Its page is gone (deleted elsewhere): there's nothing to save it into, and its words aren't exported either.
