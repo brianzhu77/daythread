@@ -150,6 +150,21 @@ export const RedoIcon = () => (
   </Icon>
 )
 
+// Phone toolbar indent / outdent (F16): three text lines and an arrow pointing the way the line moves.
+export const IndentIcon = () => (
+  <Icon size={20}>
+    <path d="M10 6h11M10 12h11M10 18h11" />
+    <path d="m3 8.5 3.5 3.5L3 15.5" />
+  </Icon>
+)
+
+export const OutdentIcon = () => (
+  <Icon size={20}>
+    <path d="M10 6h11M10 12h11M10 18h11" />
+    <path d="M6.5 8.5 3 12l3.5 3.5" />
+  </Icon>
+)
+
 export const CheckboxIcon = () => (
   <Icon size={18}>
     <rect x="4" y="4" width="16" height="16" rx="4" />

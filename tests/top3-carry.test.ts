@@ -58,7 +58,7 @@ test('A, B, b1, C: only top-level items count; b1 follows B into Top 3 and C sti
   assert.equal(carryAncestor(s.page(), b1!.id), b!.id)
   assert.equal(carryAncestor(s.page(), b!.id), null)
   s.run({ type: 'ensure-day', date: today })
-  const items = [a, b, b1, c].map(t => ({ taskId: t!.id, section: carrySection(s.page(), t!.id), ...(carryAncestor(s.page(), t!.id) ? { follows: carryAncestor(s.page(), t!.id)! } : {}) }))
+  const items = [a, b, b1, c].map(t => ({ taskId: t!.id, section: carrySection(s.page(), t!.id) }))
   s.run({ type: 'plan-tasks', date: today, items })
   const todayPage = s.ws.pages.find(x => x.date === today)!
   const rows = (k: string) => todayPage.sections.filter(x => x.kind === k).flatMap(x => x.blocks).filter(x => x.kind === 'task').map(x => x.text)
@@ -71,9 +71,57 @@ test('a sub-task follows its parent to Other when the parent overflowed there', 
   const p = s.page(), doc = editorSeed(p, s.ws), rowP = doc.find(n => n.props?.taskId === parent!.id)!, rowC = doc.find(n => n.props?.taskId === child!.id)!
   s.run({ type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(p), document: JSON.stringify(doc.filter(n => n.id !== rowC.id).map(n => n.id === rowP.id ? { ...n, children: [rowC] } : n)) })
   s.run({ type: 'ensure-day', date: today })
-  s.run({ type: 'plan-tasks', date: today, items: [x, y, z, parent, child].map(t => ({ taskId: t!.id, section: 'top3' as const, ...(t === child ? { follows: parent!.id } : {}) })) })
+  s.run({ type: 'plan-tasks', date: today, items: [x, y, z, parent, child].map(t => ({ taskId: t!.id, section: 'top3' as const })) })
   const todayPage = s.ws.pages.find(q => q.date === today)!
   const rows = (k: string) => todayPage.sections.filter(q => q.kind === k).flatMap(q => q.blocks).filter(q => q.kind === 'task').map(q => q.text)
   assert.deepEqual(rows('top3'), ['X', 'Y', 'Z'])
   assert.deepEqual(rows('other'), ['Parent', 'Child'])
+})
+
+/** A, B, b1 (under B), C on yesterday's Top 3; returns helpers for today. */
+function abc() {
+  const s = setup(), [a, b, b1, c] = ['A', 'B', 'b1', 'C'].map(t => s.add(t, 'top3'))
+  const p = s.page(), doc = editorSeed(p, s.ws), rowB = doc.find(n => n.props?.taskId === b!.id)!, rowB1 = doc.find(n => n.props?.taskId === b1!.id)!
+  s.run({ type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(p), document: JSON.stringify(doc.filter(n => n.id !== rowB1.id).map(n => n.id === rowB.id ? { ...n, children: [rowB1] } : n)) })
+  s.run({ type: 'ensure-day', date: today })
+  const rows = (k: string) => s.ws.pages.find(x => x.date === today)!.sections.filter(x => x.kind === k).flatMap(x => x.blocks).filter(x => x.kind === 'task').map(x => x.text)
+  const item = (t: typeof a) => ({ taskId: t!.id, section: carrySection(s.page(), t!.id) })
+  return { s, a, b, b1, c, rows, item }
+}
+
+test('the rule holds across commands: one + at a time (Ratchet 657a4b86)', () => {
+  const { s, a, b, b1, c, rows, item } = abc()
+  for (const t of [a, b, b1, c]) s.run({ type: 'plan-tasks', date: today, items: [item(t)] })
+  assert.deepEqual(rows('top3'), ['A', 'B', 'b1', 'C'])
+  assert.deepEqual(rows('other'), [])
+})
+
+test('the rule holds across commands: a partial add, then (after a reload) Add all for the rest', () => {
+  const { s, a, b, b1, c, rows, item } = abc()
+  s.run({ type: 'plan-tasks', date: today, items: [item(a), item(b), item(b1)] })
+  // A reload changes nothing on the server: the next command works the rule out again from the pages.
+  s.run({ type: 'plan-tasks', date: today, items: [item(c)] })
+  assert.deepEqual(rows('top3'), ['A', 'B', 'b1', 'C'])
+})
+
+test('plain plan-task and the date picker use the same rule', () => {
+  const { s, a, b, b1, c, rows } = abc()
+  for (const t of [a, b]) s.run({ type: 'plan-task', taskId: t!.id, date: today, section: 'top3', from: yesterday, today })
+  s.run({ type: 'plan-task', taskId: b1!.id, date: today }) // the date picker sends no section: it follows B
+  s.run({ type: 'plan-task', taskId: c!.id, date: today, section: 'top3', from: yesterday, today })
+  assert.deepEqual(rows('top3'), ['A', 'B', 'b1', 'C'])
+  assert.deepEqual(rows('other'), [])
+})
+
+test('a sub-task whose parent isn\'t on the day counts as its own item', () => {
+  const { s, a, b1, c, rows, item } = abc()
+  s.run({ type: 'plan-tasks', date: today, items: [item(a), item(b1), item(c)] })
+  assert.deepEqual(rows('top3'), ['A', 'b1', 'C'], 'B stayed behind: b1 is a top-level item today')
+})
+
+test('the sub-task tapped before its parent: once the parent comes, it stops taking a slot (Ratchet 609b0df7)', () => {
+  const { s, a, b, b1, c, rows, item } = abc()
+  for (const t of [a, b1, b, c]) s.run({ type: 'plan-tasks', date: today, items: [item(t)] })
+  assert.deepEqual(rows('top3'), ['A', 'b1', 'B', 'C'], 'C still fits: b1 follows B once B is there')
+  assert.deepEqual(rows('other'), [])
 })

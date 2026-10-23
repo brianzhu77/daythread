@@ -128,7 +128,8 @@ export interface Page {
   editorSections?: string;
   editorBlockMetadata?: Record<string, NoteBlock>;
   editorCreations?: Record<string, string>;
-  editorDeletions?: Record<string, { task: Task; placements: Placement[]; afterVersion: number; afterPlacements: Placement[] }>;
+  /** `deleted`: B33, the task itself went with its line (born on this page, no history); ⌘Z brings it back. */
+  editorDeletions?: Record<string, { task: Task; placements: Placement[]; afterVersion: number; afterPlacements: Placement[]; deleted?: true }>;
 
   reviewText: string;
   reviewSaved: boolean;
@@ -287,10 +288,9 @@ export type ServerAction =
   | { type: "set-model-draft"; date: LocalDate; runId: string; taskIds: string[]; materialIds: string[]; proposals: DraftProposal[] }
   | { type: "model-draft-failed"; date: LocalDate; runId: string; failure: DraftFailure; expired?: boolean; costUnknown?: boolean };
 export type Action =
-  /** `follows` (B34a): the task this one sat under; it lands in that task's section today and takes no Top 3 slot. */
-  | { type: "plan-tasks"; date: LocalDate; items: { taskId: string; section: "top3" | "other"; follows?: string }[] }
+  | { type: "plan-tasks"; date: LocalDate; items: { taskId: string; section: "top3" | "other" }[] }
   | { type: "bring-line"; date: LocalDate; sourcePageId: string; sourceBlockId: string }
-  | { type: "save-editor"; pageId: string; expectedContent: string; document: string; singleDeleteIds?: string[]; today?: string; historyTaskVersions?: Record<string, number>; history?: boolean }
+  | { type: "save-editor"; pageId: string; expectedContent: string; document: string; singleDeleteIds?: string[]; /** B33: tasks whose rows were cut (a move), never deleted with their line. */ cutTaskIds?: string[]; today?: string; historyTaskVersions?: Record<string, number>; history?: boolean }
   | { type: "ensure-day"; date: LocalDate }
   | { type: "rename-section"; pageId: string; sectionId: string; title: string }
   | { type: "add-section"; pageId: string; title: string }
@@ -314,6 +314,8 @@ export type Action =
       deadlineOn?: LocalDate | null;
     }
   | { type: "task-status"; taskId: string; status: Task["status"]; today?: LocalDate }
+  /** B33 one-time cleanup (server script only): tasks with no line anywhere that were born on their page; undoable. */
+  | { type: "delete-orphan-tasks"; taskIds: string[] }
   | {
       type: "plan-task";
       taskId: string;
