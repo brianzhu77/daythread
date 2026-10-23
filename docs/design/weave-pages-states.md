@@ -1,6 +1,6 @@
 # A7 · Weave pages: states and layout
 
-Status: **draft 1 for the A7 engineering plan** (Jazz, 2026-10-23). Behaviour comes from Bumblebee's brief
+Status: **draft 2 for the A7 engineering plan** (Jazz, 2026-10-23; draft 2 takes Bumblebee's calls 0869f63e: task lines in, no correction line). Behaviour comes from Bumblebee's brief
 `docs/plan/a7-weave-brief.md` (main b3744d7), accepted as the basis by the Lead (98046c4c) with his three notes. Where this
 file and the brief disagree, the brief wins and this file is fixed. A7's build waits on the Oct 27 check and on the offline
 run (brief §3), and the brief itself is still Brian's call, so these screens are for planning, not final.
@@ -63,8 +63,11 @@ Top to bottom:
      as they do on his page;
    - a line from one of his own pages (not a day) gets the page name after it in `--ink-3` ("· Recipes notes");
    - **tap or click a line** to open where he wrote it, with the A11 jump (a third from the top of the visible area, tinted);
-   - a **task line** shows its title with the read-only state mark used elsewhere (done: `--ink-3` and struck through). There's
-     no checkbox to tick, because the page is read-only. *Whether task lines are gathered at all is open, §8.*
+   - a **task line** is gathered too (Bumblebee 0869f63e: his recurring topics are mostly tasks, e.g. the `#rewind` ones). It
+     shows as **its words plus a muted status**, with **no checkbox**: "open · planned Oct 23", "done · Oct 22", "cancelled".
+     Open tasks are in ink; done and cancelled ones use the app's done style (`--ink-3`, done struck through), so done reads the
+     same everywhere. The status's day comes from the A11 task rule (plan day, then done day). Tapping it uses the same A11
+     jump to the task's row, where he can tick it, so there's no dead tap.
 4. **Copy to my pages** (the one primary button), or **You have a copy ›** after copying (§5).
 
 - **Read-only:** no cursor, no `/` menu, no selection bar, no drag handles, no ⋯ on rows. Text can be selected and copied with
@@ -110,10 +113,8 @@ The counts in the list row ("6 lines · 3 days") are live too, so the list never
 - **Grouping or naming:** he writes it in his own words in today's thread ("that's not a recipe"), and the next run follows
   (brief §2.4). Nothing on the page asks for this. The before-first-run line doesn't explain it either. It's a habit Brian
   already has (c377e316), and a hint would be clutter.
-- **Showing that a correction was taken (proposal, cheap):** when a run changes a page because of something he wrote, the
-  page's meta line reads "Weave · changed after your note on Oct 24 ›" until the next run, and the link jumps to that line.
-  This lets him see his correction landed. It needs the run to name the line it followed. *If that costs more than a field in
-  the run output, drop it. It's not required for v1.*
+- **No "changed after your note" line in v1** (Bumblebee 0869f63e). He sees a correction landed by opening the page. If
+  corrections don't land, the success check (brief §4) shows it, and it's added then.
 
 ## 7. Removed or missing pages
 
@@ -122,11 +123,9 @@ The counts in the list row ("6 lines · 3 days") are live too, so the list never
 - **Rebuild** (brief §2.4): no special screen. The list shows "Updating…" and then the new pages.
 - **Before the first run, opening /pages?weave:** the list with the before-first-run line.
 
-## 8. Open, for Bumblebee and the Lead
+## 8. Notes
 
-1. **Task lines:** does a Weave page gather tasks, or only text lines? I'd **leave tasks out of v1.** Tasks already have
-   Tasks, the plan and the calendar, and a done-state mark on a read-only page invites a tap that does nothing. His Oct 18 topics
-   (recipes, a title, a question, a reflection) are all text lines.
+1. **Task lines are in** (decided, Bumblebee 0869f63e): words plus a muted status, no control (§3).
 2. **Lines under a tag only:** a tagged line whose topic page exists shows on both the Tags list and Weave. That's fine, and
    it's the Lead's note 2: the check is whether Weave also shows what Tags can't.
 3. **Empty and one-character lines** are never gathered (brief §5).
@@ -139,7 +138,8 @@ The counts in the list row ("6 lines · 3 days") are live too, so the list never
 3. A failed run (fake model error): "Couldn't update this morning · will try at the next plan", the previous pages unchanged,
    no button. A second Done the same day doesn't start a second run.
 4. A Weave page: band and mark, summary with "Written by Weave", lines grouped by day, newest first. No cursor, no `/`, no
-   handles, and ⋯ offers only "Copy link to page".
+   handles, and ⋯ offers only "Copy link to page". A task line shows its words and "open · planned …" / "done · …" with no
+   checkbox; tapping it lands on the task's row, where ticking it works, and the Weave status reads "done · {today}" after.
 5. Tap a line: opens its day with the line a third from the top and tinted (A11 jump). Back returns to the Weave page.
 6. Edit a gathered line on its day, then return: the new words show, with no reload needed past the normal page load. Delete
    it: the line is gone, the counts drop, and the summary hides if it cited that line.
