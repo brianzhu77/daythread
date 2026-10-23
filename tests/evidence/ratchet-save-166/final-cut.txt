@@ -1,0 +1,3 @@
+(node:23725) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"mode":"conflict","cutTaskId":"editor-task:new-task","wasDone":"done","recoveredCutStillHasTask":true,"stashContainsCutTaskIds":true}

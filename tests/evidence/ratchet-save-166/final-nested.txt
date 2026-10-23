@@ -1,0 +1,3 @@
+{"selection":{"text":"Parent note","offset":11}}
+{"draftParents":[{"id":"parent","type":"paragraph","props":{"backgroundColor":"default","textColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Parent note","styles":{}}],"children":[{"id":"74c8a48e-064f-4418-87a6-f9c586aa3ea8","type":"paragraph","props":{"backgroundColor":"default","textColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"OFFLINE_NESTED_CHILD_1792769501276","styles":{}}],"children":[]}]}]}
+{"nestedBeforeClose":true,"recovered":true,"retainedInSlot":false,"claimed":1}
