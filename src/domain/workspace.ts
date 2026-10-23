@@ -1899,6 +1899,57 @@ function execute(
       throw new DomainError("Unsupported operation");
   }
 }
+/**
+ * Receipts (basics #1, Lead 34bbdf01): what a retry needs, kept small and bounded. A receipt's fingerprint used to be
+ * the whole action as JSON (for a save, the whole page document), and the Undo copy cloned every receipt again, so his
+ * row grew about 20 KB per save. Now:
+ * - the fingerprint is a 128-bit hash of that same JSON (sync, so the browser's own run of a command agrees);
+ * - the newest `receiptWindow` receipts are kept whole; the next `tombstoneWindow` older ones keep only their id and
+ *   are refused if they come back, so an expired operation is never applied again (Ratchet #154);
+ * - the Undo copy holds no receipts (Undo restores the current ones, below).
+ * Order is insertion order, oldest first: operation ids are never integer-like, which would reorder object keys.
+ */
+const fingerprintPrefix = "c128:";
+const expiredFingerprint = "expired";
+export const receiptWindow = 500;
+export const tombstoneWindow = 3000;
+/** cyrb128: a fast 128-bit string hash (public domain). An identity check, not a security boundary. */
+function cyrb128(text: string): string {
+  let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762;
+  for (let i = 0; i < text.length; i++) {
+    const k = text.charCodeAt(i);
+    h1 = h2 ^ Math.imul(h1 ^ k, 597399067);
+    h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+    h3 = h4 ^ Math.imul(h3 ^ k, 951274213);
+    h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+  }
+  h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067);
+  h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
+  h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213);
+  h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+  h1 ^= h2 ^ h3 ^ h4; h2 ^= h1; h3 ^= h1; h4 ^= h1;
+  return [h1, h2, h3, h4].map((h) => (h >>> 0).toString(16).padStart(8, "0")).join("");
+}
+/** A command's identity check: the hash of the action exactly as sent (its JSON). */
+export function commandFingerprint(serializedAction: string): string {
+  return fingerprintPrefix + cyrb128(serializedAction);
+}
+/** A stored fingerprint against the action now: hashed ones by hash, ones written before this change by their JSON. */
+function sameFingerprint(stored: string | undefined, serializedAction: string): boolean {
+  if (stored === undefined) return false;
+  return stored.startsWith(fingerprintPrefix) ? stored === commandFingerprint(serializedAction) : stored === serializedAction;
+}
+/** Newest receipts whole (old-format fingerprints hashed), the older ones as tombstones, the rest dropped. */
+export function compactReceipts(receipts: Workspace["receipts"]): Workspace["receipts"] {
+  const all = Object.values(receipts), whole = all.slice(-receiptWindow);
+  const expired = all.slice(Math.max(0, all.length - receiptWindow - tombstoneWindow), Math.max(0, all.length - receiptWindow));
+  const out: Workspace["receipts"] = {};
+  for (const r of expired) out[r.operationId] = { operationId: r.operationId, message: "", fingerprint: expiredFingerprint };
+  for (const r of whole)
+    out[r.operationId] = r.fingerprint && !r.fingerprint.startsWith(fingerprintPrefix) && r.fingerprint !== expiredFingerprint ? { ...r, fingerprint: commandFingerprint(r.fingerprint) } : r;
+  return out;
+}
+
 export function applyCommand(
   input: Workspace,
   command: Command,
@@ -1911,19 +1962,26 @@ export function applyCommand(
     command.operationId.length > 200
   )
     throw new DomainError("Invalid command");
-  const fingerprint = JSON.stringify(command.action);
+  const serialized = JSON.stringify(command.action);
   const existing = input.receipts[command.operationId];
   if (existing) {
-    if (existing.fingerprint !== fingerprint)
+    // An expired operation is refused whatever revision it carries: it was applied once, long ago.
+    if (existing.fingerprint === expiredFingerprint)
+      throw new DomainError("This change was already applied · reload");
+    if (!sameFingerprint(existing.fingerprint, serialized))
       throw new DomainError("Operation identity reused with different input");
     return { workspace: structuredClone(input), receipt: existing };
   }
+  const fingerprint = commandFingerprint(serialized);
   if (command.expectedRevision !== input.revision)
     throw new DomainError(
       "Saved elsewhere. Reload before applying; your input is kept here.",
     );
   let state = structuredClone(input);
-  const { undo: _previousUndo, ...before } = structuredClone(input);
+  // The Undo copy without receipts: Undo keeps the current ones (below), so a retry of an undone operation still
+  // replays its receipt instead of applying again (Ratchet #154).
+  const { undo: _previousUndo, receipts: _receipts, ...rest } = input;
+  const before = { ...structuredClone(rest), receipts: {} as Workspace["receipts"] };
   let result: { message: string; entityId?: string; simulated?: boolean };
   if (
     command.action.type === "undo" ||
@@ -1955,7 +2013,7 @@ export function applyCommand(
   } else result = execute(state, command.action, command.operationId);
   state.revision = input.revision + 1;
   const receipt = { operationId: command.operationId, ...result, fingerprint };
-  state.receipts[command.operationId] = receipt;
+  state.receipts = compactReceipts({ ...state.receipts, [command.operationId]: receipt });
   if (!["undo", "keep-planned", "ensure-day"].includes(command.action.type))
     state.undo = {
       operationId: command.operationId,
