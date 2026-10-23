@@ -104,6 +104,18 @@ const blockSaves = p => p.route('**/_serverFn/**', r => r.request().method() ===
   log(after === ids[0] && await a.locator('.bn-inline-content', { hasText: 'opener tab text' }).count() === 1, 'a reload keeps its id and its unsaved text', String(after === ids[0]))
   await ctx.close()
 }
+// (2d) A tab that sat on Pages (no editor open) past the "gone" cutoff still owns its id: a tab opened from it gets its
+// own (the heartbeat no longer depends on an open editor). The cutoff is shortened to 2 s here.
+{
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } })
+  await ctx.addInitScript(() => { window.__daythreadGoneAfterMs = 2000 })
+  const a = await ctx.newPage(); await a.goto(BASE + '/', { waitUntil: 'networkidle' }); await a.waitForTimeout(600)
+  await a.locator('a[href="/pages"]').first().click(); await a.waitForTimeout(5000)
+  const popup = ctx.waitForEvent('page'); await a.evaluate(() => window.open('/', '_blank')); const d = await popup; await d.waitForLoadState('networkidle'); await d.waitForTimeout(600)
+  const ids = await Promise.all([a, d].map(p => p.evaluate(() => sessionStorage.getItem('daythread.tab'))))
+  log(ids[0] && ids[1] && ids[0] !== ids[1], 'a tab opened from one that sat on Pages past the cutoff gets its own id', JSON.stringify(ids))
+  await ctx.close()
+}
 // (3) Two live tabs: a tab opening the page never takes over another tab that's still open (the real 2-minute rule).
 {
   const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } })

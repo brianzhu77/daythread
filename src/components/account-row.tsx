@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { getAccount } from '../server/functions'
-import { flushAllEditors } from './editor-flush'
+import { saveKeptDrafts } from './draft-recovery'
+import { flushAllEditors, openEditorPages } from './editor-flush'
+import { useWorkspace } from './use-day'
 
 /**
  * "{email} · Export · Sign out" in --ink-3 (empty-start-states.md §2, Jazz f10f8de5): the sidebar's last row on
@@ -8,6 +10,7 @@ import { flushAllEditors } from './editor-flush'
  * there's no email, and the row is just "Export".
  */
 export function AccountRow({ className }: { className: string }) {
+  const { refresh, run } = useWorkspace()
   const [account, setAccount] = useState<{ email: string | null } | null>(null)
   const [exporting, setExporting] = useState<'idle' | 'busy' | 'failed' | 'unsaved'>('idle')
   useEffect(() => { void getAccount().then(setAccount).catch(() => undefined) }, [])
@@ -24,7 +27,9 @@ export function AccountRow({ className }: { className: string }) {
     try {
       // What he just typed is part of the export: open editors save first, and an export that can't include it fails
       // rather than quietly leaving it out (Ratchet 8b6615ff), saying first that no zip came (Jazz 8c4c749b).
-      if (!(await flushAllEditors())) { setExporting('unsaved'); return }
+      // Drafts kept from a failed save (this tab's closed editor or reload, or a tab that's gone) are saved here too, as
+      // opening their page would, so Try again works without hunting for the page (Bumblebee option 1, Lead ff82e7c8).
+      if (!(await flushAllEditors()) || !(await saveKeptDrafts(refresh, run, openEditorPages()))) { setExporting('unsaved'); return }
       const response = await fetch('/api/export', { cache: 'no-store' })
       if (!response.ok) throw new Error(`export ${response.status}`)
       const name = /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? 'daythread-export.zip'

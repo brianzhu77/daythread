@@ -69,16 +69,46 @@ await typeThenExport(' UNSAVABLE_MARKER'); await p.waitForTimeout(4500)
 if (process.env.DEBUG_B3) console.log(JSON.stringify({ posts, stash: await p.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('daythread:editor:'))) }))
 const refused = (await p.locator('.account-row:visible').innerText()).trim()
 log(!downloaded && refused === 'Not exported · latest text not saved yet · Try again', 'typing that can\'t be saved: no download, "Not exported · latest text not saved yet · Try again"', JSON.stringify({ refused, downloaded }))
+// The phone path Ratchet found (pages-reload.mjs): with saves still failing he reloads Pages; the text is only in this
+// tab's draft now, and Export still refuses. Back online, Try again saves that draft itself and the zip holds it.
+if (phone) {
+  await p.reload({ waitUntil: 'networkidle' }); await p.waitForTimeout(600)
+  await p.locator('.account-row:visible').getByRole('button', { name: 'Export' }).click(); await p.waitForTimeout(2500)
+  const afterReload = (await p.locator('.account-row:visible').innerText()).trim()
+  log(!downloaded && afterReload.startsWith('Not exported'), 'after a reload of Pages with saves failing: still no zip', JSON.stringify(afterReload))
+}
 await p.unroute('**/_serverFn/**')
-// Back online: desktop taps Try again (the open editor saves first); on the phone the text waits in Today's draft, so
-// he opens Today (it's saved there) and exports again. Either way the zip now holds it.
-if (phone) { await p.goto(base + '/', { waitUntil: 'networkidle' }); await p.waitForTimeout(2500)
-  if (process.env.DEBUG_B3) console.log(JSON.stringify({ line: await p.locator('.editor-save-line').innerText().catch(() => '?'), shown: (await p.locator('.continuous-editor').innerText()).includes('UNSAVABLE_MARKER'), slots: await p.evaluate(() => Object.entries(localStorage).filter(([k]) => k.startsWith('daythread:editor:')).map(([k, v]) => [k.slice(-8), v.includes('UNSAVABLE'), JSON.parse(v).claimedBy ?? null])) }))
-  await p.locator('a[href="/pages"]:visible').first().click(); await p.waitForTimeout(300) }
 const recovered = p.waitForEvent('download')
-await p.locator('.account-row:visible').getByRole('button', { name: phone ? 'Export' : 'Try again' }).click()
+await p.locator('.account-row:visible').getByRole('button', { name: 'Try again' }).click()
 const recoveredZip = unzipSync(readFileSync(await (await recovered).path()))
-log(strFromU8(recoveredZip[root + 'workspace.json']).includes('UNSAVABLE_MARKER'), 'once it can save again, the export includes that text')
+log(strFromU8(recoveredZip[root + 'workspace.json']).includes('UNSAVABLE_MARKER'), 'back online, Try again saves the kept text and the zip holds it')
+log(!(await p.evaluate(() => Object.values(localStorage).some(v => v.includes('UNSAVABLE_MARKER')))), 'and the kept draft is cleared')
+// Lead ff82e7c8: another tab that's still open keeps its unsaved text to itself; this tab's Export never takes it.
+if (!phone) {
+  const other = await ctx.newPage(); await other.goto(base + '/', { waitUntil: 'networkidle' }); await other.waitForTimeout(800)
+  await other.route('**/_serverFn/**', r => r.request().method() === 'POST' ? r.abort('failed') : r.continue())
+  const line = other.locator('.continuous-editor .bn-inline-content').last()
+  await line.scrollIntoViewIfNeeded(); await line.click(); await other.keyboard.press(`${process.platform === 'darwin' ? 'Meta' : 'Control'}+ArrowRight`); await other.keyboard.type(' LIVE_TAB_MARKER'); await other.waitForTimeout(800)
+  await p.bringToFront()
+  const live = p.waitForEvent('download')
+  await p.locator('.account-row:visible').getByRole('button', { name: 'Export' }).click()
+  const liveZip = unzipSync(readFileSync(await (await live).path()))
+  const claimed = await p.evaluate(() => Object.values(localStorage).filter(v => v.includes('LIVE_TAB_MARKER') || v.includes('claimedBy')).map(v => JSON.parse(v).claimedBy ?? null))
+  log(!strFromU8(liveZip[root + 'workspace.json']).includes('LIVE_TAB_MARKER') && claimed.length === 1 && claimed[0] === null, 'another open tab\'s unsaved text is left alone (not exported, not claimed)', JSON.stringify(claimed))
+  await other.close()
+  // A tab that's gone (closed with saves failing) left its text in a draft: Export saves it the way opening the page
+  // would, from a screen where that page isn't open.
+  const gone = await ctx.newPage(); await gone.goto(base + '/', { waitUntil: 'networkidle' }); await gone.waitForTimeout(800)
+  await gone.route('**/_serverFn/**', r => r.request().method() === 'POST' ? r.abort('failed') : r.continue())
+  const goneLine = gone.locator('.continuous-editor .bn-inline-content').last()
+  await goneLine.scrollIntoViewIfNeeded(); await goneLine.click(); await gone.keyboard.press(`${process.platform === 'darwin' ? 'Meta' : 'Control'}+ArrowRight`); await gone.keyboard.type(' GONE_TAB_MARKER'); await gone.waitForTimeout(800)
+  await gone.close({ runBeforeUnload: true })
+  await p.goto(base + '/pages', { waitUntil: 'networkidle' }); await p.waitForTimeout(600)
+  const fromGone = p.waitForEvent('download')
+  await p.locator('.account-row:visible').getByRole('button', { name: 'Export' }).click()
+  const goneZip = unzipSync(readFileSync(await (await fromGone).path()))
+  log(strFromU8(goneZip[root + 'workspace.json']).includes('GONE_TAB_MARKER'), 'a closed tab\'s unsaved text is saved and exported')
+}
 await p.screenshot({ path: `/tmp/rb-b3-row-${width}.png` })
 log(errors.length === 0, 'no page errors', errors.slice(0, 2).join(' / '))
 await browser.close()
