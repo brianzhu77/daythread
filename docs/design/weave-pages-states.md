@@ -56,7 +56,8 @@ Top to bottom:
    `--app-radius-sm`. Under the title, `--ink-3`, 13 px: **"Weave · from 3 days · updated today"**. His pages never have
    this band, so a Weave page can't be mistaken for his.
 2. **Summary line:** one line in `--ink-2`, regular weight, with a small "Written by Weave" label after it in `--ink-3`. It's
-   the only model-written text besides the title. It shows only while every line it cites is live (Lead 98046c4c note 3);
+   the only model-written text besides the title. It shows only while every line it cites is live **and unchanged since the run** (Lead 98046c4c note 3; Ratchet 71de5733:
+   "I like X" edited to "I don't like X" must not keep the old summary);
    otherwise it is hidden, with no placeholder, until the next run.
 3. **The lines, grouped by day, newest day first.** Each group has a date heading ("Thu, Oct 18", 13 px, `--ink-3`, a link to
    that day). Under it, his lines as he wrote them:
@@ -91,7 +92,7 @@ Because the lines are live links, his edits show straight away, with no "out of 
 | Trashed the page holding lines | those lines are **hidden** while it's in the trash, and come back on Restore |
 | A day group lost all its lines | the date heading goes too |
 | Every line gone | the topic is **hidden** from the list straight away (plan 0c8baa0 §3); an open page or old link shows §7's removed screen |
-| A cited line gone | the summary line hides (§3.2) |
+| A cited line gone, or **edited** (even a typo fix) | the summary line hides (§3.2) until the next run rewrites it. No placeholder |
 | Moved a task to another day | the task line follows it into that day's group (A11 task follow) |
 
 The counts in the list row ("6 lines · 3 days") are live too, so the list never contradicts the page.
@@ -149,7 +150,7 @@ The counts in the list row ("6 lines · 3 days") are live too, so the list never
    checkbox; tapping it lands on the task's row, where ticking it works, and the Weave status reads "done · {today}" after.
 5. Tap a line: opens its day with the line a third from the top and tinted (A11 jump). Back returns to the Weave page.
 6. Edit a gathered line on its day, then return: the new words show, with no reload needed past the normal page load. Delete
-   it: the line is gone, the counts drop, and the summary hides if it cited that line.
+   it: the line is gone, the counts drop, and the summary hides if it cited that line. Editing a cited line also hides the summary.
 7. Trash the page holding a gathered line: the line is hidden. Restore: it's back.
 8. Copy to my pages: the receipt "Copied to your pages · Open"; the copy is at the top level of Mine, editable, with day
    headings linking to the days; the Weave page shows "You have a copy ›". Trash the copy: "Your copy is in the trash ›".
