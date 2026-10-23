@@ -13,6 +13,7 @@ import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, templateKind, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
+import { announceSave, changedBy, claim, clearOwn, listenForSaves, orphans, ownClaimed, readOwn, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn } from './draft-slots'
 import { applyCommand, bornHere, deletesWithLine, pasteRecords } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
@@ -238,6 +239,11 @@ function LineRefChip({ target }: { target: LineTarget }) {
     {view.where && <span className="line-ref-where">{`\u00a0· ${view.where}`}</span>}
   </span>
 }
+/** B35: a failure the network caused (worth retrying), not a refusal from the server (which would refuse again). */
+function isNetworkFailure(message: string): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
+  return /failed to fetch|networkerror|network error|load failed|fetch failed|timed? ?out|unavailable|bad gateway|gateway|\b50[234]\b|connection/i.test(message)
+}
 /** The host without `www.`, for the card's quiet domain. */
 function hostLabel(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' }
@@ -296,8 +302,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   if (!initial.current) {
     const base = pageContentKey(page)
     let nodes = editorSeed(page, workspace, { templateRows: needsTemplateRows(page, todayIso()) }), recovered = false, savedBase = base, cutTaskIds: string[] = []
-    // A recovered draft brings back its cuts too (Ratchet 067be3eb): a cut row in it is a move, never a delete.
-    try { const stored = JSON.parse(localStorage.getItem(key) ?? 'null'); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; recovered = true; cutTaskIds = Array.isArray(stored.cutTaskIds) ? stored.cutTaskIds.filter((x: unknown) => typeof x === 'string') : [] } } catch { /* fresh document */ }
+    // B35: this tab's own slot; drafts other tabs left behind are merged in after mount. A recovered draft brings back
+    // its cuts too (Ratchet 067be3eb): a cut row in it is a move, never a delete.
+    try { const stored = readOwn(page.id); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; recovered = true; cutTaskIds = (stored.cutTaskIds ?? []).filter((x: unknown) => typeof x === 'string') } } catch { /* fresh document */ }
     initial.current = { nodes, base: savedBase, recovered, cutTaskIds }
   }
   const [pastedChecklistIds, setPastedChecklistIds] = useState<string[]>(() => checklistIds(initial.current!.nodes))
@@ -564,14 +571,59 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const section = latestPage.current.sections.find(s => s.id === preceding?.id)
     return latestPage.current.date && (section?.kind === 'top3' || section?.kind === 'other') ? 'plan' : 'reference'
   }
-  const stash = () => { try { localStorage.setItem(key, JSON.stringify({ base: base.current, document: JSON.stringify(nodes()), ...(cutTasks.current.size ? { cutTaskIds: [...cutTasks.current] } : {}) })) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
+  /**
+   * B35: true (and handled) when another tab merged this tab's draft while it was away, e.g. an iOS tab suspended then
+   * resumed (Lead): drop this copy, load the latest, and never save it again, or his lines would appear twice.
+   */
+  const claimHandled = useRef(false)
+  function claimedAway(): boolean {
+    if (claimHandled.current) return true
+    if (!ownClaimed(page.id)) return false
+    claimHandled.current = true
+    clearTimeout(timer.current); clearTimeout(retryTimer.current); dirty.current = false; pendingSave.current = null; semanticDeletes.current.clear()
+    sweepClaims(page.id)
+    void (async () => {
+      try {
+        const ws = await refresh(), latest = ws.pages.find(p => p.id === page.id)
+        if (latest) applyServerPage(latest, ws)
+      } finally { claimHandled.current = false }
+      setFailed(false); setStatus("Latest loaded · this tab's text was already saved")
+    })()
+    return true
+  }
+  const stash = () => { if (claimedAway()) return; try { writeOwn(page.id, { base: base.current, document: JSON.stringify(nodes()), ...(cutTasks.current.size ? { cutTaskIds: [...cutTasks.current] } : {}) }) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
   const flushRef = useRef<() => Promise<void>>(async () => {})
+  /**
+   * B35: a save that failed on the network tries again by itself, with the same operation id (a lost reply replays
+   * instead of saving twice): after 2 s, 5 s, 15 s, then every 30 s, and at once when the connection or the tab comes
+   * back. A refusal (changed elsewhere, a conflict) never retries: it keeps its message and Load latest.
+   */
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const retries = useRef(0)
+  const offlineFailure = useRef(false)
+  const scheduleRetry = () => {
+    clearTimeout(retryTimer.current)
+    const delay = [2000, 5000, 15000][retries.current] ?? 30000
+    retries.current++
+    retryTimer.current = setTimeout(() => void flushRef.current(), delay)
+  }
   const pendingSave = useRef<{ fingerprint: string; operationId: string } | null>(null)
   const flush = useCallback(async () => {
     // A2 §4: while a paste's Undo is out, nothing is sent; typing collects and goes once the reply is applied.
     if (left.current || !dirty.current || sending.current || undoingPaste.current) return
+    // B35: another tab merged this tab's draft while it was away: never save this copy again.
+    if (claimedAway()) return
     // The page moved on only by his own save from when he last left it: start from that.
     if (isOwnLeaveSave(page.id, latestPage.current.editorJSON)) base.current = pageContentKey(latestPage.current)
+    // B35: the save went through but its reply was lost (the refresh after the failure shows the page as exactly this
+    // document): it's saved. Sending it again would look like someone else's change (the browser has no receipts).
+    if (latestPage.current.editorJSON === JSON.stringify(editor.document) && lastSent.current === latestPage.current.editorJSON) {
+      base.current = pageContentKey(latestPage.current); dirty.current = false; pendingSave.current = null
+      clearTimeout(retryTimer.current); retries.current = 0; offlineFailure.current = false
+      semanticDeletes.current.clear(); setFailed(false); setStatus('Saved')
+      clearOwn(page.id)
+      return
+    }
     sending.current = true
     const document = JSON.stringify(editor.document)
     const deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
@@ -589,9 +641,19 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     let settled!: () => void
     inflight.current = new Promise<void>(resolve => { settled = resolve })
     try {
-      const result = await run(action,undefined,operationId)
+      let failure = ''
+      const result = await run(action,undefined,operationId,{ onFailure: m => { failure = m } })
       sending.current = false
-      if (!result) { debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true); setStatus("Couldn't save · draft kept"); return }
+      if (!result) {
+        debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true)
+        offlineFailure.current = isNetworkFailure(failure)
+        // Jazz bebe67e3: what happened · what's kept, short enough for 390; Retry stays for an impatient moment.
+        if (offlineFailure.current) { setStatus(navigator.onLine === false ? "Offline · saves when you're back" : 'Not saved yet · trying again'); scheduleRetry() }
+        else setStatus("Couldn't save · draft kept")
+        return
+      }
+      clearTimeout(retryTimer.current); retries.current = 0; offlineFailure.current = false
+      announceSave(page.id)
       pendingSave.current=null; lastSaved.current = document
       debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
       for (const t of source.tasks) if (expectedTaskVersions.current.get(t.id) !== t.version) invalidHistoryTasks.current.add(t.id)
@@ -607,10 +669,52 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
       setFailed(false); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
       if (dirty.current) { stash(); timer.current = setTimeout(() => void flushRef.current(), 300) }
-      else localStorage.removeItem(key)
+      else clearOwn(page.id)
     } finally { settled() }
   }, [editor, key, page.id, run])
   flushRef.current = flush
+  // B35 part 2: keep this tab's slot marked alive, mark it closed when the tab goes, and on coming back check whether
+  // another tab claimed it meanwhile.
+  useEffect(() => {
+    listenForSaves()
+    const alive = setInterval(() => { touchOwn(page.id); touchTab() }, 15_000)
+    const gone = () => { touchOwn(page.id, true); touchTab(true) }
+    const back = () => { if (document.visibilityState === 'visible') claimedAway() }
+    window.addEventListener('pagehide', gone); document.addEventListener('visibilitychange', back)
+    return () => { clearInterval(alive); window.removeEventListener('pagehide', gone); document.removeEventListener('visibilitychange', back) }
+  }, [page.id])
+  // Drafts other tabs left behind on this page (closed, or gone quiet) are merged in on opening, the way Load latest
+  // merges ("your lines are below theirs"), then claimed, so the tab that left them can't save them again.
+  useEffect(() => {
+    sweepClaims(page.id)
+    const found = orphans(page.id)
+    if (!found.length) return
+    const ws = latestWorkspace.current, current = latestPage.current, known = new Set(ws.tasks.map(t => t.id))
+    let doc = nodes(), inserted = 0
+    for (const { key: slotKey, slot } of found) {
+      try {
+        const [baseSections, baseJSON] = JSON.parse(slot.base) as [Page['sections'], string | null]
+        const started = { ...current, sections: baseSections, editorJSON: baseJSON ?? undefined, editorSections: JSON.stringify(baseSections) } as Page
+        const draft = withoutSaved(JSON.parse(slot.document) as EditorNode[], doc)
+        const merged = mergeDraft(editorSeed(started, ws, { templateRows: needsTemplateRows(started, todayIso()) }) as EditorNode[], draft, doc, known)
+        doc = merged.document; inserted += merged.inserted.length
+        // Its cuts were moves too (B33): the save that carries its text mustn't delete them.
+        for (const id of slot.cutTaskIds ?? []) cutTasks.current.add(id)
+      } catch { continue }
+      claim(page.id, slotKey)
+    }
+    if (!inserted) return
+    editor.transact(tr => { closeHistory(tr); editor.replaceBlocks(editor.document, doc as never) })
+    // This runs before the editor's change listener is attached, so save it here (it isn't saved anywhere yet).
+    dirty.current = true; stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0)
+    setNotice({ text: 'Added unsaved text from another tab', fingerprint: JSON.stringify(editor.document) })
+  }, [])
+  // Back online, or back to this tab: a save waiting on the network goes now.
+  useEffect(() => {
+    const now = () => { if (offlineFailure.current && dirty.current && !sending.current && document.visibilityState === 'visible') { clearTimeout(retryTimer.current); void flushRef.current() } }
+    window.addEventListener('online', now); document.addEventListener('visibilitychange', now)
+    return () => { window.removeEventListener('online', now); document.removeEventListener('visibilitychange', now); clearTimeout(retryTimer.current) }
+  }, [])
   useEffect(() => registerEditorFlush(page.id, async () => {
     clearTimeout(timer.current)
     for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
@@ -709,7 +813,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     clearTimeout(timer.current)
     semanticDeletes.current.clear(); pendingSave.current = null
     applyServerPage(latestNow, ws)
-    dirty.current = false; setFailed(false); localStorage.removeItem(key)
+    dirty.current = false; setFailed(false); clearOwn(page.id)
     if (!merged.inserted.length) { setStatus('Latest loaded'); return }
     editor.transact(tr => { closeHistory(tr); editor.replaceBlocks(editor.document, merged.document as never) })
     editor.setTextCursorPosition(merged.inserted[0]!, 'end'); editor.focus()
@@ -746,7 +850,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           rememberLeaveSave(page.id, document)
         }
         // Clear the stash only if it's still this draft: he may already be back on the page and typing.
-        try { if (JSON.parse(localStorage.getItem(key) ?? 'null')?.document === document) localStorage.removeItem(key) } catch { /* keep it */ }
+        clearOwn(page.id, document)
       })()
     }
   }, [])
@@ -919,7 +1023,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       base.current = pageContentKey(expected); lastSent.current = expected.editorJSON ?? ''
       pendingSave.current = null
       dirty.current = JSON.stringify(editor.document) !== expected.editorJSON
-      if (!dirty.current) { localStorage.removeItem(key); setStatus('Saved') }
+      if (!dirty.current) { clearOwn(page.id); setStatus('Saved') }
     } finally {
       undoingPaste.current = false
       if (dirty.current) { stash(); timer.current = setTimeout(() => void flushRef.current(), 0) }
@@ -1060,7 +1164,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       editor.prosemirrorView.dispatch(transaction)
       setPastedChecklistIds(checklistIds(nextDocument))
       historyGuardBypass.current = false; suppress.current = false
-      dirty.current = false; localStorage.removeItem(key); setFailed(false); setStatus('Saved')
+      dirty.current = false; clearOwn(page.id); setFailed(false); setStatus('Saved')
       debugClient('editor.history.finish',{operationId:historyOperationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
     } catch (error) {
       debugClient('editor.history.rejected',{operationId:historyOperationId,pageId:page.id,result:'error',error:error instanceof Error?error.name:'UnknownError'})
@@ -1601,7 +1705,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     >
     <div ref={selectionFocus} tabIndex={-1} className="sr-only" aria-label={selectionLabel || undefined} />
     {hiddenEmpty.size > 0 && <style>{[...hiddenEmpty].map(id => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"]`).join(',')}{'{display:none}'}</style>}
-    <div className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? 'Changed in another tab · draft kept' : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
+    <div className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? (changedBy(page.id) === 'tab' ? 'Changed in another tab · draft kept' : 'Changed on another device · draft kept') : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}

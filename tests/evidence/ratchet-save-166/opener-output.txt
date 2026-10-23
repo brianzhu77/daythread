@@ -1,0 +1,17 @@
+{"first":"6831cb2e-e85b-4121-80cf-8041ffdeed2b","second":"6831cb2e-e85b-4121-80cf-8041ffdeed2b","same":true,"slots":[{"key":"daythread:editor:ratchet-writing:6831cb2e-e85b-4121-80cf-8041ffdeed2b","hasA":false,"hasB":true}]}
+{"recoveredA":false,"recoveredB":true}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: two live opener tabs need distinct recovery identities
+    at file:///Users/dogrod/Developer/daythread-ratchet-save-recovery/tests/evidence/ratchet-save-166/opener-slots.mjs:15:442 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: '6831cb2e-e85b-4121-80cf-8041ffdeed2b',
+  expected: '6831cb2e-e85b-4121-80cf-8041ffdeed2b',
+  operator: 'notStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
