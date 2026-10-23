@@ -786,6 +786,11 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor .bn-block-group .bn-block-group { margin-left:45px; }
 /* Deeper levels step by the same 24px: the top-level group's 45px already includes the dot column. */
 .continuous-editor .bn-block-group .bn-block-group .bn-block-group { margin-left:24px; }
+/* B39 (Jazz; Lead: Notion's convention): every nested block starts at its parent's text, so a nested to-do's checkbox
+   lines up with the parent's text. A task row draws its checkbox 14px in (2px border, 8px padding, the box's margin), so a
+   nested task pulls back by 14px, and its own children start at its text, 31px in from its block. */
+.continuous-editor .bn-block-group .bn-block-group > .bn-block-outer > .bn-block > .react-renderer > .bn-block-content[data-content-type="task"] { margin-left:-14px; }
+.continuous-editor .bn-block-group .bn-block-group > .bn-block-outer > .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="task"]) > .bn-block-group { margin-left:31px; }
 /* Top-level bullets share the task rows' columns: the dot on the checkbox centre (23px), text where task text starts (45px).
    Drawn as a circle, since a "•" glyph sits on the font baseline. Nested bullets keep BlockNote's markers. */
 .continuous-editor .bn-editor > .bn-block-group > .bn-block-outer > .bn-block > .bn-block-content[data-content-type="bulletListItem"]::before {

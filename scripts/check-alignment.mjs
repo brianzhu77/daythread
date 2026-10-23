@@ -9,7 +9,8 @@
 //   1. Columns. Each row against its own expected column:
 //      - top-level rows (open/done/cancelled tasks, bullets, numbered lines, page and link cards, empty rows): one
 //        shared text column, the one most rows use;
-//      - a nested row: its parent's text column + 24px (B19: one step right of the parent's text);
+//      - a nested row: its parent's text column + 24px (B19: one step right of the parent's text); a nested task's
+//        checkbox starts at its parent's text instead (B39, Notion's convention), so its text sits further in;
 //      - headings: the editor's own left edge.
 //   2. Markers on the first text line: a task's checkbox (and its ⋯, labels and tags), a bullet's marker (top level and nested), a card's icon
 //      and chevron, and (1280, hovered, one row per type) the drag handle, each centred on the row's first text line.
@@ -31,7 +32,7 @@ if (!base) { console.error('usage: node scripts/check-alignment.mjs <base url> [
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
-const REQUIRED = ['heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
+const REQUIRED = ['heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
 
 function measure() {
   const visible = e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 }
@@ -62,7 +63,7 @@ function measure() {
       // The task's real state, set by the editor from the workspace (data-status), never inferred from styling.
       const status = content.querySelector('.editor-task')?.getAttribute('data-status') ?? 'unknown'
       Object.assign(row, { kind: `${status} task`, empty: !title.textContent.trim(), ...firstLine(title) })
-      if (box && visible(box)) row.markers.checkbox = cy(box.getBoundingClientRect())
+      if (box && visible(box)) { row.markers.checkbox = cy(box.getBoundingClientRect()); row.boxLeft = box.getBoundingClientRect().left }
       // The row's other parts on its first line (A12): the ⋯ (laid out even while hidden), and the labels and tags.
       for (const [name, selector] of [['⋯ button', '.editor-row-more'], ['Cancelled label', '.editor-cancelled-tag'], ['reference tag', '.editor-reference-tag'], ['date tag', '.editor-date-tag'], ['Plan for today', '.editor-plan-action']]) {
         const part = content.querySelector(selector)
@@ -224,21 +225,25 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
         ? { at, check: `${c.kind} baseline: "${c.label}"`, ok: 'missing', detail: 'no plain text beside it on the line, so not measured' }
         : { at, check: `${c.kind} text baseline on the line's: "${c.label}"`, ok: Math.abs(c.baseline) <= TOLERANCE, detail: `${c.baseline >= 0 ? '+' : ''}${fmt(c.baseline)}px${c.across ? ' (against text on another line of the row, within its line box)' : ''}` })
     }
-    for (const r of rows) { seen.get(width).add(r.kind); if (r.empty) seen.get(width).add('empty row'); if (r.kind === 'nested bullet' && r.depth >= 2) seen.get(width).add('level 3 bullet') }
+    for (const r of rows) { seen.get(width).add(r.kind); if (r.empty) seen.get(width).add('empty row'); if (r.kind === 'nested bullet' && r.depth >= 2) seen.get(width).add('level 3 bullet'); if (r.kind.endsWith(' task') && r.depth >= 1) seen.get(width).add(r.depth >= 2 ? 'level 3 task' : 'nested task'); if (r.kind.endsWith(' task') && r.depth >= 2) seen.get(width).add('nested task') }
     // 1. Columns.
     const top = rows.filter(r => r.depth === 0 && r.kind !== 'heading' && r.kind !== 'paragraph')
     const counts = new Map(); for (const r of top) { const x = Math.round(r.left); counts.set(x, (counts.get(x) ?? 0) + 1) }
     const usual = counts.size ? [...counts].sort((a, b) => b[1] - a[1])[0][0] : null
     const column = usual === null ? null : top.find(r => Math.round(r.left) === usual).left
     for (const r of rows) {
-      let expected = null, rule = ''
+      let expected = null, rule = '', x = r.left, what = 'text'
       if (r.kind === 'heading') { expected = editorLeft; rule = 'editor edge' }
       else if (r.kind === 'paragraph') continue
-      else if (r.depth > 0) { const parent = rows.find(p => p.index === r.parent); if (!parent) continue; expected = parent.left + NEST_STEP; rule = `parent ${fmt(parent.left)} + ${NEST_STEP}` }
+      else if (r.depth > 0) {
+        const parent = rows.find(p => p.index === r.parent); if (!parent) continue
+        if (r.boxLeft !== undefined) { x = r.boxLeft; what = 'checkbox'; expected = parent.left; rule = "parent's text" }
+        else { expected = parent.left + NEST_STEP; rule = `parent ${fmt(parent.left)} + ${NEST_STEP}` }
+      }
       else { expected = column; rule = 'row column' }
       if (expected === null) continue
-      const off = r.left - expected
-      results.push({ at, check: `${r.kind} text x: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `x=${fmt(r.left)}, expected ${fmt(expected)} (${rule}), off ${off >= 0 ? '+' : ''}${fmt(off)}` })
+      const off = x - expected
+      results.push({ at, check: `${r.kind} ${what} x: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `x=${fmt(x)}, expected ${fmt(expected)} (${rule}), off ${off >= 0 ? '+' : ''}${fmt(off)}` })
     }
     for (const r of rows) if (r.clipped !== undefined && !r.kind.startsWith('link'))
       results.push({ at, check: `${r.kind} title not clipped: "${r.label}"`, ok: !r.clipped, detail: r.clipped ?? 'wraps' })
