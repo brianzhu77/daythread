@@ -67,8 +67,9 @@ Three ways to reach the same action, all already on screen today:
 
 ## 4. Opening it
 
-- **Tap or click:** opens the page the line is on **now**, scrolls the line into view about a third from the top, and
-  tints it briefly: the same jump the Tags list already uses. Nothing is focused, so the phone keyboard stays down.
+- **Tap or click:** opens the page the line is on **now**, scrolls the line into view about a third from the top of the
+  visible area, and tints it briefly. Nothing is focused, so the phone keyboard stays down. Tag links switch to this same
+  jump (they centred the line before), so there is one behaviour; the 350 ms drift check keeps the same target.
 - **390:** the line lands clear of the top bar and above the bottom bar's fade (B20), never under it.
 - **On the same page:** scrolls and tints, no navigation.
 - Back (browser or the app's back) returns to where he tapped it, as any page link.
