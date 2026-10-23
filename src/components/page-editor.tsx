@@ -238,6 +238,11 @@ function LineRefChip({ target }: { target: LineTarget }) {
     {view.where && <span className="line-ref-where">{`\u00a0· ${view.where}`}</span>}
   </span>
 }
+/** B35: a failure the network caused (worth retrying), not a refusal from the server (which would refuse again). */
+function isNetworkFailure(message: string): boolean {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
+  return /failed to fetch|networkerror|network error|load failed|fetch failed|timed? ?out|unavailable|bad gateway|gateway|\b50[234]\b|connection/i.test(message)
+}
 /** The host without `www.`, for the card's quiet domain. */
 function hostLabel(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' }
@@ -563,6 +568,20 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }
   const stash = () => { try { localStorage.setItem(key, JSON.stringify({ base: base.current, document: JSON.stringify(nodes()) })) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
   const flushRef = useRef<() => Promise<void>>(async () => {})
+  /**
+   * B35: a save that failed on the network tries again by itself, with the same operation id (a lost reply replays
+   * instead of saving twice): after 2 s, 5 s, 15 s, then every 30 s, and at once when the connection or the tab comes
+   * back. A refusal (changed elsewhere, a conflict) never retries: it keeps its message and Load latest.
+   */
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const retries = useRef(0)
+  const offlineFailure = useRef(false)
+  const scheduleRetry = () => {
+    clearTimeout(retryTimer.current)
+    const delay = [2000, 5000, 15000][retries.current] ?? 30000
+    retries.current++
+    retryTimer.current = setTimeout(() => void flushRef.current(), delay)
+  }
   const pendingSave = useRef<{ fingerprint: string; operationId: string } | null>(null)
   const flush = useCallback(async () => {
     // A2 §4: while a paste's Undo is out, nothing is sent; typing collects and goes once the reply is applied.
@@ -586,9 +605,17 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     let settled!: () => void
     inflight.current = new Promise<void>(resolve => { settled = resolve })
     try {
-      const result = await run(action,undefined,operationId)
+      let failure = ''
+      const result = await run(action,undefined,operationId,{ onFailure: m => { failure = m } })
       sending.current = false
-      if (!result) { debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true); setStatus("Couldn't save · draft kept"); return }
+      if (!result) {
+        debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true)
+        offlineFailure.current = isNetworkFailure(failure)
+        if (offlineFailure.current) { setStatus("Couldn't save · trying again · draft kept"); scheduleRetry() }
+        else setStatus("Couldn't save · draft kept")
+        return
+      }
+      clearTimeout(retryTimer.current); retries.current = 0; offlineFailure.current = false
       pendingSave.current=null; lastSaved.current = document
       debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
       for (const t of source.tasks) if (expectedTaskVersions.current.get(t.id) !== t.version) invalidHistoryTasks.current.add(t.id)
@@ -607,6 +634,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     } finally { settled() }
   }, [editor, key, page.id, run])
   flushRef.current = flush
+  // Back online, or back to this tab: a save waiting on the network goes now.
+  useEffect(() => {
+    const now = () => { if (offlineFailure.current && dirty.current && !sending.current && document.visibilityState === 'visible') { clearTimeout(retryTimer.current); void flushRef.current() } }
+    window.addEventListener('online', now); document.addEventListener('visibilitychange', now)
+    return () => { window.removeEventListener('online', now); document.removeEventListener('visibilitychange', now); clearTimeout(retryTimer.current) }
+  }, [])
   useEffect(() => registerEditorFlush(page.id, async () => {
     clearTimeout(timer.current)
     for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))

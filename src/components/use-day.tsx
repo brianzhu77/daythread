@@ -50,7 +50,7 @@ export interface Notice {
 type NoticeSpec = Notice | null
 type NoticeArg = NoticeSpec | ((r: Receipt) => NoticeSpec)
 /** A domain refusal matching `inlineRefusal` is handed to `onRefused` instead of the save-failed bar. */
-type RunOptions = { inlineRefusal?: RegExp; onRefused?: (message: string) => void }
+type RunOptions = { inlineRefusal?: RegExp; onRefused?: (message: string) => void; /** The failure's message, for a caller that retries by itself (B35). */ onFailure?: (message: string) => void }
 
 interface WorkspaceContextValue {
   workspace: Workspace | null
@@ -205,6 +205,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           setSaveState('failed')
           setSaveError(message)
           setLastFailed({ action, notice, operationId })
+          options.onFailure?.(message)
           debugClient('command.response',{...fields,elapsedMs:performance.now()-started,result:isConflict(message)?'conflict':'error',error:e instanceof Error?e.name:'UnknownError'})
           // Resync before any retry: a stale revision would otherwise fail forever. Screens keep
           // their local edits and re-derive from the latest data; nothing is re-sent automatically.
