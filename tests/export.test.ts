@@ -77,3 +77,12 @@ test('workspace.json: format version, every fact, trash included; no receipts, U
   assert.ok(Array.isArray(json.pages.find((p: { date: string }) => p.date === day).document))
   for (const key of ['tasks', 'placements', 'events', 'materials', 'captures']) assert.ok(Array.isArray(json[key]), key)
 })
+
+test('a link page carries its address: in the front matter and as its first line (Bumblebee f9d81e16)', () => {
+  const s = setup()
+  s.run({ type: 'create-document', title: 'github.com/mattpocock/skills/pull/1316', body: '', pageId: 'link' })
+  const ws = structuredClone(s.ws); ws.pages.find(p => p.id === 'link')!.url = 'https://github.com/mattpocock/skills/pull/1316'
+  const md = file(exportFiles(ws, new Date('2026-10-23T20:00:00Z')), 'pages/github.com-mattpocock-skills-pull-1316.md').text
+  assert.match(md, /\nurl: "https:\/\/github.com\/mattpocock\/skills\/pull\/1316"\n/)
+  assert.match(md, /# github.com\/mattpocock\/skills\/pull\/1316\n\n<https:\/\/github.com\/mattpocock\/skills\/pull\/1316>\n/)
+})

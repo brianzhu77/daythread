@@ -57,9 +57,10 @@ export function safeName(title: string): string {
 /** One page as Markdown: its title, then its document as he sees it, nesting kept, to-dos as `- [ ]` / `- [x]`. */
 export function pageMarkdown(p: Page, ws: Workspace, names: Map<string, string>): string {
   const parent = p.parentId ? names.get(p.parentId) : undefined
-  const front = ['---', `daythread-id: ${yamlString(p.id)}`, ...(p.date ? [`date: ${p.date}`] : []), ...(parent ? [`parent: ${yamlString(`[[${parent}]]`)}`] : []), '---']
+  const front = ['---', `daythread-id: ${yamlString(p.id)}`, ...(p.date ? [`date: ${p.date}`] : []), ...(p.url ? [`url: ${yamlString(p.url)}`] : []), ...(parent ? [`parent: ${yamlString(`[[${parent}]]`)}`] : []), '---']
   const title = p.type === 'daily' && p.date ? p.date : p.title || 'Untitled'
-  const body = blocksMarkdown(editorSeed(p, ws), ws, names)
+  // A link page's address is its first line, so the article is a click away (Bumblebee f9d81e16).
+  const body = [p.url ? `<${p.url}>` : '', blocksMarkdown(editorSeed(p, ws), ws, names)].filter(Boolean).join('\n\n')
   const review = p.reviewText?.trim() ? `\n\n## Evening review\n\n${p.reviewText.trim()}` : ''
   return `${front.join('\n')}\n\n# ${title}\n${body ? `\n${body}\n` : ''}${review}${review ? '\n' : ''}`
 }
