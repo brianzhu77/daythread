@@ -1,6 +1,6 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
 import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
 import { BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
@@ -22,7 +22,7 @@ import { lineRefView, pageRefView } from './line-text'
 import { lineClipboardType, lineLinkPath, parseLineClipboard, parseLineUrl } from '../domain/line-link'
 import type { LineTarget } from '../domain/page-refs'
 import { pageHref, pageLabel } from './page-tree'
-import { jumpInPage, jumpToBlock, registerEditor } from './line-jump'
+import { jumpInPage, jumpToBlock, lookupFailed, registerEditor, visibleArea } from './line-jump'
 import { resolveLineLink } from '../server/functions'
 import { newOperationId, useWorkspace } from './use-day'
 import { debugClient } from '../lib/debug'
@@ -179,17 +179,31 @@ function PageRefChip({ pageId, refId, newTitle }: { pageId: string; refId: strin
     {state === 'failed' && <span className="page-ref-failed">Not created · Retry</span>}
   </span>
 }
-/** ⌘/ on a line without a ⋯: the row menu's look, with its one item. Esc or a click away closes it. */
-function LineMenu({ top, left, onClose, onCopy }: { top: number; left: number; onClose: (refocus: boolean) => void; onCopy: () => void }) {
+/**
+ * ⌘/ on a line without a ⋯: the row menu's look, with its one item, under the line's box at its text start; above it
+ * when there's no room below; never partly off the visible area (Jazz states §1). Esc or a click away closes it.
+ */
+function LineMenu({ anchor, onClose, onCopy }: { anchor: { top: number; bottom: number; left: number }; onClose: (refocus: boolean) => void; onCopy: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
   const close = useRef(onClose); close.current = onClose
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null)
+  useLayoutEffect(() => {
+    const menu = ref.current?.getBoundingClientRect()
+    if (!menu) return
+    const { top, bottom } = visibleArea(), gap = 4, edge = 8
+    const below = anchor.bottom + gap, above = anchor.top - gap - menu.height
+    const y = below + menu.height <= bottom - edge ? below : above >= top + edge ? above : Math.max(top + edge, Math.min(below, bottom - edge - menu.height))
+    setAt({ top: y, left: Math.max(edge, Math.min(anchor.left, window.innerWidth - menu.width - edge)) })
+  }, [anchor])
+  // Focus once it's placed: a hidden element can't take focus.
+  const placed = at !== null
+  useEffect(() => { if (placed) ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus({ preventScroll: true }) }, [placed])
   useEffect(() => {
-    ref.current?.querySelector<HTMLElement>('[role=menuitem]')?.focus({ preventScroll: true })
     const away = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) close.current(false) }
     document.addEventListener('pointerdown', away)
     return () => document.removeEventListener('pointerdown', away)
   }, [])
-  return createPortal(<div ref={ref} className="app-menu line-menu" role="menu" aria-label="Line actions" style={{ position: 'fixed', top, left }}
+  return createPortal(<div ref={ref} className="app-menu line-menu" role="menu" aria-label="Line actions" style={{ position: 'fixed', top: at?.top ?? anchor.bottom + 4, left: at?.left ?? anchor.left, visibility: at ? 'visible' : 'hidden' }}
     onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(true) } }}>
     <button type="button" role="menuitem" onClick={onCopy}>Copy link to line</button>
   </div>, document.body)
@@ -429,17 +443,22 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const id = jumpTo
     if (!id) return
     let frame = 0, tries = 0, cancelled = false
-    const dropParam = () => { const url = new URL(window.location.href); for (const k of ['block', 'task']) url.searchParams.delete(k); window.history.replaceState(window.history.state, '', url) }
+    const dropParam = () => { const url = new URL(window.location.href); for (const k of ['block', 'task', 'from']) url.searchParams.delete(k); window.history.replaceState(window.history.state, '', url) }
+    const search = new URLSearchParams(window.location.search)
+    const isLineUrl = window.location.pathname === '/pages' && search.get('page') === page.id
+    // From the Tags list: the line on the page the list names; only a row that's gone follows its task (Bumblebee
+    // 54096b19). Anything else opened at a line (a day page's tag) just finds it here.
+    const fromTags = isLineUrl && search.get('from') === 'tags'
     const find = (blockId: string) => {
       if (cancelled) return
       if (!jumpWithin(blockId)) { if (++tries < 120) frame = requestAnimationFrame(() => find(blockId)); return }
       dropParam()
     }
-    const search = new URLSearchParams(window.location.search)
+    if (!isLineUrl) { frame = requestAnimationFrame(() => find(id)); return () => { cancelled = true; cancelAnimationFrame(frame) } }
+    if (fromTags && editor.getBlock(id)) { frame = requestAnimationFrame(() => find(id)); return () => { cancelled = true; cancelAnimationFrame(frame) } }
     // A11 §4: a line URL (`/pages?page=…&block=…[&task=…]`) is always resolved on the server first, so it lands where
     // the chip does, even when the block is still on the URL's page (a task's history row on a past day).
-    if (window.location.pathname !== '/pages' || search.get('page') !== page.id) { frame = requestAnimationFrame(() => find(id)); return () => { cancelled = true; cancelAnimationFrame(frame) } }
-    void resolveLineLink({ data: { pageId: page.id, lineId: id, ...(search.get('task') ? { taskId: search.get('task')! } : {}) } }).then(r => {
+    const attempt = () => void resolveLineLink({ data: { pageId: page.id, lineId: id, ...(search.get('task') ? { taskId: search.get('task')! } : {}) } }).then(r => {
       if (cancelled) return
       const target = latestWorkspace.current.pages.find(p => p.id === r.pageId)
       if (r.state === 'line-not-found' || r.state === 'page-not-found' || !r.blockId) {
@@ -450,7 +469,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // Somewhere else now (a task's plan day), or a day page opened by its id: go to its own address.
       if (target && (target.id !== page.id || target.type === 'daily')) { void navigate({ href: pageHref(target, r.blockId), replace: true, resetScroll: false }); return }
       find(r.blockId)
-    }, () => { if (!cancelled) find(id) })
+    }, () => { if (!cancelled) lookupFailed(attempt) })
+    attempt()
     return () => { cancelled = true; cancelAnimationFrame(frame) }
   }, [editor, jumpTo, jumpWithin, page.id, navigate])
   useEffect(() => { const media = window.matchMedia('(max-width: 899px)'); const update = () => setCompact(media.matches); media.addEventListener('change', update); return () => media.removeEventListener('change', update) }, [])
@@ -1335,17 +1355,19 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     navigator.clipboard.writeText(url).then(() => notice(true), () => notice(false))
   }
   /** ⌘/ on a line with no ⋯ (any line but an open task on a day page): a menu with Copy link to line (Jazz §1). */
-  const [lineMenu, setLineMenu] = useState<{ blockId: string; top: number; left: number } | null>(null)
+  const [lineMenu, setLineMenu] = useState<{ blockId: string; anchor: { top: number; bottom: number; left: number } } | null>(null)
   const closeLineMenu = (refocus: boolean) => {
     const open = lineMenu
     setLineMenu(null)
     if (refocus && open) rowActions.focusRow(open.blockId)
   }
   const openLineMenu = (blockId: string) => {
-    const el = blockElement(blockId)?.querySelector<HTMLElement>('.bn-inline-content') ?? blockElement(blockId)
-    if (!el) return false
-    const r = el.getBoundingClientRect()
-    setLineMenu({ blockId, top: r.bottom + 4, left: Math.max(8, Math.min(r.left, window.innerWidth - 240)) })
+    // The line's own box, at its text start (Jazz states §1), not the caret: a click on a bullet's dot can leave the
+    // caret's reported position far from the line.
+    const line = blockElement(blockId), content = line?.querySelector<HTMLElement>('.bn-block-content'), text = line?.querySelector<HTMLElement>('.bn-inline-content')
+    if (!content) return false
+    const box = content.getBoundingClientRect()
+    setLineMenu({ blockId, anchor: { top: box.top, bottom: box.bottom, left: (text ?? content).getBoundingClientRect().left } })
     return true
   }
   const rowActions: RowActions = {
@@ -1568,7 +1590,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     <div className="editor-phone-toolbar" aria-label="Editor tools"><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('undo')} aria-label="Undo"><UndoIcon /></button><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('redo')} aria-label="Redo"><RedoIcon /></button><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }} aria-label="Insert block"><PlusIcon /></button></div>
     {dock && createPortal(<>
       {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span>{selected.current.length === 1 && lineLinkTarget(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyLineLink(id) }}>Copy link</button>}<button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
-      {lineMenu && <LineMenu top={lineMenu.top} left={lineMenu.left} onClose={closeLineMenu} onCopy={() => { const id = lineMenu.blockId; closeLineMenu(true); copyLineLink(id) }} />}
+      {lineMenu && <LineMenu anchor={lineMenu.anchor} onClose={closeLineMenu} onCopy={() => { const id = lineMenu.blockId; closeLineMenu(true); copyLineLink(id) }} />}
     {pastedChecklistIds.length > 0 && <div className="editor-paste-notice" role="status">{pastedChecklistIds.length} checklist {pastedChecklistIds.length === 1 ? 'line' : 'lines'} · <button onClick={() => {
       let count = 0, planned = 0
       editor.transact(tr => {

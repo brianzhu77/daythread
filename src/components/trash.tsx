@@ -5,7 +5,9 @@ import { isTrashed, parentOf, subtreeIds, trashBatch, trashBatches, trashedChild
 import type { Page, Receipt, Workspace } from '../domain/types'
 import { longLabel, toIso } from './dates'
 import { flushEditor } from './editor-flush'
-import { jumpToBlock } from './line-jump'
+import { jumpToBlock, lookupFailed } from './line-jump'
+import { resolveLineLink } from '../server/functions'
+import { toast } from '@heroui/react'
 import { ChevronRightIcon, PageKindIcon, TrashIcon } from './icons'
 import { LinkUrlRow } from './link-url-row'
 import { InlineWithRefs } from './line-text'
@@ -161,15 +163,30 @@ export function TrashedPage({ page, workspace }: { page: Page; workspace: Worksp
 function ReadOnlyBody({ page, workspace }: { page: Page; workspace: Workspace }) {
   const nodes = editorSeed(page, workspace)
   const body = useRef<HTMLDivElement>(null)
-  // A11 (Jazz line-links-states §5): a link to a line on a trashed page opens it scrolled to the line.
+  const navigate = useNavigate()
+  const latest = useRef(workspace); latest.current = workspace
+  // A11 (Jazz line-links-states §5): a link to a line on a trashed page opens it scrolled to the line. As everywhere
+  // (§4), the URL is resolved on the server first: a task row here may be followed to its plan day (Ratchet #146).
   useEffect(() => {
-    const url = new URL(window.location.href), id = url.searchParams.get('block')
-    const el = id ? body.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(id)}"]`) : null
-    if (!el) return
-    for (const k of ['block', 'task']) url.searchParams.delete(k)
-    window.history.replaceState(window.history.state, '', url)
-    return jumpToBlock(el)
-  }, [page.id])
+    const url = new URL(window.location.href), id = url.searchParams.get('block'), taskId = url.searchParams.get('task')
+    if (!id) return
+    let cancelled = false, cleanup: (() => void) | undefined
+    const dropParams = () => { for (const k of ['block', 'task', 'from']) url.searchParams.delete(k); window.history.replaceState(window.history.state, '', url) }
+    const jumpHere = (blockId: string) => {
+      const el = body.current?.querySelector<HTMLElement>(`[data-id="${CSS.escape(blockId)}"]`)
+      dropParams()
+      if (el) cleanup = jumpToBlock(el)
+      else { window.scrollTo({ top: 0 }); toast("Couldn't find that line", { timeout: 4000 }) }
+    }
+    const attempt = () => void resolveLineLink({ data: { pageId: page.id, lineId: id, ...(taskId ? { taskId } : {}) } }).then(r => {
+      if (cancelled) return
+      const target = latest.current.pages.find(p => p.id === r.pageId)
+      if (r.blockId && target && target.id !== page.id) { void navigate({ href: pageHref(target, r.blockId), replace: true, resetScroll: false }); return }
+      jumpHere(r.blockId ?? id)
+    }, () => { if (!cancelled) lookupFailed(attempt) })
+    attempt()
+    return () => { cancelled = true; cleanup?.() }
+  }, [page.id, navigate])
   const render = (n: EditorNode): ReactNode => {
     const children = n.children?.length ? <div className="ro-children">{n.children.map(render)}</div> : null
     if (n.type === 'heading') return <div key={n.id} data-id={n.id}><h2 className={`ro-heading level-${n.props?.level ?? 2}`}><InlineWithRefs content={n.content} workspace={workspace} /></h2>{children}</div>
