@@ -1,0 +1,14 @@
+Basics #1, measured 2026-10-23 on a COPY of his row (Lead's backup, revision 106), local embedded Postgres 17, loopback.
+node tests/evidence/receipts-size/measure.ts <workspace-row.json> <postgres url>   (25 save-editor commands on his page)
+
+main f6ecf2e (before):
+{"revisionBefore":106,"rowBefore":"2233.9 KB","rowAfter":"2957.1 KB","receiptsAfter":"1460.6 KB","undoAfter":"1471.2 KB","browserBefore":"25.4 KB","browserAfter":"25.3 KB","firstSaveMs":57,"saveMsMedian":34,"saveMsMax":49}
+
+fix/receipts-size (after; the first save trims the row):
+{"revisionBefore":106,"rowBefore":"2233.9 KB","rowAfter":"75.1 KB","receiptsAfter":"24.4 KB","undoAfter":"25.3 KB","browserBefore":"25.4 KB","browserAfter":"25.3 KB","firstSaveMs":15,"saveMsMedian":2,"saveMsMax":2}
+
+Row: +29 KB per save before, bounded after (at most ~500 whole receipts + 3,000 tombstones ≈ 0.3 MB).
+Browser download on open: 25 KB both ways (forBrowser already drops receipts and the Undo copy); not changed by this fix.
+
+Previous build on a trimmed row (pure domain, main's applyCommand on the fix's output; /tmp script old-on-trimmed.ts):
+{"kbAfterNew":72,"oldSave":"ok","oldUndo":"ok","oldReplayOfNewOp":"Operation identity reused with different input","rollForward":"ok","kbAfterRollForward":72}
