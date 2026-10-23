@@ -1,0 +1,12 @@
+(node:42689) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS new to-do saved with same identity
+PASS nest child note, persist parent/child document tree
+PASS tick task persists done state
+PASS delete a text line and retain neighbor text
+PASS type/save a, clear it, delete empty row without orphan task
+PASS cut/paste text keeps one copy after reload
+PASS cut/paste whole task preserves task id and done state
+PASS delete cleared historical task row keeps task but unplans today
+FAIL two unsaved tabs both recover after close (must preserve both) Recovery contains A=true, B=false
+PASS no browser page errors
