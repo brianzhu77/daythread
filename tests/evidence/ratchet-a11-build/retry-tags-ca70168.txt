@@ -1,0 +1,10 @@
+{"name":"Tags list opens its document row 1280","pass":true}
+{"name":"Same document row as copied line follows task 1280","pass":true}
+{"name":"Gone tag row follows task 1280","pass":true}
+{"name":"Explicit task works without remembered source row 1280","pass":true}
+{"name":"503 exact notice, URL retained, Retry 1280","pass":true}
+{"name":"Tags list opens its document row 390","pass":true}
+{"name":"Same document row as copied line follows task 390","pass":true}
+{"name":"Gone tag row follows task 390","pass":true}
+{"name":"Explicit task works without remembered source row 390","pass":true}
+{"name":"503 exact notice, URL retained, Retry 390","pass":true}
