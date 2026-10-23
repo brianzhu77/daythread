@@ -839,7 +839,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // this page shows it on return ("Recovered unsaved draft", or Load latest after a conflict).
       stash()
       const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
-      trackLeaveSave(page.id, (async () => {
+      trackLeaveSave((async () => {
         // A save already on its way finishes first, so this one starts from the page it produced.
         await inflight.current
         if (document !== lastSaved.current) {

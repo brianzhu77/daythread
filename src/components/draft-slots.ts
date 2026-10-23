@@ -47,9 +47,14 @@ export function tabId(): string {
       sessionStorage.setItem('daythread.tab', id)
     }
     localStorage.setItem(ownerKey(id), JSON.stringify({ instance, seen: Date.now() }))
-    // Released whenever this load goes, from any screen, so a reload keeps the id: a reload from Pages (no editor open)
-    // used to find its own record still live, take a new id, and leave its draft unrecovered for 10 minutes.
-    globalThis.addEventListener?.('pagehide', () => touchTab(true))
+    // Kept fresh and released from any screen, not only while an editor is open. A reload from Pages used to find its
+    // own record still live, take a new id and leave its draft unrecovered for 10 minutes; and a tab opened from one
+    // that had sat on Pages over 10 minutes found a stale record and kept the same id (the copied-tab loss).
+    if (typeof globalThis.addEventListener === 'function') {
+      addEventListener('pagehide', () => touchTab(true))
+      addEventListener('pageshow', () => touchTab())
+      setInterval(() => touchTab(), Math.min(15_000, goneAfter() / 2))
+    }
     return resolvedTab = id
   } catch {
     return resolvedTab = 'tab'
@@ -81,6 +86,21 @@ export function ownKey(pageId: string, tab = tabId()): string {
 export function readOwn(pageId: string): DraftSlot | null {
   const own = parse(localStorage.getItem(ownKey(pageId)))
   return own && !own.claimedBy ? own : null
+}
+
+/** Every page this tab holds an unsaved draft for (B3 export recovers them; a page id may itself hold ':'). */
+export function ownDrafts(): { pageId: string; slot: DraftSlot }[] {
+  const out: { pageId: string; slot: DraftSlot }[] = []
+  try {
+    const tail = `:${tabId()}`, head = 'daythread:editor:'
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key?.startsWith(head) || !key.endsWith(tail)) continue
+      const slot = parse(localStorage.getItem(key))
+      if (slot && !slot.claimedBy) out.push({ pageId: key.slice(head.length, -tail.length), slot })
+    }
+  } catch { /* storage unavailable: nothing kept here */ }
+  return out
 }
 
 /** True when another tab merged this tab's draft while it was away. */
