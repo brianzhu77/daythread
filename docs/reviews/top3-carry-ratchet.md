@@ -8,7 +8,7 @@ Independent current-head checks: full suite **397 passed, 0 failed, 11 skipped, 
 
 Reviewer `second-day.ts` executes nested A/B/b1/C on Oct22, carries each independently to Oct23, then carries each to Oct24. Oct23 is Top3[A,B,b1,C], Other[]. Oct24 is Top3[A,B,b1], Other[C]. Flat carried rows do not retain parent identity, so b1 consumes a slot on the following carry. The exploratory assertion deliberately exits1 to expose the missing durable ancestry; it is outside the normal suite and is not described as passing. Evidence: `tests/evidence/ratchet-top3-165/second-day-output.txt`.
 
-Lead explicitly accepts this limit until B34b in message2af13851 (Oct23 09:14Z), declines an interim ancestry field, and keeps B34b immediately after B35. Re-nesting restores the source tree for the next carry. Product recorded the limit in checklist mainae0bd26 and owns the usage trigger (6910427e). Durable ancestry plus a two-morning regression is required in B34b; this review does not claim it works today. Child-first tap order also remains flat until B34b.
+Lead explicitly accepts this limit until B34b in message2af13851 (Oct23 09:14Z), declines an interim ancestry field, and keeps B34b immediately after B35. Re-nesting restores the source tree for the next carry. Product recorded the limit in checklist main2de980a (correction1874ad31) and owns the usage trigger (6910427e). Durable ancestry plus a two-morning regression is required in B34b; this review does not claim it works today. Child-first tap order also remains flat until B34b.
 
 No application changes, production writes or deployment by Ratchet. Lead owns final integration/release checks.
 
