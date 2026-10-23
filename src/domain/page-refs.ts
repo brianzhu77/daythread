@@ -77,15 +77,16 @@ const allBlocks = (page: Page) => page.sections.flatMap((s) => s.blocks)
 function taskRows(ws: Workspace, taskId: string): Row[] {
   return ws.pages.flatMap((page) => allBlocks(page).flatMap((b, order) => b.kind === 'task' && b.taskId === taskId ? [{ page, blockId: b.id, text: b.text, order }] : []))
 }
-/** Most recent first: daily pages by date, then document pages by the row's `seen`, then page id (plan §2 rule 2.3). */
+/** Most recent first: daily pages by date, then document pages by the row's `seen`, then page id (plan §2 rule 2.3); on one page, document order. */
 function byRecency(a: Row, b: Row): number {
   const daily = (r: Row) => r.page.type === 'daily' && r.page.date ? 0 : 1
   if (daily(a) !== daily(b)) return daily(a) - daily(b)
   if (daily(a) === 0 && a.page.date !== b.page.date) return a.page.date! < b.page.date! ? 1 : -1
+  // Two rows on one page: the first in document order, whatever their stamps (§2 rule 2.4, Ratchet #143).
+  if (a.page.id === b.page.id) return a.order - b.order
   const seen = (r: Row) => r.page.editorBlockMetadata?.[r.blockId]?.seen ?? -1
   if (seen(a) !== seen(b)) return seen(b) - seen(a)
-  if (a.page.id !== b.page.id) return a.page.id < b.page.id ? -1 : 1
-  return a.order - b.order
+  return a.page.id < b.page.id ? -1 : 1
 }
 /** The day a done or cancelled task counts as finished: `doneOn`, else its latest included day, plan day, last plan day. */
 export function finishedOn(ws: Workspace, task: Workspace['tasks'][number]): string | null {

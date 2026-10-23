@@ -28,7 +28,7 @@ async function store() {
     return target
   }
   // The A2 step under test starts from layout 5, so a layout-6 store goes 6 → 5 (page links) first.
-  const script = () => { const db = new DatabaseSync(path); const v = Number(db.prepare('PRAGMA user_version').get()!.user_version); db.close(); if (v === 6) { const pl = spawnSync(process.execPath, ['scripts/sqlite-rollback-page-links.ts', path], { encoding: 'utf8' }); if (pl.status !== 0) return pl } return spawnSync(process.execPath, ['scripts/sqlite-rollback-link-pages.ts', path], { encoding: 'utf8' }) }
+  const script = () => { const db = new DatabaseSync(path); const v = Number(db.prepare('PRAGMA user_version').get()!.user_version); db.close(); if (v === 7) { const dn = spawnSync(process.execPath, ['scripts/sqlite-rollback-done-on.ts', path], { encoding: 'utf8' }); if (dn.status !== 0) return dn } if (v >= 6) { const pl = spawnSync(process.execPath, ['scripts/sqlite-rollback-page-links.ts', path], { encoding: 'utf8' }); if (pl.status !== 0) return pl } return spawnSync(process.execPath, ['scripts/sqlite-rollback-link-pages.ts', path], { encoding: 'utf8' }) }
   const reopen = async () => { repo = new SqliteWorkspaceRepository(path); return repo.load() }
   return { dir, path, day, exec, paste, script, reopen, cleanup: () => rm(dir, { recursive: true, force: true }) }
 }

@@ -155,6 +155,18 @@ test('task: only trashed rows', () => {
   assert.deepEqual([r.state, r.pageId], ['trashed', 'one'], 'only trashed rows: the newest trashed page')
 })
 
+test('task: two rows on one page', () => {
+  const s = setup(), t = s.add(today, 'Twice here')
+  s.run({ type: 'not-today', taskId: t.id, date: today })
+  s.doc('one')
+  s.save('one', nodes => [...nodes, taskNode('first', t.id, 'Twice here'), taskNode('second', t.id, 'Twice here')])
+  // Unequal stamps (Ratchet #143): the later row stamped newer still loses to the first in document order.
+  const ws = structuredClone(s.state), meta = ws.pages.find(p => p.id === 'one')!.editorBlockMetadata!
+  meta.first!.seen = 1; meta.second!.seen = 99
+  const r = resolveLine(ws, { pageId: 'one', lineId: 'second', taskId: t.id })
+  assert.deepEqual([r.state, r.blockId], ['live', 'first'])
+})
+
 test('task: B16 note', () => {
   const s = setup(), t = s.add(yesterday, 'Planned')
   const source = s.page(yesterday), lineId = rowOf(source, t.id)!.id
