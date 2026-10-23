@@ -1,8 +1,23 @@
 # A11 step 2 independent build review
 
-Ratchet · task #146 · candidate **f672ba9**, accepted plan 8b808a5 and step-1 pass 04990a7. **REVISE at ca70168: original findings resolved; one new-page concurrency failure remains.** See the follow-up below. Initial f672ba9 evidence is retained as history.
+Ratchet · task #146 · candidate **f672ba9**, accepted plan 8b808a5 and step-1 pass 04990a7. **FINAL BUILD REVIEW PASS at 6d9b25f.** All three independently reproduced URL defects are resolved. Earlier revision findings below are retained as history, not current blockers.
 
-## Follow-up at ca70168
+## Final recheck at 6d9b25f
+
+Inspected the complete delta from ca70168. The server returns a page address derived from its own loaded workspace; editor and Trash use a full route load when the destination is absent from their snapshot. This does not change persisted workspace shape or chip styles.
+
+Independently executed on this build:
+
+- Production build and type check pass.
+- **New target race, live source:** a second repository creates Nov 1 after client load, moves the task and releases the resolver request. Browser loads Nov 1 on fresh data and the exact moved row tints. Pass.
+- **Same race, trashed source:** next run creates Nov 2 after client load; browser loads Nov 2 and the moved row tints. Pass. The reusable repro now accepts optional `trash` mode.
+- Original resolver/trash/reload suite **4 pass**; three-mode critical suite **18 pass**; independent tag/Retry suite **10 pass** at 1280 and 390 touch. This includes original URLs with/without task=, exact failed-lookup notice, retained parameters, Retry and reload recovery, actual Tags-list source-page navigation, canonical copied-link task following, absent tag-row fallback and explicit task identity without row memory.
+
+Prior independently executed 370-unit suite, complete 387/0/0 alignment, 48 stable/actions/caret checks and interaction reruns remain valid for unchanged areas. The last two diffs were inspected; no application CSS/domain state transition changed. Lead be5d2713 additionally reports a fresh final-head alignment gate 318/0/0; Jazz 175b16af independently reports the final race landing in Chromium/WebKit at 1280/390, tinted, no focus and no old-page row tint. Their execution is attributed separately.
+
+No reviewer blocker remains. Lead owns final authenticated/deployed checks and promotion; this report does not claim a deployment. Phone drag and real Chinese IME remain outside demonstrated execution. The author's narrow-screen multi-selection assertion is now an honest skip; this reviewer previously verified a real phone handle selection of a two-block section with no Copy link.
+
+## Follow-up history at ca70168
 
 Both original failures are fixed. Independent original URL failure/reload probe: **4 pass**; three-mode critical probe: **18 pass**. A separate independent 1280/390-touch script: **10 pass**, including actual Tags-list click to its document, canonical line URL from the same existing row following the task, gone tag row fallback, explicit task without remembered source metadata, exact failed-lookup text, retained URL/top and successful Retry. Production build/typecheck pass. No domain or chip CSS changes, so earlier unit and baseline/layout evidence carries over. Independently reran the expanded author interaction suite at 390 touch: **81 ok, no page errors**. It explicitly skips phone drag and keyboard cut/paste.
 
@@ -37,6 +52,6 @@ Product f9fd41b8 accepts creating a line chip to a trashed page and plain-text p
 
 Lead c0b95be9 reports a separate complete alignment gate 318/0/0, candidate-to-live-450913a-to-candidate rollback on throwaway Supabase schema, and real revision-106 metadata maximum 4,676 B. Lead dropped the schema and did not change the real workspace. These are Lead's executed checks, not this reviewer's. Independent Postgres persistence checks from step 1 remain valid; final Supabase rollback and deployment are Lead's lane. Jazz's design check remains separate.
 
-## Remaining release boundary
+## Original remaining release boundary (superseded by final recheck above)
 
 Re-review the tag and URL fixes at an identifiable new head, including resolver failure → recovery and original trash-task URLs with/without task=. Carry over unchanged unit/layout evidence only after inspecting the diff. Final auth/deployed smoke, exact rollback artifact and three-target deployment remain Lead's checks. A real phone drag/Chinese IME are not demonstrated by this review.
