@@ -40,12 +40,13 @@ function templateRows(section: Section, page: Page): EditorNode[] {
 }
 /**
  * A day page for today or later whose template rows have never been saved. Past pages open exactly as saved.
- * A page never opened in the editor (no editorJSON) gets the rows even if tasks were already placed on it,
- * e.g. kept from yesterday; a page saved before templates existed only gets them while all sections are empty.
+ * A page never saved from the editor (no editorSections) gets the rows even if tasks were already placed on it,
+ * e.g. kept from yesterday, also when a carry nested its rows in its document (B34b); a page saved before templates
+ * existed only gets them while all sections are empty.
  */
 export function needsTemplateRows(page: Page, today: string): boolean {
   if (page.type !== 'daily' || page.templateApplied || !page.date || page.date < today) return false
-  return !page.editorJSON || page.sections.every(s => s.blocks.length === 0)
+  return !page.editorSections || page.sections.every(s => s.blocks.length === 0)
 }
 export function editorSeed(page: Page, workspace: Workspace, options: { templateRows?: boolean } = {}): EditorNode[] {
   if (!options.templateRows && page.editorJSON && page.editorSections === JSON.stringify(page.sections)) return JSON.parse(page.editorJSON)

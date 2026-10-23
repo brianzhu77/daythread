@@ -1174,6 +1174,8 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .mc-reason { font-size: var(--text-meta); line-height: 18px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mc-strip { display: flex; align-items: center; gap: 10px; min-height: 52px; padding-left: 38px; color: var(--ink-2); font-size: var(--text-ui); animation: mc-in .18s ease-out; }
 .mc-strip.refused { color: var(--warn); }
+/* B34b: a sub-task sits under its parent on the card, one editor indent (24px) per level. */
+.mc-list li[style*='--mc-depth'] { margin-left: calc(var(--mc-depth) * 24px); }
 @keyframes mc-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .mc-strip { animation: none; } }
 .mc-add-all { justify-self: start; margin-top: 4px; }

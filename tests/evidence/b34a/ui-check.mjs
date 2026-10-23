@@ -14,7 +14,8 @@ log(childAt > parentAt && parentAt >= 0, 'a sub-task under a Top 3 row is offere
 // Add all: three top-level Top 3 items (Carried top, Parent top, Dragged up) and one sub-task under Parent top. The
 // sub-task takes no slot, so all four land in Top 3 with nothing pushed out (Bumblebee df6f0a08, Lead 6999454f).
 await p.locator('.mc-add-all').click(); await p.waitForTimeout(2000)
-const section = name => p.evaluate(n => { const h = [...document.querySelectorAll('h2')].find(e => e.textContent.includes(n)); const out = []; let x = h?.closest('[data-node-type="blockOuter"]')?.nextElementSibling; while (x && !x.querySelector('h2')) { const t = x.querySelector('.editor-task-title')?.textContent; if (t) out.push(t); x = x.nextElementSibling } return out }, name)
+// Every task row in the section, nested ones included (B34b puts the sub-task under its parent's row).
+const section = name => p.evaluate(n => { const h = [...document.querySelectorAll('h2')].find(e => e.textContent.includes(n)); const out = []; let x = h?.closest('[data-node-type="blockOuter"]')?.nextElementSibling; while (x && !x.querySelector('h2')) { for (const t of x.querySelectorAll('.editor-task-title')) if (t.textContent) out.push(t.textContent); x = x.nextElementSibling } return out }, name)
 const top3 = await section('Top 3'), other = await section('Other')
 log(JSON.stringify(top3) === JSON.stringify(['Carried top', 'Parent top', 'Child of top', 'Dragged up']), 'Add all: the three Top 3 items and the sub-task right after its parent, nothing pushed out', JSON.stringify(top3))
 log(JSON.stringify(other) === JSON.stringify(['Carried other']), 'Other stays Other', JSON.stringify(other))

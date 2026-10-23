@@ -122,6 +122,6 @@ test('a sub-task whose parent isn\'t on the day counts as its own item', () => {
 test('the sub-task tapped before its parent: once the parent comes, it stops taking a slot (Ratchet 609b0df7)', () => {
   const { s, a, b, b1, c, rows, item } = abc()
   for (const t of [a, b1, b, c]) s.run({ type: 'plan-tasks', date: today, items: [item(t)] })
-  assert.deepEqual(rows('top3'), ['A', 'b1', 'B', 'C'], 'C still fits: b1 follows B once B is there')
+  assert.deepEqual(rows('top3'), ['A', 'B', 'b1', 'C'], 'C still fits: b1 follows B once B is there, and goes under it (B34b)')
   assert.deepEqual(rows('other'), [])
 })
