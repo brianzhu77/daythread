@@ -48,4 +48,14 @@ const blockSaves = p => p.route('**/_serverFn/**', r => r.request().method() ===
   log(shown === 1, 'and it shows the line once, from the latest page', String(shown))
   await ctx.close()
 }
+// (3) Two live tabs: a tab opening the page never takes over another tab that's still open (the real 2-minute rule).
+{
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } })
+  const a = await ctx.newPage(); await a.goto(BASE + '/', { waitUntil: 'networkidle' }); await a.waitForTimeout(600)
+  await blockSaves(a); await typeInNotes(a, 'live tab text'); await a.waitForTimeout(500)
+  const c = await ctx.newPage(); await c.goto(BASE + '/', { waitUntil: 'networkidle' }); await c.waitForTimeout(2500)
+  const claimed = await c.evaluate(() => Object.values(localStorage).filter(v => v.includes('claimedBy')).length)
+  log(claimed === 0 && copies('live tab text') === 0 && await c.locator('.bn-inline-content', { hasText: 'live tab text' }).count() === 0, 'a tab that is still open is never taken over', `claimed ${claimed}`)
+  await ctx.close()
+}
 console.log(failed ? `${failed} FAILED` : 'all passed'); await b.close(); process.exit(failed ? 1 : 0)

@@ -118,3 +118,28 @@ export function sweepClaims(pageId: string, now = Date.now()): void {
     stale.forEach(key => localStorage.removeItem(key))
   } catch { /* storage unavailable */ }
 }
+
+/**
+ * B35 part 3: whether a change came from another tab of this browser or from another device. Each tab announces its
+ * saves; a conflict on a page another tab here saved in the last few minutes is "another tab", anything else "another
+ * device" (Brian's phone and Mac share the page).
+ */
+const otherTabSaves = new Map<string, number>()
+let channel: BroadcastChannel | null = null
+function saves(): BroadcastChannel | null {
+  if (channel || typeof BroadcastChannel === 'undefined') return channel
+  channel = new BroadcastChannel('daythread-saves')
+  channel.onmessage = (e: MessageEvent<{ pageId?: string; tab?: string }>) => {
+    if (e.data?.pageId && e.data.tab !== tabId()) otherTabSaves.set(e.data.pageId, Date.now())
+  }
+  return channel
+}
+/** Starts listening (call once when a page editor opens). */
+export function listenForSaves(): void { saves() }
+export function announceSave(pageId: string): void {
+  try { saves()?.postMessage({ pageId, tab: tabId() }) } catch { /* no channel: conflicts read as another device */ }
+}
+export function changedBy(pageId: string, now = Date.now()): 'tab' | 'device' {
+  const at = otherTabSaves.get(pageId)
+  return at !== undefined && now - at < 5 * 60_000 ? 'tab' : 'device'
+}

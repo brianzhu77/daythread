@@ -13,7 +13,7 @@ import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, templateKind, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
-import { claim, clearOwn, orphans, ownClaimed, readOwn, sweepClaims, touchOwn, writeOwn } from './draft-slots'
+import { announceSave, changedBy, claim, clearOwn, listenForSaves, orphans, ownClaimed, readOwn, sweepClaims, touchOwn, writeOwn } from './draft-slots'
 import { applyCommand, bornHere, deletesWithLine, pasteRecords } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
@@ -652,6 +652,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         return
       }
       clearTimeout(retryTimer.current); retries.current = 0; offlineFailure.current = false
+      announceSave(page.id)
       pendingSave.current=null; lastSaved.current = document
       debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
       for (const t of source.tasks) if (expectedTaskVersions.current.get(t.id) !== t.version) invalidHistoryTasks.current.add(t.id)
@@ -674,6 +675,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // B35 part 2: keep this tab's slot marked alive, mark it closed when the tab goes, and on coming back check whether
   // another tab claimed it meanwhile.
   useEffect(() => {
+    listenForSaves()
     const alive = setInterval(() => touchOwn(page.id), 15_000)
     const gone = () => touchOwn(page.id, true)
     const back = () => { if (document.visibilityState === 'visible') claimedAway() }
@@ -701,6 +703,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     if (!inserted) return
     editor.transact(tr => { closeHistory(tr); editor.replaceBlocks(editor.document, doc as never) })
+    // This runs before the editor's change listener is attached, so save it here (it isn't saved anywhere yet).
+    dirty.current = true; stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0)
     setNotice({ text: 'Recovered text from a closed tab · below its lines', fingerprint: JSON.stringify(editor.document) })
   }, [])
   // Back online, or back to this tab: a save waiting on the network goes now.
@@ -1699,7 +1703,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     >
     <div ref={selectionFocus} tabIndex={-1} className="sr-only" aria-label={selectionLabel || undefined} />
     {hiddenEmpty.size > 0 && <style>{[...hiddenEmpty].map(id => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"]`).join(',')}{'{display:none}'}</style>}
-    <div className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? 'Changed in another tab · draft kept' : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
+    <div className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? (changedBy(page.id) === 'tab' ? 'Changed in another tab · draft kept' : 'Changed on another device · draft kept') : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
