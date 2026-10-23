@@ -49,9 +49,15 @@ export function mergeDraft(base: EditorNode[], draft: EditorNode[], latest: Edit
     if (!placed) document.push(node)
     walk([node], n => latestLines.set(n.id, n))
   }
+  // As the first child of `parentId` in the result (a new line nested under a line that's there).
+  const insertUnder = (parentId: string, node: EditorNode) => {
+    walk(document, n => { if (n.id === parentId && !latestLines.has(node.id)) n.children = [node, ...(n.children ?? [])] })
+    walk([node], n => latestLines.set(n.id, n))
+  }
   // The id after which the next line of his goes: the latest line it follows, or the last line he got back.
   const anchorFor = new Map<string, string>()
-  const handle = (node: EditorNode, previousId: string | null) => {
+  const resolved = (id: string | null) => (id ? (anchorFor.get(id) ?? (latestLines.has(id) ? id : null)) : null)
+  const handle = (node: EditorNode, previousId: string | null, parentId: string | null, siblingId: string | null) => {
     const before = baseLines.get(node.id), now = latestLines.get(node.id)
     if (!before) {
       // A line he added. Kept with its id (no other page has it), and as a task when its task doesn't exist yet.
@@ -60,7 +66,11 @@ export function mergeDraft(base: EditorNode[], draft: EditorNode[], latest: Edit
       const line = withoutChildren(node)
       if (now) line.id = newId()
       if (line.type === 'task' && String(line.props?.taskId ?? '').startsWith('editor-task:')) line.props = { ...line.props, taskId: `editor-task:${line.id}` }
-      insertAfter(previousId ? (anchorFor.get(previousId) ?? (latestLines.has(previousId) ? previousId : null)) : null, line)
+      // Where he put it: after the line before it at its level, else under its parent, else after the line above it.
+      const sibling = resolved(siblingId), parent = resolved(parentId)
+      if (sibling) insertAfter(sibling, line)
+      else if (parent) insertUnder(parent, line)
+      else insertAfter(resolved(previousId), line)
       inserted.push(line.id); anchorFor.set(node.id, line.id)
       return
     }
@@ -87,7 +97,10 @@ export function mergeDraft(base: EditorNode[], draft: EditorNode[], latest: Edit
     inserted.push(line.id); anchorFor.set(node.id, line.id)
   }
   let previous: string | null = null
-  walk(draft, node => { handle(node, previous); previous = node.id })
+  walk(draft, (node, parent, index) => {
+    handle(node, previous, parent?.id ?? null, index > 0 ? (parent ? parent.children! : draft)[index - 1]!.id : null)
+    previous = node.id
+  })
   const order = new Map<string, number>(); let i = 0; walk(document, n => order.set(n.id, i++))
   inserted.sort((a, b) => order.get(a)! - order.get(b)!)
   return { document, inserted }

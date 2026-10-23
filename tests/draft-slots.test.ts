@@ -62,7 +62,7 @@ test('a draft merged on opening drops what the page already has: same words (any
   const n = (id: string, content: string, children: any[] = []) => ({ id, content, children })
   const latest = [n('h', 'Notes'), n('x', 'already saved')]
   const draft = [n('h', 'Notes'), n('x', 'already saved  '), n('e', ''), n('y', 'new line')]
-  const out = slots.withoutSaved(draft, latest, c => String(c ?? ''))
+  const out = slots.withoutSaved(draft, latest)
   assert.deepEqual(out.map(x => [x.id, x.content]), [['h', 'Notes'], ['x', 'already saved'], ['y', 'new line']])
 })
 
@@ -85,10 +85,30 @@ test('a new to-do or text line with the same words as one on the page is kept: l
   const base = [older, note]
   // Typed offline in the closed tab: a second "Call mom" to-do and a second "Call Mom" line, each on a new row.
   const draft = [older, { id: 'row-new', type: 'task', props: { taskId: 'editor-task:row-new' }, content: words('Call mom'), children: [] }, note, { id: 'note-new', type: 'paragraph', props: {}, content: words('Call Mom'), children: [] }]
-  const kept = slots.withoutSaved(draft, base, inlineText)
+  const kept = slots.withoutSaved(draft, base)
   assert.deepEqual(kept.map(x => x.id), ['row-old', 'row-new', 'note-old', 'note-new'])
   const merged = mergeDraft(base, kept, base, new Set(['task-old']))
   const tasks = merged.document.filter(x => x.type === 'task').map(x => [x.id, x.props?.taskId])
   assert.deepEqual(tasks, [['row-old', 'task-old'], ['row-new', 'editor-task:row-new']], 'both to-dos, the new one still a new task')
   assert.equal(merged.document.filter(x => inlineText(x.content) === 'Call Mom').length, 2, 'both text lines')
+})
+
+test('an unsaved child under an unchanged parent is kept, and a style, link or tick change is never taken as saved (Ratchet 2b858bf3)', async () => {
+  const { mergeDraft } = await import('../src/domain/draft-merge.ts')
+  const words = (text: string, styles = {}) => [{ type: 'text', text, styles }]
+  const parent = { id: 'p', type: 'paragraph', props: {}, content: words('Plan'), children: [] as any[] }
+  const latest = [parent, { id: 's', type: 'paragraph', props: {}, content: words('Bold me'), children: [] }, { id: 'c', type: 'checkListItem', props: { checked: false }, content: words('Tick me'), children: [] }]
+  const draft = [
+    { ...parent, content: words('Plan '), children: [{ id: 'kid', type: 'paragraph', props: {}, content: words('unsaved child'), children: [] }] },
+    { id: 's', type: 'paragraph', props: {}, content: words('Bold me', { bold: true }), children: [] },
+    { id: 'c', type: 'checkListItem', props: { checked: true }, content: words('Tick me'), children: [] },
+  ]
+  const kept = slots.withoutSaved(draft, latest)
+  assert.deepEqual(kept[0]!.content, parent.content, 'the parent is the page\'s own copy (whitespace only)')
+  assert.deepEqual(kept[0]!.children.map((x: { id: string }) => x.id), ['kid'], 'its unsaved child stays')
+  assert.deepEqual(kept[1]!.content, draft[1]!.content, 'bold is a change')
+  assert.equal(kept[2]!.props.checked, true, 'a tick is a change')
+  const merged = mergeDraft(latest, kept, latest, new Set())
+  assert.ok(merged.inserted.length >= 1, 'the child is merged in')
+  assert.ok(JSON.stringify(merged.document).includes('unsaved child'))
 })

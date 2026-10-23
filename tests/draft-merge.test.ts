@@ -109,3 +109,12 @@ test('checklist tick: only his tick changed → in place; both sides changed →
   const both = merge([item('c', 'milk', false)], [item('c', 'milk', true)], [item('c', 'oat milk', false)])
   assert.deepEqual(both.document.map(n => [n.type, inlineText(n.content), n.props?.checked]), [['sourceChecklist', 'oat milk', false], ['sourceChecklist', 'milk', true]])
 })
+
+test('a line he nested stays nested: under its parent, after its sibling; flat only when the parent is gone (Ratchet 2b858bf3)', () => {
+  const b = [line('p', 'parent', 'bulletListItem', [line('k', 'old child')]), line('q', 'next')]
+  const draft = [line('p', 'parent', 'bulletListItem', [line('first', 'new first child'), line('k', 'old child'), line('after', 'new after old')]), line('q', 'next', 'bulletListItem', [line('only', 'only child')])]
+  const { document } = merge(b, draft, structuredClone(b))
+  assert.deepEqual(texts(document), ['parent', '  new first child', '  old child', '  new after old', 'next', '  only child'])
+  const gone = merge(b, draft, [line('q', 'next')])
+  assert.deepEqual(texts(gone.document), ['next', '  only child', 'new first child', 'new after old'], 'the other side deleted the parent: his lines still come back')
+})
