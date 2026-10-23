@@ -56,15 +56,22 @@ const nodes = editorSeed(page, ws, { templateRows: needsTemplateRows(page, today
 const text = (t: string) => (t ? [{ type: 'text', text: t, styles: {} }] : [])
 const bullet = (t: string, children: EditorNode[] = []) => ({ id: crypto.randomUUID(), type: 'bulletListItem', props: {}, content: text(t), children }) as unknown as EditorNode
 const lineTarget = crypto.randomUUID()
+// B39: nested to-dos, two levels deep, a note under one and a to-do under a bullet: each nested block starts at its
+// parent's text (a nested checkbox under the parent's text, a nested bullet's text 24px right of it).
+const task = (t: string, role: 'plan' | 'reference', children: EditorNode[] = []) => { const id = crypto.randomUUID(); return { id, type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? SCRATCH : '' }, content: text(t), children } as unknown as EditorNode }
+const nestedTasks = [task('Fixture parent to-do', 'plan', [task('Fixture child to-do', 'plan', [task('Fixture grandchild to-do', 'plan')]), bullet('Fixture note under a to-do')])]
 const added = [
   { id: emptyCardId, type: 'pageLink', props: { pageId: emptyPageId, url: '', line: '' }, children: [] },
   { id: longCardId, type: 'pageLink', props: { pageId: longPageId, url: '', line: '' }, children: [] },
   { id: linkCardId, type: 'pageLink', props: { pageId: linkPageId, url: 'https://example.com/fixture-link', line: 'paragraph' }, children: [] },
   { ...bullet('Fixture parent', [bullet('Fixture nested child', [bullet('Fixture level 3')]), bullet('')]), id: lineTarget },
+  bullet('Fixture list with a to-do', [task('Fixture to-do under a bullet', 'reference')]),
   { id: crypto.randomUUID(), type: 'bulletListItem', props: {}, content: [...text('See '), { type: 'pageRef', props: { pageId: page.id, refId: crypto.randomUUID(), newTitle: '', lineId: lineTarget, taskId: '' } }, ...text(' for the list')], children: [] },
 ] as unknown as EditorNode[]
 const notes = nodes.findIndex(n => n.id === page.sections.find(s => s.kind === 'notes')!.id)
 nodes.splice(notes + 1, 0, ...added)
+const other = nodes.findIndex(n => n.id === page.sections.find(s => s.kind === 'other')!.id)
+nodes.splice(other + 1, 0, ...nestedTasks)
 ws = await run({ type: 'save-editor', pageId: page.id, expectedContent: pageContentKey(page), document: JSON.stringify(nodes), today })
 // The link page comes after its card is saved, as in the editor: A2 skips a paste whose card isn't on the page
 // (Ratchet 786198ab), which would leave a Retry card instead of a link card.
