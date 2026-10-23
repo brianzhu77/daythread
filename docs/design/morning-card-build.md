@@ -18,11 +18,12 @@
 
 ## 2. Layout
 
+No line about an unfinished review (removed 2026-10-23, B37, Brian 0a58be58: the review is too rigid; it returns only with B31).
+
 One white card at the top of the day body, in the same place as now. It uses the existing `.app-card` and card radius and stays inside the content column (420–1120 at 1280; 20 px sides at 390).
 
 ```
 Start the day                                  Simulated ·
-Thu's review wasn't finished · Finish (1 min)          ← unchanged line, only when true
 
 TASKS
 (+)  Rewind APPX PR                              ⋯
