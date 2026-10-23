@@ -36,9 +36,27 @@ Group B is listed for tracking only and never counts toward M.
   an open tab ignores loads older than what it holds, so after a rollback to a lower revision it keeps showing content the server no longer has until reloaded.
 - Each evidence script runs on its own fresh copy of Brian's data; scripts that write markers break each other's database checks (Lead, c1ead10 deploy).
 - **Raft tasks mirror the open rows** (Brian b9a06169 "bring it to raft tasks"; Lead 2026-10-22): task #120 A11, #121 A6b-2 (closed · dropped; parked fold = #152, later · usage trigger), #122 A7,
-  #123 B21 (waiting on Brian), #124 B22, #125 B27, #126 B28 (later · Brian), #142 B29 (later · usage trigger), #147 B30 (closed · not an app bug), #150 B31 (later), #127–#140 backlog (B2, B3, B4, B5, B6, B7, B8, B9, B10, B11, B13,
+  #123 B21 (waiting on Brian), #124 B22, #125 B27, #126 B28 (later · Brian), #142 B29 (later · usage trigger), #147 B30 (closed · not an app bug), #150 B31 (later), basics #156 B32, #157 B33, #158 B34, #159 B35, #155 B36 (Ratchet), #127–#140 backlog (B2, B3, B4, B5, B6, B7, B8, B9, B10, B11, B13,
   B14, B16, B18). Brian reads the board, so a row's status change and its task's status change go together. If Brian closes a
   task, the row becomes `dropped (Brian closed task #N)`. A new row he asks for gets a task the same day.
+
+## Basics first (Brian 0a58be58, 2026-10-23)
+
+Brian: get the basics right before new features. Ranked by what hurts him daily and what gets worse (Lead's list,
+draft 1, e838e59f, from the team's independent top-5 lists). Jazz's own list may add to it, and Brian's answer reorders it.
+These rows sit in group B and don't change N of M.
+
+| Rank | Row | Task | Owner |
+|---|---|---|---|
+| 1 | B32 Row bloat | #156 (review #154) | Roadbuster |
+| 2 | B33 Deleting a to-do line leaves a junk task | #157 | Roadbuster, after B32 |
+| 3 | B34 Carrying tasks keeps nesting and Top 3 | #158 | Roadbuster (sizing) |
+| 4 | B35 Saving recovers by itself | #159 | Roadbuster |
+| 5 | B5 Phone indent/outdent, plus B36 real iOS Safari check | #130, #155 | Roadbuster / Ratchet |
+| 6 | B3 Export (Markdown plus JSON from Settings) | #128 | Roadbuster |
+| 7 | B36 Real-day typing replay as a release gate | #155 | Ratchet (test code, Roadbuster reviews) |
+
+Not now: B29 (moved-line identity) and B22 (pasted task stays the same task), both accepted limits waiting on their triggers.
 
 ## A. First version (counts toward N of M)
 
@@ -103,9 +121,9 @@ N = D1–D6 + A5 + A1a, A1b, A3 + A4 + A6a + A8 = 13.
 |---|---|---|---|
 | B1 | Rename page | v0.3 P02 | built (c8fb28a, editable title; Ratchet #64) |
 | B2 | Events as records | v0.3 scope 6 | missing |
-| B3 | JSON export | v0.3 scope 13 | missing |
+| B3 | JSON export | v0.3 scope 13 | missing · **Basics 6**: Markdown plus JSON, downloaded from Settings (task #128) |
 | B4 | "/" menu Link and Separator; "Paragraph" → "Body" | editor spec F13 | missing |
-| B5 | Phone toolbar: Aa, indent/outdent, hide keyboard | editor spec F16 | partial |
+| B5 | Phone toolbar: Aa, indent/outdent, hide keyboard | editor spec F16 | partial · **Basics 5** (indent/outdent first; task #130) |
 | B6 | Dark mode | craft-v1 | missing |
 | B7 | Review as a sheet | craft-v1 step 5, Brian 0a58be58 | missing. **Brian's evidence (2026-10-23, 0a58be58):** the review's structure is too rigid for him; he opens it "just to see what's there", then closes it; 0 saves in 10 days (5 opens, desktop sidebar only). A sheet that keeps the same steps would not fix this; any redo starts from "show me what happened today", not a form (Lead 06:11). Same finding as B31 (task #150) |
 | B8 | Capture type chips Auto · Task · Page | craft-v1; C4 = Auto | missing |
@@ -132,6 +150,11 @@ N = D1–D6 + A5 + A1a, A1b, A3 + A4 + A6a + A8 = 13.
 | B29 | A11 v2: a link to a line keeps working when the line is cut and pasted to another place (move identity: server rename as a real copy, shared paste note, `renamed` reply; ~1½ d, Roadbuster). **Trigger (Bumblebee):** in a usage read, one real case of his line link reading "Line not found" while the same words exist elsewhere → build it; zero → it waits | A11 scope cut, Lead a7554a7d (2026-10-22) | missing (later, usage trigger) |
 | B30 | Pressing End on a line near the bottom of the screen scrolls the page about 620 px (at 1280, a line at y≈854 of 900 jumps to y≈230), so the line he's editing moves far up. Chromium and WebKit; present before A11 (04990a7), so not an A11 regression. Repro on Oct 18 in Jazz's check ffd56d5b. Desktop keyboards only; phones have no End key | Jazz ffd56d5b (2026-10-23), task #147 | **not an app bug, no change** (2026-10-23): macOS Chrome and Safari scroll to the page end on End even in a text field; ⌘→ is the Mac end-of-line key; the app won't override a system key (Roadbuster 42e75d3f, Jazz 1e733659). Task #147 closed |
 | B31 | The evening review is too rigid for him: "这个结构做的太死了，对于我而言，不是很好用". He opened it 5 times to see what was there and closed it; never saved (0 of 10 days). Needed before any review feature (A6b-2 parked plan) can matter. Shape unknown: what he wants to see at day end is the open question | Brian 0a58be58 (2026-10-23) | missing (later · Brian said basics come first) |
+| B32 | **Basics 1.** Row bloat: receipts and the Undo copy make his workspace row 2.2 MB and growing (a save takes 27 ms; at 10× that, 21 MB and 220 ms). Fix (Roadbuster 0317de11, Lead approved): short fingerprints; the newest 500 receipts kept whole, older ones shrunk to tombstones that are refused, never re-applied; the Undo copy carries no receipts (Undo already restores the current ones, Ratchet 8fbd5d00); a one-time trim on the first command after deploy. Expected at most about 0.35 MB, ever. Ratchet 9735edff: cover an expired id past the tombstone window through `executeOnLatest`, and measure the real browser download (B26 already strips receipts) | Brian 0a58be58 (basics first); Roadbuster top 5, Lead e838e59f #1 | missing (building on `fix/receipts-size`; review #154; task #156) |
+| B33 | **Basics 2.** Deleting a to-do line leaves a junk task: 8 on Oct 22 ("" ×3, "a" ×3, "aa", a ticked "#"), none with a line on any page. Cause: deliberate rule D05 (`editor-interaction.md` §1.4). **Rule (Jazz cb79b4f0, Lead 764c7bf8):** judged on the task, not on how the line was removed. A task born here (never planned on another day, no deadline, never carried; a blank title always counts) is deleted when its line leaves the page by any delete, including a selection across lines and a deleted section, with no notice; ⌘Z / Undo brings it back with the same id, done state and sub-lines. A task with history keeps today's rules (one row → Not today with the Undo notice; in a deleted section → "Planned · not in note"). Typing the text away isn't a delete. Cut then paste keeps the same task (F19); if that isn't cheap, cut never deletes. Links don't count as history ("Line not found"). One-time cleanup of exactly those 8 after a backup (Lead). **Success check:** in the usage reads, zero new tasks with no line and no history, and Not today holds only tasks he sent there | Brian 0a58be58; Bumblebee 7821f7ee #1, Lead e838e59f #2 | missing (after B32, Roadbuster; task #157) |
+| B34 | **Basics 3.** Nesting and Top 3 are lost when tasks carry to another day. On a copy (rev 112, Bumblebee 895c19e4) the morning card's Add all put "Rewind App PR" flat instead of under its parent, and his two Top 3 items under Other: every placement stores section "other", and Top 3 exists only as position on the page. **Rule (Jazz cb79b4f0):** a sub-task lands under its parent when the parent comes too (any depth, source order; under the parent's row if that page already has it); if the parent doesn't come, the child lands top-level in the parent's section; a done sub-task never carries; Top 3 carries into Top 3 and Other into Other (read the section from the page at carry time, or store it); the morning card shows the same tree. The Tasks and Review screens follow as B28. **Success check:** after a hand-off with a nested or Top 3 task, the landed rows match the source page | Brian 0a58be58; Bumblebee 7821f7ee #2, Lead e838e59f #3 | missing (sizing, Roadbuster; task #158) |
+| B35 | **Basics 4.** Saving recovers by itself: (1) retry when the connection comes back or the tab becomes visible (Roadbuster #4); (2) the unsaved-text slot is per tab, not per page (Ratchet #1, reproduce first); (3) the conflict notice says "another device" when that's what it is (Roadbuster #3). A real merge is out of scope | Brian 0a58be58; Lead e838e59f #4 | missing (Roadbuster; task #159) |
+| B36 | **Basics 5 and 7.** Real-use checks before every release, on a local build over a copy, never live. (a) A real-day typing replay: new to-do, nest, tick, delete a line, delete a blank to-do, cut and paste, two tabs; it becomes a release gate next to the alignment check. (b) Real iOS Safari in the iOS Simulator (iPhone 17, software keyboard with pinyin): type with pinyin, background mid-word and come back, hit rate of the 32 px plan button, nesting once B5's toolbar is built. Today no change has been checked on a real iPhone | Brian 0a58be58; Bumblebee 7821f7ee #4 #5, Lead e838e59f #5 #7 | missing (Ratchet task #155; test code reviewed by Roadbuster) |
 
 
 ## S. New storage on Supabase (tracked, not counted)
