@@ -432,6 +432,24 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const dragging = useRef<EditorNode[]>([])
   const [status, setStatus] = useState(initial.current.recovered ? 'Recovered unsaved draft' : '')
   const [failed, setFailed] = useState(initial.current.recovered)
+  // B38 (Jazz): a save that hasn't gone through, kept while he goes on typing (typing clears `failed`), until one saves.
+  const [unsaved, setUnsaved] = useState<'network' | 'refused' | null>(null)
+  // The header's save status scrolls away while he types low on the page: then the state shows where he still looks.
+  const saveLine = useRef<HTMLDivElement>(null)
+  const [saveLineVisible, setSaveLineVisible] = useState(true)
+  useEffect(() => {
+    const el = saveLine.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(([entry]) => setSaveLineVisible(entry!.isIntersecting))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false)
+  useEffect(() => {
+    const update = () => setOnline(navigator.onLine !== false)
+    window.addEventListener('online', update); window.addEventListener('offline', update)
+    return () => { window.removeEventListener('online', update); window.removeEventListener('offline', update) }
+  }, [])
   const [drop, setDrop] = useState<{ id: string; end: boolean; top: number } | null>(null)
   const [compact, setCompact] = useState(() => window.matchMedia('(max-width: 899px)').matches)
   // Opened at a line (?block=id, from a tag or a line link): bring that block into view a third from the top and tint
@@ -587,7 +605,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const ws = await refresh(), latest = ws.pages.find(p => p.id === page.id)
         if (latest) applyServerPage(latest, ws)
       } finally { claimHandled.current = false }
-      setFailed(false); setStatus("Latest loaded · this tab's text was already saved")
+      setFailed(false); setUnsaved(null); setStatus("Latest loaded · this tab's text was already saved")
     })()
     return true
   }
@@ -620,7 +638,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (latestPage.current.editorJSON === JSON.stringify(editor.document) && lastSent.current === latestPage.current.editorJSON) {
       base.current = pageContentKey(latestPage.current); dirty.current = false; pendingSave.current = null
       clearTimeout(retryTimer.current); retries.current = 0; offlineFailure.current = false
-      semanticDeletes.current.clear(); setFailed(false); setStatus('Saved')
+      semanticDeletes.current.clear(); setFailed(false); setUnsaved(null); setStatus('Saved')
       clearOwn(page.id)
       return
     }
@@ -637,7 +655,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const source = latestWorkspace.current
     let preview: Workspace
     try { preview = applyCommand(source, { operationId, expectedRevision: source.revision, action }).workspace }
-    catch (error) { debugClient('editor.save.rejected',{operationId,pageId:page.id,result:'conflict',error:error instanceof Error?error.name:'UnknownError'}); sending.current = false; setFailed(true); setStatus(error instanceof Error ? error.message : 'Cannot save; draft kept'); return }
+    catch (error) { debugClient('editor.save.rejected',{operationId,pageId:page.id,result:'conflict',error:error instanceof Error?error.name:'UnknownError'}); sending.current = false; setFailed(true); setUnsaved('refused'); setStatus(error instanceof Error ? error.message : 'Cannot save; draft kept'); return }
     let settled!: () => void
     inflight.current = new Promise<void>(resolve => { settled = resolve })
     try {
@@ -646,7 +664,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       sending.current = false
       if (!result) {
         debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true)
-        offlineFailure.current = isNetworkFailure(failure)
+        offlineFailure.current = isNetworkFailure(failure); setUnsaved(offlineFailure.current ? 'network' : 'refused')
         // Jazz bebe67e3: what happened · what's kept, short enough for 390; Retry stays for an impatient moment.
         if (offlineFailure.current) { setStatus(navigator.onLine === false ? "Offline · saves when you're back" : 'Not saved yet · trying again'); scheduleRetry() }
         else setStatus("Couldn't save · draft kept")
@@ -667,7 +685,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       dirty.current = JSON.stringify(editor.document) !== document
       // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
       const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
-      setFailed(false); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
+      setFailed(false); setUnsaved(null); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
       if (dirty.current) { stash(); timer.current = setTimeout(() => void flushRef.current(), 300) }
       else clearOwn(page.id)
     } finally { settled() }
@@ -766,7 +784,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (page.editorJSON === lastSent.current && page.editorSections === JSON.stringify(page.sections)) return
     // His own save from when he left this page landed after he came back: carry on from it, it isn't a conflict.
     if (dirty.current && isOwnLeaveSave(page.id, page.editorJSON)) { base.current = next; setFailed(false); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0); return }
-    if (dirty.current) { debugClient('editor.external-refresh',{operationId:newOperationId(),triggerOperationId:pendingSave.current?.operationId,pageId:page.id,result:'conflict'}); setFailed(true); setStatus('Page changed elsewhere · draft kept; copy it before reloading'); return }
+    if (dirty.current) { debugClient('editor.external-refresh',{operationId:newOperationId(),triggerOperationId:pendingSave.current?.operationId,pageId:page.id,result:'conflict'}); setFailed(true); setUnsaved('refused'); setStatus('Page changed elsewhere · draft kept; copy it before reloading'); return }
     // Deferred: replacing blocks synchronously inside React's commit triggers a flushSync warning from BlockNote's views.
     queueMicrotask(() => {
       if (dirty.current || base.current === next) return
@@ -813,7 +831,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     clearTimeout(timer.current)
     semanticDeletes.current.clear(); pendingSave.current = null
     applyServerPage(latestNow, ws)
-    dirty.current = false; setFailed(false); clearOwn(page.id)
+    dirty.current = false; setFailed(false); setUnsaved(null); clearOwn(page.id)
     if (!merged.inserted.length) { setStatus('Latest loaded'); return }
     editor.transact(tr => { closeHistory(tr); editor.replaceBlocks(editor.document, merged.document as never) })
     editor.setTextCursorPosition(merged.inserted[0]!, 'end'); editor.focus()
@@ -1164,7 +1182,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       editor.prosemirrorView.dispatch(transaction)
       setPastedChecklistIds(checklistIds(nextDocument))
       historyGuardBypass.current = false; suppress.current = false
-      dirty.current = false; clearOwn(page.id); setFailed(false); setStatus('Saved')
+      dirty.current = false; clearOwn(page.id); setFailed(false); setUnsaved(null); setStatus('Saved')
       debugClient('editor.history.finish',{operationId:historyOperationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
     } catch (error) {
       debugClient('editor.history.rejected',{operationId:historyOperationId,pageId:page.id,result:'error',error:error instanceof Error?error.name:'UnknownError'})
@@ -1541,6 +1559,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }
   // B23 §1: a failed save is a conflict when he has unsaved typing and the page is no longer the one he started from.
   const conflict = failed && dirty.current && pageContentKey(page) !== base.current
+  const conflictText = changedBy(page.id) === 'tab' ? 'Changed in another tab · draft kept' : 'Changed on another device · draft kept'
+  // B38: the dock line's words stay steady while typing flips the header between "Unsaved changes" and "Saving…".
+  const unsavedText = conflict ? conflictText : !online ? "Offline · saves when you're back" : unsaved === 'network' ? 'Not saved yet · trying again' : "Couldn't save · draft kept"
   return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
     onMouseDownCapture={e => { const target = e.target as Element; if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') } }}
@@ -1705,7 +1726,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     >
     <div ref={selectionFocus} tabIndex={-1} className="sr-only" aria-label={selectionLabel || undefined} />
     {hiddenEmpty.size > 0 && <style>{[...hiddenEmpty].map(id => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"]`).join(',')}{'{display:none}'}</style>}
-    <div className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? (changedBy(page.id) === 'tab' ? 'Changed in another tab · draft kept' : 'Changed on another device · draft kept') : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
+    <div ref={saveLine} className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? conflictText : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
@@ -1760,8 +1781,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       <span className="editor-toolbar-gap" aria-hidden="true" />
       <button {...keepCaret} onClick={() => void performHistory('undo')} aria-label="Undo"><UndoIcon /></button>
       <button {...keepCaret} onClick={() => void performHistory('redo')} aria-label="Redo"><RedoIcon /></button>
+      {unsaved && <span className="editor-toolbar-unsaved" role="img" aria-label="Not saved yet" />}
     </div>
     {dock && createPortal(<>
+      {/* B38: no role; the header's status line already announces each change. */}
+      {unsaved && !saveLineVisible && <div className="editor-unsaved-line"><span className="editor-unsaved-dot" aria-hidden="true" />{unsavedText}</div>}
       {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span>{selected.current.length === 1 && lineLinkTarget(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyLineLink(id) }}>Copy link</button>}<button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
       {lineMenu && <LineMenu anchor={lineMenu.anchor} onClose={closeLineMenu} onCopy={() => { const id = lineMenu.blockId; closeLineMenu(true); copyLineLink(id) }} />}
     {pastedChecklistIds.length > 0 && <div className="editor-paste-notice" role="status">{pastedChecklistIds.length} checklist {pastedChecklistIds.length === 1 ? 'line' : 'lines'} · <button onClick={() => {
