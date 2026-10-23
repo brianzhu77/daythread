@@ -107,6 +107,15 @@ His data is thin, so the open question is whether Weave makes anything he'd open
 
 This turns "is Weave worth building now" into his decision on real output, at little cost, before roughly a week of build.
 
+Added after the Lead's acceptance (98046c4c):
+
+- **It reinterprets his ask, so it's his call.** He said "like Karpathy's LLM Wiki" (06469260), which means written articles.
+  So the offline run writes **both shapes for the same topics**: the gathered page (§2) and an article-style page. He chooses
+  between real outputs, not between descriptions. The question to him is: "Weave gathers your own lines by topic; it doesn't
+  write articles. Here are both. Which would you want?"
+- **It has to beat Tags.** The check passes only if the output finds something the Tags list can't: an untagged line under a
+  topic, or one topic across days. If it only repeats his tags, we tell him that in plain words, not just send the file.
+
 ## 4. Success check (after release)
 
 Read in the usage read 7 days after it goes live:
