@@ -1286,3 +1286,19 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .account-row .link.retry { text-decoration: underline; }
 .account-row-phone { display: none; }
 @media (max-width: 599px) { .account-row-phone { display: block; } }
+/* B38 (Jazz): a save that hasn't gone through shows where he can still see it. Phone, typing: a dot on the toolbar.
+   Otherwise, while the header's status is scrolled away: a quiet line in the dock (desktop) or above the tab bar
+   (phone, keyboard down). State only: Retry and Copy draft stay in the header. */
+.editor-toolbar-unsaved { position:absolute; top:-3px; right:-3px; width:8px; height:8px; box-shadow:0 0 0 2px var(--bg); border-radius:50%; background:var(--warn); pointer-events:none; }
+.editor-unsaved-line { display:flex; align-items:center; gap:8px; max-width:calc(100vw - 32px); padding:6px 12px; border-radius:var(--radius-pill); background:var(--bg); color:var(--ink-2); box-shadow:0 2px 12px #0002; font-size:var(--text-caption); white-space:nowrap; pointer-events:none; }
+.editor-unsaved-dot { flex:none; width:7px; height:7px; border-radius:50%; background:var(--warn); }
+@media(max-width:899px) {
+  .bottom-dock .editor-unsaved-line { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); }
+  body:has(.continuous-editor.has-selection) .editor-unsaved-line { display:none; }
+}
+@media(max-width:700px) { body:has(.continuous-editor:focus-within) .editor-unsaved-line { display:none; } }
+/* A notice (HeroUI toast, 44px, 16px off the bottom on desktop) would cover the line: the line steps up above it. */
+@media(min-width:900px) {
+  .editor-unsaved-line { transition:transform .15s ease-out; }
+  body:has(.app-toasts [data-slot="toast"]) .editor-unsaved-line { transform:translateY(-52px); }
+}
