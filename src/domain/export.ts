@@ -1,0 +1,221 @@
+import { editorSeed, inlineText, type EditorNode } from './editor-document.ts'
+import type { Page, Workspace } from './types.ts'
+
+/**
+ * B3 export (Lead 1ce5dd8b, Jazz f10f8de5): his words out of the app, readable without its code. A folder of Markdown
+ * (a day page per date, a document page per title) that opens as an Obsidian vault, plus `workspace.json` with every
+ * fact behind it. Read-only: built from a loaded workspace, nothing is written.
+ */
+export const exportFormatVersion = 1
+
+export interface ExportFile { path: string; text: string }
+
+/** Every file of the export, under one folder named for the day it was made. */
+export function exportFiles(ws: Workspace, now: Date): ExportFile[] {
+  const day = now.toLocaleDateString('en-CA', { timeZone: ws.timezone })
+  const root = `daythread-export-${day}`
+  const names = fileNames(ws)
+  const live = ws.pages.filter(p => !p.trashedAt)
+  const days = live.filter(p => p.type === 'daily' && p.date).sort((a, b) => (a.date! < b.date! ? -1 : 1))
+  const documents = live.filter(p => !(p.type === 'daily' && p.date)).sort((a, b) => names.get(a.id)!.localeCompare(names.get(b.id)!))
+  return [
+    { path: `${root}/README.md`, text: readme(day) },
+    ...days.map(p => ({ path: `${root}/days/${names.get(p.id)}.md`, text: pageMarkdown(p, ws, names) })),
+    ...documents.map(p => ({ path: `${root}/pages/${names.get(p.id)}.md`, text: pageMarkdown(p, ws, names) })),
+    { path: `${root}/workspace.json`, text: JSON.stringify(exportJson(ws, now, names), null, 2) },
+  ]
+}
+
+/**
+ * A file name per page, links included: a day page by its local date; any other page by its title, with only what a
+ * file system or a `[[link]]` can't hold replaced, CJK and emoji kept, and " (2)" for a second page of the same title.
+ */
+export function fileNames(ws: Workspace): Map<string, string> {
+  const names = new Map<string, string>(), taken = new Set<string>()
+  const pages = [...ws.pages].sort((a, b) => (a.type === b.type ? 0 : a.type === 'daily' ? -1 : 1))
+  for (const p of pages) {
+    const base = p.type === 'daily' && p.date ? p.date : safeName(p.title)
+    let name = base
+    for (let n = 2; taken.has(name.toLowerCase()); n++) name = `${base} (${n})`
+    taken.add(name.toLowerCase())
+    names.set(p.id, name)
+  }
+  return names
+}
+export function safeName(title: string): string {
+  const name = title
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    // Windows and macOS reject these in a file name; Obsidian can't link to a name holding # ^ [ ] or |.
+    .replace(/[/\\:*?"<>|#^[\]]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[. ]+$/, '')
+  const short = [...name].slice(0, 120).join('')
+  return /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(short) ? `${short}-` : short || 'Untitled'
+}
+
+/** One page as Markdown: its title, then its document as he sees it, nesting kept, to-dos as `- [ ]` / `- [x]`. */
+export function pageMarkdown(p: Page, ws: Workspace, names: Map<string, string>): string {
+  const parent = p.parentId ? names.get(p.parentId) : undefined
+  const front = ['---', `daythread-id: ${yamlString(p.id)}`, ...(p.date ? [`date: ${p.date}`] : []), ...(parent ? [`parent: ${yamlString(`[[${parent}]]`)}`] : []), '---']
+  const title = p.type === 'daily' && p.date ? p.date : p.title || 'Untitled'
+  const body = blocksMarkdown(editorSeed(p, ws), ws, names)
+  const review = p.reviewText?.trim() ? `\n\n## Evening review\n\n${p.reviewText.trim()}` : ''
+  return `${front.join('\n')}\n\n# ${title}\n${body ? `\n${body}\n` : ''}${review}${review ? '\n' : ''}`
+}
+
+const listTypes = new Set(['bulletListItem', 'numberedListItem', 'checkListItem', 'task', 'sourceChecklist', 'toggleListItem'])
+
+/**
+ * Top-level text stays text and headings stay headings. Anything nested, or with lines nested under it, is written as
+ * a list item indented one tab per level: Markdown keeps nesting only in lists.
+ */
+export function blocksMarkdown(nodes: EditorNode[], ws: Workspace, names: Map<string, string>): string {
+  const out: string[] = []
+  let previousList = false
+  const write = (n: EditorNode, depth: number) => {
+    const lines = blockLines(n, ws, names, depth > 0 || Boolean(n.children?.length))
+    const kids = n.children ?? []
+    if (!lines.length && !kids.length) return
+    const isList = depth > 0 || lines[0]?.startsWith('- ') || lines[0]?.startsWith('1. ') || false
+    if (depth === 0 && out.length && !(isList && previousList)) out.push('')
+    const pad = '\t'.repeat(depth)
+    out.push(...lines.map(l => pad + l))
+    if (depth === 0) previousList = isList
+    // A line with no words of its own still holds its nested lines' place.
+    const childDepth = lines.length ? depth + 1 : depth
+    kids.forEach(k => write(k, childDepth))
+  }
+  nodes.forEach(n => write(n, 0))
+  return out.join('\n')
+}
+
+function blockLines(n: EditorNode, ws: Workspace, names: Map<string, string>, asItem: boolean): string[] {
+  const text = inlineMarkdown(n.content, ws, names).trim()
+  const props = (n.props ?? {}) as Record<string, unknown>
+  switch (n.type) {
+    case 'heading': {
+      if (!text) return []
+      return asItem ? [`- **${text}**`] : [`${'#'.repeat(Math.min(Math.max(Number(props.level ?? 2), 1), 6))} ${text}`]
+    }
+    case 'task': {
+      const task = ws.tasks.find(t => t.id === props.taskId)
+      if (!text && !task?.title.trim()) return []
+      const mark = task?.status === 'done' ? 'x' : task?.status === 'cancelled' ? '-' : ' '
+      return [`- [${mark}] ${text || task!.title.trim()}`]
+    }
+    case 'checkListItem':
+    case 'sourceChecklist':
+      return text ? [`- [${props.checked ? 'x' : ' '}] ${text}`] : []
+    case 'bulletListItem':
+    case 'toggleListItem':
+      return text ? [`- ${text}`] : []
+    case 'numberedListItem':
+      return text ? [`1. ${text}`] : []
+    case 'quote':
+      return text ? [asItem ? `- > ${text}` : `> ${text}`] : []
+    case 'codeBlock': {
+      const code = inlineText(n.content)
+      return code ? ['```' + String(props.language ?? ''), ...code.split('\n'), '```'] : []
+    }
+    case 'divider':
+      return asItem ? [] : ['---']
+    case 'pageLink': {
+      const target = typeof props.pageId === 'string' && props.pageId ? names.get(props.pageId) : undefined
+      if (target) return [`${asItem ? '- ' : ''}[[${target}]]`]
+      return typeof props.url === 'string' && props.url ? [`${asItem ? '- ' : ''}<${props.url}>`] : []
+    }
+    case 'image':
+    case 'video':
+    case 'audio':
+    case 'file': {
+      const url = String(props.url ?? '')
+      if (!url) return []
+      const label = String(props.caption || props.name || n.type)
+      return [`${asItem ? '- ' : ''}${n.type === 'image' ? '!' : ''}[${label}](${url})`]
+    }
+    case 'table': {
+      const rows = ((n.content as { rows?: { cells?: unknown[] }[] } | undefined)?.rows ?? []).map(r => (r.cells ?? []).map(c => inlineMarkdown((c as { content?: unknown })?.content ?? c, ws, names).replace(/\|/g, '\\|').trim()))
+      if (!rows.length) return []
+      const width = Math.max(...rows.map(r => r.length)), row = (r: string[]) => `| ${Array.from({ length: width }, (_, i) => r[i] ?? '').join(' | ')} |`
+      return [row(rows[0]!), `|${' --- |'.repeat(width)}`, ...rows.slice(1).map(row)]
+    }
+    default:
+      return text ? [asItem ? `- ${text}` : text] : []
+  }
+}
+
+type Inline = { type?: string; text?: string; styles?: Record<string, unknown>; href?: string; content?: unknown; props?: Record<string, unknown> }
+
+/** Words with their styles, links as links, `[[page]]` links by the target's file name. */
+export function inlineMarkdown(content: unknown, ws: Workspace, names: Map<string, string>): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return (content as Inline[]).map(c => {
+    if (!c || typeof c !== 'object') return ''
+    if (c.type === 'link') return `[${inlineMarkdown(c.content, ws, names) || c.href}](${c.href ?? ''})`
+    if (c.type === 'pageRef') {
+      const id = String(c.props?.pageId ?? ''), target = names.get(id)
+      if (target) return `[[${target}]]`
+      return String(c.props?.newTitle || ws.pages.find(p => p.id === id)?.title || '')
+    }
+    if (c.type !== 'text' || !c.text) return ''
+    return styled(c.text, c.styles ?? {})
+  }).join('')
+}
+/** Markdown marks go inside the run's own spaces ("**bold** ", not "**bold **"), which Markdown wouldn't read. */
+function styled(text: string, styles: Record<string, unknown>): string {
+  if (styles.code) return `\`${text}\``
+  const [, lead, core, trail] = /^(\s*)([\s\S]*?)(\s*)$/.exec(text)!
+  if (!core) return text
+  let out = core
+  if (styles.strike) out = `~~${out}~~`
+  if (styles.italic) out = `*${out}*`
+  if (styles.bold) out = `**${out}**`
+  return `${lead}${out}${trail}`
+}
+
+function yamlString(value: string): string {
+  return JSON.stringify(value)
+}
+
+/**
+ * Every fact, readable without the app: pages with their documents (BlockNote JSON) and Markdown file, tasks, plans,
+ * events, links and captures, trash included. Receipts, the Undo copy and editor bookkeeping are internals and stay
+ * out (Lead 1ce5dd8b).
+ */
+export function exportJson(ws: Workspace, now: Date, names = fileNames(ws)) {
+  const pages = ws.pages.map(p => {
+    const { editorJSON: _j, editorSections: _s, editorBlockMetadata: _m, editorCreations: _c, editorDeletions: _d, templateApplied: _t, ...rest } = p
+    // The document as the page shows it: its saved document with rows planned since then.
+    let document: EditorNode[] | null
+    try { document = editorSeed(p, ws) } catch { document = null }
+    const folder = p.type === 'daily' && p.date ? 'days' : 'pages'
+    return { ...rest, document, markdownFile: p.trashedAt ? null : `${folder}/${names.get(p.id)}.md` }
+  })
+  return {
+    format: 'daythread-export',
+    formatVersion: exportFormatVersion,
+    exportedAt: now.toISOString(),
+    schemaVersion: ws.schemaVersion,
+    revision: ws.revision,
+    timezone: ws.timezone,
+    pages,
+    tasks: ws.tasks,
+    placements: ws.placements,
+    events: ws.events,
+    materials: ws.materials,
+    captures: ws.captures,
+  }
+}
+
+function readme(day: string): string {
+  return `# Daythread export · ${day}
+
+- \`days/\`: one Markdown file per day page, named by its date (America/Vancouver).
+- \`pages/\`: one Markdown file per page that isn't a day. \`[[links]]\` point at these files by name, so the folder opens as an Obsidian vault.
+- \`workspace.json\`: every fact behind the pages (pages with their documents, tasks, plans, events, links, captures and trashed pages), format \`daythread-export\` version ${exportFormatVersion}. A page's \`document\` is BlockNote JSON; \`markdownFile\` names its Markdown file.
+
+To-dos are \`- [ ]\` open, \`- [x]\` done, \`- [-]\` cancelled. Nested lines are indented one tab per level.
+`
+}
