@@ -1,0 +1,17 @@
+{"id":"e39e96c0-c30e-4ccc-9a8e-903bf158cea8","ownBeforeMarker":true}
+{"closedDraft":true,"exported":false,"currentPageOpen":true}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: gone tab text on the open page must be recovered before a successful export
+    at file:///Users/dogrod/Developer/daythread-ratchet-export/tests/evidence/ratchet-export-170/closed-same-page.mjs:6:1613 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

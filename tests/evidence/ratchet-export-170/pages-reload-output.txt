@@ -1,0 +1,19 @@
+{"sameIdentity":true,"downloads":1,"row":"Export","retainedDraft":true}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Pages reload must not forget unsaved closed-editor guard
+
+1 !== 0
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-export/tests/evidence/ratchet-export-170/pages-reload.mjs:4:1211 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 1,
+  expected: 0,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
