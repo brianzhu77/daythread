@@ -69,6 +69,21 @@ const movingRow = page(ws, today).sections.flatMap(s => s.blocks).find(b => b.ta
 // A page that is removed outright below (only a link paste's Undo does that in the app), for "Page not found".
 await run({ type: 'create-document', title: 'A11 missing', body: '', pageId: 'a11-missing' })
 
+// A trashed document page holding a row of the task planned today: its URL still follows the task (Ratchet #146).
+await run({ type: 'create-document', title: 'A11 trashed task page', body: '', pageId: 'a11-trash-task' })
+await save('a11-trash-task', nodes => [...nodes, { id: 'a11-trashed-task-row', type: 'task', props: { taskId: pastTask }, content: [text('A11 past task')], children: [] } as unknown as EditorNode])
+await run({ type: 'delete-page', pageId: 'a11-trash-task', at: new Date().toISOString() })
+
+// A tagged task (planned today) with a row on the target page, and a second row of it there that's then removed:
+// a tag opens the page the Tags list names; a row that's gone follows its task (Bumblebee 54096b19).
+ws = await run({ type: 'add-task', pageId: page(ws, today).id, sectionId: other(today, ws), title: 'A11 tagged task #a11tag', plannedOn: today })
+const taggedTask = ws.tasks.at(-1)!.id
+await save('a11-target', nodes => { const at = nodes.findIndex(n => n.id === 'a11-tail-0'); return [...nodes.slice(0, at), { id: 'a11-tagged-row', type: 'task', props: { taskId: taggedTask }, content: [text('A11 tagged task #a11tag')], children: [] } as unknown as EditorNode,
+  { id: 'a11-tagged-gone', type: 'task', props: { taskId: taggedTask }, content: [text('A11 tagged task #a11tag')], children: [] } as unknown as EditorNode, ...nodes.slice(at)] })
+await save('a11-target', nodes => nodes.filter(n => n.id !== 'a11-tagged-gone'))
+ws = await repository.load()
+const taggedTodayRow = page(ws, today).sections.flatMap(s => s.blocks).find(b => b.taskId === taggedTask)!.id
+
 // The page holding the links, and a page link to the target too (Linked from lists the source once).
 await run({ type: 'create-document', title: 'A11 links', body: '', pageId: 'a11-source' })
 ws = await repository.load()
@@ -90,8 +105,8 @@ ws = await run({ type: 'plan-task', taskId: movingTask, date: tomorrow, section:
 const manifest = {
   today, past, tomorrow, long,
   pages: { target: 'a11-target', source: 'a11-source', gone: 'a11-gone', trash: 'a11-trash', past: page(ws, past).id, today: page(ws, today).id, tomorrow: page(ws, tomorrow).id },
-  tasks: { past: pastTask, moving: movingTask },
-  rows: { pastRow, todayRow, movingRow, movedRow: page(ws, tomorrow).sections.flatMap(s => s.blocks).find(b => b.taskId === movingTask)!.id },
+  tasks: { past: pastTask, moving: movingTask, tagged: taggedTask },
+  rows: { pastRow, todayRow, movingRow, taggedTodayRow, movedRow: page(ws, tomorrow).sections.flatMap(s => s.blocks).find(b => b.taskId === movingTask)!.id },
   refIds: Object.fromEntries(Object.entries(links).map(([name, ref]) => [name, ref.props.refId])),
 }
 // Remove 'a11-missing' from the store directly (both snapshots), as an outright delete leaves it: links to it stay.

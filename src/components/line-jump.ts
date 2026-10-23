@@ -1,3 +1,5 @@
+import { toast } from '@heroui/react'
+
 /**
  * The block jump (tags and A11 line links, Jazz line-links-states §4): the line lands about a third from the top of the
  * visible area (below a stuck top bar, above the phone's bottom bar and its fade), tinted briefly, nothing focused.
@@ -8,7 +10,7 @@ const overlays = '.day-screen .capture-bar, .tab-bar, .banner.save-failed'
 /** The fade above the phone's bottom bar (styles.css `.tab-bar::before`, 120px). */
 const tabFade = 120
 
-function visibleArea(): { top: number; bottom: number } {
+export function visibleArea(): { top: number; bottom: number } {
   let top = 0, bottom = window.innerHeight
   for (const el of document.querySelectorAll<HTMLElement>(overlays)) {
     const style = getComputedStyle(el), r = el.getBoundingClientRect()
@@ -50,4 +52,14 @@ export function registerEditor(pageId: string, jump: (blockId: string) => boolea
 /** Jumps within an open editor of `pageId`; false when that page isn't open or the line isn't on it. */
 export function jumpInPage(pageId: string, blockId: string): boolean {
   return editors.get(pageId)?.(blockId) ?? false
+}
+
+/**
+ * The server couldn't say where a linked line is now (offline, an error): jump nowhere, since an old row would look
+ * like the right one. The page named in the URL stays open at the top, the URL is kept, and Retry asks again
+ * (Bumblebee 499095e0, Jazz states §4; Ratchet #146).
+ */
+export function lookupFailed(retry: () => void): void {
+  window.scrollTo({ top: 0 })
+  const key: string = toast("Couldn't check where that line is now", { timeout: 12000, actionProps: { children: 'Retry', onPress: () => { toast.close(key); retry() } } })
 }

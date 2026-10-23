@@ -100,6 +100,22 @@ if (!touch) {
   await p.locator('.line-menu [role=menuitem]').click(); await wait(400)
   log(await toast('Link to line copied').count() > 0, '⌘/: "Link to line copied"')
   log(await clipText() === lineUrl(M.pages.target, 'a11-line'), '⌘/: the clipboard text is the line URL', await clipText())
+  // Placement (Jazz states §1): under the line's box at its text start; above it when there's no room below.
+  const placement = () => p.evaluate(() => {
+    const m = document.querySelector('.line-menu')?.getBoundingClientRect()
+    return m ? { top: m.top, bottom: m.bottom, left: m.left, h: innerHeight } : null
+  })
+  const lineBox = id => block(id).evaluate(e => { const c = e.querySelector('.bn-block-content').getBoundingClientRect(), t = e.querySelector('.bn-inline-content').getBoundingClientRect(); return { top: c.top, bottom: c.bottom, left: t.left } })
+  await caretEnd('a11-fill-3'); const fill = await lineBox('a11-fill-3'); await p.keyboard.press('ControlOrMeta+/'); await wait(300)
+  let m = await placement()
+  log(m && m.top >= fill.bottom - 1 && Math.abs(m.left - fill.left) <= 1 && m.bottom <= m.h, '⌘/ menu: under its line, at the text start', JSON.stringify({ m, fill }))
+  await p.keyboard.press('Escape'); await wait(200)
+  // A line far enough down the page that it can sit at the bottom of the window.
+  await caretEnd('a11-tail-5'); await p.evaluate(() => { const r = document.querySelector('[data-node-type="blockContainer"][data-id="a11-tail-5"]').getBoundingClientRect(); window.scrollBy(0, r.bottom - (innerHeight - 12)) }); await wait(200)
+  const low = await lineBox('a11-tail-5'); await p.keyboard.press('ControlOrMeta+/'); await wait(300)
+  m = await placement()
+  log(m && m.bottom <= low.top + 1 && m.top >= 0, '⌘/ menu on a line at the bottom of the screen: above the line, fully in view', JSON.stringify({ m, low }))
+  await p.keyboard.press('Escape'); await wait(200)
   await caretEnd('a11-heading'); await p.keyboard.press('ControlOrMeta+/'); await wait(300)
   log(await p.locator('.line-menu').count() === 1, '⌘/ on a custom heading offers it'); await p.keyboard.press('Escape'); await wait(200)
 }
@@ -228,6 +244,9 @@ for (const [url, page, line, what] of [
   [lineUrl(M.pages.past, M.rows.pastRow, M.tasks.past), M.pages.today, M.rows.todayRow, 'a task linked on a past day (history row still there), with task='],
   [lineUrl(M.pages.past, M.rows.pastRow), M.pages.today, M.rows.todayRow, 'the same, without task='],
   [lineUrl(M.pages.today, M.rows.movingRow, M.tasks.moving), M.pages.tomorrow, M.rows.movedRow, 'a task moved to tomorrow'],
+  [lineUrl('a11-trash-task', 'a11-trashed-task-row', M.tasks.past), M.pages.today, M.rows.todayRow, 'a task row on a trashed page, with task= (its task is planned today)'],
+  [lineUrl('a11-trash-task', 'a11-trashed-task-row'), M.pages.today, M.rows.todayRow, 'the same, without task='],
+  [lineUrl(M.pages.trash, 'a11-trash-line'), M.pages.trash, 'a11-trash-line', 'a plain line on a trashed page stays there'],
 ]) {
   const fresh = await b.newContext({ viewport: { width, height: 900 }, ...(touch ? { hasTouch: true, isMobile: true } : {}) })
   const q = await fresh.newPage()
@@ -236,6 +255,41 @@ for (const [url, page, line, what] of [
   const onPage = day ? at.pathname === `/day/${day}` : at.searchParams.get('page') === page
   const shown = await q.locator(`[data-id="${line}"]`).first().evaluate(e => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight }).catch(() => false)
   log(onPage && shown, `${what}: lands where the chip does`, `${at.pathname}${at.search}`)
+  await fresh.close()
+}
+
+// ------------------------------------------------------------------ tag on a task row in a document page
+named('tags: the page the list names')
+await goto('/tags/a11tag')
+await tap(p.locator('.card-section', { hasText: 'A11 target' }).locator('.tag-block').first())
+await p.waitForURL(u => u.searchParams.get('page') === M.pages.target || u.pathname.startsWith('/day/'), { timeout: 5000 }).catch(() => {})
+await wait(800)
+log(new URL(p.url()).searchParams.get('page') === M.pages.target, 'a tagged task row on a document page opens that page, though its task is planned today', new URL(p.url()).pathname + new URL(p.url()).search)
+await landed('a11-tagged-row', 'tag jump')
+// The same entry after its row is gone from that page: the jump follows the task to its day.
+await goto(`/pages?page=${M.pages.target}&block=a11-tagged-gone&from=tags`); await wait(800)
+log(new URL(p.url()).pathname === `/day/${M.today}`, 'a row that\'s gone follows its task', new URL(p.url()).pathname)
+await landed(M.rows.taggedTodayRow, 'tag jump, row gone')
+
+// ------------------------------------------------------------------ URL: lookup fails
+named('URL: lookup fails')
+{
+  const fresh = await b.newContext({ viewport: { width, height: 900 }, ...(touch ? { hasTouch: true, isMobile: true } : {}) })
+  await fresh.addInitScript(() => { window.__flashed = new Set(); new MutationObserver(l => { for (const x of l) if (x.target.classList?.contains('block-flash')) window.__flashed.add(x.target.getAttribute('data-id')) }).observe(document, { attributes: true, attributeFilter: ['class'], subtree: true }) })
+  const q = await fresh.newPage(); let blocked = 0
+  // The resolver's request only (a GET server function carrying lineId): 503, as when the server is unreachable.
+  const deny = async r => { let u = r.request().url(); try { u = decodeURIComponent(u) } catch {} if (u.includes('_serverFn') && u.includes('lineId')) { blocked++; await r.fulfill({ status: 503, body: 'unavailable' }) } else await r.continue() }
+  await q.route('**/*', deny)
+  const url = lineUrl(M.pages.past, M.rows.pastRow, M.tasks.past)
+  await q.goto(url, { waitUntil: 'networkidle' }); await q.waitForTimeout(900)
+  const state = await q.evaluate(row => ({ tinted: window.__flashed.has(row), notice: document.body.innerText.includes("Couldn't check where that line is now"), y: scrollY, href: location.href }), M.rows.pastRow)
+  log(blocked >= 1 && !state.tinted, 'no jump to the old row', `blocked ${blocked}`)
+  log(state.notice, '"Couldn\'t check where that line is now"')
+  log(state.href === url && state.y < 40, 'the URL\'s page at the top, the URL kept', state.href)
+  await q.unroute('**/*', deny)
+  await q.getByRole('button', { name: 'Retry' }).first().click(); await q.waitForTimeout(1500)
+  const after = await q.evaluate(row => ({ path: location.pathname, tinted: window.__flashed.has(row) }), M.rows.todayRow)
+  log(after.path === `/day/${M.today}` && after.tinted, 'Retry, once it answers: lands where the chip does', after.path)
   await fresh.close()
 }
 
