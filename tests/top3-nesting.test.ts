@@ -132,3 +132,22 @@ test('a morning page that only a carry has written to still gets its empty start
   assert.deepEqual(b.children?.map(x => x.props?.taskId), [s.task.b1])
   assert.ok(doc.some(x => !inlineText(x.content).trim() && x.type !== 'heading'), 'starter rows are there')
 })
+
+test('a parent tapped after its sub-task and two others still fits: the sub-task stops counting (Ratchet late-parent)', () => {
+  const s = setup(['P', 'c', 'X', 'Y'], { P: ['c'] })
+  plan(s, today, ['c', 'X', 'Y', 'P'])
+  assert.deepEqual(s.rows(today, 'other'), [])
+  assert.deepEqual(top3(s.outline(today)), ['X', 'Y', 'P', '  c'], 'top-level rows in tap order; c goes under P')
+  // c, X, Y fill Top 3 before P comes, so Z goes to Other; then P arrives, c stops counting, and P fits.
+  const t = setup(['P', 'c', 'X', 'Y', 'Z'], { P: ['c'] })
+  plan(t, today, ['c', 'X', 'Y', 'Z', 'P'])
+  assert.deepEqual(t.rows(today, 'other'), ['Z'])
+  assert.deepEqual(top3(t.outline(today)), ['X', 'Y', 'P', '  c'])
+  // Top 3 already full of real items: c overflows to Other, then P does too, and c goes under it there.
+  const u = setup(['P', 'c', 'X', 'Y', 'Z'], { P: ['c'] })
+  plan(u, today, ['X', 'Y', 'Z', 'c', 'P'])
+  assert.deepEqual(u.rows(today, 'top3'), ['X', 'Y', 'Z'])
+  assert.deepEqual(u.rows(today, 'other'), ['P', 'c'])
+  const out = u.outline(today)
+  assert.deepEqual(out.slice(out.indexOf('P'), out.indexOf('P') + 2), ['P', '  c'])
+})
