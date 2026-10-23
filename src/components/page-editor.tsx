@@ -695,7 +695,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       try {
         const [baseSections, baseJSON] = JSON.parse(slot.base) as [Page['sections'], string | null]
         const started = { ...current, sections: baseSections, editorJSON: baseJSON ?? undefined, editorSections: JSON.stringify(baseSections) } as Page
-        const draft = withoutSaved(JSON.parse(slot.document) as EditorNode[], doc, inlineText)
+        const draft = withoutSaved(JSON.parse(slot.document) as EditorNode[], doc)
         const merged = mergeDraft(editorSeed(started, ws, { templateRows: needsTemplateRows(started, todayIso()) }) as EditorNode[], draft, doc, known)
         doc = merged.document; inserted += merged.inserted.length
         // Its cuts were moves too (B33): the save that carries its text mustn't delete them.

@@ -169,21 +169,43 @@ export function changedBy(pageId: string, now = Date.now()): 'tab' | 'device' {
 }
 
 /**
- * A closed tab's draft without what the page already has (Lead 62bf2071): a line whose words are on the page under
- * the same id, give or take whitespace, counts as unchanged; an empty line adds nothing. So a draft whose save went
- * through (its reply lost) merges in nothing, and nothing appears twice.
+ * A closed tab's draft without what the page already has (Lead 62bf2071, 0ce16749): a line counts as unchanged only
+ * under the same block id, with the same kind, props and inline content, give or take whitespace in its text (a save
+ * whose reply was lost). Its own children are still checked one by one, so an unsaved child under an unchanged parent
+ * stays (Ratchet 2b858bf3). A new line with no content and no children adds nothing. Matching words alone never drops
+ * a line: a second "Call mom" typed on purpose is a different block.
  */
-export function withoutSaved<N extends { id: string; content?: unknown; children?: N[] }>(draft: N[], latest: N[], text: (content: unknown) => string): N[] {
-  const onPage = new Map<string, N>()
-  const remember = (n: N) => { onPage.set(n.id, n); n.children?.forEach(remember) }
+type DraftNode = { id: string; type?: string; props?: unknown; content?: unknown; children?: DraftNode[] }
+const space = (text: string) => text.replace(/\s+/g, ' ')
+/** Inline content with whitespace runs collapsed and the line's ends trimmed; empty text runs dropped. */
+function normalContent(content: unknown): unknown {
+  // A string is the editor's shorthand for one unstyled text run.
+  if (typeof content === 'string') content = [{ type: 'text', text: content, styles: {} }]
+  if (!Array.isArray(content)) return content ?? null
+  const runs = content.map(c => (c && typeof c === 'object' && (c as { type?: string }).type === 'text' ? { ...c, text: space(String((c as { text?: unknown }).text ?? '')) } : c))
+  const first = runs[0] as { type?: string; text?: string } | undefined, last = runs.at(-1) as typeof first
+  if (first?.type === 'text') runs[0] = { ...first, text: first.text!.trimStart() }
+  if (last?.type === 'text') runs[runs.length - 1] = { ...runs.at(-1) as object, text: (runs.at(-1) as { text: string }).text.trimEnd() }
+  return runs.filter(c => !(c && typeof c === 'object' && (c as { type?: string }).type === 'text' && !(c as { text?: string }).text))
+}
+/** JSON with object keys sorted, so the same props read back from the server compare equal. */
+const stable = (value: unknown): string => JSON.stringify(value, (_k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1))) : v))
+const line = (n: DraftNode) => stable([n.type ?? null, n.props ?? {}, normalContent(n.content)])
+const blank = (n: DraftNode) => {
+  const c = normalContent(n.content)
+  return (c === null || (Array.isArray(c) && !c.length)) && (n.type === undefined || ['paragraph', 'bulletListItem', 'numberedListItem', 'checkListItem', 'task'].includes(n.type))
+}
+export function withoutSaved<N extends DraftNode>(draft: N[], latest: N[]): N[] {
+  const onPage = new Map<string, DraftNode>()
+  const remember = (n: DraftNode) => { onPage.set(n.id, n); n.children?.forEach(remember) }
   latest.forEach(remember)
-  const words = (n: N) => text(n.content).replace(/\s+/g, ' ').trim()
-  const clean = (list: N[]): N[] => list.flatMap(n => {
+  const clean = (list: DraftNode[]): DraftNode[] => list.flatMap(n => {
     const children = clean(n.children ?? [])
     const there = onPage.get(n.id)
-    if (there && words(there) === words(n)) return [{ ...there, children: there.children } as N]
-    if (!there && !words(n) && !children.length) return []
-    return [{ ...n, children } as N]
+    // The page's own copy of the line (its exact whitespace), with the draft's children.
+    if (there && line(there) === line(n)) return [{ ...there, children }]
+    if (!there && blank(n) && !children.length) return []
+    return [{ ...n, children }]
   })
-  return clean(draft)
+  return clean(draft) as N[]
 }

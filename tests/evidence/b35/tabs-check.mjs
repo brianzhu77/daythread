@@ -72,6 +72,23 @@ const blockSaves = p => p.route('**/_serverFn/**', r => r.request().method() ===
   log(copies('already saved line') === 1, 'a closed tab whose save went through adds nothing twice (even with a trailing space and an empty line)', String(copies('already saved line')))
   await ctx.close()
 }
+// (2b2) Ratchet 2b858bf3: a parent line already saved, an unsaved child nested under it, the tab closed. The parent
+// is unchanged, so it matches the page, but its child must still come back, nested and saved once.
+{
+  const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } })
+  await ctx.addInitScript(() => { window.__daythreadGoneAfterMs = 1000 })
+  const a = await ctx.newPage(); await a.goto(BASE + '/', { waitUntil: 'networkidle' }); await a.waitForTimeout(600)
+  await typeInNotes(a, 'saved parent line'); await a.waitForTimeout(1500)
+  await blockSaves(a)
+  await a.keyboard.press('Enter'); await a.keyboard.press('Tab'); await a.keyboard.type('unsaved nested child'); await a.waitForTimeout(800)
+  await a.close({ runBeforeUnload: true })
+  const c = await ctx.newPage(); await c.goto(BASE + '/', { waitUntil: 'networkidle' }); await c.waitForTimeout(2500)
+  const db = new DatabaseSync(DB, { readOnly: true })
+  const nested = db.prepare("SELECT editorJSON FROM pages WHERE snapshot='current'").all().some(r => (JSON.parse(String(r.editorJSON ?? '[]'))).some(function has(n) { return (JSON.stringify(n.content ?? '').includes('saved parent line') && (n.children ?? []).some(k => JSON.stringify(k.content ?? '').includes('unsaved nested child'))) || (n.children ?? []).some(has) }))
+  db.close()
+  log(nested && copies('unsaved nested child') === 1 && copies('saved parent line') === 1, 'an unsaved child under an unchanged parent comes back nested and is saved once', `nested ${nested}, child ${copies('unsaved nested child')}, parent ${copies('saved parent line')}`)
+  await ctx.close()
+}
 // (2c) A tab opened from another (window.open shares its sessionStorage, as a ⌘-click or "Duplicate tab" does) gets
 // its own id, so both drafts survive (Ratchet 66accf58, Bumblebee 5ab67ef1); a plain reload keeps its id and draft.
 {
