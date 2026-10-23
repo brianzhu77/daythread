@@ -13,7 +13,7 @@ import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, templateKind, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
-import { applyCommand, pasteRecords } from '../domain/workspace'
+import { applyCommand, bornHere, pasteRecords } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
 import { cardsPresent, urlLine, type UndoCard } from '../domain/link-paste'
@@ -417,6 +417,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const suppress = useRef(false)
   const semanticDeletes = useRef(new Set<string>())
+  // B33: tasks whose rows were cut (a move): the next save says so, so the task isn't deleted with its line.
+  const cutTasks = useRef(new Set<string>())
   const composing = useRef(false)
   const selected = useRef<string[]>([])
   const dragging = useRef<EditorNode[]>([])
@@ -571,10 +573,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (isOwnLeaveSave(page.id, latestPage.current.editorJSON)) base.current = pageContentKey(latestPage.current)
     sending.current = true
     const document = JSON.stringify(editor.document)
-    const deletions = [...semanticDeletes.current]
+    const deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
     lastSent.current = document
     setStatus('Saving…')
-    const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, today: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }
+    const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), today: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }
     const fingerprint=JSON.stringify(action)
     if (pendingSave.current?.fingerprint !== fingerprint) pendingSave.current={fingerprint,operationId:newOperationId()}
     const operationId=pendingSave.current!.operationId
@@ -598,6 +600,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // The editor has closed meanwhile: leaving takes it from here (it needs only the new starting point).
       if (left.current) return
       deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
+      cutIds.forEach(id => cutTasks.current.delete(id))
       dirty.current = JSON.stringify(editor.document) !== document
       // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
       const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
@@ -730,12 +733,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // Now the draft is stashed as before and then saved. If that save is refused or fails, the stash stays and
       // this page shows it on return ("Recovered unsaved draft", or Load latest after a conflict).
       stash()
-      const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current]
+      const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
       void (async () => {
         // A save already on its way finishes first, so this one starts from the page it produced.
         await inflight.current
         if (document !== lastSaved.current) {
-          const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, today: todayIso() }
+          const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), today: todayIso() }
           debugClient('editor.save.leave',{pageId:page.id})
           const result = await runRef.current(action, undefined, newOperationId(), { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => {} })
           if (!result) return
@@ -1085,7 +1088,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const ids = selected.current; selected.current = []
     const first = before.find(n => n.id === ids[0])
     const above = before[before.findIndex(n => n.id === ids[0]) - 1]
-    const plannedCount = before.filter(n => ids.includes(n.id) && n.type === 'task' && n.props?.role === 'plan').length
+    // B33: a task born on this page goes with its line, so only tasks with history "stay" (Jazz: no notice for the rest).
+    const kept = (n: EditorNode) => { const t = latestWorkspace.current.tasks.find(x => x.id === n.props?.taskId); return Boolean(t) && !bornHere(latestWorkspace.current, t!, latestPage.current) }
+    const plannedCount = before.filter(n => ids.includes(n.id) && n.type === 'task' && n.props?.role === 'plan' && kept(n)).length
     if (ids.length === 1 && nodes().find(n => n.id === ids[0])?.type === 'task') semanticDeletes.current.add(ids[0]!)
     editor.prosemirrorView.dispatch(closeHistory(editor.prosemirrorState.tr))
     editor.removeBlocks(ids)
@@ -1093,7 +1098,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     else if (editor.document[0]) editor.setTextCursorPosition(editor.document[0].id, 'start')
     editor.focus()
     setSelectionLabel(''); setStatus('Content removed')
-    setNotice({ text: first?.type === 'heading' ? `Deleted '${inlineText(first.content)}'${plannedCount ? ` · ${plannedCount === 1 ? '1 planned task stays' : `${plannedCount} planned tasks stay`} planned` : ''}` : ids.length === 1 && first?.type === 'task' && first.props?.role === 'plan' ? 'Not today · deadline kept' : 'Content removed · tasks unchanged', fingerprint: JSON.stringify(editor.document) })
+    setNotice({ text: first?.type === 'heading' ? `Deleted '${inlineText(first.content)}'${plannedCount ? ` · ${plannedCount === 1 ? '1 planned task stays' : `${plannedCount} planned tasks stay`} planned` : ''}` : ids.length === 1 && first?.type === 'task' && first.props?.role === 'plan' && kept(first) ? 'Not today · deadline kept' : 'Content removed · tasks unchanged', fingerprint: JSON.stringify(editor.document) })
   }
   // BlockNote places its 30px side menu at the top of the block; our headings and task rows are taller than its
   // defaults (up to 6.5px off when measured). Keep its positioning, nudged level with the hovered block's first line.
@@ -1201,6 +1206,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (cut) {
       cutTokens.add(token)
       try { localStorage.setItem(`daythread:cut:${token}`, JSON.stringify(blocks)) } catch { /* same-tab move remains available */ }
+      // Tasks typed in the editor keep their `editor-task:` id as their real id, so check the workspace, not the prefix.
+      for (const n of deepNodes(blocks)) if (n.type === 'task' && latestWorkspace.current.tasks.some(t => t.id === n.props?.taskId)) cutTasks.current.add(String(n.props!.taskId))
       editor.transact(tr => { closeHistory(tr); if (chosen) editor.removeBlocks(chosen.map(n => n.id)); else tr.deleteSelection() })
       selected.current = []; setSelectionLabel('')
     }

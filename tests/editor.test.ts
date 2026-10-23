@@ -4,9 +4,11 @@ import { applyCommand, createEmptyWorkspace } from '../src/domain/workspace.ts'
 import { editorSeed, needsTemplateRows, pageContentKey, sectionRange } from '../src/domain/editor-document.ts'
 import type { Action, Workspace } from '../src/domain/types.ts'
 function run(ws: Workspace, action: Action) { return applyCommand(ws, { operationId: crypto.randomUUID(), expectedRevision: ws.revision, action }).workspace }
-function fixture() {
+function fixture(history = false) {
  let ws = run(createEmptyWorkspace(), { type: 'ensure-day', date: '2026-10-16' })
- ws = run(ws, { type: 'add-task', pageId: ws.pages[0]!.id, sectionId: ws.pages[0]!.sections[0]!.id, title: 'Existing task' })
+ // `history`: a deadline, so deleting its row keeps the task (Not today / Planned · not in note); otherwise it was
+ // born here and goes with its line (B33).
+ ws = run(ws, { type: 'add-task', pageId: ws.pages[0]!.id, sectionId: ws.pages[0]!.sections[0]!.id, title: 'Existing task', ...(history ? { deadlineOn: '2026-10-30' } : {}) })
  return ws
 }
 test('section boundary includes subordinate headings but stops at equal or higher headings', () => {
@@ -19,7 +21,7 @@ test('a section owns its empty lines, including at the end of the document', () 
   assert.deepEqual(sectionRange(list, 'b').map(x => x.id), ['b', 'blank'])
 })
 test('whole section deletion and restoration preserve task and placement; moved rows keep their role', () => {
- let ws = fixture(); const p = ws.pages[0]!, doc = editorSeed(p, ws), beforeTask = structuredClone(ws.tasks), beforePlacement = structuredClone(ws.placements)
+ let ws = fixture(true); const p = ws.pages[0]!, doc = editorSeed(p, ws), beforeTask = structuredClone(ws.tasks), beforePlacement = structuredClone(ws.placements)
  const range = new Set(sectionRange(doc, p.sections[0]!.id).map(n => n.id))
  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(p), document: JSON.stringify(doc.filter(n => !range.has(n.id))) })
  assert.deepEqual(ws.tasks, beforeTask); assert.deepEqual(ws.placements, beforePlacement)
@@ -27,7 +29,7 @@ test('whole section deletion and restoration preserve task and placement; moved 
  assert.equal(ws.tasks.length, 1); assert.equal(ws.pages[0]!.sections[0]!.blocks[0]!.planRole, 'plan')
 })
 test('semantic single-row deletion and undo check task versions instead of rolling back later edits', () => {
- let ws = fixture(); const p = ws.pages[0]!, doc = editorSeed(p, ws), row = doc.find(n => n.type === 'task')!
+ let ws = fixture(true); const p = ws.pages[0]!, doc = editorSeed(p, ws), row = doc.find(n => n.type === 'task')!
  ws = run(ws, { type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(p), document: JSON.stringify(doc.filter(n => n.id !== row.id)), singleDeleteIds: [row.id], today: p.date! })
  assert.equal(ws.tasks[0]!.paused, true)
  const beforeConflict = run(ws, { type: 'task-status', taskId: ws.tasks[0]!.id, status: 'done' })
