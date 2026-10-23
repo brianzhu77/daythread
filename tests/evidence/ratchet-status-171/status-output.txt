@@ -1,0 +1,6 @@
+{"width":1280,"headerAfterOnline":"Saved"}
+{"width":1280,"offline":true,"steady":true,"dockRect":{"x":659.03125,"y":845.40625,"width":221.9375,"height":30.59375},"savedCleared":true}
+{"width":1280,"onlineFailureRetry":true}
+{"width":390,"headerAfterOnline":"Saved"}
+{"width":390,"offline":true,"steady":true,"dockRect":{"x":84,"y":780,"width":221.9375,"height":30},"savedCleared":true}
+{"width":390,"onlineFailureRetry":true}
