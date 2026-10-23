@@ -293,6 +293,37 @@ named('URL: lookup fails')
   await fresh.close()
 }
 
+// ------------------------------------------------------------------ URL: task moved to a page made after loading
+named('URL: task moved to a page made after loading')
+{
+  // Ratchet #146: this tab has loaded its workspace; before its resolver request runs, a second writer (the
+  // repository, as another device would) makes a new future day and moves the task there. The server then names a
+  // page this tab's copy doesn't have.
+  const { SqliteWorkspaceRepository } = await import('../../../src/server/sqlite-repository.ts')
+  const repo = new SqliteWorkspaceRepository(DB)
+  let day = '2026-11-01'; const known = await repo.load()
+  while (known.pages.some(x => x.date === day)) { const d = new Date(`${day}T12:00Z`); d.setUTCDate(d.getUTCDate() + 1); day = d.toISOString().slice(0, 10) }
+  const fresh = await b.newContext({ viewport: { width, height: 900 }, ...(touch ? { hasTouch: true, isMobile: true } : {}) })
+  await fresh.addInitScript(() => { window.__flashed = new Set(); new MutationObserver(l => { for (const x of l) if (x.target.classList?.contains('block-flash')) window.__flashed.add(x.target.getAttribute('data-id')) }).observe(document, { attributes: true, attributeFilter: ['class'], subtree: true }) })
+  const q = await fresh.newPage(); let injected = 0
+  await q.route('**/*', async r => {
+    let u = r.request().url(); try { u = decodeURIComponent(u) } catch {}
+    if (!injected && u.includes('_serverFn') && u.includes('lineId')) {
+      injected++
+      let w = await repo.load()
+      w = (await repo.execute({ operationId: `a11-race-day-${day}`, expectedRevision: w.revision, action: { type: 'ensure-day', date: day } })).workspace
+      await repo.execute({ operationId: `a11-race-plan-${day}`, expectedRevision: w.revision, action: { type: 'plan-task', taskId: M.tasks.tagged, date: day, section: 'other', from: M.today, today: M.today } })
+    }
+    await r.continue()
+  })
+  await q.goto(lineUrl(M.pages.today, M.rows.taggedTodayRow, M.tasks.tagged), { waitUntil: 'networkidle' }); await q.waitForTimeout(2600)
+  const w = await repo.load(), row = w.pages.find(x => x.date === day).sections.flatMap(x => x.blocks).find(x => x.taskId === M.tasks.tagged)
+  const at = await q.evaluate(id => ({ path: location.pathname, tinted: window.__flashed.has(id) }), row.id)
+  log(injected === 1 && at.path === `/day/${day}`, 'lands on the page the server names, though this tab had never loaded it', at.path)
+  log(at.tinted, 'and tints the task row there')
+  await fresh.close()
+}
+
 // ------------------------------------------------------------------ Linked from
 named('Linked from')
 await goto(pagePath(M.pages.target))
@@ -375,7 +406,8 @@ if (width >= 900) {
   await p.locator('.bn-side-menu [aria-label^="Select or drag"]').first().click({ modifiers: ['Shift'] }); await wait(300)
 }
 const two = await p.locator('.editor-selection-bar').innerText().catch(() => '')
-log(width < 900 || (/2 blocks selected/.test(two) && !two.includes('Copy link')), 'two lines selected: no Copy link', two.replace(/\n/g, ' '))
+if (width >= 900) log(/2 blocks selected/.test(two) && !two.includes('Copy link'), 'two lines selected: no Copy link', two.replace(/\n/g, ' '))
+else console.log(`skip ${width}${touch ? ' touch' : ''} · ${group}: two lines selected is driven at 1280 only`)
 
 console.log(errors.length ? `page errors: ${errors.join(' | ')}` : 'no page errors')
 console.log(failed ? `${failed} FAILED` : 'all passed')

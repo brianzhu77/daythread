@@ -460,14 +460,17 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // the chip does, even when the block is still on the URL's page (a task's history row on a past day).
     const attempt = () => void resolveLineLink({ data: { pageId: page.id, lineId: id, ...(search.get('task') ? { taskId: search.get('task')! } : {}) } }).then(r => {
       if (cancelled) return
-      const target = latestWorkspace.current.pages.find(p => p.id === r.pageId)
+      // Go to the server's address. A page this browser's copy doesn't have yet (made since it loaded, e.g. the day a
+      // task was just moved to) gets a full load, so the route reads fresh data before jumping (Ratchet #146, Lead).
+      const go = (href: string) => { if (latestWorkspace.current.pages.some(p => p.id === r.pageId)) void navigate({ href, replace: true, resetScroll: false }); else window.location.replace(href) }
+      const elsewhere = r.pageId !== page.id || page.type === 'daily'
       if (r.state === 'line-not-found' || r.state === 'page-not-found' || !r.blockId) {
         dropParam(); window.scrollTo({ top: 0 }); toast("Couldn't find that line", { timeout: 4000 })
-        if (target && (target.id !== page.id || target.type === 'daily')) void navigate({ href: pageHref(target), replace: true })
+        if (r.href && elsewhere) go(r.href)
         return
       }
       // Somewhere else now (a task's plan day), or a day page opened by its id: go to its own address.
-      if (target && (target.id !== page.id || target.type === 'daily')) { void navigate({ href: pageHref(target, r.blockId), replace: true, resetScroll: false }); return }
+      if (r.href && elsewhere) { go(r.href); return }
       find(r.blockId)
     }, () => { if (!cancelled) lookupFailed(attempt) })
     attempt()
