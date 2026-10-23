@@ -1,0 +1,21 @@
+(node:43179) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"cutTaskId":"editor-task:new-task","wasDone":"done","recoveredCutStillHasTask":false,"stashContainsCutTaskIds":false}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: a cut must remain a move even after unsaved draft recovery
+
+false !== true
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-born-here/tests/evidence/ratchet-born-here-164/cut-recovery.mjs:7:937 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
