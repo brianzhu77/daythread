@@ -1,0 +1,16 @@
+{"visible":true,"exported":false,"row":"Export"}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: export must include typing still waiting for autosave, or refuse clearly
+    at file:///Users/dogrod/Developer/daythread-ratchet-export/tests/evidence/ratchet-export-170/pending-save.mjs:6:986 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
