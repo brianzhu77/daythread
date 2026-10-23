@@ -1,7 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { dayTemplate } from '../domain/editor-document'
-import { carrySection, isBlankTask } from '../domain/workspace'
+import { carryAncestor, carrySection, isBlankTask } from '../domain/workspace'
 import type { DayView, LocalDate, NoteBlock, Page, Task, Workspace } from '../domain/types'
 import { longLabel, shortLabel, weekday } from './dates'
 import { DateTag } from './date-tag'
@@ -36,7 +36,7 @@ export function useHandoffLater(date: LocalDate): [boolean, (v: boolean) => void
   ]
 }
 
-interface TaskSuggestion { task: Task; reason: string; section: 'top3' | 'other' }
+interface TaskSuggestion { task: Task; reason: string; section: 'top3' | 'other'; /** B34a: the task it sat under yesterday. */ follows?: string }
 
 /** §3: suggested tasks first (to Top 3), then unfinished ones (to the plan list); each task once, first reason kept. */
 export function taskSuggestions(view: DayView, workspace: Workspace, today: LocalDate): TaskSuggestion[] {
@@ -56,7 +56,7 @@ export function taskSuggestions(view: DayView, workspace: Workspace, today: Loca
     if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: 'Suggested last night', section: 'top3' }) }
   for (const t of view.handoffTasks)
     // B34a: Top 3 carries into Top 3, Other into Other, by where its row was yesterday.
-    if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: `Unfinished · from ${prev?.date ? weekday(prev.date) : 'yesterday'}`, section: carrySection(prev, t.id) }) }
+    if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); const follows = carryAncestor(prev, t.id); out.push({ task: t, reason: `Unfinished · from ${prev?.date ? weekday(prev.date) : 'yesterday'}`, section: carrySection(prev, t.id), ...(follows ? { follows } : {}) }) }
   if (drafted) for (const t of draftTasks)
     if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: 'Drafted for today', section: 'other' }) }
   return out
@@ -165,7 +165,7 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
   // (Ratchet #75, Lead 51b3c990).
   const add = async (s: TaskSuggestion) => {
     const hadSection = { top3: planSectionExists('top3'), other: planSectionExists('other') }
-    const receipt = await write({ type: 'plan-tasks', date: today, items: [{ taskId: s.task.id, section: s.section }] }, null)
+    const receipt = await write({ type: 'plan-tasks', date: today, items: [{ taskId: s.task.id, section: s.section, ...(s.follows ? { follows: s.follows } : {}) }] }, null)
     if (!receipt) return
     const placed = placedIn([s.task.id])[0] ?? s.section
     const name = placed === 'top3' ? top3 : other
@@ -176,7 +176,7 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
   const addAll = async () => {
     // One strip for the whole Add all, as it is one operation with one Undo (Bumblebee b82493ff, Jazz 446d101 §12.6).
     const ids = tasks.map(s => s.task.id)
-    const receipt = await write({ type: 'plan-tasks', date: today, items: tasks.map(s => ({ taskId: s.task.id, section: s.section })) }, null)
+    const receipt = await write({ type: 'plan-tasks', date: today, items: tasks.map(s => ({ taskId: s.task.id, section: s.section, ...(s.follows ? { follows: s.follows } : {}) })) }, null)
     if (!receipt) return
     const placed = placedIn(ids)
     const toTop3 = placed.filter(k => k === 'top3').length, toOther = placed.length - toTop3

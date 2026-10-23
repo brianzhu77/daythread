@@ -12,8 +12,11 @@ const iso = (d: Date) => d.toLocaleDateString('en-CA', { timeZone: 'America/Vanc
 const yesterday = iso(new Date(Date.now() - 86_400_000))
 let ws = await run({ type: 'ensure-day', date: yesterday })
 const p = () => ws.pages.find(x => x.date === yesterday)!, sec = (k: string) => p().sections.find(s => s.kind === k)!.id
-for (const [title, kind] of [['Carried top', 'top3'], ['Carried other', 'other'], ['Dragged up', 'other']] as const) ws = await run({ type: 'add-task', pageId: p().id, sectionId: sec(kind), title, plannedOn: yesterday })
+for (const [title, kind] of [['Carried top', 'top3'], ['Parent top', 'top3'], ['Child of top', 'top3'], ['Carried other', 'other'], ['Dragged up', 'other']] as const) ws = await run({ type: 'add-task', pageId: p().id, sectionId: sec(kind), title, plannedOn: yesterday })
 const doc = editorSeed(p(), ws), row = doc.find(x => x.type === 'task' && x.content && JSON.stringify(x.content).includes('Dragged up'))!
 const rest = doc.filter(x => x.id !== row.id), at = rest.findIndex(x => x.id === sec('top3'))
 ws = await run({ type: 'save-editor', pageId: p().id, expectedContent: pageContentKey(p()), document: JSON.stringify([...rest.slice(0, at + 1), row, ...rest.slice(at + 1)]) })
+// "Child of top" nested under "Parent top" inside Top 3, as his "Rewind App PR" sits under its parent.
+const d2 = editorSeed(p(), ws), parentRow = d2.find(x => JSON.stringify(x.content ?? '').includes('Parent top'))!, childRow = d2.find(x => JSON.stringify(x.content ?? '').includes('Child of top'))!
+ws = await run({ type: 'save-editor', pageId: p().id, expectedContent: pageContentKey(p()), document: JSON.stringify(d2.filter(x => x.id !== childRow.id).map(x => x.id === parentRow.id ? { ...x, children: [childRow] } : x)) })
 console.log(`seeded ${yesterday}`); process.exit(0)

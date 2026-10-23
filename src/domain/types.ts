@@ -287,7 +287,8 @@ export type ServerAction =
   | { type: "set-model-draft"; date: LocalDate; runId: string; taskIds: string[]; materialIds: string[]; proposals: DraftProposal[] }
   | { type: "model-draft-failed"; date: LocalDate; runId: string; failure: DraftFailure; expired?: boolean; costUnknown?: boolean };
 export type Action =
-  | { type: "plan-tasks"; date: LocalDate; items: { taskId: string; section: "top3" | "other" }[] }
+  /** `follows` (B34a): the task this one sat under; it lands in that task's section today and takes no Top 3 slot. */
+  | { type: "plan-tasks"; date: LocalDate; items: { taskId: string; section: "top3" | "other"; follows?: string }[] }
   | { type: "bring-line"; date: LocalDate; sourcePageId: string; sourceBlockId: string }
   | { type: "save-editor"; pageId: string; expectedContent: string; document: string; singleDeleteIds?: string[]; today?: string; historyTaskVersions?: Record<string, number>; history?: boolean }
   | { type: "ensure-day"; date: LocalDate }
