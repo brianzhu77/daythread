@@ -111,6 +111,13 @@ if (!phone) {
   const goneZip = unzipSync(readFileSync(await (await fromGone).path()))
   log(strFromU8(goneZip[root + 'workspace.json']).includes('GONE_TAB_MARKER'), 'a closed tab\'s unsaved text is saved and exported, its page open here')
   log((await p.locator('.continuous-editor').innerText()).includes('GONE_TAB_MARKER'), 'and the open page shows it')
+  // Bumblebee 7d1e1684: the next keystroke here saves on top of the merge, with no "changed in another tab".
+  const here = p.locator('.continuous-editor .bn-inline-content').last()
+  await here.scrollIntoViewIfNeeded(); await here.click(); await p.keyboard.press(`${process.platform === 'darwin' ? 'Meta' : 'Control'}+ArrowRight`); await p.keyboard.type(' AFTER_MERGE'); await p.waitForTimeout(2500)
+  const saveLine = await p.locator('.editor-save-line').innerText().catch(() => '')
+  const saved = await (await p.request.get(base + '/api/export')).body()
+  const after = strFromU8(unzipSync(new Uint8Array(saved))[root + 'workspace.json'])
+  log(!/changed|conflict|draft kept/i.test(saveLine) && after.includes('AFTER_MERGE') && after.includes('GONE_TAB_MARKER'), 'and the next keystroke there saves on top of it, no conflict', JSON.stringify(saveLine))
 }
 await p.screenshot({ path: `/tmp/rb-b3-row-${width}.png` })
 log(errors.length === 0, 'no page errors', errors.slice(0, 2).join(' / '))
