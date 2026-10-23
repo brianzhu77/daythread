@@ -1,3 +1,13 @@
+# B3 task170 — 420ef4b recheck
+
+**REVISE: gone-tab draft skipped when its page is open in the exporter.** A keeps page editor open; B types on the same page with saves blocked and closes; A exports. Actual browser `closed-same-page.mjs` asserts B really stashed its marker before close, waits past the shortened gone cutoff, then downloads a ZIP missing that marker. `saveKeptDrafts` filters all records by open page id, including gone-tab records that appeared after A mounted. Messagef13b9560. Flush A first, then include eligible other/gone-tab drafts on its page; preserving live-tab isolation still applies.
+
+The previous Pages-reload gap is fixed: reviewer pages-reload.mjs now refuses without download and keeps its identity. Requested live-slot boundary passes; copied-opener actual browser recheck has distinct ids and both markers recover. Author export fixture independently repeated19/19 desktop Chromium and18/18 phone WebKit, including online recovery retry from Pages without visiting the edited page. Full422/0/11skip4todo(437 total), typecheck/build pass. No new source changes by reviewer.
+
+The closed-same-page test's first attempt failed its precondition because the target wasn't scrolled into view; it is excluded. Final reproduction explicitly scrolls, checks actual stash, and uses the same1second quiet cutoff hook as the standing frozen tests. This proves a gone slot according to the app's rule, not native10minute timing. Script/output preserved. No production writes or native claims.
+
+## Prior-head review
+
 # B3 task170 — 33189ff recheck
 
 **REVISE: Pages reload forgets the unsaved-export guard.** The original immediate pending-save defect is fixed: reviewer pending-save.mjs now exports the visible delayed marker. Both desktop and phone standing fixtures pass saving-first/refusal/retry paths. However reviewer390WebKit `pages-reload.mjs` types with saves blocked, navigates Pages, reloads Pages, then exports: sameIdentity=true, retainedDraft=true, downloads=1, row=Export. No save can have reached the server, so the successful export omits this tab's retained text. The `unsavedPages` set is memory-only and is reset on reload. Message2dfbe619.

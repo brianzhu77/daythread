@@ -1,0 +1,19 @@
+ok   390: with sign-in off the row is just "Export" ("Export")
+ok   390: while building: "Exporting…", disabled
+ok   390: the zip is named for the day (daythread-export-2026-10-23.zip)
+ok   390: after the download the row is back to "Export" (no notice)
+ok   390: files: README, workspace.json, the day, CJK titles kept with (2), unsafe characters replaced, no trashed page (["README.md","days/2026-10-23.md","pages/Q4 plan- home-office.md","pages/原生家庭创伤导致的讨好型人格如何解决？（是否强关联？）.md","pages/原生家庭创伤导致的讨好型人格如何解决？（是否强关联？） (2).md","workspace.json"])
+ok   390: to-dos and nesting: corridor › Rewind App PR, plaid ticked
+ok   390: styles, links, and the [[link]] points at the final name
+ok   390: workspace.json: versioned, trash included, no receipts or Undo copy
+ok   390: the response is never cached (no-store, private)
+ok   390: a failure says "Couldn’t export · Try again" ("Couldn’t export · Try again")
+ok   390: Try again is underlined (Jazz) (underline)
+ok   390: Try again downloads it
+ok   390: typing still waiting for autosave is in the export
+ok   390: typing that can't be saved: no download, "Not exported · latest text not saved yet · Try again" ({"refused":"Not exported · latest text not saved yet · Try again","downloaded":false})
+ok   390: after a reload of Pages with saves failing: still no zip ("Not exported · latest text not saved yet · Try again")
+ok   390: back online, Try again saves the kept text and the zip holds it
+ok   390: and the kept draft is cleared
+ok   390: no page errors
+all passed

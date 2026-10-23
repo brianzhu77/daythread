@@ -1,0 +1,1 @@
+{"slotRetained":true,"claimed":false}
