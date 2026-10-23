@@ -360,6 +360,15 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
 .task-row { display: flex; align-items: flex-start; gap: 0 10px; min-height: var(--tap); flex-wrap: nowrap; border-radius: var(--app-radius-sm); margin: 0 -8px; padding: 0 2px 0 8px; }
 .task-row:hover { background: var(--fill-soft); }
 .task-row .task-title { flex: 1 1 0; }
+/* B28 (Jazz rule 3): a sub-task under its listed parent; "↳ parent" above its title when the parent is elsewhere. In
+   a task list a sub-task's checkbox starts at its parent's title (checkbox 20 + gap 10), as in the editor (B39); a
+   card steps in by the editor's indent (24 px). */
+.task-list > li[style*='--tree-depth'] { margin-left: calc(var(--tree-depth) * 30px); }
+.app-card[style*='--tree-depth'] { margin-left: calc(var(--tree-depth) * 24px); }
+.task-parent { display: block; font-size: var(--text-meta); line-height: 18px; color: var(--ink-3); font-weight: normal; overflow-wrap: anywhere; }
+/* The checkbox and date tag stay level with the title, not with the "↳ parent" line above it (18 px). */
+.task-row:has(.task-parent) > .check { margin-top: 30px; }
+.task-row:has(.task-parent) .app-tag { margin-top: 29px; }
 .task-row .app-tag { flex: none; margin-top: 11px; }
 .task-row > .check { margin-top: 12px; }
 .task-row .row-menu { align-self: center; }
