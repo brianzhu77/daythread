@@ -27,7 +27,7 @@ import { resolveLineLink } from '../server/functions'
 import { newOperationId, useWorkspace } from './use-day'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
+import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, IndentIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { addDays, fromIso, longLabel, todayIso, weekday } from './dates'
@@ -1184,6 +1184,26 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     window.addEventListener('scroll', update, true)
     return () => { off(); window.removeEventListener('scroll', update, true) }
   }, [editor])
+  // Toolbar taps must not take focus from the line: WebKit still sends mousedown after a prevented touch pointerdown,
+  // which blurred the editor, hid the toolbar and dropped the click (B5 check, Playwright WebKit at 390).
+  const keepCaret = { onPointerDown: (e: React.PointerEvent) => e.preventDefault(), onMouseDown: (e: React.MouseEvent) => e.preventDefault() }
+  // A heading starts a section, so nothing nests into or under one: indenting a section's first line would move it out
+  // of its section (a Top 3 task would silently leave Top 3). Tab and the phone toolbar both ask this.
+  const canIndent = () => {
+    const { block, prevBlock } = editor.getTextCursorPosition()
+    return editor.canNestBlock() && block.type !== 'heading' && prevBlock?.type !== 'heading'
+  }
+  // Whether the phone toolbar's indent / outdent can act on the caret's line.
+  const [nesting, setNesting] = useState({ in: false, out: false })
+  useEffect(() => {
+    const update = () => {
+      const next = { in: canIndent(), out: editor.canUnnestBlock() }
+      setNesting(previous => previous.in === next.in && previous.out === next.out ? previous : next)
+    }
+    const offSelection = editor.onSelectionChange(update)
+    const offChange = editor.onChange(update)
+    return () => { offSelection(); offChange() }
+  }, [editor])
   function copyBlocks(e: React.ClipboardEvent, cut: boolean) {
     const selection = editor.prosemirrorState.selection
     if (!selected.current.length && (selection.empty || selection instanceof TextSelection && selection.$from.sameParent(selection.$to))) return
@@ -1470,6 +1490,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           return
         }
       }
+      // Tab where nesting would leave the section does nothing (and keeps focus in the editor), as the toolbar's Indent.
+      if (e.key === 'Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !canIndent()) { e.preventDefault(); e.stopPropagation(); return }
       // A12 keyboard path (Lead b8ec39d5): ⌘/ (Ctrl+/), as Notion's block menu, opens the caret row's ⋯ menu; the
       // context-menu key and Shift+F10 too. Tab keeps indenting.
       if (((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === '/') || e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
@@ -1590,7 +1612,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       onPointerMove={e => { if (dragging.current.length && e.buttons) updateDrop(e.clientX - 35, e.clientY) }}
       onPointerUp={e => { e.preventDefault(); if (!dropRef.current) { dragging.current = []; setTouchDragging(false); select(touchHandle.id) } else commitDrag() }}
       onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null) }}><GripIcon /></button>}
-    <div className="editor-phone-toolbar" aria-label="Editor tools"><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('undo')} aria-label="Undo"><UndoIcon /></button><button onPointerDown={e => e.preventDefault()} onClick={() => void performHistory('redo')} aria-label="Redo"><RedoIcon /></button><button onPointerDown={e => e.preventDefault()} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }} aria-label="Insert block"><PlusIcon /></button></div>
+    {/* F16 order: + · outdent / indent · undo / redo. Indent and outdent are Tab and Shift+Tab (F11): a phone has no Tab key. */}
+    <div className="editor-phone-toolbar" aria-label="Editor tools">
+      <button {...keepCaret} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }} aria-label="Insert block"><PlusIcon /></button>
+      <span className="editor-toolbar-gap" aria-hidden="true" />
+      <button {...keepCaret} onClick={() => editor.unnestBlock()} disabled={!nesting.out} aria-label="Outdent"><OutdentIcon /></button>
+      <button {...keepCaret} onClick={() => editor.nestBlock()} disabled={!nesting.in} aria-label="Indent"><IndentIcon /></button>
+      <span className="editor-toolbar-gap" aria-hidden="true" />
+      <button {...keepCaret} onClick={() => void performHistory('undo')} aria-label="Undo"><UndoIcon /></button>
+      <button {...keepCaret} onClick={() => void performHistory('redo')} aria-label="Redo"><RedoIcon /></button>
+    </div>
     {dock && createPortal(<>
       {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span>{selected.current.length === 1 && lineLinkTarget(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyLineLink(id) }}>Copy link</button>}<button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
       {lineMenu && <LineMenu anchor={lineMenu.anchor} onClose={closeLineMenu} onCopy={() => { const id = lineMenu.blockId; closeLineMenu(true); copyLineLink(id) }} />}
