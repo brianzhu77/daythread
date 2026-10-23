@@ -75,3 +75,20 @@ test('an inherited tab id owned by another live load is replaced; a released one
   const reloaded = await import(`../src/components/draft-slots.ts?reload=${Date.now()}`)
   assert.equal(reloaded.tabId(), 'mine', 'released on pagehide: the reload keeps it')
 })
+
+test('a new to-do or text line with the same words as one on the page is kept: lines match by id, not words (Bumblebee, Lead)', async () => {
+  const { mergeDraft } = await import('../src/domain/draft-merge.ts')
+  const { inlineText } = await import('../src/domain/editor-document.ts')
+  const words = (text: string) => [{ type: 'text', text, styles: {} }]
+  const older = { id: 'row-old', type: 'task', props: { taskId: 'task-old' }, content: words('Call mom'), children: [] }
+  const note = { id: 'note-old', type: 'paragraph', props: {}, content: words('Call Mom'), children: [] }
+  const base = [older, note]
+  // Typed offline in the closed tab: a second "Call mom" to-do and a second "Call Mom" line, each on a new row.
+  const draft = [older, { id: 'row-new', type: 'task', props: { taskId: 'editor-task:row-new' }, content: words('Call mom'), children: [] }, note, { id: 'note-new', type: 'paragraph', props: {}, content: words('Call Mom'), children: [] }]
+  const kept = slots.withoutSaved(draft, base, inlineText)
+  assert.deepEqual(kept.map(x => x.id), ['row-old', 'row-new', 'note-old', 'note-new'])
+  const merged = mergeDraft(base, kept, base, new Set(['task-old']))
+  const tasks = merged.document.filter(x => x.type === 'task').map(x => [x.id, x.props?.taskId])
+  assert.deepEqual(tasks, [['row-old', 'task-old'], ['row-new', 'editor-task:row-new']], 'both to-dos, the new one still a new task')
+  assert.equal(merged.document.filter(x => inlineText(x.content) === 'Call Mom').length, 2, 'both text lines')
+})
