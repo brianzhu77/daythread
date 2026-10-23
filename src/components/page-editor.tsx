@@ -1083,14 +1083,19 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     selectionFocus.current?.focus()
     window.getSelection()?.removeAllRanges()
   }
+  /** B33: deleting this task's line deletes the task (born on this page, no history). */
+  const goesWithLine = (taskId: unknown) => { const t = latestWorkspace.current.tasks.find(x => x.id === taskId); return Boolean(t) && bornHere(latestWorkspace.current, t!, latestPage.current) }
   function deleteSelected() {
     const before = nodes()
     const ids = selected.current; selected.current = []
     const first = before.find(n => n.id === ids[0])
     const above = before[before.findIndex(n => n.id === ids[0]) - 1]
     // B33: a task born on this page goes with its line, so only tasks with history "stay" (Jazz: no notice for the rest).
-    const kept = (n: EditorNode) => { const t = latestWorkspace.current.tasks.find(x => x.id === n.props?.taskId); return Boolean(t) && !bornHere(latestWorkspace.current, t!, latestPage.current) }
+    const kept = (n: EditorNode) => latestWorkspace.current.tasks.some(t => t.id === n.props?.taskId) && !goesWithLine(n.props?.taskId)
     const plannedCount = before.filter(n => ids.includes(n.id) && n.type === 'task' && n.props?.role === 'plan' && kept(n)).length
+    // To-dos that go with their lines (B33): the notice says so, with its Undo (Jazz 416bbf34).
+    const removed = deepNodes(before.filter(n => ids.includes(n.id)))
+    const deletedCount = removed.filter(n => n.type === 'task' && latestWorkspace.current.tasks.some(t => t.id === n.props?.taskId) && !kept(n)).length
     if (ids.length === 1 && nodes().find(n => n.id === ids[0])?.type === 'task') semanticDeletes.current.add(ids[0]!)
     editor.prosemirrorView.dispatch(closeHistory(editor.prosemirrorState.tr))
     editor.removeBlocks(ids)
@@ -1098,7 +1103,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     else if (editor.document[0]) editor.setTextCursorPosition(editor.document[0].id, 'start')
     editor.focus()
     setSelectionLabel(''); setStatus('Content removed')
-    setNotice({ text: first?.type === 'heading' ? `Deleted '${inlineText(first.content)}'${plannedCount ? ` · ${plannedCount === 1 ? '1 planned task stays' : `${plannedCount} planned tasks stay`} planned` : ''}` : ids.length === 1 && first?.type === 'task' && first.props?.role === 'plan' && kept(first) ? 'Not today · deadline kept' : 'Content removed · tasks unchanged', fingerprint: JSON.stringify(editor.document) })
+    setNotice({ text: first?.type === 'heading' ? `Deleted '${inlineText(first.content)}'${plannedCount ? ` · ${plannedCount === 1 ? '1 planned task stays' : `${plannedCount} planned tasks stay`} planned` : ''}` : ids.length === 1 && first?.type === 'task' && first.props?.role === 'plan' && kept(first) ? 'Not today · deadline kept' : deletedCount ? (deletedCount === 1 ? 'To-do deleted' : `${deletedCount} to-dos deleted`) : 'Content removed · tasks unchanged', fingerprint: JSON.stringify(editor.document) })
   }
   // BlockNote places its 30px side menu at the top of the block; our headings and task rows are taller than its
   // defaults (up to 6.5px off when measured). Keep its positioning, nudged level with the hovered block's first line.
@@ -1544,8 +1549,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // the line that moves up. Everything above the removed row keeps its positions, so `above` holds after removal.
         e.preventDefault(); e.stopPropagation(); const id = editor.getTextCursorPosition().block.id
         const view = editor.prosemirrorView, above = endOfLineAbove(view, view.state.selection.$from.before())
+        const deleting = goesWithLine(editor.getBlock(id)?.props && (editor.getBlock(id)!.props as { taskId?: string }).taskId)
         semanticDeletes.current.add(id); editor.removeBlocks([id])
         if (above !== null) view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, above)).scrollIntoView())
+        // The path that left his junk to-dos: say what happened, with Undo (Bumblebee e7026847, Jazz 416bbf34).
+        if (deleting) setNotice({ text: 'To-do deleted', fingerprint: JSON.stringify(editor.document) })
       } else if (!['Shift', 'Control', 'Meta', 'Alt'].includes(e.key) && !((e.metaKey || e.ctrlKey) && ['c', 'x'].includes(e.key.toLowerCase()))) { selected.current = []; setSelectionLabel('') }
     }}
     >
