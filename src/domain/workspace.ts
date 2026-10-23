@@ -245,6 +245,9 @@ export function top3Full(state: Workspace, day: string, taskId?: string): boolea
   // B34a: a sub-task that followed its parent in takes no slot (Bumblebee df6f0a08, Lead 6999454f), decided here from
   // the previous page, so every entry and every later command agrees (Ratchet 657a4b86, Lead f74ab962).
   for (const id of [...ids]) if (followSection(state, day, id)) ids.delete(id);
+  // B34b: a sub-task already here goes under the task arriving now, so it stops being an item of its own (Ratchet
+  // late-parent: c, X, Y tapped before P).
+  if (taskId) { const from = previousDayPage(state, day); for (const id of [...ids]) if (carryAncestors(from, id).includes(taskId)) ids.delete(id); }
   return ids.size >= 3;
 }
 /** A day page's plan rows for a task leave it (A12): the presentation only; placements are the caller's. */
