@@ -1,0 +1,4 @@
+{"case":"trashed source without task=","pass":false,"expected":"/day/2026-10-22","actual":"http://127.0.0.1:3487/pages?page=independent-trash"}
+{"case":"trashed source with task=","pass":false,"expected":"/day/2026-10-22","actual":"http://127.0.0.1:3487/pages?page=independent-trash"}
+{"case":"resolver 503 must not silently tint history","pass":false,"blocked":1,"wrongTint":1,"notice":false,"url":"http://127.0.0.1:3487/pages?page=day%3A2026-10-21"}
+{"case":"reload recovers after resolver service returns","pass":false,"expected":"/day/2026-10-22","actual":"http://127.0.0.1:3487/pages?page=day%3A2026-10-21"}

@@ -1,0 +1,4 @@
+{"case":"trashed source without task=","pass":true,"expected":"/day/2026-10-22","actual":"http://127.0.0.1:3487/day/2026-10-22"}
+{"case":"trashed source with task=","pass":true,"expected":"/day/2026-10-22","actual":"http://127.0.0.1:3487/day/2026-10-22"}
+{"case":"resolver 503 must not silently tint history","pass":true,"blocked":1,"wrongTint":0,"notice":true,"url":"http://127.0.0.1:3487/pages?page=day%3A2026-10-21&block=ef4ef71e-7b09-4b37-bfa6-e485acc20972&task=569949b5-c7ac-41b1-ba4d-34047a50453d"}
+{"case":"reload recovers after resolver service returns","pass":true,"expected":"/day/2026-10-22","actual":"http://127.0.0.1:3487/day/2026-10-22"}

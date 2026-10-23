@@ -1,0 +1,3 @@
+(node:73954) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"case":"new target created by second writer after browser load","injected":1,"expected":"/day/2026-11-01","actual":"http://127.0.0.1:3487/pages?page=day%3A2026-10-21&block=ea8ea555-5326-488d-ad50-9d24bb65dc0e&task=6bd1f538-d2eb-4850-a743-0505d6d84ffb","plan":"2026-11-01","tinted":false,"pass":false}
