@@ -279,11 +279,7 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
         <h2 id="std-title">Start the day</h2>
         {page.draft?.simulated && <span className="sim">Simulated</span>}
       </header>
-      {prev && !prev.reviewSaved && prev.date && (
-        <p className="line">
-          {weekday(prev.date)}’s review wasn’t finished · <a href={`/review?date=${prev.date}`}>Finish (1 min)</a>
-        </p>
-      )}
+      {/* No nudge toward an unfinished review: he finds it too rigid (Brian 0a58be58, B37). It returns only with B31. */}
       {!hasPlanSection && tasks.length > 0 && <p className="line quiet">Adding creates a {top3} section at the top</p>}
 
       {(taskKeys.length > 0 || strips.has(allKey) || statusLine) && (
