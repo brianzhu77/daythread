@@ -8,7 +8,9 @@ type Kind = 'text' | 'number' | 'boolean' | 'json'
 type Fields<T> = Record<keyof T, Kind>
 // Exhaustive maps intentionally fail typecheck whenever a domain field is added without a storage mapping.
 const pages = { id:'text',type:'text',url:'text',date:'text',title:'text',sections:'json',editorJSON:'text',templateApplied:'boolean',editorSections:'text',editorBlockMetadata:'json',editorCreations:'json',editorDeletions:'json',reviewText:'text',reviewSaved:'boolean',handoffDone:'boolean',reviewStep:'number',reviewSource:'text',reviewSkipped:'boolean',draftError:'text',draft:'json',parentId:'text',trashedAt:'text',trashId:'text' } satisfies Fields<Page>
-const tasks = { id:'text',title:'text',status:'text',version:'number',plannedOn:'text',attentionOn:'text',deadlineOn:'text',paused:'boolean',createdOn:'text',lastPlannedOn:'text',sourcePageId:'text' } satisfies Fields<Task>
+// A11's `Task.doneOn` is not a column: production keeps the workspace as JSON in Postgres, and this local dev store
+// doesn't need a layout bump for it. Here a done task's day falls back to the derived one (plan §2).
+const tasks = { id:'text',title:'text',status:'text',version:'number',plannedOn:'text',attentionOn:'text',deadlineOn:'text',paused:'boolean',createdOn:'text',lastPlannedOn:'text',sourcePageId:'text' } satisfies Fields<Omit<Task, 'doneOn'>>
 const placements = { taskId:'text',date:'text',state:'text',order:'number',section:'text' } satisfies Fields<Placement>
 const events = { id:'text',title:'text',date:'text',time:'text',cancelled:'boolean' } satisfies Fields<Event>
 const materials = { id:'text',url:'text',title:'text',body:'text',savedOn:'text',reviewState:'text',nextReviewOn:'text',resurface:'boolean',lastDecisionOn:'text',skippedUntil:'text',taskId:'text',openedOn:'json',dismissedOn:'json',decisions:'json',sources:'json' } satisfies Fields<Material>

@@ -111,7 +111,8 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
       if (target?.trashedAt) throw new Error('Page is in trash; restore it first')
     }
     const title = target?.title ?? ref.newTitle ?? known?.title ?? ''
-    return { refId: ref.refId, pageId: ref.pageId, at: known?.at ?? revision, title, ...(!target && (ref.newTitle || known?.pending) ? { pending: true } : {}) }
+    return { refId: ref.refId, pageId: ref.pageId, at: known?.at ?? revision, title, ...(!target && (ref.newTitle || known?.pending) ? { pending: true } : {}),
+      ...(ref.lineId ? { lineId: ref.lineId } : {}), ...(ref.taskId ? { taskId: ref.taskId } : {}) }
   })
   let current: Section | undefined
   const restored: [Section, SectionKind][] = []

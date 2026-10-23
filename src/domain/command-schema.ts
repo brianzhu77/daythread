@@ -46,7 +46,7 @@ const action = z.discriminatedUnion("type", [
     attentionOn: day.nullable().optional(),
     deadlineOn: day.nullable().optional(),
   }),
-  z.object({ type: z.literal("task-status"), taskId: id, status }),
+  z.object({ type: z.literal("task-status"), taskId: id, status, today: day.optional() }),
   z.object({
     type: z.literal("plan-task"),
     taskId: id,

@@ -2,7 +2,7 @@
 // reference (cards and links), so Linked from (B15), A2's Undo check and Trash all read the same thing.
 import type { NoteBlock, Page, PageRefEntry, Section, Workspace } from './types.ts'
 
-export interface InlineRef { refId: string; pageId: string; newTitle?: string }
+export interface InlineRef { refId: string; pageId: string; newTitle?: string; lineId?: string; taskId?: string }
 type Inline = { type?: string; text?: string; content?: unknown; props?: Record<string, unknown> }
 
 /** The `pageRef` nodes of one line's inline content, in order. */
@@ -11,7 +11,8 @@ export function inlineRefs(content: unknown): InlineRef[] {
   return (content as Inline[]).flatMap((c) => {
     if (c?.type === 'pageRef') {
       const p = c.props ?? {}
-      return [{ refId: String(p.refId ?? ''), pageId: String(p.pageId ?? ''), ...(p.newTitle ? { newTitle: String(p.newTitle) } : {}) }]
+      return [{ refId: String(p.refId ?? ''), pageId: String(p.pageId ?? ''), ...(p.newTitle ? { newTitle: String(p.newTitle) } : {}),
+        ...(p.lineId ? { lineId: String(p.lineId) } : {}), ...(p.taskId ? { taskId: String(p.taskId) } : {}) }]
     }
     return c && typeof c === 'object' && 'content' in c ? inlineRefs(c.content) : []
   })
@@ -58,4 +59,70 @@ export function referenceIndex(ws: Workspace): { links: Map<string, PageRefEntry
     }
   }
   return { links, cards }
+}
+
+/**
+ * A11 (docs/plan/a11-line-links.md §2): where a link to one line goes now. One function for the chip, the jump, the
+ * plain URL (server side) and Linked from, so they can't disagree. In v1 a line's id only lives on the page it was
+ * made on; a task line follows its task.
+ */
+export type LineState = 'live' | 'moved' | 'trashed' | 'line-not-found' | 'page-not-found'
+export interface LineTarget { pageId: string; lineId: string; taskId?: string }
+export interface ResolvedLine { state: LineState; pageId: string; blockId?: string; words: string; taskId?: string }
+
+interface Row { page: Page; blockId: string; text: string; order: number }
+const allBlocks = (page: Page) => page.sections.flatMap((s) => s.blocks)
+
+/** Every row of a task on every page, with its position in its page (document order). */
+function taskRows(ws: Workspace, taskId: string): Row[] {
+  return ws.pages.flatMap((page) => allBlocks(page).flatMap((b, order) => b.kind === 'task' && b.taskId === taskId ? [{ page, blockId: b.id, text: b.text, order }] : []))
+}
+/** Most recent first: daily pages by date, then document pages by the row's `seen`, then page id (plan §2 rule 2.3). */
+function byRecency(a: Row, b: Row): number {
+  const daily = (r: Row) => r.page.type === 'daily' && r.page.date ? 0 : 1
+  if (daily(a) !== daily(b)) return daily(a) - daily(b)
+  if (daily(a) === 0 && a.page.date !== b.page.date) return a.page.date! < b.page.date! ? 1 : -1
+  const seen = (r: Row) => r.page.editorBlockMetadata?.[r.blockId]?.seen ?? -1
+  if (seen(a) !== seen(b)) return seen(b) - seen(a)
+  if (a.page.id !== b.page.id) return a.page.id < b.page.id ? -1 : 1
+  return a.order - b.order
+}
+/** The day a done or cancelled task counts as finished: `doneOn`, else its latest included day, plan day, last plan day. */
+export function finishedOn(ws: Workspace, task: Workspace['tasks'][number]): string | null {
+  if (task.status === 'done' && task.doneOn) return task.doneOn
+  const included = ws.placements.filter((x) => x.taskId === task.id && x.state === 'included').map((x) => x.date).sort().at(-1)
+  return included ?? task.plannedOn ?? task.lastPlannedOn ?? null
+}
+
+/** Which task a link means: its own `taskId`, else the line's task on its page, else that page's kept copy of the line. */
+function taskOf(ws: Workspace, target: LineTarget): string | undefined {
+  if (target.taskId) return target.taskId
+  const page = ws.pages.find((p) => p.id === target.pageId)
+  const live = page && allBlocks(page).find((b) => b.id === target.lineId)
+  return live?.taskId ?? page?.editorBlockMetadata?.[target.lineId]?.taskId
+}
+
+export function resolveLine(ws: Workspace, target: LineTarget): ResolvedLine {
+  const taskId = taskOf(ws, target), task = taskId ? ws.tasks.find((t) => t.id === taskId) : undefined
+  if (task) {
+    const rows = taskRows(ws, task.id).sort(byRecency)
+    const onDay = (day: string | null) => day ? rows.find((r) => r.page.type === 'daily' && r.page.date === day) : undefined
+    // The target first (plan day, then the day it was finished), trash after (Ratchet #141, Bumblebee f9abca12).
+    const chosen = (task.status === 'open' && task.plannedOn ? onDay(task.plannedOn) : undefined)
+      ?? (task.status !== 'open' ? onDay(finishedOn(ws, task)) : undefined)
+      ?? rows.find((r) => !r.page.trashedAt)
+      ?? rows[0]
+    if (chosen) {
+      const state: LineState = chosen.page.trashedAt ? 'trashed' : chosen.page.id === target.pageId ? 'live' : 'moved'
+      return { state, pageId: chosen.page.id, blockId: chosen.blockId, words: chosen.text, taskId: task.id }
+    }
+  }
+  const page = ws.pages.find((p) => p.id === target.pageId)
+  if (!page) return { state: 'page-not-found', pageId: target.pageId, words: '' }
+  const block = allBlocks(page).find((b) => b.id === target.lineId)
+  // A custom heading is a line too; the template's role headings are never targets (Ratchet 5).
+  const heading = page.sections.find((s) => s.id === target.lineId && s.kind === 'custom')
+  const words = block?.text ?? heading?.title
+  if (words === undefined) return { state: page.trashedAt ? 'trashed' : 'line-not-found', pageId: page.id, words: '' }
+  return { state: page.trashedAt ? 'trashed' : 'live', pageId: page.id, blockId: target.lineId, words }
 }
