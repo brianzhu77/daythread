@@ -61,8 +61,9 @@ if (cards) {
   await p.keyboard.press('Meta+z'); await p.waitForTimeout(2500)
   if (DB) {
     const back = task(), on = r => r?.length === 1 && r[0].status === 'open' && r[0].state === 'included' && !!r[0].planned
-    log(on(saved) && gone?.[0]?.state === 'excluded' && !gone[0].planned && on(back) && back[0].id === saved[0].id,
-      '⌘Z puts the same task back on the day (database: included and planned again)', `before ${JSON.stringify(saved)} · deleted ${JSON.stringify(gone)} · after ⌘Z ${JSON.stringify(back)}`)
+    // B33: a to-do born on this page goes with its line (the task is deleted, not moved to Not today).
+    log(on(saved) && gone?.length === 0 && on(back) && back[0].id === saved[0].id,
+      '⌘Z puts the same task back on the day (database: deleted with its line, then included and planned again)', `before ${JSON.stringify(saved)} · deleted ${JSON.stringify(gone)} · after ⌘Z ${JSON.stringify(back)}`)
   }
   const rows = await p.locator('[data-content-type="task"] .bn-inline-content').allTextContents()
   log(rows.some(t => t.startsWith('undo me') || t.startsWith('undo m')) || rows.length > tasksBefore, '⌘Z brings the deleted row back', rows.join(' | ').slice(0, 120))

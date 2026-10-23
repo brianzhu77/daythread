@@ -138,10 +138,12 @@ test('Undo of each action puts the row back in its section and position, with th
 })
 
 test('Not today by action and by deleting the whole row leave the same task and placement state', () => {
-  const byAction = setup(), a = byAction.add(today, 'Same', 'top3')
+  // A task with history (a deadline): deleting its row means Not today. A task born here goes with its line (B33).
+  const withHistory = (s: ReturnType<typeof setup>) => { const p = s.day(today); s.run({ type: 'add-task', pageId: p.id, sectionId: p.sections.find(x => x.kind === 'top3')!.id, title: 'Same', plannedOn: today, deadlineOn: friday }); return s.state.tasks.at(-1)! }
+  const byAction = setup(), a = withHistory(byAction)
   byAction.run({ type: 'not-today', taskId: a.id, date: today, onlyThisDay: true })
 
-  const byDelete = setup(); byDelete.add(today, 'Same', 'top3')
+  const byDelete = setup(); withHistory(byDelete)
   const p = byDelete.page(today), doc = editorSeed(p, byDelete.state), row = doc.find(n => n.type === 'task')!
   byDelete.run({ type: 'save-editor', pageId: p.id, expectedContent: pageContentKey(p), document: JSON.stringify(doc.filter(n => n.id !== row.id)), singleDeleteIds: [row.id], today })
 

@@ -13,12 +13,12 @@ import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, templateKind, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
-import { applyCommand, pasteRecords } from '../domain/workspace'
+import { applyCommand, bornHere, deletesWithLine, pasteRecords } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
 import { cardsPresent, urlLine, type UndoCard } from '../domain/link-paste'
 import { recentPages, visiblePages, parentOf } from '../domain/page-tree'
-import { lineRefView, pageRefView } from './line-text'
+import { lineRefView, pageRefView, whereLabel as placeLabel } from './line-text'
 import { lineClipboardType, lineLinkPath, parseLineClipboard, parseLineUrl } from '../domain/line-link'
 import type { LineTarget } from '../domain/page-refs'
 import { pageHref, pageLabel } from './page-tree'
@@ -292,12 +292,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const runRef = useRef(run); runRef.current = run
   const navigate = useNavigate()
   const key = `daythread:editor:${page.id}`
-  const initial = useRef<{ nodes: EditorNode[]; base: string; recovered: boolean } | null>(null)
+  const initial = useRef<{ nodes: EditorNode[]; base: string; recovered: boolean; cutTaskIds: string[] } | null>(null)
   if (!initial.current) {
     const base = pageContentKey(page)
-    let nodes = editorSeed(page, workspace, { templateRows: needsTemplateRows(page, todayIso()) }), recovered = false, savedBase = base
-    try { const stored = JSON.parse(localStorage.getItem(key) ?? 'null'); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; recovered = true } } catch { /* fresh document */ }
-    initial.current = { nodes, base: savedBase, recovered }
+    let nodes = editorSeed(page, workspace, { templateRows: needsTemplateRows(page, todayIso()) }), recovered = false, savedBase = base, cutTaskIds: string[] = []
+    // A recovered draft brings back its cuts too (Ratchet 067be3eb): a cut row in it is a move, never a delete.
+    try { const stored = JSON.parse(localStorage.getItem(key) ?? 'null'); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; recovered = true; cutTaskIds = Array.isArray(stored.cutTaskIds) ? stored.cutTaskIds.filter((x: unknown) => typeof x === 'string') : [] } } catch { /* fresh document */ }
+    initial.current = { nodes, base: savedBase, recovered, cutTaskIds }
   }
   const [pastedChecklistIds, setPastedChecklistIds] = useState<string[]>(() => checklistIds(initial.current!.nodes))
   // The blocks the handle press picked; the drop handler moves exactly these.
@@ -417,6 +418,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const suppress = useRef(false)
   const semanticDeletes = useRef(new Set<string>())
+  // B33: tasks whose rows were cut (a move): the next save says so, so the task isn't deleted with its line.
+  const cutTasks = useRef(new Set<string>(initial.current.cutTaskIds))
   const composing = useRef(false)
   const selected = useRef<string[]>([])
   const dragging = useRef<EditorNode[]>([])
@@ -561,7 +564,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const section = latestPage.current.sections.find(s => s.id === preceding?.id)
     return latestPage.current.date && (section?.kind === 'top3' || section?.kind === 'other') ? 'plan' : 'reference'
   }
-  const stash = () => { try { localStorage.setItem(key, JSON.stringify({ base: base.current, document: JSON.stringify(nodes()) })) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
+  const stash = () => { try { localStorage.setItem(key, JSON.stringify({ base: base.current, document: JSON.stringify(nodes()), ...(cutTasks.current.size ? { cutTaskIds: [...cutTasks.current] } : {}) })) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
   const flushRef = useRef<() => Promise<void>>(async () => {})
   const pendingSave = useRef<{ fingerprint: string; operationId: string } | null>(null)
   const flush = useCallback(async () => {
@@ -571,10 +574,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (isOwnLeaveSave(page.id, latestPage.current.editorJSON)) base.current = pageContentKey(latestPage.current)
     sending.current = true
     const document = JSON.stringify(editor.document)
-    const deletions = [...semanticDeletes.current]
+    const deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
     lastSent.current = document
     setStatus('Saving…')
-    const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, today: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }
+    const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), today: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }
     const fingerprint=JSON.stringify(action)
     if (pendingSave.current?.fingerprint !== fingerprint) pendingSave.current={fingerprint,operationId:newOperationId()}
     const operationId=pendingSave.current!.operationId
@@ -598,6 +601,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // The editor has closed meanwhile: leaving takes it from here (it needs only the new starting point).
       if (left.current) return
       deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
+      cutIds.forEach(id => cutTasks.current.delete(id))
       dirty.current = JSON.stringify(editor.document) !== document
       // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
       const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
@@ -730,12 +734,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // Now the draft is stashed as before and then saved. If that save is refused or fails, the stash stays and
       // this page shows it on return ("Recovered unsaved draft", or Load latest after a conflict).
       stash()
-      const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current]
+      const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
       void (async () => {
         // A save already on its way finishes first, so this one starts from the page it produced.
         await inflight.current
         if (document !== lastSaved.current) {
-          const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, today: todayIso() }
+          const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), today: todayIso() }
           debugClient('editor.save.leave',{pageId:page.id})
           const result = await runRef.current(action, undefined, newOperationId(), { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => {} })
           if (!result) return
@@ -1080,12 +1084,34 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     selectionFocus.current?.focus()
     window.getSelection()?.removeAllRanges()
   }
+  /** B33: the save's own decision (deletesWithLine), on the document as it is after the delete. */
+  const goesWithLine = (taskId: unknown, after: readonly EditorNode[]) => typeof taskId === 'string'
+    && deletesWithLine(latestWorkspace.current, latestPage.current, taskId, new Set(deepNodes(after).filter(n => n.type === 'task').map(n => String(n.props?.taskId))))
+  /**
+   * A new to-do that stays because another page still has a line of it (Ratchet 164): the notice says where, not "To-do
+   * deleted" and not "Not today", which he didn't choose (Jazz 57dd5a4e).
+   */
+  const stillElsewhere = (taskId: unknown, after: readonly EditorNode[]) => {
+    const ws = latestWorkspace.current, here = latestPage.current, t = ws.tasks.find(x => x.id === taskId)
+    if (!t || !bornHere(ws, t, here) || deepNodes(after).some(n => n.type === 'task' && n.props?.taskId === t.id)) return null
+    const other = ws.pages.find(o => o.id !== here.id && o.sections.some(s => s.blocks.some(b => b.taskId === t.id)))
+    if (!other) return null
+    const from = here.type === 'daily' && here.date === todayIso() ? 'today' : here.type === 'daily' ? placeLabel(here) : 'this page'
+    return `Removed from ${from} · ${other.type === 'daily' ? `still on ${placeLabel(other)}` : `still in ${placeLabel(other)}`}`
+  }
   function deleteSelected() {
     const before = nodes()
     const ids = selected.current; selected.current = []
     const first = before.find(n => n.id === ids[0])
     const above = before[before.findIndex(n => n.id === ids[0]) - 1]
-    const plannedCount = before.filter(n => ids.includes(n.id) && n.type === 'task' && n.props?.role === 'plan').length
+    // B33: a task born on this page goes with its line, so only tasks with history "stay" (Jazz: no notice for the rest).
+    const removedIds = new Set(deepNodes(before.filter(n => ids.includes(n.id))).map(n => n.id))
+    const after = before.filter(n => !ids.includes(n.id))
+    const kept = (n: EditorNode) => latestWorkspace.current.tasks.some(t => t.id === n.props?.taskId) && !goesWithLine(n.props?.taskId, after)
+    const plannedCount = before.filter(n => ids.includes(n.id) && n.type === 'task' && n.props?.role === 'plan' && kept(n)).length
+    // To-dos that go with their lines (B33): the notice says so, with its Undo (Jazz 416bbf34).
+    const removed = deepNodes(before).filter(n => removedIds.has(n.id))
+    const deletedCount = new Set(removed.filter(n => n.type === 'task' && goesWithLine(n.props?.taskId, after)).map(n => n.props?.taskId)).size
     if (ids.length === 1 && nodes().find(n => n.id === ids[0])?.type === 'task') semanticDeletes.current.add(ids[0]!)
     editor.prosemirrorView.dispatch(closeHistory(editor.prosemirrorState.tr))
     editor.removeBlocks(ids)
@@ -1093,7 +1119,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     else if (editor.document[0]) editor.setTextCursorPosition(editor.document[0].id, 'start')
     editor.focus()
     setSelectionLabel(''); setStatus('Content removed')
-    setNotice({ text: first?.type === 'heading' ? `Deleted '${inlineText(first.content)}'${plannedCount ? ` · ${plannedCount === 1 ? '1 planned task stays' : `${plannedCount} planned tasks stay`} planned` : ''}` : ids.length === 1 && first?.type === 'task' && first.props?.role === 'plan' ? 'Not today · deadline kept' : 'Content removed · tasks unchanged', fingerprint: JSON.stringify(editor.document) })
+    // One copy of a task whose other line stays on this page: nothing happened to the task, so no notice (Lead 2fd18667).
+    if (ids.length === 1 && first?.type === 'task' && deepNodes(after).some(n => n.type === 'task' && n.props?.taskId === first.props?.taskId)) return
+    setNotice({ text: first?.type === 'heading' ? `Deleted '${inlineText(first.content)}'${plannedCount ? ` · ${plannedCount === 1 ? '1 planned task stays' : `${plannedCount} planned tasks stay`} planned` : ''}` : ids.length === 1 && first?.type === 'task' && stillElsewhere(first.props?.taskId, after) ? stillElsewhere(first.props?.taskId, after)! : ids.length === 1 && first?.type === 'task' && first.props?.role === 'plan' && kept(first) && !deepNodes(after).some(n => n.type === 'task' && n.props?.taskId === first.props?.taskId) ? 'Not today · deadline kept' : deletedCount ? (deletedCount === 1 ? 'To-do deleted' : `${deletedCount} to-dos deleted`) : 'Content removed · tasks unchanged', fingerprint: JSON.stringify(editor.document) })
   }
   // BlockNote places its 30px side menu at the top of the block; our headings and task rows are taller than its
   // defaults (up to 6.5px off when measured). Keep its positioning, nudged level with the hovered block's first line.
@@ -1221,6 +1249,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (cut) {
       cutTokens.add(token)
       try { localStorage.setItem(`daythread:cut:${token}`, JSON.stringify(blocks)) } catch { /* same-tab move remains available */ }
+      // Tasks typed in the editor keep their `editor-task:` id as their real id, so check the workspace, not the prefix.
+      for (const n of deepNodes(blocks)) if (n.type === 'task' && latestWorkspace.current.tasks.some(t => t.id === n.props?.taskId)) cutTasks.current.add(String(n.props!.taskId))
       editor.transact(tr => { closeHistory(tr); if (chosen) editor.removeBlocks(chosen.map(n => n.id)); else tr.deleteSelection() })
       selected.current = []; setSelectionLabel('')
     }
@@ -1559,8 +1589,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // the line that moves up. Everything above the removed row keeps its positions, so `above` holds after removal.
         e.preventDefault(); e.stopPropagation(); const id = editor.getTextCursorPosition().block.id
         const view = editor.prosemirrorView, above = endOfLineAbove(view, view.state.selection.$from.before())
+        const taskId = (editor.getBlock(id)?.props as { taskId?: string } | undefined)?.taskId
         semanticDeletes.current.add(id); editor.removeBlocks([id])
+        const deleting = goesWithLine(taskId, nodes())
         if (above !== null) view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, above)).scrollIntoView())
+        // The path that left his junk to-dos: say what happened, with Undo (Bumblebee e7026847, Jazz 416bbf34).
+        const elsewhere = stillElsewhere(taskId, nodes())
+        if (deleting || elsewhere) setNotice({ text: elsewhere ?? 'To-do deleted', fingerprint: JSON.stringify(editor.document) })
       } else if (!['Shift', 'Control', 'Meta', 'Alt'].includes(e.key) && !((e.metaKey || e.ctrlKey) && ['c', 'x'].includes(e.key.toLowerCase()))) { selected.current = []; setSelectionLabel('') }
     }}
     >

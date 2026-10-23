@@ -243,6 +243,27 @@ export function top3Full(state: Workspace, day: string, taskId?: string): boolea
   return ids.size >= 3;
 }
 /** A day page's plan rows for a task leave it (A12): the presentation only; placements are the caller's. */
+/**
+ * B33: a task that only ever lived on this page. Made here, never planned or carried to another day, no deadline or
+ * start date. A blank title ("", "#", a lone tag) always counts: there are no words to lose.
+ */
+export function bornHere(state: Workspace, t: Task, p: Page): boolean {
+  if (!t.title.replace(/#[^\s#]*/g, "").trim()) return true;
+  if (t.sourcePageId !== p.id || t.deadlineOn || t.attentionOn) return false;
+  const day = p.type === "daily" ? p.date ?? null : null;
+  if ((t.plannedOn && t.plannedOn !== day) || (t.lastPlannedOn && t.lastPlannedOn !== day)) return false;
+  return state.placements.every(x => x.taskId !== t.id || x.date === day);
+}
+/**
+ * B33, the whole decision, shared by the save and the editor's notice so they can't disagree (Ratchet 164): the task
+ * goes with its line only if it was born on this page, no row of it is left on this page (`remaining`: the task ids
+ * still on the page after the change), and no other page holds a row of it.
+ */
+export function deletesWithLine(state: Workspace, p: Page, taskId: string, remaining: ReadonlySet<string>): boolean {
+  const t = state.tasks.find((x) => x.id === taskId);
+  if (!t || !bornHere(state, t, p) || remaining.has(taskId)) return false;
+  return !state.pages.some((o) => o.id !== p.id && o.sections.some((s) => s.blocks.some((x) => x.taskId === taskId)));
+}
 function removePlanRows(state: Workspace, taskId: string, day: string) {
   const p = state.pages.find((x) => x.type === "daily" && x.date === day);
   if (p)
@@ -982,6 +1003,15 @@ function execute(
       // Undo of a semantic row deletion restores only its checked task and relations.
       for (const [blockId, effect] of Object.entries(p.editorDeletions ?? {})) {
         if (!present.has(blockId)) continue;
+        // B33: a task deleted with its line comes back as it was, same id, done state and placements.
+        if (effect.deleted) {
+          if (!state.tasks.some(t => t.id === effect.task.id)) {
+            state.tasks.push(structuredClone(effect.task));
+            state.placements = state.placements.filter(x => x.taskId !== effect.task.id).concat(structuredClone(effect.placements));
+          }
+          delete p.editorDeletions![blockId];
+          continue;
+        }
         const current = task(state, effect.task.id);
         if (current.version !== effect.afterVersion || JSON.stringify(state.placements.filter(x => x.taskId === current.id)) !== JSON.stringify(effect.afterPlacements)) throw new DomainError("Task changed after deletion; cannot undo safely");
         Object.assign(current, effect.task, { version: current.version + 1 });
@@ -1016,11 +1046,25 @@ function execute(
         (p.editorCreations ??= {})[node.id] = t.id;
         if (planned) place(state, t, planned);
       }
+      // B33 (Jazz rule 2, Lead 764c7bf8): a task born on this page with no history goes with its line, by any delete
+      // (a key, a block selection, a selection across lines, a whole section). A task with history keeps the rules
+      // below (Not today; "Planned · not in note"). A cut is a move and never deletes (Jazz's fallback).
+      const cut = new Set(action.cutTaskIds ?? []);
+      const remaining = new Set(all.filter(n => n.type === "task").map(n => String(n.props?.taskId)));
+      for (const b of previousBlocks) {
+        if (b.kind !== "task" || !b.taskId || present.has(b.id) || cut.has(b.taskId)) continue;
+        if (!deletesWithLine(state, p, b.taskId, remaining)) continue;
+        const t = task(state, b.taskId);
+        (p.editorDeletions ??= {})[b.id] = { task: structuredClone(t), placements: structuredClone(state.placements.filter(x => x.taskId === t.id)), afterVersion: t.version, afterPlacements: [], deleted: true };
+        state.tasks = state.tasks.filter(x => x.id !== t.id);
+        state.placements = state.placements.filter(x => x.taskId !== t.id);
+      }
       for (const singleDeleteId of action.singleDeleteIds ?? []) {
        if (!present.has(singleDeleteId) && p.date === action.today) {
         const b = previousBlocks.find(b => b.id === singleDeleteId);
         const isPlan = b?.planRole === 'plan' || b?.planRole === undefined && p.sections.some(s => (s.kind === 'top3' || s.kind === 'other') && s.blocks.some(x => x.id === b?.id));
-        if (b?.taskId && isPlan) {
+        // Another line of the same task is still on this page: deleting one copy doesn't take the task off the day.
+        if (b?.taskId && isPlan && state.tasks.some(x => x.id === b.taskId) && !remaining.has(b.taskId)) {
           const t = task(state, b.taskId);
           if (t.plannedOn === p.date) {
             const beforeTask = structuredClone(t), beforePlacements = structuredClone(state.placements.filter(x => x.taskId === t.id));
@@ -1188,6 +1232,20 @@ function execute(
       if (t.plannedOn)
         place(state, t, t.plannedOn, s.kind === "top3" ? "top3" : "other");
       return { message: "Task saved", entityId: t.id };
+    }
+    case "delete-orphan-tasks": {
+      // Each one must still be an orphan born on its page: no row on any page, and no history (bornHere). Any that isn't
+      // stops the whole command, so the list he was shown is exactly what goes.
+      const ids = new Set(action.taskIds);
+      for (const id of ids) {
+        const t = task(state, id);
+        if (state.pages.some(pg => pg.sections.some(s => s.blocks.some(b => b.taskId === id)))) throw new DomainError(`'${t.title}' still has a line`);
+        const home = state.pages.find(pg => pg.id === t.sourcePageId);
+        if (!home || !bornHere(state, t, home)) throw new DomainError(`'${t.title}' has history; not deleted`);
+      }
+      state.tasks = state.tasks.filter(t => !ids.has(t.id));
+      state.placements = state.placements.filter(x => !ids.has(x.taskId));
+      return { message: `Deleted ${ids.size} empty task${ids.size === 1 ? "" : "s"}` };
     }
     case "task-status": {
       const t = task(state, action.taskId);
