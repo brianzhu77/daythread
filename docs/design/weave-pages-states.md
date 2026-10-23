@@ -67,7 +67,9 @@ Top to bottom:
    - a gathered **page card or link card** (his Oct 18 recipe cards, Lead dry run cfbbab8) shows as a **one-line page link**:
      the page icon and the page's title, the same as an inline page link, not the full card with its preview. Tapping it opens
      **that page**, not the day the card sits on, since the page is what the line is about. A trashed page's card follows
-     §4 (hidden while trashed);
+     §4 (hidden while trashed). **A card and that page's own lines are one item** (Bumblebee e4d5c42d): when both are
+     gathered, only the card shows, under the card's day, and it counts once in "N lines";
+   - **a line that holds only tags** (his recipe pages' bare `#recipe`) is never gathered or counted;
    - **tap or click a line** to open where he wrote it, with the A11 jump (a third from the top of the visible area, tinted);
    - a **task line** is gathered too (Bumblebee 0869f63e: his recurring topics are mostly tasks, e.g. the `#rewind` ones). It
      shows as **its words plus a muted status**, with **no checkbox**: "open · planned Oct 23", "done · Oct 22", "cancelled".
@@ -135,7 +137,7 @@ The counts in the list row ("6 lines · 3 days") are live too, so the list never
 1. **Task lines are in** (decided, Bumblebee 0869f63e): words plus a muted status, no control (§3).
 2. **Lines under a tag only:** a tagged line whose topic page exists shows on both the Tags list and Weave. That's fine, and
    it's the Lead's note 2: the check is whether Weave also shows what Tags can't.
-3. **Empty and one-character lines** are never gathered (brief §5).
+3. **Empty, one-character and tags-only lines** are never gathered (brief §5; Bumblebee e4d5c42d).
 
 ## 9. Checks (for Ratchet and the build check, 1280 and 390, on a copy of his data)
 
