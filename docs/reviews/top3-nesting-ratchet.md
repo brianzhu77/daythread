@@ -1,3 +1,7 @@
+# B34b follow-up990d05f
+
+**PASS.** Small domain-only delta excludes an arriving parent's already-present descendants from Top3 capacity. Reviewer late-parent.ts now produces Top3[X,Y,P,c], Other[], with c nested under P; original second-day.ts still passes. Full suite408/0/11skip/4todo(423 total), typecheck pass. Added domain tests also cover the extra-Z and genuine3-item-overflow cases. Prior ff0bbdd browser/rollback conclusions remain applicable: no client or stored-shape change in this delta. The original late-parent limit is fixed by990d05f, not by ff0bbdd.
+
 # B34b task169 — ff0bbdd
 
 **PASS within Lead00606815 explicitly accepted scope.** The late-parent capacity/section gap below is accepted for a separate follow-up, not claimed fixed. No other blocker found. Reviewer executed `late-parent.ts`: previous Top3 is P with child c, X, Y; individual taps c,X,Y,P produce Top3[c,X,Y], Other[P], with no nesting. The arriving P is counted in addition to its already-present child before capacity is decided; subsequent nesting refuses the cross-section pair. Expected3 parent slots with c under P. Message6bc583a5.
