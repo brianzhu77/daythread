@@ -133,3 +133,8 @@ export function resolveLine(ws: Workspace, target: LineTarget): ResolvedLine {
   if (words === undefined) return { state: page.trashedAt ? 'trashed' : 'line-not-found', pageId: page.id, words: '' }
   return { state: page.trashedAt ? 'trashed' : 'live', pageId: page.id, blockId: target.lineId, words }
 }
+
+/** The page a reference counts for (Linked from, the `[[` list): a line link's resolved page, else its page (A11 §5). */
+export function refTargetPage(ws: Workspace, ref: Pick<PageRefEntry, 'pageId' | 'lineId' | 'taskId'>): string {
+  return ref.lineId ? resolveLine(ws, { pageId: ref.pageId, lineId: ref.lineId, ...(ref.taskId ? { taskId: ref.taskId } : {}) }).pageId : ref.pageId
+}

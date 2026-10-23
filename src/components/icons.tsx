@@ -67,6 +67,13 @@ export const ExternalIcon = () => (
 /** The icon of a page row: a globe for a link page, the page icon otherwise. */
 export const PageKindIcon = ({ url }: { url?: string | null }) => (url ? <GlobeIcon /> : <PagesIcon />)
 
+/** ↳: a link to one line (A11, Jazz line-links-states §3): "a passage", not a page. */
+export const LineLinkIcon = () => (
+  <Icon>
+    <path d="M7 5v8a3 3 0 0 0 3 3h8M15 13l3 3-3 3" />
+  </Icon>
+)
+
 export const TrashIcon = () => (
   <Icon>
     <path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" />

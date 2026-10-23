@@ -752,6 +752,17 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .page-ref.is-missing { cursor: default; }
 .page-ref-spinner { display: inline-block; width: 10px; height: 10px; margin-left: 4px; border: 1.5px solid var(--ink-3); border-right-color: transparent; border-radius: 50%; animation: page-card-spin .8s linear infinite; vertical-align: -1px; }
 .page-ref-failed { margin-left: 6px; font-size: var(--text-meta); color: var(--app-danger); }
+/* A11 (Jazz line-links-states §3): a link to one line is the page-link chip with ↳, the line's words and " · where".
+   It never wraps inside itself: on a narrow line the words shrink first, the place last. As one box it would be a full
+   line tall plus its padding; the font's own line height makes it the size of an inline page link's chip. */
+.line-ref { display: inline-flex; align-items: baseline; max-width: 100%; line-height: normal; white-space: nowrap; vertical-align: baseline; overflow-wrap: normal; }
+.line-ref .page-ref-icon { flex: none; align-self: center; }
+.line-ref-words, .line-ref-where { white-space: nowrap; }
+.line-ref-words { min-width: 2.5em; overflow: hidden; text-overflow: ellipsis; flex: 0 100000 auto; }
+.line-ref-where { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink-3); }
+.line-ref.is-line-not-found, .line-ref.is-page-not-found { color: var(--ink-3); }
+.line-ref.is-page-not-found { cursor: default; }
+.line-menu { right: auto; z-index: 40; min-width: 200px; }
 /* A2 link page: the URL exactly as pasted, one muted line under the title (Jazz §3). */
 .link-url-row { display: flex; align-items: center; gap: 6px; margin: 4px 0 0; min-width: 0; font-size: var(--text-ui); color: var(--ink-2); }
 .link-url-row svg { flex: none; width: 16px; height: 16px; color: var(--ink-3); }

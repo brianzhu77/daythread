@@ -18,6 +18,8 @@
 //      A marker that can't be found is MISSING, never skipped.
 //   The title's date picker: each day's dot centred under its number (within 1px) and below the digits.
 //   Page card titles must wrap, not clip (link cards may end in an ellipsis).
+//   Inline chips (A9a page links, A11 line links): the chip's height within its line's box, and its text on the same
+//   baseline as the plain text beside it (Jazz line-links-states §7 check 10).
 //   3. Coverage. Every row type in REQUIRED must appear on the measured pages; one that doesn't is MISSING, never a
 //      pass. Add it to the data copy (or pass a fixture page) and run again.
 // Tolerance is 1px on unrounded coordinates (output shows one decimal). Exit code 1 on any FAIL or MISSING.
@@ -29,7 +31,7 @@ if (!base) { console.error('usage: node scripts/check-alignment.mjs <base url> [
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
-const REQUIRED = ['heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
+const REQUIRED = ['heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
 
 function measure() {
   const visible = e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 }
@@ -89,7 +91,29 @@ function measure() {
     } else return
     rows.push(row)
   })
-  return { rows, editorLeft }
+  // Inline chips, measured against plain text on the same line of the same row.
+  const chips = []
+  for (const chip of document.querySelectorAll('.continuous-editor .bn-inline-content .page-ref')) {
+    if (!visible(chip)) continue
+    const inline = chip.closest('.bn-inline-content'), words = chip.querySelector('.line-ref-words, .page-ref-title')
+    const range = document.createRange(); range.selectNodeContents(words ?? chip)
+    const own = [...range.getClientRects()].find(r => r.width > 0 && r.height > 0)
+    const box = chip.getBoundingClientRect(), lineHeight = parseFloat(getComputedStyle(inline).lineHeight) || parseFloat(getComputedStyle(inline).fontSize) * 1.2
+    // Plain text of the same row: on the chip's own line if there is some; else on another line, compared by where the
+    // text sits inside its line box (a chip that wrapped onto a line of its own).
+    const top = inline.getBoundingClientRect().top + parseFloat(getComputedStyle(inline).paddingTop)
+    const inLine = r => r.bottom - (top + Math.floor((cy(r) - top) / lineHeight) * lineHeight)
+    let beside = null, other = null
+    const walker = document.createTreeWalker(inline, NodeFilter.SHOW_TEXT)
+    for (let n = walker.nextNode(); n && !beside; n = walker.nextNode()) {
+      if (chip.contains(n) || n.parentElement?.closest('.page-ref') || !n.textContent.trim()) continue
+      const r = document.createRange(); r.selectNodeContents(n)
+      for (const x of r.getClientRects()) if (x.width > 0 && own) { if (Math.abs(cy(x) - cy(own)) < own.height / 2) beside = x; else other ??= x }
+    }
+    const baseline = !own ? null : beside ? own.bottom - beside.bottom : other ? inLine(own) - inLine(other) : null
+    chips.push({ kind: chip.classList.contains('line-ref') ? 'line link' : 'page link', label: chip.textContent.trim().slice(0, 24), height: box.height, lineHeight, baseline, across: !beside && Boolean(other) })
+  }
+  return { rows, editorLeft, chips }
 }
 
 const fmt = n => (Math.round(n * 10) / 10).toFixed(1)
@@ -139,7 +163,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
   for (const path of paths) {
     const page = await browser.newPage({ viewport: { width, height } })
     await page.goto(`${base}${path}`, { waitUntil: 'networkidle' }); await page.waitForTimeout(1000)
-    const { rows, editorLeft } = await page.evaluate(measure)
+    const { rows, editorLeft, chips } = await page.evaluate(measure)
     await drawPass(page, rows)
     // The drag handle shows on hover (desktop only): hover one row of each kind and measure it there.
     if (width === 1280) {
@@ -193,6 +217,13 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     // A dot is a non-text graphic: at least 3:1 against its own cell, on plain, today and selected cells (Lead f5c37a18).
     for (const d of dots) results.push({ at, check: `picker dot contrast on day ${d.day} (${d.kind})`, ok: d.contrast >= 3, detail: `${fmt(d.contrast)}:1 against its cell` })
     for (const d of dots) seen.get(width).add(d.kind === 'plain' ? 'picker dot on a plain day' : d.kind === 'today' ? 'picker dot on today' : 'picker dot on the selected day')
+    for (const c of chips) {
+      seen.get(width).add(c.kind)
+      results.push({ at, check: `${c.kind} height within the line box: "${c.label}"`, ok: c.height <= c.lineHeight + TOLERANCE, detail: `${fmt(c.height)}px in a ${fmt(c.lineHeight)}px line` })
+      results.push(c.baseline === null
+        ? { at, check: `${c.kind} baseline: "${c.label}"`, ok: 'missing', detail: 'no plain text beside it on the line, so not measured' }
+        : { at, check: `${c.kind} text baseline on the line's: "${c.label}"`, ok: Math.abs(c.baseline) <= TOLERANCE, detail: `${c.baseline >= 0 ? '+' : ''}${fmt(c.baseline)}px${c.across ? ' (against text on another line of the row, within its line box)' : ''}` })
+    }
     for (const r of rows) { seen.get(width).add(r.kind); if (r.empty) seen.get(width).add('empty row'); if (r.kind === 'nested bullet' && r.depth >= 2) seen.get(width).add('level 3 bullet') }
     // 1. Columns.
     const top = rows.filter(r => r.depth === 0 && r.kind !== 'heading' && r.kind !== 'paragraph')

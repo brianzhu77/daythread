@@ -108,7 +108,8 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
     const known = index.links.get(`${ref.refId}|${ref.pageId}`), target = pageOf(ref.pageId)
     if (!known) {
       if (!target && !(ref.newTitle && !workspace.pages.some(p => p.id === ref.pageId))) throw new Error('Page not found')
-      if (target?.trashedAt) throw new Error('Page is in trash; restore it first')
+      // A line link may name a line on a trashed page: the chip says so and opens it there (A11 §5).
+      if (target?.trashedAt && !ref.lineId) throw new Error('Page is in trash; restore it first')
     }
     const title = target?.title ?? ref.newTitle ?? known?.title ?? ''
     return { refId: ref.refId, pageId: ref.pageId, at: known?.at ?? revision, title, ...(!target && (ref.newTitle || known?.pending) ? { pending: true } : {}),
