@@ -1,0 +1,28 @@
+{"top":["A","B","b1"],"other":["C"]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: individual + taps must not make child b1 consume C slot
++ actual - expected
+
+  [
+    'A',
+    'B',
+    'b1',
+-   'C'
+  ]
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-top3-carry/tests/evidence/ratchet-top3-165/separate-adds.ts:15:49
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [ 'A', 'B', 'b1' ],
+  expected: [ 'A', 'B', 'b1', 'C' ],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
