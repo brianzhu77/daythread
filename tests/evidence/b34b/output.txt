@@ -1,0 +1,29 @@
+Roadbuster, fix/top3-nesting (B34b), built preview on 127.0.0.1:3542, a fresh seed.ts store per run, 2026-10-23.
+1280 Chromium and 390 WebKit with touch; "taps" = + in the order b1x, B, A, b1, C, D; "all" = Add all.
+
+ok   1280: the card lists the tree in page order (["A","B","b1","b1x","C","D"])
+ok   1280: sub-tasks are indented one step per level ([0,0,24,48,0,0])
+ok   1280: an added sub-task's strip keeps its indent ([0,48])
+ok   1280: Top 3 holds A, B and C with B's sub-tasks (no slot); D stays in Other (["B","b1","b1x","A","C"] ["D"])
+ok   1280: taps: today's page shows the same tree after a reload (["B","  b1","    b1x","A","C","D"])
+ok   1280: no page errors
+all passed
+ok   1280: the card lists the tree in page order (["A","B","b1","b1x","C","D"])
+ok   1280: sub-tasks are indented one step per level ([0,0,24,48,0,0])
+ok   1280: Top 3 holds A, B and C with B's sub-tasks (no slot); D stays in Other (["A","B","b1","b1x","C"] ["D"])
+ok   1280: all: today's page shows the same tree after a reload (["A","B","  b1","    b1x","C","D"])
+ok   1280: no page errors
+all passed
+ok   390: the card lists the tree in page order (["A","B","b1","b1x","C","D"])
+ok   390: sub-tasks are indented one step per level ([0,0,24,48,0,0])
+ok   390: an added sub-task's strip keeps its indent ([0,48])
+ok   390: Top 3 holds A, B and C with B's sub-tasks (no slot); D stays in Other (["B","b1","b1x","A","C"] ["D"])
+ok   390: taps: today's page shows the same tree after a reload (["B","  b1","    b1x","A","C","D"])
+ok   390: no page errors
+all passed
+ok   390: the card lists the tree in page order (["A","B","b1","b1x","C","D"])
+ok   390: sub-tasks are indented one step per level ([0,0,24,48,0,0])
+ok   390: Top 3 holds A, B and C with B's sub-tasks (no slot); D stays in Other (["A","B","b1","b1x","C"] ["D"])
+ok   390: all: today's page shows the same tree after a reload (["A","B","  b1","    b1x","C","D"])
+ok   390: no page errors
+all passed

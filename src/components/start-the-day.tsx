@@ -1,7 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { dayTemplate } from '../domain/editor-document'
-import { carrySection, isBlankTask } from '../domain/workspace'
+import { carryAncestors, carrySection, isBlankTask } from '../domain/workspace'
 import type { DayView, LocalDate, NoteBlock, Page, Task, Workspace } from '../domain/types'
 import { longLabel, shortLabel, weekday } from './dates'
 import { DateTag } from './date-tag'
@@ -59,7 +59,17 @@ export function taskSuggestions(view: DayView, workspace: Workspace, today: Loca
     if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: `Unfinished · from ${prev?.date ? weekday(prev.date) : 'yesterday'}`, section: carrySection(prev, t.id) }) }
   if (drafted) for (const t of draftTasks)
     if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: 'Drafted for today', section: 'other' }) }
-  return out
+  return asTree(out, prev)
+}
+
+/** B34b (Jazz rule 3): a sub-task right after its nearest ancestor on the previous page that the card also offers. */
+function asTree(out: TaskSuggestion[], prev: Page | undefined): TaskSuggestion[] {
+  const ids = new Set(out.map(s => s.task.id))
+  const parentOf = new Map(out.map(s => [s.task.id, carryAncestors(prev, s.task.id).find(a => ids.has(a)) ?? null]))
+  const tree: TaskSuggestion[] = []
+  const emit = (parent: string | null) => out.filter(s => parentOf.get(s.task.id) === parent).forEach(s => { tree.push(s); emit(s.task.id) })
+  emit(null)
+  return tree
 }
 
 /** A draft made by Draft my day (a real run, or its simulated stand-in from the card), not by the evening review. */
@@ -198,10 +208,15 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
     }
   }
 
-  const row = (key: string) => {
+  // B34b: the card shows the page's tree. A row is indented once per ancestor shown above it, a strip included, so a
+  // sub-task doesn't jump left when its parent is added.
+  const prevPage = previousDailyPage(workspace, today)
+  const depthOf = (key: string, shown: string[]) => key.startsWith('task:') ? carryAncestors(prevPage, key.slice(5)).filter(a => shown.includes(`task:${a}`)).length : 0
+  const indent = (depth: number) => (depth ? { style: { '--mc-depth': depth } as CSSProperties } : {})
+  const row = (key: string, depth = 0) => {
     const strip = strips.get(key)
     if (strip) return (
-      <li key={key} className={`mc-strip ${strip.refused ? 'refused' : ''}`} role="status">
+      <li key={key} className={`mc-strip ${strip.refused ? 'refused' : ''}`} role="status" {...indent(depth)}>
         <span>{strip.text}</span>
         {strip.undo && !strip.refused && <button type="button" className="app-link" onClick={() => void undo(key, strip.undo!)}>Undo</button>}
       </li>
@@ -210,7 +225,7 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
       const s = tasks.find(t => `task:${t.task.id}` === key)
       if (!s) return null
       return (
-        <li key={key} className="mc-row">
+        <li key={key} className="mc-row" {...indent(depth)}>
           <AddButton label={`Add ${s.task.title} to ${s.section === 'top3' ? top3 : other}`} onPress={() => void add(s)} />
           <span className="mc-text">
             <span className="mc-title-line"><span className="mc-title"><TagText text={s.task.title} /></span><DateTag task={s.task} today={today} /></span>
@@ -287,7 +302,7 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
         <div className="mc-group">
           <h3 className="mc-label">Tasks</h3>
           {statusLine}
-          {(taskKeys.length > 0 || strips.has(allKey)) && <ul className="plain mc-list">{strips.has(allKey) && row(allKey)}{taskKeys.map(row)}</ul>}
+          {(taskKeys.length > 0 || strips.has(allKey)) && <ul className="plain mc-list">{strips.has(allKey) && row(allKey)}{taskKeys.map(k => row(k, depthOf(k, taskKeys)))}</ul>}
           {tasks.length >= 2 && <button type="button" className="app-link mc-add-all" onClick={() => void addAll()}>Add all tasks</button>}
           {contextLine}
         </div>
