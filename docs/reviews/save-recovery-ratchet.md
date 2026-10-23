@@ -1,3 +1,13 @@
+# B35 task166 — 862a5df follow-up
+
+**REVISE: deduplication discards unsaved children and semantic changes.** The copied-tab identity blocker is fixed in actual Chromium: distinct ids, two slots, both markers recovered. This replacement introduces confirmed loss in `withoutSaved`: an unchanged parent's server node replaces the draft node together with all draft children. Reviewer browser run on fresh v4 fixture typed/nested a child under unchanged Parent note with saves blocked, closed/reopened: recovered=false, retainedInSlot=false, claimed=1. The words were gone from both UI and recovery storage. Script `nested-recovery.mjs` and output are preserved; the cursor offset11 confirms the unchanged parent text. Earlier attempts that split/cleared the parent were harness errors and excluded.
+
+`dedupe-semantics.ts` independently executes the helper plus real mergeDraft: **2 pass, 2 fail**. Intentional same-words ordinary lines with distinct block ids survive; same-words tasks with distinct task ids survive (Lead0ce16749/Producta20ab60a cases). An unchanged parent's new child is lost, and an offline checklist tick with the same id/words is reverted. Dedupe must preserve children and semantic properties; text equality is insufficient. Reported2b858bf3 and c4a0d0f4. No app fixes by reviewer.
+
+Independent current-head normal suite403 passed/0 failed/11 skipped/4 todo(418 total), typecheck/build pass. These do not cover the two additional failing recovery invariants. Prior-head10/10 real-day and cut/retry evidence below is not automatically a current-head pass. Hidden desktop timer check remains explicitly unverified/nonblocking; Product94a437ad accepts that gap. Jazz2d022b9d reports strings pass and WebKit page.close without closed mark may delay recovery10minutes; Lead e3b62bd7 assigns native app-switcher kill recovery to task155, nonblocking.
+
+## Prior-head review
+
 # B35 task166 — 6c7fad1 independent review
 
 **REVISE: copied tab identities can still lose offline text.** Actual Chromium opener inherits the parent's sessionStorage, including `daythread.tab`. Two editors consequently write one localStorage key. Reviewer browser script `tests/evidence/ratchet-save-166/opener-slots.mjs` typed A and B into separate tabs with POST saves blocked, closed both and reopened: only B recovered. This is actual browser input, not a synthetic storage mock. Message66accf58 reports it; copied-id detection must preserve normal reload recovery and ensure concurrent live tabs have different identities. Recheck browser Duplicate Tab as well where available; that browser command was not executed by Ratchet.

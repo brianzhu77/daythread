@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import {chromium} from '@playwright/test'
 import {DatabaseSync} from 'node:sqlite'
-const base='http://127.0.0.1:3540',db='/tmp/ratchet-155-b35-166.sqlite';
+const [base='http://127.0.0.1:3550',db='/tmp/ratchet-155-b35-166-v2.sqlite']=process.argv.slice(2);
 const copies=s=>{const d=new DatabaseSync(db,{readOnly:true});try{return d.prepare("SELECT editorJSON FROM pages WHERE snapshot='current'").all().reduce((n,r)=>n+String(r.editorJSON??'').split(s).length-1,0)}finally{d.close()}};
 const b=await chromium.launch();
 for(const variant of ['normal','whitespace','emptyline']){

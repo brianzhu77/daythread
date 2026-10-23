@@ -1,0 +1,18 @@
+{"selection":{"text":"Parent note","offset":11}}
+{"draftParents":[{"id":"parent","type":"paragraph","props":{"backgroundColor":"default","textColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Parent note","styles":{}}],"children":[{"id":"3aa6c995-4113-407d-8b25-657b798f064f","type":"paragraph","props":{"backgroundColor":"default","textColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"OFFLINE_NESTED_CHILD_1792748276713","styles":{}}],"children":[]}]}]}
+{"nestedBeforeClose":true,"recovered":false,"retainedInSlot":false,"claimed":1}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: unsaved child must survive orphan recovery under unchanged parent
+    at file:///Users/dogrod/Developer/daythread-ratchet-save-recovery/tests/evidence/ratchet-save-166/nested-recovery.mjs:13:175 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
