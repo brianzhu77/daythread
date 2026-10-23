@@ -15,6 +15,7 @@ import { Route as PagesRouteImport } from './routes/pages'
 import { Route as ReviewRouteImport } from './routes/review'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as TasksRouteImport } from './routes/tasks'
+import { Route as ApiExportRouteImport } from './routes/api/export'
 import { Route as DayDateRouteImport } from './routes/day.$date'
 import { Route as TagsIndexRouteImport } from './routes/tags.index'
 import { Route as TagsTagRouteImport } from './routes/tags.$tag'
@@ -51,6 +52,11 @@ const TasksRoute = TasksRouteImport.update({
   path: '/tasks',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiExportRoute = ApiExportRouteImport.update({
+  id: '/api/export',
+  path: '/api/export',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DayDateRoute = DayDateRouteImport.update({
   id: '/day/$date',
   path: '/day/$date',
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/review': typeof ReviewRoute
   '/sign-in': typeof SignInRoute
   '/tasks': typeof TasksRoute
+  '/api/export': typeof ApiExportRoute
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags/': typeof TagsIndexRoute
@@ -97,6 +104,7 @@ export interface FileRoutesByTo {
   '/review': typeof ReviewRoute
   '/sign-in': typeof SignInRoute
   '/tasks': typeof TasksRoute
+  '/api/export': typeof ApiExportRoute
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags': typeof TagsIndexRoute
@@ -111,6 +119,7 @@ export interface FileRoutesById {
   '/review': typeof ReviewRoute
   '/sign-in': typeof SignInRoute
   '/tasks': typeof TasksRoute
+  '/api/export': typeof ApiExportRoute
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags/': typeof TagsIndexRoute
@@ -126,6 +135,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/sign-in'
     | '/tasks'
+    | '/api/export'
     | '/day/$date'
     | '/tags/$tag'
     | '/tags/'
@@ -139,6 +149,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/sign-in'
     | '/tasks'
+    | '/api/export'
     | '/day/$date'
     | '/tags/$tag'
     | '/tags'
@@ -152,6 +163,7 @@ export interface FileRouteTypes {
     | '/review'
     | '/sign-in'
     | '/tasks'
+    | '/api/export'
     | '/day/$date'
     | '/tags/$tag'
     | '/tags/'
@@ -166,6 +178,7 @@ export interface RootRouteChildren {
   ReviewRoute: typeof ReviewRoute
   SignInRoute: typeof SignInRoute
   TasksRoute: typeof TasksRoute
+  ApiExportRoute: typeof ApiExportRoute
   DayDateRoute: typeof DayDateRoute
   TagsTagRoute: typeof TagsTagRoute
   TagsIndexRoute: typeof TagsIndexRoute
@@ -217,6 +230,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TasksRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/export': {
+      id: '/api/export'
+      path: '/api/export'
+      fullPath: '/api/export'
+      preLoaderRoute: typeof ApiExportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/day/$date': {
       id: '/day/$date'
       path: '/day/$date'
@@ -262,6 +282,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReviewRoute: ReviewRoute,
   SignInRoute: SignInRoute,
   TasksRoute: TasksRoute,
+  ApiExportRoute: ApiExportRoute,
   DayDateRoute: DayDateRoute,
   TagsTagRoute: TagsTagRoute,
   TagsIndexRoute: TagsIndexRoute,

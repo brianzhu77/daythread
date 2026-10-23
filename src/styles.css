@@ -1282,5 +1282,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .link { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
 .account-row { color: var(--ink-3); font-size: var(--text-meta); margin: 1rem 0 0; }
 .account-row-sidebar { padding: 0 10px; } /* the same left edge as .side-label */
+/* Only the failure's Try again is underlined: in the same grey as the words around it, nothing else says it's a link (Jazz). */
+.account-row .link.retry { text-decoration: underline; }
 .account-row-phone { display: none; }
 @media (max-width: 599px) { .account-row-phone { display: block; } }

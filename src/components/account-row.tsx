@@ -1,21 +1,54 @@
 import { useEffect, useState } from 'react'
 import { getAccount } from '../server/functions'
+import { saveKeptDrafts } from './draft-recovery'
+import { flushAllEditors, openEditorPages } from './editor-flush'
+import { useWorkspace } from './use-day'
 
 /**
- * "{email} · Sign out" in --ink-3 (empty-start-states.md §2): the sidebar's last row on desktop, the end of the Pages
- * list on the phone. Sign out asks nothing; drafts stay on the device.
+ * "{email} · Export · Sign out" in --ink-3 (empty-start-states.md §2, Jazz f10f8de5): the sidebar's last row on
+ * desktop, the end of the Pages list on the phone. Sign out asks nothing; drafts stay on the device. With sign-in off
+ * there's no email, and the row is just "Export".
  */
 export function AccountRow({ className }: { className: string }) {
-  const [email, setEmail] = useState<string | null>(null)
-  useEffect(() => { void getAccount().then(a => setEmail(a.email)).catch(() => undefined) }, [])
-  if (!email) return null
+  const { refresh, run } = useWorkspace()
+  const [account, setAccount] = useState<{ email: string | null } | null>(null)
+  const [exporting, setExporting] = useState<'idle' | 'busy' | 'failed' | 'unsaved'>('idle')
+  useEffect(() => { void getAccount().then(setAccount).catch(() => undefined) }, [])
+  if (!account) return null
+  const email = account.email
   async function signOut() {
     await fetch('/api/auth/sign-out', { method: 'POST' }).catch(() => undefined)
     window.location.assign('/sign-in')
   }
+  // The browser's own download is the feedback; only a failure says anything (Jazz).
+  async function exportAll() {
+    if (exporting === 'busy') return
+    setExporting('busy')
+    try {
+      // What he just typed is part of the export: open editors save first, and an export that can't include it fails
+      // rather than quietly leaving it out (Ratchet 8b6615ff), saying first that no zip came (Jazz 8c4c749b).
+      // Drafts kept from a failed save (this tab's closed editor or reload, or a tab that's gone) are saved here too, as
+      // opening their page would, so Try again works without hunting for the page (Bumblebee option 1, Lead ff82e7c8).
+      if (!(await flushAllEditors()) || !(await saveKeptDrafts(refresh, run, openEditorPages()))) { setExporting('unsaved'); return }
+      const response = await fetch('/api/export', { cache: 'no-store' })
+      if (!response.ok) throw new Error(`export ${response.status}`)
+      const name = /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? 'daythread-export.zip'
+      const url = URL.createObjectURL(await response.blob())
+      const a = document.createElement('a')
+      a.href = url; a.download = name; document.body.append(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      setExporting('idle')
+    } catch {
+      setExporting('failed')
+    }
+  }
+  const retry = <button type="button" className="link retry" onClick={() => void exportAll()}>Try again</button>
+  const exportLink = exporting === 'failed' ? <>Couldn’t export · {retry}</>
+    : exporting === 'unsaved' ? <>Not exported · latest text not saved yet · {retry}</>
+    : <button type="button" className="link" disabled={exporting === 'busy'} onClick={() => void exportAll()}>{exporting === 'busy' ? 'Exporting…' : 'Export'}</button>
   return (
     <p className={`account-row ${className}`}>
-      {email} · <button type="button" className="link" onClick={() => void signOut()}>Sign out</button>
+      {email && <>{email} · </>}{exportLink}{email && <> · <button type="button" className="link" onClick={() => void signOut()}>Sign out</button></>}
     </p>
   )
 }
