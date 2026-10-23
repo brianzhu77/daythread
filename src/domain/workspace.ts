@@ -240,6 +240,9 @@ export function top3Full(state: Workspace, day: string, taskId?: string): boolea
     ? p.sections.filter((s) => s.kind === "top3").flatMap((s) => s.blocks).filter((b) => b.kind === "task" && b.taskId).map((b) => b.taskId!)
     : state.placements.filter((x) => x.date === day && x.state === "included" && x.section === "top3").map((x) => x.taskId));
   if (taskId && ids.has(taskId)) return false;
+  // B34a: a sub-task that followed its parent in takes no slot (Bumblebee df6f0a08, Lead 6999454f), decided here from
+  // the previous page, so every entry and every later command agrees (Ratchet 657a4b86, Lead f74ab962).
+  for (const id of [...ids]) if (followSection(state, day, id)) ids.delete(id);
   return ids.size >= 3;
 }
 /** A day page's plan rows for a task leave it (A12): the presentation only; placements are the caller's. */
@@ -672,6 +675,42 @@ export function getCalendarTasks(state: Workspace, day: string): Task[] {
 export function isBlankTask(t: Task): boolean {
   return !t.title.trim();
 }
+/**
+ * B34a (Jazz rule 3, Lead cbbabf88): where a carried task lands on the next day: the section its row was in on `from`.
+ * A nested row is in its top-level ancestor's section, so a sub-task in Top 3 carries into Top 3 too, as a plain row
+ * right after its parent until B34b nests it (Bumblebee 8ea1b2fc, Lead 766387ae); a full Top 3 still sends it to Other
+ * (plan-tasks). Placements can't say this: dragging a row into Top 3 doesn't change its placement.
+ */
+export function carrySection(from: Page | undefined, taskId: string): "top3" | "other" {
+  const top3 = from?.sections.find((s) => s.kind === "top3");
+  return top3?.blocks.some((b) => b.kind === "task" && b.taskId === taskId) ? "top3" : "other";
+}
+/** B34a: the task a row sat under on `from` (its top-level ancestor row's task), or null for a top-level row. */
+export function carryAncestor(from: Page | undefined, taskId: string): string | null {
+  if (!from?.editorJSON) return null;
+  let nodes: EditorNode[];
+  try { nodes = JSON.parse(from.editorJSON) as EditorNode[]; } catch { return null; }
+  const holds = (n: EditorNode): boolean => (n.children ?? []).some((c) => (c.type === "task" && c.props?.taskId === taskId) || holds(c));
+  const top = nodes.find((n) => holds(n));
+  return top?.type === "task" && typeof top.props?.taskId === "string" && top.props.taskId !== taskId ? top.props.taskId : null;
+}
+/**
+ * B34a: where a task goes on `day` because it sat under another task on the previous day page: the section its
+ * top-level ancestor is in on `day`, or null (not a sub-task there, or its ancestor isn't on `day`). Worked out from
+ * the stored pages each time, never from the client (Bumblebee 191829ca, Lead f74ab962).
+ */
+export function followSection(state: Workspace, day: string, taskId: string): "top3" | "other" | null {
+  const ancestor = carryAncestor(previousDayPage(state, day), taskId);
+  return ancestor ? sectionOn(state, day, ancestor) : null;
+}
+/** The section a task's row is in on a day (its page; or its placement while the day has no page). */
+function sectionOn(state: Workspace, day: string, taskId: string): "top3" | "other" | null {
+  const p = state.pages.find((x) => x.type === "daily" && x.date === day);
+  if (!p) { const x = state.placements.find((y) => y.date === day && y.taskId === taskId && y.state === "included"); return x ? (x.section === "top3" ? "top3" : "other") : null; }
+  const s = p.sections.find((x) => (x.kind === "top3" || x.kind === "other") && x.blocks.some((b) => b.taskId === taskId));
+  return s ? (s.kind === "top3" ? "top3" : "other") : null;
+}
+
 export function getDayView(state: Workspace, day: string): DayView {
   date(day);
   const current =
@@ -1263,8 +1302,10 @@ function execute(
         throw new DomainError("Restore task before planning");
       // A12: a move from a day page keeps the row's section, and a full Top 3 there sends it to the plan list instead
       // of making a fourth row (the morning card's rule), said in the receipt.
-      const full = action.from !== undefined && action.from !== action.date && action.section === "top3" && top3Full(state, action.date, t.id);
-      place(state, t, action.date, full ? "other" : action.section);
+      // B34a: a sub-task whose parent is on that day goes to its parent's section, with no slot taken.
+      const follow = followSection(state, action.date, t.id);
+      const full = !follow && action.from !== undefined && action.from !== action.date && action.section === "top3" && top3Full(state, action.date, t.id);
+      place(state, t, action.date, follow ?? (full ? "other" : action.section));
       if (action.from !== undefined) {
         if (!action.today) throw new DomainError("A move from a day page needs today's date");
         date(action.from);
@@ -1287,6 +1328,9 @@ function execute(
         if (t.status !== "open") throw new DomainError("Restore task before planning");
         if (ids.has(t.id)) throw new DomainError("Task listed twice");
         ids.add(t.id);
+        // B34a: a sub-task goes where its parent landed that day, Top 3 or Other, and takes no Top 3 slot.
+        const follow = followSection(state, action.date, t.id);
+        if (follow) { place(state, t, action.date, follow); continue; }
         place(state, t, action.date, item.section === "top3" && top3Full(state, action.date, t.id) ? "other" : item.section);
       }
       return { message: `Added ${action.items.length} tasks` };

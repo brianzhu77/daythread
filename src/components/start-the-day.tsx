@@ -1,7 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { dayTemplate } from '../domain/editor-document'
-import { isBlankTask } from '../domain/workspace'
+import { carrySection, isBlankTask } from '../domain/workspace'
 import type { DayView, LocalDate, NoteBlock, Page, Task, Workspace } from '../domain/types'
 import { longLabel, shortLabel, weekday } from './dates'
 import { DateTag } from './date-tag'
@@ -55,7 +55,8 @@ export function taskSuggestions(view: DayView, workspace: Workspace, today: Loca
   if (!drafted) for (const t of draftTasks)
     if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: 'Suggested last night', section: 'top3' }) }
   for (const t of view.handoffTasks)
-    if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: `Unfinished · from ${prev?.date ? weekday(prev.date) : 'yesterday'}`, section: 'other' }) }
+    // B34a: Top 3 carries into Top 3, Other into Other, by where its row was yesterday.
+    if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: `Unfinished · from ${prev?.date ? weekday(prev.date) : 'yesterday'}`, section: carrySection(prev, t.id) }) }
   if (drafted) for (const t of draftTasks)
     if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: 'Drafted for today', section: 'other' }) }
   return out

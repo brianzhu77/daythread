@@ -1,0 +1,29 @@
+{"top":["A","B","b1","C"],"other":[]}
+{"day":"2026-10-24","top":["A","B","b1"],"other":["C"]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: second morning must not lose child identity merely because first carry flattened rows
++ actual - expected
+
+  [
+    'A',
+    'B',
+    'b1',
+-   'C'
+  ]
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-top3-carry/tests/evidence/ratchet-top3-165/second-day.ts:17:412
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [ 'A', 'B', 'b1' ],
+  expected: [ 'A', 'B', 'b1', 'C' ],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

@@ -1,0 +1,7 @@
+ok   1280: a Top 3 row is offered into Top 3 (["Add Carried top to TODO - Top 3","Add Parent top to TODO - Top 3","Add Child of top to TODO - Top 3","Add Carried other to TODO - Other","Add Dragged up to TODO - Top 3"])
+ok   1280: a row dragged into Top 3 is offered into Top 3
+ok   1280: an Other row is offered into Other
+ok   1280: a sub-task under a Top 3 row is offered into Top 3, right after its parent (Bumblebee 8ea1b2fc) (["Add Carried top to TODO - Top 3","Add Parent top to TODO - Top 3","Add Child of top to TODO - Top 3","Add Carried other to TODO - Other","Add Dragged up to TODO - Top 3"])
+ok   1280: Add all: the three Top 3 items and the sub-task right after its parent, nothing pushed out (["Carried top","Parent top","Child of top","Dragged up"])
+ok   1280: Other stays Other (["Carried other"])
+all passed
