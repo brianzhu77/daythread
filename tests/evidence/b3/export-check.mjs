@@ -41,6 +41,8 @@ log(head.headers()['cache-control']?.includes('no-store') && head.headers()['con
 await p.unroute('**/api/export'); await p.route('**/api/export', r => r.fulfill({ status: 500, body: 'no' }))
 await row.getByRole('button', { name: 'Export' }).click(); await p.waitForTimeout(500)
 log((await row.innerText()).trim() === 'Couldn’t export · Try again', 'a failure says "Couldn’t export · Try again"', JSON.stringify(await row.innerText()))
+const underline = await row.getByRole('button', { name: 'Try again' }).evaluate(e => getComputedStyle(e).textDecorationLine)
+log(underline === 'underline', 'Try again is underlined (Jazz)', underline)
 await p.unroute('**/api/export')
 const again = p.waitForEvent('download')
 await row.getByRole('button', { name: 'Try again' }).click()

@@ -34,7 +34,7 @@ export function AccountRow({ className }: { className: string }) {
     }
   }
   const exportLink = exporting === 'failed'
-    ? <>Couldn’t export · <button type="button" className="link" onClick={() => void exportAll()}>Try again</button></>
+    ? <>Couldn’t export · <button type="button" className="link retry" onClick={() => void exportAll()}>Try again</button></>
     : <button type="button" className="link" disabled={exporting === 'busy'} onClick={() => void exportAll()}>{exporting === 'busy' ? 'Exporting…' : 'Export'}</button>
   return (
     <p className={`account-row ${className}`}>
