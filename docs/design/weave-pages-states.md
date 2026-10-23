@@ -62,6 +62,10 @@ Top to bottom:
    - **live words** from the A11 projection, in ink, the same size and inline formatting as in his page; tags and links render
      as they do on his page;
    - a line from one of his own pages (not a day) gets the page name after it in `--ink-3` ("· Recipes notes");
+   - a gathered **page card or link card** (his Oct 18 recipe cards, Lead dry run cfbbab8) shows as a **one-line page link**:
+     the page icon and the page's title, the same as an inline page link, not the full card with its preview. Tapping it opens
+     **that page**, not the day the card sits on, since the page is what the line is about. A trashed page's card follows
+     §4 (hidden while trashed);
    - **tap or click a line** to open where he wrote it, with the A11 jump (a third from the top of the visible area, tinted);
    - a **task line** is gathered too (Bumblebee 0869f63e: his recurring topics are mostly tasks, e.g. the `#rewind` ones). It
      shows as **its words plus a muted status**, with **no checkbox**: "open · planned Oct 23", "done · Oct 22", "cancelled".
@@ -138,7 +142,8 @@ The counts in the list row ("6 lines · 3 days") are live too, so the list never
 3. A failed run (fake model error): "Couldn't update this morning · will try at the next plan", the previous pages unchanged,
    no button. A second Done the same day doesn't start a second run.
 4. A Weave page: band and mark, summary with "Written by Weave", lines grouped by day, newest first. No cursor, no `/`, no
-   handles, and ⋯ offers only "Copy link to page". A task line shows its words and "open · planned …" / "done · …" with no
+   handles, and ⋯ offers only "Copy link to page". A gathered page card shows as a one-line page link and opens that page.
+   A task line shows its words and "open · planned …" / "done · …" with no
    checkbox; tapping it lands on the task's row, where ticking it works, and the Weave status reads "done · {today}" after.
 5. Tap a line: opens its day with the line a third from the top and tinted (A11 jump). Back returns to the Weave page.
 6. Edit a gathered line on its day, then return: the new words show, with no reload needed past the normal page load. Delete
