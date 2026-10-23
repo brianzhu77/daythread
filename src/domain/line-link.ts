@@ -1,4 +1,5 @@
 import type { LineTarget } from './page-refs.ts'
+import type { Page } from './types.ts'
 
 /**
  * A11 §4: a link to one line, as it travels. In the app it's `application/x-daythread-line`; as text it's this app's
@@ -46,4 +47,10 @@ function checked(pageId: unknown, lineId: unknown, taskId: unknown): LineTarget 
   const ok = (v: unknown): v is string => typeof v === 'string' && idPattern.test(v)
   if (!ok(pageId) || !ok(lineId) || (taskId !== undefined && taskId !== null && !ok(taskId))) return null
   return { pageId, lineId, ...(ok(taskId) ? { taskId } : {}) }
+}
+
+/** A page's own address, opened at a line: a day page by its date, any other page by its id (as pageHref). */
+export function pagePath(page: Pick<Page, 'id' | 'type' | 'date'>, blockId?: string): string {
+  if (page.type === 'daily' && page.date) return `/day/${page.date}${blockId ? `?block=${encodeURIComponent(blockId)}` : ''}`
+  return `/pages?page=${encodeURIComponent(page.id)}${blockId ? `&block=${encodeURIComponent(blockId)}` : ''}`
 }

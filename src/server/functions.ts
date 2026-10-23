@@ -73,5 +73,8 @@ export const resolveLineLink = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const { getRepository } = await import("./storage");
     const { resolveLine } = await import("../domain/page-refs");
-    return resolveLine(await getRepository().load(), data);
+    const { pagePath } = await import("../domain/line-link");
+    const ws = await getRepository().load(), resolved = resolveLine(ws, data), page = ws.pages.find((p) => p.id === resolved.pageId);
+    // The address to open, from the server's own data: the browser's copy may not have the page yet (Ratchet #146).
+    return { ...resolved, href: page ? pagePath(page, resolved.blockId) : null };
   });

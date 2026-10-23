@@ -180,8 +180,12 @@ function ReadOnlyBody({ page, workspace }: { page: Page; workspace: Workspace })
     }
     const attempt = () => void resolveLineLink({ data: { pageId: page.id, lineId: id, ...(taskId ? { taskId } : {}) } }).then(r => {
       if (cancelled) return
-      const target = latest.current.pages.find(p => p.id === r.pageId)
-      if (r.blockId && target && target.id !== page.id) { void navigate({ href: pageHref(target, r.blockId), replace: true, resetScroll: false }); return }
+      // The server's address; a page this browser's copy doesn't have yet gets a full load (Ratchet #146, Lead).
+      if (r.blockId && r.href && r.pageId !== page.id) {
+        if (latest.current.pages.some(p => p.id === r.pageId)) void navigate({ href: r.href, replace: true, resetScroll: false })
+        else window.location.replace(r.href)
+        return
+      }
       jumpHere(r.blockId ?? id)
     }, () => { if (!cancelled) lookupFailed(attempt) })
     attempt()

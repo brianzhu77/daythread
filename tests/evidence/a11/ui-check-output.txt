@@ -1,4 +1,4 @@
-A11 fixture added (today 2026-10-22, past 2026-10-18, tomorrow 2026-10-23); ids in /tmp/a11-check.0pIFpg/1280.sqlite.a11.json
+A11 fixture added (today 2026-10-22, past 2026-10-18, tomorrow 2026-10-23); ids in /tmp/a11-check.FSuajZ/1280.sqlite.a11.json
 ok   1280 · copy: three entry points: ⌘/ on a line opens its menu with Copy link to line
 ok   1280 · copy: three entry points: ⌘/: "Link to line copied"
 ok   1280 · copy: three entry points: ⌘/: the clipboard text is the line URL (http://127.0.0.1:3471/pages?page=a11-target&block=a11-line)
@@ -8,7 +8,7 @@ ok   1280 · copy: three entry points: ⌘/ on a custom heading offers it
 ok   1280 · copy: three entry points: selection bar with one line: Copy link
 ok   1280 · copy: three entry points: selection bar: the clipboard text is the line URL
 ok   1280 · copy: three entry points: task menu: Copy link to line in its own group, last (before Delete line on the phone) ([["Tomorrow · Fri, Oct 23","Not today"],["This weekend · Sat 10/24","Next week · Mon 10/26","Pick date…"],["Move to Top 3"],["Cancel task"],["Copy link to line"]])
-ok   1280 · copy: three entry points: task: the URL carries task= (http://127.0.0.1:3471/pages?page=day%3A2026-10-22&block=ec4ef374-f230-4b99-bcad-5d29ae63738b&task=7f3a96ad-2112-4fd0-a948-c29b55dffda5)
+ok   1280 · copy: three entry points: task: the URL carries task= (http://127.0.0.1:3471/pages?page=day%3A2026-10-22&block=5af112ea-bd22-4f37-9e33-b463dd340f1c&task=baa1fd46-8b5c-4f40-9bd3-3ce3e1c9c8d6)
 ok   1280 · copy: three entry points: template heading (Notes): no Copy link to line
 ok   1280 · copy: clipboard fails: "Couldn't copy"
 ok   1280 · copy: clipboard fails: no "copied" notice
@@ -40,7 +40,7 @@ ok   1280 · chip and jump: same page, again: about a third from the top (top 25
 ok   1280 · chip and jump: same page, again: clear of the top bar and the bottom bar's fade (top 252, bar 0, tab 900)
 ok   1280 · chip and jump: same page, again: nothing focused
 ok   1280 · chip and jump: same page: no navigation
-ok   1280 · chip and jump: after a reload: refIds, lineIds and times unchanged ([["3464804b-ff7a-4854-8671-f552a89166e3","a11-line",null,22],["cb0942fb-31f8-4a71-8439-75394b9db93c","a11-long",null,22]])
+ok   1280 · chip and jump: after a reload: refIds, lineIds and times unchanged ([["b3611668-0bd8-4b81-9b05-8304e12f4833","a11-line",null,22],["119c55d9-aa59-4131-b6a9-373d41311367","a11-long",null,22]])
 ok   1280 · chip: Line not found: "Line not found · {page}"
 ok   1280 · chip: Line not found: "Couldn't find that line"
 ok   1280 · chip: Line not found: opens the page at the top
@@ -72,11 +72,13 @@ ok   1280 · tags: the page the list names: tag jump, row gone: clear of the top
 ok   1280 · tags: the page the list names: tag jump, row gone: nothing focused
 ok   1280 · URL: lookup fails: no jump to the old row (blocked 1)
 ok   1280 · URL: lookup fails: "Couldn't check where that line is now"
-ok   1280 · URL: lookup fails: the URL's page at the top, the URL kept (http://127.0.0.1:3471/pages?page=day%3A2026-10-18&block=c174a749-e421-4a3c-aa57-bc40b4923d85&task=7f3a96ad-2112-4fd0-a948-c29b55dffda5)
+ok   1280 · URL: lookup fails: the URL's page at the top, the URL kept (http://127.0.0.1:3471/pages?page=day%3A2026-10-18&block=3e030c62-45c6-4516-a891-39bde32f7d7d&task=baa1fd46-8b5c-4f40-9bd3-3ce3e1c9c8d6)
 ok   1280 · URL: lookup fails: Retry, once it answers: lands where the chip does (/day/2026-10-22)
+ok   1280 · URL: task moved to a page made after loading: lands on the page the server names, though this tab had never loaded it (/day/2026-11-01)
+ok   1280 · URL: task moved to a page made after loading: and tints the task row there
 ok   1280 · Linked from: the linking page once (a page link and line links to it) (["A11 links"])
 ok   1280 · Linked from: a moved task's link counts on its new day (["A11 links"])
-ok   1280 · Linked from: with the link's own time ([["6d07df3e-d4ac-4161-a47f-ef7e098fdd17","bb4a91c1-c8c2-4e12-ba2f-a01408d88726","e433753d-0a10-4e95-b7d5-7e6dc3e71efa",22]])
+ok   1280 · Linked from: with the link's own time ([["20e35cf4-aafc-4dff-b2b1-7be95797e4c1","40122b56-bbc4-4ab3-9d5a-5ca473125ce1","9011f27b-6690-4362-a0e1-ab0a532c8190",22]])
 ok   1280 · long excerpt at 390: no overflow (1074 ≤ 1074)
 ok   1280 · long excerpt at 390: one line (20px)
 ok   1280 · long excerpt at 390: the words end in an ellipsis; the place shows whole
@@ -94,7 +96,7 @@ ok   1280 · copy: not offered: an empty line: no menu, nothing written
 ok   1280 · copy: not offered: two lines selected: no Copy link (2 blocks selected Delete)
 no page errors
 all passed
-A11 fixture added (today 2026-10-22, past 2026-10-18, tomorrow 2026-10-23); ids in /tmp/a11-check.0pIFpg/390.sqlite.a11.json
+A11 fixture added (today 2026-10-22, past 2026-10-18, tomorrow 2026-10-23); ids in /tmp/a11-check.FSuajZ/390.sqlite.a11.json
 ok   390 · copy: three entry points: ⌘/ on a line opens its menu with Copy link to line
 ok   390 · copy: three entry points: ⌘/: "Link to line copied"
 ok   390 · copy: three entry points: ⌘/: the clipboard text is the line URL (http://127.0.0.1:3471/pages?page=a11-target&block=a11-line)
@@ -104,7 +106,7 @@ ok   390 · copy: three entry points: ⌘/ on a custom heading offers it
 ok   390 · copy: three entry points: selection bar with one line: Copy link
 ok   390 · copy: three entry points: selection bar: the clipboard text is the line URL
 ok   390 · copy: three entry points: task menu: Copy link to line in its own group, last (before Delete line on the phone) ([["Tomorrow · Fri, Oct 23","Not today"],["This weekend · Sat 10/24","Next week · Mon 10/26","Pick date…"],["Move to Top 3"],["Cancel task"],["Copy link to line"]])
-ok   390 · copy: three entry points: task: the URL carries task= (http://127.0.0.1:3471/pages?page=day%3A2026-10-22&block=30311443-e2bb-43c1-91b3-bdef46872e80&task=4a06fa91-8b96-4f37-b0be-e10c8686195b)
+ok   390 · copy: three entry points: task: the URL carries task= (http://127.0.0.1:3471/pages?page=day%3A2026-10-22&block=c760f5f2-6a87-4922-b312-2026065d75cd&task=8c0f8f37-c2e2-4b20-bf7d-331670cb7f68)
 ok   390 · copy: three entry points: template heading (Notes): no Copy link to line
 ok   390 · copy: clipboard fails: "Couldn't copy"
 ok   390 · copy: clipboard fails: no "copied" notice
@@ -136,7 +138,7 @@ ok   390 · chip and jump: same page, again: about a third from the top (top 252
 ok   390 · chip and jump: same page, again: clear of the top bar and the bottom bar's fade (top 252, bar 0, tab 828)
 ok   390 · chip and jump: same page, again: nothing focused
 ok   390 · chip and jump: same page: no navigation
-ok   390 · chip and jump: after a reload: refIds, lineIds and times unchanged ([["caa2c99f-94b3-40cd-add9-cb002202487f","a11-line",null,22],["1f198d3e-4d01-464c-bb71-e54dc2435d07","a11-long",null,22]])
+ok   390 · chip and jump: after a reload: refIds, lineIds and times unchanged ([["e1333231-8a61-4f47-94df-c0ef97323de0","a11-line",null,22],["83d01032-8507-42c1-a92c-1b78a924bc09","a11-long",null,22]])
 ok   390 · chip: Line not found: "Line not found · {page}"
 ok   390 · chip: Line not found: "Couldn't find that line"
 ok   390 · chip: Line not found: opens the page at the top
@@ -168,11 +170,13 @@ ok   390 · tags: the page the list names: tag jump, row gone: clear of the top 
 ok   390 · tags: the page the list names: tag jump, row gone: nothing focused
 ok   390 · URL: lookup fails: no jump to the old row (blocked 1)
 ok   390 · URL: lookup fails: "Couldn't check where that line is now"
-ok   390 · URL: lookup fails: the URL's page at the top, the URL kept (http://127.0.0.1:3471/pages?page=day%3A2026-10-18&block=034cf515-5a41-4441-a66e-50e3f7b9a155&task=4a06fa91-8b96-4f37-b0be-e10c8686195b)
+ok   390 · URL: lookup fails: the URL's page at the top, the URL kept (http://127.0.0.1:3471/pages?page=day%3A2026-10-18&block=0aa5938e-8f65-4401-ab84-4166dfa7c417&task=8c0f8f37-c2e2-4b20-bf7d-331670cb7f68)
 ok   390 · URL: lookup fails: Retry, once it answers: lands where the chip does (/day/2026-10-22)
+ok   390 · URL: task moved to a page made after loading: lands on the page the server names, though this tab had never loaded it (/day/2026-11-01)
+ok   390 · URL: task moved to a page made after loading: and tints the task row there
 ok   390 · Linked from: the linking page once (a page link and line links to it) (["A11 links"])
 ok   390 · Linked from: a moved task's link counts on its new day (["A11 links"])
-ok   390 · Linked from: with the link's own time ([["96af8133-8e90-48b9-a79e-2ff17ad6becf","8fb44453-6e34-4f36-856f-de6f67cfa2ef","444f1e53-7249-4b29-b4b7-f627de97ac30",22]])
+ok   390 · Linked from: with the link's own time ([["d94fb45a-90c1-499e-ad14-2e7948a420e3","657e6c1c-3d21-49e5-9266-fcc4ec202642","c4ff5172-827c-487a-af16-edafadeecbbe",22]])
 ok   390 · long excerpt at 390: no overflow (350 ≤ 350)
 ok   390 · long excerpt at 390: one line (20px)
 ok   390 · long excerpt at 390: the words end in an ellipsis; the place shows whole
@@ -186,14 +190,14 @@ skip 390 · drag keeps the link: the desktop grip drag runs at 1280; a phone dra
 ok   390 · chip: cut and paste: a cut-and-pasted plain line → "Line not found · {page}" (v1) (Line not found · A11 target)
 ok   390 · chip: cut and paste: a cut-and-pasted task row → still followed by its task (A11 past task · Oct 18)
 ok   390 · copy: not offered: an empty line: no menu, nothing written
-ok   390 · copy: not offered: two lines selected: no Copy link (Block selected Copy link Delete)
+skip 390 · copy: not offered: two lines selected is driven at 1280 only
 no page errors
 all passed
-A11 fixture added (today 2026-10-22, past 2026-10-18, tomorrow 2026-10-23); ids in /tmp/a11-check.0pIFpg/390-touch.sqlite.a11.json
+A11 fixture added (today 2026-10-22, past 2026-10-18, tomorrow 2026-10-23); ids in /tmp/a11-check.FSuajZ/390-touch.sqlite.a11.json
 ok   390 touch · copy: three entry points: selection bar with one line: Copy link
 ok   390 touch · copy: three entry points: selection bar: the clipboard text is the line URL
 ok   390 touch · copy: three entry points: task menu: Copy link to line in its own group, last (before Delete line on the phone) ([["Move to Top 3"],["Cancel task"],["Copy link to line"],["Delete line"]])
-ok   390 touch · copy: three entry points: task: the URL carries task= (http://127.0.0.1:3471/pages?page=day%3A2026-10-22&block=7d68c9de-db43-4968-8bb7-4804c0bd5592&task=70101488-857e-49f4-8d3b-985e483e1738)
+ok   390 touch · copy: three entry points: task: the URL carries task= (http://127.0.0.1:3471/pages?page=day%3A2026-10-22&block=38fdbc8e-b0e5-4b9c-8f90-b31cd49fa6b4&task=3ed9c422-5a0f-44fe-be25-6eb808968662)
 ok   390 touch · copy: clipboard fails: "Couldn't copy"
 ok   390 touch · copy: clipboard fails: no "copied" notice
 ok   390 touch · paste: line type / own URL / foreign URL: the copied line makes a chip (["The linked line · A11 target"])
@@ -224,7 +228,7 @@ ok   390 touch · chip and jump: same page, again: about a third from the top (t
 ok   390 touch · chip and jump: same page, again: clear of the top bar and the bottom bar's fade (top 252, bar 0, tab 828)
 ok   390 touch · chip and jump: same page, again: nothing focused
 ok   390 touch · chip and jump: same page: no navigation
-ok   390 touch · chip and jump: after a reload: refIds, lineIds and times unchanged ([["29694b07-431e-4273-8318-31f1a6af9aa2","a11-line",null,22],["b924a78d-07f6-43cb-9d00-82af0f1048ac","a11-long",null,22]])
+ok   390 touch · chip and jump: after a reload: refIds, lineIds and times unchanged ([["9cebf6d8-d2b3-4e98-be20-4342271fc07a","a11-line",null,22],["cab63dec-8eff-4c73-907b-e480ba4381d9","a11-long",null,22]])
 ok   390 touch · chip: Line not found: "Line not found · {page}"
 ok   390 touch · chip: Line not found: "Couldn't find that line"
 ok   390 touch · chip: Line not found: opens the page at the top
@@ -256,11 +260,13 @@ ok   390 touch · tags: the page the list names: tag jump, row gone: clear of th
 ok   390 touch · tags: the page the list names: tag jump, row gone: nothing focused
 ok   390 touch · URL: lookup fails: no jump to the old row (blocked 1)
 ok   390 touch · URL: lookup fails: "Couldn't check where that line is now"
-ok   390 touch · URL: lookup fails: the URL's page at the top, the URL kept (http://127.0.0.1:3471/pages?page=day%3A2026-10-18&block=dd5a9791-d64e-4c00-a4f7-203abca9353d&task=70101488-857e-49f4-8d3b-985e483e1738)
+ok   390 touch · URL: lookup fails: the URL's page at the top, the URL kept (http://127.0.0.1:3471/pages?page=day%3A2026-10-18&block=be7b0f3e-be27-42a0-a272-a923e90f5015&task=3ed9c422-5a0f-44fe-be25-6eb808968662)
 ok   390 touch · URL: lookup fails: Retry, once it answers: lands where the chip does (/day/2026-10-22)
+ok   390 touch · URL: task moved to a page made after loading: lands on the page the server names, though this tab had never loaded it (/day/2026-11-01)
+ok   390 touch · URL: task moved to a page made after loading: and tints the task row there
 ok   390 touch · Linked from: the linking page once (a page link and line links to it) (["A11 links"])
 ok   390 touch · Linked from: a moved task's link counts on its new day (["A11 links"])
-ok   390 touch · Linked from: with the link's own time ([["9b94fa96-5585-41db-a858-b949b7dd7901","c303213c-209f-4094-9bb2-e7fa5783e222","74cb5ce5-a0b2-457f-9180-d5287b06553f",22]])
+ok   390 touch · Linked from: with the link's own time ([["134892f8-82ab-482c-a590-ee1705677a1e","a54e5bba-faa3-4917-a026-f2748facc982","53fdfeeb-c2d9-47bb-b261-7d20f32e658e",22]])
 ok   390 touch · long excerpt at 390: no overflow (350 ≤ 350)
 ok   390 touch · long excerpt at 390: one line (20px)
 ok   390 touch · long excerpt at 390: the words end in an ellipsis; the place shows whole
@@ -272,6 +278,6 @@ ok   390 touch · edit and task move: moved task: clear of the top bar and the b
 ok   390 touch · edit and task move: moved task: nothing focused
 skip 390 touch · drag keeps the link: the desktop grip drag runs at 1280; a phone drag isn't driven here
 skip 390 touch · chip: cut and paste: cut and paste by keyboard runs at 1280 and 390
-ok   390 touch · copy: not offered: two lines selected: no Copy link (Block selected Copy link Delete)
+skip 390 touch · copy: not offered: two lines selected is driven at 1280 only
 no page errors
 all passed
