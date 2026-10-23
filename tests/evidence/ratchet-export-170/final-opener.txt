@@ -1,0 +1,2 @@
+{"first":"815bb69f-67d3-46ae-9e5d-eb7b34618b92","second":"9c9b4de3-4401-4bef-b7e1-c43aa6780cbf","same":false,"slots":[{"key":"daythread:editor:ratchet-writing:815bb69f-67d3-46ae-9e5d-eb7b34618b92","hasA":true,"hasB":false},{"key":"daythread:editor:ratchet-writing:9c9b4de3-4401-4bef-b7e1-c43aa6780cbf","hasA":false,"hasB":true}]}
+{"recoveredA":true,"recoveredB":true}

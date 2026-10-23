@@ -1,3 +1,20 @@
+# B3 task170 — final c0eaa5c
+
+**PASS.** Source review covers final recovery delta9e8af9d plus test-onlyc0eaa5c. The original pending-save omission, Pages-reload bypass and gone-tab/open-page omission are fixed. No unresolved release blocker found in the reviewed scope.
+
+Independent exact-head checks:
+
+- Full suite422 passed/0 failed/11 skipped/4 todo(437 total), typecheck and production build pass.
+- Standing export browser checks pass at1280Chromium and390WebKit touch, including ZIP/text/schema/no-store, busy/failure/underlined retry, delayed save, no-download refusal, retained draft after reload and online Try again saving it without visiting the edited page.
+- Own pages-reload.mjs passes with same identity and no download while saves fail. Own live-slot.mjs confirms another live tab's draft remains unclaimed. Own copied-opener.mjs confirms distinct identities and both drafts recover.
+- Own closed-same-page.mjs now exports the gone tab's marker while A has that page open. A adopts B's text; A's next typing reaches the server and shows Saved with no conflict. The standing browser test independently covers the same UI adoption/next-keystroke path.
+
+Prior auth401/forward403 and content/file-name conclusions remain applicable; auth/export serialization code is unchanged. Product's real-row text/URL preservation and Jazz's display checks remain attributed below. Native HomeScreen/Safari download and Obsidian itself remain unverified, with GFM explicitly accepted as the Obsidian stand-in. The recovered-text notice after Export is an accepted B40 follow-up perLeada0173c36, not silently claimed present.
+
+No application changes, production writes or deployment by reviewer. Lead owns merged-tree checks with990d05f/B38/B39. Final evidence in tests/evidence/ratchet-export-170/final-*.txt.
+
+## Prior-head findings (resolved)
+
 # B3 task170 — 420ef4b recheck
 
 **REVISE: gone-tab draft skipped when its page is open in the exporter.** A keeps page editor open; B types on the same page with saves blocked and closes; A exports. Actual browser `closed-same-page.mjs` asserts B really stashed its marker before close, waits past the shortened gone cutoff, then downloads a ZIP missing that marker. `saveKeptDrafts` filters all records by open page id, including gone-tab records that appeared after A mounted. Messagef13b9560. Flush A first, then include eligible other/gone-tab drafts on its page; preserving live-tab isolation still applies.
