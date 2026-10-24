@@ -1582,6 +1582,25 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     reveal()
     return editor.onSelectionChange(reveal)
   }, [editor, keyboardTop, styleOpen])
+  // B58: Edit link's URL form opens below the link, and with the keyboard up its OK sat behind the toolbar (Ratchet's
+  // native run). When the form takes focus, the page scrolls it clear of the toolbar, the same rule as the caret's line.
+  useEffect(() => {
+    if (keyboardTop === null) return
+    const clear = () => requestAnimationFrame(() => {
+      // The open one: the page also keeps hidden forms (the formatting toolbar's), so take the visible popover with a field.
+      const form = [...document.querySelectorAll('[data-slot="popover-content"]')].find(p => p.getBoundingClientRect().height && p.querySelector('input'))
+      const bar = phoneToolbar.current?.getBoundingClientRect()
+      if (!form || !bar?.height) return
+      const overlap = form.getBoundingClientRect().bottom + 8 - bar.top
+      if (overlap > 0) window.scrollBy(0, overlap)
+    })
+    // The form opens with a short zoom, so it's measured again once that has finished.
+    const settled = () => { clear(); setTimeout(clear, 250) }
+    settled()
+    document.addEventListener('focusin', settled)
+    window.visualViewport?.addEventListener('resize', settled)
+    return () => { document.removeEventListener('focusin', settled); window.visualViewport?.removeEventListener('resize', settled) }
+  }, [keyboardTop])
   // B44's paste menu reserves room above the toolbar, not above the style panel, so only one of them is open at a time.
   useEffect(() => { if (pasteMenu) setStyleOpen(false) }, [pasteMenu])
   useEffect(() => {
