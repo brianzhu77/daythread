@@ -16,6 +16,8 @@ export interface DraftSlot {
   closed?: boolean
   /** Set by the tab that merged this slot; the owner, if it comes back, must not save its copy. */
   claimedBy?: string
+  /** B40: set while a tab is saving this gone tab's draft (`claimedBy` is that tab); a save that never finished frees it. */
+  taking?: number
 }
 
 const prefix = (pageId: string) => `daythread:editor:${pageId}`
@@ -103,18 +105,33 @@ export function ownDrafts(): { pageId: string; slot: DraftSlot }[] {
   return out
 }
 
-/** True when another tab merged this tab's draft while it was away. */
+/**
+ * True when another tab merged this tab's draft while it was away. A draft another tab is only *taking* (its save still
+ * out) isn't claimed yet: this tab carries on as a live tab, and its next stash drops the marks (Roadbuster 6958aa41).
+ */
 export function ownClaimed(pageId: string): boolean {
-  return Boolean(parse(localStorage.getItem(ownKey(pageId)))?.claimedBy)
+  const slot = parse(localStorage.getItem(ownKey(pageId)))
+  return Boolean(slot?.claimedBy && !slot.taking)
 }
 
 export function writeOwn(pageId: string, slot: Omit<DraftSlot, 'seen'>): void {
   localStorage.setItem(ownKey(pageId), JSON.stringify({ ...slot, seen: Date.now() }))
 }
 
+/**
+ * B40: the page another tab saved this tab's earlier text as, while this tab came back and kept typing. Set only when
+ * that page held nothing but this tab's own text (the page hadn't changed since this tab's draft started), so this
+ * tab can start its next save from it without dropping anyone else's lines.
+ */
+const savedKey = (pageId: string, tab: string) => `daythread:kept-saved:${pageId}:${tab}`
+export function savedForMe(pageId: string, editorJSON: string | undefined): boolean {
+  try { return editorJSON !== undefined && localStorage.getItem(savedKey(pageId, tabId())) === editorJSON } catch { return false }
+}
+
 /** Clears this tab's slot; with `document`, only if it still holds exactly that text. */
 export function clearOwn(pageId: string, document?: string): void {
   try {
+    if (document === undefined) localStorage.removeItem(savedKey(pageId, tabId()))
     const key = ownKey(pageId)
     if (document === undefined || parse(localStorage.getItem(key))?.document === document) localStorage.removeItem(key)
   } catch { /* storage unavailable */ }
@@ -136,19 +153,55 @@ export function orphans(pageId: string, now = Date.now()): { key: string; slot: 
     const key = localStorage.key(i)
     if (!key || key === own || !(key === legacy || key.startsWith(`${legacy}:`))) continue
     const slot = parse(localStorage.getItem(key))
-    if (!slot || slot.claimedBy) continue
+    // A tab that took it to save and never finished (closed mid-save) frees it again after a minute.
+    if (!slot || (slot.claimedBy && !(slot.taking && now - slot.taking > 60_000))) continue
     // The old one-slot key had no owner or time: it belongs to whichever tab opens the page next.
     if (key === legacy || slot.closed || now - (slot.seen ?? 0) > goneAfter()) out.push({ key, slot })
   }
   return out.sort((a, b) => (a.slot.seen ?? 0) - (b.slot.seen ?? 0))
 }
 
-/** Marks a merged slot as claimed (the old one-slot key is simply removed). Claims are cleared after a day. */
-export function claim(pageId: string, key: string): void {
+/**
+ * Marks a merged slot as claimed (the old one-slot key is simply removed). Claims are cleared after a day. With
+ * `saved` (B40's background save), only if the slot still holds exactly that text: an owner that came back and wrote
+ * newer text meanwhile keeps its slot, unmarked, and its own next save carries it all (the merge leaves out lines
+ * already saved). False when the slot was left to its owner.
+ */
+export function claim(pageId: string, key: string, saved?: string, sentAs?: string): boolean {
   try {
-    if (key === prefix(pageId)) { localStorage.removeItem(key); return }
+    if (key === prefix(pageId)) { localStorage.removeItem(key); return true }
     const slot = parse(localStorage.getItem(key))
-    if (slot) localStorage.setItem(key, JSON.stringify({ ...slot, document: '', claimedBy: tabId(), seen: Date.now() }))
+    if (!slot) return true
+    const { taking: _, claimedBy: _c, ...rest } = slot
+    if (saved !== undefined && slot.document !== saved) {
+      if (slot.claimedBy === tabId()) localStorage.setItem(key, JSON.stringify(rest))
+      // Tell the owner which page its earlier text became, so its next save starts from there (see savedForMe).
+      if (sentAs !== undefined) localStorage.setItem(savedKey(pageId, key.slice(prefix(pageId).length + 1)), sentAs)
+      return false
+    }
+    localStorage.setItem(key, JSON.stringify({ ...rest, document: '', claimedBy: tabId(), seen: Date.now() }))
+    return true
+  } catch { return true }
+}
+
+/**
+ * B40: marks a gone tab's draft as being saved by this tab, so an editor opening the page in another tab doesn't merge
+ * it at the same time; false when it's no longer free. `release` gives it back after a failed save.
+ */
+export function take(pageId: string, key: string): boolean {
+  try {
+    if (!orphans(pageId).some(o => o.key === key)) return false
+    if (key === prefix(pageId)) return true
+    const slot = parse(localStorage.getItem(key))
+    if (slot) localStorage.setItem(key, JSON.stringify({ ...slot, claimedBy: tabId(), taking: Date.now() }))
+    return true
+  } catch { return false }
+}
+export function release(pageId: string, key: string): void {
+  try {
+    if (key === prefix(pageId)) return
+    const slot = parse(localStorage.getItem(key))
+    if (slot?.taking && slot.claimedBy === tabId()) { const { claimedBy: _c, taking: _t, ...rest } = slot; localStorage.setItem(key, JSON.stringify(rest)) }
   } catch { /* storage unavailable */ }
 }
 
@@ -160,7 +213,8 @@ export function sweepClaims(pageId: string, now = Date.now()): void {
       const key = localStorage.key(i)
       if (!key || !key.startsWith(`${legacy}:`)) continue
       const slot = parse(localStorage.getItem(key))
-      if (slot?.claimedBy && (key === own || now - slot.seen > 24 * 60 * 60_000)) stale.push(key)
+      // A slot another tab is still taking isn't this tab's to drop: if that save fails, `release` gives it back.
+      if (slot?.claimedBy && ((key === own && !slot.taking) || now - slot.seen > 24 * 60 * 60_000)) stale.push(key)
     }
     stale.forEach(key => localStorage.removeItem(key))
   } catch { /* storage unavailable */ }

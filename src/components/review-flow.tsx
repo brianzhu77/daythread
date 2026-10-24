@@ -4,6 +4,7 @@ import { addDays, longLabel, shortLabel, taskDateTag, weekday } from './dates'
 import { CaptureBar, CaptureReceipts } from './capture'
 import { RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
+import { ParentLine, treeIndent, useTaskTree } from './task-tree'
 import { useDay, useWorkspace } from './use-day'
 import { displayTitle } from './day-page'
 import { Link, useNavigate } from '@tanstack/react-router'
@@ -126,16 +127,20 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
           <h2 id="rs-plan">
             {planCards.length === 0 ? `${weekday(date)} · nothing planned` : `${weekday(date)} · ${openCount} open of ${placedToday.length}`}
           </h2>
-          {planCards.map(t => (
-            <PlanCard
-              key={t.id}
-              task={t}
-              date={date}
-              today={today}
-              acted={p.acted[t.id] ?? (t.status === 'done' ? 'Done' : undefined)}
-              onActed={label => update({ acted: { ...p.acted, [t.id]: label } })}
-            />
-          ))}
+          <TaskTree tasks={planCards}>
+            {(t, depth, parentId) => (
+              <PlanCard
+                key={t.id}
+                task={t}
+                date={date}
+                today={today}
+                depth={depth}
+                parentId={parentId}
+                acted={p.acted[t.id] ?? (t.status === 'done' ? 'Done' : undefined)}
+                onActed={label => update({ acted: { ...p.acted, [t.id]: label } })}
+              />
+            )}
+          </TaskTree>
           <StepFoot onNext={() => go(1)} extra={<button type="button" className="ghost" onClick={() => run({ type: 'review-progress', date, step: 1, skip: true }, null)}>Skip tonight</button>} />
         </section>
       )}
@@ -200,13 +205,21 @@ function StepFoot({ onBack, onNext, nextLabel = 'Next', extra }: { onBack?: () =
   )
 }
 
-function PlanCard({ task, date, today, acted, onActed }: { task: Task; date: LocalDate; today: LocalDate; acted?: string; onActed: (label: string) => void }) {
+/** B28: the review's task lists in outline order (a sub-task under its parent, or "↳ parent" when it's elsewhere). */
+function TaskTree({ tasks, children }: { tasks: readonly Task[]; children: (task: Task, depth: number, parentId: string | null) => React.ReactNode }) {
+  const rows = useTaskTree(tasks, reviewTaskId)
+  return <>{rows.map(({ item, depth, outsideParent }) => children(item, depth, outsideParent))}</>
+}
+const reviewTaskId = (t: Task) => t.id
+
+function PlanCard({ task, date, today, depth = 0, parentId = null, acted, onActed }: { task: Task; date: LocalDate; today: LocalDate; depth?: number; parentId?: string | null; acted?: string; onActed: (label: string) => void }) {
   const { markDone, planOn, notToday } = useTaskActions(today)
   const act = async (label: string, fn: () => Promise<unknown>) => {
     if (await fn()) onActed(label)
   }
   return (
-    <div className={`app-card plan-card ${acted ? 'acted' : ''}`}>
+    <div className={`app-card plan-card ${acted ? 'acted' : ''}`} {...treeIndent(depth)}>
+      <ParentLine parentId={parentId} />
       <p className="plan-title">
         {task.title} <span className="app-tag">{taskDateTag(task, today, date)}</span>
       </p>
@@ -346,17 +359,20 @@ function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspa
         <>
           {draft.simulated && <p className="sim">Simulated suggestions · no model was called</p>}
           <p className="quiet">Suggestions for Top 3. Remove any you don’t want.</p>
-          {suggestions.map(t => (
-            <div key={t!.id} className="app-card suggestion">
+          <TaskTree tasks={suggestions}>
+            {(t, depth, parentId) => (
+            <div key={t.id} className="app-card suggestion" {...treeIndent(depth)}>
               <span className="grow">
-                {t!.title}
-                {isNew(t!.id) && <span className="app-tag quiet"> Updated on another device</span>}
+                <ParentLine parentId={parentId} />
+                {t.title}
+                {isNew(t.id) && <span className="app-tag quiet"> Updated on another device</span>}
               </span>
-              <button type="button" className="ghost" aria-label={`Remove ${t!.title}`} onClick={() => update({ removedSuggestions: [...p.removedSuggestions, t!.id] })}>
+              <button type="button" className="ghost" aria-label={`Remove ${t.title}`} onClick={() => update({ removedSuggestions: [...p.removedSuggestions, t.id] })}>
                 Remove
               </button>
             </div>
-          ))}
+            )}
+          </TaskTree>
           {related.length > 0 && <p className="quiet">Related for tomorrow</p>}
           {related.map(m => (
             <div key={m!.id} className="app-card suggestion">

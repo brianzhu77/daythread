@@ -9,6 +9,7 @@ import { useDay, useWorkspace } from './use-day'
 import { useCreatePage } from './pages-screen'
 import { SidebarTrashRow } from './trash'
 import { AccountRow } from './account-row'
+import { useKeptDrafts } from './kept-drafts'
 
 // Highlight only where you are: Today is today's page, not any day (another day highlights its Days row, or nothing).
 const destinations = [
@@ -27,6 +28,8 @@ export function Navigation() {
   const trashView = useRouterState({ select: s => (s.location.search as { view?: string }).view === 'trash' })
   const today = useToday()
   const [captureOpen, setCaptureOpen] = useState(false)
+  // B40: the tab where he'd find a page whose text isn't saved yet carries a dot (Today, Calendar for an earlier day, Pages).
+  const unsavedTabs = new Set(useKeptDrafts().pages.map(p => p.tab))
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') { event.preventDefault(); setCaptureOpen(true) } }
@@ -60,7 +63,7 @@ export function Navigation() {
       <nav className="tab-bar" aria-label="Main">
         <div className="tab-capsule">
           {destinations.map(({ to, label, Icon, match }) => (
-            <Link key={to} to={to} className="tab" aria-label={label} aria-current={match(path, today) ? 'page' : undefined}>
+            <Link key={to} to={to} className={`tab${unsavedTabs.has(to as never) ? ' has-unsaved' : ''}`} aria-label={unsavedTabs.has(to as never) ? `${label} · not saved yet` : label} aria-current={match(path, today) ? 'page' : undefined}>
               <Icon />
             </Link>
           ))}
