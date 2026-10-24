@@ -198,7 +198,8 @@ export interface Material {
   openedOn?: LocalDate[];
   dismissedOn?: LocalDate[];
   decisions?: { date: LocalDate; decision: string }[];
-  sources: { pageId: string; blockId: string; note: string }[];
+  /** `plain`: B44, a link pasted and kept as a plain link on that line; the record goes with the line (B33's rule). */
+  sources: { pageId: string; blockId: string; note: string; plain?: true }[];
 }
 export interface Capture {
   id: string;
@@ -383,6 +384,8 @@ export type Action =
   /** A2: URLs pasted onto an empty line of `pageId`, one card each, in order. `sectionId`: the heading above them. */
   | { type: "paste-links"; pageId: string; sectionId?: string; today: LocalDate; items: { url: string; pageId: string; cardBlockId: string; lineType: string; title?: string }[] }
   | { type: "undo-paste-links"; pageId: string; operationId: string; today: LocalDate }
+  /** B44: links pasted and kept as plain links (the menu's default): each still recorded, with no page, on its line. */
+  | { type: "save-plain-link"; pageId: string; items: { blockId: string; url: string }[] }
   /** B43: a made link page's title and description, read from the web after the paste; applied only to that untouched page. */
   | { type: "apply-link-preview"; parentPageId: string; cardBlockId: string; pageId: string; url: string; title: string | null; description: string | null }
   | { type: "rename-page"; pageId: string; title: string }

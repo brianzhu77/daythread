@@ -1,3 +1,10 @@
+// RETIRED (B44, Lead 590a74e3). A pasted link no longer makes a page by itself: it goes in plain, with a menu, and
+// "Bookmark page" does what this checked. This check was also tied to Brian's data as of Oct 20 ("today" fixed), so it
+// can't run on a fresh copy. Its saved output (*-output.txt) is the record of A2 as built. Current checks:
+//   tests/evidence/b44/menu-check.mjs (the menu, Bookmark = A2's paste, both undo steps, §4a)
+//   tests/evidence/b43/preview-check.mjs (the bookmarked page's title and description)
+console.log('retired: see tests/evidence/b44/menu-check.mjs'); process.exit(0)
+
 // Jazz link-pages-states §6 check 8: the server is stopped, he pastes → the card says "Not created · Retry" and keeps
 // the URL; after a restart, Retry makes the page once, as a link page (never an empty page).
 //   node server-stop-check.mjs <worktree> <port> <db path> <pristine copy> <shots dir> <playwright index.mjs>

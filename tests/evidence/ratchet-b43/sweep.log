@@ -1,0 +1,27 @@
+ok   not http at all                      3ms open=0 {"title":null,"description":null}
+ok   empty reply                          2ms open=0 {"title":null,"description":null}
+ok   reset mid-headers                    1ms open=0 {"title":null,"description":null}
+ok   reset mid-body                      56ms open=0 {"title":null,"description":null}
+ok   content-length lies                  3ms open=0 {"title":null,"description":null}
+ok   broken chunked                       3ms open=0 {"title":null,"description":null}
+ok   headers never end                 4005ms open=0 {"title":null,"description":null}
+ok   body trickles forever             4002ms open=0 {"title":null,"description":null}
+ok   huge header                          0ms open=0 {"title":null,"description":null}
+ok   gzip garbage                         0ms open=0 {"title":null,"description":null}
+ok   real gzip                            3ms open=0 {"title":null,"description":null}
+ok   bogus charset                        1ms open=0 {"title":null,"description":null}
+ok   utf-16 charset                       0ms open=0 {"title":"Sixteen","description":null}
+ok   title of controls and bidi           0ms open=0 {"title":"evil title","description":null}
+ok   giant title                          5ms open=0 {"title":"长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长长
+ok   nested og tags and entities          1ms open=0 {"title":"<script>alert(1)</script> &amp;","description":null}
+ok   redirect to itself                   2ms open=0 {"title":null,"description":null}
+ok   redirect empty                       3ms open=0 {"title":null,"description":null}
+ok   redirect javascript:                 2ms open=0 {"title":null,"description":null}
+ok   redirect file:                       2ms open=0 {"title":null,"description":null}
+ok   redirect to metadata                 1ms open=0 {"title":null,"description":null}
+ok   redirect to ::ffff:127.0.0.1 hex     2ms open=0 {"title":null,"description":null}
+ok   redirect to decimal ip               2ms open=0 {"title":null,"description":null}
+ok   redirect bad port                    3ms open=0 {"title":null,"description":null}
+ok   invalid header bytes                 1ms open=0 {"title":null,"description":null}
+ok   HTTP/0.9 style                       1ms open=0 {"title":null,"description":null}
+all passed

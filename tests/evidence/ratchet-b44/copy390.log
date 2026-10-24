@@ -1,0 +1,9 @@
+(node:17697) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   390 keep: real row copy: menu and no automatic page
+ok   390 keep: real row copy: bookmark made
+ok   390 keep: no page errors
+(node:17746) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   390 keep: title paste has no menu
+ok   390 keep: no page errors
