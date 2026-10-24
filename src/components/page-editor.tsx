@@ -1526,6 +1526,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // used to open whenever the caret sat in a link, so right after a paste it covered the lines above. Typing or a paste
   // puts it away until the next tap on a link; a mouse keeps BlockNote's behaviour.
   const [linkTapped, setLinkTapped] = useState(false)
+  const inText = (target: EventTarget) => Boolean((target as Element).closest?.('.bn-editor [contenteditable="true"], .bn-editor[contenteditable="true"]'))
   const [hoverPointer, setHoverPointer] = useState(() => typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches)
   useEffect(() => {
     const query = window.matchMedia('(hover: hover) and (pointer: fine)'), changed = () => setHoverPointer(query.matches)
@@ -1885,10 +1886,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // side menu and link toolbar): anything they showed would make iOS take the tap for a hover and drop the click.
     // On a device with both (a touch laptop, an iPad with a trackpad), the last pointer decides (Lead f6ade708).
     onPointerDownCapture={e => { lastPointer.current = e.pointerType }}
-    onPointerUpCapture={e => { if (e.pointerType === 'touch') setLinkTapped(Boolean((e.target as Element).closest?.('a'))) }}
-    onPasteCapture={() => setLinkTapped(false)}
-    onBeforeInputCapture={() => setLinkTapped(false)}
-    onInputCapture={() => setLinkTapped(false)}
+    // Only the text itself counts: the toolbar and its URL form are portals whose events bubble here too, and clearing
+    // on them unmounted the toolbar before Edit link could open (Ratchet 9fff8995).
+    onPointerUpCapture={e => { if (e.pointerType === 'touch' && inText(e.target)) setLinkTapped(Boolean((e.target as Element).closest?.('a'))) }}
+    onPasteCapture={e => { if (inText(e.target)) setLinkTapped(false) }}
+    onBeforeInputCapture={e => { if (inText(e.target)) setLinkTapped(false) }}
+    onInputCapture={e => { if (inText(e.target)) setLinkTapped(false) }}
     onPointerMoveCapture={e => { lastPointer.current = e.pointerType }}
     onMouseOverCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
     onMouseMoveCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
