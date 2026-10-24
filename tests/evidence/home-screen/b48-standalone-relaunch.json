@@ -1,0 +1,134 @@
+[
+ {
+  "cycle": 1,
+  "ok": false,
+  "dom": {
+   "toolbar": {
+    "top": 350,
+    "bottom": 400,
+    "height": 50
+   },
+   "vv": {
+    "height": 408,
+    "offsetTop": 148
+   },
+   "innerHeight": 769,
+   "active": "true",
+   "standalone": true,
+   "tabBar": {
+    "top": 558,
+    "bottom": 618
+   },
+   "tabBarOverlapPx": 0
+  },
+  "keyboard": [],
+  "tools": [
+   {
+    "name": "Line style",
+    "y": "415",
+    "height": "44",
+    "visible": "true"
+   },
+   {
+    "name": "Indent",
+    "y": "415",
+    "height": "44",
+    "visible": "true"
+   },
+   {
+    "name": "Hide keyboard",
+    "y": "415",
+    "height": "44",
+    "visible": "true"
+   }
+  ]
+ },
+ {
+  "cycle": 2,
+  "ok": false,
+  "dom": {
+   "toolbar": {
+    "top": 350,
+    "bottom": 400,
+    "height": 50
+   },
+   "vv": {
+    "height": 408,
+    "offsetTop": 148
+   },
+   "innerHeight": 769,
+   "active": "true",
+   "standalone": true,
+   "tabBar": {
+    "top": 558,
+    "bottom": 618
+   },
+   "tabBarOverlapPx": 0
+  },
+  "keyboard": [],
+  "tools": [
+   {
+    "name": "Line style",
+    "y": "415",
+    "height": "44",
+    "visible": "true"
+   },
+   {
+    "name": "Indent",
+    "y": "415",
+    "height": "44",
+    "visible": "true"
+   },
+   {
+    "name": "Hide keyboard",
+    "y": "415",
+    "height": "44",
+    "visible": "true"
+   }
+  ]
+ },
+ {
+  "cycle": 3,
+  "ok": false,
+  "dom": {
+   "toolbar": {
+    "top": 350,
+    "bottom": 400,
+    "height": 50
+   },
+   "vv": {
+    "height": 408,
+    "offsetTop": 148
+   },
+   "innerHeight": 769,
+   "active": "true",
+   "standalone": true,
+   "tabBar": {
+    "top": 558,
+    "bottom": 618
+   },
+   "tabBarOverlapPx": 0
+  },
+  "keyboard": [],
+  "tools": [
+   {
+    "name": "Line style",
+    "y": "415",
+    "height": "44",
+    "visible": "true"
+   },
+   {
+    "name": "Indent",
+    "y": "415",
+    "height": "44",
+    "visible": "true"
+   },
+   {
+    "name": "Hide keyboard",
+    "y": "415",
+    "height": "44",
+    "visible": "true"
+   }
+  ]
+ }
+]

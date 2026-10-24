@@ -1,0 +1,572 @@
+{
+ "anchor": "day:2026-10-23:top3:template:0",
+ "newLine": {
+  "id": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+  "type": "task",
+  "standalone": true
+ },
+ "first": {
+  "id": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+  "type": "task",
+  "text": "万",
+  "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">万</div>"
+ },
+ "later": {
+  "id": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+  "type": "task",
+  "text": "万和",
+  "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">万和</div>"
+ },
+ "around": [
+  {
+   "id": "day:2026-10-23:top3:template:0",
+   "type": "task",
+   "text": "TRV for Lu and Kathy",
+   "depth": 0
+  },
+  {
+   "id": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+   "type": "task",
+   "text": "万和",
+   "depth": 0
+  },
+  {
+   "id": "day:2026-10-23:other",
+   "type": "heading",
+   "text": "TODO - Other",
+   "depth": 0
+  },
+  {
+   "id": "d6c964ec-ca02-4508-8016-3a2c83cfe793",
+   "type": "task",
+   "text": "#daythread improvements on link as page",
+   "depth": 0
+  }
+ ],
+ "log": [
+  {
+   "t": 24120,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+    "offset": 1,
+    "node": "P"
+   },
+   "inputType": "insertParagraph",
+   "data": null,
+   "isComposing": false
+  },
+  {
+   "t": 24144,
+   "ev": "mut",
+   "caret": {
+    "block": "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea",
+    "offset": 0,
+    "node": "P"
+   },
+   "records": 6,
+   "kinds": [
+    "childList",
+    "attributes"
+   ],
+   "added": [
+    "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea"
+   ],
+   "removed": [],
+   "text": "",
+   "html": "<br class=\"ProseMirror-trailingBreak\">",
+   "raw": [
+    {
+     "type": "list",
+     "at": "div.bn-block-content@-",
+     "added": [
+      "<p class=\"bn-inline-content\"><br></p>"
+     ],
+     "removed": []
+    },
+    {
+     "type": "list",
+     "at": "p.bn-inline-content@-",
+     "added": [
+      "<br>"
+     ],
+     "removed": []
+    },
+    {
+     "type": "list",
+     "at": "div.bn-block@002580aa",
+     "added": [
+      "<div class=\"bn-block-content\"><p class=\"bn-inline-content\">万圣节装饰、衣服</p></div>"
+     ],
+     "removed": []
+    },
+    {
+     "type": "list",
+     "at": "div.bn-block@002580aa",
+     "added": [],
+     "removed": [
+      "<div class=\"bn-block-content\"><p class=\"bn-inline-content\">万圣节装饰、衣服</p><p class=\"bn-inline-content\"><br></p></div>"
+     ]
+    },
+    {
+     "type": "list",
+     "at": "div.bn-block-group@day:2026",
+     "added": [
+      "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"bn-block-content\"><p class=\"bn-inline-content\"><br class=\"ProseMirror-trailingBreak\"></p></div></div></div>"
+     ],
+     "removed": []
+    },
+    {
+     "type": "attr",
+     "at": "div.tiptap@-",
+     "name": "class"
+    }
+   ]
+  },
+  {
+   "t": 25233,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea",
+    "offset": 0,
+    "node": "P"
+   },
+   "inputType": "insertCompositionText",
+   "data": "w",
+   "isComposing": true
+  },
+  {
+   "t": 26082,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea",
+    "offset": 0,
+    "node": "#text"
+   },
+   "inputType": "insertCompositionText",
+   "data": "wa",
+   "isComposing": true
+  },
+  {
+   "t": 26882,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea",
+    "offset": 0,
+    "node": "#text"
+   },
+   "inputType": "insertCompositionText",
+   "data": "wan",
+   "isComposing": true
+  },
+  {
+   "t": 27785,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea",
+    "offset": 0,
+    "node": "#text"
+   },
+   "inputType": "insertCompositionText",
+   "data": "万",
+   "isComposing": true
+  },
+  {
+   "t": 27789,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea",
+    "offset": 0,
+    "node": "#text"
+   },
+   "inputType": "deleteCompositionText",
+   "data": null,
+   "isComposing": true
+  },
+  {
+   "t": 27796,
+   "ev": "mut",
+   "caret": {
+    "block": "55bb4780-3e12-4eb8-9f0c-163e56078ffc",
+    "offset": 0,
+    "node": "P"
+   },
+   "records": 5,
+   "kinds": [
+    "childList",
+    "attributes"
+   ],
+   "added": [
+    "55bb4780-3e12-4eb8-9f0c-163e56078ffc"
+   ],
+   "removed": [
+    "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea"
+   ],
+   "text": "",
+   "html": "<img class=\"ProseMirror-separator\" alt=\"\"><br><br class=\"ProseMirror-trailingBreak\">",
+   "raw": [
+    {
+     "type": "list",
+     "at": "div.bn-block-group@day:2026",
+     "added": [],
+     "removed": [
+      "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"bn-block-content\"><p class=\"bn-inline-content\">万</p></div></div></div>"
+     ]
+    },
+    {
+     "type": "list",
+     "at": "div.bn-block-group@day:2026",
+     "added": [
+      "<br>"
+     ],
+     "removed": []
+    },
+    {
+     "type": "list",
+     "at": "div.bn-block-group@day:2026",
+     "added": [
+      "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"bn-block-content\"><p class=\"bn-inline-content\"><img class=\"ProseMirror-separator\" alt=\"\"><br><br class=\"ProseMirror-trailingBreak\"></p></d"
+     ],
+     "removed": []
+    },
+    {
+     "type": "list",
+     "at": "div.bn-block-group@day:2026",
+     "added": [],
+     "removed": [
+      "<br>"
+     ]
+    },
+    {
+     "type": "attr",
+     "at": "div.tiptap@-",
+     "name": "class"
+    }
+   ]
+  },
+  {
+   "t": 27797,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "55bb4780-3e12-4eb8-9f0c-163e56078ffc",
+    "offset": 0,
+    "node": "P"
+   },
+   "inputType": "insertFromComposition",
+   "data": "万",
+   "isComposing": true
+  },
+  {
+   "t": 27799,
+   "ev": "compositionend",
+   "caret": {
+    "block": "55bb4780-3e12-4eb8-9f0c-163e56078ffc",
+    "offset": 1,
+    "node": "#text"
+   },
+   "data": "万"
+  },
+  {
+   "t": 27805,
+   "ev": "mut",
+   "caret": {
+    "block": "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea",
+    "offset": 1,
+    "node": "#text"
+   },
+   "records": 3,
+   "kinds": [
+    "childList",
+    "attributes"
+   ],
+   "added": [
+    "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea"
+   ],
+   "removed": [
+    "55bb4780-3e12-4eb8-9f0c-163e56078ffc"
+   ],
+   "text": "万",
+   "html": "万",
+   "raw": [
+    {
+     "type": "list",
+     "at": "div.bn-block-group@day:2026",
+     "added": [
+      "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"bn-block-content\"><p class=\"bn-inline-content\">万</p></div></div></div>"
+     ],
+     "removed": []
+    },
+    {
+     "type": "list",
+     "at": "div.bn-block-group@day:2026",
+     "added": [],
+     "removed": [
+      "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"bn-block-content\"><p class=\"bn-inline-content\">万<br><br class=\"ProseMirror-trailingBreak\"></p></div></div></div>"
+     ]
+    },
+    {
+     "type": "attr",
+     "at": "div.tiptap@-",
+     "name": "class"
+    }
+   ]
+  },
+  {
+   "t": 29583,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea",
+    "offset": 1,
+    "node": "#text"
+   },
+   "inputType": "insertCompositionText",
+   "data": "h",
+   "isComposing": true
+  },
+  {
+   "t": 30415,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea",
+    "offset": 1,
+    "node": "#text"
+   },
+   "inputType": "insertCompositionText",
+   "data": "he",
+   "isComposing": true
+  },
+  {
+   "t": 31234,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea",
+    "offset": 1,
+    "node": "#text"
+   },
+   "inputType": "insertCompositionText",
+   "data": "和",
+   "isComposing": true
+  },
+  {
+   "t": 31249,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea",
+    "offset": 1,
+    "node": "#text"
+   },
+   "inputType": "deleteCompositionText",
+   "data": null,
+   "isComposing": true
+  },
+  {
+   "t": 31250,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea",
+    "offset": 1,
+    "node": "#text"
+   },
+   "inputType": "insertFromComposition",
+   "data": "和",
+   "isComposing": true
+  },
+  {
+   "t": 31251,
+   "ev": "compositionend",
+   "caret": {
+    "block": "24ee3ef4-0125-4e40-b8a2-3a782ec9e1ea",
+    "offset": 2,
+    "node": "#text"
+   },
+   "data": "和"
+  },
+  {
+   "t": 53988,
+   "ev": "mut",
+   "caret": {
+    "block": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+    "offset": 0,
+    "node": "DIV"
+   },
+   "records": 2,
+   "kinds": [
+    "childList",
+    "attributes"
+   ],
+   "added": [
+    "d45124f9-915a-49c4-b9b7-eaff985f4121"
+   ],
+   "removed": [],
+   "text": "",
+   "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\"><br class=\"ProseMirror-trailingBreak\"></div>",
+   "raw": [
+    {
+     "type": "list",
+     "at": "div.bn-block-group@-",
+     "added": [
+      "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"react-renderer node-task bn-react-node-view-renderer\"><div class=\"bn-block-content\"><div class=\"editor-task\"><input type=\"checkbox\"><span "
+     ],
+     "removed": []
+    },
+    {
+     "type": "attr",
+     "at": "div.tiptap@-",
+     "name": "class"
+    }
+   ]
+  },
+  {
+   "t": 55199,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+    "offset": 0,
+    "node": "DIV"
+   },
+   "inputType": "insertCompositionText",
+   "data": "w",
+   "isComposing": true
+  },
+  {
+   "t": 56031,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+    "offset": 0,
+    "node": "#text"
+   },
+   "inputType": "insertCompositionText",
+   "data": "wa",
+   "isComposing": true
+  },
+  {
+   "t": 56898,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+    "offset": 0,
+    "node": "#text"
+   },
+   "inputType": "insertCompositionText",
+   "data": "wan",
+   "isComposing": true
+  },
+  {
+   "t": 57717,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+    "offset": 0,
+    "node": "#text"
+   },
+   "inputType": "insertCompositionText",
+   "data": "万",
+   "isComposing": true
+  },
+  {
+   "t": 57720,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+    "offset": 0,
+    "node": "#text"
+   },
+   "inputType": "deleteCompositionText",
+   "data": null,
+   "isComposing": true
+  },
+  {
+   "t": 57724,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+    "offset": 0,
+    "node": "DIV"
+   },
+   "inputType": "insertFromComposition",
+   "data": "万",
+   "isComposing": true
+  },
+  {
+   "t": 57726,
+   "ev": "compositionend",
+   "caret": {
+    "block": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+    "offset": 1,
+    "node": "#text"
+   },
+   "data": "万"
+  },
+  {
+   "t": 59516,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+    "offset": 1,
+    "node": "DIV"
+   },
+   "inputType": "insertCompositionText",
+   "data": "h",
+   "isComposing": true
+  },
+  {
+   "t": 60316,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+    "offset": 1,
+    "node": "#text"
+   },
+   "inputType": "insertCompositionText",
+   "data": "he",
+   "isComposing": true
+  },
+  {
+   "t": 61167,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+    "offset": 1,
+    "node": "#text"
+   },
+   "inputType": "insertCompositionText",
+   "data": "和",
+   "isComposing": true
+  },
+  {
+   "t": 61170,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+    "offset": 1,
+    "node": "#text"
+   },
+   "inputType": "deleteCompositionText",
+   "data": null,
+   "isComposing": true
+  },
+  {
+   "t": 61172,
+   "ev": "beforeinput",
+   "caret": {
+    "block": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+    "offset": 1,
+    "node": "#text"
+   },
+   "inputType": "insertFromComposition",
+   "data": "和",
+   "isComposing": true
+  },
+  {
+   "t": 61178,
+   "ev": "compositionend",
+   "caret": {
+    "block": "d45124f9-915a-49c4-b9b7-eaff985f4121",
+    "offset": 2,
+    "node": "#text"
+   },
+   "data": "和"
+  }
+ ]
+}
