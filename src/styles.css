@@ -583,6 +583,9 @@ details.banner > :not(summary) { display: inline-flex; align-items: center; marg
 
 /* ---------- Navigation (craft-v1 §3) ---------- */
 body:has(.list-screen) { background: var(--bg-grouped); }
+/* B52b (Jazz cf1067d6): what a screen is drawn on, for the strips that cover the edges (status bar, tab bar fade). */
+:root { --screen-bg: var(--bg); }
+body:has(.list-screen) { --screen-bg: var(--bg-grouped); }
 .sidebar {
   display: none;
   position: sticky;
@@ -634,7 +637,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .tab[aria-current='page'] { background: var(--fill); color: var(--blue); }
 /* B20 (Jazz): text that scrolls under the floating bar fades out over 48px and is fully hidden from the bar's top edge
    (12px offset + 60px bar = 72px), so nothing shows through the glass. */
-.tab-bar::before { content: ''; position: fixed; left: 0; right: 0; bottom: 0; height: calc(120px + env(safe-area-inset-bottom)); background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 0%, transparent), var(--bg) 48px); pointer-events: none; z-index: -1; }
+.tab-bar::before { content: ''; position: fixed; left: 0; right: 0; bottom: 0; height: calc(120px + env(safe-area-inset-bottom)); background: linear-gradient(to bottom, color-mix(in srgb, var(--screen-bg) 0%, transparent), var(--screen-bg) 48px); pointer-events: none; z-index: -1; }
 .tab-bar.is-keyboard-up { display: none; }
 .tab-plus { pointer-events: auto; flex: none; width: 60px; height: 60px; padding: 0; border-radius: 50%; background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); color: var(--ink); box-shadow: var(--shadow-float); }
 
@@ -981,7 +984,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* B52: the page scrolls under the iPhone status bar; a strip in the page colour keeps the clock clear. It follows the
    visible part of the page (--vv-top), which iOS scrolls while the keyboard is up. Zero high where there's no inset.
    Under sheets and menus (z 30+), over the page. */
-.safe-top { position:fixed; left:0; right:0; top:var(--vv-top, 0px); height:env(safe-area-inset-top); background:var(--bg); z-index:25; pointer-events:none; }
+.safe-top { position:fixed; left:0; right:0; top:var(--vv-top, 0px); height:env(safe-area-inset-top); background:var(--screen-bg); z-index:25; pointer-events:none; }
+/* B52b: at scroll 0 nothing starts under the clock (the inset is 0 wherever the page doesn't reach under it). */
+@media (max-width: 899px) { .app-content { padding-top: env(safe-area-inset-top); } }
 /* B56: on the review, phone notices sit at the bottom, clear of the tab bar (12 px off the bottom, 60 px tall). */
 @media (max-width: 599px) { .app-toasts.toast-region--bottom { bottom:calc(84px + env(safe-area-inset-bottom)); } }
 /* Phone notices sit under the status bar and the strip, at the top of what he can see. */

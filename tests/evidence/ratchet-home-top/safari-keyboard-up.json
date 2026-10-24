@@ -1,0 +1,38 @@
+{
+  "standalone": false,
+  "safe": {
+    "x": 0,
+    "y": 0,
+    "width": 402,
+    "height": 0,
+    "top": 0,
+    "right": 402,
+    "bottom": 0,
+    "left": 0
+  },
+  "vv": {
+    "top": 93,
+    "height": 376
+  },
+  "caret": {
+    "x": 0,
+    "y": 0,
+    "width": 0,
+    "height": 0,
+    "top": 0,
+    "right": 0,
+    "bottom": 0,
+    "left": 0
+  },
+  "toolbar": {
+    "x": 25.5,
+    "y": 318,
+    "width": 351,
+    "height": 50,
+    "top": 318,
+    "right": 376.5,
+    "bottom": 368,
+    "left": 25.5
+  },
+  "focus": "true"
+}

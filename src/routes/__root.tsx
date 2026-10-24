@@ -10,8 +10,14 @@ export const Route = createRootRoute({
       { name: 'viewport', content: 'width=device-width, initial-scale=1, interactive-widget=resizes-content, viewport-fit=cover' },
       { name: 'theme-color', content: '#ffffff' }, // B52: the page's colour (--bg-doc), so Safari's bars match it
       { name: 'apple-mobile-web-app-capable', content: 'yes' },
+      // B52b: in the Home Screen app the page reaches under the status bar and env(safe-area-inset-top) is its height,
+      // so B52's strip covers what scrolls there. iOS 26 keeps the clock dark over our white (Roadbuster 3ddfd8f4).
+      { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
       { title: 'Daythread' },
     ],
+    // B52b: the Home Screen app is the whole site, wherever its icon was added from (without this, an icon added on a
+    // day page showed a browser bar on Tasks and the review).
+    links: [{ rel: 'manifest', href: '/manifest.webmanifest' }],
   }),
   component: Root,
   notFoundComponent: () => (
