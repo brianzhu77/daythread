@@ -1,12 +1,13 @@
 import { Link } from '@tanstack/react-router'
 import type { LocalDate, Task } from '../domain/types'
-import { getUpcomingByDate, type UpcomingKind } from '../domain/upcoming'
+import { getUpcomingByDate, type UpcomingKind, type UpcomingTaskDate } from '../domain/upcoming'
 import { DateTag } from './date-tag'
 import { addDays, daysBetween, longLabel } from './dates'
 import { RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
 import { useDay, useWorkspace } from './use-day'
 import { TagText } from './tag-text'
+import { ParentLine, treeIndent, useTaskTree } from './task-tree'
 
 export const taskViews = ['today', 'upcoming', 'open', 'paused'] as const
 export type TaskView = (typeof taskViews)[number]
@@ -57,40 +58,50 @@ function UpcomingList({ today }: { today: LocalDate }) {
   if (!workspace) return null
   const days = getUpcomingByDate(workspace, addDays(today, 1))
   if (!days.length) return <Empty text="Nothing planned, starting or due after today." />
-  return days.map(d => (
-    <section key={d.date} className="list-section">
-      <h2 className="list-header">{longLabel(d.date)}</h2>
+  return days.map(d => <UpcomingDay key={d.date} date={d.date} tasks={d.tasks} today={today} />)
+}
+
+const upcomingId = (x: UpcomingTaskDate) => x.task.id
+
+function UpcomingDay({ date, tasks, today }: { date: LocalDate; tasks: readonly UpcomingTaskDate[]; today: LocalDate }) {
+  const rows = useTaskTree(tasks, upcomingId)
+  return (
+    <section className="list-section">
+      <h2 className="list-header">{longLabel(date)}</h2>
       <ul className="plain task-list">
-        {d.tasks.map(({ task, kinds }) => (
-          <li key={task.id}>
-            <ListTaskRow task={task} today={today} paused={task.paused} label={upcomingLabel(task, kinds, today)} />
+        {rows.map(({ item: { task, kinds }, depth, outsideParent }) => (
+          <li key={task.id} {...treeIndent(depth)}>
+            <ListTaskRow task={task} today={today} paused={task.paused} label={upcomingLabel(task, kinds, today)} parentId={outsideParent} />
           </li>
         ))}
       </ul>
     </section>
-  ))
+  )
 }
 
+const taskId = (t: Task) => t.id
+
 function TaskList({ tasks, today, paused = false, empty }: { tasks: Task[]; today: LocalDate; paused?: boolean; empty?: string }) {
+  const rows = useTaskTree(tasks, taskId)
   if (!tasks.length) return empty ? <Empty text={empty} /> : null
   return (
     <ul className="plain task-list">
-      {tasks.map(t => (
-        <li key={t.id}>
-          <ListTaskRow task={t} today={today} paused={paused} />
+      {rows.map(({ item: t, depth, outsideParent }) => (
+        <li key={t.id} {...treeIndent(depth)}>
+          <ListTaskRow task={t} today={today} paused={paused} parentId={outsideParent} />
         </li>
       ))}
     </ul>
   )
 }
 
-function ListTaskRow({ task, today, paused, label }: { task: Task; today: LocalDate; paused: boolean; label?: string }) {
+function ListTaskRow({ task, today, paused, label, parentId = null }: { task: Task; today: LocalDate; paused: boolean; label?: string; parentId?: string | null }) {
   const { markDone, planOn, notToday } = useTaskActions(today)
   const plannedToday = task.plannedOn === today
   return (
     <div className={`task-row list ${paused ? 'is-paused' : ''}`} data-task-id={task.id}>
       <input type="checkbox" className="check" checked={task.status === 'done'} aria-label={`Mark ${task.title} done`} onChange={() => markDone(task)} />
-      <span className="task-title"><TagText text={task.title} /></span>
+      <span className="task-title"><ParentLine parentId={parentId} /><TagText text={task.title} /></span>
       <DateTag task={task} today={today} label={label} />
       {/* Upcoming keeps set-aside rows' dates (02 Not today) but they must not read as commitments; the Not today tab needs no marker. */}
       {paused && label !== undefined && <span className="app-tag paused">Not today</span>}
