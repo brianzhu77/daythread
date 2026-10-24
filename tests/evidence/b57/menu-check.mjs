@@ -14,5 +14,5 @@ await row.hover(); await p.locator('.bn-block-outer', { has: row }).locator('.ed
 const another = p.locator('.app-menu [role^=menuitem]', { hasText: 'Another day' })
 if (await another.count()) { await another.first().hover(); await p.waitForTimeout(300) }
 const items = await p.locator('.app-menu [role^=menuitem]').allInnerTexts()
-console.log(day, JSON.stringify(items.map(t => t.replace(/\s+/g, ' ').trim()).filter(t => /Tomorrow|weekend|Next week/.test(t))))
+console.log(day, JSON.stringify(items.map(t => t.replace(/\s+/g, ' ').trim()).filter(t => /Tomorrow|weekend|Next week|Pick date/.test(t))))
 await browser.close()
