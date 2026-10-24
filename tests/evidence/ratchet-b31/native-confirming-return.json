@@ -1,0 +1,195 @@
+{
+  "value": "wan",
+  "pending": 0,
+  "log": [
+    {
+      "type": "keydown",
+      "key": "w",
+      "code": 229,
+      "composing": false,
+      "data": null,
+      "value": "",
+      "inputType": null
+    },
+    {
+      "type": "compositionstart",
+      "key": null,
+      "code": null,
+      "composing": null,
+      "data": "",
+      "value": "",
+      "inputType": null
+    },
+    {
+      "type": "compositionupdate",
+      "key": null,
+      "code": null,
+      "composing": null,
+      "data": "w",
+      "value": "",
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "composing": true,
+      "data": "w",
+      "value": "",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "composing": true,
+      "data": "w",
+      "value": "w",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "keydown",
+      "key": "a",
+      "code": 229,
+      "composing": true,
+      "data": null,
+      "value": "w",
+      "inputType": null
+    },
+    {
+      "type": "compositionupdate",
+      "key": null,
+      "code": null,
+      "composing": null,
+      "data": "wa",
+      "value": "w",
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "composing": true,
+      "data": "wa",
+      "value": "w",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "composing": true,
+      "data": "wa",
+      "value": "wa",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "keydown",
+      "key": "n",
+      "code": 229,
+      "composing": true,
+      "data": null,
+      "value": "wa",
+      "inputType": null
+    },
+    {
+      "type": "compositionupdate",
+      "key": null,
+      "code": null,
+      "composing": null,
+      "data": "wan",
+      "value": "wa",
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "composing": true,
+      "data": "wan",
+      "value": "wa",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "composing": true,
+      "data": "wan",
+      "value": "wan",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "compositionupdate",
+      "key": null,
+      "code": null,
+      "composing": null,
+      "data": "wan",
+      "value": "wan",
+      "inputType": null
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "composing": true,
+      "data": "wan",
+      "value": "wan",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "composing": true,
+      "data": "wan",
+      "value": "wan",
+      "inputType": "insertCompositionText"
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "composing": true,
+      "data": null,
+      "value": "wan",
+      "inputType": "deleteCompositionText"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "composing": true,
+      "data": null,
+      "value": "",
+      "inputType": "deleteCompositionText"
+    },
+    {
+      "type": "beforeinput",
+      "key": null,
+      "code": null,
+      "composing": true,
+      "data": "wan",
+      "value": "",
+      "inputType": "insertFromComposition"
+    },
+    {
+      "type": "input",
+      "key": null,
+      "code": null,
+      "composing": true,
+      "data": "wan",
+      "value": "wan",
+      "inputType": "insertFromComposition"
+    },
+    {
+      "type": "compositionend",
+      "key": null,
+      "code": null,
+      "composing": null,
+      "data": "wan",
+      "value": "wan",
+      "inputType": null
+    }
+  ]
+}
