@@ -1606,6 +1606,47 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     editor.updateBlock(block, (style === 'todo' ? { type: 'checkListItem', props: {} } : { type: next.type, props: next.level ? { level: next.level } : {} }) as never)
     editor.focus()
   }
+  /**
+   * B49 (Brian's iOS pinyin bug; Ratchet's Simulator trace 9d390e56/dec1a134): on iOS, picking the first candidate on an
+   * empty line sends deleteCompositionText, which empties the line's DOM, then insertFromComposition. ProseMirror reads
+   * the emptied line as a different block, so the word lands in a new block (a paragraph, or the next line) and his
+   * line is left empty or gone. Typing never creates a block, so a block that appeared during a composition is this
+   * bug: once the composition is over, his line gets the word back (its own id, type and props) and the stray block
+   * goes. Same undo step as the typing.
+   */
+  const compositionLine = useRef<{ id: string; type: string; props: Record<string, unknown>; empty: boolean; ids: Set<string> } | null>(null)
+  function noteCompositionStart() {
+    const block = editor.getTextCursorPosition().block
+    compositionLine.current = { id: block.id, type: block.type, props: { ...block.props }, empty: !inlineText(block.content as EditorNode['content']), ids: new Set(deepNodes(nodes()).map(n => n.id)) }
+  }
+  function repairComposition() {
+    const start = compositionLine.current
+    compositionLine.current = null
+    // Only a composition that began on an empty line (later words on a line go in place).
+    if (!start?.empty || composing.current) return
+    const plain = (n: EditorNode) => inlineText(n.content).replace(/\n/g, '').trim()
+    const added = deepNodes(nodes()).filter(n => !start.ids.has(n.id))
+    // The word went into one of the new blocks: the one with text (a composition adds no line breaks).
+    const landed = added.find(n => plain(n))
+    if (!landed) return
+    const content = (Array.isArray(landed.content) ? landed.content : [])
+      .map(c => (c && typeof c === 'object' && (c as { type?: string }).type === 'text' ? { ...c, text: String((c as { text?: string }).text ?? '').replace(/\n/g, '') } : c))
+      .filter(c => !(c && typeof c === 'object' && (c as { type?: string }).type === 'text' && !(c as { text?: string }).text))
+    // Other new blocks it left: empty, or a second copy of the word. Never one with lines under it.
+    const strays = added.filter(n => n.id !== landed.id && !n.children?.length && (!plain(n) || plain(n) === plain(landed))).map(n => n.id)
+    const own = editor.getBlock(start.id)
+    debugClient('editor.composition.repaired', { pageId: page.id, blockId: start.id, result: own ? 'refilled' : 'replaced' })
+    editor.transact(() => {
+      if (own) {
+        editor.updateBlock(start.id, { content } as never)
+        editor.removeBlocks([landed.id, ...strays])
+      } else {
+        editor.replaceBlocks([landed.id], [{ id: start.id, type: start.type, props: start.props, content, children: landed.children ?? [] }] as never)
+        if (strays.length) editor.removeBlocks(strays)
+      }
+      editor.setTextCursorPosition(start.id, 'end')
+    })
+  }
   function copyBlocks(e: React.ClipboardEvent, cut: boolean) {
     const selection = editor.prosemirrorState.selection
     if (!selected.current.length && (selection.empty || selection instanceof TextSelection && selection.$from.sameParent(selection.$to))) return
@@ -1835,9 +1876,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos)))
       })
     }}
-    onCompositionStartCapture={() => { composing.current = true; clearTimeout(timer.current) }}
+    onCompositionStartCapture={() => { composing.current = true; clearTimeout(timer.current); noteCompositionStart() }}
     // A9a §3: after the composition, once ProseMirror has finished it (its DOM and decorations are drawn again).
-    onCompositionEndCapture={() => { composing.current = false; setTimeout(maybeOpenLinkList, 50); requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
+    onCompositionEndCapture={() => { composing.current = false; setTimeout(repairComposition, 0); setTimeout(maybeOpenLinkList, 50); requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
     onDropCapture={e => {
       // Drops go to the row boundary under the pointer at release. BlockNote's line can lag the pointer when
       // dragover events stop arriving (Ratchet task #49: a long drag stayed put, the line stuck near the start),
