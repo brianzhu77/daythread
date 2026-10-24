@@ -6,7 +6,7 @@ import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as histor
 import { BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, editorHasBlockWithType, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
 import { toast } from '@heroui/react'
-import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useEditorState, useExtensionState, usePortalElement, useUIMode } from '@blocknote/react'
+import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, LinkToolbarController, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useEditorState, useExtensionState, usePortalElement, useUIMode } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
 import '@blocknote/shadcn/style.css'
@@ -1522,6 +1522,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * (selection changes, never hover); a mouse keeps the hover handle as before.
    */
   const lastPointer = useRef('')
+  // Finding 6 (iPhone sweep): on a touch screen the link toolbar ("Edit link") shows only after a tap on the link. It
+  // used to open whenever the caret sat in a link, so right after a paste it covered the lines above. Typing or a paste
+  // puts it away until the next tap on a link; a mouse keeps BlockNote's behaviour.
+  const [linkTapped, setLinkTapped] = useState(false)
   const [hoverPointer, setHoverPointer] = useState(() => typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches)
   useEffect(() => {
     const query = window.matchMedia('(hover: hover) and (pointer: fine)'), changed = () => setHoverPointer(query.matches)
@@ -1881,6 +1885,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // side menu and link toolbar): anything they showed would make iOS take the tap for a hover and drop the click.
     // On a device with both (a touch laptop, an iPad with a trackpad), the last pointer decides (Lead f6ade708).
     onPointerDownCapture={e => { lastPointer.current = e.pointerType }}
+    onPointerUpCapture={e => { if (e.pointerType === 'touch') setLinkTapped(Boolean((e.target as Element).closest?.('a'))) }}
+    onPasteCapture={() => setLinkTapped(false)}
+    onBeforeInputCapture={() => setLinkTapped(false)}
+    onInputCapture={() => setLinkTapped(false)}
     onPointerMoveCapture={e => { lastPointer.current = e.pointerType }}
     onMouseOverCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
     onMouseMoveCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
@@ -2037,7 +2045,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     {pasteMenu && <PasteLinkMenu menu={pasteMenu} detail={bookmarkDetail(pasteMenu.urls)} onKeep={() => setPasteMenu(null)} onBookmark={bookmarkPasted} onHighlight={h => setPasteMenu({ ...pasteMenu, highlight: h })} />}
     <div ref={saveLine} className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? conflictText : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
-    <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false}>
+    <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
       {!compact && !selectionLabel && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
         <LineTypeSelect key="blockTypeSelect" isRoleHeading={isRoleHeading} canHoldHeading={canHoldHeading} />
@@ -2074,6 +2082,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}
       {['[[', '【【'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} shouldOpen={() => false} getItems={async query => linkItems(query, trigger)} onItemClick={item => item.onItemClick()} />)}
       {hoverPointer && <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />}
+      {(hoverPointer || linkTapped) && <LinkToolbarController />}
     </BlockNoteView>
     </RowActionsContext.Provider>
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}
