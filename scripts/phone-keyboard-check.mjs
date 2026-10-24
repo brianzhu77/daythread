@@ -71,6 +71,10 @@ try {
   await page.evaluate(() => window.__scrollVisual(180)); await settle()
   const scrolled = await visible()
   aboveKeyboard(scrolled, 'scrolled 180 px')
+  // Scrolled as far as iOS allows (the visible bottom meets the page's bottom): the keyboard is still up.
+  await page.evaluate(k => window.__scrollVisual(k), KEYBOARD); await settle()
+  aboveKeyboard(await visible(), `scrolled ${KEYBOARD} px`)
+  await page.evaluate(() => window.__scrollVisual(180)); await settle()
   await page.locator('.editor-phone-toolbar .editor-aa').tap(); await settle()
   const panel = await visible()
   assert.ok(panel.panel && panel.panel.bottom <= panel.toolbar.top && panel.panel.top >= panel.top, `Aa panel above the toolbar and visible ${JSON.stringify(panel)}`)

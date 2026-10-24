@@ -336,9 +336,9 @@ function useKeyboardTop(): number | null {
     const measure = () => {
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => {
-        const bottom = vv.offsetTop + vv.height
+        // The keyboard's height doesn't depend on how far iOS has scrolled the visible part (offsetTop can reach it).
         // Under ~100 px is Safari's bars moving, not a keyboard.
-        setTop(window.innerHeight - bottom > 100 ? Math.round(bottom) : null)
+        setTop(window.innerHeight - vv.height > 100 ? Math.round(vv.offsetTop + vv.height) : null)
       })
     }
     measure()
