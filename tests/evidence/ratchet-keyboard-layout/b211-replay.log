@@ -1,0 +1,10 @@
+ok   webkit ios-rects: keyboard down: the tab bar shows
+ok   webkit ios-rects: keyboard up: the tab bar is hidden
+ok   webkit ios-rects: the caret's line and the line below it are clear of the toolbar ({"before":{"barTop":450,"barBottom":500,"line6":438,"line7":468,"visibleBottom":508},"after":{"barTop":450,"barBottom":500,"line6":412,"line7":442,"visibleBottom":508}})
+ok   webkit ios-rects: with a hidden row below, the next visible line clears too ({"before":{"barTop":450,"line9":438,"line11":468},"after":{"barTop":450,"line9":412,"line11":442}})
+ok   webkit ios-rects: the toolbar stays just above the keyboard ({"barTop":450,"barBottom":500,"line6":412,"line7":442,"visibleBottom":508})
+ok   webkit ios-rects: still typing: the tab bar stays hidden
+ok   webkit ios-rects: the caret handle sits on the caret's line with the visible part scrolled (iOS rects) ({"handleMid":337,"line":[322,352]})
+ok   webkit ios-rects: keyboard down again: the tab bar is back
+ok   webkit ios-rects: no page errors
+all passed

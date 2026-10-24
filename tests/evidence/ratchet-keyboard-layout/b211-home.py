@@ -1,0 +1,11 @@
+from driver import *
+import driver
+driver.ROOT=Path('/tmp/b211-ios');ctx=next(c for c in contexts()if c.startswith('WEBVIEW_60275'));driver.web=lambda:call('context',{'name':ctx});goto('/day/2026-10-24')
+js('document.querySelector(\'[data-id="ratchet211-line-0"]\').scrollIntoView({block:"center"})');time.sleep(.5)
+e=next(e for e in ET.fromstring(source()).iter()if e.get('name')=='原生验收第1行'and e.get('visible')=='true');native();call('execute/sync',{'script':'mobile: tap','args':[{'x':float(e.get('x'))+20,'y':float(e.get('y'))+10}]});time.sleep(.7)
+script='''const s=getSelection(),n=s.anchorNode,e=(n.nodeType===1?n:n.parentElement),row=e.closest('[data-node-type=blockContainer]'),rows=[...document.querySelectorAll('[data-node-type=blockContainer]')];let next;for(let i=rows.indexOf(row)+1;i<rows.length;i++){const r=rows[i].querySelector('.bn-block-content').getBoundingClientRect();if(r.height){next=r.toJSON();break}}const rect=x=>x?.getBoundingClientRect().toJSON();return {id:row?.dataset.id,caret:s.getRangeAt(0).getBoundingClientRect().toJSON(),row:rect(row?.querySelector('.bn-inline-content')),next,bar:rect(document.querySelector('.editor-phone-toolbar')),handle:rect(document.querySelector('.editor-touch-handle')),tabs:getComputedStyle(document.querySelector('.tab-bar')).display,vv:{top:visualViewport.offsetTop,height:visualViewport.height},panel:rect(document.querySelector('.editor-style-panel'))}'''
+v=js(script);print('focused',v,flush=True);snap('home-line-next');assert v['tabs']=='none';assert v['next']['bottom']<=v['bar']['top']-7,v
+# Move the caret to the last line with a native tap; avoid any synthetic keyboard event.
+js('document.querySelector(\'[data-id="ratchet211-line-2"]\').scrollIntoView({block:"center"})');time.sleep(.4)
+e=next(e for e in ET.fromstring(source()).iter()if e.get('name')=='原生验收第3行'and e.get('visible')=='true');native();call('execute/sync',{'script':'mobile: tap','args':[{'x':float(e.get('x'))+20,'y':float(e.get('y'))+10}]});time.sleep(.4);tap('Line style');time.sleep(.5);v=js(script);print('Aa',v,flush=True);snap('home-last-aa');assert v['panel']and v['caret']['bottom']<=v['panel']['top'],v
+Path('/tmp/b211-ios/home-native.json').write_text(json.dumps(v,ensure_ascii=False,indent=2))

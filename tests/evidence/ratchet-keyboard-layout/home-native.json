@@ -1,0 +1,59 @@
+{
+  "id": "ratchet211-line-2",
+  "caret": {
+    "x": 65,
+    "y": 194,
+    "width": 0,
+    "height": 20,
+    "top": 194,
+    "right": 65,
+    "bottom": 214,
+    "left": 65
+  },
+  "row": {
+    "x": 65,
+    "y": 192,
+    "width": 104.984375,
+    "height": 24,
+    "top": 192,
+    "right": 169.984375,
+    "bottom": 216,
+    "left": 65
+  },
+  "next": null,
+  "bar": {
+    "x": 25.5,
+    "y": 350,
+    "width": 351,
+    "height": 50,
+    "top": 350,
+    "right": 376.5,
+    "bottom": 400,
+    "left": 25.5
+  },
+  "handle": {
+    "x": 358,
+    "y": 182,
+    "width": 32,
+    "height": 44,
+    "top": 182,
+    "right": 390,
+    "bottom": 226,
+    "left": 358
+  },
+  "tabs": "none",
+  "vv": {
+    "top": 262,
+    "height": 408
+  },
+  "panel": {
+    "x": 25.5,
+    "y": 242,
+    "width": 351,
+    "height": 100,
+    "top": 242,
+    "right": 376.5,
+    "bottom": 342,
+    "left": 25.5
+  }
+}
