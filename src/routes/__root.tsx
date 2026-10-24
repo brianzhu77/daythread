@@ -24,7 +24,8 @@ export const Route = createRootRoute({
 
 function Root() {
   // The sign-in screen stands alone: the app frame would load the workspace.
-  const signIn = useRouterState({ select: s => s.location.pathname === '/sign-in' })
+  // B49's typing test stands alone too: it holds no data of his (src/routes/debug-ime.tsx).
+  const signIn = useRouterState({ select: s => s.location.pathname === '/sign-in' || s.location.pathname === '/debug-ime' })
   return (
     <html lang="en">
       <head>
