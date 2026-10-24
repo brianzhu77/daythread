@@ -114,3 +114,11 @@ test('a malformed redirect gives no preview and never stops the server (Ratchet 
   routes['/after'] = html('<title>Still serving</title>')
   assert.equal((await fetchLinkPreview(`${base}/after`)).title, 'Still serving')
 })
+
+test('DAYTHREAD_LINK_PREVIEW=off fetches nothing (an emergency switch; pastes keep the bare URL title)', async () => {
+  let hits = 0
+  routes['/counted'] = res => { hits++; res.setHeader('content-type', 'text/html'); res.end('<title>x</title>') }
+  process.env.DAYTHREAD_LINK_PREVIEW = 'off'
+  try { assert.deepEqual(await fetchLinkPreview(`${base}/counted`), { title: null, description: null }) } finally { delete process.env.DAYTHREAD_LINK_PREVIEW }
+  assert.equal(hits, 0, 'no request made')
+})
