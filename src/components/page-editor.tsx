@@ -1555,9 +1555,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // B48: iOS scrolls the caret to just above the keyboard, which is where the toolbar now sits, so keep the caret's line
   // clear of the toolbar while the keyboard is up.
   useEffect(() => {
-    if (keyboardTop === null) return
+    if (keyboardTop === null && !styleOpen) return
     const reveal = () => requestAnimationFrame(() => {
       const bar = phoneToolbar.current?.getBoundingClientRect(), selection = window.getSelection()
+      // B53: the open Aa panel sits on top of the toolbar; the line it styles stays in view above it.
+      const panel = styleOpen ? phoneToolbar.current?.querySelector('.editor-style-panel')?.getBoundingClientRect() : undefined
       if (!bar?.height || !selection?.rangeCount || !editor.isFocused()) return
       const range = selection.getRangeAt(0)
       const caret = range.getBoundingClientRect().height ? range.getBoundingClientRect() : (range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement)?.getBoundingClientRect()
@@ -1566,13 +1568,14 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const rows = row ? [...(editor.domElement?.querySelectorAll<HTMLElement>('[data-node-type="blockContainer"]') ?? [])] : []
       const next = rows[rows.indexOf(row as HTMLElement) + 1]
       const nextLine = next?.querySelector('.bn-block-content')?.getBoundingClientRect()
-      const lowest = Math.max(caret?.bottom ?? 0, nextLine && nextLine.height ? nextLine.bottom : 0)
-      const overlap = lowest ? lowest + 8 - bar.top : 0
+      // With the panel open only the caret's line has to show; the panel is up for a moment, the line below can wait.
+      const lowest = panel?.height ? caret?.bottom ?? 0 : Math.max(caret?.bottom ?? 0, nextLine && nextLine.height ? nextLine.bottom : 0)
+      const overlap = lowest ? lowest + 8 - (panel?.height ? panel.top : bar.top) : 0
       if (overlap > 0) window.scrollBy(0, overlap)
     })
     reveal()
     return editor.onSelectionChange(reveal)
-  }, [editor, keyboardTop])
+  }, [editor, keyboardTop, styleOpen])
   // B44's paste menu reserves room above the toolbar, not above the style panel, so only one of them is open at a time.
   useEffect(() => { if (pasteMenu) setStyleOpen(false) }, [pasteMenu])
   useEffect(() => {
@@ -1849,7 +1852,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const conflictText = changedBy(page.id) === 'tab' ? 'Changed in another tab · draft kept' : 'Changed on another device · draft kept'
   // B38: the dock line's words stay steady while typing flips the header between "Unsaved changes" and "Saving…".
   const unsavedText = conflict ? conflictText : !online ? "Offline · saves when you're back" : unsaved === 'network' ? 'Not saved yet · trying again' : "Couldn't save · draft kept"
-  return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''} ${pasteMenu ? 'has-paste-menu' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
+  return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''} ${pasteMenu ? 'has-paste-menu' : ''} ${styleOpen && lineStyle ? 'has-style-panel' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onBlur={e => { if (e.target === editor.domElement) setStyleOpen(false) }}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
     onMouseDownCapture={e => { const target = e.target as Element; if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') } }}

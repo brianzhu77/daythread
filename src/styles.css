@@ -832,7 +832,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
  /* B5 Aa (F16): the line's styles in a 4 × 2 grid above the toolbar, so the line being edited stays in view. */
  .editor-phone-toolbar .editor-aa { font-size:16px;font-weight:600;letter-spacing:-.01em; }
  .editor-phone-toolbar .editor-aa[aria-expanded='true'] { background:var(--fill-soft);border-radius:11px; }
- .editor-style-panel { display:grid;grid-template-columns:repeat(4,1fr);gap:4px;position:absolute;bottom:calc(100% + 8px);left:0;right:0;padding:4px;background:var(--bg);border-radius:14px;box-shadow:0 3px 20px #0002;z-index:60; }
+ /* B53: while Aa is open the page can always scroll the line it styles up above the panel, even at the page's end. */
+.continuous-editor.has-style-panel { margin-bottom:120px; }
+.editor-style-panel { display:grid;grid-template-columns:repeat(4,1fr);gap:4px;position:absolute;bottom:calc(100% + 8px);left:0;right:0;padding:4px;background:var(--bg);border-radius:14px;box-shadow:0 3px 20px #0002;z-index:60; }
  .editor-style-panel button { min-height:44px;padding:0 4px;border:0;border-radius:10px;background:transparent;color:var(--ink);font-size:var(--text-meta);line-height:1.2; }
  .editor-style-panel button[aria-pressed='true'] { background:var(--fill-soft);color:var(--blue-text);font-weight:600; }
  .editor-style-panel .is-h1, .editor-style-panel .is-h2, .editor-style-panel .is-h3 { font-weight:600; }
