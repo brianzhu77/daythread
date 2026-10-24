@@ -77,13 +77,18 @@ export function taskDateTag(task: Task, today: LocalDate, pageDate: LocalDate = 
   return parts.join(' · ')
 }
 
+/**
+ * B57 (Bumblebee d3a8ddd8, Lead 424a45cd): "This weekend" only Monday to Thursday (on Friday it's tomorrow, on Saturday
+ * and Sunday it would be next week's), and never two options for one date (on Sunday "Next week" is tomorrow).
+ */
 export const anotherDayOptions = (today: LocalDate) => {
   const d = fromIso(today).getDay()
   const toSat = (6 - d + 7) % 7 || 7
   const toMon = (1 - d + 7) % 7 || 7
-  return [
+  const options = [
     { label: 'Tomorrow', date: addDays(today, 1) },
-    { label: 'This weekend', date: addDays(today, toSat) },
+    ...(d >= 1 && d <= 4 ? [{ label: 'This weekend', date: addDays(today, toSat) }] : []),
     { label: 'Next week', date: addDays(today, toMon) },
   ]
+  return options.filter((o, i) => options.findIndex(x => x.date === o.date) === i)
 }

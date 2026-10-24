@@ -1,6 +1,7 @@
 // A12 row actions in the browser (plan §5, Jazz day-row-actions-states §5), on a copy of Brian's database.
 //   node ui-check.mjs <base url> <db path> <playwright index.mjs>
-// The build must serve that copy, with today = 2026-10-20 (America/Vancouver).
+// The build must serve that copy, with today = 2026-10-20 (America/Vancouver). The browser's clock is pinned to that
+// Tuesday (B57: "This weekend" is offered Monday to Thursday only, and the checks below choose it).
 import { DatabaseSync } from 'node:sqlite'
 const [base, dbPath, pw] = process.argv.slice(2)
 const { chromium } = await import(pw)
@@ -17,7 +18,8 @@ const inSection = (rows, kind) => (rows?.[kind] ?? []).some(t => t.includes(TITL
 
 const browser = await chromium.launch(), errors = []
 const page = async (width = 1280, mobile = false) => {
-  const p = await browser.newPage({ viewport: { width, height: mobile ? 844 : 1000 }, hasTouch: mobile, isMobile: mobile })
+  const p = await browser.newPage({ viewport: { width, height: mobile ? 844 : 1000 }, hasTouch: mobile, isMobile: mobile, timezoneId: 'America/Vancouver' })
+  await p.clock.install({ time: new Date(`${TODAY}T10:00:00-07:00`) }); await p.clock.resume()
   p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(m.text()) })
   return p
 }
