@@ -1,0 +1,17 @@
+offset240 {"top":240,"bottom":748,"keyboard":336,"toolbar":{"top":704,"bottom":754},"panel":null,"menu":null}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: scrolled 240 px: toolbar just above the keyboard (toolbar 754, visible bottom 748)
+    at aboveKeyboard (file:///Users/dogrod/Developer/daythread-ratchet-keyboard/tests/evidence/ratchet-b48/offset-check.mjs:36:10)
+    at file:///Users/dogrod/Developer/daythread-ratchet-keyboard/tests/evidence/ratchet-b48/offset-check.mjs:73:54 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
