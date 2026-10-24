@@ -519,9 +519,48 @@ function checkLinkIdentity(state: Workspace): void {
   }
 }
 /** Written or tracked on a link page since it was made: a title, any text or row, a review note. */
-function linkPageEdited(state: Workspace, p: Page, firstTitle: string = defaultLinkTitle(p.url ?? "")): boolean {
-  return p.title !== firstTitle || Boolean(p.reviewText.trim()) || state.pages.some((c) => c.parentId === p.id)
-    || p.sections.some((s) => s.title.trim() || s.blocks.some((b) => b.kind !== "paragraph" || b.text.trim()));
+function linkPageEdited(state: Workspace, p: Page, firstTitle: string = defaultLinkTitle(p.url ?? ""), preview?: LinkPasteRecord["preview"]): boolean {
+  // B43: a body that is still exactly what the preview wrote isn't his writing; any change to it is (Ratchet a35f2026:
+  // the quote turned into a bullet, or formatted, with the same words).
+  const body = preview ? p.editorJSON !== preview.document
+    : p.sections.some((s) => s.title.trim() || s.blocks.some((b) => b.kind !== "paragraph" || b.text.trim()));
+  return p.title !== firstTitle || Boolean(p.reviewText.trim()) || state.pages.some((c) => c.parentId === p.id) || body;
+}
+/**
+ * B43 (Lead, Ratchet): the title and description read from the web for a page a paste just made. Bound to that paste:
+ * it applies only while the paste stands (not undone), the page is the one it made, still at that URL, not in the
+ * trash, and untouched since (its title still the paste's, its body still the empty line). Otherwise it does nothing:
+ * a late result never overrides him. The title also goes to this paste's Good Stuffs record if it still had the old
+ * one. The description becomes a quote line, unless it adds nothing (empty, or the title again).
+ */
+function applyLinkPreview(state: Workspace, action: Extract<Action, { type: "apply-link-preview" }>): { message: string; entityId?: string } {
+  const unchanged = { message: "Link page unchanged" };
+  const parent = state.pages.find((x) => x.id === action.parentPageId);
+  const r = parent?.editorBlockMetadata?.[`paste:${action.cardBlockId}`]?.linkPaste;
+  if (!r || r.undone || r.outcome !== "made" || r.pageId !== action.pageId || r.url !== action.url || r.preview) return unchanged;
+  const p = state.pages.find((x) => x.id === action.pageId);
+  if (!p || isTrashed(p) || p.url !== action.url || p.editorJSON || linkPageEdited(state, p, r.title)) return unchanged;
+  const title = action.title?.replace(/\s+/g, " ").trim().slice(0, 200) || null;
+  const description = action.description?.replace(/\s+/g, " ").trim().slice(0, 500) || null;
+  const same = (a: string, b: string) => a.toLocaleLowerCase() === b.toLocaleLowerCase();
+  const quote = description && !same(description, title ?? p.title) ? description : null;
+  if (!title && !quote) return unchanged;
+  const before = p.title;
+  if (title) {
+    p.title = title;
+    const m = r.materialId ? state.materials.find((x) => x.id === r.materialId) : undefined;
+    if (m && m.title === before) m.title = title;
+  }
+  if (quote) {
+    const blockId = newId(), empty = p.sections[0]?.blocks[0]?.id ?? newId();
+    const nodes: EditorNode[] = [{ id: blockId, type: "quote", props: {}, content: quote, children: [] }, { id: empty, type: "paragraph", props: {}, content: "", children: [] }];
+    p.sections = projectDocument(nodes, p, state);
+    p.editorJSON = JSON.stringify(nodes);
+    p.editorSections = JSON.stringify(p.sections);
+    r.preview = { blockId, text: quote, document: p.editorJSON };
+  }
+  r.title = p.title;
+  return { message: title ? `Named '${p.title}'` : "Link page filled in", entityId: p.id };
 }
 /** The follow-up record was acted on: a decision, a task made from it. A re-save of a Done item isn't a decision. */
 function followUpUsed(m: Material | undefined): boolean {
@@ -623,7 +662,7 @@ function undoPasteLinks(state: Workspace, action: Extract<Action, { type: "undo-
       // A save of this link from anywhere but this paste (Ratchet 2b3a09fd: typed under Good Stuffs on another day)
       // is a use of the page too.
       const otherSaves = (urlOwner(state, r.url).material?.sources ?? []).filter((x) => !own.has(`${x.pageId}/${x.blockId}`)).map((x) => `${x.pageId}/${x.blockId}`);
-      if (linkPageEdited(state, p, r.title) || followUpUsed(urlOwner(state, r.url).material)) kept.push(`Kept ${p.title || "Untitled"} · it has your edits`);
+      if (linkPageEdited(state, p, r.title, r.preview) || followUpUsed(urlOwner(state, r.url).material)) kept.push(`Kept ${p.title || "Untitled"} · it has your edits`);
       else if (refs.length || otherSaves.length) kept.push(`Kept ${p.title || "Untitled"} · linked from ${linkedFrom([...refs, ...otherSaves])}`);
       else remove.add(p);
     } else {
@@ -1641,6 +1680,8 @@ function execute(
       return pasteLinks(state, action, operationId);
     case "undo-paste-links":
       return undoPasteLinks(state, action);
+    case "apply-link-preview":
+      return applyLinkPreview(state, action);
     case "rename-page": {
       const p = page(state, action.pageId);
       if (p.type !== "document") throw new DomainError("Day pages are named by their date");

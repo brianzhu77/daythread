@@ -78,3 +78,23 @@ export const resolveLineLink = createServerFn({ method: "GET" })
     // The address to open, from the server's own data: the browser's copy may not have the page yet (Ratchet #146).
     return { ...resolved, href: page ? pagePath(page, resolved.blockId) : null };
   });
+
+/**
+ * B43: a link page a paste just made takes the linked page's own title, and its description as a quote, read here
+ * (link-preview.ts: public addresses only, short and small). Applied as `apply-link-preview`, which changes the page only
+ * while it's untouched since that paste; a site that can't be read changes nothing and shows no error.
+ */
+export const previewLinkPage = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.object({ parentPageId: z.string().min(1).max(200), cardBlockId: z.string().min(1).max(200), pageId: z.string().min(1).max(200), url: z.string().min(1).max(10_000) }).parse(input))
+  .handler(async ({ data }) => {
+    const [{ fetchLinkPreview }, { getRepository }, { forBrowser }] = await Promise.all([import("./link-preview"), import("./storage"), import("./browser-workspace")])
+    const found = await fetchLinkPreview(data.url)
+    if (!found.title && !found.description) return { applied: false as const }
+    try {
+      const result = await getRepository().executeOnLatest(`link-preview:${data.cardBlockId}`, { type: "apply-link-preview", ...data, title: found.title, description: found.description })
+      return { applied: result.receipt.message !== "Link page unchanged", workspace: forBrowser(result.workspace) }
+    } catch {
+      // The page went to the trash meanwhile, or the store moved on: nothing to fill in.
+      return { applied: false as const }
+    }
+  });
