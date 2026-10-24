@@ -1,3 +1,9 @@
+// RETIRED (Lead 4656a452, Oct 24): superseded. It expects the pre-B31 review's .plan-card (gone since B31) and a
+// past-day menu from before A11's "Copy link to line", so it stops early on main. Row actions are covered by
+// tests/evidence/b57/menu-check.mjs (another-day options), the B50 first-tap check and the unit suite. Kept for its
+// output files; running it only says so.
+console.log('a12-row-actions/ui-check.mjs is retired (superseded); see the note at the top of the file.')
+process.exit(0)
 // A12 row actions in the browser (plan §5, Jazz day-row-actions-states §5), on a copy of Brian's database.
 //   node ui-check.mjs <base url> <db path> <playwright index.mjs>
 // The build must serve that copy, with today = 2026-10-20 (America/Vancouver). The browser's clock is pinned to that
