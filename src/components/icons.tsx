@@ -165,6 +165,15 @@ export const OutdentIcon = () => (
   </Icon>
 )
 
+// Phone toolbar (F16): hide the keyboard. A keyboard with a chevron pointing down under it.
+export const HideKeyboardIcon = () => (
+  <Icon size={20}>
+    <rect x="3" y="4" width="18" height="11" rx="2" />
+    <path d="M7 8h.01M11 8h.01M15 8h.01M8 11.5h8" />
+    <path d="m9 18.5 3 2.5 3-2.5" />
+  </Icon>
+)
+
 export const CheckboxIcon = () => (
   <Icon size={18}>
     <rect x="4" y="4" width="16" height="16" rx="4" />

@@ -834,10 +834,18 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .is-touch-drag .bn-block-outer:not(:has(> .bn-block > .bn-block-content[data-content-type=heading])) { display:none; }
 @media(max-width:700px) {
  .editor-touch-handle { display:flex;align-items:center;justify-content:center;position:fixed;right:12px;z-index:70;touch-action:none;border:0;padding:0;background:var(--bg);color:var(--ink-2);width:32px;height:44px;font-size:22px; }
- .editor-phone-toolbar { display:flex;position:fixed;bottom:90px;left:50%;transform:translateX(-50%);gap:6px;background:var(--bg);border-radius:14px;box-shadow:0 3px 20px #0002;z-index:60;padding:3px; }
- .editor-phone-toolbar button { min-width:40px;height:36px;background:transparent;color:var(--ink);border:0; }
+ .editor-phone-toolbar { display:flex;position:fixed;bottom:90px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 16px);gap:4px;background:var(--bg);border-radius:14px;box-shadow:0 3px 20px #0002;z-index:60;padding:3px; }
+ /* B5 Aa: seven buttons fit 390 (42 px each, no side padding), so the bar never runs off the screen. */
+ .editor-phone-toolbar button { min-width:42px;height:36px;padding:0;background:transparent;color:var(--ink);border:0; }
  .editor-phone-toolbar button:disabled { color:var(--ink-3); }
  .editor-toolbar-gap { width:1px;align-self:stretch;margin:8px 2px;background:var(--line); }
+ /* B5 Aa (F16): the line's styles in a 4 × 2 grid above the toolbar, so the line being edited stays in view. */
+ .editor-phone-toolbar .editor-aa { font-size:16px;font-weight:600;letter-spacing:-.01em; }
+ .editor-phone-toolbar .editor-aa[aria-expanded='true'] { background:var(--fill-soft);border-radius:11px; }
+ .editor-style-panel { display:grid;grid-template-columns:repeat(4,1fr);gap:4px;position:absolute;bottom:calc(100% + 8px);left:0;right:0;padding:4px;background:var(--bg);border-radius:14px;box-shadow:0 3px 20px #0002;z-index:60; }
+ .editor-style-panel button { min-height:44px;padding:0 4px;border:0;border-radius:10px;background:transparent;color:var(--ink);font-size:var(--text-meta);line-height:1.2; }
+ .editor-style-panel button[aria-pressed='true'] { background:var(--fill-soft);color:var(--blue-text);font-weight:600; }
+ .editor-style-panel .is-h1, .editor-style-panel .is-h2, .editor-style-panel .is-h3 { font-weight:600; }
 }
 /* B19: no plan-row bar; it read as a quote border. The padding keeps checkboxes on the bullet column. */
 .continuous-editor .bn-block-content[data-content-type=task] { border-left:2px solid transparent; padding-left:8px; }

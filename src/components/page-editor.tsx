@@ -28,7 +28,7 @@ import { resolveLineLink } from '../server/functions'
 import { newOperationId, useWorkspace } from './use-day'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, IndentIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
+import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { addDays, fromIso, longLabel, todayIso, weekday } from './dates'
@@ -71,6 +71,21 @@ const pageRef = createReactInlineContentSpec({ type: 'pageRef', propSchema: { pa
 const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef } })
 /** Lines a `[[` link can live in (plan §1): never a task row. */
 const linkableLines = new Set(['paragraph', 'bulletListItem', 'numberedListItem', 'heading', 'quote'])
+// B5 Aa (F16): the styles a line can take from the phone toolbar, in the order the panel shows them.
+type LineStyle = 'text' | 'h1' | 'h2' | 'h3' | 'bullet' | 'numbered' | 'todo' | 'quote'
+const lineStyles: { key: LineStyle; label: string; type: string; level?: number }[] = [
+  { key: 'text', label: 'Text', type: 'paragraph' }, { key: 'h1', label: 'Heading 1', type: 'heading', level: 1 },
+  { key: 'h2', label: 'Heading 2', type: 'heading', level: 2 }, { key: 'h3', label: 'Heading 3', type: 'heading', level: 3 },
+  { key: 'bullet', label: 'Bullet', type: 'bulletListItem' }, { key: 'numbered', label: 'Numbered', type: 'numberedListItem' },
+  { key: 'todo', label: 'To-do', type: 'task' }, { key: 'quote', label: 'Quote', type: 'quote' },
+]
+/** The caret line's style, or null for a line Aa can't restyle (a page or link card, a pasted checklist line). */
+function styleOf(block: EditorNode | undefined): LineStyle | null {
+  if (!block) return null
+  if (block.type === 'heading') return (['h1', 'h2', 'h3'] as const)[Math.min(3, Math.max(1, Number(block.props?.level) || 1)) - 1]!
+  if (block.type === 'task' || block.type === 'checkListItem') return 'todo'
+  return lineStyles.find(s => s.type === block.type)?.key ?? null
+}
 const clipboardType = 'application/x-daythread-blocks'
 const cutTokens = new Set<string>()
 const deepNodes = (nodes: readonly EditorNode[]): EditorNode[] => nodes.flatMap(n => [n, ...deepNodes(n.children ?? [])])
@@ -1373,17 +1388,32 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const { block, prevBlock } = editor.getTextCursorPosition()
     return editor.canNestBlock() && block.type !== 'heading' && prevBlock?.type !== 'heading'
   }
-  // Whether the phone toolbar's indent / outdent can act on the caret's line.
+  // Whether the phone toolbar's indent / outdent can act on the caret's line, and the line's style for Aa (F16).
   const [nesting, setNesting] = useState({ in: false, out: false })
+  const [lineStyle, setLineStyle] = useState<LineStyle | null>(null)
+  const [styleOpen, setStyleOpen] = useState(false)
   useEffect(() => {
     const update = () => {
       const next = { in: canIndent(), out: editor.canUnnestBlock() }
       setNesting(previous => previous.in === next.in && previous.out === next.out ? previous : next)
+      setLineStyle(styleOf(editor.getTextCursorPosition().block as unknown as EditorNode))
     }
     const offSelection = editor.onSelectionChange(update)
     const offChange = editor.onChange(update)
     return () => { offSelection(); offChange() }
   }, [editor])
+  /**
+   * B5 Aa (F16): turn the caret's line into another style. A to-do goes through the checklist line, as typing `[] ` does,
+   * so it becomes a task the same way; a to-do turned into anything else follows B42 ("Removed from tasks · Undo").
+   */
+  function setStyle(style: LineStyle) {
+    setStyleOpen(false)
+    const block = editor.getTextCursorPosition().block
+    if (styleOf(block as unknown as EditorNode) === style) return
+    const next = lineStyles.find(s => s.key === style)!
+    editor.updateBlock(block, (style === 'todo' ? { type: 'checkListItem', props: {} } : { type: next.type, props: next.level ? { level: next.level } : {} }) as never)
+    editor.focus()
+  }
   function copyBlocks(e: React.ClipboardEvent, cut: boolean) {
     const selection = editor.prosemirrorState.selection
     if (!selected.current.length && (selection.empty || selection instanceof TextSelection && selection.$from.sameParent(selection.$to))) return
@@ -1802,15 +1832,22 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       onPointerMove={e => { if (dragging.current.length && e.buttons) updateDrop(e.clientX - 35, e.clientY) }}
       onPointerUp={e => { e.preventDefault(); if (!dropRef.current) { dragging.current = []; setTouchDragging(false); select(touchHandle.id) } else commitDrag() }}
       onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null) }}><GripIcon /></button>}
-    {/* F16 order: + · outdent / indent · undo / redo. Indent and outdent are Tab and Shift+Tab (F11): a phone has no Tab key. */}
+    {/* F16 order: Aa · + · outdent / indent · undo / redo · hide keyboard. Indent and outdent are Tab and Shift+Tab
+        (F11): a phone has no Tab key. */}
     <div className="editor-phone-toolbar" aria-label="Editor tools">
-      <button {...keepCaret} onClick={() => { editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }} aria-label="Insert block"><PlusIcon /></button>
+      {styleOpen && lineStyle && <div className="editor-style-panel" role="group" aria-label="Line style">
+        {lineStyles.map(s => <button key={s.key} {...keepCaret} className={`is-${s.key}`} aria-pressed={lineStyle === s.key} onClick={() => setStyle(s.key)}>{s.label}</button>)}
+      </div>}
+      <button {...keepCaret} className="editor-aa" onClick={() => setStyleOpen(open => !open)} disabled={!lineStyle} aria-expanded={styleOpen && Boolean(lineStyle)} aria-label="Line style">Aa</button>
+      <button {...keepCaret} onClick={() => { setStyleOpen(false); editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }} aria-label="Insert block"><PlusIcon /></button>
       <span className="editor-toolbar-gap" aria-hidden="true" />
       <button {...keepCaret} onClick={() => editor.unnestBlock()} disabled={!nesting.out} aria-label="Outdent"><OutdentIcon /></button>
       <button {...keepCaret} onClick={() => editor.nestBlock()} disabled={!nesting.in} aria-label="Indent"><IndentIcon /></button>
       <span className="editor-toolbar-gap" aria-hidden="true" />
       <button {...keepCaret} onClick={() => void performHistory('undo')} aria-label="Undo"><UndoIcon /></button>
       <button {...keepCaret} onClick={() => void performHistory('redo')} aria-label="Redo"><RedoIcon /></button>
+      <span className="editor-toolbar-gap" aria-hidden="true" />
+      <button {...keepCaret} onClick={() => { setStyleOpen(false); (editor.domElement as HTMLElement | undefined)?.blur() }} aria-label="Hide keyboard"><HideKeyboardIcon /></button>
       {unsaved && <span className="editor-toolbar-unsaved" role="img" aria-label="Not saved yet" />}
     </div>
     {dock && createPortal(<>
