@@ -1,0 +1,58 @@
+(node:56894) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+selected BEFORE SELECT
+
+
+Delete task when I delete the checkbox
+⋯
+
+#
+menu Daythread
+Today
+Tasks
+Calendar
+Pages
+Tags
+Review
+
+DAYS
+
+Today
+Thu, Oct 22
+
+PAGES
+
+＋ New page
+
+Export
+
+Today,
+Fri, Oct 23
+Start the day
+TASKS
+
+No suggestions from last night · Draft my day
+
+Done
+Later
+TODO - Top 3
+TODO - Other
+
+BEFORE SELECT
+
+Delete task when I delete the checkbox
+⋯
+#daythread bug
+⋯
+read SEO information
+⋯
+Carried from yesterday
+⋯
+Events
+Good Stuffs
+Notes
+Paragraph
+Review today
+{"after":[{"id":"c25343c1-a0fb-42eb-b16c-03fd754f54c6","title":"Carried from yesterday"},{"id":"eb89ab4d-e2ab-49cd-a0f3-9100701f9d23","title":"read SEO information"}]}
+{"restored":[{"id":"83bda601-7fbd-4dab-9db4-ee7eebf328ff","title":"#daythread bug"},{"id":"c25343c1-a0fb-42eb-b16c-03fd754f54c6","title":"Carried from yesterday"},{"id":"d00eed2b-effa-4d6e-acbb-2f5378fdcedb","title":"Delete task when I delete the checkbox"},{"id":"eb89ab4d-e2ab-49cd-a0f3-9100701f9d23","title":"read SEO information"}],"status":"Saved"}
+{"pass":true,"converted":2,"undoSameIds":true,"status":"Saved"}

@@ -1,0 +1,2 @@
+{"old":"editor-task:typed-line","new":"editor-task:typed-line","status":"open","sameId":true}
+PASS: fresh open state, no deletion record, old creation Undo refused; same-block ID reuse accepted by Lead953b3d9f
