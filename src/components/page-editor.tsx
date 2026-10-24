@@ -13,7 +13,7 @@ import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, templateKind, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
-import { announceSave, changedBy, claim, clearOwn, listenForSaves, orphans, ownClaimed, readOwn, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn } from './draft-slots'
+import { announceSave, changedBy, claim, clearOwn, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn } from './draft-slots'
 import { applyCommand, bornHere, deletesWithLine, pasteRecords } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
@@ -35,7 +35,8 @@ import { addDays, fromIso, longLabel, todayIso, weekday } from './dates'
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
 import { endOfLineAbove, rowArrows } from './row-arrows'
-import { isOwnLeaveSave, registerEditorFlush, rememberLeaveSave, trackLeaveSave } from './editor-flush'
+import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, rememberLeaveSave, trackLeaveSave } from './editor-flush'
+import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
 import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
 
@@ -240,10 +241,6 @@ function LineRefChip({ target }: { target: LineTarget }) {
   </span>
 }
 /** B35: a failure the network caused (worth retrying), not a refusal from the server (which would refuse again). */
-function isNetworkFailure(message: string): boolean {
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
-  return /failed to fetch|networkerror|network error|load failed|fetch failed|timed? ?out|unavailable|bad gateway|gateway|\b50[234]\b|connection/i.test(message)
-}
 /** The host without `www.`, for the card's quiet domain. */
 function hostLabel(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' }
@@ -300,6 +297,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const key = `daythread:editor:${page.id}`
   const initial = useRef<{ nodes: EditorNode[]; base: string; recovered: boolean; cutTaskIds: string[] } | null>(null)
   if (!initial.current) {
+    // B40: from here on, a background save of kept drafts leaves this page's draft to this editor.
+    noteEditorMounting(page.id)
     const base = pageContentKey(page)
     let nodes = editorSeed(page, workspace, { templateRows: needsTemplateRows(page, todayIso()) }), recovered = false, savedBase = base, cutTaskIds: string[] = []
     // B35: this tab's own slot; drafts other tabs left behind are merged in after mount. A recovered draft brings back
@@ -632,7 +631,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // B35: another tab merged this tab's draft while it was away: never save this copy again.
     if (claimedAway()) return
     // The page moved on only by his own save from when he last left it: start from that.
-    if (isOwnLeaveSave(page.id, latestPage.current.editorJSON)) base.current = pageContentKey(latestPage.current)
+    // B40: or by another tab saving this tab's own earlier text while this tab was away and then came back.
+    if (isOwnLeaveSave(page.id, latestPage.current.editorJSON) || savedForMe(page.id, latestPage.current.editorJSON)) base.current = pageContentKey(latestPage.current)
     // B35: the save went through but its reply was lost (the refresh after the failure shows the page as exactly this
     // document): it's saved. Sending it again would look like someone else's change (the browser has no receipts).
     if (latestPage.current.editorJSON === JSON.stringify(editor.document) && lastSent.current === latestPage.current.editorJSON) {
@@ -700,6 +700,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const back = () => { if (document.visibilityState === 'visible') claimedAway() }
     window.addEventListener('pagehide', gone); document.addEventListener('visibilitychange', back)
     return () => { clearInterval(alive); window.removeEventListener('pagehide', gone); document.removeEventListener('visibilitychange', back) }
+  }, [page.id])
+  useEffect(() => () => doneEditorMounting(page.id), [page.id])
+  // B40 (Bumblebee, Lead a0173c36): a closed tab's text that a background save or Export put into this page says so
+  // once, the way merging it on opening does; his own tab's text needs no notice.
+  useEffect(() => {
+    if (takeRecoveredNotice(page.id)) toast('Added unsaved text from another tab', { timeout: 6000 })
+    const heard = (e: Event) => { if ((e as CustomEvent<string>).detail === page.id && takeRecoveredNotice(page.id)) toast('Added unsaved text from another tab', { timeout: 6000 }) }
+    window.addEventListener(recoveredEvent, heard)
+    return () => window.removeEventListener(recoveredEvent, heard)
   }, [page.id])
   // Drafts other tabs left behind on this page (closed, or gone quiet) are merged in on opening, the way Load latest
   // merges ("your lines are below theirs"), then claimed, so the tab that left them can't save them again.
@@ -783,7 +792,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // Keep from the morning hand-off, another tab) rewrote the page under us and the open editor must follow.
     if (page.editorJSON === lastSent.current && page.editorSections === JSON.stringify(page.sections)) return
     // His own save from when he left this page landed after he came back: carry on from it, it isn't a conflict.
-    if (dirty.current && isOwnLeaveSave(page.id, page.editorJSON)) { base.current = next; setFailed(false); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0); return }
+    if (dirty.current && (isOwnLeaveSave(page.id, page.editorJSON) || savedForMe(page.id, page.editorJSON))) { base.current = next; setFailed(false); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0); return }
     if (dirty.current) { debugClient('editor.external-refresh',{operationId:newOperationId(),triggerOperationId:pendingSave.current?.operationId,pageId:page.id,result:'conflict'}); setFailed(true); setUnsaved('refused'); setStatus('Page changed elsewhere · draft kept; copy it before reloading'); return }
     // Deferred: replacing blocks synchronously inside React's commit triggers a flushSync warning from BlockNote's views.
     queueMicrotask(() => {

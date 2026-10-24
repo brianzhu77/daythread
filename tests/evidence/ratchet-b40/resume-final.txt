@@ -1,0 +1,1 @@
+{"taking":true,"beforeFailSlot":true,"afterFailSlot":true,"serverHas":false,"status":"Not saved yet · trying again\nRetry saving\nCopy draft"}

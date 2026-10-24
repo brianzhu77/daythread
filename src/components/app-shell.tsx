@@ -1,6 +1,7 @@
 import { Toast } from '@heroui/react'
 import { type ReactNode, useEffect, useState } from 'react'
 import { Navigation } from './navigation'
+import { KeptDrafts } from './kept-drafts'
 import { WorkspaceProvider, isConflict, useWorkspace, type SimOutcome } from './use-day'
 
 /** App frame (craft-v1 §3): sidebar on laptop, bottom tabs and + on phone, dev banner, undo notices. */
@@ -16,6 +17,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
         <div className="bottom-dock">
           <div id="editor-dock" className="editor-dock" />
+          <KeptDrafts />
         </div>
         <Toasts />
       </div>

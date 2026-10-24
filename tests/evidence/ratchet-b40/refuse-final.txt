@@ -1,0 +1,6 @@
+kept: "Thu, Oct 22 not saved yet · trying again"
+after attempt 1 (refused 1): {"line":"Thu, Oct 22 not saved yet · trying again","header":null}
+after attempt 2 (refused 2): {"line":"Couldn't save Thu, Oct 22 · open it","header":null}
+after attempt 3 (refused 3): {"line":"Couldn't save Thu, Oct 22 · open it","header":null}
+cause cleared: null
+errors: none
