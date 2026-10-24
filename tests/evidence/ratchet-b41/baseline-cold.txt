@@ -1,0 +1,20 @@
+{"width":1280,"mode":"cold","pass":false,"navigationDelta":1,"state":{"url":"chrome-error://chromewebdata/","shell":false,"text":"","pages":false},"failedRequests":[{"url":"http://127.0.0.1:3580/assets/pages-B-KSdAIb.js","error":"net::ERR_FAILED"},{"url":"http://127.0.0.1:3580/pages","error":"net::ERR_INTERNET_DISCONNECTED"}],"errors":[]}
+{"width":390,"mode":"cold","pass":false,"navigationDelta":1,"state":{"url":"http://127.0.0.1:3580/pages","shell":false,"text":"Something went wrong!\nShow Error\n","pages":false},"failedRequests":[{"url":"http://127.0.0.1:3580/assets/pages-B-KSdAIb.js","error":"WebKit encountered an internal error"},{"url":"http://127.0.0.1:3580/pages","error":"WebKit encountered an internal error"}],"errors":[]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: offline screen navigation must keep the app shell and avoid full document reload
+
+2 !== 0
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-offline-chunks/tests/evidence/ratchet-b41/offline-navigation.mjs:33:8 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 2,
+  expected: 0,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

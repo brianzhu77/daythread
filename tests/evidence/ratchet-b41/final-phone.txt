@@ -1,0 +1,9 @@
+ok   390: offline / → /pages: the app stays, showing the screen or its offline line ({"url":"/pages","failed":[],"offlineLine":null})
+ok   390: offline / → /tasks: the app stays, showing the screen or its offline line ({"url":"/tasks?view=today","failed":[],"offlineLine":null})
+ok   390: offline / → /calendar: the app stays, showing the screen or its offline line ({"url":"/calendar","failed":[],"offlineLine":null})
+ok   390: offline / → /tags: the app stays, showing the screen or its offline line ({"url":"/tags","failed":[],"offlineLine":null})
+ok   390: offline / → /review: the app stays, showing the screen or its offline line ({"url":"/review?date=2026-10-23","failed":[],"offlineLine":null})
+ok   390: offline /pages → /: the app stays, showing the screen or its offline line ({"url":"/","failed":[],"offlineLine":null})
+ok   390: offline Pages → Today: the editor opens (/)
+ok   390: offline, the emoji menu can't load; the app stays and typing goes on ({"typed":true,"otherErrors":[]})
+all passed

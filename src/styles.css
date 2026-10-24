@@ -374,7 +374,10 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
 .task-row:has(.task-parent) .app-tag { margin-top: 29px; }
 .task-row .app-tag { flex: none; margin-top: 11px; }
 .task-row > .check { margin-top: 12px; }
-.task-row .row-menu { align-self: center; }
+/* B45: the ⋯ sits on the title's first line, like the checkbox, not in the middle of a wrapped row. The button is a
+   44 px tap target, as tall as a one-line row, so a one-line row looks as before. */
+.task-row .row-menu { align-self: flex-start; }
+.task-row:has(.task-parent) .row-menu { margin-top: 18px; }
 .task-row.ref { background: var(--app-surface); margin: 3px -8px; }
 .task-row.ref .task-title { color: var(--ink-soft); }
 .task-row.past .task-title { color: var(--ink-soft); }
