@@ -9,17 +9,30 @@ const KEYBOARD = 336
 const browser = await pw[engine].launch(), p = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true })
 const errors = []; p.on('pageerror', e => errors.push(e.message))
 let failed = 0
-const log = (ok, what, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${engine}: ${what}${detail ? ` (${detail})` : ''}`) }
-await p.addInitScript(keyboard => {
+const log = (ok, what, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${engine}${iosRects ? ' ios-rects' : ''}: ${what}${detail ? ` (${detail})` : ''}`) }
+// IOS_RECTS=1: measure like iOS Safari (getBoundingClientRect from the visible part, which iOS scrolls by offsetTop
+// with the keyboard up), as scripts/phone-keyboard-check.mjs does for finding 11. The caret handle must still sit on
+// the caret's line.
+const iosRects = process.env.IOS_RECTS === '1'
+await p.addInitScript(([keyboard, iosRects]) => {
   const vv = window.visualViewport
-  let up = 0
+  let up = 0, scrolled = 0
+  window.__scrollVisual = y => { scrolled = y; vv.dispatchEvent(new Event('scroll')) }
+  if (iosRects) {
+    const shift = r => new DOMRect(r.x, r.y - scrolled, r.width, r.height)
+    for (const proto of [Element.prototype, Range.prototype]) {
+      const rect = proto.getBoundingClientRect, rects = proto.getClientRects
+      proto.getBoundingClientRect = function () { return shift(rect.call(this)) }
+      proto.getClientRects = function () { return [...rects.call(this)].map(shift) }
+    }
+  }
   Object.defineProperty(vv, 'height', { configurable: true, get: () => window.innerHeight - up })
-  Object.defineProperty(vv, 'offsetTop', { configurable: true, get: () => 0 })
+  Object.defineProperty(vv, 'offsetTop', { configurable: true, get: () => scrolled })
   const fire = () => vv.dispatchEvent(new Event('resize'))
   const typing = () => Boolean(document.activeElement?.closest('[contenteditable="true"], input, textarea'))
   document.addEventListener('focusin', () => setTimeout(() => { if (typing() && !up) { up = keyboard; fire() } }, 60))
-  document.addEventListener('focusout', () => setTimeout(() => { if (!typing() && up) { up = 0; fire() } }, 60))
-}, KEYBOARD)
+  document.addEventListener('focusout', () => setTimeout(() => { if (!typing() && up) { up = 0; scrolled = 0; fire() } }, 60))
+}, [KEYBOARD, iosRects])
 const settle = () => p.waitForTimeout(400)
 const tabBar = () => p.evaluate(() => { const t = document.querySelector('nav.tab-bar'); return t && getComputedStyle(t).display !== 'none' && t.getBoundingClientRect().height > 0 })
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
@@ -46,6 +59,15 @@ const after = await geometry()
 log(after.line6 <= after.barTop - 8 && after.line7 <= after.barTop - 8, 'the caret\'s line and the line below it are clear of the toolbar', JSON.stringify({ before, after }))
 log(after.barBottom <= after.visibleBottom && after.barBottom >= after.visibleBottom - 16, 'the toolbar stays just above the keyboard', JSON.stringify(after))
 log(!(await tabBar()), 'still typing: the tab bar stays hidden')
+// iOS scrolls the visible part by 60 px: the caret handle stays on the caret's line (finding 11's correction).
+await p.evaluate(() => window.__scrollVisual(60)); await p.waitForTimeout(300)
+const handle = await p.evaluate(() => {
+  const h = document.querySelector('.editor-touch-handle'), a = getSelection().anchorNode, e = a.nodeType === 1 ? a : a.parentElement
+  const line = e.closest('[data-node-type="blockContainer"]').querySelector('.bn-block-content').getBoundingClientRect(), hr = h.getBoundingClientRect()
+  return { handleMid: Math.round(hr.top + hr.height / 2), line: [Math.round(line.top), Math.round(line.bottom)] }
+})
+log(handle.handleMid >= handle.line[0] && handle.handleMid <= handle.line[1], `the caret handle sits on the caret's line with the visible part scrolled${iosRects ? ' (iOS rects)' : ''}`, JSON.stringify(handle))
+await p.evaluate(() => window.__scrollVisual(0)); await p.waitForTimeout(200)
 await p.locator('.editor-phone-toolbar [aria-label="Hide keyboard"]').tap(); await settle()
 log(await tabBar(), 'keyboard down again: the tab bar is back')
 log(errors.length === 0, 'no page errors', errors.slice(0, 2).join(' / '))

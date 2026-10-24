@@ -1504,7 +1504,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const update = () => {
       const block = editor.getTextCursorPosition().block
       const el = document.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"]`)
-      if (el) { const top = firstLineCenter(el) - touchHandleSize / 2; setTouchHandle(previous => previous?.id === block.id && Math.abs(previous.top - top) < 0.5 ? previous : { id: block.id, top }) }
+      // Finding 11: measured from what he can see on iOS, placed from the layout viewport, so add fixedOffset().
+      if (el) { const top = firstLineCenter(el) - touchHandleSize / 2 + fixedOffset(); setTouchHandle(previous => previous?.id === block.id && Math.abs(previous.top - top) < 0.5 ? previous : { id: block.id, top }) }
     }
     const off = editor.onSelectionChange(() => requestAnimationFrame(update))
     // B50: the keyboard moving the visible part (iOS scrolls it without a window scroll) moves the line too, so the
