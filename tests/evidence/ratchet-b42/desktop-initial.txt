@@ -1,0 +1,11 @@
+(node:52867) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280: born here: the checkbox goes, the line stays as text, the task is deleted ({"kind":"paragraph","tasks":[]})
+ok   1280: it says "To-do deleted" (Saved | To-do deleted
+Undo)
+ok   1280: ⌘Z: the to-do and its task come back ({"kind":"task","back":[{"id":"af6ace9c-637d-43a9-9594-78f4f129f8a5","title":"Delete task when I delete the checkbox","status":"open","paused":0,"plannedOn":"2026-10-23"}]})
+ok   1280: nested: the child's task goes, the parent's stays ({"child":0,"parent":1})
+ok   1280: with history: Not today, the task kept ({"id":"73f026aa-a9fa-4130-b830-0ca646bf4cdd","title":"Carried from yesterday","status":"open","paused":1,"plannedOn":null})
+ok   1280: a text line made a to-do again: a new task, saved ({"fresh":[{"id":"editor-task:2b91b450-a412-452d-8afd-8eb50b81e050","title":"read SEO information","status":"open","paused":0,"plannedOn":null}],"line":"Saved"})
+ok   1280: no page errors
+all passed

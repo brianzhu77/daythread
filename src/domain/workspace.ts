@@ -1121,10 +1121,16 @@ function execute(
         state.tasks = state.tasks.filter(t => t.id !== taskId);
         state.placements = state.placements.filter(x => x.taskId !== taskId);
       }
-      // Undo of a semantic row deletion restores only its checked task and relations.
+      // Undo of a semantic row deletion restores only its checked task and relations: when a row of that task is back at
+      // the block (B42: a line that stopped being a to-do keeps its block, so the block alone being there isn't enough).
+      const taskRowAt = new Map(all.filter(n => n.type === "task").map(n => [n.id, String(n.props?.taskId)]));
       for (const [blockId, effect] of Object.entries(p.editorDeletions ?? {})) {
-        if (!present.has(blockId)) continue;
-        // B33: a task deleted with its line comes back as it was, same id, done state and placements.
+        if (taskRowAt.get(blockId) !== effect.task.id) continue;
+        // B33: a task deleted with its line comes back as it was, same id, done state and placements: by ⌘Z (a history
+        // save) or Undo. A plain save with that row back is him making the line a to-do again by hand (B42): a task typed
+        // in the editor has its block's id, so the row is the same, but it's a new task, made below (Ratchet 564e2144),
+        // and the old one can't come back any more.
+        if (effect.deleted && !action.history) { delete p.editorDeletions![blockId]; continue; }
         if (effect.deleted) {
           if (!state.tasks.some(t => t.id === effect.task.id)) {
             state.tasks.push(structuredClone(effect.task));
@@ -1156,10 +1162,12 @@ function execute(
       for (const node of all) {
         if (node.type !== 'task' || state.tasks.some(t => t.id === node.props?.taskId)) continue;
         if (!inlineText(node.content) && node.props?.taskId === `editor-task:${node.id}`) continue;
-        const existingContent = previousBlocks.some(b => b.id === node.id && (b.kind !== 'paragraph' || b.text));
-        // Only an imported checklist can become a Task while retaining a non-empty existing block ID.
+        // A block that held a task, event, material or reference row never becomes a new task in place. A text line can:
+        // turning it into a to-do (slash menu, "[] ") is how he makes one, also of a line that was a to-do before (B42,
+        // Lead: "turning the line back into a to-do by hand makes a new task"). An imported checklist can, too.
+        const existingRow = previousBlocks.some(b => b.id === node.id && b.kind !== 'paragraph');
         const checklistConversion = pastedChecklists.has(node.id) && (node.props?.role === 'reference' || node.props?.role === 'plan' && Boolean(p.date));
-        if (node.props?.taskId !== `editor-task:${node.id}` || existingContent && !checklistConversion) throw new DomainError("Unknown Task identity");
+        if (node.props?.taskId !== `editor-task:${node.id}` || existingRow && !checklistConversion) throw new DomainError("Unknown Task identity");
         const planned = node.props.role === 'plan' ? p.date : null;
         const t = createTask(state, inlineText(node.content) || 'Untitled task', p, planned);
         t.id = node.props.taskId;
@@ -1172,16 +1180,21 @@ function execute(
       // below (Not today; "Planned · not in note"). A cut is a move and never deletes (Jazz's fallback).
       const cut = new Set(action.cutTaskIds ?? []);
       const remaining = new Set(all.filter(n => n.type === "task").map(n => String(n.props?.taskId)));
+      // B42 (Lead): a to-do row whose line stops being a to-do (a bullet, text, a heading, any other type; the block
+      // stays) counts as that row being deleted.
+      const unchecked = new Set(previousBlocks.filter(b => b.kind === "task" && b.taskId && present.has(b.id) && taskRowAt.get(b.id) !== b.taskId && !cut.has(b.taskId)).map(b => b.id));
       for (const b of previousBlocks) {
-        if (b.kind !== "task" || !b.taskId || present.has(b.id) || cut.has(b.taskId)) continue;
+        if (b.kind !== "task" || !b.taskId || (present.has(b.id) && !unchecked.has(b.id)) || cut.has(b.taskId)) continue;
         if (!deletesWithLine(state, p, b.taskId, remaining)) continue;
         const t = task(state, b.taskId);
         (p.editorDeletions ??= {})[b.id] = { task: structuredClone(t), placements: structuredClone(state.placements.filter(x => x.taskId === t.id)), afterVersion: t.version, afterPlacements: [], deleted: true };
         state.tasks = state.tasks.filter(x => x.id !== t.id);
         state.placements = state.placements.filter(x => x.taskId !== t.id);
       }
-      for (const singleDeleteId of action.singleDeleteIds ?? []) {
-       if (!present.has(singleDeleteId) && p.date === action.today) {
+      // A line that stopped being a to-do is one line, chosen by him: a task with history goes to Not today, as with
+      // a single delete.
+      for (const singleDeleteId of [...(action.singleDeleteIds ?? []), ...unchecked]) {
+       if ((!present.has(singleDeleteId) || unchecked.has(singleDeleteId)) && p.date === action.today) {
         const b = previousBlocks.find(b => b.id === singleDeleteId);
         const isPlan = b?.planRole === 'plan' || b?.planRole === undefined && p.sections.some(s => (s.kind === 'top3' || s.kind === 'other') && s.blocks.some(x => x.id === b?.id));
         // Another line of the same task is still on this page: deleting one copy doesn't take the task off the day.

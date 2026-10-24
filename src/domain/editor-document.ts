@@ -152,9 +152,10 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
         }
         current.blocks.push({ id: node.id, kind: 'task', taskId: target.id, text: nextTitle, planRole: node.props?.role === 'plan' ? 'plan' : 'reference' })
       } else {
-        // A card turned back into its URL line (A2 Undo) is a plain line now, not a reference to the page.
+        // A card turned back into its URL line (A2 Undo) is a plain line now, not a reference to the page. A to-do turned
+        // into a bullet, text or a heading (B42) is a plain line too: its row no longer holds the task.
         const previous = old.get(node.id)
-        const prior = previous?.kind === 'reference' ? undefined : previous
+        const prior = previous?.kind === 'reference' || previous?.kind === 'task' ? undefined : previous
         const refs = refsOf(node)
         const value = refs.length ? lineText(node.content, ref => refs.find(r => r.refId === ref.refId)?.title ?? '') : inlineText(node.content)
         if (prior?.eventId && prior.text !== value) {

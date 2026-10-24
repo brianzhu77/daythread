@@ -1,0 +1,19 @@
+{"old":"editor-task:typed-line","new":"editor-task:typed-line","status":"done","sameId":true}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: manual re-conversion of an editor-created task needs a new identity
+    at file:///Users/dogrod/Developer/daythread-ratchet-unchecked/tests/evidence/ratchet-b42/editor-born.ts:2:1074
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'editor-task:typed-line',
+  expected: 'editor-task:typed-line',
+  operator: 'notStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
