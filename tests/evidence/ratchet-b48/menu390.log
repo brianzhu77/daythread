@@ -1,0 +1,12 @@
+(node:47655) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   390 three: the menu is clear of the phone toolbar ({"menuTop":452,"menuBottom":563,"toolbarTop":760})
+ok   390 three: "Bookmark 3 pages" makes three cards (3)
+ok   390 three: no page errors
+all passed
+(node:47682) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   390 phone-bookmark: after the tap the editor keeps focus, caret on the line after the card ({"editor":true,"afterCard":true})
+ok   390 phone-bookmark: the notice's Undo gives back the plain link, still remembered ({"pages":[],"m":{"id":"material:c8c06844-29df-4726-8737-8452222f6512","sources":"[{\"pageId\":\"day:2026-10-24\",\"blockId\":\"day:2026-10-24:notes:template:0\",\"note\":\"\",\"plain\":true}]"}})
+ok   390 phone-bookmark: no page errors
+all passed
