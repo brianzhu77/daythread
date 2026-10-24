@@ -28,7 +28,7 @@ import { previewLinkPage, resolveLineLink } from '../server/functions'
 import { newOperationId, useWorkspace } from './use-day'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, IndentIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
+import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { addDays, fromIso, longLabel, todayIso, weekday } from './dates'
@@ -1678,7 +1678,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const conflictText = changedBy(page.id) === 'tab' ? 'Changed in another tab · draft kept' : 'Changed on another device · draft kept'
   // B38: the dock line's words stay steady while typing flips the header between "Unsaved changes" and "Saving…".
   const unsavedText = conflict ? conflictText : !online ? "Offline · saves when you're back" : unsaved === 'network' ? 'Not saved yet · trying again' : "Couldn't save · draft kept"
-  return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
+  return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''} ${pasteMenu ? 'has-paste-menu' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
     onMouseDownCapture={e => { const target = e.target as Element; if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') } }}
     onMouseUpCapture={e => {
@@ -2022,12 +2022,12 @@ function PasteLinkMenu({ menu, detail, onKeep, onBookmark, onHighlight }: { menu
       onPointerDown={e => e.preventDefault()}>
       <div className="sr-only" aria-live="polite">Paste options: Keep as link, or Bookmark page</div>
       <div role="option" id="paste-menu-keep" aria-selected={menu.highlight === 0} className="paste-menu-row" onClick={keep} onPointerEnter={() => onHighlight(0)}>
-        <span className="paste-menu-icon" aria-hidden="true">🔗</span>
+        <span className="paste-menu-icon" aria-hidden="true"><LinkIcon /></span>
         <span className="paste-menu-text"><span className="paste-menu-label">{several ? 'Keep as links' : 'Keep as link'}</span></span>
         {menu.highlight === 0 && <span className="paste-menu-hint" aria-hidden="true">↵</span>}
       </div>
       <div role="option" id="paste-menu-bookmark" aria-selected={menu.highlight === 1} className="paste-menu-row" onClick={bookmark} onPointerEnter={() => onHighlight(1)}>
-        <span className="paste-menu-icon" aria-hidden="true">🌐</span>
+        <span className="paste-menu-icon" aria-hidden="true"><GlobeIcon /></span>
         <span className="paste-menu-text"><span className="paste-menu-label">{several ? `Bookmark ${menu.urls.length} pages` : 'Bookmark page'}</span><span className="paste-menu-detail">{detail}</span></span>
         {menu.highlight === 1 && <span className="paste-menu-hint" aria-hidden="true">↵</span>}
       </div>

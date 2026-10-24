@@ -57,6 +57,14 @@ export const GlobeIcon = () => (
   </Icon>
 )
 
+/** A chain: a plain link (B44's "Keep as link"). */
+export const LinkIcon = () => (
+  <Icon>
+    <path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1.2 1.2" />
+    <path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1.2-1.2" />
+  </Icon>
+)
+
 /** ↗: opens the website in a new tab, the only thing on a link card that leaves the app. */
 export const ExternalIcon = () => (
   <Icon>
