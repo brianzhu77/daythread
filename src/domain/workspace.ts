@@ -527,6 +527,62 @@ function linkPageEdited(state: Workspace, p: Page, firstTitle: string = defaultL
   return p.title !== firstTitle || Boolean(p.reviewText.trim()) || state.pages.some((c) => c.parentId === p.id) || body;
 }
 /**
+ * B44 §4a (Lead 17ab8da6): a link pasted and kept plain is still remembered, as a saved item with no page, so the
+ * morning draft, Review and Weave keep seeing it. It belongs to its line: an item this made goes when no line of that
+ * page holds the link any more (`dropUnheldPlainLinks`). A link he already has keeps its item as it is; only the line is
+ * added, with no re-save of its review state.
+ */
+function savePlainLink(state: Workspace, action: Extract<Action, { type: "save-plain-link" }>): { message: string; entityId?: string } {
+  const p = page(state, action.pageId);
+  for (const item of action.items) {
+    const url = text(item.url.trim(), 10_000);
+    const owner = urlOwner(state, url);
+    if (owner.key === null) throw new DomainError("Use an http(s) link");
+    const source = { pageId: p.id, blockId: item.blockId, note: "", plain: true as const };
+    if (owner.material) {
+      if (!owner.material.sources.some((x) => x.pageId === p.id && x.blockId === item.blockId)) owner.material.sources.push(source);
+      continue;
+    }
+    const day = p.date ?? new Date().toLocaleDateString("en-CA", { timeZone: state.timezone });
+    // Its title stays the URL this round (Lead: B43's fetch is for bookmark pages only).
+    state.materials.push({ id: `material:${item.blockId}`, url, title: url, body: "", savedOn: day, reviewState: "pending", nextReviewOn: null, resurface: true, lastDecisionOn: null, skippedUntil: null, sources: [source], decisions: [] });
+  }
+  return { message: action.items.length === 1 ? "Link kept" : `${action.items.length} links kept` };
+}
+/** Does this line hold a link to `key`: an inline link, or a link card for it. */
+function holdsLink(n: EditorNode, key: string): boolean {
+  if (n.type === "pageLink") return typeof n.props?.url === "string" && urlKey(n.props.url) === key;
+  const runs = Array.isArray(n.content) ? (n.content as { type?: string; href?: string }[]) : [];
+  return runs.some((c) => c?.type === "link" && typeof c.href === "string" && urlKey(c.href) === key)
+    || inlineText(n.content).split(/\s+/).some((w) => urlKey(w) === key);
+}
+/**
+ * B44 §4a, B33's rule for something born on a line: after a save of `p`, a plain-link source whose line no longer holds
+ * its link moves to another line of `p` that does (a card that replaced it, the line Undo put back), or goes. An item
+ * left with no lines goes too, unless a page has that link, or he acted on it. Good Stuffs saves aren't plain: untouched.
+ */
+function dropUnheldPlainLinks(state: Workspace, p: Page, nodes: EditorNode[]): void {
+  const all: EditorNode[] = [];
+  const walk = (list: EditorNode[]) => list.forEach((n) => { all.push(n); walk(n.children ?? []); });
+  walk(nodes);
+  for (const m of [...state.materials]) {
+    const key = urlKey(m.url);
+    if (key === null || !m.sources.some((x) => x.plain && x.pageId === p.id)) continue;
+    const taken = new Set(m.sources.filter((x) => x.pageId === p.id).map((x) => x.blockId));
+    let lost = false;
+    m.sources = m.sources.flatMap((x) => {
+      if (!x.plain || x.pageId !== p.id) return [x];
+      const line = all.find((n) => n.id === x.blockId);
+      if (line && holdsLink(line, key)) return [x];
+      const other = all.find((n) => !taken.has(n.id) && holdsLink(n, key));
+      if (other) { taken.add(other.id); return [{ ...x, blockId: other.id }]; }
+      lost = true;
+      return [];
+    });
+    if (lost && !m.sources.length && !urlOwner(state, m.url).page && !followUpUsed(m)) state.materials = state.materials.filter((x) => x !== m);
+  }
+}
+/**
  * B43 (Lead, Ratchet): the title and description read from the web for a page a paste just made. Bound to that paste:
  * it applies only while the paste stands (not undone), the page is the one it made, still at that URL, not in the
  * trash, and untouched since (its title still the paste's, its body still the empty line). Otherwise it does nothing:
@@ -1248,6 +1304,7 @@ function execute(
       }
       }
       p.sections = projectDocument(nodes, p, state);
+      dropUnheldPlainLinks(state, p, nodes);
       // A11 §2: each task row on the page now is stamped with this save's revision, from its first save on, so a link
       // to its task can pick the most recent document page that shows it.
       for (const b of p.sections.flatMap(s => s.blocks)) if (b.kind === "task") p.editorBlockMetadata[b.id] = { ...structuredClone(b), seen: state.revision + 1 };
@@ -1682,6 +1739,8 @@ function execute(
       return undoPasteLinks(state, action);
     case "apply-link-preview":
       return applyLinkPreview(state, action);
+    case "save-plain-link":
+      return savePlainLink(state, action);
     case "rename-page": {
       const p = page(state, action.pageId);
       if (p.type !== "document") throw new DomainError("Day pages are named by their date");
