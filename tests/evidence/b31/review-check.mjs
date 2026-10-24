@@ -62,18 +62,26 @@ try {
       await ctx.setOffline(true)
       await type('Kathy 的作业，family culture')
       assert.match(await page.locator('.review-pending').textContent(), /Not added · Retry/)
+      // Done with text still in the box (no Return): it becomes a line, and Done waits for both.
+      await input.fill('万圣节装饰、衣服')
       await page.getByRole('button', { name: 'Done' }).click(); await settle()
-      assert.match(await page.locator('.review-one-head .warn-line').textContent(), /1 line not saved yet/)
+      assert.match(await page.locator('.review-one-head .warn-line').textContent(), /2 lines not saved yet/)
+      assert.equal(await page.locator('.review-pending').count(), 2, 'the typed line is kept as a line')
       assert.match(page.url(), /\/review/, 'Done stays while a line is unsaved')
       await ctx.setOffline(false); await page.evaluate(() => window.dispatchEvent(new Event('online'))); await settle(1500)
-      assert.equal(await page.locator('.review-pending').count(), 0, 'the line saved by itself once online')
-      assert.ok((await listed()).includes('Kathy 的作业，family culture'))
+      assert.equal(await page.locator('.review-pending').count(), 0, 'the lines saved by themselves once online')
+      for (const t of ['Kathy 的作业，family culture', '万圣节装饰、衣服']) assert.equal((await listed()).filter(x => x === t).length, 1, `${t} listed once`)
       await input.fill('')
     } else {
       await input.fill('')
       await page.getByRole('checkbox', { name: 'Mark #daythread bug done' }).click(); await settle()
-      await type('万圣节装饰、衣服')
-      await type('Kathy 的作业，family culture')
+      // Two quick lines on a day with no page yet, with reconnect and show retries fired while both saves run: one
+      // page, one task per line.
+      await input.fill('万圣节装饰、衣服'); await input.press('Enter')
+      await input.fill('Kathy 的作业，family culture'); await input.press('Enter')
+      await page.evaluate(() => { for (let i = 0; i < 3; i++) { window.dispatchEvent(new Event('online')); document.dispatchEvent(new Event('visibilitychange')) } })
+      await settle(1500)
+      assert.equal(await page.locator('.review-pending').count(), 0)
       out.geometry = await geometry()
       for (const g of out.geometry) {
         assert.ok(g.check === null || Math.abs(g.check) <= 1, `checkbox on first line: ${g.text} ${g.check}`)
@@ -98,7 +106,7 @@ try {
       await page.goto(`${base}/`, { waitUntil: 'networkidle' }); await settle(1200)
       assert.equal(await card(), 0, 'no morning card after Done')
       out.outline = await outline()
-      const once = ['TRV for Lu and Kathy', '#daythread improvements on link as page', 'Kathy 的作业，family culture', ...(mode === 'evening' ? ['万圣节装饰、衣服'] : [])]
+      const once = ['TODO - Top 3', 'TODO - Other', 'TRV for Lu and Kathy', '#daythread improvements on link as page', 'Kathy 的作业，family culture', '万圣节装饰、衣服']
       for (const t of once) assert.equal(out.outline.filter(x => x === t).length, 1, `${t} once`)
       if (mode === 'evening') assert.equal(out.outline.includes('#daythread bug'), false, 'a ticked task stays behind')
       else assert.equal(out.outline.filter(x => x === '#daythread bug').length, 1, 'an unticked task comes along once')

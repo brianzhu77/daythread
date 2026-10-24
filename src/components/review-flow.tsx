@@ -91,25 +91,36 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
     }
   }, [comingIds, nextView, workspace, handedOff, planAhead, page])
 
-  /** The next day's page, made from the template the first time a line needs it. */
-  const ensureNextPage = useCallback(async (): Promise<Page | null> => {
+  /** The next day's page, made from the template the first time a line needs it; lines typed together share one call. */
+  const creating = useRef<Promise<Page | null> | null>(null)
+  const ensureNextPage = useCallback((): Promise<Page | null> => {
     const find = () => latest()?.pages.find(p => p.type === 'daily' && p.date === next) ?? null
-    if (find()) return find()
-    const receipt = await run({ type: 'ensure-day', date: next }, null, undefined, { quiet: true })
-    return receipt ? find() : null
+    if (find()) return Promise.resolve(find())
+    creating.current ??= run({ type: 'ensure-day', date: next }, null, undefined, { quiet: true })
+      .then(receipt => (receipt ? find() : null))
+      .finally(() => (creating.current = null))
+    return creating.current
   }, [latest, next, run])
 
+  // One save per line at a time: Return, a retry on reconnect and Done all wait on the save already running.
+  const saving = useRef(new Map<string, Promise<boolean>>())
   const saveLine = useCallback(
-    async (line: PendingLine): Promise<boolean> => {
-      setLines(all => all.map(l => (l.key === line.key ? { ...l, failed: false } : l)))
-      const target = await ensureNextPage()
-      const section = target?.sections.find(s => s.kind === 'other') ?? target?.sections.find(s => s.kind === 'top3')
-      const receipt =
-        target && section
-          ? await run({ type: 'add-task', pageId: target.id, sectionId: section.id, title: line.title, plannedOn: next }, null, line.operationId, { quiet: true })
-          : null
-      setLines(all => (receipt ? all.filter(l => l.key !== line.key) : all.map(l => (l.key === line.key ? { ...l, failed: true } : l))))
-      return Boolean(receipt)
+    (line: PendingLine): Promise<boolean> => {
+      const running = saving.current.get(line.key)
+      if (running) return running
+      const job = (async () => {
+        setLines(all => all.map(l => (l.key === line.key ? { ...l, failed: false } : l)))
+        const target = await ensureNextPage()
+        const section = target?.sections.find(s => s.kind === 'other') ?? target?.sections.find(s => s.kind === 'top3')
+        const receipt =
+          target && section
+            ? await run({ type: 'add-task', pageId: target.id, sectionId: section.id, title: line.title, plannedOn: next }, null, line.operationId, { quiet: true })
+            : null
+        setLines(all => (receipt ? all.filter(l => l.key !== line.key) : all.map(l => (l.key === line.key ? { ...l, failed: true } : l))))
+        return Boolean(receipt)
+      })().finally(() => saving.current.delete(line.key))
+      saving.current.set(line.key, job)
+      return job
     },
     [ensureNextPage, next, run, setLines],
   )
@@ -140,10 +151,11 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
   if (!view || !nextView || !workspace || lines === null || acted === null || comingIds === null) return <p className="loading">Loading…</p>
   if (!page) return <p className="empty">There’s no page for {longLabel(date)} to review.</p>
 
-  const addLine = (title: string) => {
+  const addLine = (title: string): PendingLine => {
     const line: PendingLine = { key: newOperationId(), title, operationId: newOperationId(), failed: false }
     setLines(all => [...all, line])
     void saveLine(line)
+    return line
   }
 
   const reviewed = workspace.tasks.filter(t => t.plannedOn === date && t.status !== 'cancelled')
@@ -167,13 +179,11 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
     setFinishError(null)
     try {
       // Done never drops a line: the one still in the box is added first, and every line must be on the page.
+      // The typed line is taken directly, not from state that may not have re-rendered yet.
       const typed = draft.trim()
-      if (typed) {
-        setDraft('')
-        addLine(typed)
-      }
-      await new Promise(r => setTimeout(r, 0))
-      const pending = linesRef.current ?? []
+      if (typed) setDraft('')
+      const typedLine = typed ? addLine(typed) : null
+      const pending = [...(linesRef.current ?? []).filter(l => l.key !== typedLine?.key), ...(typedLine ? [typedLine] : [])]
       const saved = await Promise.all(pending.map(saveLine))
       const unsaved = saved.filter(ok => !ok).length
       if (unsaved) {
