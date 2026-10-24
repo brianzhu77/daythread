@@ -112,8 +112,12 @@ export function readDraftAnswer(value: unknown, request: DraftRequest, day: Loca
   const v = value as { taskIds?: unknown; materialIds?: unknown; proposals?: unknown } | null
   if (!v || typeof v !== 'object' || !Array.isArray(v.taskIds) || !Array.isArray(v.materialIds) || !Array.isArray(v.proposals)) return { ok: false, dropped: 0 }
   let dropped = 0, valid = 0
+  // A list the request sent nothing for (an empty day: no lines, no open tasks) can't hold a right entry, and models
+  // fill it anyway. Those entries are ignored, not counted, so an empty day reads as "nothing to suggest" rather than
+  // "Model unavailable" (Oct 21 draft, 2026-10-23).
   const pick = (list: unknown[], allowed: string[], max: number) => {
     const out: string[] = []
+    if (!allowed.length) return out
     for (const id of list) {
       if (typeof id !== 'string' || !allowed.includes(id)) { dropped++; continue }
       valid++
@@ -124,7 +128,7 @@ export function readDraftAnswer(value: unknown, request: DraftRequest, day: Loca
   const taskIds = pick(v.taskIds, request.manifest.taskCandidates, 3)
   const materialIds = pick(v.materialIds, request.manifest.materialCandidates, 2)
   const proposals: DraftProposal[] = []
-  for (const e of v.proposals as { lineId?: unknown; propose?: unknown; date?: unknown }[]) {
+  for (const e of (request.manifest.lines.length ? v.proposals : []) as { lineId?: unknown; propose?: unknown; date?: unknown }[]) {
     const entry = typeof e?.lineId === 'string' ? request.lines.get(e.lineId) : undefined
     const sent = entry && request.manifest.lines.find(l => l.lineId === e.lineId)
     if (!entry || !sent || typeof e.propose !== 'boolean' || (e.date !== null && typeof e.date !== 'string')) { dropped++; continue }

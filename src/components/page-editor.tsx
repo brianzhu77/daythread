@@ -38,6 +38,7 @@ import { endOfLineAbove, rowArrows } from './row-arrows'
 import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, rememberLeaveSave, trackLeaveSave } from './editor-flush'
 import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
+import { openedByTurnover } from './use-screen-today'
 import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
 
 const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' }, planDate: { default: '' } }, content: 'inline' }, {
@@ -1332,7 +1333,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // A past day opens to be read, with no cursor: the cursor would show an empty row he never wrote (B19 hides them
     // until he clicks into a section; Jazz, Bumblebee, Lead).
     const past = page.type === 'daily' && !!page.date && page.date < todayIso()
-    if (target && !jumpTo && !naming && !past && window.matchMedia('(pointer: fine)').matches) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
+    // A day the screen moved to on its own after midnight waits for him to click in (B46, Jazz).
+    const moved = page.type === 'daily' && openedByTurnover(page.date)
+    if (target && !jumpTo && !naming && !past && !moved && window.matchMedia('(pointer: fine)').matches) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
   }, [editor, jumpTo])
   useEffect(() => {
     const update = () => {

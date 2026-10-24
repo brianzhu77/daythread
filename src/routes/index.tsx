@@ -1,13 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
 import { DayScreen } from '../components/day-screen'
-import { todayIso } from '../components/dates'
+import { useScreenToday } from '../components/use-screen-today'
 
 export const Route = createFileRoute('/')({
   component: Today,
 })
 
 function Today() {
-  const [today] = useState(todayIso)
-  return <DayScreen date={today} today={today} />
+  const today = useScreenToday()
+  // Keyed by the day, so coming back on a new day opens that day's screen afresh.
+  return <DayScreen key={today} date={today} today={today} />
 }

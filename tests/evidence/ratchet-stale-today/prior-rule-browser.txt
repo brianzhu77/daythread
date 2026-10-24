@@ -1,0 +1,23 @@
+ok   1280 resumed: Today opens on Oct 21 (Wed, Oct 21)
+ok   1280 resumed: back on Oct 23, Today shows Oct 23 (Fri, Oct 23)
+ok   1280 resumed: /day/2026-10-21 on Oct 21 says Today (Today,)
+ok   1280 resumed: back on Oct 23, that page no longer says Today ((no relative label))
+ok   1280 resumed: no page errors
+ok   1280 short trip: back at 00:01 after input at 23:55, still Oct 23 (Fri, Oct 23)
+ok   1280 short trip: 11 idle minutes later, Oct 24 (Sat, Oct 24)
+ok   1280 short trip: the editor's focus was released
+ok   1280 short trip: no page errors
+ok   1280 overnight: visible overnight with no return event, Oct 24 by 00:15 (Sat, Oct 24)
+ok   1280 overnight: no page errors
+ok   390 resumed: Today opens on Oct 21 (Wed, Oct 21)
+ok   390 resumed: back on Oct 23, Today shows Oct 23 (Fri, Oct 23)
+ok   390 resumed: /day/2026-10-21 on Oct 21 says Today (Today)
+ok   390 resumed: back on Oct 23, that page no longer says Today ((no relative label))
+ok   390 resumed: no page errors
+ok   390 short trip: back at 00:01 after input at 23:55, still Oct 23 (Fri, Oct 23)
+ok   390 short trip: 11 idle minutes later, Oct 24 (Sat, Oct 24)
+ok   390 short trip: the editor's focus was released
+ok   390 short trip: no page errors
+ok   390 overnight: visible overnight with no return event, Oct 24 by 00:15 (Sat, Oct 24)
+ok   390 overnight: no page errors
+all passed
