@@ -1,6 +1,6 @@
 # B31 · Evening review on one screen (design proposal)
 
-Status: **proposal** for Lead to pick against Bumblebee's day-end read (task #150). Not approved.
+Status: **picked** by Lead (4d1273a7); built as ee95174 on design/b31-review, in review (task #150).
 Mock: `docs/design/b31/mock.html`, screenshots `b31-shape-390.png` and `b31-shape-1280.png` (his real Oct 23 lines).
 
 ## What his data says (row rev 362, read-only copy)
@@ -27,6 +27,8 @@ One screen, no steps, one button. The screen is about **tomorrow**, because that
    "Comes along" (each with its section, the same call as the morning card's Add all, so B34 nesting holds), then
    `handoff-done` for tomorrow, then `save-review` (finish). Back to today with "Saturday is set · 2 come along, 2 added".
    The morning card then has nothing left to ask, so there is one place for this job, not two (Bumblebee's risk).
+   Exception (Lead 56a3f306): if the reviewed day's Notes or Good Stuffs still has lines the card would offer to bring,
+   Done skips `handoff-done`, and the card shows only those lines.
    Leaving without Done loses nothing already ticked or written; the carry then happens on the morning card as today.
 
 Removed from the review: step numbers, Skip tonight, the capture bar (the add list does that job), the reflection
