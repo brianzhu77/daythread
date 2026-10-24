@@ -1,0 +1,8 @@
+(node:43845) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"imported","pages":7}
+PASS 1280 success: rev356 evening rows/links and no Simulated
+PASS 1280 success: real-run path starts and preserves evening picks while drafting
+PASS 1280 success: new model task appended, duplicate removed, two evening links retain priority
+PASS 1280 success: reload retains picks; no page errors
+PASS 1280 success: Add all respects Top3 limit and sends model-only task to Other
