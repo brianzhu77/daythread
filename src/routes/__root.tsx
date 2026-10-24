@@ -8,7 +8,7 @@ export const Route = createRootRoute({
       { charSet: 'utf-8' },
       // viewport-fit=cover lets the capture bar sit above the iPhone home indicator.
       { name: 'viewport', content: 'width=device-width, initial-scale=1, interactive-widget=resizes-content, viewport-fit=cover' },
-      { name: 'theme-color', content: '#f6f5f0' },
+      { name: 'theme-color', content: '#ffffff' }, // B52: the page's colour (--bg-doc), so Safari's bars match it
       { name: 'apple-mobile-web-app-capable', content: 'yes' },
       { title: 'Daythread' },
     ],

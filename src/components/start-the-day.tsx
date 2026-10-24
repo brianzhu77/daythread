@@ -267,7 +267,9 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
         </p>
       : !isCardDraft(page)
         // B47 (Jazz 8aebb93a): over the review's draft, Draft my day stays, worded for the picks shown under it.
-        ? <p className="line">{page.draft ? 'From last night' : 'No suggestions from last night'} · <button type="button" className="app-link" onClick={() => void startDraft()}>Draft my day</button></p>
+        // B51: after a review saved with Done, last night's planning is already on the page; the line doesn't say it
+        // suggested nothing.
+        ? <p className="line">{page.draft ? 'From last night · ' : prev?.reviewSaved ? '' : 'No suggestions from last night · '}<button type="button" className="app-link" onClick={() => void startDraft()}>Draft my day</button></p>
         // Nothing new: no task the card wouldn't offer anyway and no proposal (Lead, after the first real run).
         : draftFoundNothing(page, view)
           ? <p className="line mc-status nothing">Nothing to suggest today</p>
