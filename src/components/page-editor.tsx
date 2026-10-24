@@ -3,10 +3,10 @@ import { NodeSelection, Selection, TextSelection, type Transaction } from '@tipt
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
-import { BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
+import { BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, editorHasBlockWithType, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
 import { toast } from '@heroui/react'
-import { BasicTextStyleButton, BlockTypeSelect, CreateLinkButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useExtensionState } from '@blocknote/react'
+import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useEditorState, useExtensionState, usePortalElement, useUIMode } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
 import '@blocknote/shadcn/style.css'
@@ -85,6 +85,29 @@ function styleOf(block: EditorNode | undefined): LineStyle | null {
   if (block.type === 'heading') return (['h1', 'h2', 'h3'] as const)[Math.min(3, Math.max(1, Number(block.props?.level) || 1)) - 1]!
   if (block.type === 'task' || block.type === 'checkListItem') return 'todo'
   return lineStyles.find(s => s.type === block.type)?.key ?? null
+}
+/**
+ * Desktop's block-type menu: BlockTypeSelect's items with Aa's rules (B5 review). A day's role heading keeps its type, so
+ * the menu shows but is disabled; a line that can't hold a heading doesn't offer one.
+ */
+function LineTypeSelect({ isRoleHeading, canHoldHeading }: { isRoleHeading: (blockId: string) => boolean; canHoldHeading: (blockId: string) => boolean }) {
+  const Components = useComponentsContext()!
+  const editor = useBlockNoteEditor()
+  const portalElement = usePortalElement()
+  const uiMode = useUIMode()
+  const blocks = useEditorState({ editor, selector: ({ editor }) => editor.getSelection()?.blocks || [editor.getTextCursorPosition().block] })
+  const first = blocks[0]!
+  const items = useMemo(() => blockTypeSelectItems(editor).filter(item => editorHasBlockWithType(editor, item.type,
+    Object.fromEntries(Object.entries(item.props ?? {}).map(([name, value]) => [name, typeof value])) as Record<string, 'string' | 'number' | 'boolean'>)), [editor])
+  const noHeading = blocks.some(b => !canHoldHeading(b.id))
+  const selectItems = items.map(({ name, type, props, icon: Icon }) => ({
+    text: name, icon: <Icon size={16} />,
+    isSelected: type === first.type && Object.entries(props ?? {}).every(([key, value]) => (first.props as Record<string, unknown>)[key] === value),
+    isDisabled: noHeading && type === 'heading',
+    onClick: () => { editor.focus(); editor.transact(() => { for (const block of blocks) editor.updateBlock(block, { type, props } as never) }) },
+  }))
+  if (!selectItems.some(item => item.isSelected) || !editor.isEditable) return null
+  return <Components.FormattingToolbar.Select className="bn-select" items={selectItems} isDisabled={blocks.some(b => isRoleHeading(b.id))} portalElement={portalElement} preventFocusOnOpen={uiMode === 'mobile'} />
 }
 const clipboardType = 'application/x-daythread-blocks'
 const cutTokens = new Set<string>()
@@ -1388,15 +1411,29 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const { block, prevBlock } = editor.getTextCursorPosition()
     return editor.canNestBlock() && block.type !== 'heading' && prevBlock?.type !== 'heading'
   }
+  /** The day's role headings (Top 3, Other, Events, Notes…) are structure; a heading he wrote is just a line. */
+  const isRoleHeading = (blockId: string) => {
+    if (editor.getBlock(blockId)?.type !== 'heading') return false
+    const section = latestPage.current.sections.find(x => x.id === blockId)
+    return Boolean((section && section.kind !== 'custom') || templateKind(latestPage.current, blockId))
+  }
+  // canIndent's rule from the other side: a line that is indented, or has lines indented under it, can't become a heading.
+  const canHoldHeading = (blockId: string) => !editor.getParentBlock(blockId) && !editor.getBlock(blockId)?.children.length
   // Whether the phone toolbar's indent / outdent can act on the caret's line, and the line's style for Aa (F16).
   const [nesting, setNesting] = useState({ in: false, out: false })
   const [lineStyle, setLineStyle] = useState<LineStyle | null>(null)
+  const [headingOk, setHeadingOk] = useState(true)
   const [styleOpen, setStyleOpen] = useState(false)
   useEffect(() => {
     const update = () => {
       const next = { in: canIndent(), out: editor.canUnnestBlock() }
       setNesting(previous => previous.in === next.in && previous.out === next.out ? previous : next)
-      setLineStyle(styleOf(editor.getTextCursorPosition().block as unknown as EditorNode))
+      const block = editor.getTextCursorPosition().block
+      const style = isRoleHeading(block.id) ? null : styleOf(block as unknown as EditorNode)
+      setLineStyle(style)
+      setHeadingOk(canHoldHeading(block.id))
+      // A line Aa can't restyle closes the panel, so it doesn't come back on the next line he taps.
+      if (!style) setStyleOpen(false)
     }
     const offSelection = editor.onSelectionChange(update)
     const offChange = editor.onChange(update)
@@ -1409,8 +1446,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   function setStyle(style: LineStyle) {
     setStyleOpen(false)
     const block = editor.getTextCursorPosition().block
-    if (styleOf(block as unknown as EditorNode) === style) return
     const next = lineStyles.find(s => s.key === style)!
+    if (isRoleHeading(block.id) || styleOf(block as unknown as EditorNode) === style || (next.type === 'heading' && !canHoldHeading(block.id))) return
     editor.updateBlock(block, (style === 'todo' ? { type: 'checkListItem', props: {} } : { type: next.type, props: next.level ? { level: next.level } : {} }) as never)
     editor.focus()
   }
@@ -1561,9 +1598,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const block = editor.getBlock(blockId)
     if (!block || !['paragraph', 'bulletListItem', 'numberedListItem', 'checkListItem', 'heading', 'quote', 'task'].includes(block.type)) return null
     if (!inlineText(block.content as EditorNode['content']).trim()) return null
-    // The day's role headings (Top 3, Other, Notes…) are structure; a heading he wrote is a target.
-    const section = latestPage.current.sections.find(x => x.id === blockId)
-    if (block.type === 'heading' && ((section && section.kind !== 'custom') || templateKind(latestPage.current, blockId))) return null
+    if (isRoleHeading(blockId)) return null
     const taskId = block.type === 'task' ? String(block.props.taskId ?? '') : ''
     return { pageId: page.id, lineId: blockId, ...(taskId && !taskId.startsWith('editor-task:') ? { taskId } : {}) }
   }
@@ -1623,6 +1658,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // B38: the dock line's words stay steady while typing flips the header between "Unsaved changes" and "Saving…".
   const unsavedText = conflict ? conflictText : !online ? "Offline · saves when you're back" : unsaved === 'network' ? 'Not saved yet · trying again' : "Couldn't save · draft kept"
   return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
+    onBlur={e => { if (e.target === editor.domElement) setStyleOpen(false) }}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
     onMouseDownCapture={e => { const target = e.target as Element; if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') } }}
     onMouseUpCapture={e => {
@@ -1791,7 +1827,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
       {!compact && !selectionLabel && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
-        <BlockTypeSelect key="blockTypeSelect" />
+        <LineTypeSelect key="blockTypeSelect" isRoleHeading={isRoleHeading} canHoldHeading={canHoldHeading} />
         <BasicTextStyleButton key="bold" basicTextStyle="bold" />
         <BasicTextStyleButton key="italic" basicTextStyle="italic" />
         <BasicTextStyleButton key="underline" basicTextStyle="underline" />
@@ -1836,7 +1872,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         (F11): a phone has no Tab key. */}
     <div className="editor-phone-toolbar" aria-label="Editor tools">
       {styleOpen && lineStyle && <div className="editor-style-panel" role="group" aria-label="Line style">
-        {lineStyles.map(s => <button key={s.key} {...keepCaret} className={`is-${s.key}`} aria-pressed={lineStyle === s.key} onClick={() => setStyle(s.key)}>{s.label}</button>)}
+        {lineStyles.map(s => <button key={s.key} {...keepCaret} className={`is-${s.key}`} aria-pressed={lineStyle === s.key} disabled={s.type === 'heading' && !headingOk} onClick={() => setStyle(s.key)}>{s.label}</button>)}
       </div>}
       <button {...keepCaret} className="editor-aa" onClick={() => setStyleOpen(open => !open)} disabled={!lineStyle} aria-expanded={styleOpen && Boolean(lineStyle)} aria-label="Line style">Aa</button>
       <button {...keepCaret} onClick={() => { setStyleOpen(false); editor.focus(); editor.getExtension(SuggestionMenu)?.openSuggestionMenu('/') }} aria-label="Insert block"><PlusIcon /></button>

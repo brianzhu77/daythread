@@ -1,5 +1,7 @@
 // B5 check (F16): the phone toolbar's Aa turns the caret's line into another style and keeps the caret and keyboard;
-// a to-do made this way is a task, and turning it back follows B42; hide keyboard ends editing.
+// a to-do made this way is a task, and turning it back follows B42; hide keyboard ends editing. Review round: the day's
+// own headings can't be restyled, the panel closes when the editor loses focus, and a line that is indented or has lines
+// indented under it isn't offered a heading.
 // Run against an isolated server on a disposable store (it types on today's page), never live.
 // Usage: node scripts/phone-style-check.mjs <base-url> [webkit|chromium]
 import assert from 'node:assert/strict'
@@ -27,7 +29,7 @@ const state = () => page.evaluate(() => {
   }
 })
 const tap = async selector => { await page.locator(selector).tap(); await page.waitForTimeout(400) }
-const pick = async label => { await tap('.editor-phone-toolbar [aria-label="Line style"]'); await page.locator('.editor-style-panel button', { hasText: new RegExp(`^${label}$`) }).tap(); await page.waitForTimeout(500) }
+const pick = async label => { await tap('.editor-phone-toolbar .editor-aa'); await page.locator('.editor-style-panel button', { hasText: new RegExp(`^${label}$`) }).tap(); await page.waitForTimeout(500) }
 try {
   await page.goto(base, { waitUntil: 'networkidle' })
   const later = page.getByRole('button', { name: 'Later', exact: true })
@@ -42,7 +44,7 @@ try {
   const start = await state()
   assert.deepEqual(start.labels, ['Line style', 'Insert block', 'Outdent', 'Indent', 'Undo', 'Redo', 'Hide keyboard'], 'F16 order')
   assert.equal(await kind(), 'bulletListItem')
-  await tap('.editor-phone-toolbar [aria-label="Line style"]')
+  await tap('.editor-phone-toolbar .editor-aa')
   const open = await state()
   assert.equal(open.panel, true); assert.deepEqual(open.pressed, ['Bullet']); assert.equal(open.caret, true, 'caret kept while the panel is open')
   assert.ok(open.geometry.panelBottom <= open.geometry.toolbarTop, 'panel sits above the toolbar'); assert.ok(open.geometry.left >= 8 && open.geometry.right <= 382); assert.ok(open.geometry.minRow >= 44)
@@ -63,17 +65,35 @@ try {
   await page.waitForTimeout(1500); await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(800)
   assert.equal(await kind(), 'task', 'the to-do is saved')
   await row().locator('.bn-inline-content').first().tap({ position: { x: 30, y: 8 } }); await page.waitForTimeout(300)
-  await tap('.editor-phone-toolbar [aria-label="Line style"]')
+  await tap('.editor-phone-toolbar .editor-aa')
   assert.deepEqual((await state()).pressed, ['To-do'])
   await page.locator('.editor-style-panel button', { hasText: /^Bullet$/ }).tap(); await page.waitForTimeout(700)
   assert.equal(await kind(), 'bulletListItem')
   const notice = await page.getByText('Removed from tasks').count()
   assert.equal(notice, 1, 'B42 notice for a to-do turned into a bullet')
+  const aa = page.locator('.editor-phone-toolbar .editor-aa')
+  await page.locator('[data-content-type="heading"]', { hasText: /^Events$/ }).first().tap(); await page.waitForTimeout(400)
+  assert.equal(await aa.isDisabled(), true, 'Aa is off on the day\'s own heading')
+  await row().locator('.bn-inline-content').first().tap({ position: { x: 30, y: 8 } }); await page.waitForTimeout(300)
+  await tap('.editor-phone-toolbar .editor-aa')
+  assert.equal((await state()).panel, true)
+  await page.evaluate(() => document.activeElement?.blur()); await page.waitForTimeout(300)
+  await row().locator('.bn-inline-content').first().tap({ position: { x: 30, y: 8 } }); await page.waitForTimeout(400)
+  assert.equal((await state()).panel, false, 'the panel closed when the editor lost focus')
+  const child = `child line ${Date.now().toString(36)}`
+  await row().locator('.bn-inline-content').first().evaluate(el => { const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r) }); await page.waitForTimeout(200)
+  await page.keyboard.press('Enter'); await page.keyboard.type(child)
+  await tap('.editor-phone-toolbar [aria-label="Indent"]')
+  const headingsOff = async () => { await tap('.editor-phone-toolbar .editor-aa'); const off = await page.locator('.editor-style-panel button:disabled').allTextContents(); await tap('.editor-phone-toolbar .editor-aa'); return off }
+  assert.equal(await page.locator('[data-node-type="blockGroup"] [data-node-type="blockGroup"] [data-node-type="blockContainer"]', { hasText: child }).count(), 1, 'the child line is indented')
+  assert.deepEqual(await headingsOff(), ['Heading 1', 'Heading 2', 'Heading 3'], 'no heading on an indented line')
+  await row().locator('.bn-inline-content').first().tap({ position: { x: 30, y: 8 } }); await page.waitForTimeout(300)
+  assert.deepEqual(await headingsOff(), ['Heading 1', 'Heading 2', 'Heading 3'], 'no heading over indented lines')
   await tap('.editor-phone-toolbar [aria-label="Hide keyboard"]')
   const hidden = await state()
   assert.equal(hidden.caret, false, 'hide keyboard ends editing'); assert.equal(hidden.toolbar, false, 'toolbar goes with the keyboard')
   assert.deepEqual(errors, [])
-  console.log(JSON.stringify({ engine, order: start.labels, panel: open.geometry, styles: 'h2, text, quote, numbered, h1, to-do (task, saved), bullet (B42 notice)', caretKept: true, hideKeyboard: true, pageErrors: 0 }))
+  console.log(JSON.stringify({ engine, order: start.labels, panel: open.geometry, styles: 'h2, text, quote, numbered, h1, to-do (task, saved), bullet (B42 notice)', roleHeadingOff: true, closesOnBlur: true, noHeadingWhenIndented: true, caretKept: true, hideKeyboard: true, pageErrors: 0 }))
 } finally {
   await browser.close()
 }
