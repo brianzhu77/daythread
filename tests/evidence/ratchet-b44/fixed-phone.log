@@ -1,0 +1,37 @@
+(node:16971) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   390 bookmark: Bookmark page: the card and its page, A2's paste ([{"id":"7583d1a2-1ce0-4fa8-8826-861ab2d999cb","title":"xiachufang.com/recipe/10324"}])
+ok   390 bookmark: A2's notice "Made a page · Undo"
+ok   390 bookmark: one remembered item for the link, now on the card
+focus {
+  tag: '<div aria-autocomplete="list" aria-haspopup="listbox" contenteditable="true" role="textbox" tabindex="0" translate="no" class="tiptap ProseMirror bn-editor bn-default-styles placeh',
+  selection: ''
+}
+ok   390 bookmark: ⌘Z (step 2) gives back the plain link: page gone, link still remembered ({"pages":[],"m":true})
+ok   390 bookmark: ⌘Z again (step 1) removes the paste and what it remembered (null)
+ok   390 bookmark: no page errors
+all passed
+(node:17058) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   390 keep: one menu for three
+menu/toolbar {
+  menu: { top: 503, bottom: 558 },
+  toolbar: { top: 760, bottom: 810 },
+  hit: '<span class="paste-menu-label">Bookmark 3 pages</span>'
+}
+ok   390 keep: three cards
+ok   390 keep: three pages
+ok   390 keep: no page errors
+(node:17108) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   390 keep: notice Undo restores plain link and retains material
+ok   390 keep: after notice Undo, refocused history Undo removes original paste
+ok   390 keep: no page errors
+(node:17285) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+before delete [Object: null prototype] {
+  id: 'material:day:2026-10-23:good-stuffs:template:0',
+  sources: '[{"pageId":"day:2026-10-23","blockId":"day:2026-10-23:good-stuffs:template:0","note":""}]'
+}
+ok   390 keep: deliberate Good Stuffs material survives deleting its line ({"id":"material:day:2026-10-23:good-stuffs:template:0","sources":"[{\"pageId\":\"day:2026-10-23\",\"blockId\":\"day:2026-10-23:good-stuffs:template:0\",\"note\":\"\"}]"})
+ok   390 keep: no errors

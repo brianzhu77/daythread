@@ -1,0 +1,40 @@
+(node:13395) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280 keep: the link goes in plain, no card (0)
+ok   1280 keep: the menu: Keep as link (highlighted), Bookmark page · New page in Today (Paste options: Keep as link, or Bookmark page Keep as link ↵ Bookmark page New page in Today)
+ok   1280 keep: no page made; the link is remembered (§4a) ({"id":"material:day:2026-10-23:notes:template:0","sources":"[{\"pageId\":\"day:2026-10-23\",\"blockId\":\"day:2026-10-23:notes:template:0\",\"note\":\"\",\"plain\":true}]"})
+ok   1280 keep: Enter keeps the link: the menu closes, nothing else happens
+ok   1280 keep: ⌘Z undoes the paste, and the remembered link goes with it (null)
+ok   1280 keep: no page errors
+all passed
+(node:13544) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280 bookmark: Bookmark page: the card and its page, A2's paste ([{"id":"65e9db45-3456-43ac-a3db-568b0d0aa3a4","title":"xiachufang.com/recipe/10324"}])
+ok   1280 bookmark: A2's notice "Made a page · Undo"
+ok   1280 bookmark: one remembered item for the link, now on the card
+ok   1280 bookmark: ⌘Z (step 2) gives back the plain link: page gone, link still remembered ({"pages":[],"m":true})
+ok   1280 bookmark: ⌘Z again (step 1) removes the paste and what it remembered (null)
+ok   1280 bookmark: no page errors
+all passed
+(node:13590) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280 several: two plain links, one per line
+ok   1280 several: the menu reads "Bookmark 2 pages · 2 new pages in Today" (Paste options: Keep as link, or Bookmark page Keep as links ↵ Bookmark 2 pages 2 new pages in Today)
+ok   1280 several: Esc keeps both, both remembered, no pages
+ok   1280 several: no page errors
+all passed
+(node:13694) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280 typing: typing keeps the link: the menu closes and the keys type ("https://www.xiachufang.com/recipe/10324/ x")
+ok   1280 typing: no page errors
+all passed
+(node:13722) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280 sentence: a URL pasted into a sentence: a normal paste, no menu
+ok   1280 sentence: no page errors
+all passed
+(node:13744) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280 saved: a link with a page already: "Saved before · Today" (Paste options: Keep as link, or Bookmark page Keep as link ↵ Bookmark page Saved before · Today)
+ok   1280 saved: no page errors
+all passed
