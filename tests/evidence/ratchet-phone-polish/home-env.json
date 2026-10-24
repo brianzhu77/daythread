@@ -1,0 +1,16 @@
+{
+  "metas": [
+    "width=device-width, initial-scale=1, interactive-widget=resizes-content, viewport-fit=cover"
+  ],
+  "standalone": true,
+  "inner": [
+    402,
+    812
+  ],
+  "screen": [
+    402,
+    874
+  ],
+  "safeStyle": "0px",
+  "bottom": "34px"
+}

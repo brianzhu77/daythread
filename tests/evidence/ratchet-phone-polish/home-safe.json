@@ -1,0 +1,16 @@
+{
+  "standalone": true,
+  "safe": {
+    "x": 0,
+    "y": 0,
+    "width": 402,
+    "height": 0,
+    "top": 0,
+    "right": 402,
+    "bottom": 0,
+    "left": 0
+  },
+  "vv": 74,
+  "h": 408,
+  "focus": "true"
+}

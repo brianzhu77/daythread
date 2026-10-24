@@ -1,0 +1,22 @@
+{
+  "url": "http://127.0.0.1:3624/review",
+  "active": "<body><div class=\"app\"><aside class=\"sidebar\" aria-label=\"Navigation\"><a class=\"brand\" href=\"/\">Daythread</a><nav class=\"sidebar-nav\" aria-label=\"Main\"><a class=\"side-row\" href=\"/\"><svg width=\"22\" hei",
+  "viewport": {
+    "height": 714,
+    "offsetTop": 0
+  },
+  "toolbar": null,
+  "text": "\nTomorrow · Sun, Oct 25\nDone\nSaturday: 1 done · 0 still open · review saved\nSunday is already set up. New lines still go on its page.\nOn Sunday\n\nTRV for Lu and Kathy\n⋯\n\n#daythread improvements on link as page\nTop 3\n⋯\n\n万圣节装饰、衣服\n⋯\n\nKathy 的作业，family culture\n⋯\n\nEach line goes on Sunday’s page as a to-do. Return adds the next one.\nDone\nUndo\n",
+  "blocks": [],
+  "errors": [],
+  "trace": [
+    {
+      "t": 14767,
+      "ev": "input",
+      "caret": null,
+      "inputType": null,
+      "data": null,
+      "isComposing": null
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "vv": 60,
+  "line": {
+    "x": 65,
+    "y": 286,
+    "width": 287.921875,
+    "height": 24,
+    "top": 286,
+    "right": 352.921875,
+    "bottom": 310,
+    "left": 65
+  },
+  "menu": {
+    "x": 65,
+    "y": 168,
+    "width": 309,
+    "height": 111,
+    "top": 168,
+    "right": 374,
+    "bottom": 279,
+    "left": 65
+  },
+  "safe": {
+    "x": 0,
+    "y": 0,
+    "width": 402,
+    "height": 0,
+    "top": 0,
+    "right": 402,
+    "bottom": 0,
+    "left": 0
+  }
+}
