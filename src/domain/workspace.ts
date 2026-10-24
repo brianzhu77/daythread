@@ -409,9 +409,29 @@ function untouchedLineMaterial(m: Material, blockId: string, previous: EditorNod
  * Saves are debounced while Brian types, so an untouched Material follows its line from one URL to the next
  * (re-keyed); words added to the line become that save's note, and a deleted line leaves the Material alone.
  */
-/** One draft per day (morning-model-states §1): a ready draft or a run in progress; a failed run allows Retry. */
+/**
+ * A draft made by Draft my day (a run, or the card's stand-in with no model key, which has proposals), as opposed to
+ * one the evening review made ("Prepare tomorrow": his open tasks and links picked by rule; B47).
+ */
+export function isCardDraft(draft: NonNullable<Page["draft"]>): boolean {
+  return Boolean(draft.run || draft.proposals);
+}
+/** B47: what he kept at night for this day: the review's draft itself, or what a card draft carried over from it. */
+export function eveningPicks(draft: Page["draft"]): { taskIds: string[]; materialIds: string[] } {
+  if (!draft) return { taskIds: [], materialIds: [] };
+  return isCardDraft(draft) ? draft.evening ?? { taskIds: [], materialIds: [] } : { taskIds: draft.taskIds, materialIds: draft.materialIds };
+}
+/** A card draft carries the evening's picks on, when there are any. */
+const carryEvening = (p: Page) => {
+  const evening = eveningPicks(p.draft);
+  return evening.taskIds.length || evening.materialIds.length ? { evening: structuredClone(evening) } : {};
+};
+/**
+ * One draft per day (morning-model-states §1): a ready draft or a run in progress; a failed run allows Retry. The
+ * review's draft doesn't count: Draft my day runs over it and keeps its picks (B47).
+ */
 function hasDayDraft(p: Page): boolean {
-  if (!p.draft) return false;
+  if (!p.draft || !isCardDraft(p.draft)) return false;
   return !p.draft.run || p.draft.run.status === "ready" || p.draft.run.status === "drafting";
 }
 function draftingPage(state: Workspace, day: string, runId: string): Page {
@@ -1821,7 +1841,7 @@ function execute(
       p.draft = {
         simulated: false, taskIds: [], materialIds: [], text: "",
         run: { runId: operationId, run, trigger: "card", startedAt: action.startedAt, status: "drafting", attemptId: `draft:${action.date}:${operationId}`, model: action.model, requestHash: "", manifest: { lines: [], sentPages: [], omittedPages: [], taskCandidates: [], materialCandidates: [] } },
-        proposals: [], hidden: [],
+        proposals: [], hidden: [], ...carryEvening(p),
       };
       delete p.draftError;
       return { message: "Drafting your day", entityId: operationId };
@@ -2179,7 +2199,9 @@ function execute(
       }
       const view = getDayView(state, action.date);
       const candidates = [...view.planned, ...view.handoffTasks, ...view.carry];
+      const evening = action.trigger === "card" ? carryEvening(p) : {};
       p.draft = {
+        ...evening,
         simulated: true,
         taskIds: [...new Set(candidates.map((t) => t.id))].slice(0, 3),
         materialIds: state.materials

@@ -5,7 +5,7 @@ import { anotherDayItems, useTaskActions } from './task-row'
 import { useWorkspace } from './use-day'
 import { displayTitle } from './day-page'
 import { useNavigate } from '@tanstack/react-router'
-import { linkPageOf } from '../domain/workspace'
+import { eveningPicks, isCardDraft, linkPageOf } from '../domain/workspace'
 import { displayPageTitle } from './page-title'
 
 interface Props {
@@ -145,7 +145,9 @@ function NotInNote({ tasks, date, today }: { tasks: Task[]; date: LocalDate; tod
 function RelatedLine({ view, workspace, date }: { view: DayView; workspace: Workspace; date: LocalDate }) {
   const { run } = useWorkspace()
   const navigate = useNavigate()
-    const items = (view.page?.draft?.materialIds ?? [])
+  // B47: his evening links first, then a Draft my day run's, each once.
+  const draft = view.page?.draft ?? null, card = Boolean(draft && isCardDraft(draft))
+  const items = [...new Set([...eveningPicks(draft).materialIds, ...(card ? draft!.materialIds : [])])]
     .map(id => workspace.materials.find(m => m.id === id))
     .filter(m => m !== undefined && m.resurface && !m.dismissedOn?.includes(date) && m.reviewState !== 'done' && m.reviewState !== 'task')
     .slice(0, 2)
@@ -153,7 +155,7 @@ function RelatedLine({ view, workspace, date }: { view: DayView; workspace: Work
   return (
     <div className="fact-block related">
       <p className="fact-label">
-        Related {view.page?.draft?.simulated && <span className="sim">Simulated</span>}
+        Related {draft?.simulated && card && <span className="sim">Simulated</span>}
       </p>
       {items.map(m => {
         // A2 §6: a saved link that is a link page shows the page's title, and Open opens the page.

@@ -357,7 +357,8 @@ function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspa
       )}
       {draft && !p.tomorrowSaved && (
         <>
-          {draft.simulated && <p className="sim">Simulated suggestions · no model was called</p>}
+          {/* B47 (Jazz 8aebb93a): it picks from his open tasks and links by rule; no model is implied. */}
+          {draft.simulated && <p className="sim">Picked from your open tasks and links</p>}
           <p className="quiet">Suggestions for Top 3. Remove any you don’t want.</p>
           <TaskTree tasks={suggestions}>
             {(t, depth, parentId) => (
