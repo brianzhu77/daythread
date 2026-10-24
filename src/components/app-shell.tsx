@@ -1,4 +1,5 @@
 import { Toast } from '@heroui/react'
+import { useRouterState } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useState } from 'react'
 import { Navigation } from './navigation'
 import { KeptDrafts } from './kept-drafts'
@@ -6,6 +7,7 @@ import { WorkspaceProvider, isConflict, useWorkspace, type SimOutcome } from './
 
 /** App frame (craft-v1 §3): sidebar on laptop, bottom tabs and + on phone, dev banner, undo notices. */
 export function AppShell({ children }: { children: ReactNode }) {
+  useVisibleTop()
   return (
     <WorkspaceProvider>
       <div className="app">
@@ -20,6 +22,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <KeptDrafts />
         </div>
         <Toasts />
+        <div className="safe-top" aria-hidden="true" />
       </div>
     </WorkspaceProvider>
   )
@@ -31,6 +34,7 @@ export function AppShell({ children }: { children: ReactNode }) {
  */
 function Toasts() {
   const [phone, setPhone] = useState(false)
+  const path = useRouterState({ select: r => r.location.pathname })
   useEffect(() => {
     const media = window.matchMedia('(max-width: 599px)')
     const update = () => setPhone(media.matches)
@@ -38,7 +42,9 @@ function Toasts() {
     return () => media.removeEventListener('change', update)
   }, [])
   return (
-    <Toast.Provider placement={phone ? 'top' : 'bottom'} className="app-toasts">
+    // B56: the review's header (title and Done) is at the top, so its notices go at the bottom, above the tab bar; a tap
+    // on Done hit the notice, or its Undo.
+    <Toast.Provider placement={phone && path !== '/review' ? 'top' : 'bottom'} className="app-toasts">
       {({ toast: t }) => (
         <Toast toast={t}>
           <Toast.Content>
@@ -108,4 +114,24 @@ function SaveIndicator() {
       </button>
     </p>
   )
+}
+
+/**
+ * B52: `--vv-top` is where the visible part of the page starts, for fixed things that belong at its top (the
+ * status-bar strip, phone notices). iOS scrolls the visible part by `visualViewport.offsetTop` while the keyboard is
+ * up, and a fixed `top: 0` would then sit above the screen.
+ */
+function useVisibleTop() {
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    const update = () => document.documentElement.style.setProperty('--vv-top', `${Math.round(vv.offsetTop)}px`)
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+    }
+  }, [])
 }

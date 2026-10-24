@@ -975,6 +975,14 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .calendar-nav > :last-child { margin-left: 4px; }
 /* When the "N other open tasks" line sits right above the page, the save line shares its row (Jazz, step 2 review). */
 .day-body:has(> .facts > .fact-pair:last-child) .editor-save-line { top:-48px; }
+/* B52: the page scrolls under the iPhone status bar; a strip in the page colour keeps the clock clear. It follows the
+   visible part of the page (--vv-top), which iOS scrolls while the keyboard is up. Zero high where there's no inset.
+   Under sheets and menus (z 30+), over the page. */
+.safe-top { position:fixed; left:0; right:0; top:var(--vv-top, 0px); height:env(safe-area-inset-top); background:var(--bg); z-index:25; pointer-events:none; }
+/* B56: on the review, phone notices sit at the bottom, clear of the tab bar (12 px off the bottom, 60 px tall). */
+@media (max-width: 599px) { .app-toasts.toast-region--bottom { bottom:calc(84px + env(safe-area-inset-bottom)); } }
+/* Phone notices sit under the status bar and the strip, at the top of what he can see. */
+.app-toasts.toast-region--top { top:calc(16px + env(safe-area-inset-top) + var(--vv-top, 0px)); }
 /* HeroUI reveals the toast ✕ on hover only; phones have no hover, so it always shows. */
 .app-toasts .toast__close-button { opacity:1; pointer-events:auto; }
 
