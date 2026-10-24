@@ -1,0 +1,6 @@
+(node:32827) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280 keep: live other-tab draft not taken
+ok   1280 keep: two survivors recover closed-tab intent
+ok   1280 keep: one material, one source, one recovered line ([{"pageId":"day:2026-10-23","blockId":"day:2026-10-23:notes:template:0","note":"","plain":true}])
+ok   1280 keep: no page errors

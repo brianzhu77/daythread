@@ -1,0 +1,6 @@
+(node:33784) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   390 good-stuffs: kept in Good Stuffs: remembered, not as a plain link ({"id":"material:day:2026-10-23:good-stuffs:template:0","sources":"[{\"pageId\":\"day:2026-10-23\",\"blockId\":\"day:2026-10-23:good-stuffs:template:0\",\"note\":\"\"}]"})
+ok   390 good-stuffs: deleting the line keeps the Good Stuffs save ({"id":"material:day:2026-10-23:good-stuffs:template:0","sources":"[{\"pageId\":\"day:2026-10-23\",\"blockId\":\"day:2026-10-23:good-stuffs:template:0\",\"note\":\"\"}]"})
+ok   390 good-stuffs: no page errors
+all passed

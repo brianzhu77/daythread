@@ -1,0 +1,11 @@
+(node:32044) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   390 keep: offline kept text retained
+ok   390 keep: offline kept link is remembered after reconnect ({"id":"material:day:2026-10-23:notes:template:0","sources":"[{\"pageId\":\"day:2026-10-23\",\"blockId\":\"day:2026-10-23:notes:template:0\",\"note\":\"\",\"plain\":true}]"})
+ok   390 keep: no page errors
+(node:32110) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   390 offline-closed: the draft holds the kept link ([[{"blockId":"day:2026-10-23:notes:template:0","url":"https://www.xiachufang.com/recipe/10324/"}]])
+ok   390 offline-closed: another tab merges the draft, saves it and remembers the link ({"m":{"id":"material:day:2026-10-23:notes:template:0","sources":"[{\"pageId\":\"day:2026-10-23\",\"blockId\":\"day:2026-10-23:notes:template:0\",\"note\":\"\",\"plain\":true}]"},"line":true,"slots":[{"claimed":true,"kept":1,"age":480}]})
+ok   390 offline-closed: no page errors
+all passed
