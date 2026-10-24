@@ -762,7 +762,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       }
     }
     for (const [blockId, effect] of Object.entries(latestPage.current.editorDeletions ?? {})) {
-      if (!changes.some(c => c.type === 'insert' && c.block.id === blockId)) continue
+      // Its row comes back: re-inserted (a delete undone) or turned back into that to-do (B42: a conversion undone).
+      if (!changes.some(c => c.block.id === blockId && (c.type === 'insert' || c.type === 'update' && c.block.type === 'task' && String(c.block.props.taskId) === effect.task.id))) continue
       const target = latestWorkspace.current.tasks.find(t => t.id === effect.task.id)
       if (!target || target.version !== effect.afterVersion) { debugClient('editor.undo.rejected',{operationId:newOperationId(),pageId:page.id,taskId:effect.task.id,result:'version-conflict'}); setStatus(`Can't undo: '${target?.title ?? effect.task.title}' changed since`); return false }
     }
@@ -770,11 +771,26 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       for (const c of changes) if (c.type === 'delete' && knownSemantic.current.has(c.block.id)) semanticDeletes.current.add(c.block.id)
     }
   }), [editor])
+  // B42: the to-do rows on the page as of the last change, to notice a line that stops being a to-do.
+  const taskRows = useRef<Map<string, string> | null>(null)
+  const readTaskRows = () => new Map(deepNodes(nodes()).filter(n => n.type === 'task').map(n => [n.id, String(n.props?.taskId)]))
+  useEffect(() => { taskRows.current ??= readTaskRows() }, [])
   useEffect(() => editor.onChange(() => {
+    const before = taskRows.current, rows = readTaskRows()
+    taskRows.current = rows
     if (suppress.current) return
     if (notice.current && notice.current.fingerprint !== JSON.stringify(editor.document)) closeNotice()
+    // B42 (Lead): a to-do turned into a bullet, text or a heading counts as deleting it; say so as B33's delete does.
+    if (before) {
+      const all = new Set(deepNodes(nodes()).map(n => n.id))
+      const unchecked = [...before].filter(([id, taskId]) => all.has(id) && rows.get(id) !== taskId).map(([, taskId]) => taskId)
+      const after = nodes(), deleted = unchecked.filter(taskId => goesWithLine(taskId, after))
+      const elsewhere = unchecked.length === 1 ? stillElsewhere(unchecked[0], after) : null
+      if (deleted.length || elsewhere) setNotice({ text: elsewhere ?? (deleted.length === 1 ? 'To-do deleted' : `${deleted.length} to-dos deleted`), fingerprint: JSON.stringify(editor.document) })
+    }
     setPastedChecklistIds(checklistIds(nodes()))
-    const checklist = editor.document.find(b => b.type === 'checkListItem')
+    // At any depth: "[] " on a nested line makes a to-do too (B42; a nested one used to stay a plain checklist line).
+    const checklist = (deepNodes(editor.document as unknown as EditorNode[]) as unknown as typeof editor.document).find(b => b.type === 'checkListItem')
     if (checklist && !composing.current) editor.transact(tr => {
       editor.updateBlock(checklist.id, { type: 'task', props: { taskId: `editor-task:${checklist.id}`, role: insertionRole(checklist.id), planDate: insertionRole(checklist.id) === 'plan' ? page.date ?? '' : '' }, content: checklist.content } as never)
       tr.setMeta('addToHistory', false)
@@ -1157,7 +1173,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const next = nextNodes.find(n => n.type === 'task' && n.props?.taskId === taskId)
       return !latestWorkspace.current.tasks.some(t => t.id === taskId) && [old, next].some(n => n?.props?.taskId === `editor-task:${n?.id}`)
         || old && next && inlineText(old.content) !== inlineText(next.content)
-        || Object.entries(latestPage.current.editorDeletions ?? {}).some(([id, effect]) => effect.task.id === taskId && nextById.has(id) && !oldById.has(id))
+        || Object.entries(latestPage.current.editorDeletions ?? {}).some(([id, effect]) => effect.task.id === taskId && nextById.get(id)?.type === 'task' && nextById.get(id)?.props?.taskId === taskId && !(oldById.get(id)?.type === 'task' && oldById.get(id)?.props?.taskId === taskId))
         || direction === 'redo' && [...knownSemantic.current].some(id => oldById.get(id)?.props?.taskId === taskId && !nextById.has(id))
         || Object.entries(latestPage.current.editorCreations ?? {}).some(([id, createdTask]) => createdTask === taskId && (oldById.get(id)?.type === 'task') !== (nextById.get(id)?.type === 'task'))
     })
