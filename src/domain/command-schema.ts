@@ -6,7 +6,7 @@ const body = z.string().max(100_000);
 const status = z.enum(["open", "done", "cancelled"]);
 const outcome = z.enum(["success", "failure", "budget", "context"]).optional();
 const action = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("save-editor"), pageId: id, expectedContent: z.string().max(2_000_000), document: z.string().max(1_000_000), singleDeleteIds: z.array(id).max(100).optional(), cutTaskIds: z.array(id).max(200).optional(), today: day.optional(), historyTaskVersions: z.record(id, z.number().int().nonnegative()).optional(), history: z.boolean().optional() }),
+  z.object({ type: z.literal("save-editor"), pageId: id, expectedContent: z.string().max(2_000_000), document: z.string().max(1_000_000), singleDeleteIds: z.array(id).max(100).optional(), cutTaskIds: z.array(id).max(200).optional(), keptPlainLinks: z.array(z.object({ blockId: id, url: z.string().min(1).max(10_000) })).max(50).optional(), today: day.optional(), historyTaskVersions: z.record(id, z.number().int().nonnegative()).optional(), history: z.boolean().optional() }),
   z.object({ type: z.literal("ensure-day"), date: day }),
   z.object({ type: z.literal("plan-tasks"), date: day, items: z.array(z.object({ taskId: id, section: z.enum(["top3", "other"]) })).min(1).max(100) }),
   z.object({ type: z.literal("bring-line"), date: day, sourcePageId: id, sourceBlockId: id }),
@@ -121,7 +121,6 @@ const action = z.discriminatedUnion("type", [
     items: z.array(z.object({ url: z.string().min(1).max(10_000), pageId: id, cardBlockId: id, lineType: z.enum(["paragraph", "bulletListItem", "numberedListItem"]), title: title.optional() })).min(1).max(50),
   }),
   z.object({ type: z.literal("undo-paste-links"), pageId: id, operationId: id, today: day }),
-  z.object({ type: z.literal("save-plain-link"), pageId: id, items: z.array(z.object({ blockId: id, url: z.string().min(1).max(10_000) })).min(1).max(50) }),
   z.object({ type: z.literal("apply-link-preview"), parentPageId: id, cardBlockId: id, pageId: id, url: z.string().min(1).max(10_000), title: z.string().max(200).nullable(), description: z.string().max(500).nullable() }),
   z.object({ type: z.literal("rename-page"), pageId: id, title }),
   z.object({ type: z.literal("move-page"), pageId: id, parentId: id.nullable() }),

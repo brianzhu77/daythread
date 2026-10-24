@@ -98,7 +98,7 @@ export function saveKeptDrafts(refresh: () => Promise<Workspace>, run: Run, skip
       let done!: () => void
       saving.set(pageId, new Promise<void>(resolve => { done = resolve }))
       try {
-        const receipt = await run({ type: 'save-editor', pageId, expectedContent: pageContentKey(page), document: JSON.stringify(document), ...(slot.cutTaskIds?.length ? { cutTaskIds: slot.cutTaskIds } : {}), today: todayIso() }, undefined, undefined, { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => { failure = 'changed elsewhere' }, onFailure: m => { failure = m }, quiet: options.quiet })
+        const receipt = await run({ type: 'save-editor', pageId, expectedContent: pageContentKey(page), document: JSON.stringify(document), ...(slot.cutTaskIds?.length ? { cutTaskIds: slot.cutTaskIds } : {}), ...(slot.keptPlainLinks?.length ? { keptPlainLinks: slot.keptPlainLinks } : {}), today: todayIso() }, undefined, undefined, { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => { failure = 'changed elsewhere' }, onFailure: m => { failure = m }, quiet: options.quiet })
         if (!receipt) { if (key !== null) release(pageId, key); options.onFailure?.({ pageId, message: failure || 'not saved' }); return false }
         if (key === null) clearOwn(pageId, slot.document)
         // Its owner came back and wrote newer text while this save was out: the slot stays its own, unmarked. When the

@@ -296,16 +296,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const runRef = useRef(run); runRef.current = run
   const navigate = useNavigate()
   const key = `daythread:editor:${page.id}`
-  const initial = useRef<{ nodes: EditorNode[]; base: string; recovered: boolean; cutTaskIds: string[] } | null>(null)
+  const initial = useRef<{ nodes: EditorNode[]; base: string; recovered: boolean; cutTaskIds: string[]; keptPlainLinks: { blockId: string; url: string }[] } | null>(null)
   if (!initial.current) {
     // B40: from here on, a background save of kept drafts leaves this page's draft to this editor.
     noteEditorMounting(page.id)
     const base = pageContentKey(page)
-    let nodes = editorSeed(page, workspace, { templateRows: needsTemplateRows(page, todayIso()) }), recovered = false, savedBase = base, cutTaskIds: string[] = []
+    let nodes = editorSeed(page, workspace, { templateRows: needsTemplateRows(page, todayIso()) }), recovered = false, savedBase = base, cutTaskIds: string[] = [], keptPlainLinks: { blockId: string; url: string }[] = []
     // B35: this tab's own slot; drafts other tabs left behind are merged in after mount. A recovered draft brings back
     // its cuts too (Ratchet 067be3eb): a cut row in it is a move, never a delete.
-    try { const stored = readOwn(page.id); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; recovered = true; cutTaskIds = (stored.cutTaskIds ?? []).filter((x: unknown) => typeof x === 'string') } } catch { /* fresh document */ }
-    initial.current = { nodes, base: savedBase, recovered, cutTaskIds }
+    try { const stored = readOwn(page.id); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; recovered = true; cutTaskIds = (stored.cutTaskIds ?? []).filter((x: unknown) => typeof x === 'string'); keptPlainLinks = stored.keptPlainLinks ?? [] } } catch { /* fresh document */ }
+    initial.current = { nodes, base: savedBase, recovered, cutTaskIds, keptPlainLinks }
   }
   const [pastedChecklistIds, setPastedChecklistIds] = useState<string[]>(() => checklistIds(initial.current!.nodes))
   // The blocks the handle press picked; the drop handler moves exactly these.
@@ -428,6 +428,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const semanticDeletes = useRef(new Set<string>())
   // B33: tasks whose rows were cut (a move): the next save says so, so the task isn't deleted with its line.
   const cutTasks = useRef(new Set<string>(initial.current.cutTaskIds))
+  /**
+   * B44 §4a: links pasted and kept plain, by line, until a save that carries them succeeds (Lead 5be8b479). They go with
+   * the text, so a save that fails offline, a retry, a draft and another tab's merge all bring them along.
+   */
+  const keptLinks = useRef(new Map<string, string>(initial.current.keptPlainLinks.map(x => [x.blockId, x.url])))
+  /** The kept links whose lines are in `document`, as a save sends them (and a draft keeps them). */
+  const keptOn = (document: readonly EditorNode[]) => {
+    const ids = new Set(deepNodes(document).map(n => n.id))
+    return [...keptLinks.current].filter(([id]) => ids.has(id)).slice(0, 50).map(([blockId, url]) => ({ blockId, url }))
+  }
   const composing = useRef(false)
   const selected = useRef<string[]>([])
   const dragging = useRef<EditorNode[]>([])
@@ -610,7 +620,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     })()
     return true
   }
-  const stash = () => { if (claimedAway()) return; try { writeOwn(page.id, { base: base.current, document: JSON.stringify(nodes()), ...(cutTasks.current.size ? { cutTaskIds: [...cutTasks.current] } : {}) }) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
+  const stash = () => { if (claimedAway()) return; try { const kept = keptOn(nodes()); writeOwn(page.id, { base: base.current, document: JSON.stringify(nodes()), ...(cutTasks.current.size ? { cutTaskIds: [...cutTasks.current] } : {}), ...(kept.length ? { keptPlainLinks: kept } : {}) }) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
   const flushRef = useRef<() => Promise<void>>(async () => {})
   /**
    * B35: a save that failed on the network tries again by itself, with the same operation id (a lost reply replays
@@ -646,10 +656,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     sending.current = true
     const document = JSON.stringify(editor.document)
-    const deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
+    const deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current], kept = keptOn(editor.document as unknown as EditorNode[])
     lastSent.current = document
     setStatus('Saving…')
-    const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), today: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }
+    const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), ...(kept.length ? { keptPlainLinks: kept } : {}), today: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }
     const fingerprint=JSON.stringify(action)
     if (pendingSave.current?.fingerprint !== fingerprint) pendingSave.current={fingerprint,operationId:newOperationId()}
     const operationId=pendingSave.current!.operationId
@@ -684,6 +694,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (left.current) return
       deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
       cutIds.forEach(id => cutTasks.current.delete(id))
+      // Remembered now. One this save left out (its line didn't hold the link: undone, say) stays for a later save, as
+      // does one pasted again on the same line since.
+      const remembered = (blockId: string) => preview.materials.some(m => m.sources.some(x => x.pageId === page.id && x.blockId === blockId))
+      kept.forEach(x => { if (keptLinks.current.get(x.blockId) === x.url && remembered(x.blockId)) keptLinks.current.delete(x.blockId) })
       dirty.current = JSON.stringify(editor.document) !== document
       // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
       const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
@@ -729,6 +743,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         doc = merged.document; inserted += merged.inserted.length
         // Its cuts were moves too (B33): the save that carries its text mustn't delete them.
         for (const id of slot.cutTaskIds ?? []) cutTasks.current.add(id)
+        for (const x of slot.keptPlainLinks ?? []) keptLinks.current.set(x.blockId, x.url)
       } catch { continue }
       claim(page.id, slotKey)
     }
@@ -884,12 +899,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // Now the draft is stashed as before and then saved. If that save is refused or fails, the stash stays and
       // this page shows it on return ("Recovered unsaved draft", or Load latest after a conflict).
       stash()
-      const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
+      const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current], kept = keptOn(editor.document as unknown as EditorNode[])
       trackLeaveSave((async () => {
         // A save already on its way finishes first, so this one starts from the page it produced.
         await inflight.current
         if (document !== lastSaved.current) {
-          const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), today: todayIso() }
+          const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), ...(kept.length ? { keptPlainLinks: kept } : {}), today: todayIso() }
           debugClient('editor.save.leave',{pageId:page.id})
           const result = await runRef.current(action, undefined, newOperationId(), { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => {} })
           if (!result) return false
@@ -953,7 +968,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   /**
    * B44 (Jazz's states, Lead d5258c8): a pasted link goes in as a plain link, one per line, and a menu under it offers
    * "Bookmark page" (A2's paste, applied to these lines). Every way out keeps the link. The links are remembered either
-   * way (§4a: `save-plain-link`); the menu itself fetches nothing.
+   * way (§4a: the next editor save carries them, `keptPlainLinks`); the menu itself fetches nothing.
    */
   type PasteMenu = { blockIds: string[]; urls: string[]; lineType: string; linkText?: string; highlight: 0 | 1 }
   const [pasteMenu, setPasteMenuState] = useState<PasteMenu | null>(null)
@@ -963,6 +978,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     setPasteMenu(null)
     const ids = [blockId, ...urls.slice(1).map(() => crypto.randomUUID())]
     const content = (url: string, i: number) => [{ type: 'link', href: url, content: i === 0 && linkText ? linkText : url }]
+    // Before the edit: the change it makes stashes the draft at once, and the draft must carry the links too.
+    urls.forEach((url, i) => keptLinks.current.set(ids[i]!, url))
     editor.transact(tr => {
       closeHistory(tr)
       editor.updateBlock(blockId, { content: content(urls[0]!, 0) } as never)
@@ -970,7 +987,6 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       urls.slice(1).forEach((url, i) => { after = editor.insertBlocks([{ id: ids[i + 1], type: lineType, content: content(url, i + 1) } as never], after, 'after')[0]!.id })
       editor.setTextCursorPosition(after, 'end')
     })
-    void run({ type: 'save-plain-link', pageId: page.id, items: urls.map((url, i) => ({ blockId: ids[i]!, url })) }, null)
     setPasteMenu({ blockIds: ids, urls, lineType, ...(linkText ? { linkText } : {}), highlight: 0 })
   }
   function bookmarkPasted() {

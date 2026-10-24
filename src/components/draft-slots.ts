@@ -10,6 +10,8 @@ export interface DraftSlot {
   base: string
   document: string
   cutTaskIds?: string[]
+  /** B44: links pasted and kept plain on its lines, remembered with the save that carries them. */
+  keptPlainLinks?: { blockId: string; url: string }[]
   /** Last time the tab that owns it was alive (ms). */
   seen: number
   /** Set when the tab closed (pagehide). */
