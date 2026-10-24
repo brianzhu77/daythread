@@ -1566,8 +1566,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // B55: the line below the caret stays clear too, so its checkbox can be ticked without scrolling first.
       const row = (range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement)?.closest('[data-node-type="blockContainer"]')
       const rows = row ? [...(editor.domElement?.querySelectorAll<HTMLElement>('[data-node-type="blockContainer"]') ?? [])] : []
-      const next = rows[rows.indexOf(row as HTMLElement) + 1]
-      const nextLine = next?.querySelector('.bn-block-content')?.getBoundingClientRect()
+      // The next line he can see: on a past day empty rows are hidden (B19), so skip anything with no height.
+      let nextLine: DOMRect | undefined
+      for (let i = rows.indexOf(row as HTMLElement) + 1; i > 0 && i < rows.length && !nextLine?.height; i++) nextLine = rows[i]!.querySelector('.bn-block-content')?.getBoundingClientRect()
       // With the panel open only the caret's line has to show; the panel is up for a moment, the line below can wait.
       const lowest = panel?.height ? caret?.bottom ?? 0 : Math.max(caret?.bottom ?? 0, nextLine && nextLine.height ? nextLine.bottom : 0)
       const overlap = lowest ? lowest + 8 - (panel?.height ? panel.top : bar.top) : 0
