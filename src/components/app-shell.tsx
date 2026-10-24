@@ -1,4 +1,5 @@
 import { Toast } from '@heroui/react'
+import { useRouterState } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useState } from 'react'
 import { Navigation } from './navigation'
 import { KeptDrafts } from './kept-drafts'
@@ -33,6 +34,7 @@ export function AppShell({ children }: { children: ReactNode }) {
  */
 function Toasts() {
   const [phone, setPhone] = useState(false)
+  const path = useRouterState({ select: r => r.location.pathname })
   useEffect(() => {
     const media = window.matchMedia('(max-width: 599px)')
     const update = () => setPhone(media.matches)
@@ -40,7 +42,9 @@ function Toasts() {
     return () => media.removeEventListener('change', update)
   }, [])
   return (
-    <Toast.Provider placement={phone ? 'top' : 'bottom'} className="app-toasts">
+    // B56: the review's header (title and Done) is at the top, so its notices go at the bottom, above the tab bar; a tap
+    // on Done hit the notice, or its Undo.
+    <Toast.Provider placement={phone && path !== '/review' ? 'top' : 'bottom'} className="app-toasts">
       {({ toast: t }) => (
         <Toast toast={t}>
           <Toast.Content>
