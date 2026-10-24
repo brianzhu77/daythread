@@ -150,6 +150,8 @@ function request(url: URL, signal: AbortSignal): Promise<Hop> {
 /** The page's title and description, or nulls; never throws. */
 export async function fetchLinkPreview(raw: string): Promise<LinkPreview> {
   const none = { title: null, description: null }
+  // Off switch: checks that paste real URLs, or an emergency. Nothing is fetched.
+  if (process.env.DAYTHREAD_LINK_PREVIEW === 'off') return none
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), previewLimits.timeoutMs)
   try {
     let next: string = raw
