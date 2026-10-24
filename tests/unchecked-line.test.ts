@@ -120,3 +120,27 @@ test('a block that held another kind of row never becomes a new task in place', 
   const s = setup(), t = s.add('Task row'), row = s.rowOf(t.id).id
   assert.throws(() => s.save(nodes => s.map(nodes, row, x => ({ ...x, props: { ...x.props, taskId: `editor-task:${x.id}` } }))), /Unknown Task identity/)
 })
+
+test('a to-do typed in the editor, done, unchecked, then made a to-do again by hand: a new open task, not the old one (Ratchet 564e2144)', () => {
+  const s = setup()
+  s.save(nodes => [...nodes, { id: 'typed', type: 'task', props: { taskId: 'editor-task:typed', role: 'plan', planDate: today }, content: [{ type: 'text', text: 'Typed here', styles: {} }], children: [] }])
+  s.run({ type: 'task-status', taskId: 'editor-task:typed', status: 'done', today })
+  const asTask = structuredClone(s.rowOf('editor-task:typed'))
+  s.save(nodes => s.map(nodes, 'typed', s.as('bulletListItem')))
+  assert.equal(has(s.ws, 'editor-task:typed'), false)
+  // By hand (a plain save): a new task on the same block, open, not the old done one.
+  s.save(nodes => s.map(nodes, 'typed', () => ({ ...asTask, props: { ...asTask.props, taskId: 'editor-task:typed' } })))
+  const t = s.ws.tasks.find(x => x.id === 'editor-task:typed')!
+  assert.equal(t.status, 'open', 'a fresh task')
+  assert.equal(s.page().editorDeletions?.typed, undefined, 'the old one can\'t come back later')
+})
+
+test('the same row brought back by ⌘Z (a history save) restores the old task, done state included', () => {
+  const s = setup()
+  s.save(nodes => [...nodes, { id: 'typed', type: 'task', props: { taskId: 'editor-task:typed', role: 'plan', planDate: today }, content: [{ type: 'text', text: 'Typed here', styles: {} }], children: [] }])
+  s.run({ type: 'task-status', taskId: 'editor-task:typed', status: 'done', today })
+  const asTask = structuredClone(s.rowOf('editor-task:typed'))
+  s.save(nodes => s.map(nodes, 'typed', s.as('bulletListItem')))
+  s.save(nodes => s.map(nodes, 'typed', () => asTask), { history: true, historyTaskVersions: { 'editor-task:typed': 0 } })
+  assert.equal(s.ws.tasks.find(x => x.id === 'editor-task:typed')?.status, 'done')
+})

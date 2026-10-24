@@ -1126,7 +1126,11 @@ function execute(
       const taskRowAt = new Map(all.filter(n => n.type === "task").map(n => [n.id, String(n.props?.taskId)]));
       for (const [blockId, effect] of Object.entries(p.editorDeletions ?? {})) {
         if (taskRowAt.get(blockId) !== effect.task.id) continue;
-        // B33: a task deleted with its line comes back as it was, same id, done state and placements.
+        // B33: a task deleted with its line comes back as it was, same id, done state and placements: by ⌘Z (a history
+        // save) or Undo. A plain save with that row back is him making the line a to-do again by hand (B42): a task typed
+        // in the editor has its block's id, so the row is the same, but it's a new task, made below (Ratchet 564e2144),
+        // and the old one can't come back any more.
+        if (effect.deleted && !action.history) { delete p.editorDeletions![blockId]; continue; }
         if (effect.deleted) {
           if (!state.tasks.some(t => t.id === effect.task.id)) {
             state.tasks.push(structuredClone(effect.task));
