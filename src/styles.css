@@ -635,6 +635,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* B20 (Jazz): text that scrolls under the floating bar fades out over 48px and is fully hidden from the bar's top edge
    (12px offset + 60px bar = 72px), so nothing shows through the glass. */
 .tab-bar::before { content: ''; position: fixed; left: 0; right: 0; bottom: 0; height: calc(120px + env(safe-area-inset-bottom)); background: linear-gradient(to bottom, color-mix(in srgb, var(--bg) 0%, transparent), var(--bg) 48px); pointer-events: none; z-index: -1; }
+.tab-bar.is-keyboard-up { display: none; }
 .tab-plus { pointer-events: auto; flex: none; width: 60px; height: 60px; padding: 0; border-radius: 50%; background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); color: var(--ink); box-shadow: var(--shadow-float); }
 
 /* Phone: capture lives behind + (craft-v1 §5.3); notices move to the top, clear of the tab bar. */

@@ -26,6 +26,7 @@ import { pageHref, pageLabel } from './page-tree'
 import { jumpInPage, jumpToBlock, lookupFailed, registerEditor, visibleArea } from './line-jump'
 import { previewLinkPage, resolveLineLink } from '../server/functions'
 import { newOperationId, useWorkspace } from './use-day'
+import { useKeyboardTop } from './keyboard'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
 import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
@@ -322,36 +323,6 @@ function hasDateFacts(task: Task): boolean {
 const touchHandleSize = 44
 // Viewport y of the middle of a block's first line of text. Works for empty blocks and wrapped text alike,
 // since it reads the line box of the inline content rather than the rendered glyphs.
-/**
- * B48: where the phone toolbar sits with the keyboard up. iOS doesn't shrink the layout viewport for the keyboard, so a
- * fixed bottom stays behind it; the visual viewport is what he can see. Returns the visible bottom edge in layout
- * coordinates while a keyboard covers part of the screen, else null (the toolbar keeps its place above the tab bar).
- */
-function useKeyboardTop(): number | null {
-  const [top, setTop] = useState<number | null>(null)
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!vv) return
-    let frame = 0
-    const measure = () => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => {
-        // The keyboard's height doesn't depend on how far iOS has scrolled the visible part (offsetTop can reach it).
-        // Under ~100 px is Safari's bars moving, not a keyboard.
-        setTop(window.innerHeight - vv.height > 100 ? Math.round(vv.offsetTop + vv.height) : null)
-      })
-    }
-    measure()
-    vv.addEventListener('resize', measure); vv.addEventListener('scroll', measure)
-    document.addEventListener('focusin', measure); document.addEventListener('focusout', measure)
-    return () => {
-      cancelAnimationFrame(frame)
-      vv.removeEventListener('resize', measure); vv.removeEventListener('scroll', measure)
-      document.removeEventListener('focusin', measure); document.removeEventListener('focusout', measure)
-    }
-  }, [])
-  return top
-}
 function firstLineCenter(block: HTMLElement): number {
   const inline = block.querySelector<HTMLElement>('.bn-inline-content, .editor-page-card-title') ?? block
   const style = getComputedStyle(inline)
@@ -1571,7 +1542,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (!bar?.height || !selection?.rangeCount || !editor.isFocused()) return
       const range = selection.getRangeAt(0)
       const caret = range.getBoundingClientRect().height ? range.getBoundingClientRect() : (range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement)?.getBoundingClientRect()
-      const overlap = caret ? caret.bottom + 8 - bar.top : 0
+      // B55: the line below the caret stays clear too, so its checkbox can be ticked without scrolling first.
+      const row = (range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement)?.closest('[data-node-type="blockContainer"]')
+      const rows = row ? [...(editor.domElement?.querySelectorAll<HTMLElement>('[data-node-type="blockContainer"]') ?? [])] : []
+      const next = rows[rows.indexOf(row as HTMLElement) + 1]
+      const nextLine = next?.querySelector('.bn-block-content')?.getBoundingClientRect()
+      const lowest = Math.max(caret?.bottom ?? 0, nextLine && nextLine.height ? nextLine.bottom : 0)
+      const overlap = lowest ? lowest + 8 - bar.top : 0
       if (overlap > 0) window.scrollBy(0, overlap)
     })
     reveal()

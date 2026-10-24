@@ -10,6 +10,7 @@ import { useCreatePage } from './pages-screen'
 import { SidebarTrashRow } from './trash'
 import { AccountRow } from './account-row'
 import { useKeptDrafts } from './kept-drafts'
+import { useKeyboardTop } from './keyboard'
 
 // Highlight only where you are: Today is today's page, not any day (another day highlights its Days row, or nothing).
 const destinations = [
@@ -24,6 +25,7 @@ const destinations = [
 /** Sidebar on laptop, floating tab capsule + capture button on phone (craft-v1 §3). CSS picks one. */
 export function Navigation() {
   const path = useRouterState({ select: s => s.location.pathname })
+  const keyboardUp = useKeyboardTop() !== null
   const openPageId = useRouterState({ select: s => (s.location.search as { page?: string }).page })
   const trashView = useRouterState({ select: s => (s.location.search as { view?: string }).view === 'trash' })
   const today = useToday()
@@ -60,7 +62,8 @@ export function Navigation() {
         <PageGroups path={path} openPageId={openPageId} trashView={trashView} today={today} />
       </aside>
 
-      <nav className="tab-bar" aria-label="Main">
+      {/* B54: hidden while a keyboard is up (B48's detection), so it never sits between the keyboard and the toolbar. */}
+      <nav className={`tab-bar${keyboardUp ? ' is-keyboard-up' : ''}`} aria-label="Main">
         <div className="tab-capsule">
           {destinations.map(({ to, label, Icon, match }) => (
             <Link key={to} to={to} className={`tab${unsavedTabs.has(to as never) ? ' has-unsaved' : ''}`} aria-label={unsavedTabs.has(to as never) ? `${label} · not saved yet` : label} aria-current={match(path, today) ? 'page' : undefined}>
