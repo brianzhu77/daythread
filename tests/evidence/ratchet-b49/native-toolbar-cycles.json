@@ -1,0 +1,197 @@
+[
+  {
+    "cycle": 1,
+    "dom": {
+      "toolbar": {
+        "x": 25.5,
+        "y": 318,
+        "width": 351,
+        "height": 50,
+        "top": 318,
+        "right": 376.5,
+        "bottom": 368,
+        "left": 25.5
+      },
+      "vv": {
+        "height": 376,
+        "offsetTop": 58
+      },
+      "innerHeight": 714,
+      "active": "true"
+    },
+    "keyboards": [
+      {
+        "type": "XCUIElementTypeKeyboard",
+        "enabled": "true",
+        "visible": "true",
+        "accessible": "false",
+        "x": "0",
+        "y": "583",
+        "width": "402",
+        "height": "233",
+        "index": "0",
+        "traits": ""
+      }
+    ],
+    "tools": [
+      {
+        "type": "XCUIElementTypeButton",
+        "name": "Indent",
+        "label": "Indent",
+        "enabled": "false",
+        "visible": "true",
+        "accessible": "true",
+        "x": "175",
+        "y": "383",
+        "width": "43",
+        "height": "44",
+        "index": "3",
+        "traits": "NotEnabled, Button"
+      },
+      {
+        "type": "XCUIElementTypeButton",
+        "name": "Hide keyboard",
+        "label": "Hide keyboard",
+        "enabled": "true",
+        "visible": "true",
+        "accessible": "true",
+        "x": "331",
+        "y": "383",
+        "width": "43",
+        "height": "44",
+        "index": "6",
+        "traits": "Button"
+      }
+    ]
+  },
+  {
+    "cycle": 2,
+    "dom": {
+      "toolbar": {
+        "x": 25.5,
+        "y": 318,
+        "width": 351,
+        "height": 50,
+        "top": 318,
+        "right": 376.5,
+        "bottom": 368,
+        "left": 25.5
+      },
+      "vv": {
+        "height": 376,
+        "offsetTop": 58
+      },
+      "innerHeight": 714,
+      "active": "true"
+    },
+    "keyboards": [
+      {
+        "type": "XCUIElementTypeKeyboard",
+        "enabled": "true",
+        "visible": "true",
+        "accessible": "false",
+        "x": "0",
+        "y": "583",
+        "width": "402",
+        "height": "233",
+        "index": "0",
+        "traits": ""
+      }
+    ],
+    "tools": [
+      {
+        "type": "XCUIElementTypeButton",
+        "name": "Indent",
+        "label": "Indent",
+        "enabled": "false",
+        "visible": "true",
+        "accessible": "true",
+        "x": "175",
+        "y": "383",
+        "width": "43",
+        "height": "44",
+        "index": "3",
+        "traits": "NotEnabled, Button"
+      },
+      {
+        "type": "XCUIElementTypeButton",
+        "name": "Hide keyboard",
+        "label": "Hide keyboard",
+        "enabled": "true",
+        "visible": "true",
+        "accessible": "true",
+        "x": "331",
+        "y": "383",
+        "width": "43",
+        "height": "44",
+        "index": "6",
+        "traits": "Button"
+      }
+    ]
+  },
+  {
+    "cycle": 3,
+    "dom": {
+      "toolbar": {
+        "x": 25.5,
+        "y": 318,
+        "width": 351,
+        "height": 50,
+        "top": 318,
+        "right": 376.5,
+        "bottom": 368,
+        "left": 25.5
+      },
+      "vv": {
+        "height": 376,
+        "offsetTop": 58
+      },
+      "innerHeight": 714,
+      "active": "true"
+    },
+    "keyboards": [
+      {
+        "type": "XCUIElementTypeKeyboard",
+        "enabled": "true",
+        "visible": "true",
+        "accessible": "false",
+        "x": "0",
+        "y": "583",
+        "width": "402",
+        "height": "233",
+        "index": "0",
+        "traits": ""
+      }
+    ],
+    "tools": [
+      {
+        "type": "XCUIElementTypeButton",
+        "name": "Indent",
+        "label": "Indent",
+        "enabled": "false",
+        "visible": "true",
+        "accessible": "true",
+        "x": "175",
+        "y": "383",
+        "width": "43",
+        "height": "44",
+        "index": "3",
+        "traits": "NotEnabled, Button"
+      },
+      {
+        "type": "XCUIElementTypeButton",
+        "name": "Hide keyboard",
+        "label": "Hide keyboard",
+        "enabled": "true",
+        "visible": "true",
+        "accessible": "true",
+        "x": "331",
+        "y": "383",
+        "width": "43",
+        "height": "44",
+        "index": "6",
+        "traits": "Button"
+      }
+    ]
+  }
+]
