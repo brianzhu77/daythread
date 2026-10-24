@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { LocalDate } from '../domain/types'
 import { todayIso } from './dates'
-import { ownDrafts } from './draft-slots'
 import { leaveSavesPending } from './editor-flush'
 
 /** No input for this long means he isn't on the screen (Jazz, Bumblebee, Lead c61baf51). */
@@ -24,15 +23,19 @@ function watchInput() {
 /** True for the day a screen moved to on its own until his next key, tap or click: its editor opens without a cursor. */
 export const openedByTurnover = (date: LocalDate | null): boolean => date !== null && movedTo === date
 
-/** A cursor resting in the editor isn't use; text still waiting to save is. */
+/**
+ * A cursor resting in the editor isn't use. A draft whose save failed doesn't hold the day either: it stays stored,
+ * B40 retries it once its page is no longer open, and the not-saved line names its day (Jazz, Bumblebee). Only a
+ * leave-save already in flight waits, for the seconds it takes.
+ */
 function mayTurnOver(now: number): boolean {
-  return now - lastInput >= idleMs && ownDrafts().length === 0 && !leaveSavesPending()
+  return now - lastInput >= idleMs && !leaveSavesPending()
 }
 
 /**
  * Today for a screen that stays open on a day. Reading it once at mount let a Home Screen app resumed on Oct 23 still
  * treat Oct 21 as today and offer Oct 21's morning card. It's re-read once a minute and on every return to the app,
- * and moves to the new date only after 10 minutes with no input and nothing waiting to save: a trip to another app at
+ * and moves to the new date only after 10 minutes with no input: a trip to another app at
  * 23:55 keeps the day he was writing in, while a tab left open overnight, which may never see a return event, moves on.
  * When it moves, the editor's focus is released and the new day's editor opens without a cursor, so his first
  * keystroke can't land in the new day unseen. Labels that should turn over on their own at midnight use `useToday`
