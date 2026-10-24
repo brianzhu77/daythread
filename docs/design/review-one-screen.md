@@ -15,7 +15,7 @@ Mock: `docs/design/b31/mock.html`, screenshots `b31-shape-390.png` and `b31-shap
 
 One screen, no steps, one button. The screen is about **tomorrow**, because that's what he wrote by hand.
 
-1. **Title** "Tomorrow · Sat, Oct 25", a quiet line "Friday: 2 done · 3 still open", and **Done** top right
+1. **Title** "Tomorrow · Sat, Oct 24", a quiet line "Friday: 2 done · 3 still open", and **Done** top right
    (the only button; top right so the phone keyboard never covers it).
 2. **Comes along tomorrow**: today's open tasks, in outline order (B28 tree), with their Top 3 tag. Each row has a
    checkbox (done, with Undo in the row) and ⋯ (Another day…, Not tomorrow). No other buttons. Nothing to do here
@@ -23,8 +23,11 @@ One screen, no steps, one button. The screen is about **tomorrow**, because that
 3. **Add for tomorrow**: a list he types into, like his 明天 list. Return adds the next line. Each line becomes a
    to-do on tomorrow's page right away (`ensure-day` for tomorrow on the first line, then `add-task` into Other).
    ⋯ on a line: Remove, Make it Top 3.
-4. **Done** saves the review (`save-review`, finish) and goes back to today with "Saturday is set · 2 come along, 2 added".
-   Leaving without Done loses nothing: every tick and line is saved as he makes it.
+4. **Done** does tomorrow's hand-off and saves the review: `plan-tasks` for tomorrow with the rows still in
+   "Comes along" (each with its section, the same call as the morning card's Add all, so B34 nesting holds), then
+   `handoff-done` for tomorrow, then `save-review` (finish). Back to today with "Saturday is set · 2 come along, 2 added".
+   The morning card then has nothing left to ask, so there is one place for this job, not two (Bumblebee's risk).
+   Leaving without Done loses nothing already ticked or written; the carry then happens on the morning card as today.
 
 Removed from the review: step numbers, Skip tonight, the capture bar (the add list does that job), the reflection
 box (never used), the saved-items sorting (moves out of the review; still reachable later if wanted), and
@@ -38,16 +41,18 @@ looks at suggestions).
 - **Nothing open, nothing added:** "Nothing comes along from Friday." The add list shows its empty line focused.
 - **A line fails to save:** it stays in the list with "Not added · Retry"; the text is never lost.
 - **Another device changed things:** the list follows the workspace as everywhere else; a ticked task shows as done.
-- **Late review (after midnight, or an older day):** title uses that day + 1, e.g. reviewing Friday at 01:00 Saturday
-  adds to Saturday, which is now today. The title's date makes that clear.
+- **Late review (after midnight, or an older day):** title uses that day + 1, e.g. reviewing Friday at 00:49 Saturday
+  (what he did on Oct 24) adds to Saturday, which is now today, and Done is that day's hand-off. The title's date makes that clear.
 - **Reminder link:** unchanged URL; the opened-from-reminder count stays.
 
 ## Choices for Lead
 
 - **New lines go to Other (recommended) or Top 3 while it has room.** Other keeps the carry rules unchanged and
   Top 3 stays his explicit choice (⋯ Make it Top 3).
-- **Morning card unchanged (recommended for today).** The evening list is a preview of what the card will carry.
-  Later option: Done performs the carry, so the morning card doesn't ask again. Bigger change, not today.
+- **Done performs the carry (recommended, revised after Bumblebee dd816a10).** He already planned Saturday from the
+  morning card at 00:49 his time, so the card is his night tool too; Done doing the same hand-off makes them one job.
+  Reviewing after midnight is then exactly the morning card's hand-off for today. Fallback if it proves risky: card
+  unchanged and the evening list is only a preview.
 
 ## Not decided here
 
