@@ -1,0 +1,10 @@
+from driver import *
+import driver
+driver.ROOT=Path('/tmp/b213-ios');ctx='WEBVIEW_60275.3';driver.web=lambda:call('context',{'name':ctx});out=[]
+metrics='''return {url:location.href,standalone:navigator.standalone,screen:[screen.width,screen.height],inner:[innerWidth,innerHeight],vv:{top:visualViewport.offsetTop,height:visualViewport.height},safe:document.querySelector('.safe-top').getBoundingClientRect().toJSON(),padding:getComputedStyle(document.querySelector('.app-content')).paddingTop,stripColor:getComputedStyle(document.querySelector('.safe-top')).backgroundColor,fade:getComputedStyle(document.querySelector('.tab-bar'),'::before').backgroundImage,title:document.querySelector('h1')?.getBoundingClientRect().toJSON(),done:[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Done')?.getBoundingClientRect().toJSON(),errors:window.__sweepErrors??[]}'''
+goto('/');js('scrollTo(0,0)');v=js(metrics);out.append(v);print('today',v,flush=True);snap('home-today-top');assert v['standalone']and v['safe']['height']==62 and v['padding']=='62px';assert v['title']['top']>=62
+# Actual tab navigation must remain inside the installed app.
+tap('Tasks');time.sleep(.5);js('scrollTo(0,0)');v=js(metrics);out.append(v);print('tasks',v,flush=True);snap('home-tasks-top');assert '/tasks'in v['url']and v['title']['top']>=62;assert v['stripColor']=='rgb(245, 245, 250)',v
+js('scrollTo(0,document.body.scrollHeight)');snap('home-tasks-bottom');print('native chrome',[(e.get('name'),e.get('type'))for e in ET.fromstring(source()).iter()if e.get('name')in ['Close','URL','TabBarItemTitle']],flush=True)
+tap('Today');time.sleep(.4);js("[...document.querySelectorAll('a')].find(x=>x.textContent.includes('Review today')).scrollIntoView({block:'center'})");tap('Review today');time.sleep(.4);js('scrollTo(0,0)');v=js(metrics);out.append(v);print('review',v,flush=True);snap('home-review-top');assert '/review'in v['url']and v['done']['top']>=62
+Path('/tmp/b213-ios/screens.json').write_text(json.dumps(out,ensure_ascii=False,indent=2))

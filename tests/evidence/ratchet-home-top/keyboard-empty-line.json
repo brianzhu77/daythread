@@ -1,0 +1,23 @@
+{
+  "line": {
+    "x": 65,
+    "y": 347,
+    "width": 2,
+    "height": 24,
+    "top": 347,
+    "right": 67,
+    "bottom": 371,
+    "left": 65
+  },
+  "safe": {
+    "x": 0,
+    "y": 0,
+    "width": 402,
+    "height": 62,
+    "top": 0,
+    "right": 402,
+    "bottom": 62,
+    "left": 0
+  },
+  "vv": 93
+}
