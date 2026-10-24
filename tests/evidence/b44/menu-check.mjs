@@ -48,7 +48,7 @@ if (mode === 'keep') {
   const made = pagesFor(U)
   log(await cards() === 1 && made.length === 1, 'Bookmark page: the card and its page, A2\'s paste', JSON.stringify(made))
   log(/Made a page/.test(await p.locator('[role="alert"], [data-slot="toast"]').allInnerTexts().then(t => t.join(' | '))), 'A2\'s notice "Made a page · Undo"')
-  log(materialFor(U) && JSON.parse(materialFor(U).sources).length === 1, 'one remembered item for the link, now on the card')
+  log(materialFor(U) && JSON.parse(materialFor(U).sources).length === 1, 'one remembered item for the link, now on the card', JSON.stringify(q("SELECT id, sources FROM materials WHERE snapshot='current'")))
   if (!phone) {
     await p.keyboard.press(`${mod}+z`); await p.waitForTimeout(2500)
     log(await cards() === 0 && (await lineTexts()).some(t => t.includes('xiachufang')) && pagesFor(U).length === 0 && materialFor(U), '⌘Z (step 2) gives back the plain link: page gone, link still remembered', JSON.stringify({ pages: pagesFor(U), m: Boolean(materialFor(U)) }))
@@ -105,10 +105,10 @@ if (mode === 'keep') {
   log(slot.some(x => x?.length === 1), 'the draft holds the kept link', JSON.stringify(slot))
   // WebKit doesn't always fire pagehide on a closed page, so the slot may not say "closed"; a short gone-after (B35's
   // check hook) makes it a gone tab's either way.
-  await p.close({ runBeforeUnload: true }); await context.setOffline(false)
-  await context.addInitScript(() => { globalThis.__daythreadGoneAfterMs = 1500 }); await new Promise(r => setTimeout(r, 1600))
-  p = await context.newPage(); p.on('pageerror', e => errors.push(e.message))
-  await p.goto(`${base}/`, { waitUntil: 'networkidle' })
+  await context.addInitScript(() => { globalThis.__daythreadGoneAfterMs = 1500 })
+  const next = await context.newPage(); next.on('pageerror', e => errors.push(e.message))
+  await p.close({ runBeforeUnload: true }); await context.setOffline(false); p = next
+  await new Promise(r => setTimeout(r, 1600)); await p.goto(`${base}/`, { waitUntil: 'networkidle' })
   log(await until(async () => Boolean(materialFor(U)) && (await lineTexts()).some(t => t.includes(U)), 15000), 'another tab merges the draft, saves it and remembers the link', JSON.stringify({ m: materialFor(U) ?? null, line: (await lineTexts()).some(t => t.includes(U)), slots: await p.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('daythread:editor:')).map(k => { const v = JSON.parse(localStorage.getItem(k)); return { closed: v.closed, claimed: Boolean(v.claimedBy), kept: v.keptPlainLinks?.length ?? 0, age: Date.now() - v.seen } })) }))
 } else if (mode === 'good-stuffs') {
   // Ratchet: a link pasted into Good Stuffs and kept is a deliberate save; deleting its line keeps the item.

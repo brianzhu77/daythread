@@ -540,12 +540,12 @@ function linkPageEdited(state: Workspace, p: Page, firstTitle: string = defaultL
  * 5be8b479, Ratchet 517c25c): one write, retried and kept in drafts with the text, so nothing is lost offline. A link
  * whose line this save doesn't hold (undone, or already a card) is left out.
  */
-function keepPlainLinks(state: Workspace, p: Page, nodes: readonly EditorNode[], items: readonly { blockId: string; url: string }[]): void {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
+function keepPlainLinks(state: Workspace, p: Page, nodes: readonly EditorNode[] | null, items: readonly { blockId: string; url: string }[]): void {
+  const byId = new Map((nodes ?? []).map((n) => [n.id, n]));
   for (const item of items) {
     const url = text(item.url.trim(), 10_000);
     const owner = urlOwner(state, url), line = byId.get(item.blockId);
-    if (owner.key === null || !line || !holdsLink(line, owner.key)) continue;
+    if (owner.key === null || (nodes && (!line || !holdsLink(line, owner.key)))) continue;
     const source = { pageId: p.id, blockId: item.blockId, note: "", plain: true as const };
     if (owner.material) {
       if (!owner.material.sources.some((x) => x.pageId === p.id && x.blockId === item.blockId)) owner.material.sources.push(source);
@@ -555,6 +555,15 @@ function keepPlainLinks(state: Workspace, p: Page, nodes: readonly EditorNode[],
     // Its title stays the URL this round (Lead: B43's fetch is for bookmark pages only).
     state.materials.push({ id: `material:${item.blockId}`, url, title: url, body: "", savedOn: day, reviewState: "pending", nextReviewOn: null, resurface: true, lastDecisionOn: null, skippedUntil: null, sources: [source], decisions: [] });
   }
+}
+/**
+ * Tabs still open on b358ac8 (B44's first build) send this right after a paste, before the line is saved; it's kept
+ * so their links are remembered (no line check: the line comes with their next save). This build sends
+ * `keptPlainLinks` with the save instead.
+ */
+function savePlainLink(state: Workspace, action: Extract<Action, { type: "save-plain-link" }>): { message: string } {
+  keepPlainLinks(state, page(state, action.pageId), null, action.items);
+  return { message: action.items.length === 1 ? "Link kept" : `${action.items.length} links kept` };
 }
 /** Does this line hold a link to `key`: an inline link, or a link card for it. */
 function holdsLink(n: EditorNode, key: string): boolean {
@@ -1743,6 +1752,8 @@ function execute(
     }
     case "paste-links":
       return pasteLinks(state, action, operationId);
+    case "save-plain-link":
+      return savePlainLink(state, action);
     case "undo-paste-links":
       return undoPasteLinks(state, action);
     case "apply-link-preview":

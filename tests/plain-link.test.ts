@@ -96,3 +96,12 @@ test('a kept link whose line this save doesn\'t hold is left out (undone, or alr
   s.save(n => [...n, { id: 'l1', type: 'paragraph', props: {}, content: [{ type: 'text', text: 'no link here', styles: {} }], children: [] } as EditorNode], [{ blockId: 'l1', url }, { blockId: 'gone', url }])
   assert.equal(item(s.ws), undefined)
 })
+
+test('a tab still on b358ac8 sends save-plain-link before its save: still remembered, and still goes with its line', () => {
+  const s = setup()
+  s.run({ type: 'save-plain-link', pageId: s.dayId, items: [{ blockId: 'l1', url }] })
+  s.save(n => [...n, link('l1')])
+  assert.deepEqual(item(s.ws)?.sources, [{ pageId: s.dayId, blockId: 'l1', note: '', plain: true }])
+  s.save(n => n.filter(x => x.id !== 'l1'))
+  assert.equal(item(s.ws), undefined)
+})

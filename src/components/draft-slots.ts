@@ -288,3 +288,8 @@ export function withoutSaved<N extends DraftNode>(draft: N[], latest: N[]): N[] 
   })
   return clean(draft) as N[]
 }
+
+/** A draft's kept links once its lines are merged into a page (B44: a line may come back under a new id). */
+export function keptAfterMerge(kept: DraftSlot['keptPlainLinks'], placed: ReadonlyMap<string, string>): { blockId: string; url: string }[] {
+  return (kept ?? []).map(x => ({ blockId: placed.get(x.blockId) ?? x.blockId, url: x.url }))
+}

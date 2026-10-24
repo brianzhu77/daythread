@@ -382,6 +382,8 @@ export type Action =
   | { type: "material-resurface"; materialId: string; enabled: boolean }
   | { type: "create-document"; title: string; body: string; pageId?: string; parentId?: string }
   /** A2: URLs pasted onto an empty line of `pageId`, one card each, in order. `sectionId`: the heading above them. */
+  /** B44 at b358ac8 only; see `keptPlainLinks` on save-editor. */
+  | { type: "save-plain-link"; pageId: string; items: { blockId: string; url: string }[] }
   | { type: "paste-links"; pageId: string; sectionId?: string; today: LocalDate; items: { url: string; pageId: string; cardBlockId: string; lineType: string; title?: string }[] }
   | { type: "undo-paste-links"; pageId: string; operationId: string; today: LocalDate }
   /** B44: links pasted and kept as plain links (the menu's default): each still recorded, with no page, on its line. */

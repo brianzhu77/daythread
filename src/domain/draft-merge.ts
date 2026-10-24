@@ -9,6 +9,8 @@ export interface DraftMerge {
   document: EditorNode[]
   /** Ids of the lines that were inserted (or filled), in document order. */
   inserted: string[]
+  /** Where his changed lines went: draft id → id in `document` (a new id when the latest page already had his). */
+  placed: Map<string, string>
 }
 
 const walk = (nodes: EditorNode[], visit: (node: EditorNode, parent: EditorNode | null, index: number) => void, parent: EditorNode | null = null) =>
@@ -103,5 +105,5 @@ export function mergeDraft(base: EditorNode[], draft: EditorNode[], latest: Edit
   })
   const order = new Map<string, number>(); let i = 0; walk(document, n => order.set(n.id, i++))
   inserted.sort((a, b) => order.get(a)! - order.get(b)!)
-  return { document, inserted }
+  return { document, inserted, placed: anchorFor }
 }

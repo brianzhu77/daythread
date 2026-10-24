@@ -13,7 +13,7 @@ import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, templateKind, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
-import { announceSave, changedBy, claim, clearOwn, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn } from './draft-slots'
+import { announceSave, changedBy, claim, clearOwn, keptAfterMerge, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn } from './draft-slots'
 import { applyCommand, bornHere, deletesWithLine, pasteRecords, urlOwner } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
@@ -743,7 +743,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         doc = merged.document; inserted += merged.inserted.length
         // Its cuts were moves too (B33): the save that carries its text mustn't delete them.
         for (const id of slot.cutTaskIds ?? []) cutTasks.current.add(id)
-        for (const x of slot.keptPlainLinks ?? []) keptLinks.current.set(x.blockId, x.url)
+        for (const x of keptAfterMerge(slot.keptPlainLinks, merged.placed)) keptLinks.current.set(x.blockId, x.url)
       } catch { continue }
       claim(page.id, slotKey)
     }
@@ -871,6 +871,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const started = { ...latestNow, sections: baseSections, editorJSON: baseJSON ?? undefined, editorSections: JSON.stringify(baseSections) } as Page
     const seed = (p: Page) => editorSeed(p, ws, { templateRows: needsTemplateRows(p, todayIso()) }) as EditorNode[]
     const merged = mergeDraft(seed(started), nodes(), seed(latestNow), new Set(ws.tasks.map(t => t.id)))
+    for (const x of keptAfterMerge([...keptLinks.current].map(([blockId, url]) => ({ blockId, url })), merged.placed)) keptLinks.current.set(x.blockId, x.url)
     clearTimeout(timer.current)
     semanticDeletes.current.clear(); pendingSave.current = null
     applyServerPage(latestNow, ws)
@@ -1046,6 +1047,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const known = latestWorkspace.current.pages.find(p => p.url && urlKey(p.url) === urlKey(url))
       return { url, pageId: known?.id ?? crypto.randomUUID(), cardBlockId: crypto.randomUUID(), lineType: lineType as 'paragraph', ...(linkText ? { title: linkText } : {}) }
     })
+    // §4a: a kept link not yet saved goes onto its card, so it's remembered while the card stands; its line keeps its
+    // entry too, for the Undo that brings the line back.
+    if (fromMenu) items.forEach((it, i) => { const url = keptLinks.current.get(blockIds[i]!); if (url) keptLinks.current.set(it.cardBlockId, url) })
     // B44: its own undo step after the paste (Jazz §9): ⌘Z gives back the plain links, a second ⌘Z the paste.
     editor.transact(tr => {
       closeHistory(tr)
