@@ -1,0 +1,1045 @@
+{
+  "before": {
+    "id": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+    "html": "<div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a\"><div class=\"react-renderer node-task bn-react-node-view-renderer\"><div class=\"bn-block-content\" data-content-type=\"task\" data-task-id=\"editor-task:d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a\" data-role=\"plan\" data-plan-date=\"2026-10-23\" data-node-view-wrapper=\"\" style=\"white-space: normal;\"><div class=\"editor-task\" data-role=\"plan\" data-draft=\"true\" data-status=\"draft\"><input contenteditable=\"false\" aria-label=\"New task\" type=\"checkbox\"><span class=\"bn-inline-content editor-task-title \" data-placeholder=\"To do\" data-node-view-content=\"\"><div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">wan</div></span></div></div></div></div>"
+  },
+  "after": {
+    "log": [
+      {
+        "t": 15,
+        "ev": "mut",
+        "caret": {
+          "block": "day:2026-10-23:top3:template:0",
+          "offset": 1,
+          "node": "SPAN"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "TRV for Lu and Kathy",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">TRV for Lu and Kathy</div>",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 17,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "day:2026-10-23:top3:template:0",
+          "offset": 1,
+          "node": "SPAN"
+        }
+      },
+      {
+        "t": 22,
+        "ev": "mut",
+        "caret": {
+          "block": "day:2026-10-23:top3:template:0",
+          "offset": 20,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "TRV for Lu and Kathy",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">TRV for Lu and Kathy</div>",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 25,
+        "ev": "mut",
+        "caret": {
+          "block": "day:2026-10-23:top3:template:0",
+          "offset": 20,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "TRV for Lu and Kathy",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">TRV for Lu and Kathy</div>",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "span.bn-inline-content@day:2026",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 707,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "DIV"
+        },
+        "records": 2,
+        "kinds": [
+          "childList",
+          "attributes"
+        ],
+        "added": [
+          "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a"
+        ],
+        "removed": [],
+        "text": "",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\"><br class=\"ProseMirror-trailingBreak\"></div>",
+        "raw": [
+          {
+            "type": "list",
+            "at": "div.bn-block-group@-",
+            "added": [
+              "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"react-renderer node-task bn-react-node-view-renderer\"><div class=\"bn-block-content\"><div class=\"editor-task\"><input type=\"checkbox\"><span "
+            ],
+            "removed": []
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 707,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "DIV"
+        },
+        "records": 2,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\"><br class=\"ProseMirror-trailingBreak\"></div>",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "span.bn-inline-content@d3fbbb7e",
+            "name": "class"
+          },
+          {
+            "type": "attr",
+            "at": "span.bn-inline-content@day:2026",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 707,
+        "ev": "keydown",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "DIV"
+        },
+        "key": "Enter",
+        "keyCode": 13,
+        "isComposing": false
+      },
+      {
+        "t": 707,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "DIV"
+        }
+      },
+      {
+        "t": 709,
+        "ev": "keyup",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "DIV"
+        },
+        "key": "Enter",
+        "keyCode": 13,
+        "isComposing": false
+      },
+      {
+        "t": 1745,
+        "ev": "keydown",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "DIV"
+        },
+        "key": "w",
+        "keyCode": 229,
+        "isComposing": false
+      },
+      {
+        "t": 1747,
+        "ev": "compositionstart",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "DIV"
+        },
+        "data": ""
+      },
+      {
+        "t": 1747,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "DIV"
+        },
+        "data": "w"
+      },
+      {
+        "t": 1747,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "DIV"
+        },
+        "inputType": "insertCompositionText",
+        "data": "w",
+        "isComposing": true
+      },
+      {
+        "t": 1753,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 5,
+        "kinds": [
+          "childList",
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "w",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">w</div>",
+        "raw": [
+          {
+            "type": "list",
+            "at": "div.@d3fbbb7e",
+            "added": [
+              "#text(\"w\")"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "div.@d3fbbb7e",
+            "added": [],
+            "removed": [
+              "<br class=\"ProseMirror-trailingBreak\">"
+            ]
+          },
+          {
+            "type": "text",
+            "at": "div.@d3fbbb7e",
+            "old": "",
+            "now": "w"
+          },
+          {
+            "type": "attr",
+            "at": "div.react-renderer@d3fbbb7e",
+            "name": "data-is-empty-and-focused"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 1754,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "w",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">w</div>",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "span.bn-inline-content@d3fbbb7e",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 1754,
+        "ev": "input",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "w",
+        "isComposing": true
+      },
+      {
+        "t": 1755,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 1,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 1755,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 1,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "w",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">w</div>",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 1755,
+        "ev": "keyup",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 1,
+          "node": "#text"
+        },
+        "key": "w",
+        "keyCode": 87,
+        "isComposing": true
+      },
+      {
+        "t": 2311,
+        "ev": "keydown",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 1,
+          "node": "#text"
+        },
+        "key": "a",
+        "keyCode": 229,
+        "isComposing": true
+      },
+      {
+        "t": 2313,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "data": "wa"
+      },
+      {
+        "t": 2313,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wa",
+        "isComposing": true
+      },
+      {
+        "t": 2316,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wa",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">wa</div>",
+        "raw": [
+          {
+            "type": "text",
+            "at": "div.@d3fbbb7e",
+            "old": "w",
+            "now": "wa"
+          },
+          {
+            "type": "text",
+            "at": "div.@d3fbbb7e",
+            "old": "",
+            "now": "wa"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 2317,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wa",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">wa</div>",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "span.bn-inline-content@d3fbbb7e",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 2317,
+        "ev": "input",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wa",
+        "isComposing": true
+      },
+      {
+        "t": 2317,
+        "ev": "keyup",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 2,
+          "node": "#text"
+        },
+        "key": "a",
+        "keyCode": 65,
+        "isComposing": true
+      },
+      {
+        "t": 2317,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 2,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 2318,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 2,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wa",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">wa</div>",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 2895,
+        "ev": "keydown",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 2,
+          "node": "#text"
+        },
+        "key": "n",
+        "keyCode": 229,
+        "isComposing": true
+      },
+      {
+        "t": 2896,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "data": "wan"
+      },
+      {
+        "t": 2896,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wan",
+        "isComposing": true
+      },
+      {
+        "t": 2898,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wan",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">wan</div>",
+        "raw": [
+          {
+            "type": "text",
+            "at": "div.@d3fbbb7e",
+            "old": "wa",
+            "now": "wan"
+          },
+          {
+            "type": "text",
+            "at": "div.@d3fbbb7e",
+            "old": "",
+            "now": "wan"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 2899,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wan",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">wan</div>",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "span.bn-inline-content@d3fbbb7e",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 2899,
+        "ev": "input",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wan",
+        "isComposing": true
+      },
+      {
+        "t": 2899,
+        "ev": "keyup",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 3,
+          "node": "#text"
+        },
+        "key": "n",
+        "keyCode": 78,
+        "isComposing": true
+      },
+      {
+        "t": 2899,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 3,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 2900,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 3,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wan",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">wan</div>",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4317,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "data": "万"
+      },
+      {
+        "t": 4318,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4330,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">万</div>",
+        "raw": [
+          {
+            "type": "text",
+            "at": "div.@d3fbbb7e",
+            "old": "wan",
+            "now": "万"
+          },
+          {
+            "type": "text",
+            "at": "div.@d3fbbb7e",
+            "old": "",
+            "now": "万"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4331,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">万</div>",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "span.bn-inline-content@d3fbbb7e",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4331,
+        "ev": "input",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4332,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "deleteCompositionText",
+        "data": null,
+        "isComposing": true
+      },
+      {
+        "t": 4335,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "DIV"
+        },
+        "records": 7,
+        "kinds": [
+          "characterData",
+          "childList",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\"><br class=\"ProseMirror-trailingBreak\"></div>",
+        "raw": [
+          {
+            "type": "text",
+            "at": "?",
+            "old": "万",
+            "now": ""
+          },
+          {
+            "type": "list",
+            "at": "div.@d3fbbb7e",
+            "added": [],
+            "removed": [
+              "#text(\"\")"
+            ]
+          },
+          {
+            "type": "list",
+            "at": "div.@d3fbbb7e",
+            "added": [
+              "<br>"
+            ],
+            "removed": []
+          },
+          {
+            "type": "attr",
+            "at": "div.react-renderer@d3fbbb7e",
+            "name": "data-is-empty-and-focused"
+          },
+          {
+            "type": "list",
+            "at": "div.@d3fbbb7e",
+            "added": [
+              "<br class=\"ProseMirror-trailingBreak\">"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "div.@d3fbbb7e",
+            "added": [],
+            "removed": [
+              "<br>"
+            ]
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4336,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "DIV"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\"><br class=\"ProseMirror-trailingBreak\"></div>",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "span.bn-inline-content@d3fbbb7e",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4336,
+        "ev": "input",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "DIV"
+        },
+        "inputType": "deleteCompositionText",
+        "data": null,
+        "isComposing": true
+      },
+      {
+        "t": 4336,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 0,
+          "node": "DIV"
+        },
+        "inputType": "insertFromComposition",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4338,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 1,
+          "node": "#text"
+        },
+        "records": 5,
+        "kinds": [
+          "childList",
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">万</div>",
+        "raw": [
+          {
+            "type": "list",
+            "at": "div.@d3fbbb7e",
+            "added": [
+              "#text(\"万\")"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "div.@d3fbbb7e",
+            "added": [],
+            "removed": [
+              "<br class=\"ProseMirror-trailingBreak\">"
+            ]
+          },
+          {
+            "type": "text",
+            "at": "div.@d3fbbb7e",
+            "old": "",
+            "now": "万"
+          },
+          {
+            "type": "attr",
+            "at": "div.react-renderer@d3fbbb7e",
+            "name": "data-is-empty-and-focused"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4339,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 1,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">万</div>",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "span.bn-inline-content@d3fbbb7e",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4339,
+        "ev": "input",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 1,
+          "node": "#text"
+        },
+        "inputType": "insertFromComposition",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4339,
+        "ev": "compositionend",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 1,
+          "node": "#text"
+        },
+        "data": "万"
+      },
+      {
+        "t": 4339,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 1,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 4360,
+        "ev": "mut",
+        "caret": {
+          "block": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+          "offset": 1,
+          "node": "DIV"
+        },
+        "records": 3,
+        "kinds": [
+          "childList",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万",
+        "html": "<div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">万</div>",
+        "raw": [
+          {
+            "type": "list",
+            "at": "div.@d3fbbb7e",
+            "added": [
+              "#text(\"万\")"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "div.@d3fbbb7e",
+            "added": [],
+            "removed": [
+              "#text(\"万\")"
+            ]
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      }
+    ],
+    "blocks": [],
+    "caret": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a"
+  }
+}

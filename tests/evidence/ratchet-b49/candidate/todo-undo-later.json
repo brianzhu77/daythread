@@ -1,0 +1,8 @@
+{
+  "value": {
+    "id": "d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a",
+    "type": "task",
+    "text": "万",
+    "html": "<div class=\"react-renderer node-task bn-react-node-view-renderer\"><div class=\"bn-block-content\" data-content-type=\"task\" data-task-id=\"editor-task:d3fbbb7e-c5bb-4e42-9d5e-8ee45ccb337a\" data-role=\"plan\" data-plan-date=\"2026-10-23\" data-node-view-wrapper=\"\" style=\"white-space: normal;\"><div class=\"editor-task\" data-role=\"plan\" data-status=\"open\"><input contenteditable=\"false\" aria-label=\"Complete 万\" type=\"checkbox\"><span class=\"bn-inline-content editor-task-title \" data-placeholder=\"To do\" data-node-view-content=\"\"><div data-node-view-content-react=\"\" data-node-view-wrapper=\"\" style=\"white-space: inherit;\">万</div></span><span contenteditable=\"false\" class=\"editor-row-menu\"><div class=\"row-menu\"><button type=\"button\" class=\"editor-row-more\" aria-label=\"Actions for 万\" aria-haspopup=\"menu\" aria-expanded=\"false\" aria-controls=\"_r_h_\">⋯</button></div></span></div></div></div>"
+  }
+}

@@ -1,0 +1,1363 @@
+{
+  "before": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+  "after": {
+    "id": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+    "type": "bulletListItem",
+    "text": "万和",
+    "html": "万和",
+    "log": [
+      {
+        "t": 13,
+        "ev": "mut",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万圣节装饰、衣服",
+        "html": "万圣节装饰、衣服",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 27,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        }
+      },
+      {
+        "t": 30,
+        "ev": "mut",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万圣节装饰、衣服",
+        "html": "万圣节装饰、衣服",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 1309,
+        "ev": "keydown",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        },
+        "key": "Enter",
+        "keyCode": 13,
+        "isComposing": false
+      },
+      {
+        "t": 1318,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        },
+        "inputType": "insertParagraph",
+        "data": null,
+        "isComposing": false
+      },
+      {
+        "t": 1334,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "P"
+        },
+        "records": 6,
+        "kinds": [
+          "childList",
+          "attributes"
+        ],
+        "added": [
+          "853e224a-d3b7-45ed-8da1-08dd67d0ae5e"
+        ],
+        "removed": [],
+        "text": "",
+        "html": "<br class=\"ProseMirror-trailingBreak\">",
+        "raw": [
+          {
+            "type": "list",
+            "at": "div.bn-block-content@-",
+            "added": [
+              "<p class=\"bn-inline-content\"><br></p>"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "p.bn-inline-content@-",
+            "added": [
+              "<br>"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "div.bn-block@002580aa",
+            "added": [
+              "<div class=\"bn-block-content\"><p class=\"bn-inline-content\">万圣节装饰、衣服</p></div>"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "div.bn-block@002580aa",
+            "added": [],
+            "removed": [
+              "<div class=\"bn-block-content\"><p class=\"bn-inline-content\">万圣节装饰、衣服</p><p class=\"bn-inline-content\"><br></p></div>"
+            ]
+          },
+          {
+            "type": "list",
+            "at": "div.bn-block-group@day:2026",
+            "added": [
+              "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"bn-block-content\"><p class=\"bn-inline-content\"><br class=\"ProseMirror-trailingBreak\"></p></div></div></div>"
+            ],
+            "removed": []
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 1334,
+        "ev": "input",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "P"
+        },
+        "inputType": "insertParagraph",
+        "data": null,
+        "isComposing": false
+      },
+      {
+        "t": 1334,
+        "ev": "keyup",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "P"
+        },
+        "key": "Enter",
+        "keyCode": 13,
+        "isComposing": false
+      },
+      {
+        "t": 1335,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "P"
+        }
+      },
+      {
+        "t": 1838,
+        "ev": "keydown",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "P"
+        },
+        "key": "w",
+        "keyCode": 229,
+        "isComposing": false
+      },
+      {
+        "t": 1840,
+        "ev": "compositionstart",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "P"
+        },
+        "data": ""
+      },
+      {
+        "t": 1841,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "P"
+        },
+        "data": "w"
+      },
+      {
+        "t": 1841,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "P"
+        },
+        "inputType": "insertCompositionText",
+        "data": "w",
+        "isComposing": true
+      },
+      {
+        "t": 1844,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 5,
+        "kinds": [
+          "childList",
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "w",
+        "html": "w",
+        "raw": [
+          {
+            "type": "list",
+            "at": "p.bn-inline-content@853e224a",
+            "added": [
+              "#text(\"w\")"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "p.bn-inline-content@853e224a",
+            "added": [],
+            "removed": [
+              "<br class=\"ProseMirror-trailingBreak\">"
+            ]
+          },
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@853e224a",
+            "old": "",
+            "now": "w"
+          },
+          {
+            "type": "attr",
+            "at": "div.bn-block-content@853e224a",
+            "name": "data-is-empty-and-focused"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 1844,
+        "ev": "input",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "w",
+        "isComposing": true
+      },
+      {
+        "t": 1844,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 1844,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "w",
+        "html": "w",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 1845,
+        "ev": "keyup",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "key": "w",
+        "keyCode": 87,
+        "isComposing": true
+      },
+      {
+        "t": 2388,
+        "ev": "keydown",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "key": "a",
+        "keyCode": 229,
+        "isComposing": true
+      },
+      {
+        "t": 2390,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "data": "wa"
+      },
+      {
+        "t": 2390,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wa",
+        "isComposing": true
+      },
+      {
+        "t": 2393,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wa",
+        "html": "wa",
+        "raw": [
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@853e224a",
+            "old": "w",
+            "now": "wa"
+          },
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@853e224a",
+            "old": "",
+            "now": "wa"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 2393,
+        "ev": "input",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wa",
+        "isComposing": true
+      },
+      {
+        "t": 2393,
+        "ev": "keyup",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 2,
+          "node": "#text"
+        },
+        "key": "a",
+        "keyCode": 65,
+        "isComposing": true
+      },
+      {
+        "t": 2393,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 2,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 2394,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 2,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wa",
+        "html": "wa",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 2955,
+        "ev": "keydown",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 2,
+          "node": "#text"
+        },
+        "key": "n",
+        "keyCode": 229,
+        "isComposing": true
+      },
+      {
+        "t": 2957,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "data": "wan"
+      },
+      {
+        "t": 2957,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wan",
+        "isComposing": true
+      },
+      {
+        "t": 2961,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wan",
+        "html": "wan",
+        "raw": [
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@853e224a",
+            "old": "wa",
+            "now": "wan"
+          },
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@853e224a",
+            "old": "",
+            "now": "wan"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 2961,
+        "ev": "input",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wan",
+        "isComposing": true
+      },
+      {
+        "t": 2961,
+        "ev": "keyup",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 3,
+          "node": "#text"
+        },
+        "key": "n",
+        "keyCode": 78,
+        "isComposing": true
+      },
+      {
+        "t": 2961,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 3,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 2962,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 3,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wan",
+        "html": "wan",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4357,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "data": "万"
+      },
+      {
+        "t": 4357,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4360,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万",
+        "html": "万",
+        "raw": [
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@853e224a",
+            "old": "wan",
+            "now": "万"
+          },
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@853e224a",
+            "old": "",
+            "now": "万"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4360,
+        "ev": "input",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4360,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "deleteCompositionText",
+        "data": null,
+        "isComposing": true
+      },
+      {
+        "t": 4366,
+        "ev": "mut",
+        "caret": {
+          "block": "31befdd7-48ee-40ee-825b-40fa74ddaa40",
+          "offset": 0,
+          "node": "P"
+        },
+        "records": 5,
+        "kinds": [
+          "childList",
+          "attributes"
+        ],
+        "added": [
+          "31befdd7-48ee-40ee-825b-40fa74ddaa40"
+        ],
+        "removed": [
+          "853e224a-d3b7-45ed-8da1-08dd67d0ae5e"
+        ],
+        "text": "",
+        "html": "<img class=\"ProseMirror-separator\" alt=\"\"><br><br class=\"ProseMirror-trailingBreak\">",
+        "raw": [
+          {
+            "type": "list",
+            "at": "div.bn-block-group@day:2026",
+            "added": [],
+            "removed": [
+              "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"bn-block-content\"><p class=\"bn-inline-content\">万</p></div></div></div>"
+            ]
+          },
+          {
+            "type": "list",
+            "at": "div.bn-block-group@day:2026",
+            "added": [
+              "<br>"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "div.bn-block-group@day:2026",
+            "added": [
+              "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"bn-block-content\"><p class=\"bn-inline-content\"><img class=\"ProseMirror-separator\" alt=\"\"><br><br class=\"ProseMirror-trailingBreak\"></p></d"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "div.bn-block-group@day:2026",
+            "added": [],
+            "removed": [
+              "<br>"
+            ]
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4366,
+        "ev": "input",
+        "caret": {
+          "block": "31befdd7-48ee-40ee-825b-40fa74ddaa40",
+          "offset": 0,
+          "node": "P"
+        },
+        "inputType": "deleteCompositionText",
+        "data": null,
+        "isComposing": true
+      },
+      {
+        "t": 4367,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "31befdd7-48ee-40ee-825b-40fa74ddaa40",
+          "offset": 0,
+          "node": "P"
+        },
+        "inputType": "insertFromComposition",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4368,
+        "ev": "mut",
+        "caret": {
+          "block": "31befdd7-48ee-40ee-825b-40fa74ddaa40",
+          "offset": 1,
+          "node": "#text"
+        },
+        "records": 4,
+        "kinds": [
+          "childList",
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万",
+        "html": "万<br><br class=\"ProseMirror-trailingBreak\">",
+        "raw": [
+          {
+            "type": "list",
+            "at": "p.bn-inline-content@31befdd7",
+            "added": [
+              "#text(\"万\")"
+            ],
+            "removed": []
+          },
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@31befdd7",
+            "old": "",
+            "now": "万"
+          },
+          {
+            "type": "list",
+            "at": "p.bn-inline-content@31befdd7",
+            "added": [],
+            "removed": [
+              "<img class=\"ProseMirror-separator\" alt=\"\">"
+            ]
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4368,
+        "ev": "input",
+        "caret": {
+          "block": "31befdd7-48ee-40ee-825b-40fa74ddaa40",
+          "offset": 1,
+          "node": "#text"
+        },
+        "inputType": "insertFromComposition",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4368,
+        "ev": "compositionend",
+        "caret": {
+          "block": "31befdd7-48ee-40ee-825b-40fa74ddaa40",
+          "offset": 1,
+          "node": "#text"
+        },
+        "data": "万"
+      },
+      {
+        "t": 4369,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "31befdd7-48ee-40ee-825b-40fa74ddaa40",
+          "offset": 1,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 4373,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "childList",
+          "attributes"
+        ],
+        "added": [
+          "853e224a-d3b7-45ed-8da1-08dd67d0ae5e"
+        ],
+        "removed": [
+          "31befdd7-48ee-40ee-825b-40fa74ddaa40"
+        ],
+        "text": "万",
+        "html": "万",
+        "raw": [
+          {
+            "type": "list",
+            "at": "div.bn-block-group@day:2026",
+            "added": [
+              "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"bn-block-content\"><p class=\"bn-inline-content\">万</p></div></div></div>"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "div.bn-block-group@day:2026",
+            "added": [],
+            "removed": [
+              "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"bn-block-content\"><p class=\"bn-inline-content\">万<br><br class=\"ProseMirror-trailingBreak\"></p></div></div></div>"
+            ]
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4373,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 25472,
+        "ev": "keydown",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "key": "h",
+        "keyCode": 229,
+        "isComposing": false
+      },
+      {
+        "t": 25474,
+        "ev": "compositionstart",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "data": ""
+      },
+      {
+        "t": 25474,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "data": "h"
+      },
+      {
+        "t": 25474,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "h",
+        "isComposing": true
+      },
+      {
+        "t": 25478,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "records": 2,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万h",
+        "html": "万h",
+        "raw": [
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@853e224a",
+            "old": "万",
+            "now": "万h"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 25478,
+        "ev": "input",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "h",
+        "isComposing": true
+      },
+      {
+        "t": 25478,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 2,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 25479,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 2,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万h",
+        "html": "万h",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 25480,
+        "ev": "keyup",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 2,
+          "node": "#text"
+        },
+        "key": "h",
+        "keyCode": 72,
+        "isComposing": true
+      },
+      {
+        "t": 26022,
+        "ev": "keydown",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 2,
+          "node": "#text"
+        },
+        "key": "e",
+        "keyCode": 229,
+        "isComposing": true
+      },
+      {
+        "t": 26024,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "data": "he"
+      },
+      {
+        "t": 26024,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "he",
+        "isComposing": true
+      },
+      {
+        "t": 26026,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万he",
+        "html": "万he",
+        "raw": [
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@853e224a",
+            "old": "万h",
+            "now": "万he"
+          },
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@853e224a",
+            "old": "万",
+            "now": "万he"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 26026,
+        "ev": "input",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "he",
+        "isComposing": true
+      },
+      {
+        "t": 26026,
+        "ev": "keyup",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 3,
+          "node": "#text"
+        },
+        "key": "e",
+        "keyCode": 69,
+        "isComposing": true
+      },
+      {
+        "t": 26026,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 3,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 26027,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 3,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万he",
+        "html": "万he",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 26624,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "data": "和"
+      },
+      {
+        "t": 26624,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "和",
+        "isComposing": true
+      },
+      {
+        "t": 26651,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万和",
+        "html": "万和",
+        "raw": [
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@853e224a",
+            "old": "万he",
+            "now": "万和"
+          },
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@853e224a",
+            "old": "万",
+            "now": "万和"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 26651,
+        "ev": "input",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "和",
+        "isComposing": true
+      },
+      {
+        "t": 26651,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "inputType": "deleteCompositionText",
+        "data": null,
+        "isComposing": true
+      },
+      {
+        "t": 26653,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "records": 2,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万",
+        "html": "万",
+        "raw": [
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@853e224a",
+            "old": "万和",
+            "now": "万"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 26653,
+        "ev": "input",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "inputType": "deleteCompositionText",
+        "data": null,
+        "isComposing": true
+      },
+      {
+        "t": 26653,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 1,
+          "node": "#text"
+        },
+        "inputType": "insertFromComposition",
+        "data": "和",
+        "isComposing": true
+      },
+      {
+        "t": 26654,
+        "ev": "mut",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 2,
+          "node": "#text"
+        },
+        "records": 2,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万和",
+        "html": "万和",
+        "raw": [
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@853e224a",
+            "old": "万",
+            "now": "万和"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 26654,
+        "ev": "input",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 2,
+          "node": "#text"
+        },
+        "inputType": "insertFromComposition",
+        "data": "和",
+        "isComposing": true
+      },
+      {
+        "t": 26654,
+        "ev": "compositionend",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 2,
+          "node": "#text"
+        },
+        "data": "和"
+      },
+      {
+        "t": 26654,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "853e224a-d3b7-45ed-8da1-08dd67d0ae5e",
+          "offset": 2,
+          "node": "#text"
+        }
+      }
+    ]
+  }
+}
