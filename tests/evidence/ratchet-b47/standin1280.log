@@ -1,0 +1,21 @@
+(node:44131) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"imported","pages":7}
+(node:44142) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280: his stored draft is the review's (no run, no proposals)
+ok   1280: the card shows
+ok   1280: no "Simulated" on the card header
+ok   1280: no "Simulated" on Related
+ok   1280: status line: "From last night · Draft my day" (From last night · Draft my day)
+ok   1280: his evening picks are the first rows, "Suggested last night" (["#plaid_for_all_customers PRD Draft · Suggested last night","#daythread improvements on link as page · Suggested last night","#daythread bug · Suggested last night"])
+ok   1280: Related shows his two evening links (2)
+ok   1280: Draft my day runs over it and the draft keeps his evening picks ({"taskIds":["editor-task:day:2026-10-22:top3:template:0","64b1175e-f678-48ee-b526-0fa4132266ae","editor-task:day:2026-10-23:other:template:0"],"materialIds":["material:789f6e63-20e0-4481-81f6-e8e11cbdf273","material:57a5c605-9a28-49ac-aa20-35617505cbe6"]})
+ok   1280: after the run his evening picks are still the first rows (["#plaid_for_all_customers PRD Draft · Suggested last night","#daythread improvements on link as page · Suggested last night","#daythread bug · Suggested last night"])
+ok   1280: no task twice (["#plaid_for_all_customers PRD Draft · Suggested last night","#daythread improvements on link as page · Suggested last night","#daythread bug · Suggested last night","TRV for Lu and Kathy · Unfinished · from Fri","read SEO information, replace title and copy the description as quoted · Fri · TODO - Other"])
+ok   1280: Related still shows two links (the usual limit)
+ok   1280: Draft my day is used: no second run offered
+ok   1280: no-key stand-in retains Simulated badge
+ok   1280: after a reload, the same (["#plaid_for_all_customers PRD Draft · Suggested last night","#daythread improvements on link as page · Suggested last night","#daythread bug · Suggested last night"])
+ok   1280: no page errors
+all passed

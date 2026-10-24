@@ -152,6 +152,8 @@ export interface Page {
     proposals?: DraftProposal[];
     /** lineIds hidden for this day (Hide for today). */
     hidden?: string[];
+    /** B47: the evening review's picks, kept when Draft my day replaces that draft; the card shows them first. */
+    evening?: { taskIds: string[]; materialIds: string[] };
   } | null;
 }
 export interface Task {

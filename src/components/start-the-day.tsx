@@ -1,7 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { dayTemplate } from '../domain/editor-document'
-import { carryAncestors, carrySection, isBlankTask } from '../domain/workspace'
+import { carryAncestors, carrySection, eveningPicks, isBlankTask, isCardDraft as isCardDraftOf } from '../domain/workspace'
 import type { DayView, LocalDate, NoteBlock, Page, Task, Workspace } from '../domain/types'
 import { longLabel, shortLabel, weekday } from './dates'
 import { DateTag } from './date-tag'
@@ -50,14 +50,16 @@ export function taskSuggestions(view: DayView, workspace: Workspace, today: Loca
   // A Draft my day pick reads "Drafted for today" and goes to the plan list, never Top 3: Top 3 holds what he chose,
   // including "Suggested last night" from his review (Lead c1ba8868, morning-model-states §4).
   // A task the card already offers keeps its own reason and place; a model pick of it adds nothing (Lead, Bumblebee).
+  // B47: his evening picks come first, also after Draft my day ran over them; the run's own picks come last.
   const drafted = isCardDraft(page)
-  const draftTasks = (page.draft?.taskIds ?? []).map(id => workspace.tasks.find(x => x.id === id))
-  if (!drafted) for (const t of draftTasks)
+  const find = (id: string) => workspace.tasks.find(x => x.id === id)
+  for (const t of eveningPicks(page.draft).taskIds.map(find))
     if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: 'Suggested last night', section: 'top3' }) }
+  const draftTasks = drafted ? page.draft!.taskIds.map(find) : []
   for (const t of view.handoffTasks)
     // B34a: Top 3 carries into Top 3, Other into Other, by where its row was yesterday.
     if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: `Unfinished · from ${prev?.date ? weekday(prev.date) : 'yesterday'}`, section: carrySection(prev, t.id) }) }
-  if (drafted) for (const t of draftTasks)
+  for (const t of draftTasks)
     if (eligible(t) && !seen.has(t.id)) { seen.add(t.id); out.push({ task: t, reason: 'Drafted for today', section: 'other' }) }
   return asTree(out, prev)
 }
@@ -74,7 +76,7 @@ function asTree(out: TaskSuggestion[], prev: Page | undefined): TaskSuggestion[]
 
 /** A draft made by Draft my day (a real run, or its simulated stand-in from the card), not by the evening review. */
 export function isCardDraft(page: Page): boolean {
-  return Boolean(page.draft?.run || page.draft?.proposals)
+  return Boolean(page.draft && isCardDraftOf(page.draft))
 }
 
 /**
@@ -108,7 +110,7 @@ export function hasHandoffContent(view: DayView, workspace: Workspace, today: Lo
   // has nothing to read (empty-start-states §2). Tasks planned today don't count, so typing one doesn't push the page down.
   const hasStartingPoint =
     Boolean(previousDailyPage(workspace, today)) || workspace.tasks.some(t => t.status === 'open' && !isBlankTask(t) && t.plannedOn !== today)
-  const needsDraftLink = Boolean(page && !page.draft && !page.draftError && hasStartingPoint)
+  const needsDraftLink = Boolean(page && !isCardDraft(page) && !page.draftError && hasStartingPoint)
   const runShowing = Boolean(page?.draft?.run && page.draft.run.status !== 'ready') || Boolean(page?.draftError)
   // A Draft my day result stays on the card even when it found nothing, until Done or Later (Ratchet #80, Jazz 8437503d):
   // the card vanishing after his tap would look like a failure.
@@ -263,8 +265,9 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
           {retryable && <> · <button type="button" className="app-link" onClick={() => void startDraft()}>Retry</button></>}
           {run?.costUnknown && <span className="mc-cost-unknown">Cost unknown</span>}
         </p>
-      : !page.draft
-        ? <p className="line">No suggestions from last night · <button type="button" className="app-link" onClick={() => void startDraft()}>Draft my day</button></p>
+      : !isCardDraft(page)
+        // B47 (Jazz 8aebb93a): over the review's draft, Draft my day stays, worded for the picks shown under it.
+        ? <p className="line">{page.draft ? 'From last night' : 'No suggestions from last night'} · <button type="button" className="app-link" onClick={() => void startDraft()}>Draft my day</button></p>
         // Nothing new: no task the card wouldn't offer anyway and no proposal (Lead, after the first real run).
         : draftFoundNothing(page, view)
           ? <p className="line mc-status nothing">Nothing to suggest today</p>
@@ -293,7 +296,7 @@ export function StartTheDay({ view, workspace, today, onLater, onBusy }: { view:
     <section className="app-card start-the-day" aria-labelledby="std-title">
       <header className="card-head">
         <h2 id="std-title">Start the day</h2>
-        {page.draft?.simulated && <span className="sim">Simulated</span>}
+        {page.draft?.simulated && isCardDraft(page) && <span className="sim">Simulated</span>}
       </header>
       {/* No nudge toward an unfinished review: he finds it too rigid (Brian 0a58be58, B37). It returns only with B31. */}
       {!hasPlanSection && tasks.length > 0 && <p className="line quiet">Adding creates a {top3} section at the top</p>}
