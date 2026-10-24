@@ -1,0 +1,4 @@
+1280 [{"text":"P","depth":"0"},{"text":"c1","depth":"1"},{"text":"c2","depth":"1"},{"text":"g","depth":"2"},{"text":"↳ Rc3","depth":"0"},{"text":"Q","depth":"0"}]
+1280 tomorrow nesting/removal PASS
+390 [{"text":"P","depth":"0"},{"text":"c1","depth":"1"},{"text":"c2","depth":"1"},{"text":"g","depth":"2"},{"text":"↳ Rc3","depth":"0"},{"text":"Q","depth":"0"}]
+390 tomorrow nesting/removal PASS

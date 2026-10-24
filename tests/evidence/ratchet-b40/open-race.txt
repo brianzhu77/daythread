@@ -1,0 +1,16 @@
+{"status":"Changed on another device · draft kept\nLoad latest","ownTextVisible":1,"goneTextVisible":0}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: background must leave the open dirty page alone
+    at file:///Users/dogrod/Developer/daythread-ratchet-unsaved-anywhere/tests/evidence/ratchet-b40/open-race.mjs:4:904 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

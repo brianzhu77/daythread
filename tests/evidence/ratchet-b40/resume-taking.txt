@@ -1,0 +1,16 @@
+{"taking":true,"beforeFailSlot":false,"afterFailSlot":false,"serverHas":false,"status":"Latest loaded · this tab's text was already saved"}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: owner text must survive a failed taking save
+    at file:///Users/dogrod/Developer/daythread-ratchet-unsaved-anywhere/tests/evidence/ratchet-b40/resume-taking.mjs:3:2098 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

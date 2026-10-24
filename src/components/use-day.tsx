@@ -50,7 +50,7 @@ export interface Notice {
 type NoticeSpec = Notice | null
 type NoticeArg = NoticeSpec | ((r: Receipt) => NoticeSpec)
 /** A domain refusal matching `inlineRefusal` is handed to `onRefused` instead of the save-failed bar. */
-type RunOptions = { inlineRefusal?: RegExp; onRefused?: (message: string) => void; /** The failure's message, for a caller that retries by itself (B35). */ onFailure?: (message: string) => void }
+type RunOptions = { inlineRefusal?: RegExp; onRefused?: (message: string) => void; /** The failure's message, for a caller that retries by itself (B35). */ onFailure?: (message: string) => void; /** B40: a background save; its failure says so in its own line, never the header's bar and Retry. */ quiet?: boolean }
 
 interface WorkspaceContextValue {
   workspace: Workspace | null
@@ -175,7 +175,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       const job = queue.current.then(async (): Promise<Receipt | null> => {
         const current = wsRef.current
         if (!current) return null
-        setSaveState('saving')
+        if (!options.quiet) setSaveState('saving')
         const started=performance.now()
         const fields={operationId,command:action.type,beforeRevision:current.revision,...('pageId' in action?{pageId:action.pageId}:{}),...('taskId' in action?{taskId:action.taskId}:{})}
         debugClient('command.request',fields)
@@ -202,9 +202,11 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
             return null
           }
           // What the user typed stays on screen; the header shows the failure with Retry.
-          setSaveState('failed')
-          setSaveError(message)
-          setLastFailed({ action, notice, operationId })
+          if (!options.quiet) {
+            setSaveState('failed')
+            setSaveError(message)
+            setLastFailed({ action, notice, operationId })
+          }
           options.onFailure?.(message)
           debugClient('command.response',{...fields,elapsedMs:performance.now()-started,result:isConflict(message)?'conflict':'error',error:e instanceof Error?e.name:'UnknownError'})
           // Resync before any retry: a stale revision would otherwise fail forever. Screens keep

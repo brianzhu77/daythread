@@ -1,0 +1,14 @@
+A: keep tab line right after B closed: Thu, Oct 22 not saved yet · trying again
+A: keep tab line after retry: null
+A: Oct 22 opened in keep: text count: 1
+A: notices: ["Added unsaved text from another tab"]
+A: after reload notices (expect none): []
+B: on Pages: Thu, Oct 22 not saved yet · trying again
+B: right after opening: {"loading":"Opening your page…","editor":false}
+B: after save landed: {"copies":1,"status":""}
+B: line before typing: ["PAC Lunch race718 @Nov 20","PAC Lunch gone256 @Nov 20"]
+B: line after typing: ["PAC Lunch rac moree718 @Nov 20","PAC Lunch gone256 @Nov 20"]
+B: typing after: Saved
+B: line after reload: ["PAC Lunch rac moree718 @Nov 20","PAC Lunch gone256 @Nov 20"]
+B: server copies after reload: 0
+errors: none

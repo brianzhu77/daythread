@@ -10,6 +10,7 @@ import { useDay, useWorkspace } from './use-day'
 import { DayHeader } from './day-header'
 import { FutureDayState } from './future-day'
 import { useEffect, useState } from 'react'
+import { Link } from '@tanstack/react-router'
 
 /** Today (and any other date): header, facts strip, Start the day, receipts, the page, capture. */
 export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }) {
@@ -78,9 +79,10 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
           </div>
         )}
         {page && date <= today && (
-          <a className="review-entry" href={`/review?date=${date}`}>
+          // A router link, not a document load (B41): offline, a full load is the browser's error page.
+          <Link className="review-entry" to="/review" search={{ date }}>
             {page.reviewSaved ? 'Review saved · open again' : `Review ${isToday ? 'today' : longLabel(date)}`}
-          </a>
+          </Link>
         )}
       </div>
 

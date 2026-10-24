@@ -1,0 +1,3 @@
+{"whileOpen":{"status":"Saved","goneSlotKept":1}}
+{"afterLeaving":{"GONE_B":1,"OPEN_A":1,"unclaimedSlots":0,"notice":1}}
+errors: none

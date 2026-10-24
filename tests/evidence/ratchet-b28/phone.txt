@@ -1,0 +1,7 @@
+ok   390: Tasks · Today: sub-tasks under their parent, one level deeper each; c3 names its parent planned elsewhere (["P","  c1","  c2","    g","Q","c3 ↳ R"])
+ok   390: a sub-task's checkbox starts at its parent's title (B39) ([0,0])
+ok   390: each checkbox is level with its own title, also under a "↳" line ([0,0,0,0,0,0])
+ok   390: Tasks · Upcoming: R alone on tomorrow, no "↳" (["R"])
+ok   390: Review · plan cards in the same outline, c3 with "↳ R" ({"lines":["P","  c1","  c2","    g","Q","c3 ↳ R"],"reviewParents":["","","","","","↳ R"]})
+ok   390: no page errors
+all passed

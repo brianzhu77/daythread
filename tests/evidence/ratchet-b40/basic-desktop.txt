@@ -1,0 +1,9 @@
+chromium1280 | failing, on Pages: {"line":{"text":"Thu, Oct 22 not saved yet · trying again","box":[639,845,901,876]},"dots":["Calendar · not saved yet"],"header":[],"path":"/pages"}
+chromium1280 | failing, on Tasks: {"line":{"text":"Thu, Oct 22 not saved yet · trying again","box":[639,845,901,876]},"dots":["Calendar · not saved yet"],"header":[],"path":"/tasks"}
+chromium1280 | offline, on Tasks: {"line":{"text":"Offline · Thu, Oct 22 saves when you're back","box":[624,845,916,876]},"dots":["Calendar · not saved yet"],"header":[],"path":"/tasks"}
+chromium1280 | back online: {"line":null,"dots":[],"header":[],"path":"/tasks"}
+chromium1280 | slots left: []
+chromium1280 | Oct 22: text there: 1
+chromium1280 | Oct 22: notices: []
+chromium1280 | Oct 22: status: 
+errors: none
