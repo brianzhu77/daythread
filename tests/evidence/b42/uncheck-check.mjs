@@ -31,7 +31,7 @@ await p.goto(base + '/', { waitUntil: 'networkidle' }); await p.waitForTimeout(1
 await backspaceAtStart('Delete task when')
 const notice1 = await noticeText()
 log(await kind('Delete task when') !== 'task' && task('Delete task when I delete the checkbox').length === 0, 'born here: the checkbox goes, the line stays as text, the task is deleted', JSON.stringify({ kind: await kind('Delete task when'), tasks: task('Delete task when I delete the checkbox') }))
-log(/To-do deleted/.test(notice1), 'it says "To-do deleted"', notice1.slice(0, 120))
+log(/Removed from tasks/.test(notice1) && !/To-do deleted/.test(notice1), 'it says "Removed from tasks" (the words stay; Jazz)', notice1.slice(0, 120))
 
 // 2. ⌘Z: the same task comes back, as a to-do again.
 await p.keyboard.press(`${mod}+z`); await p.waitForTimeout(2200)

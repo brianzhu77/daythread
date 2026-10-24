@@ -780,13 +780,14 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     taskRows.current = rows
     if (suppress.current) return
     if (notice.current && notice.current.fingerprint !== JSON.stringify(editor.document)) closeNotice()
-    // B42 (Lead): a to-do turned into a bullet, text or a heading counts as deleting it; say so as B33's delete does.
+    // B42 (Lead): a to-do turned into a bullet, text or a heading counts as deleting it. His words stay on the line, so
+    // the notice says only the task went (Jazz 0a9590e4); a line delete keeps "To-do deleted".
     if (before) {
       const all = new Set(deepNodes(nodes()).map(n => n.id))
       const unchecked = [...before].filter(([id, taskId]) => all.has(id) && rows.get(id) !== taskId).map(([, taskId]) => taskId)
       const after = nodes(), deleted = unchecked.filter(taskId => goesWithLine(taskId, after))
       const elsewhere = unchecked.length === 1 ? stillElsewhere(unchecked[0], after) : null
-      if (deleted.length || elsewhere) setNotice({ text: elsewhere ?? (deleted.length === 1 ? 'To-do deleted' : `${deleted.length} to-dos deleted`), fingerprint: JSON.stringify(editor.document) })
+      if (deleted.length || elsewhere) setNotice({ text: elsewhere ?? (deleted.length === 1 ? 'Removed from tasks' : `${deleted.length} removed from tasks`), fingerprint: JSON.stringify(editor.document) })
     }
     setPastedChecklistIds(checklistIds(nodes()))
     // At any depth: "[] " on a nested line makes a to-do too (B42; a nested one used to stay a plain checklist line).
