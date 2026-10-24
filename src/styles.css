@@ -1328,3 +1328,14 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 @media(max-width:899px) { .bottom-dock:has(.editor-dock .editor-unsaved-line) > .editor-unsaved-line.is-elsewhere { display:none; } }
 .tab.has-unsaved { position:relative; }
 .tab.has-unsaved::after { content:''; position:absolute; top:9px; left:calc(50% + 7px); width:7px; height:7px; border-radius:50%; background:var(--warn); box-shadow:0 0 0 2px var(--bg); pointer-events:none; }
+
+/* B44 (Jazz §2): the paste menu under a pasted link. Rows at least 44 px; "Keep as link" first and highlighted. */
+.paste-menu { position: fixed; z-index: 40; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-block); box-shadow: var(--shadow-float); padding: 4px; display: grid; gap: 2px; }
+.paste-menu-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 10px; border-radius: var(--radius-inline); cursor: pointer; }
+.paste-menu-row[aria-selected="true"] { background: var(--fill-soft); }
+.paste-menu-icon { flex: none; width: 20px; text-align: center; }
+.paste-menu-text { flex: 1; display: grid; min-width: 0; }
+.paste-menu-label { font-size: 15px; color: var(--ink); }
+.paste-menu-detail { font-size: 13px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.paste-menu-hint { flex: none; color: var(--ink-3); font-size: 13px; }
+@media (hover: none), (max-width: 599px) { .paste-menu-hint { display: none; } }
