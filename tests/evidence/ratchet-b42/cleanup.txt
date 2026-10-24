@@ -1,0 +1,5 @@
+(node:53186) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"imported","pages":6}
+{"revision":280,"tasks":12,"list":[{"page":"2026-10-23","deletes":[{"id":"editor-task:25515125-dee3-4ddb-8801-74d0b284e8f0","title":"read SEO information, replace title and copy the description as quoted"},{"id":"editor-task:f72faaba-852f-46ac-a4ed-1936a720917e","title":"Delete task when I delete the checkbox"}],"alsoChanges":[]}]}
+{"pass":true,"wrongIdsNoChange":true,"exactTwoRemoved":true,"documentsUnchanged":true,"undoRestores":true,"apply":"2026-10-23: Page saved; task arrangements unchanged (revision 280 → 281); Undo targets cleanup-unchecked:day:2026-10-23:280"}
