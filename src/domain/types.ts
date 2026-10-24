@@ -52,8 +52,11 @@ export interface LinkPasteRecord {
   url: string;
   /** The line the card replaced (paragraph, bullet, numbered), so Undo puts back the same kind of line. */
   lineType: string;
-  /** A made page's first title (the link text, or the URL default), so Undo can tell a rename. */
+  /** A made page's first title (the link text, or the URL default), so Undo can tell a rename. B43: or the title read
+   * from the web, which isn't his edit either. */
   title?: string;
+  /** B43: the description quote the preview put on the made page, so Undo doesn't count it as his writing. */
+  preview?: { blockId: string; text: string };
   /** The day of the paste, for "Saved before · {day}". */
   on: LocalDate;
   /** References (`pageId/blockId`) to each page of the outcome at paste time; only ones added since block Undo. */
@@ -379,6 +382,8 @@ export type Action =
   /** A2: URLs pasted onto an empty line of `pageId`, one card each, in order. `sectionId`: the heading above them. */
   | { type: "paste-links"; pageId: string; sectionId?: string; today: LocalDate; items: { url: string; pageId: string; cardBlockId: string; lineType: string; title?: string }[] }
   | { type: "undo-paste-links"; pageId: string; operationId: string; today: LocalDate }
+  /** B43: a made link page's title and description, read from the web after the paste; applied only to that untouched page. */
+  | { type: "apply-link-preview"; parentPageId: string; cardBlockId: string; pageId: string; url: string; title: string | null; description: string | null }
   | { type: "rename-page"; pageId: string; title: string }
   | { type: "move-page"; pageId: string; parentId: string | null }
   | { type: "delete-page"; pageId: string; at: string }

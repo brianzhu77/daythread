@@ -24,7 +24,7 @@ import { lineClipboardType, lineLinkPath, parseLineClipboard, parseLineUrl } fro
 import type { LineTarget } from '../domain/page-refs'
 import { pageHref, pageLabel } from './page-tree'
 import { jumpInPage, jumpToBlock, lookupFailed, registerEditor, visibleArea } from './line-jump'
-import { resolveLineLink } from '../server/functions'
+import { previewLinkPage, resolveLineLink } from '../server/functions'
 import { newOperationId, useWorkspace } from './use-day'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
@@ -995,6 +995,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const moved = records.filter(r => { const b = editor.getBlock(r.cardBlockId); return b && (b.props as { pageId: string }).pageId !== r.pageId })
     if (moved.length) editor.transact(tr => { for (const r of moved) editor.updateBlock(r.cardBlockId, { props: { pageId: r.pageId } } as never); tr.setMeta('addToHistory', false) })
     showLinkNotice(preview, operationId, records)
+    // B43: each page this paste made takes the linked page's own title and description, read on the server, in the
+    // background. Nothing waits on it; it changes only a page still untouched, and a failure shows nothing.
+    for (const r of records.filter(x => x.outcome === 'made')) void previewLinkPage({ data: { parentPageId: page.id, cardBlockId: r.cardBlockId, pageId: r.pageId, url: r.url } })
+      .then(result => { if (result.applied) void refresh().catch(() => undefined) }, () => undefined)
     // As `/page`: once the pages exist, the cards are saved now, not at his next edit (e.g. after a Retry).
     if (dirty.current && !sending.current) { clearTimeout(timer.current); void flushRef.current() }
   }
