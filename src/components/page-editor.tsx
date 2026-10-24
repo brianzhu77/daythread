@@ -13,7 +13,7 @@ import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, templateKind, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
-import { announceSave, changedBy, claim, clearOwn, listenForSaves, orphans, ownClaimed, readOwn, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn } from './draft-slots'
+import { announceSave, changedBy, claim, clearOwn, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn } from './draft-slots'
 import { applyCommand, bornHere, deletesWithLine, pasteRecords } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
@@ -631,7 +631,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // B35: another tab merged this tab's draft while it was away: never save this copy again.
     if (claimedAway()) return
     // The page moved on only by his own save from when he last left it: start from that.
-    if (isOwnLeaveSave(page.id, latestPage.current.editorJSON)) base.current = pageContentKey(latestPage.current)
+    // B40: or by another tab saving this tab's own earlier text while this tab was away and then came back.
+    if (isOwnLeaveSave(page.id, latestPage.current.editorJSON) || savedForMe(page.id, latestPage.current.editorJSON)) base.current = pageContentKey(latestPage.current)
     // B35: the save went through but its reply was lost (the refresh after the failure shows the page as exactly this
     // document): it's saved. Sending it again would look like someone else's change (the browser has no receipts).
     if (latestPage.current.editorJSON === JSON.stringify(editor.document) && lastSent.current === latestPage.current.editorJSON) {
@@ -791,7 +792,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // Keep from the morning hand-off, another tab) rewrote the page under us and the open editor must follow.
     if (page.editorJSON === lastSent.current && page.editorSections === JSON.stringify(page.sections)) return
     // His own save from when he left this page landed after he came back: carry on from it, it isn't a conflict.
-    if (dirty.current && isOwnLeaveSave(page.id, page.editorJSON)) { base.current = next; setFailed(false); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0); return }
+    if (dirty.current && (isOwnLeaveSave(page.id, page.editorJSON) || savedForMe(page.id, page.editorJSON))) { base.current = next; setFailed(false); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0); return }
     if (dirty.current) { debugClient('editor.external-refresh',{operationId:newOperationId(),triggerOperationId:pendingSave.current?.operationId,pageId:page.id,result:'conflict'}); setFailed(true); setUnsaved('refused'); setStatus('Page changed elsewhere · draft kept; copy it before reloading'); return }
     // Deferred: replacing blocks synchronously inside React's commit triggers a flushSync warning from BlockNote's views.
     queueMicrotask(() => {

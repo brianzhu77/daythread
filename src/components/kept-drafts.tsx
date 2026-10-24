@@ -72,7 +72,7 @@ export function KeptDrafts() {
       let failure: { pageId: string; message: string } | null = null
       let ok = false
       try {
-        ok = await saveKeptDrafts(() => refreshRef.current(), runRef.current, openEditorPages(), { quiet: true, onFailure: f => { failure = f } })
+        ok = await saveKeptDrafts(() => refreshRef.current(), runRef.current, openEditorPages(), { quiet: true, leaveOpenPages: true, onFailure: f => { failure = f } })
       } catch (error) {
         failure = { pageId: '', message: error instanceof Error ? error.message : String(error) }
       } finally { running = false }
