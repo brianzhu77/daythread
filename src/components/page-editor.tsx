@@ -1506,9 +1506,26 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (el) { const top = firstLineCenter(el) - touchHandleSize / 2; setTouchHandle(previous => previous?.id === block.id && Math.abs(previous.top - top) < 0.5 ? previous : { id: block.id, top }) }
     }
     const off = editor.onSelectionChange(() => requestAnimationFrame(update))
+    // B50: the keyboard moving the visible part (iOS scrolls it without a window scroll) moves the line too, so the
+    // handle stays beside the caret's line, never where it was (Jazz's finding 4).
+    const later = () => requestAnimationFrame(update)
     window.addEventListener('scroll', update, true)
-    return () => { off(); window.removeEventListener('scroll', update, true) }
+    window.visualViewport?.addEventListener('resize', later); window.visualViewport?.addEventListener('scroll', later)
+    return () => { off(); window.removeEventListener('scroll', update, true); window.visualViewport?.removeEventListener('resize', later); window.visualViewport?.removeEventListener('scroll', later) }
   }, [editor])
+  /**
+   * B50 (Ratchet's sweep, Lead 34508051, Jazz aa5d667c): BlockNote's side menu (⋮⋮) mounts on mousemove. On iOS a tap
+   * sends a mousemove first, and Mobile Safari treats a tap that makes something appear as a hover: no click, no
+   * focus, so every first tap after opening a page was lost. Touch screens use only the caret's handle above
+   * (selection changes, never hover); a mouse keeps the hover handle as before.
+   */
+  const lastPointer = useRef('')
+  const [hoverPointer, setHoverPointer] = useState(() => typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches)
+  useEffect(() => {
+    const query = window.matchMedia('(hover: hover) and (pointer: fine)'), changed = () => setHoverPointer(query.matches)
+    changed(); query.addEventListener('change', changed)
+    return () => query.removeEventListener('change', changed)
+  }, [])
   // Toolbar taps must not take focus from the line: WebKit still sends mousedown after a prevented touch pointerdown,
   // which blurred the editor, hid the toolbar and dropped the click (B5 check, Playwright WebKit at 390).
   const keepCaret = { onPointerDown: (e: React.PointerEvent) => e.preventDefault(), onMouseDown: (e: React.MouseEvent) => e.preventDefault() }
@@ -1854,6 +1871,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       })
     }}
     onCompositionStartCapture={() => { composing.current = true; clearTimeout(timer.current); noteCompositionStart() }}
+    // B50: on a touch screen, the mouse events a tap sends before its click never reach hover handlers (BlockNote's
+    // side menu and link toolbar): anything they showed would make iOS take the tap for a hover and drop the click.
+    // On a device with both (a touch laptop, an iPad with a trackpad), the last pointer decides (Lead f6ade708).
+    onPointerDownCapture={e => { lastPointer.current = e.pointerType }}
+    onPointerMoveCapture={e => { lastPointer.current = e.pointerType }}
+    onMouseOverCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
+    onMouseMoveCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
     // A9a §3: after the composition, once ProseMirror has finished it (its DOM and decorations are drawn again).
     onCompositionEndCapture={() => { composing.current = false; setTimeout(repairComposition, 0); setTimeout(maybeOpenLinkList, 50); requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
     onDropCapture={e => {
@@ -2043,7 +2067,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}
       {['[[', '【【'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} shouldOpen={() => false} getItems={async query => linkItems(query, trigger)} onItemClick={item => item.onItemClick()} />)}
-      <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />
+      {hoverPointer && <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />}
     </BlockNoteView>
     </RowActionsContext.Provider>
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}
