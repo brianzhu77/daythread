@@ -1,0 +1,11 @@
+(node:37839) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   second: the word stays on his new line, its id and kind kept ({"before":{"id":"8c5fc463-1fea-4911-b2ff-4f3dbf1678c3","type":"bulletListItem","text":"","focused":true},"after":{"id":"8c5fc463-1fea-4911-b2ff-4f3dbf1678c3","type":"bulletListItem","text":"万","focused":true}})
+ok   second: no second line with the word, no paragraph in its place
+ok   second: the caret is still in the editor
+ok   second: a second word goes on the same line ({"id":"8c5fc463-1fea-4911-b2ff-4f3dbf1678c3","type":"bulletListItem","text":"万和","focused":true})
+ok   second: typing carries on in that line ({"id":"8c5fc463-1fea-4911-b2ff-4f3dbf1678c3","type":"bulletListItem","text":"万和x","focused":true})
+ok   second: saved: his line with the word, no line break ({"type":"bulletListItem","text":"万和x"})
+ok   second: saved: the word nowhere else
+ok   second: no page errors
+all passed
