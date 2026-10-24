@@ -1,0 +1,4 @@
+{"ownerSlot":{"claimed":false,"taking":false,"hasNewer":true}}
+{"ownerStatus":["Saved"]}
+{"saved":{"FROZEN_OWNER":1,"MORE_AFTER":1}}
+errors: none
