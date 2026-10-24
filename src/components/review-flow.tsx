@@ -1,412 +1,404 @@
-import { useEffect, useState } from 'react'
-import type { LocalDate, Material, Task, Workspace } from '../domain/types'
-import { addDays, longLabel, shortLabel, taskDateTag, weekday } from './dates'
-import { CaptureBar, CaptureReceipts } from './capture'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
+import type { LocalDate, Page, Task } from '../domain/types'
+import { carrySection, getDayView } from '../domain/workspace'
+import { addDays, longLabel, shortLabel, weekday } from './dates'
 import { RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
 import { ParentLine, treeIndent, useTaskTree } from './task-tree'
-import { useDay, useWorkspace } from './use-day'
-import { displayTitle } from './day-page'
-import { Link, useNavigate } from '@tanstack/react-router'
-import { linkPageOf } from '../domain/workspace'
-import { displayPageTitle } from './page-title'
-import { ExternalIcon } from './icons'
+import { newOperationId, useDay, useWorkspace } from './use-day'
+import { cardLines, previousDailyPage } from './start-the-day'
+import { TagText } from './tag-text'
 
-type StepId = 'plan' | 'saved' | 'capture' | 'reflect' | 'tomorrow'
+/**
+ * B31 (docs/design/review-one-screen.md): the evening review is one screen about the next day. Today's open tasks come
+ * along unless he ticks or moves them; lines he types go on the next day's page as to-dos; Done is the morning card's
+ * hand-off done the night before, so there is one place to plan the next day.
+ */
 
-const stepNumber: Record<StepId, number> = { plan: 1, saved: 2, capture: 3, reflect: 4, tomorrow: 5 }
-const stepById = (n: number | undefined): StepId => (Object.keys(stepNumber) as StepId[]).find(k => stepNumber[k] === n) ?? 'plan'
-
-/** Screen-only details. The step, source, skip and saved state live on the page (domain). */
-interface Progress {
-  reflection: string | null
-  acted: Record<string, string>
-  removedSuggestions: string[]
-  tomorrowSaved: boolean
-  /** What Brian saw when a save hit a conflict. Anything else in the latest draft is new to him. */
-  kept?: string[]
+/** A line typed for the next day that isn't on its page yet. Kept in storage so a reload or a lost connection keeps it. */
+interface PendingLine {
+  key: string
+  title: string
+  /** One operation id per line: a retry after a lost response replays the same add, never a second task. */
+  operationId: string
+  failed: boolean
 }
 
-const blank: Progress = { reflection: null, acted: {}, removedSuggestions: [], tomorrowSaved: false }
-
-function useProgress(date: LocalDate): [Progress | null, (patch: Partial<Progress>) => void] {
-  const key = `daythread.review.${date}`
+function useStored<T>(key: string, blank: T): [T | null, (next: T | ((prev: T) => T)) => void] {
   // null until read from storage, so a resumed review never flashes its blank state.
-  const [p, setP] = useState<Progress | null>(null)
+  const [value, setValue] = useState<T | null>(null)
   useEffect(() => {
     const raw = localStorage.getItem(key)
-    setP(raw ? { ...blank, ...JSON.parse(raw) } : blank)
+    setValue(raw ? (JSON.parse(raw) as T) : blank)
+    // `blank` is a constant per call site.
   }, [key])
-  return [
-    p,
-    patch =>
-      setP(prev => {
-        const next = { ...(prev ?? blank), ...patch }
-        localStorage.setItem(key, JSON.stringify(next))
-        return next
+  const update = useCallback(
+    (next: T | ((prev: T) => T)) =>
+      setValue(prev => {
+        const value = typeof next === 'function' ? (next as (p: T) => T)(prev ?? blank) : next
+        localStorage.setItem(key, JSON.stringify(value))
+        return value
       }),
-  ]
+    [key],
+  )
+  return [value, update]
 }
 
-/** Guided evening review, phone first (01 §7 + Good Stuffs addendum G-2). Each step fits one screen. */
-export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; today: LocalDate; fromReminder: boolean }) {
-  const { run } = useWorkspace()
-  const { view, workspace } = useDay(date)
-  const [progress, update] = useProgress(date)
-  const page = view?.page ?? null
-  // The set of saved items is fixed when the step opens, so a decision doesn't pull in a fourth card.
-  const [sortIds, setSortIds] = useState<string[] | null>(null)
+const noLines: PendingLine[] = []
+const noActs: Record<string, string> = {}
 
-  // Record where the review was opened from (04 counts "opened from the reminder").
+/** "Today", "Tomorrow" or the weekday, said from the clock, not from the reviewed day (after midnight it's today). */
+function dayWord(day: LocalDate, today: LocalDate): string {
+  if (day === today) return 'Today'
+  if (day === addDays(today, 1)) return 'Tomorrow'
+  return weekday(day)
+}
+
+const dayName = (day: LocalDate) => new Date(`${day}T12:00:00`).toLocaleDateString('en-US', { weekday: 'long' })
+
+export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; today: LocalDate; fromReminder: boolean }) {
+  const { run, latest } = useWorkspace()
+  const navigate = useNavigate()
+  const next = addDays(date, 1)
+  const { view, workspace } = useDay(date)
+  const { view: nextView } = useDay(next)
+  const [lines, setLines] = useStored<PendingLine[]>(`daythread.review-lines.${date}`, noLines)
+  const [acted, setActed] = useStored<Record<string, string>>(`daythread.review-acted.${date}`, noActs)
+  // The rows that come along are fixed when the screen opens, so a ticked or moved row stays in place and says so.
+  const [comingIds, setComingIds] = useState<string[] | null>(null)
+  const [draft, setDraft] = useState('')
+  const [finishing, setFinishing] = useState(false)
+  const [finishError, setFinishError] = useState<string | null>(null)
+  const composing = useRef(false)
+  const page = view?.page ?? null
+  const nextPage = nextView?.page ?? null
+  const planAhead = next >= today
+  const handedOff = Boolean(nextPage?.handoffDone)
+
+  // Where the review was opened from (04 counts "opened from the reminder").
   const recorded = page?.reviewSource !== undefined
   useEffect(() => {
     if (page && !recorded) void run({ type: 'review-progress', date, step: 1, source: fromReminder ? 'reminder' : 'direct' }, null)
   }, [page, recorded, fromReminder, date, run])
 
-  if (!view || !workspace || !progress) return <p className="loading">Loading…</p>
-  const p = progress
+  useEffect(() => {
+    if (comingIds === null && nextView && workspace) {
+      // In the order he sees them on the reviewed page: Top 3 first, then Other, top to bottom.
+      const onPage = (page?.sections ?? []).filter(s => s.kind === 'top3' || s.kind === 'other').flatMap(s => s.blocks.map(b => b.taskId))
+      const at = (id: string) => (onPage.indexOf(id) + 1 || Infinity)
+      setComingIds(handedOff || !planAhead ? [] : nextView.handoffTasks.map(t => t.id).sort((a, b) => at(a) - at(b)))
+    }
+  }, [comingIds, nextView, workspace, handedOff, planAhead, page])
+
+  /** The next day's page, made from the template the first time a line needs it; lines typed together share one call. */
+  const creating = useRef<Promise<Page | null> | null>(null)
+  const ensureNextPage = useCallback((): Promise<Page | null> => {
+    const find = () => latest()?.pages.find(p => p.type === 'daily' && p.date === next) ?? null
+    if (find()) return Promise.resolve(find())
+    creating.current ??= run({ type: 'ensure-day', date: next }, null, undefined, { quiet: true })
+      .then(receipt => (receipt ? find() : null))
+      .finally(() => (creating.current = null))
+    return creating.current
+  }, [latest, next, run])
+
+  // One save per line at a time: Return, a retry on reconnect and Done all wait on the save already running.
+  const saving = useRef(new Map<string, Promise<boolean>>())
+  const saveLine = useCallback(
+    (line: PendingLine): Promise<boolean> => {
+      const running = saving.current.get(line.key)
+      if (running) return running
+      const job = (async () => {
+        setLines(all => all.map(l => (l.key === line.key ? { ...l, failed: false } : l)))
+        const target = await ensureNextPage()
+        const section = target?.sections.find(s => s.kind === 'other') ?? target?.sections.find(s => s.kind === 'top3')
+        const receipt =
+          target && section
+            ? await run({ type: 'add-task', pageId: target.id, sectionId: section.id, title: line.title, plannedOn: next }, null, line.operationId, { quiet: true })
+            : null
+        setLines(all => (receipt ? all.filter(l => l.key !== line.key) : all.map(l => (l.key === line.key ? { ...l, failed: true } : l))))
+        return Boolean(receipt)
+      })().finally(() => saving.current.delete(line.key))
+      saving.current.set(line.key, job)
+      return job
+    },
+    [ensureNextPage, next, run, setLines],
+  )
+
+  // B35's way: a line that didn't save is tried again when the connection comes back or the screen is shown again,
+  // and once when the review opens (a line left from a reload). The same operation id makes a repeat harmless.
+  const linesRef = useRef(lines)
+  linesRef.current = lines
+  const retryAll = useCallback(() => {
+    for (const line of linesRef.current ?? []) void saveLine(line)
+  }, [saveLine])
+  const retriedOnOpen = useRef(false)
+  useEffect(() => {
+    if (!workspace || lines === null || retriedOnOpen.current) return
+    retriedOnOpen.current = true
+    retryAll()
+  }, [workspace, lines, retryAll])
+  useEffect(() => {
+    const visible = () => document.visibilityState === 'visible' && retryAll()
+    window.addEventListener('online', retryAll)
+    document.addEventListener('visibilitychange', visible)
+    return () => {
+      window.removeEventListener('online', retryAll)
+      document.removeEventListener('visibilitychange', visible)
+    }
+  }, [retryAll])
+
+  if (!view || !nextView || !workspace || lines === null || acted === null || comingIds === null) return <p className="loading">Loading…</p>
   if (!page) return <p className="empty">There’s no page for {longLabel(date)} to review.</p>
 
-  const current = stepById(page.reviewStep)
-  const hasSaved = view.materialReview.length > 0 || (current === 'saved' && (sortIds?.length ?? 0) > 0)
-  const steps: StepId[] = ['plan', ...(hasSaved ? (['saved'] as const) : []), 'capture', 'reflect', 'tomorrow']
-  const index = Math.max(0, steps.indexOf(current))
-  const setStep = (s: StepId) => {
-    if (s === 'saved' && sortIds === null) setSortIds(view.materialReview.map(m => m.id))
-    void run({ type: 'review-progress', date, step: stepNumber[s] }, null)
+  const addLine = (title: string): PendingLine => {
+    const line: PendingLine = { key: newOperationId(), title, operationId: newOperationId(), failed: false }
+    setLines(all => [...all, line])
+    void saveLine(line)
+    return line
   }
-  const go = (delta: number) => setStep(steps[Math.min(steps.length - 1, Math.max(0, index + delta))])
-  const reflection = p.reflection ?? page.reviewText
-  const sortCards = (sortIds ?? view.materialReview.map(m => m.id))
-    .map(id => workspace.materials.find(m => m.id === id))
-    .filter((m): m is Material => m !== undefined)
-  const undecided = sortCards.filter(m => m.reviewState === 'pending' || (m.reviewState === 'watching' && m.lastDecisionOn !== date))
 
-  const saveReview = (finish: boolean) => run({ type: 'save-review', date, text: reflection, finish }, { text: 'Review saved' })
+  const reviewed = workspace.tasks.filter(t => t.plannedOn === date && t.status !== 'cancelled')
+  const doneCount = reviewed.filter(t => t.status === 'done').length
+  const openCount = reviewed.length - doneCount
+  const prevPage = previousDailyPage(workspace, next)
+  const coming = comingIds.map(id => workspace.tasks.find(t => t.id === id)).filter((t): t is Task => t !== undefined)
+  const stillComing = (t: Task) => nextView.handoffTasks.some(h => h.id === t.id)
+  const shown = new Set(comingIds)
+  const onNext = nextPage
+    ? nextPage.sections
+        .filter(s => s.kind === 'top3' || s.kind === 'other')
+        .flatMap(s => s.blocks.filter(b => b.taskId && !shown.has(b.taskId)).map(b => ({ block: b, top3: s.kind === 'top3' })))
+        .map(r => ({ ...r, task: workspace.tasks.find(t => t.id === r.block.taskId) }))
+        .filter((r): r is typeof r & { task: Task } => Boolean(r.task) && r.task!.status !== 'cancelled' && r.task!.title.trim() !== '')
+    : []
 
-  if (page.reviewSkipped)
-    return (
-      <div className="review">
-        <p className="quiet">Skipped tonight</p>
-        <button type="button" className="secondary" onClick={() => run({ type: 'review-progress', date, step: 1, skip: false }, null)}>
-          Review anyway
-        </button>
-      </div>
-    )
-
-  const placedToday = workspace.tasks.filter(t => t.plannedOn === date && t.status !== 'cancelled')
-  // Cards stay in place after an action so the list doesn't jump; they show what was done.
-  const planCards = workspace.tasks.filter(t => (t.plannedOn === date && t.status !== 'cancelled') || p.acted[t.id])
-  const openCount = placedToday.filter(t => t.status === 'open').length
+  const finish = async () => {
+    if (finishing) return
+    setFinishing(true)
+    setFinishError(null)
+    try {
+      // Done never drops a line: the one still in the box is added first, and every line must be on the page.
+      // The typed line is taken directly, not from state that may not have re-rendered yet.
+      const typed = draft.trim()
+      if (typed) setDraft('')
+      const typedLine = typed ? addLine(typed) : null
+      const pending = [...(linesRef.current ?? []).filter(l => l.key !== typedLine?.key), ...(typedLine ? [typedLine] : [])]
+      const saved = await Promise.all(pending.map(saveLine))
+      const unsaved = saved.filter(ok => !ok).length
+      if (unsaved) {
+        setFinishError(`${unsaved} line${unsaved === 1 ? '' : 's'} not saved yet`)
+        return
+      }
+      if (planAhead && !handedOff) {
+        // The morning card's Add all: each row to the section it had, in outline order, so nesting and Top 3 hold.
+        const ws = latest()!
+        const handoff = new Set(getDayView(ws, next).handoffTasks.map(t => t.id))
+        const items = comingIds
+          .map(id => ws.tasks.find(t => t.id === id))
+          .filter((t): t is Task => t !== undefined && t.status === 'open')
+          .filter(t => handoff.has(t.id))
+          .map(t => ({ taskId: t.id, section: carrySection(previousDailyPage(ws, next), t.id) }))
+        if (items.length) {
+          if (!(await ensureNextPage()) || !(await run({ type: 'plan-tasks', date: next, items }, null))) {
+            setFinishError('Couldn’t set up the day')
+            return
+          }
+        }
+        // Lines from the day's Notes are still offered by the morning card; Done closes it only when nothing is left.
+        const after = latest()!
+        if (!cardLines(getDayView(after, next), after).length && !(await run({ type: 'handoff-done', date: next }, null))) {
+          setFinishError('Couldn’t set up the day')
+          return
+        }
+      }
+      const total = (latest()?.tasks ?? []).filter(t => t.plannedOn === next && t.status === 'open' && t.title.trim()).length
+      const set = planAhead ? `${dayName(next)} is set · ${total} to-do${total === 1 ? '' : 's'}` : 'Review saved'
+      if (!(await run({ type: 'save-review', date, text: page.reviewText ?? '', finish: true }, { text: set }))) {
+        setFinishError('Review not saved')
+        return
+      }
+      localStorage.removeItem(`daythread.review-acted.${date}`)
+      void navigate({ to: '/' })
+    } finally {
+      setFinishing(false)
+    }
+  }
 
   return (
-    <div className="review">
-      <header className="review-head">
-        <p className="eyebrow">
-          Review · {date === today ? 'today' : longLabel(date)}
-          {fromReminder && <span className="quiet"> · from your reminder</span>}
+    <div className="review review-one">
+      <header className="review-one-head">
+        <h1>
+          {dayWord(next, today)} · {longLabel(next)}
+        </h1>
+        <button type="button" className="app-link review-done" onClick={() => void finish()} disabled={finishing}>
+          Done
+        </button>
+        <p className="quiet review-one-sub">
+          {/* A day without tasks reads "nothing planned", not "0 done · 0 still open" (empty-start-states §2). */}
+          {reviewed.length === 0
+            ? `${dayName(date)}: nothing planned`
+            : `${dayName(date)}: ${doneCount} done · ${openCount} still open`}
+          {page.reviewSaved && ' · review saved'}
         </p>
-        <ol className="steps" aria-label="Review steps">
-          {steps.map((s, i) => (
-            <li key={s} aria-current={i === index ? 'step' : undefined} className={i < index ? 'past' : ''}>
-              <button type="button" onClick={() => setStep(s)} aria-label={`Go to step ${i + 1}`}>{i + 1}</button>
-            </li>
-          ))}
-        </ol>
-        {!page.reviewSaved && (
-          <button type="button" className="app-link" onClick={() => saveReview(true)}>
-            Finish
-          </button>
+        {finishError && (
+          <p className="warn-line" role="alert">
+            {finishError} ·{' '}
+            <button type="button" className="app-link" onClick={() => void finish()}>
+              Retry
+            </button>
+          </p>
         )}
-        {page.reviewSaved && <span className="ok">Review saved</span>}
       </header>
 
-      {current === 'plan' && (
-        <section className="review-step" aria-labelledby="rs-plan">
-          {/* A day without tasks reads "nothing planned", not "0 open of 0" (empty-start-states §2). */}
-          <h2 id="rs-plan">
-            {planCards.length === 0 ? `${weekday(date)} · nothing planned` : `${weekday(date)} · ${openCount} open of ${placedToday.length}`}
-          </h2>
-          <TaskTree tasks={planCards}>
-            {(t, depth, parentId) => (
-              <PlanCard
-                key={t.id}
-                task={t}
-                date={date}
-                today={today}
-                depth={depth}
-                parentId={parentId}
-                acted={p.acted[t.id] ?? (t.status === 'done' ? 'Done' : undefined)}
-                onActed={label => update({ acted: { ...p.acted, [t.id]: label } })}
+      {!planAhead ? (
+        <p className="quiet">{dayName(next)} has passed, so nothing carries from here. Done saves the review.</p>
+      ) : handedOff ? (
+        <p className="quiet">{dayName(next)} is already set up. New lines still go on its page.</p>
+      ) : (
+        <section className="review-group" aria-labelledby="ro-coming">
+          <h2 id="ro-coming">Comes along {dayWord(next, today).toLowerCase()}</h2>
+          {coming.length === 0 ? (
+            <p className="quiet review-empty">Nothing comes along from {dayName(date)}.</p>
+          ) : (
+            <>
+              <div className="review-list">
+                <ComingTree tasks={coming}>
+                  {(t, depth, parentId) => (
+                    <ComingRow
+                      key={t.id}
+                      task={t}
+                      date={date}
+                      next={next}
+                      today={today}
+                      depth={depth}
+                      parentId={parentId}
+                      top3={carrySection(prevPage, t.id) === 'top3'}
+                      label={t.status === 'done' ? undefined : stillComing(t) ? undefined : acted[t.id] ?? 'Not coming along'}
+                      onActed={label => setActed(a => ({ ...a, [t.id]: label }))}
+                    />
+                  )}
+                </ComingTree>
+              </div>
+              <p className="quiet review-hint">Tick what you finished. ⋯ moves a task to another day.</p>
+            </>
+          )}
+        </section>
+      )}
+
+      {planAhead && (
+        <section className="review-group" aria-labelledby="ro-add">
+          <h2 id="ro-add">{handedOff ? `On ${dayName(next)}` : `Add for ${dayWord(next, today).toLowerCase()}`}</h2>
+          <div className="review-list">
+            {onNext.map(({ task, block, top3 }) => (
+              <NextRow key={block.id} task={task} blockId={block.id} pageId={nextPage!.id} next={next} today={today} top3={top3} />
+            ))}
+            {lines.map(line => (
+              <div key={line.key} className="task-row plan review-pending">
+                <input type="checkbox" className="check" disabled aria-label={`${line.title} is not saved yet`} />
+                <span className="task-title">{line.title}</span>
+                {line.failed ? (
+                  <span className="review-line-state warn">
+                    Not added ·{' '}
+                    <button type="button" className="app-link" onClick={() => void saveLine(line)}>
+                      Retry
+                    </button>
+                  </span>
+                ) : (
+                  <span className="review-line-state quiet">Adding…</span>
+                )}
+              </div>
+            ))}
+            <div className="task-row plan review-new">
+              <span className="check review-new-box" aria-hidden="true" />
+              {/* A plain input, not the page editor: Return while a pinyin candidate is open confirms it (B49). */}
+              <input
+                className="task-title review-new-input"
+                value={draft}
+                placeholder="New line"
+                aria-label={`Add a to-do for ${dayName(next)}`}
+                enterKeyHint="enter"
+                onChange={e => setDraft(e.target.value)}
+                onCompositionStart={() => (composing.current = true)}
+                onCompositionEnd={() => {
+                  // WebKit sends the Return that confirms a candidate after compositionend; let that one pass.
+                  setTimeout(() => (composing.current = false), 0)
+                }}
+                onKeyDown={e => {
+                  if (e.key !== 'Enter') return
+                  if (e.nativeEvent.isComposing || e.keyCode === 229 || composing.current) return
+                  e.preventDefault()
+                  const title = draft.trim()
+                  if (!title) return
+                  setDraft('')
+                  addLine(title)
+                }}
               />
-            )}
-          </TaskTree>
-          <StepFoot onNext={() => go(1)} extra={<button type="button" className="ghost" onClick={() => run({ type: 'review-progress', date, step: 1, skip: true }, null)}>Skip tonight</button>} />
+            </div>
+          </div>
+          <p className="quiet review-hint">Each line goes on {dayName(next)}’s page as a to-do. Return adds the next one.</p>
         </section>
       )}
-
-      {current === 'saved' && (
-        <section className="review-step" aria-labelledby="rs-saved">
-          <h2 id="rs-saved">Saved items</h2>
-          <p className="quiet">What should happen with these?</p>
-          {sortCards.map(m => (
-            <SortCard key={m.id} material={m} workspace={workspace} date={date} today={today} />
-          ))}
-          <StepFoot
-            onBack={() => go(-1)}
-            onNext={async () => {
-              // Skipping delays only the cards shown tonight, by three days (addendum G-2).
-              if (undecided.length) await run({ type: 'skip-material-review', materialIds: undecided.map(m => m.id), date }, null)
-              go(1)
-            }}
-            nextLabel={undecided.length ? 'Skip for now' : 'Next'}
-          />
-        </section>
-      )}
-
-      {current === 'capture' && (
-        <section className="review-step" aria-labelledby="rs-capture">
-          <h2 id="rs-capture">Anything new?</h2>
-          <p className="quiet">Tasks, changes or links. Dictation works well here.</p>
-          <CaptureBar page={page} placeholder="e.g. “Call the bank tomorrow”, “Tax return is done”" />
-          <CaptureReceipts page={page} workspace={workspace} />
-          <StepFoot onBack={() => go(-1)} onNext={() => go(1)} />
-        </section>
-      )}
-
-      {current === 'reflect' && (
-        <section className="review-step" aria-labelledby="rs-reflect">
-          <h2 id="rs-reflect">One line about today</h2>
-          <label className="quiet" htmlFor="reflection">What changed today? (optional, never turned into tasks)</label>
-          <textarea id="reflection" rows={3} value={reflection} onChange={e => update({ reflection: e.target.value })} />
-          <StepFoot
-            onBack={() => go(-1)}
-            onNext={async () => {
-              await saveReview(true)
-              go(1)
-            }}
-            nextLabel="Save and continue"
-          />
-        </section>
-      )}
-
-      {current === 'tomorrow' && <TomorrowStep date={date} workspace={workspace} p={p} update={update} />}
     </div>
   )
 }
 
-function StepFoot({ onBack, onNext, nextLabel = 'Next', extra }: { onBack?: () => void; onNext: () => void; nextLabel?: string; extra?: React.ReactNode }) {
-  return (
-    <footer className="step-foot">
-      {onBack ? <button type="button" className="ghost" onClick={onBack}>Back</button> : <span />}
-      {extra}
-      <button type="button" className="primary" onClick={onNext}>{nextLabel}</button>
-    </footer>
-  )
-}
-
-/** B28: the review's task lists in outline order (a sub-task under its parent, or "↳ parent" when it's elsewhere). */
-function TaskTree({ tasks, children }: { tasks: readonly Task[]; children: (task: Task, depth: number, parentId: string | null) => React.ReactNode }) {
-  const rows = useTaskTree(tasks, reviewTaskId)
+function ComingTree({ tasks, children }: { tasks: readonly Task[]; children: (task: Task, depth: number, parentId: string | null) => React.ReactNode }) {
+  const rows = useTaskTree(tasks, taskId)
   return <>{rows.map(({ item, depth, outsideParent }) => children(item, depth, outsideParent))}</>
 }
-const reviewTaskId = (t: Task) => t.id
+const taskId = (t: Task) => t.id
 
-function PlanCard({ task, date, today, depth = 0, parentId = null, acted, onActed }: { task: Task; date: LocalDate; today: LocalDate; depth?: number; parentId?: string | null; acted?: string; onActed: (label: string) => void }) {
+function ComingRow({ task, date, next, today, depth, parentId, top3, label, onActed }: { task: Task; date: LocalDate; next: LocalDate; today: LocalDate; depth: number; parentId: string | null; top3: boolean; label?: string; onActed: (label: string) => void }) {
   const { markDone, planOn, notToday } = useTaskActions(today)
-  const act = async (label: string, fn: () => Promise<unknown>) => {
-    if (await fn()) onActed(label)
+  const done = task.status === 'done'
+  const act = async (text: string, fn: () => Promise<unknown>) => {
+    if (await fn()) onActed(text)
   }
   return (
-    <div className={`app-card plan-card ${acted ? 'acted' : ''}`} {...treeIndent(depth)}>
-      <ParentLine parentId={parentId} />
-      <p className="plan-title">
-        {task.title} <span className="app-tag">{taskDateTag(task, today, date)}</span>
-      </p>
-      {acted ? (
-        <p className="ok">{acted}</p>
-      ) : (
-        <div className="plan-actions">
-          <button type="button" className="secondary" onClick={() => act('Done', () => markDone(task))}>Done</button>
-          <button type="button" className="secondary" onClick={() => act(`Moved to ${shortLabel(addDays(date, 1))}`, () => planOn(task, addDays(date, 1), undefined, date))}>Tomorrow</button>
-          <button type="button" className="ghost" onClick={() => act('Not today', () => notToday(task, date))}>Not today</button>
-          <RowMenu label={`Another day for ${task.title}`} groups={[{ title: 'Another day', items: anotherDayItems(task, today, (t, d) => act(`Moved to ${shortLabel(d)}`, () => planOn(t, d, undefined, date))) }]} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-/** Addendum G-2: three one-tap choices; Make it a task and Pick a date sit in ⋯ to fit one phone screen. */
-function SortCard({ material, workspace, date, today }: { material: Material; workspace: Workspace; date: LocalDate; today: LocalDate }) {
-  const { run } = useWorkspace()
-  const navigate = useNavigate()
-  const linkPage = linkPageOf(workspace, material)
-  const source = material.sources[0]
-  const sourceDay = source ? workspace.pages.find(p => p.id === source.pageId)?.date : undefined
-  const decide = (decision: 'watching' | 'lower' | 'done' | 'task', text: string, nextReviewOn?: LocalDate) =>
-    run({ type: 'review-material', materialId: material.id, decision, date, nextReviewOn }, r => ({ text, undoOperationId: r.operationId }))
-
-  return (
-    <div className="app-card sort-card">
-      <p className="sort-title">
-        {linkPage ? <>
-          {/* A2 §6: a link page's title, and tapping it opens the page; ↗ opens the site. */}
-          <a href={`/pages?page=${encodeURIComponent(linkPage.id)}`} onClick={e => { e.preventDefault(); void run({ type: 'open-material', materialId: material.id, date }, null); void navigate({ to: '/pages', search: { page: linkPage.id } }) }}>
-            {displayPageTitle(linkPage)}
-          </a>
-          <a className="sort-open-site" href={material.url} target="_blank" rel="noreferrer" aria-label="Open website" title={material.url}><ExternalIcon /></a>
-        </> : <a href={material.url} target="_blank" rel="noreferrer" onClick={() => void run({ type: 'open-material', materialId: material.id, date }, null)}>
-          {displayTitle(material.title, material.url)}
-        </a>}
-      </p>
-      <p className="quiet">
-        Saved {sourceDay ? weekday(sourceDay) : shortLabel(material.savedOn)} in Good Stuffs
-        {source?.note && <> · “{source.note}”</>}
-      </p>
-      {material.lastDecisionOn === date ? (
-        <p className="ok">{decisionLabel(material)}</p>
-      ) : (
-      <div className="plan-actions">
-        <button type="button" className="secondary" onClick={() => decide('watching', `Keep watching · back ${shortLabel(addDays(today, 7))}`)}>Keep watching</button>
-        <button type="button" className="secondary" onClick={() => decide('lower', 'Lower priority')}>Lower priority</button>
-        <button type="button" className="secondary" onClick={() => decide('done', 'Done with it')}>Done with it</button>
+    <div className={`task-row plan ${done ? 'is-done' : ''} ${label ? 'is-moved' : ''}`} data-task-id={task.id} {...treeIndent(depth)}>
+      <input type="checkbox" className="check" checked={done} disabled={Boolean(label)} aria-label={done ? `Reopen ${task.title}` : `Mark ${task.title} done`} onChange={() => void markDone(task)} />
+      <span className="task-title">
+        <ParentLine parentId={parentId} />
+        <TagText text={task.title} />
+      </span>
+      {label ? <span className="app-tag quiet">{label}</span> : top3 && !done ? <span className="app-tag section-tag">Top 3</span> : null}
+      {!done && !label && (
         <RowMenu
-          label={`More for ${material.title}`}
+          label={`Actions for ${task.title}`}
           groups={[
-            {
-              items: [
-                { label: 'Make it a task', onSelect: () => decide('task', 'Task created · Unscheduled') },
-                {
-                  label: 'Keep watching until…',
-                  onSelect: () => {
-                    const d = window.prompt('Bring it back on (YYYY-MM-DD)', addDays(today, 14))
-                    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) void decide('watching', `Keep watching · back ${shortLabel(d)}`, d)
-                  },
-                },
-              ],
-            },
+            { title: 'Another day', items: anotherDayItems(task, today, (t, d) => act(`Moved to ${shortLabel(d)}`, () => planOn(t, d, undefined, date))).filter(i => !i.label.endsWith(shortLabel(next))) },
+            { items: [{ label: `Not ${dayWord(next, today).toLowerCase()}`, onSelect: () => act('Not coming along', () => notToday(task, date)) }] },
           ]}
         />
-      </div>
       )}
     </div>
   )
 }
 
-function decisionLabel(m: Material): string {
-  switch (m.reviewState) {
-    case 'watching':
-      return `Keep watching · back ${m.nextReviewOn ? shortLabel(m.nextReviewOn) : 'later'}`
-    case 'lower':
-      return 'Lower priority'
-    case 'done':
-      return 'Done with it'
-    case 'task':
-      return 'Task created · Unscheduled'
-    default:
-      return ''
-  }
-}
-
-function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspace: Workspace; p: Progress; update: (patch: Partial<Progress>) => void }) {
-  const { run, simOutcome } = useWorkspace()
-  const tomorrow = addDays(date, 1)
-  const page = workspace.pages.find(x => x.type === 'daily' && x.date === tomorrow)
-  const draft = page?.draft
-  const reviewSaved = workspace.pages.find(x => x.type === 'daily' && x.date === date)?.reviewSaved
-  // After a conflict: the latest draft with Brian's removals applied; new items are flagged and
-  // removable, vanished ones are reported. The next Save stores exactly what is on screen.
-  const allowed = (id: string) => !p.removedSuggestions.includes(id)
-  const isNew = (id: string) => Boolean(p.kept && !p.kept.includes(id))
-  const dropped = p.kept ? p.kept.filter(id => !draft?.taskIds.includes(id) && !draft?.materialIds.includes(id)).length : 0
-  const suggestions = (draft?.taskIds ?? []).filter(allowed).map(id => workspace.tasks.find(t => t.id === id)).filter(t => t !== undefined)
-  // Removed tasks and Related items share one list of ids; both are saved together (save-draft).
-  const related = (draft?.materialIds ?? [])
-    .filter(allowed)
-    .map(id => workspace.materials.find(m => m.id === id))
-    .filter(m => m !== undefined)
-    .slice(0, 2)
-  const plannedTomorrow = workspace.tasks.filter(t => t.plannedOn === tomorrow && t.status === 'open').length
-
-  const draftFailed = Boolean(page?.draftError)
-  const prepare = () => run({ type: 'generate-draft', date: tomorrow, outcome: simOutcome }, null)
-  const [saveFailed, setSaveFailed] = useState(false)
-  const save = async () => {
-    const taskIds = suggestions.map(t => t!.id)
-    const materialIds = related.map(m => m!.id)
-    const receipt = await run({ type: 'save-draft', date: tomorrow, taskIds, materialIds }, null)
-    setSaveFailed(!receipt)
-    // On failure the workspace reloads; keep these choices and let Brian save again by hand.
-    update(receipt ? { tomorrowSaved: true, kept: undefined } : { kept: [...taskIds, ...materialIds] })
-  }
-
+function NextRow({ task, blockId, pageId, next, today, top3 }: { task: Task; blockId: string; pageId: string; next: LocalDate; today: LocalDate; top3: boolean }) {
+  const { run } = useWorkspace()
+  const { markDone, planOn } = useTaskActions(today)
+  const done = task.status === 'done'
   return (
-    <section className="review-step" aria-labelledby="rs-tomorrow">
-      <h2 id="rs-tomorrow">Tomorrow · {longLabel(tomorrow)}</h2>
-      {draftFailed && (
-        <p className="warn-line" role="alert">
-          {reviewSaved ? 'Review saved · ' : ''}Tomorrow’s suggestions couldn’t be prepared ·{' '}
-          <button type="button" className="app-link" onClick={prepare}>Retry</button>
-        </p>
-      )}
-      {!draft && !draftFailed && (
-        <button type="button" className="primary wide" onClick={prepare}>
-          Prepare tomorrow
-        </button>
-      )}
-      {draft && !p.tomorrowSaved && (
-        <>
-          {/* B47 (Jazz 8aebb93a): it picks from his open tasks and links by rule; no model is implied. */}
-          {draft.simulated && <p className="quiet">Picked from your open tasks and links</p>}
-          <p className="quiet">Suggestions for Top 3. Remove any you don’t want.</p>
-          <TaskTree tasks={suggestions}>
-            {(t, depth, parentId) => (
-            <div key={t.id} className="app-card suggestion" {...treeIndent(depth)}>
-              <span className="grow">
-                <ParentLine parentId={parentId} />
-                {t.title}
-                {isNew(t.id) && <span className="app-tag quiet"> Updated on another device</span>}
-              </span>
-              <button type="button" className="ghost" aria-label={`Remove ${t.title}`} onClick={() => update({ removedSuggestions: [...p.removedSuggestions, t.id] })}>
-                Remove
-              </button>
-            </div>
-            )}
-          </TaskTree>
-          {related.length > 0 && <p className="quiet">Related for tomorrow</p>}
-          {related.map(m => (
-            <div key={m!.id} className="app-card suggestion">
-              <span className="grow">
-                {displayTitle(m!.title, m!.url)}
-                {isNew(m!.id) && <span className="app-tag quiet"> Updated on another device</span>}
-              </span>
-              <button type="button" className="ghost" aria-label={`Remove ${m!.title}`} onClick={() => update({ removedSuggestions: [...p.removedSuggestions, m!.id] })}>
-                Remove
-              </button>
-            </div>
-          ))}
-          {saveFailed && (
-            <p className="warn-line" role="alert">
-              Not saved — your choices are still here
-              {dropped > 0 && ` · ${dropped} suggestion${dropped === 1 ? ' is' : 's are'} no longer offered and ${dropped === 1 ? 'was' : 'were'} left out`}
-              . Check the list, then save again.
-            </p>
-          )}
-          <button type="button" className="primary wide" onClick={save}>
-            {saveFailed ? 'Retry' : 'Save for tomorrow'}
-          </button>
-        </>
-      )}
-      {p.tomorrowSaved && (
-        <div className="done-state">
-          <p className="ok">
-            Tomorrow: {suggestions.length} suggestion{suggestions.length === 1 ? '' : 's'} saved
-            {plannedTomorrow > 0 && ` · ${plannedTomorrow} planned`}
-          </p>
-          <Link className="app-button secondary" to="/">Back to today</Link>
-        </div>
-      )}
-    </section>
+    <div className={`task-row plan ${done ? 'is-done' : ''}`} data-task-id={task.id}>
+      <input type="checkbox" className="check" checked={done} aria-label={done ? `Reopen ${task.title}` : `Mark ${task.title} done`} onChange={() => void markDone(task)} />
+      <span className="task-title">
+        <TagText text={task.title} />
+      </span>
+      {top3 && !done && <span className="app-tag section-tag">Top 3</span>}
+      <RowMenu
+        label={`Actions for ${task.title}`}
+        groups={[
+          {
+            items: [
+              top3 ? { label: 'Move to Other', onSelect: () => planOn(task, next, 'other') } : { label: 'Make it Top 3', onSelect: () => planOn(task, next, 'top3') },
+              // B33: removing the line deletes a task born there (with Undo), and a task with history leaves the day.
+              { label: `Remove from ${dayName(next)}`, danger: true, onSelect: () => run({ type: 'remove-blocks', pageId, blockIds: [blockId], bulk: false, today }, r => ({ text: 'Removed', undoOperationId: r.operationId })) },
+            ],
+          },
+        ]}
+      />
+    </div>
   )
 }

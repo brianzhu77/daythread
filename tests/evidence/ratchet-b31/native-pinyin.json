@@ -1,0 +1,402 @@
+{
+  "candidate": {
+    "value": "万",
+    "pending": 0,
+    "rows": 4,
+    "log": [
+      {
+        "type": "keydown",
+        "key": "w",
+        "code": 229,
+        "composing": false,
+        "data": null,
+        "value": "",
+        "inputType": null
+      },
+      {
+        "type": "compositionstart",
+        "key": null,
+        "code": null,
+        "composing": null,
+        "data": "",
+        "value": "",
+        "inputType": null
+      },
+      {
+        "type": "compositionupdate",
+        "key": null,
+        "code": null,
+        "composing": null,
+        "data": "w",
+        "value": "",
+        "inputType": null
+      },
+      {
+        "type": "beforeinput",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "w",
+        "value": "",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "input",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "w",
+        "value": "w",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "keydown",
+        "key": "a",
+        "code": 229,
+        "composing": true,
+        "data": null,
+        "value": "w",
+        "inputType": null
+      },
+      {
+        "type": "compositionupdate",
+        "key": null,
+        "code": null,
+        "composing": null,
+        "data": "wa",
+        "value": "w",
+        "inputType": null
+      },
+      {
+        "type": "beforeinput",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "wa",
+        "value": "w",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "input",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "wa",
+        "value": "wa",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "keydown",
+        "key": "n",
+        "code": 229,
+        "composing": true,
+        "data": null,
+        "value": "wa",
+        "inputType": null
+      },
+      {
+        "type": "compositionupdate",
+        "key": null,
+        "code": null,
+        "composing": null,
+        "data": "wan",
+        "value": "wa",
+        "inputType": null
+      },
+      {
+        "type": "beforeinput",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "wan",
+        "value": "wa",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "input",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "wan",
+        "value": "wan",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "compositionupdate",
+        "key": null,
+        "code": null,
+        "composing": null,
+        "data": "万",
+        "value": "wan",
+        "inputType": null
+      },
+      {
+        "type": "beforeinput",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "万",
+        "value": "wan",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "input",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "万",
+        "value": "万",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "beforeinput",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": null,
+        "value": "万",
+        "inputType": "deleteCompositionText"
+      },
+      {
+        "type": "input",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": null,
+        "value": "",
+        "inputType": "deleteCompositionText"
+      },
+      {
+        "type": "beforeinput",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "万",
+        "value": "",
+        "inputType": "insertFromComposition"
+      },
+      {
+        "type": "input",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "万",
+        "value": "万",
+        "inputType": "insertFromComposition"
+      },
+      {
+        "type": "compositionend",
+        "key": null,
+        "code": null,
+        "composing": null,
+        "data": "万",
+        "value": "万",
+        "inputType": null
+      }
+    ]
+  },
+  "return": {
+    "value": "",
+    "text": "Today · Sat, Oct 24\nDone\nFriday: 2 done · 0 still open · review saved\nSaturday is already set up. New lines still go on its page.\nOn Saturday\n\nTRV for Lu and Kathy\nTop 3\n⋯\n\n#daythread bug\nTop 3\n⋯\n\n#daythread improvements on link as page\nTop 3\n⋯\n\n万\n⋯\n\nEach line goes on Saturday’s page as a to-do. Return adds the next one.\n",
+    "log": [
+      {
+        "type": "keydown",
+        "key": "w",
+        "code": 229,
+        "composing": false,
+        "data": null,
+        "value": "",
+        "inputType": null
+      },
+      {
+        "type": "compositionstart",
+        "key": null,
+        "code": null,
+        "composing": null,
+        "data": "",
+        "value": "",
+        "inputType": null
+      },
+      {
+        "type": "compositionupdate",
+        "key": null,
+        "code": null,
+        "composing": null,
+        "data": "w",
+        "value": "",
+        "inputType": null
+      },
+      {
+        "type": "beforeinput",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "w",
+        "value": "",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "input",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "w",
+        "value": "w",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "keydown",
+        "key": "a",
+        "code": 229,
+        "composing": true,
+        "data": null,
+        "value": "w",
+        "inputType": null
+      },
+      {
+        "type": "compositionupdate",
+        "key": null,
+        "code": null,
+        "composing": null,
+        "data": "wa",
+        "value": "w",
+        "inputType": null
+      },
+      {
+        "type": "beforeinput",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "wa",
+        "value": "w",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "input",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "wa",
+        "value": "wa",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "keydown",
+        "key": "n",
+        "code": 229,
+        "composing": true,
+        "data": null,
+        "value": "wa",
+        "inputType": null
+      },
+      {
+        "type": "compositionupdate",
+        "key": null,
+        "code": null,
+        "composing": null,
+        "data": "wan",
+        "value": "wa",
+        "inputType": null
+      },
+      {
+        "type": "beforeinput",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "wan",
+        "value": "wa",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "input",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "wan",
+        "value": "wan",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "compositionupdate",
+        "key": null,
+        "code": null,
+        "composing": null,
+        "data": "万",
+        "value": "wan",
+        "inputType": null
+      },
+      {
+        "type": "beforeinput",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "万",
+        "value": "wan",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "input",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "万",
+        "value": "万",
+        "inputType": "insertCompositionText"
+      },
+      {
+        "type": "beforeinput",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": null,
+        "value": "万",
+        "inputType": "deleteCompositionText"
+      },
+      {
+        "type": "input",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": null,
+        "value": "",
+        "inputType": "deleteCompositionText"
+      },
+      {
+        "type": "beforeinput",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "万",
+        "value": "",
+        "inputType": "insertFromComposition"
+      },
+      {
+        "type": "input",
+        "key": null,
+        "code": null,
+        "composing": true,
+        "data": "万",
+        "value": "万",
+        "inputType": "insertFromComposition"
+      },
+      {
+        "type": "compositionend",
+        "key": null,
+        "code": null,
+        "composing": null,
+        "data": "万",
+        "value": "万",
+        "inputType": null
+      },
+      {
+        "type": "keydown",
+        "key": "Enter",
+        "code": 13,
+        "composing": false,
+        "data": null,
+        "value": "万",
+        "inputType": null
+      }
+    ]
+  }
+}

@@ -502,8 +502,6 @@ textarea.task-title:focus { outline: none; }
 .capture-bar textarea::placeholder { color: var(--ink-faint); }
 .capture-bar textarea:focus { outline: none; background: var(--card); box-shadow: inset 0 0 0 1.5px var(--app-accent); }
 .capture-status { position: absolute; left: 28px; top: -18px; font-size: .74rem; color: var(--ink-soft); }
-.review-step .capture-bar { position: static; background: none; border: 0; padding: 0; backdrop-filter: none; }
-.review-step .capture-status { position: static; align-self: center; }
 
 .receipts { display: grid; gap: 10px; }
 .receipt { background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow-card-soft); }
@@ -519,37 +517,31 @@ textarea.task-title:focus { outline: none; }
 .failed-line { display: grid; gap: 6px; color: var(--app-danger); }
 .original { margin: 0; padding: 8px 12px; border-left: 3px solid var(--line); color: var(--ink-soft); white-space: pre-wrap; }
 
-/* ---------- Review ---------- */
+/* ---------- Review (B31: one screen about the next day) ---------- */
 .review { display: grid; gap: 16px; padding-top: 8px; }
-.review-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.review-head .eyebrow { flex-basis: 100%; }
-.steps { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; flex: 1; }
-.steps button { min-width: 34px; min-height: 34px; padding: 0; border-radius: 50%; background: var(--app-surface); color: var(--ink-soft); font-size: .85rem; }
-.steps li.past button { background: var(--app-accent-soft); color: var(--app-accent); }
-.steps li[aria-current='step'] button { background: var(--app-accent); color: var(--ink-on-blue); }
-.review-step { display: grid; gap: 12px; }
-.review-step h2 { font-size: 1.5rem; letter-spacing: -.02em; }
-.review-step textarea { width: 100%; border: 0; border-radius: var(--radius-block); padding: 12px 14px; background: var(--app-surface); resize: vertical; }
-.review-step textarea:focus { outline: none; background: var(--card); box-shadow: inset 0 0 0 1.5px var(--app-accent); }
-.plan-card .plan-title, .sort-title { font-weight: var(--weight-medium); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; overflow-wrap: anywhere; }
-.plan-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.plan-card.acted { opacity: .7; }
-.suggestion { display: flex; align-items: center; gap: 8px; }
-.step-foot {
-  position: sticky;
-  bottom: calc(8px + env(safe-area-inset-bottom));
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  background: var(--glass);
-  backdrop-filter: blur(10px);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-float);
-}
+.review-one { max-width: 640px; width: 100%; margin: 0 auto; gap: 20px; }
+.review-one-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 12px; }
+.review-one-head h1 { font-size: 1.5rem; letter-spacing: -.02em; margin: 0; }
+/* The only button, top right, where the phone keyboard never covers it. 44 px tall for the thumb. */
+.review-done { font-size: 1.06rem; font-weight: var(--weight-semibold, 600); min-height: var(--tap); padding: 0 4px; }
+.review-done:disabled { opacity: .5; }
+.review-one-sub, .review-one-head .warn-line { grid-column: 1 / -1; margin: 0; }
+.review-group { display: grid; gap: 6px; }
+.review-group h2 { font-size: var(--text-meta); font-weight: var(--weight-medium); color: var(--ink-2); margin: 0 4px; letter-spacing: 0; }
+.review-list { display: grid; background: var(--card); border-radius: var(--radius-card); padding: 2px 16px; }
+.review-list > .task-row { margin: 0 -8px; }
+.review-list > .task-row + .task-row { box-shadow: 0 -1px 0 var(--line); border-radius: 0; }
+.review-hint, .review-empty { margin: 0 4px; font-size: var(--text-meta); }
+.review-list .is-moved .task-title { color: var(--ink-2); }
+/* A section, not a date: no alarm icon. */
+.task-row .app-tag.section-tag::before { display: none; }
+.review-line-state { flex: none; margin-top: 11px; font-size: var(--text-meta); }
+.review-line-state.warn { color: var(--warn); }
+.review-new-box { border-style: dashed; margin-top: 12px; }
+.review-new-input { font: inherit; color: var(--ink); line-height: 1.45; }
+.review-new-input:focus { outline: none; }
+.review-new-input::placeholder { color: var(--ink-faint); }
 .warn-line { color: var(--warn); background: var(--warn-soft); border-radius: var(--radius-row); padding: 10px 14px; }
-.done-state { display: grid; gap: 12px; justify-items: start; }
 
 /* ---------- Touch: row actions stay visible (no hover to reveal them) ---------- */
 @media (hover: hover) and (pointer: fine) {
@@ -648,7 +640,6 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* Phone: capture lives behind + (craft-v1 §5.3); notices move to the top, clear of the tab bar. */
 @media (max-width: 899px) {
   .day-screen > .capture-bar { display: none; }
-  .step-foot { bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
 
 /* ---------- Sheet ---------- */
@@ -783,8 +774,6 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .link-url-row svg { flex: none; width: 16px; height: 16px; color: var(--ink-3); }
 .link-url-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .link-url-open { flex: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; color: var(--accent, var(--ink)); text-decoration: none; }
-.sort-open-site { display: inline-grid; place-items: center; width: 44px; height: 44px; margin: -12px 0; vertical-align: middle; color: var(--ink-3); }
-.sort-open-site svg { width: 18px; height: 18px; }
 .untitled { color: var(--ink-3); }
 .page-title-field { outline: none; cursor: text; }
 .page-title-field:empty::before { content: attr(data-placeholder); color: var(--ink-3); }
