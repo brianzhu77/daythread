@@ -100,12 +100,25 @@ try {
   await page.locator('.editor-phone-toolbar .editor-aa').tap(); await settle()
   const panel = await visible()
   assert.ok(panel.panel && panel.panel.bottom <= panel.toolbar.top && panel.panel.top >= panel.top, `Aa panel above the toolbar and visible ${JSON.stringify(panel)}`)
+
   await page.evaluate(() => window.__scrollVisual(60)); await settle()
   const panelScrolled = await visible()
   aboveKeyboard(panelScrolled, 'scrolled with Aa open')
   assert.ok(panelScrolled.panel && panelScrolled.panel.bottom <= panelScrolled.toolbar.top && panelScrolled.panel.top >= panelScrolled.top, `Aa panel follows a scroll ${JSON.stringify(panelScrolled)}`)
   await page.locator('.editor-phone-toolbar .editor-aa').tap(); await settle()
   await page.evaluate(() => window.__scrollVisual(0)); await settle()
+  // B53: the keyboard rule leaves the caret's line just above the toolbar (sweep-ios/04); opening Aa then covered it.
+  // The line it styles stays in view above the open panel.
+  const lineBottom = () => page.evaluate(() => Math.round(getSelection().anchorNode.parentElement.closest('.bn-block-content').getBoundingClientRect().bottom))
+  // Put the caret's line where the keyboard rule leaves it: ending 8 px above the toolbar.
+  const bar = (await visible()).toolbar
+  await page.evaluate(by => window.scrollBy(0, by), (await lineBottom()) - (bar.top - 8)); await settle()
+  const before = await lineBottom()
+  assert.ok(Math.abs(bar.top - 8 - before) <= 2, `setup: the caret's line sits just above the toolbar (line ${before}, toolbar ${bar.top})`)
+  await page.locator('.editor-phone-toolbar .editor-aa').tap(); await settle()
+  const opened = await visible(), styled = await lineBottom()
+  assert.ok(opened.panel && styled <= opened.panel.top && styled >= opened.top, `the styled line is above the Aa panel (line bottom ${styled}, panel top ${opened.panel?.top})`)
+  await page.locator('.editor-phone-toolbar .editor-aa').tap(); await settle()
   await page.evaluate(v => { const dt = new DataTransfer(); dt.setData('text/plain', v); document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })) }, 'https://example.com/b48-keyboard')
   await settle()
   const menu = await visible()
