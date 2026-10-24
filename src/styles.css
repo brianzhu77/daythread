@@ -365,7 +365,10 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
    card steps in by the editor's indent (24 px). */
 .task-list > li[style*='--tree-depth'] { margin-left: calc(var(--tree-depth) * 30px); }
 .app-card[style*='--tree-depth'] { margin-left: calc(var(--tree-depth) * 24px); }
-.task-parent { display: block; font-size: var(--text-meta); line-height: 18px; color: var(--ink-3); font-weight: normal; overflow-wrap: anywhere; }
+/* "↳ parent" stays one line (ellipsis): the checkbox below is placed for a one-line parent (margin-top 30px), and a
+   wrapped parent at 390 left it beside the parent's second line. width 0 + min-width 100% keep the unwrapped line out
+   of the list grid's min-content width, which would otherwise widen the whole list. */
+.task-parent { display: block; font-size: var(--text-meta); line-height: 18px; color: var(--ink-3); font-weight: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 0; min-width: 100%; }
 /* The checkbox and date tag stay level with the title, not with the "↳ parent" line above it (18 px). */
 .task-row:has(.task-parent) > .check { margin-top: 30px; }
 .task-row:has(.task-parent) .app-tag { margin-top: 29px; }
