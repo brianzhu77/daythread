@@ -450,6 +450,10 @@ function linkMaterialLines(state: Workspace, p: Page, nodes: readonly EditorNode
       const node = byId.get(b.id), link = lineLink(node, b.text);
       const m = b.kind === "material" ? state.materials.find((m) => m.id === b.materialId) : undefined;
       if (m) {
+        // A line in Good Stuffs is a deliberate save, whichever came first: this save or the paste's `save-plain-link`
+        // (Ratchet, B44). Its record is no longer plain, so deleting the line keeps the item.
+        const own = m.sources.find((x) => x.blockId === b.id);
+        if (own) delete own.plain;
         if (link && untouchedLineMaterial(m, b.id, previousById.get(b.id))) {
           if (link.url === m.url) { m.title = text(link.title, 1000); continue; }
           const key = urlKey(link.url), owner = state.materials.find((x) => x.url === link.url || (key !== null && urlKey(x.url) === key));
@@ -474,7 +478,9 @@ function linkMaterialLines(state: Workspace, p: Page, nodes: readonly EditorNode
       const saved = findOrCreateMaterial(state, p, link.url, link.title, "", `material:${b.id}`);
       b.kind = "material";
       b.materialId = saved.id;
-      if (!saved.sources.some((x) => x.blockId === b.id)) saved.sources.push({ pageId: p.id, blockId: b.id, note: "" });
+      const own = saved.sources.find((x) => x.blockId === b.id);
+      if (own) delete own.plain; // as above
+      else saved.sources.push({ pageId: p.id, blockId: b.id, note: "" });
     }
   }
 }

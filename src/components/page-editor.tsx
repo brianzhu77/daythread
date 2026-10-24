@@ -2004,7 +2004,11 @@ function PasteLinkMenu({ menu, detail, onKeep, onBookmark, onHighlight }: { menu
       const line = document.querySelector(`.bn-block-outer[data-id="${CSS.escape(menu.blockIds.at(-1)!)}"]`), first = document.querySelector(`.bn-block-outer[data-id="${CSS.escape(menu.blockIds[0]!)}"]`)
       const text = line?.querySelector('.bn-inline-content')?.getBoundingClientRect(), rect = line?.getBoundingClientRect(), top = first?.getBoundingClientRect()
       if (!text || !rect || !top) return
-      const phone = window.innerWidth < 600, height = ref.current?.offsetHeight ?? 110, bottom = window.visualViewport?.height ?? window.innerHeight
+      const phone = window.innerWidth < 600, height = ref.current?.offsetHeight ?? 110
+      // §5: clear of the phone toolbar too (Ratchet), measured where it is now rather than assumed, since its size
+      // changes with what it holds (B5). A hidden toolbar measures 0 high and reserves nothing.
+      const toolbar = line!.closest('.continuous-editor')?.querySelector('.editor-phone-toolbar')?.getBoundingClientRect()
+      const bottom = Math.min(window.visualViewport?.height ?? window.innerHeight, toolbar?.height ? toolbar.top : Infinity)
       const editor = line!.closest('.continuous-editor')?.getBoundingClientRect()
       const width = phone && editor ? editor.right - text.left - 8 : 280
       const below = rect.bottom + 4
@@ -2019,7 +2023,7 @@ function PasteLinkMenu({ menu, detail, onKeep, onBookmark, onHighlight }: { menu
   const bookmark = (e: React.SyntheticEvent) => { e.preventDefault(); onBookmark() }
   return (
     <div ref={ref} className="paste-menu" role="listbox" aria-label="Paste options" style={place ? { top: place.top, left: place.left, width: place.width } : { visibility: 'hidden' }}
-      onPointerDown={e => e.preventDefault()}>
+      onPointerDown={e => e.preventDefault()} onMouseDown={e => e.preventDefault()}>
       <div className="sr-only" aria-live="polite">Paste options: Keep as link, or Bookmark page</div>
       <div role="option" id="paste-menu-keep" aria-selected={menu.highlight === 0} className="paste-menu-row" onClick={keep} onPointerEnter={() => onHighlight(0)}>
         <span className="paste-menu-icon" aria-hidden="true"><LinkIcon /></span>

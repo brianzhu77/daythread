@@ -1,7 +1,7 @@
 // B44 (Jazz's states §1–§5, §9; Lead 17ab8da6 for §4a): pasting a link gives a plain link and a menu; every way out
 // keeps the link; "Bookmark page" makes A2's card and page as a second undo step; a kept link is still remembered and
 // goes with its line. Built server, sign-in off, a fresh store per run:
-//   DB=<store> node tests/evidence/b44/menu-check.mjs <base> <keep|bookmark|several|typing|sentence|saved> [width]
+//   DB=<store> node tests/evidence/b44/menu-check.mjs <base> <keep|bookmark|several|typing|sentence|saved|phone-bookmark|three|good-stuffs> [width]
 import { chromium, webkit } from '@playwright/test'
 import { DatabaseSync } from 'node:sqlite'
 const [base, mode = 'keep', width = '1280'] = process.argv.slice(2), DB = process.env.DB
@@ -68,6 +68,35 @@ if (mode === 'keep') {
 } else if (mode === 'sentence') {
   await clickNotes(); await p.keyboard.type('see '); await paste(U); await p.waitForTimeout(500)
   log(await menu().count() === 0 && await cards() === 0, 'a URL pasted into a sentence: a normal paste, no menu')
+} else if (mode === 'phone-bookmark') {
+  // Ratchet: a tap on Bookmark used to move focus to the page (the keyboard dropped). The caret stays in the editor, on
+  // the line after the card; the phone's Undo is the notice's (Bumblebee).
+  await clickNotes(); await paste(U); await p.waitForTimeout(400)
+  if (phone) await p.locator('#paste-menu-bookmark').tap(); else await p.locator('#paste-menu-bookmark').click()
+  await p.waitForTimeout(2500)
+  const caret = await p.evaluate(() => {
+    const at = getSelection()?.anchorNode, el = at instanceof Element ? at : at?.parentElement, outer = el?.closest('.bn-block-outer')
+    return { editor: Boolean(document.activeElement?.closest('.bn-editor')), afterCard: outer?.previousElementSibling?.querySelector('[data-content-type="pageLink"]') ? true : false }
+  })
+  log(caret.editor && caret.afterCard, 'after the tap the editor keeps focus, caret on the line after the card', JSON.stringify(caret))
+  await p.locator('[role="alert"] button, [data-slot="toast"] button', { hasText: 'Undo' }).first()[phone ? 'tap' : 'click']()
+  log(await until(async () => await cards() === 0 && (await lineTexts()).some(t => t.trim() === U) && pagesFor(U).length === 0 && materialFor(U)), 'the notice\'s Undo gives back the plain link, still remembered', JSON.stringify({ pages: pagesFor(U), m: materialFor(U) ?? null }))
+} else if (mode === 'three') {
+  // Ratchet: with three lines the menu sat under the phone toolbar and "Bookmark 3 pages" couldn't be tapped (§5).
+  await clickNotes(); await paste(`${U}\n${U2}\nhttps://example.com/third`); await p.waitForTimeout(500)
+  const boxes = await p.evaluate(() => { const r = s => document.querySelector(s)?.getBoundingClientRect(); const m = r('.paste-menu'), t = r('.editor-phone-toolbar'); return { menuTop: m?.top, menuBottom: m?.bottom, toolbarTop: t?.height ? t.top : null } })
+  log(boxes.toolbarTop === null || boxes.menuBottom <= boxes.toolbarTop, 'the menu is clear of the phone toolbar', JSON.stringify(boxes))
+  if (phone) await p.locator('#paste-menu-bookmark').tap(); else await p.locator('#paste-menu-bookmark').click()
+  log(await until(async () => await cards() === 3), '"Bookmark 3 pages" makes three cards', String(await cards()))
+} else if (mode === 'good-stuffs') {
+  // Ratchet: a link pasted into Good Stuffs and kept is a deliberate save; deleting its line keeps the item.
+  const gs = `day:${today}:good-stuffs:template:0`
+  await p.locator(`.bn-block-outer[data-id="${gs}"] .bn-inline-content`).first()[phone ? 'tap' : 'click'](); await paste(U); await p.waitForTimeout(400)
+  await p.keyboard.press('Escape'); await p.waitForTimeout(400)
+  log(await until(async () => materialFor(U) && !JSON.parse(materialFor(U).sources).some(x => x.plain)), 'kept in Good Stuffs: remembered, not as a plain link', JSON.stringify(materialFor(U) ?? null))
+  await p.locator('.bn-inline-content', { hasText: U }).first().evaluate(el => { const r = document.createRange(); r.selectNodeContents(el); getSelection().removeAllRanges(); getSelection().addRange(r) })
+  await p.keyboard.press('Backspace'); await p.waitForTimeout(2500)
+  log(!(await lineTexts()).some(t => t.includes('xiachufang')) && Boolean(materialFor(U)), 'deleting the line keeps the Good Stuffs save', JSON.stringify(materialFor(U) ?? null))
 } else if (mode === 'saved') {
   // The link already has a page (bookmarked before): the second line says so.
   await clickNotes(); await paste(U); await p.waitForTimeout(400); await p.keyboard.press('ArrowDown'); await p.keyboard.press('Enter'); await p.waitForTimeout(2500)

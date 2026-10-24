@@ -73,3 +73,15 @@ test('a link he already had keeps its item untouched: no re-save, and it isn\'t 
   s.save(n => n.filter(x => x.id !== 'l9'))
   assert.ok(item(s.ws), 'the Good Stuffs save keeps it')
 })
+
+test('a link pasted into Good Stuffs is a deliberate save, whichever of the two saves lands first (Ratchet)', () => {
+  for (const order of ['plain-first', 'editor-first'] as const) {
+    const s = setup()
+    const into = (n: EditorNode[]) => { const at = n.findIndex(x => x.id === `day:${day}:good-stuffs`); return [...n.slice(0, at + 1), link('g1'), ...n.slice(at + 1)] }
+    if (order === 'plain-first') { s.run({ type: 'save-plain-link', pageId: s.dayId, items: [{ blockId: 'g1', url }] }); s.save(into) }
+    else { s.save(into); s.run({ type: 'save-plain-link', pageId: s.dayId, items: [{ blockId: 'g1', url }] }) }
+    assert.deepEqual(item(s.ws)?.sources, [{ pageId: s.dayId, blockId: 'g1', note: '' }], `${order}: not plain`)
+    s.save(n => n.filter(x => x.id !== 'g1'))
+    assert.ok(item(s.ws), `${order}: deleting the line keeps the save`)
+  }
+})
