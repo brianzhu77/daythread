@@ -52,8 +52,12 @@ export interface LinkPasteRecord {
   url: string;
   /** The line the card replaced (paragraph, bullet, numbered), so Undo puts back the same kind of line. */
   lineType: string;
-  /** A made page's first title (the link text, or the URL default), so Undo can tell a rename. */
+  /** A made page's first title (the link text, or the URL default), so Undo can tell a rename. B43: or the title read
+   * from the web, which isn't his edit either. */
   title?: string;
+  /** B43: the description quote the preview put on the made page, and the whole body it wrote, so Undo doesn't count
+   * that as his writing, while any change to it (a word, a format, the quote turned into a bullet) does. */
+  preview?: { blockId: string; text: string; document: string };
   /** The day of the paste, for "Saved before · {day}". */
   on: LocalDate;
   /** References (`pageId/blockId`) to each page of the outcome at paste time; only ones added since block Undo. */
@@ -194,7 +198,8 @@ export interface Material {
   openedOn?: LocalDate[];
   dismissedOn?: LocalDate[];
   decisions?: { date: LocalDate; decision: string }[];
-  sources: { pageId: string; blockId: string; note: string }[];
+  /** `plain`: B44, a link pasted and kept as a plain link on that line; the record goes with the line (B33's rule). */
+  sources: { pageId: string; blockId: string; note: string; plain?: true }[];
 }
 export interface Capture {
   id: string;
@@ -379,6 +384,10 @@ export type Action =
   /** A2: URLs pasted onto an empty line of `pageId`, one card each, in order. `sectionId`: the heading above them. */
   | { type: "paste-links"; pageId: string; sectionId?: string; today: LocalDate; items: { url: string; pageId: string; cardBlockId: string; lineType: string; title?: string }[] }
   | { type: "undo-paste-links"; pageId: string; operationId: string; today: LocalDate }
+  /** B44: links pasted and kept as plain links (the menu's default): each still recorded, with no page, on its line. */
+  | { type: "save-plain-link"; pageId: string; items: { blockId: string; url: string }[] }
+  /** B43: a made link page's title and description, read from the web after the paste; applied only to that untouched page. */
+  | { type: "apply-link-preview"; parentPageId: string; cardBlockId: string; pageId: string; url: string; title: string | null; description: string | null }
   | { type: "rename-page"; pageId: string; title: string }
   | { type: "move-page"; pageId: string; parentId: string | null }
   | { type: "delete-page"; pageId: string; at: string }

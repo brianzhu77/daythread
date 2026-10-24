@@ -1,0 +1,18 @@
+(node:16996) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280 phone-bookmark: after the tap the editor keeps focus, caret on the line after the card ({"editor":true,"afterCard":true})
+ok   1280 phone-bookmark: the notice's Undo gives back the plain link, still remembered ({"pages":[],"m":{"id":"material:day:2026-10-23:notes:template:0","sources":"[{\"pageId\":\"day:2026-10-23\",\"blockId\":\"day:2026-10-23:notes:template:0\",\"note\":\"\",\"plain\":true}]"}})
+ok   1280 phone-bookmark: no page errors
+all passed
+(node:17047) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280 three: the menu is clear of the phone toolbar ({"menuTop":677.203125,"menuBottom":788.59375,"toolbarTop":null})
+ok   1280 three: "Bookmark 3 pages" makes three cards (3)
+ok   1280 three: no page errors
+all passed
+(node:17096) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280 good-stuffs: kept in Good Stuffs: remembered, not as a plain link ({"id":"material:day:2026-10-23:good-stuffs:template:0","sources":"[{\"pageId\":\"day:2026-10-23\",\"blockId\":\"day:2026-10-23:good-stuffs:template:0\",\"note\":\"\"}]"})
+ok   1280 good-stuffs: deleting the line keeps the Good Stuffs save ({"id":"material:day:2026-10-23:good-stuffs:template:0","sources":"[{\"pageId\":\"day:2026-10-23\",\"blockId\":\"day:2026-10-23:good-stuffs:template:0\",\"note\":\"\"}]"})
+ok   1280 good-stuffs: no page errors
+all passed

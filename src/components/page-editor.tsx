@@ -14,7 +14,7 @@ import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, templateKind, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
 import { announceSave, changedBy, claim, clearOwn, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn } from './draft-slots'
-import { applyCommand, bornHere, deletesWithLine, pasteRecords } from '../domain/workspace'
+import { applyCommand, bornHere, deletesWithLine, pasteRecords, urlOwner } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
 import { cardsPresent, urlLine, type UndoCard } from '../domain/link-paste'
@@ -24,11 +24,11 @@ import { lineClipboardType, lineLinkPath, parseLineClipboard, parseLineUrl } fro
 import type { LineTarget } from '../domain/page-refs'
 import { pageHref, pageLabel } from './page-tree'
 import { jumpInPage, jumpToBlock, lookupFailed, registerEditor, visibleArea } from './line-jump'
-import { resolveLineLink } from '../server/functions'
+import { previewLinkPage, resolveLineLink } from '../server/functions'
 import { newOperationId, useWorkspace } from './use-day'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
+import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { addDays, fromIso, longLabel, todayIso, weekday } from './dates'
@@ -415,7 +415,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const urls = pastedUrls(data.getData('text/plain')) ?? pastedUrls(data.getData('text/uri-list').split(/\r?\n/).filter(l => !l.startsWith('#')).join('\n')) ?? (copied ? [copied.url] : null)
     const at = editor.getTextCursorPosition().block
     if (urls && editor.prosemirrorState.selection.empty && ['paragraph', 'bulletListItem', 'numberedListItem'].includes(at.type) && !inlineText(at.content).trim() && !at.children.length) {
-      void pasteLinkLines(at.id, at.type, urls, copied && urls.length === 1 && urls[0] === copied.url ? copied.text : undefined)
+      // B44: the links go in plain, and a menu offers the page; ignoring it keeps them as links (Jazz §2).
+      pastePlainLinks(at.id, at.type, urls, copied && urls.length === 1 && urls[0] === copied.url ? copied.text : undefined)
       return true
     }
     const html = data.getData('text/html')
@@ -988,19 +989,90 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     void navigate({ to: '/pages', search: { page: pageId, focus: 'title' } })
   }
   /**
+   * B44 (Jazz's states, Lead d5258c8): a pasted link goes in as a plain link, one per line, and a menu under it offers
+   * "Bookmark page" (A2's paste, applied to these lines). Every way out keeps the link. The links are remembered either
+   * way (§4a: `save-plain-link`); the menu itself fetches nothing.
+   */
+  type PasteMenu = { blockIds: string[]; urls: string[]; lineType: string; linkText?: string; highlight: 0 | 1 }
+  const [pasteMenu, setPasteMenuState] = useState<PasteMenu | null>(null)
+  const pasteMenuRef = useRef<PasteMenu | null>(null)
+  const setPasteMenu = (menu: PasteMenu | null) => { pasteMenuRef.current = menu; setPasteMenuState(menu) }
+  function pastePlainLinks(blockId: string, lineType: string, urls: string[], linkText?: string) {
+    setPasteMenu(null)
+    const ids = [blockId, ...urls.slice(1).map(() => crypto.randomUUID())]
+    const content = (url: string, i: number) => [{ type: 'link', href: url, content: i === 0 && linkText ? linkText : url }]
+    editor.transact(tr => {
+      closeHistory(tr)
+      editor.updateBlock(blockId, { content: content(urls[0]!, 0) } as never)
+      let after = blockId
+      urls.slice(1).forEach((url, i) => { after = editor.insertBlocks([{ id: ids[i + 1], type: lineType, content: content(url, i + 1) } as never], after, 'after')[0]!.id })
+      editor.setTextCursorPosition(after, 'end')
+    })
+    void run({ type: 'save-plain-link', pageId: page.id, items: urls.map((url, i) => ({ blockId: ids[i]!, url })) }, null)
+    setPasteMenu({ blockIds: ids, urls, lineType, ...(linkText ? { linkText } : {}), highlight: 0 })
+  }
+  function bookmarkPasted() {
+    const menu = pasteMenuRef.current
+    setPasteMenu(null)
+    if (!menu || menu.blockIds.some(id => !editor.getBlock(id))) return
+    void pasteLinkLines(menu.blockIds, menu.lineType, menu.urls, menu.urls.length === 1 ? menu.linkText : undefined, true)
+  }
+  /** B44: pastes made by "Bookmark page"; their Undo steps back through the editor's own history (see undoLinkPaste). */
+  const bookmarkOps = useRef(new Set<string>())
+  /** Jazz §2: what "Bookmark page" will do, by A2's rules for the URL(s). */
+  function bookmarkDetail(urls: string[]): string {
+    const ws = latestWorkspace.current, here = latestPage.current
+    const where = here.type === 'daily' && here.date ? dayLabel(here.date) : here.title || 'Untitled'
+    const owners = urls.map(u => urlOwner(ws, u).page)
+    const made = (pageId: string) => ws.pages.flatMap(p => Object.values(p.editorBlockMetadata ?? {})).map(b => b.linkPaste).filter(r => r?.outcome === 'made' && r.pageId === pageId).map(r => r!.on).sort()[0]
+    if (urls.length === 1) {
+      const owner = owners[0]
+      if (!owner) return `New page in ${where}`
+      if (owner.trashedAt) return 'Restores it from the trash'
+      const on = made(owner.id)
+      return on ? `Saved before · ${dayLabel(on)}` : 'Saved before'
+    }
+    const fresh = owners.filter(o => !o).length, trashed = owners.filter(o => o?.trashedAt).length, saved = urls.length - fresh - trashed
+    if (!saved && !trashed) return `${fresh} new pages in ${where}`
+    return [fresh && `${fresh} new`, saved && `${saved} saved before`, trashed && `${trashed} from the trash`].filter(Boolean).join(' · ')
+  }
+  // Jazz §3: the menu closes, keeping the links, when he moves the caret, selects, clicks or taps elsewhere, leaves, or
+  // scrolls the line away. Keys are handled in onKeyDownCapture.
+  useEffect(() => {
+    if (!pasteMenu) return
+    const last = pasteMenu.blockIds.at(-1)!
+    const keep = () => setPasteMenu(null)
+    const offSelection = editor.onSelectionChange(() => {
+      const sel = editor.prosemirrorState.selection
+      if (editor.getTextCursorPosition().block.id !== last || !sel.empty || sel.$from.parentOffset !== sel.$from.parent.content.size) keep()
+    })
+    const down = (e: PointerEvent) => { if (!(e.target as Element).closest?.('.paste-menu')) keep() }
+    const hidden = () => { if (document.visibilityState === 'hidden') keep() }
+    const scrolled = () => {
+      const rect = document.querySelector(`.bn-block-outer[data-id="${CSS.escape(last)}"]`)?.getBoundingClientRect()
+      if (!rect || rect.bottom < 0 || rect.top > (window.visualViewport?.height ?? window.innerHeight)) keep()
+    }
+    document.addEventListener('pointerdown', down, true); document.addEventListener('visibilitychange', hidden)
+    window.addEventListener('pagehide', keep); window.addEventListener('scroll', scrolled, true)
+    return () => { offSelection?.(); document.removeEventListener('pointerdown', down, true); document.removeEventListener('visibilitychange', hidden); window.removeEventListener('pagehide', keep); window.removeEventListener('scroll', scrolled, true) }
+  }, [pasteMenu?.blockIds.join()])
+  /**
    * A2 §3: the cards go in at once (one editor step), each pointing at the page the browser already knows for that key
    * or at a new id; then one paste-links for all of them, retried like `/page` (3 tries, then "Not created · Retry").
    */
-  async function pasteLinkLines(blockId: string, lineType: string, urls: string[], linkText?: string) {
-    const operationId = newOperationId()
+  async function pasteLinkLines(blockIds: string[], lineType: string, urls: string[], linkText?: string, fromMenu = false) {
+    const operationId = newOperationId(), blockId = blockIds[0]!
+    if (fromMenu) bookmarkOps.current.add(operationId)
     const preceding = nodes().slice(0, nodes().findIndex(n => n.id === blockId) + 1).reverse().find(n => n.type === 'heading')
     const items = urls.map(url => {
       const known = latestWorkspace.current.pages.find(p => p.url && urlKey(p.url) === urlKey(url))
       return { url, pageId: known?.id ?? crypto.randomUUID(), cardBlockId: crypto.randomUUID(), lineType: lineType as 'paragraph', ...(linkText ? { title: linkText } : {}) }
     })
-    editor.transact(() => {
+    // B44: its own undo step after the paste (Jazz §9): ⌘Z gives back the plain links, a second ⌘Z the paste.
+    editor.transact(tr => {
+      closeHistory(tr)
       const cards = items.map(it => ({ id: it.cardBlockId, type: 'pageLink', props: { pageId: it.pageId, url: it.url, line: lineType } }))
-      const { insertedBlocks } = editor.replaceBlocks([blockId], cards as never)
+      const { insertedBlocks } = editor.replaceBlocks(blockIds, cards as never)
       const [next] = editor.insertBlocks([{ type: lineType } as never], insertedBlocks.at(-1)!, 'after')
       editor.setTextCursorPosition(next!, 'start')
     })
@@ -1033,6 +1105,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const moved = records.filter(r => { const b = editor.getBlock(r.cardBlockId); return b && (b.props as { pageId: string }).pageId !== r.pageId })
     if (moved.length) editor.transact(tr => { for (const r of moved) editor.updateBlock(r.cardBlockId, { props: { pageId: r.pageId } } as never); tr.setMeta('addToHistory', false) })
     showLinkNotice(preview, operationId, records)
+    // B43: each page this paste made takes the linked page's own title and description, read on the server, in the
+    // background. Nothing waits on it; it changes only a page still untouched, and a failure shows nothing.
+    for (const r of records.filter(x => x.outcome === 'made')) void previewLinkPage({ data: { parentPageId: page.id, cardBlockId: r.cardBlockId, pageId: r.pageId, url: r.url } })
+      .then(result => { if (result.applied) void refresh().catch(() => undefined) }, () => undefined)
     // As `/page`: once the pages exist, the cards are saved now, not at his next edit (e.g. after a Retry).
     if (dirty.current && !sending.current) { clearTimeout(timer.current); void flushRef.current() }
   }
@@ -1070,6 +1146,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * the normal refresh (or "Page changed elsewhere · draft kept") takes over.
    */
   async function undoLinkPaste(operationId: string) {
+    // B44: read before the notice closes below: a menu bookmark with nothing edited since steps back through history.
+    const viaHistory = bookmarkOps.current.has(operationId) && linkNotice.current?.operationId === operationId && linkNotice.current.fingerprint === JSON.stringify(editor.document)
     // A refusal is a notice too: the status line is replaced as soon as he types.
     const refuse = (text: string) => { setStatus(text); toast(text, { timeout: 6000 }) }
     if (linkNotice.current?.operationId === operationId) { toast.close(linkNotice.current.key); linkNotice.current = null }
@@ -1098,10 +1176,18 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const receipt = await run(action, r => (r.message === 'Paste undone' ? null : { text: r.message }), undoOperationId, { inlineRefusal: /Page changed · nothing was undone|Nothing to undo|Saved elsewhere/, onRefused: () => refuse("Couldn't undo · card kept") })
       if (!receipt) return
       suppress.current = true
-      editor.transact(tr => {
+      // B44 (Jazz §9): a bookmark made from the paste menu, nothing edited since: its own undo step gives back the plain
+      // links exactly as pasted and leaves the paste as the next step. Otherwise A2's way: the cards become URL lines.
+      let undone = false
+      if (viaHistory) {
+        historyGuardBypass.current = true
+        try { undone = historyUndo(editor.prosemirrorState, tr => editor.prosemirrorView.dispatch(tr)) } finally { historyGuardBypass.current = false }
+      }
+      if (!undone) editor.transact(tr => {
         for (const c of cardsPresent(nodes(), cards)) { const line = urlLine(c); editor.updateBlock(c.blockId, { type: line.type, props: {}, content: line.content } as never) }
         tr.setMeta('addToHistory', false)
       })
+      bookmarkOps.current.delete(operationId)
       suppress.current = false
       latestWorkspace.current = preview; latestPage.current = expected
       base.current = pageContentKey(expected); lastSent.current = expected.editorJSON ?? ''
@@ -1657,7 +1743,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const conflictText = changedBy(page.id) === 'tab' ? 'Changed in another tab · draft kept' : 'Changed on another device · draft kept'
   // B38: the dock line's words stay steady while typing flips the header between "Unsaved changes" and "Saving…".
   const unsavedText = conflict ? conflictText : !online ? "Offline · saves when you're back" : unsaved === 'network' ? 'Not saved yet · trying again' : "Couldn't save · draft kept"
-  return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
+  return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''} ${pasteMenu ? 'has-paste-menu' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onBlur={e => { if (e.target === editor.domElement) setStyleOpen(false) }}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
     onMouseDownCapture={e => { const target = e.target as Element; if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') } }}
@@ -1721,6 +1807,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }}
     onKeyDownCapture={e => {
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
+      // B44 (Jazz §3): with the paste menu open, ↑/↓ move, Enter picks (Keep is first), Esc keeps; any other key keeps
+      // the link and does what it would anyway (⌘Z undoes the paste).
+      const menu = pasteMenuRef.current
+      if (menu) {
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); setPasteMenu({ ...menu, highlight: menu.highlight ? 0 : 1 }); return }
+        if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); e.stopPropagation(); if (menu.highlight === 1) bookmarkPasted(); else setPasteMenu(null); return }
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setPasteMenu(null); return }
+        if (!['Shift', 'Control', 'Meta', 'Alt'].includes(e.key)) setPasteMenu(null)
+      }
       // Keys inside a row's ⋯ menu belong to the menu (Enter chooses, arrows move), never to the editor's row rules.
       if ((e.target as Element).closest?.('.editor-row-menu')) return
       // Line end/start in a task row: the browser's own move can step over the row's non-editable parts (⋯, tags)
@@ -1822,6 +1917,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     >
     <div ref={selectionFocus} tabIndex={-1} className="sr-only" aria-label={selectionLabel || undefined} />
     {hiddenEmpty.size > 0 && <style>{[...hiddenEmpty].map(id => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"]`).join(',')}{'{display:none}'}</style>}
+    {pasteMenu && <PasteLinkMenu menu={pasteMenu} detail={bookmarkDetail(pasteMenu.urls)} onKeep={() => setPasteMenu(null)} onBookmark={bookmarkPasted} onHighlight={h => setPasteMenu({ ...pasteMenu, highlight: h })} />}
     <div ref={saveLine} className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? conflictText : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false}>
@@ -1966,4 +2062,52 @@ function SectionSideMenu({ select, picked, extended, selectedIds }: { select(id:
       />
     </span>
   </SideMenu>
+}
+
+/**
+ * B44 (Jazz §2, §5, §6): the paste menu, under the pasted line(s), above them when there's no room (the phone keyboard,
+ * the window's bottom). The editor keeps focus: rows are chosen with a tap or click that doesn't take it, or by keys the
+ * editor passes on. A listbox for screen readers, announced once.
+ */
+function PasteLinkMenu({ menu, detail, onKeep, onBookmark, onHighlight }: { menu: { blockIds: string[]; urls: string[]; highlight: 0 | 1 }; detail: string; onKeep: () => void; onBookmark: () => void; onHighlight: (h: 0 | 1) => void }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [place, setPlace] = useState<{ top: number; left: number; width: number } | null>(null)
+  useLayoutEffect(() => {
+    const measure = () => {
+      const line = document.querySelector(`.bn-block-outer[data-id="${CSS.escape(menu.blockIds.at(-1)!)}"]`), first = document.querySelector(`.bn-block-outer[data-id="${CSS.escape(menu.blockIds[0]!)}"]`)
+      const text = line?.querySelector('.bn-inline-content')?.getBoundingClientRect(), rect = line?.getBoundingClientRect(), top = first?.getBoundingClientRect()
+      if (!text || !rect || !top) return
+      const phone = window.innerWidth < 600, height = ref.current?.offsetHeight ?? 110
+      // §5: clear of the phone toolbar too (Ratchet), measured where it is now rather than assumed, since its size
+      // changes with what it holds (B5). A hidden toolbar measures 0 high and reserves nothing.
+      const toolbar = line!.closest('.continuous-editor')?.querySelector('.editor-phone-toolbar')?.getBoundingClientRect()
+      const bottom = Math.min(window.visualViewport?.height ?? window.innerHeight, toolbar?.height ? toolbar.top : Infinity)
+      const editor = line!.closest('.continuous-editor')?.getBoundingClientRect()
+      const width = phone && editor ? editor.right - text.left - 8 : 280
+      const below = rect.bottom + 4
+      setPlace({ top: below + height <= bottom - 8 ? below : Math.max(8, top.top - height - 4), left: text.left, width })
+    }
+    measure()
+    window.visualViewport?.addEventListener('resize', measure)
+    return () => window.visualViewport?.removeEventListener('resize', measure)
+  }, [menu.blockIds.join()])
+  const several = menu.urls.length > 1
+  const keep = (e: React.SyntheticEvent) => { e.preventDefault(); onKeep() }
+  const bookmark = (e: React.SyntheticEvent) => { e.preventDefault(); onBookmark() }
+  return (
+    <div ref={ref} className="paste-menu" role="listbox" aria-label="Paste options" style={place ? { top: place.top, left: place.left, width: place.width } : { visibility: 'hidden' }}
+      onPointerDown={e => e.preventDefault()} onMouseDown={e => e.preventDefault()}>
+      <div className="sr-only" aria-live="polite">Paste options: Keep as link, or Bookmark page</div>
+      <div role="option" id="paste-menu-keep" aria-selected={menu.highlight === 0} className="paste-menu-row" onClick={keep} onPointerEnter={() => onHighlight(0)}>
+        <span className="paste-menu-icon" aria-hidden="true"><LinkIcon /></span>
+        <span className="paste-menu-text"><span className="paste-menu-label">{several ? 'Keep as links' : 'Keep as link'}</span></span>
+        {menu.highlight === 0 && <span className="paste-menu-hint" aria-hidden="true">↵</span>}
+      </div>
+      <div role="option" id="paste-menu-bookmark" aria-selected={menu.highlight === 1} className="paste-menu-row" onClick={bookmark} onPointerEnter={() => onHighlight(1)}>
+        <span className="paste-menu-icon" aria-hidden="true"><GlobeIcon /></span>
+        <span className="paste-menu-text"><span className="paste-menu-label">{several ? `Bookmark ${menu.urls.length} pages` : 'Bookmark page'}</span><span className="paste-menu-detail">{detail}</span></span>
+        {menu.highlight === 1 && <span className="paste-menu-hint" aria-hidden="true">↵</span>}
+      </div>
+    </div>
+  )
 }

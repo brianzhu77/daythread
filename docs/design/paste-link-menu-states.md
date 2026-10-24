@@ -96,6 +96,16 @@ It does **exactly A2's paste, applied to the line that's already there:**
 - **With B43:** the new page's title and quoted description come from B43's fetch. The menu itself fetches nothing
   and never waits for the network, so it opens at once.
 
+## 4a. A kept plain link is still remembered
+
+Decided by the Lead in 17ab8da6, after Bumblebee 4e7b0ff1, Jazz d2a1d5bf and Bumblebee 9d91c13a. A kept plain link still records a **material with no page**, so the morning draft, Review and Weave keep seeing his links. Only the page is opt-in. Nothing about it shows on the line.
+
+- **Only for pastes that showed the menu** (§1): a link alone on its own line. A URL in a sentence stays plain text, as today.
+- **The paste's Undo or ⌘Z removes it**, the same as A2's rule for the page.
+- **"Bookmark page" attaches the page to that same material.** He never ends up with two entries for one link.
+- **Deleting the plain link's line removes its material**, unless a page or another line still holds it. This is B33's rule for something born on the line. A deliberate Good Stuffs save keeps today's rule: its material stays when its line goes.
+- **Not in this round:** B43's title fetch runs only for bookmark pages. A kept link's material keeps its URL as its title.
+
 ## 5. Phone (390)
 
 - **Pasting** from the long-press menu, or the keyboard's paste key, inserts the link and shows the menu above the
