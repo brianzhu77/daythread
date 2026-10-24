@@ -1,0 +1,1 @@
+PASS: empty manifests ignored; invalid entries for each populated manifest still refuse; valid task retained; malformed schema refuses

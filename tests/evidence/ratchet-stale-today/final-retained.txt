@@ -1,0 +1,4 @@
+{"width":1280,"otherPage":false,"pass":true,"turnover":true,"oldDaySavedOnce":true}
+{"width":1280,"otherPage":true,"pass":true,"turnover":true,"oldDaySavedOnce":true}
+{"width":390,"otherPage":false,"pass":true,"turnover":true,"oldDaySavedOnce":true}
+{"width":390,"otherPage":true,"pass":true,"turnover":true,"oldDaySavedOnce":true}
