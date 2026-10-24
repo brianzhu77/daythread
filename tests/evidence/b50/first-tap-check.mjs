@@ -40,6 +40,10 @@ const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancou
     return document.querySelectorAll('.bn-link-toolbar').length
   })
   log(linkHover === 0, 'a hover over a link opens no link toolbar', String(linkHover))
+  // Bumblebee 65d52e86: one tap on the link still gets him to opening it (the caret goes in, the toolbar shows).
+  await p.locator('.bn-editor a[href="https://example.com/b50"]').tap(); await p.waitForTimeout(600)
+  const open = await p.evaluate(() => { const bar = document.querySelector('.bn-link-toolbar'); return bar ? [...bar.querySelectorAll('button, a')].map(b => b.getAttribute('aria-label') || b.getAttribute('title') || b.textContent?.trim()).filter(Boolean) : null })
+  log(Array.isArray(open) && open.some(x => /open/i.test(x)), 'one tap on the link shows its toolbar with Open', JSON.stringify(open))
   await p.evaluate(() => document.activeElement.blur())
   await p.reload({ waitUntil: 'networkidle' }); await p.waitForTimeout(800)
   const handleAt = () => p.evaluate(() => { const h = document.querySelector('.editor-touch-handle'), s = getSelection(), a = s?.anchorNode, e = a && (a.nodeType === 1 ? a : a.parentElement), row = e?.closest('[data-node-type="blockContainer"]')
