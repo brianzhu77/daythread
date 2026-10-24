@@ -1,7 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
 import { TasksScreen, taskViews, type TaskView } from '../components/tasks-screen'
-import { todayIso } from '../components/dates'
+import { useScreenToday } from '../components/use-screen-today'
 
 export const Route = createFileRoute('/tasks')({
   // Unknown views fall back to Today; switching views only changes the URL.
@@ -13,6 +12,6 @@ export const Route = createFileRoute('/tasks')({
 
 function Tasks() {
   const { view } = Route.useSearch()
-  const [today] = useState(todayIso)
+  const today = useScreenToday()
   return <TasksScreen view={view} today={today} />
 }

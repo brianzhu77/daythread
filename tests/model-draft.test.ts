@@ -85,6 +85,25 @@ test('empty is a normal answer; every entry invalid or bad JSON is "Model unavai
   }
 })
 
+test('an empty day: invented lines and tasks are ignored, so it reads as nothing to suggest, not "Model unavailable"', async () => {
+  resetPriceCache()
+  const dir = await mkdtemp(join(tmpdir(), 'daythread-draft-')), repo = new SqliteWorkspaceRepository(join(dir, 'w.sqlite'))
+  try {
+    for (const [operationId, action] of [
+      ['d', { type: 'ensure-day', date: '2026-10-19' }],
+      ['r1', { type: 'start-draft-run', date: '2026-10-19', model: 'fake/model', startedAt: t0.toISOString() }],
+    ] as const) { const ws = await repo.load(); await repo.execute({ operationId, expectedRevision: ws.revision, action: action as Action }) }
+    const sent: string[][] = []
+    const fetchImpl = fake(lines => { sent.push(lines); return { taskIds: ['made-up-task'], proposals: [{ lineId: 'day:2026-10-18/n1', propose: true, date: null }] } })
+    assert.equal(await draftDayRun(deps({ repo }, fetchImpl), '2026-10-19', 'r1'), 'drafted')
+    assert.deepEqual(sent, [[]])
+    const d = (await draftOf(repo)).draft!
+    assert.equal(d.run!.status, 'ready')
+    assert.equal(d.run!.failure, undefined)
+    assert.deepEqual([d.taskIds, d.proposals], [[], []])
+  } finally { await rm(dir, { recursive: true, force: true }) }
+})
+
 test('failures: 401 key rejected (no charge), 500 / timeout unavailable with the cost estimated', async () => {
   for (const [answer, failure, state] of [[401, 'key-rejected', 'settled'], [500, 'unavailable', 'estimated'], ['timeout', 'unavailable', 'estimated']] as const) {
     const s = await store()

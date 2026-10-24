@@ -1,7 +1,6 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
-import { useState } from 'react'
 import { DayScreen } from '../components/day-screen'
-import { todayIso } from '../components/dates'
+import { useScreenToday } from '../components/use-screen-today'
 
 export const Route = createFileRoute('/day/$date')({
   beforeLoad: ({ params }) => {
@@ -12,6 +11,6 @@ export const Route = createFileRoute('/day/$date')({
 
 function Day() {
   const { date } = Route.useParams()
-  const [today] = useState(todayIso)
+  const today = useScreenToday()
   return <DayScreen key={date} date={date} today={today} />
 }
