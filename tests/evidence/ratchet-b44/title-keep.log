@@ -1,0 +1,13 @@
+(node:17714) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280 keep: title paste has no menu
+ok   1280 keep: no page errors
+(node:17733) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   390 keep: the link goes in plain, no card (0)
+ok   390 keep: the menu: Keep as link (highlighted), Bookmark page · New page in Today (Paste options: Keep as link, or Bookmark page Keep as link Bookmark page New page in Today)
+ok   390 keep: no page made; the link is remembered (§4a) ({"id":"material:day:2026-10-23:notes:template:0","sources":"[{\"pageId\":\"day:2026-10-23\",\"blockId\":\"day:2026-10-23:notes:template:0\",\"note\":\"\",\"plain\":true}]"})
+ok   390 keep: Enter keeps the link: the menu closes, nothing else happens
+ok   390 keep: ⌘Z undoes the paste, and the remembered link goes with it (null)
+ok   390 keep: no page errors
+all passed
