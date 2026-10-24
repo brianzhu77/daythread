@@ -1,0 +1,634 @@
+{
+  "before": {
+    "id": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+    "html": "<div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"03ed7a38-e5f7-4bdc-87aa-49656573d562\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">wan</p></div></div>"
+  },
+  "after": {
+    "log": [
+      {
+        "t": 13,
+        "ev": "mut",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万圣节装饰、衣服",
+        "html": "万圣节装饰、衣服"
+      },
+      {
+        "t": 16,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        }
+      },
+      {
+        "t": 21,
+        "ev": "mut",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万圣节装饰、衣服",
+        "html": "万圣节装饰、衣服"
+      },
+      {
+        "t": 1221,
+        "ev": "keydown",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        },
+        "key": "Enter",
+        "keyCode": 13,
+        "isComposing": false
+      },
+      {
+        "t": 1229,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        },
+        "inputType": "insertParagraph",
+        "data": null,
+        "isComposing": false
+      },
+      {
+        "t": 1235,
+        "ev": "mut",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "P"
+        },
+        "records": 6,
+        "kinds": [
+          "childList",
+          "attributes"
+        ],
+        "added": [
+          "03ed7a38-e5f7-4bdc-87aa-49656573d562"
+        ],
+        "removed": [],
+        "text": "",
+        "html": "<br class=\"ProseMirror-trailingBreak\">"
+      },
+      {
+        "t": 1235,
+        "ev": "input",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "P"
+        },
+        "inputType": "insertParagraph",
+        "data": null,
+        "isComposing": false
+      },
+      {
+        "t": 1236,
+        "ev": "keyup",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "P"
+        },
+        "key": "Enter",
+        "keyCode": 13,
+        "isComposing": false
+      },
+      {
+        "t": 1236,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "P"
+        }
+      },
+      {
+        "t": 1784,
+        "ev": "keydown",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "P"
+        },
+        "key": "w",
+        "keyCode": 229,
+        "isComposing": false
+      },
+      {
+        "t": 1786,
+        "ev": "compositionstart",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "P"
+        },
+        "data": ""
+      },
+      {
+        "t": 1786,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "P"
+        },
+        "data": "w"
+      },
+      {
+        "t": 1786,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "P"
+        },
+        "inputType": "insertCompositionText",
+        "data": "w",
+        "isComposing": true
+      },
+      {
+        "t": 1788,
+        "ev": "mut",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 5,
+        "kinds": [
+          "childList",
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "w",
+        "html": "w"
+      },
+      {
+        "t": 1788,
+        "ev": "input",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "w",
+        "isComposing": true
+      },
+      {
+        "t": 1789,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 1,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 1789,
+        "ev": "mut",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 1,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "w",
+        "html": "w"
+      },
+      {
+        "t": 1790,
+        "ev": "keyup",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 1,
+          "node": "#text"
+        },
+        "key": "w",
+        "keyCode": 87,
+        "isComposing": true
+      },
+      {
+        "t": 2367,
+        "ev": "keydown",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 1,
+          "node": "#text"
+        },
+        "key": "a",
+        "keyCode": 229,
+        "isComposing": true
+      },
+      {
+        "t": 2369,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "data": "wa"
+      },
+      {
+        "t": 2369,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wa",
+        "isComposing": true
+      },
+      {
+        "t": 2371,
+        "ev": "mut",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wa",
+        "html": "wa"
+      },
+      {
+        "t": 2371,
+        "ev": "input",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wa",
+        "isComposing": true
+      },
+      {
+        "t": 2371,
+        "ev": "keyup",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 2,
+          "node": "#text"
+        },
+        "key": "a",
+        "keyCode": 65,
+        "isComposing": true
+      },
+      {
+        "t": 2371,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 2,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 2372,
+        "ev": "mut",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 2,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wa",
+        "html": "wa"
+      },
+      {
+        "t": 2951,
+        "ev": "keydown",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 2,
+          "node": "#text"
+        },
+        "key": "n",
+        "keyCode": 229,
+        "isComposing": true
+      },
+      {
+        "t": 2953,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "data": "wan"
+      },
+      {
+        "t": 2953,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wan",
+        "isComposing": true
+      },
+      {
+        "t": 2955,
+        "ev": "mut",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wan",
+        "html": "wan"
+      },
+      {
+        "t": 2955,
+        "ev": "input",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wan",
+        "isComposing": true
+      },
+      {
+        "t": 2955,
+        "ev": "keyup",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 3,
+          "node": "#text"
+        },
+        "key": "n",
+        "keyCode": 78,
+        "isComposing": true
+      },
+      {
+        "t": 2955,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 3,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 2956,
+        "ev": "mut",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 3,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wan",
+        "html": "wan"
+      },
+      {
+        "t": 4671,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "data": "万"
+      },
+      {
+        "t": 4675,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4678,
+        "ev": "mut",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万",
+        "html": "万"
+      },
+      {
+        "t": 4678,
+        "ev": "input",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4678,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "03ed7a38-e5f7-4bdc-87aa-49656573d562",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "deleteCompositionText",
+        "data": null,
+        "isComposing": true
+      },
+      {
+        "t": 4682,
+        "ev": "mut",
+        "caret": {
+          "block": "8a426f7b-9ec1-4c0b-a52c-76b74cd233c3",
+          "offset": 0,
+          "node": "P"
+        },
+        "records": 5,
+        "kinds": [
+          "childList",
+          "attributes"
+        ],
+        "added": [
+          "8a426f7b-9ec1-4c0b-a52c-76b74cd233c3"
+        ],
+        "removed": [
+          "03ed7a38-e5f7-4bdc-87aa-49656573d562"
+        ],
+        "text": "",
+        "html": "<img class=\"ProseMirror-separator\" alt=\"\"><br><br class=\"ProseMirror-trailingBreak\">"
+      },
+      {
+        "t": 4682,
+        "ev": "input",
+        "caret": {
+          "block": "8a426f7b-9ec1-4c0b-a52c-76b74cd233c3",
+          "offset": 0,
+          "node": "P"
+        },
+        "inputType": "deleteCompositionText",
+        "data": null,
+        "isComposing": true
+      },
+      {
+        "t": 4682,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "8a426f7b-9ec1-4c0b-a52c-76b74cd233c3",
+          "offset": 0,
+          "node": "P"
+        },
+        "inputType": "insertFromComposition",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4684,
+        "ev": "mut",
+        "caret": {
+          "block": "8a426f7b-9ec1-4c0b-a52c-76b74cd233c3",
+          "offset": 1,
+          "node": "#text"
+        },
+        "records": 4,
+        "kinds": [
+          "childList",
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万",
+        "html": "万<br><br class=\"ProseMirror-trailingBreak\">"
+      },
+      {
+        "t": 4684,
+        "ev": "input",
+        "caret": {
+          "block": "8a426f7b-9ec1-4c0b-a52c-76b74cd233c3",
+          "offset": 1,
+          "node": "#text"
+        },
+        "inputType": "insertFromComposition",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4684,
+        "ev": "compositionend",
+        "caret": {
+          "block": "8a426f7b-9ec1-4c0b-a52c-76b74cd233c3",
+          "offset": 1,
+          "node": "#text"
+        },
+        "data": "万"
+      },
+      {
+        "t": 4684,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "8a426f7b-9ec1-4c0b-a52c-76b74cd233c3",
+          "offset": 1,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 4707,
+        "ev": "mut",
+        "caret": {
+          "block": "8a426f7b-9ec1-4c0b-a52c-76b74cd233c3",
+          "offset": 1,
+          "node": "P"
+        },
+        "records": 3,
+        "kinds": [
+          "childList",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万",
+        "html": "万<br><br class=\"ProseMirror-trailingBreak\">"
+      }
+    ],
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "万",
+        "id": "8a426f7b-9ec1-4c0b-a52c-76b74cd233c3",
+        "html": "<p class=\"bn-inline-content\">万<br><br class=\"ProseMirror-trailingBreak\"></p>"
+      }
+    ],
+    "caret": "8a426f7b-9ec1-4c0b-a52c-76b74cd233c3"
+  }
+}
