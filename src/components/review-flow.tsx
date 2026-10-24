@@ -6,7 +6,7 @@ import { RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
 import { useDay, useWorkspace } from './use-day'
 import { displayTitle } from './day-page'
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { linkPageOf } from '../domain/workspace'
 import { displayPageTitle } from './page-title'
 import { ExternalIcon } from './icons'
@@ -387,7 +387,7 @@ function TomorrowStep({ date, workspace, p, update }: { date: LocalDate; workspa
             Tomorrow: {suggestions.length} suggestion{suggestions.length === 1 ? '' : 's'} saved
             {plannedTomorrow > 0 && ` · ${plannedTomorrow} planned`}
           </p>
-          <a className="app-button secondary" href="/">Back to today</a>
+          <Link className="app-button secondary" to="/">Back to today</Link>
         </div>
       )}
     </section>

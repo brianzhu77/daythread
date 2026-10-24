@@ -1,10 +1,12 @@
 import { Toast } from '@heroui/react'
 import { type ReactNode, useEffect, useState } from 'react'
 import { Navigation } from './navigation'
+import { preloadEditor } from './continuous-page'
 import { WorkspaceProvider, isConflict, useWorkspace, type SimOutcome } from './use-day'
 
 /** App frame (craft-v1 §3): sidebar on laptop, bottom tabs and + on phone, dev banner, undo notices. */
 export function AppShell({ children }: { children: ReactNode }) {
+  usePreloadEditor()
   return (
     <WorkspaceProvider>
       <div className="app">
@@ -21,6 +23,21 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
     </WorkspaceProvider>
   )
+}
+
+/**
+ * B41: every screen's code comes with the app (route code splitting is off in vite.config.ts); the editor, the one
+ * large separate download, is fetched once the app is idle, so moving between screens offline needs no network.
+ */
+function usePreloadEditor() {
+  useEffect(() => {
+    const load = () => { void preloadEditor().catch(() => undefined) }
+    const idle = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback
+    const handle = idle ? idle(load, { timeout: 3000 }) : window.setTimeout(load, 1500)
+    // Offline at start: fetch it as soon as the connection is back.
+    window.addEventListener('online', load)
+    return () => { window.removeEventListener('online', load); if (!idle) clearTimeout(handle) }
+  }, [])
 }
 
 /**
