@@ -1,0 +1,9 @@
+ok   1280: offline / → /pages: the app stays, showing the screen or its offline line ({"url":"/pages","failed":[],"offlineLine":null})
+ok   1280: offline / → /tasks: the app stays, showing the screen or its offline line ({"url":"/tasks?view=today","failed":[],"offlineLine":null})
+ok   1280: offline / → /calendar: the app stays, showing the screen or its offline line ({"url":"/calendar","failed":[],"offlineLine":null})
+ok   1280: offline / → /tags: the app stays, showing the screen or its offline line ({"url":"/tags","failed":[],"offlineLine":null})
+ok   1280: offline / → /review: the app stays, showing the screen or its offline line ({"url":"/review","failed":[],"offlineLine":null})
+ok   1280: offline /pages → /: the app stays, showing the screen or its offline line ({"url":"/","failed":[],"offlineLine":null})
+ok   1280: offline Pages → Today: the editor opens (/)
+ok   1280: offline, the emoji menu can't load; the app stays and typing goes on ({"typed":true,"otherErrors":[]})
+all passed
