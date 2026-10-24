@@ -21,8 +21,12 @@
       const now = blocks(), added = now.filter(id => !known.has(id)), removed = [...known].filter(id => !now.includes(id))
       known = new Set(now)
       const c = caret(), block = c?.block && root.querySelector(`[data-node-type="blockContainer"][data-id="${CSS.escape(c.block)}"] .bn-inline-content`)
-      push('mut', { records: records.length, kinds: [...new Set(records.map(r => r.type))], added, removed, text: block?.textContent ?? null, html: block?.innerHTML.slice(0, 160) ?? null })
-    }).observe(root, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['data-is-empty-and-focused', 'class'] })
+      // v2: every record as it happened (the browser's own edit, then ProseMirror's redraw), not only the end state.
+      const short = n => n.nodeType === 3 ? `#text(${JSON.stringify(n.data)})` : n.nodeType === 1 ? n.outerHTML.replace(/ (style|data-[a-z-]+|draggable|contenteditable|spellcheck|translate|role|aria-[a-z-]+|tabindex)="[^"]*"/g, '').slice(0, 200) : n.nodeName
+      const where = n => { const e = n.nodeType === 1 ? n : n.parentElement; return e ? `${e.nodeName.toLowerCase()}.${(e.className || '').toString().split(' ')[0]}@${blockOf(e)?.dataset.id?.slice(0, 8) ?? '-'}` : '?' }
+      const raw = records.map(r => r.type === 'characterData' ? { type: 'text', at: where(r.target), old: r.oldValue, now: r.target.data } : r.type === 'attributes' ? { type: 'attr', at: where(r.target), name: r.attributeName } : { type: 'list', at: where(r.target), added: [...r.addedNodes].map(short), removed: [...r.removedNodes].map(short) })
+      push('mut', { records: records.length, kinds: [...new Set(records.map(r => r.type))], added, removed, text: block?.textContent ?? null, html: block?.innerHTML.slice(0, 160) ?? null, raw })
+    }).observe(root, { subtree: true, childList: true, characterData: true, characterDataOldValue: true, attributes: true, attributeFilter: ['data-is-empty-and-focused', 'class'] })
   }
   observe()
 })()

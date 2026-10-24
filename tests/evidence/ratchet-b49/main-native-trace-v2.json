@@ -1,0 +1,898 @@
+{
+  "before": {
+    "id": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+    "html": "<div class=\"bn-block\" data-node-type=\"blockContainer\" data-id=\"ecbbb19d-d123-4d79-a118-7998d1a1e414\"><div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\">wan</p></div></div>"
+  },
+  "after": {
+    "log": [
+      {
+        "t": 16,
+        "ev": "mut",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万圣节装饰、衣服",
+        "html": "万圣节装饰、衣服",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 21,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        }
+      },
+      {
+        "t": 24,
+        "ev": "mut",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万圣节装饰、衣服",
+        "html": "万圣节装饰、衣服",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 717,
+        "ev": "keydown",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        },
+        "key": "Enter",
+        "keyCode": 13,
+        "isComposing": false
+      },
+      {
+        "t": 727,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "002580aa-4f03-4add-8a6e-37da29ebf862",
+          "offset": 1,
+          "node": "P"
+        },
+        "inputType": "insertParagraph",
+        "data": null,
+        "isComposing": false
+      },
+      {
+        "t": 734,
+        "ev": "mut",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "P"
+        },
+        "records": 6,
+        "kinds": [
+          "childList",
+          "attributes"
+        ],
+        "added": [
+          "ecbbb19d-d123-4d79-a118-7998d1a1e414"
+        ],
+        "removed": [],
+        "text": "",
+        "html": "<br class=\"ProseMirror-trailingBreak\">",
+        "raw": [
+          {
+            "type": "list",
+            "at": "div.bn-block-content@-",
+            "added": [
+              "<p class=\"bn-inline-content\"><br></p>"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "p.bn-inline-content@-",
+            "added": [
+              "<br>"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "div.bn-block@002580aa",
+            "added": [
+              "<div class=\"bn-block-content\"><p class=\"bn-inline-content\">万圣节装饰、衣服</p></div>"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "div.bn-block@002580aa",
+            "added": [],
+            "removed": [
+              "<div class=\"bn-block-content\"><p class=\"bn-inline-content\">万圣节装饰、衣服</p><p class=\"bn-inline-content\"><br></p></div>"
+            ]
+          },
+          {
+            "type": "list",
+            "at": "div.bn-block-group@day:2026",
+            "added": [
+              "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"bn-block-content\"><p class=\"bn-inline-content\"><br class=\"ProseMirror-trailingBreak\"></p></div></div></div>"
+            ],
+            "removed": []
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 735,
+        "ev": "input",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "P"
+        },
+        "inputType": "insertParagraph",
+        "data": null,
+        "isComposing": false
+      },
+      {
+        "t": 735,
+        "ev": "keyup",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "P"
+        },
+        "key": "Enter",
+        "keyCode": 13,
+        "isComposing": false
+      },
+      {
+        "t": 735,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "P"
+        }
+      },
+      {
+        "t": 1265,
+        "ev": "keydown",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "P"
+        },
+        "key": "w",
+        "keyCode": 229,
+        "isComposing": false
+      },
+      {
+        "t": 1267,
+        "ev": "compositionstart",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "P"
+        },
+        "data": ""
+      },
+      {
+        "t": 1267,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "P"
+        },
+        "data": "w"
+      },
+      {
+        "t": 1267,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "P"
+        },
+        "inputType": "insertCompositionText",
+        "data": "w",
+        "isComposing": true
+      },
+      {
+        "t": 1270,
+        "ev": "mut",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 5,
+        "kinds": [
+          "childList",
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "w",
+        "html": "w",
+        "raw": [
+          {
+            "type": "list",
+            "at": "p.bn-inline-content@ecbbb19d",
+            "added": [
+              "#text(\"w\")"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "p.bn-inline-content@ecbbb19d",
+            "added": [],
+            "removed": [
+              "<br class=\"ProseMirror-trailingBreak\">"
+            ]
+          },
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@ecbbb19d",
+            "old": "",
+            "now": "w"
+          },
+          {
+            "type": "attr",
+            "at": "div.bn-block-content@ecbbb19d",
+            "name": "data-is-empty-and-focused"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 1270,
+        "ev": "input",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "w",
+        "isComposing": true
+      },
+      {
+        "t": 1270,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 1,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 1271,
+        "ev": "mut",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 1,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "w",
+        "html": "w",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 1271,
+        "ev": "keyup",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 1,
+          "node": "#text"
+        },
+        "key": "w",
+        "keyCode": 87,
+        "isComposing": true
+      },
+      {
+        "t": 1882,
+        "ev": "keydown",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 1,
+          "node": "#text"
+        },
+        "key": "a",
+        "keyCode": 229,
+        "isComposing": true
+      },
+      {
+        "t": 1884,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "data": "wa"
+      },
+      {
+        "t": 1884,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wa",
+        "isComposing": true
+      },
+      {
+        "t": 1886,
+        "ev": "mut",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wa",
+        "html": "wa",
+        "raw": [
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@ecbbb19d",
+            "old": "w",
+            "now": "wa"
+          },
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@ecbbb19d",
+            "old": "",
+            "now": "wa"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 1886,
+        "ev": "input",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wa",
+        "isComposing": true
+      },
+      {
+        "t": 1886,
+        "ev": "keyup",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 2,
+          "node": "#text"
+        },
+        "key": "a",
+        "keyCode": 65,
+        "isComposing": true
+      },
+      {
+        "t": 1886,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 2,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 1887,
+        "ev": "mut",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 2,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wa",
+        "html": "wa",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 2465,
+        "ev": "keydown",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 2,
+          "node": "#text"
+        },
+        "key": "n",
+        "keyCode": 229,
+        "isComposing": true
+      },
+      {
+        "t": 2467,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "data": "wan"
+      },
+      {
+        "t": 2467,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wan",
+        "isComposing": true
+      },
+      {
+        "t": 2469,
+        "ev": "mut",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wan",
+        "html": "wan",
+        "raw": [
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@ecbbb19d",
+            "old": "wa",
+            "now": "wan"
+          },
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@ecbbb19d",
+            "old": "",
+            "now": "wan"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 2469,
+        "ev": "input",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "wan",
+        "isComposing": true
+      },
+      {
+        "t": 2469,
+        "ev": "keyup",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 3,
+          "node": "#text"
+        },
+        "key": "n",
+        "keyCode": 78,
+        "isComposing": true
+      },
+      {
+        "t": 2469,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 3,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 2469,
+        "ev": "mut",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 3,
+          "node": "#text"
+        },
+        "records": 1,
+        "kinds": [
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "wan",
+        "html": "wan",
+        "raw": [
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4102,
+        "ev": "compositionupdate",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "data": "万"
+      },
+      {
+        "t": 4102,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4105,
+        "ev": "mut",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "records": 3,
+        "kinds": [
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万",
+        "html": "万",
+        "raw": [
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@ecbbb19d",
+            "old": "wan",
+            "now": "万"
+          },
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@ecbbb19d",
+            "old": "",
+            "now": "万"
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4105,
+        "ev": "input",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "insertCompositionText",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4106,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "ecbbb19d-d123-4d79-a118-7998d1a1e414",
+          "offset": 0,
+          "node": "#text"
+        },
+        "inputType": "deleteCompositionText",
+        "data": null,
+        "isComposing": true
+      },
+      {
+        "t": 4111,
+        "ev": "mut",
+        "caret": {
+          "block": "b5b5aaec-c084-42bb-8d86-0bfc1edf0564",
+          "offset": 0,
+          "node": "P"
+        },
+        "records": 5,
+        "kinds": [
+          "childList",
+          "attributes"
+        ],
+        "added": [
+          "b5b5aaec-c084-42bb-8d86-0bfc1edf0564"
+        ],
+        "removed": [
+          "ecbbb19d-d123-4d79-a118-7998d1a1e414"
+        ],
+        "text": "",
+        "html": "<img class=\"ProseMirror-separator\" alt=\"\"><br><br class=\"ProseMirror-trailingBreak\">",
+        "raw": [
+          {
+            "type": "list",
+            "at": "div.bn-block-group@day:2026",
+            "added": [],
+            "removed": [
+              "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"bn-block-content\"><p class=\"bn-inline-content\">万</p></div></div></div>"
+            ]
+          },
+          {
+            "type": "list",
+            "at": "div.bn-block-group@day:2026",
+            "added": [
+              "<br>"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "div.bn-block-group@day:2026",
+            "added": [
+              "<div class=\"bn-block-outer\"><div class=\"bn-block\"><div class=\"bn-block-content\"><p class=\"bn-inline-content\"><img class=\"ProseMirror-separator\" alt=\"\"><br><br class=\"ProseMirror-trailingBreak\"></p></d"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "div.bn-block-group@day:2026",
+            "added": [],
+            "removed": [
+              "<br>"
+            ]
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4111,
+        "ev": "input",
+        "caret": {
+          "block": "b5b5aaec-c084-42bb-8d86-0bfc1edf0564",
+          "offset": 0,
+          "node": "P"
+        },
+        "inputType": "deleteCompositionText",
+        "data": null,
+        "isComposing": true
+      },
+      {
+        "t": 4111,
+        "ev": "beforeinput",
+        "caret": {
+          "block": "b5b5aaec-c084-42bb-8d86-0bfc1edf0564",
+          "offset": 0,
+          "node": "P"
+        },
+        "inputType": "insertFromComposition",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4113,
+        "ev": "mut",
+        "caret": {
+          "block": "b5b5aaec-c084-42bb-8d86-0bfc1edf0564",
+          "offset": 1,
+          "node": "#text"
+        },
+        "records": 4,
+        "kinds": [
+          "childList",
+          "characterData",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万",
+        "html": "万<br><br class=\"ProseMirror-trailingBreak\">",
+        "raw": [
+          {
+            "type": "list",
+            "at": "p.bn-inline-content@b5b5aaec",
+            "added": [
+              "#text(\"万\")"
+            ],
+            "removed": []
+          },
+          {
+            "type": "text",
+            "at": "p.bn-inline-content@b5b5aaec",
+            "old": "",
+            "now": "万"
+          },
+          {
+            "type": "list",
+            "at": "p.bn-inline-content@b5b5aaec",
+            "added": [],
+            "removed": [
+              "<img class=\"ProseMirror-separator\" alt=\"\">"
+            ]
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      },
+      {
+        "t": 4113,
+        "ev": "input",
+        "caret": {
+          "block": "b5b5aaec-c084-42bb-8d86-0bfc1edf0564",
+          "offset": 1,
+          "node": "#text"
+        },
+        "inputType": "insertFromComposition",
+        "data": "万",
+        "isComposing": true
+      },
+      {
+        "t": 4113,
+        "ev": "compositionend",
+        "caret": {
+          "block": "b5b5aaec-c084-42bb-8d86-0bfc1edf0564",
+          "offset": 1,
+          "node": "#text"
+        },
+        "data": "万"
+      },
+      {
+        "t": 4113,
+        "ev": "selectionchange",
+        "caret": {
+          "block": "b5b5aaec-c084-42bb-8d86-0bfc1edf0564",
+          "offset": 1,
+          "node": "#text"
+        }
+      },
+      {
+        "t": 4135,
+        "ev": "mut",
+        "caret": {
+          "block": "b5b5aaec-c084-42bb-8d86-0bfc1edf0564",
+          "offset": 1,
+          "node": "P"
+        },
+        "records": 3,
+        "kinds": [
+          "childList",
+          "attributes"
+        ],
+        "added": [],
+        "removed": [],
+        "text": "万",
+        "html": "万<br><br class=\"ProseMirror-trailingBreak\">",
+        "raw": [
+          {
+            "type": "list",
+            "at": "p.bn-inline-content@b5b5aaec",
+            "added": [
+              "#text(\"万\")"
+            ],
+            "removed": []
+          },
+          {
+            "type": "list",
+            "at": "p.bn-inline-content@b5b5aaec",
+            "added": [],
+            "removed": [
+              "#text(\"万\")"
+            ]
+          },
+          {
+            "type": "attr",
+            "at": "div.tiptap@-",
+            "name": "class"
+          }
+        ]
+      }
+    ],
+    "blocks": [
+      {
+        "type": "paragraph",
+        "text": "万",
+        "id": "b5b5aaec-c084-42bb-8d86-0bfc1edf0564",
+        "html": "<p class=\"bn-inline-content\">万<br><br class=\"ProseMirror-trailingBreak\"></p>"
+      }
+    ],
+    "caret": "b5b5aaec-c084-42bb-8d86-0bfc1edf0564"
+  }
+}
