@@ -1,0 +1,41 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+:root{--bg:#f5f5fa;--card:#fff;--fill:#efeef5;--ink:#1c1c1e;--ink2:#6e6e73;--ink3:#9ea0a4;--line:#e5e5ea;--check:#d9d8dd;--blue:#0a84ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);font:16px/1.4 -apple-system,"SF Pro Text","PingFang SC",system-ui,sans-serif;color:var(--ink)}
+.wrap{max-width:640px;margin:0 auto;padding:16px 16px 40px}
+.head{display:flex;align-items:baseline;justify-content:space-between;margin:8px 0 2px}
+h1{font-size:22px;margin:0;font-weight:700}.done{color:var(--blue);font-weight:600;font-size:17px;background:none;border:0}
+.sub{color:var(--ink2);font-size:14px;margin:0 0 18px}
+h2{font-size:13px;font-weight:600;color:var(--ink2);text-transform:none;margin:18px 4px 6px}
+.group{background:var(--card);border-radius:12px;overflow:hidden}
+.row{display:flex;align-items:center;gap:12px;min-height:46px;padding:0 6px 0 14px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}.row .t{flex:1}.child{padding-left:40px}
+.box{width:20px;height:20px;border:1.5px solid var(--check);border-radius:5px;flex:none}
+.box.on{background:var(--blue);border-color:var(--blue)}
+.more{width:36px;height:36px;border:0;background:none;color:var(--ink3);font-size:20px;letter-spacing:1px}
+.tag{font-size:12px;color:var(--ink2);background:var(--fill);border-radius:6px;padding:1px 6px}
+.gone{color:var(--ink3);text-decoration:line-through}
+.add{color:var(--ink3)}.add .box{border-style:dashed}
+.note{color:var(--ink3);font-size:13px;margin:6px 4px}
+.menu{position:absolute;right:22px;background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.18);width:220px;font-size:15px;z-index:2}
+.menu div{padding:11px 14px;border-bottom:1px solid var(--line)}.menu div:last-child{border:0}
+.label{position:fixed;left:8px;top:6px;font:12px monospace;color:#c00}
+</style></head><body><div class="wrap">
+<div class="head"><h1>Tomorrow · Sat, Oct 25</h1><button class="done">Done</button></div>
+<p class="sub">Friday: 2 done · 3 still open</p>
+
+<h2>Comes along tomorrow</h2>
+<div class="group" style="position:relative">
+ <div class="row"><span class="box"></span><span class="t">TRV for Lu and Kathy <span class="tag">Top 3</span></span><button class="more">⋯</button></div>
+ <div class="row"><span class="box"></span><span class="t">#daythread bug <span class="tag">Top 3</span></span><button class="more">⋯</button></div>
+ <div class="row"><span class="box on"></span><span class="t gone">#daythread improvements on link as page</span><span class="note" style="margin:0 8px">Done · Undo</span></div>
+</div>
+<p class="note">Tick what you finished. ⋯ moves a task to another day or lets it go.</p>
+
+<h2>Add for tomorrow</h2>
+<div class="group">
+ <div class="row"><span class="box"></span><span class="t">万圣节装饰、衣服</span><button class="more">⋯</button></div>
+ <div class="row"><span class="box"></span><span class="t">Kathy 的作业，family culture</span><button class="more">⋯</button></div>
+ <div class="row add"><span class="box"></span><span class="t">New line</span></div>
+</div>
+<p class="note">Each line goes on Saturday’s page as a to-do. Return adds the next line.</p>
+</div></body></html>
