@@ -1510,6 +1510,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const [lineStyle, setLineStyle] = useState<LineStyle | null>(null)
   const [headingOk, setHeadingOk] = useState(true)
   const [styleOpen, setStyleOpen] = useState(false)
+  // B44's paste menu reserves room above the toolbar, not above the style panel, so only one of them is open at a time.
+  useEffect(() => { if (pasteMenu) setStyleOpen(false) }, [pasteMenu])
   useEffect(() => {
     const update = () => {
       const next = { in: canIndent(), out: editor.canUnnestBlock() }
