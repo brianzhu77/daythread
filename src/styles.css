@@ -638,6 +638,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* B20 (Jazz): text that scrolls under the floating bar fades out over 48px and is fully hidden from the bar's top edge
    (12px offset + 60px bar = 72px), so nothing shows through the glass. */
 .tab-bar::before { content: ''; position: fixed; left: 0; right: 0; bottom: 0; height: calc(120px + env(safe-area-inset-bottom)); background: linear-gradient(to bottom, color-mix(in srgb, var(--screen-bg) 0%, transparent), var(--screen-bg) 48px); pointer-events: none; z-index: -1; }
+.tab-bar.is-keyboard-up { display: none; }
 .tab-plus { pointer-events: auto; flex: none; width: 60px; height: 60px; padding: 0; border-radius: 50%; background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); color: var(--ink); box-shadow: var(--shadow-float); }
 
 /* Phone: capture lives behind + (craft-v1 §5.3); notices move to the top, clear of the tab bar. */
@@ -834,7 +835,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
  /* B5 Aa (F16): the line's styles in a 4 × 2 grid above the toolbar, so the line being edited stays in view. */
  .editor-phone-toolbar .editor-aa { font-size:16px;font-weight:600;letter-spacing:-.01em; }
  .editor-phone-toolbar .editor-aa[aria-expanded='true'] { background:var(--fill-soft);border-radius:11px; }
- .editor-style-panel { display:grid;grid-template-columns:repeat(4,1fr);gap:4px;position:absolute;bottom:calc(100% + 8px);left:0;right:0;padding:4px;background:var(--bg);border-radius:14px;box-shadow:0 3px 20px #0002;z-index:60; }
+ /* B53: while Aa is open the page can always scroll the line it styles up above the panel, even at the page's end. */
+.continuous-editor.has-style-panel { margin-bottom:120px; }
+.editor-style-panel { display:grid;grid-template-columns:repeat(4,1fr);gap:4px;position:absolute;bottom:calc(100% + 8px);left:0;right:0;padding:4px;background:var(--bg);border-radius:14px;box-shadow:0 3px 20px #0002;z-index:60; }
  .editor-style-panel button { min-height:44px;padding:0 4px;border:0;border-radius:10px;background:transparent;color:var(--ink);font-size:var(--text-meta);line-height:1.2; }
  .editor-style-panel button[aria-pressed='true'] { background:var(--fill-soft);color:var(--blue-text);font-weight:600; }
  .editor-style-panel .is-h1, .editor-style-panel .is-h2, .editor-style-panel .is-h3 { font-weight:600; }

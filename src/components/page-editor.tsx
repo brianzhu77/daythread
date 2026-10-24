@@ -26,6 +26,7 @@ import { pageHref, pageLabel } from './page-tree'
 import { jumpInPage, jumpToBlock, lookupFailed, registerEditor, visibleArea } from './line-jump'
 import { previewLinkPage, resolveLineLink } from '../server/functions'
 import { newOperationId, useWorkspace } from './use-day'
+import { useKeyboardTop } from './keyboard'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
 import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
@@ -323,36 +324,6 @@ function hasDateFacts(task: Task): boolean {
 const touchHandleSize = 44
 // Viewport y of the middle of a block's first line of text. Works for empty blocks and wrapped text alike,
 // since it reads the line box of the inline content rather than the rendered glyphs.
-/**
- * B48: where the phone toolbar sits with the keyboard up. iOS doesn't shrink the layout viewport for the keyboard, so a
- * fixed bottom stays behind it; the visual viewport is what he can see. Returns the visible bottom edge in layout
- * coordinates while a keyboard covers part of the screen, else null (the toolbar keeps its place above the tab bar).
- */
-function useKeyboardTop(): number | null {
-  const [top, setTop] = useState<number | null>(null)
-  useEffect(() => {
-    const vv = window.visualViewport
-    if (!vv) return
-    let frame = 0
-    const measure = () => {
-      cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => {
-        // The keyboard's height doesn't depend on how far iOS has scrolled the visible part (offsetTop can reach it).
-        // Under ~100 px is Safari's bars moving, not a keyboard.
-        setTop(window.innerHeight - vv.height > 100 ? Math.round(vv.offsetTop + vv.height) : null)
-      })
-    }
-    measure()
-    vv.addEventListener('resize', measure); vv.addEventListener('scroll', measure)
-    document.addEventListener('focusin', measure); document.addEventListener('focusout', measure)
-    return () => {
-      cancelAnimationFrame(frame)
-      vv.removeEventListener('resize', measure); vv.removeEventListener('scroll', measure)
-      document.removeEventListener('focusin', measure); document.removeEventListener('focusout', measure)
-    }
-  }, [])
-  return top
-}
 function firstLineCenter(block: HTMLElement): number {
   const inline = block.querySelector<HTMLElement>('.bn-inline-content, .editor-page-card-title') ?? block
   const style = getComputedStyle(inline)
@@ -1533,7 +1504,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const update = () => {
       const block = editor.getTextCursorPosition().block
       const el = document.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"]`)
-      if (el) { const top = firstLineCenter(el) - touchHandleSize / 2; setTouchHandle(previous => previous?.id === block.id && Math.abs(previous.top - top) < 0.5 ? previous : { id: block.id, top }) }
+      // Finding 11: measured from what he can see on iOS, placed from the layout viewport, so add fixedOffset().
+      if (el) { const top = firstLineCenter(el) - touchHandleSize / 2 + fixedOffset(); setTouchHandle(previous => previous?.id === block.id && Math.abs(previous.top - top) < 0.5 ? previous : { id: block.id, top }) }
     }
     const off = editor.onSelectionChange(() => requestAnimationFrame(update))
     // B50: the keyboard moving the visible part (iOS scrolls it without a window scroll) moves the line too, so the
@@ -1583,18 +1555,28 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // B48: iOS scrolls the caret to just above the keyboard, which is where the toolbar now sits, so keep the caret's line
   // clear of the toolbar while the keyboard is up.
   useEffect(() => {
-    if (keyboardTop === null) return
+    if (keyboardTop === null && !styleOpen) return
     const reveal = () => requestAnimationFrame(() => {
       const bar = phoneToolbar.current?.getBoundingClientRect(), selection = window.getSelection()
+      // B53: the open Aa panel sits on top of the toolbar; the line it styles stays in view above it.
+      const panel = styleOpen ? phoneToolbar.current?.querySelector('.editor-style-panel')?.getBoundingClientRect() : undefined
       if (!bar?.height || !selection?.rangeCount || !editor.isFocused()) return
       const range = selection.getRangeAt(0)
       const caret = range.getBoundingClientRect().height ? range.getBoundingClientRect() : (range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement)?.getBoundingClientRect()
-      const overlap = caret ? caret.bottom + 8 - bar.top : 0
+      // B55: the line below the caret stays clear too, so its checkbox can be ticked without scrolling first.
+      const row = (range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement)?.closest('[data-node-type="blockContainer"]')
+      const rows = row ? [...(editor.domElement?.querySelectorAll<HTMLElement>('[data-node-type="blockContainer"]') ?? [])] : []
+      // The next line he can see: on a past day empty rows are hidden (B19), so skip anything with no height.
+      let nextLine: DOMRect | undefined
+      for (let i = rows.indexOf(row as HTMLElement) + 1; i > 0 && i < rows.length && !nextLine?.height; i++) nextLine = rows[i]!.querySelector('.bn-block-content')?.getBoundingClientRect()
+      // With the panel open only the caret's line has to show; the panel is up for a moment, the line below can wait.
+      const lowest = panel?.height ? caret?.bottom ?? 0 : Math.max(caret?.bottom ?? 0, nextLine && nextLine.height ? nextLine.bottom : 0)
+      const overlap = lowest ? lowest + 8 - (panel?.height ? panel.top : bar.top) : 0
       if (overlap > 0) window.scrollBy(0, overlap)
     })
     reveal()
     return editor.onSelectionChange(reveal)
-  }, [editor, keyboardTop])
+  }, [editor, keyboardTop, styleOpen])
   // B44's paste menu reserves room above the toolbar, not above the style panel, so only one of them is open at a time.
   useEffect(() => { if (pasteMenu) setStyleOpen(false) }, [pasteMenu])
   useEffect(() => {
@@ -1871,7 +1853,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const conflictText = changedBy(page.id) === 'tab' ? 'Changed in another tab · draft kept' : 'Changed on another device · draft kept'
   // B38: the dock line's words stay steady while typing flips the header between "Unsaved changes" and "Saving…".
   const unsavedText = conflict ? conflictText : !online ? "Offline · saves when you're back" : unsaved === 'network' ? 'Not saved yet · trying again' : "Couldn't save · draft kept"
-  return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''} ${pasteMenu ? 'has-paste-menu' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
+  return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''} ${pasteMenu ? 'has-paste-menu' : ''} ${styleOpen && lineStyle ? 'has-style-panel' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onBlur={e => { if (e.target === editor.domElement) setStyleOpen(false) }}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
     onMouseDownCapture={e => { const target = e.target as Element; if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') } }}
