@@ -27,27 +27,19 @@ for (const target of screens) {
   log(shown, `offline ${start} → ${target}: the app stays, showing the screen or its offline line`, JSON.stringify({ url: url.replace(base, ''), failed: failedRequests.filter(x => x.includes('/assets/')).slice(0, 3), offlineLine: text.match(/Offline[^\n]*/)?.[0] ?? null }))
   await ctx.close()
 }
-// The editor's code: fetched when the app is idle, so Today opens offline from Pages. If it never arrived (blocked
-// here), the page says "Offline · this page needs a connection" in the app, and opens by itself once back online.
-for (const blocked of [false, true]) {
+// The editor comes with the app, so Today opens offline from Pages; its emoji menu (the one part still fetched on
+// first use) fails quietly offline: no page error, the app stays.
+{
   const ctx = await browser.newContext({ viewport: { width: Number(width), height: 1000 }, ...(phone ? { hasTouch: true, isMobile: true } : {}) })
   const p = await ctx.newPage(), errors = []
   p.on('pageerror', e => errors.push(e.message))
-  // A 503, not an aborted request: WebKit keeps an aborted one for the session, so even a reload after reconnecting
-  // would get the same failure there (a test artifact; a real dropped connection isn't kept).
-  if (blocked) await p.route('**/assets/page-editor-*', r => r.fulfill({ status: 503, body: '' }))
-  await p.goto(base + '/pages', { waitUntil: 'networkidle' }); await p.waitForTimeout(4000)
+  await p.goto(base + '/pages', { waitUntil: 'networkidle' }); await p.waitForTimeout(1500)
   await ctx.setOffline(true)
   await p.locator('a[href="/"]:visible').first().click(); await p.waitForTimeout(2500)
-  const url = p.url(), text = await p.locator('body').innerText().catch(() => '')
-  if (!blocked) log(url.startsWith(base) && (await p.locator('.continuous-editor').count()) > 0, 'offline Pages → Today: the editor opens (fetched while idle)', url.replace(base, ''))
-  else {
-    log(url.startsWith(base) && text.includes('Offline · this page needs a connection'), 'editor code never fetched: "Offline · this page needs a connection" in the app', JSON.stringify(text.match(/Offline[^\n]*/)?.[0] ?? url))
-    await p.unroute('**/assets/page-editor-*'); await ctx.setOffline(false)
-    const opened = await p.locator('.continuous-editor').first().waitFor({ timeout: 15000 }).then(() => true, () => false)
-    log(opened, 'back online, the page opens by itself')
-  }
-  log(errors.length === 0, `no page errors (${blocked ? 'blocked' : 'preloaded'})`, errors.slice(0, 2).join(' / '))
+  log(p.url().startsWith(base) && (await p.locator('.continuous-editor').count()) > 0, 'offline Pages → Today: the editor opens', p.url().replace(base, ''))
+  const last = p.locator('.continuous-editor .bn-inline-content').last()
+  await last.click(); await p.keyboard.type(' :smi'); await p.waitForTimeout(2000)
+  log(p.url().startsWith(base) && (await p.locator('.continuous-editor').count()) > 0 && errors.length === 0, 'offline, the emoji menu can\'t load and the app stays, with no page error', errors.slice(0, 2).join(' / '))
   await ctx.close()
 }
 await browser.close()
