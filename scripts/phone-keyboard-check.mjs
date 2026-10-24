@@ -74,6 +74,10 @@ try {
   await page.locator('.editor-phone-toolbar .editor-aa').tap(); await settle()
   const panel = await visible()
   assert.ok(panel.panel && panel.panel.bottom <= panel.toolbar.top && panel.panel.top >= panel.top, `Aa panel above the toolbar and visible ${JSON.stringify(panel)}`)
+  await page.evaluate(() => window.__scrollVisual(60)); await settle()
+  const panelScrolled = await visible()
+  aboveKeyboard(panelScrolled, 'scrolled with Aa open')
+  assert.ok(panelScrolled.panel && panelScrolled.panel.bottom <= panelScrolled.toolbar.top && panelScrolled.panel.top >= panelScrolled.top, `Aa panel follows a scroll ${JSON.stringify(panelScrolled)}`)
   await page.locator('.editor-phone-toolbar .editor-aa').tap(); await settle()
   await page.evaluate(() => window.__scrollVisual(0)); await settle()
   await page.evaluate(v => { const dt = new DataTransfer(); dt.setData('text/plain', v); document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })) }, 'https://example.com/b48-keyboard')
@@ -82,6 +86,13 @@ try {
   assert.ok(menu.menu, 'paste menu shown')
   assert.ok(menu.menu.top >= menu.top && (menu.menu.bottom <= menu.toolbar.top || menu.menu.top >= menu.toolbar.bottom), `paste menu visible and clear of the toolbar ${JSON.stringify(menu)}`)
   await page.screenshot({ path: `/tmp/jazz-basics/b48-${engine}390.png` })
+  const clear = v => v.menu && v.menu.top >= v.top && v.menu.bottom <= v.bottom && (v.menu.bottom <= v.toolbar.top || v.menu.top >= v.toolbar.bottom)
+  for (const y of [120, 40]) {
+    await page.evaluate(y => window.__scrollVisual(y), y); await settle()
+    const v = await visible()
+    aboveKeyboard(v, `scrolled ${y} with the paste menu open`)
+    assert.ok(clear(v), `paste menu follows a scroll to ${y} ${JSON.stringify(v)}`)
+  }
   await page.keyboard.press('Escape'); await hide()
   // No keyboard (an external one, or the fake turned off): the toolbar keeps its place above the tab bar.
   const plain = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true })

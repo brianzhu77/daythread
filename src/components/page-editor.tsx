@@ -2150,15 +2150,20 @@ function PasteLinkMenu({ menu, detail, onKeep, onBookmark, onHighlight }: { menu
       // §5: clear of the phone toolbar too (Ratchet), measured where it is now rather than assumed, since its size
       // changes with what it holds (B5). A hidden toolbar measures 0 high and reserves nothing.
       const toolbar = line!.closest('.continuous-editor')?.querySelector('.editor-phone-toolbar')?.getBoundingClientRect()
-      const bottom = Math.min(window.visualViewport?.height ?? window.innerHeight, toolbar?.height ? toolbar.top : Infinity)
+      // B48: what he can see, in the same coordinates as the line, which moves when iOS scrolls the visible part.
+      const vv = window.visualViewport, seen = vv ? { top: vv.offsetTop, bottom: vv.offsetTop + vv.height } : { top: 0, bottom: window.innerHeight }
+      const bottom = Math.min(seen.bottom, toolbar?.height ? toolbar.top : Infinity)
       const editor = line!.closest('.continuous-editor')?.getBoundingClientRect()
       const width = phone && editor ? editor.right - text.left - 8 : 280
       const below = rect.bottom + 4
-      setPlace({ top: below + height <= bottom - 8 ? below : Math.max(8, top.top - height - 4), left: text.left, width })
+      setPlace({ top: below + height <= bottom - 8 ? below : Math.max(seen.top + 8, top.top - height - 4), left: text.left, width })
     }
+    // The toolbar moves with the keyboard and the visible part (B48) a frame later, so measure after it has.
+    let frame = 0
+    const later = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => { frame = requestAnimationFrame(measure) }) }
     measure()
-    window.visualViewport?.addEventListener('resize', measure)
-    return () => window.visualViewport?.removeEventListener('resize', measure)
+    window.visualViewport?.addEventListener('resize', later); window.visualViewport?.addEventListener('scroll', later)
+    return () => { cancelAnimationFrame(frame); window.visualViewport?.removeEventListener('resize', later); window.visualViewport?.removeEventListener('scroll', later) }
   }, [menu.blockIds.join()])
   const several = menu.urls.length > 1
   const keep = (e: React.SyntheticEvent) => { e.preventDefault(); onKeep() }
