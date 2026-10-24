@@ -87,3 +87,15 @@ test('the result is text: it never adds markup, links or a second line', () => {
   assert.equal(typeof quote.content, 'string', 'plain text content, no inline links')
   assert.equal(quote.content, '[[Not a link]] <script>x</script> second line')
 })
+
+test('the quote turned into a bullet, or formatted, with the same words: Undo keeps the page (Ratchet a35f2026)', () => {
+  for (const edit of [(n: EditorNode) => ({ ...n, type: 'bulletListItem' }), (n: EditorNode) => ({ ...n, content: [{ type: 'text', text: inlineText(n.content), styles: { bold: true } }] })]) {
+    let { ws, dayId, op } = pasted()
+    ws = ok(ws, preview(dayId, 'How to be more ambitious', 'A tutorial'))
+    const p = page(ws, 'link')
+    ws = ok(ws, { type: 'save-editor', pageId: 'link', expectedContent: pageContentKey(p), document: JSON.stringify(editorSeed(p, ws).map((n, i) => i === 0 ? edit(n) : n)) })
+    const r = run(ws, { type: 'undo-paste-links', pageId: dayId, operationId: op, today: day })
+    assert.equal(r.workspace.pages.some(x => x.id === 'link'), true)
+    assert.match(r.receipt.message, /has your edits/)
+  }
+})

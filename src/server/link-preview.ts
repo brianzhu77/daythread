@@ -45,6 +45,7 @@ export function isPublicAddress(ip: string): boolean {
     const first = parseInt(lower.split(':')[0] || '0', 16)
     if ((first & 0xfe00) === 0xfc00) return false // unique local fc00::/7
     if ((first & 0xffc0) === 0xfe80) return false // link-local fe80::/10
+    if ((first & 0xffc0) === 0xfec0) return false // site-local fec0::/10 (deprecated, still private)
     if ((first & 0xff00) === 0xff00) return false // multicast
     if (lower.startsWith('64:ff9b:') || lower.startsWith('2001:db8:') || lower.startsWith('::')) return false // NAT64, documentation, other v4-compatible forms
     return true
@@ -91,36 +92,58 @@ export function decodeHtml(bytes: Buffer, contentType: string): string | null {
   try { return new TextDecoder(declared.toLowerCase(), { fatal: true }).decode(bytes) } catch { return null }
 }
 
+/**
+ * One request. Every way it ends goes through `end`, which settles once and destroys the response and the request, so
+ * no body keeps downloading after we've stopped reading it (a redirect, a refused type, the cap; Ratchet 778e5e0d), and
+ * no throw from anything a site sends can escape a callback (Ratchet 80f75716, Lead 3c7f684c).
+ */
 function request(url: URL, signal: AbortSignal): Promise<Hop> {
   return new Promise(resolve => {
-    const get = url.protocol === 'https:' ? https.get : http.get
-    const req = get(url, {
-      lookup: checkedLookup as never, signal,
-      headers: { 'user-agent': 'Daythread link preview (+title and description only)', accept: 'text/html,application/xhtml+xml', 'accept-encoding': 'identity' },
-    }, res => {
-      const status = res.statusCode ?? 0
-      if (status >= 300 && status < 400 && res.headers.location) { res.resume(); return resolve({ redirect: new URL(res.headers.location, url).toString() }) }
-      const type = String(res.headers['content-type'] ?? '')
-      if (status < 200 || status >= 300 || !/text\/html|application\/xhtml\+xml/i.test(type)) { res.resume(); return resolve(null) }
-      const chunks: Buffer[] = []; let size = 0, done = false
-      const finish = (cut: boolean) => {
-        if (done) return; done = true
-        let bytes = Buffer.concat(chunks)
-        // A page cut at the cap may end mid-character; drop the last few bytes rather than fail the strict decode.
-        if (cut) { const head = /<\/head>/i.exec(bytes.toString('latin1')); bytes = head ? bytes.subarray(0, head.index) : bytes.subarray(0, Math.max(0, bytes.length - 4)) }
-        const html = decodeHtml(bytes, type)
-        resolve(html === null ? null : { html })
-      }
-      // Only the start of the page is read: the head is where the title and description are.
-      res.on('data', (chunk: Buffer) => {
-        const room = previewLimits.maxBytes - size
-        chunks.push(room < chunk.length ? chunk.subarray(0, room) : chunk); size += Math.min(room, chunk.length)
-        if (size >= previewLimits.maxBytes) { res.destroy(); finish(true) }
-      })
-      res.on('end', () => finish(false))
-      res.on('error', () => (size ? finish(true) : resolve(null)))
-    })
-    req.on('error', () => resolve(null))
+    let settled = false, req: http.ClientRequest | undefined, res: http.IncomingMessage | undefined
+    const end = (hop: Hop) => {
+      if (settled) return
+      settled = true
+      try { res?.destroy() } catch { /* already closed */ }
+      try { req?.destroy() } catch { /* already closed */ }
+      resolve(hop)
+    }
+    const guard = <A extends unknown[]>(fn: (...args: A) => void) => (...args: A) => { try { fn(...args) } catch { end(null) } }
+    try {
+      const get = url.protocol === 'https:' ? https.get : http.get
+      req = get(url, {
+        lookup: checkedLookup as never, signal,
+        headers: { 'user-agent': 'Daythread link preview (+title and description only)', accept: 'text/html,application/xhtml+xml', 'accept-encoding': 'identity' },
+      }, guard((response: http.IncomingMessage) => {
+        res = response
+        response.on('error', guard(() => (chunks.length ? finish(true) : end(null))))
+        const status = response.statusCode ?? 0
+        if (status >= 300 && status < 400 && response.headers.location) {
+          let to: string
+          try { to = new URL(response.headers.location, url).toString() } catch { return end(null) } // a malformed Location
+          return end({ redirect: to })
+        }
+        const type = String(response.headers['content-type'] ?? '')
+        if (status < 200 || status >= 300 || !/text\/html|application\/xhtml\+xml/i.test(type)) return end(null)
+        const chunks: Buffer[] = []; let size = 0
+        const finish = (cut: boolean) => {
+          let bytes = Buffer.concat(chunks)
+          // A page cut at the cap may end mid-character; keep what's before </head>, or drop the last bytes, rather than
+          // fail the strict decode.
+          if (cut) { const head = /<\/head>/i.exec(bytes.toString('latin1')); bytes = head ? bytes.subarray(0, head.index) : bytes.subarray(0, Math.max(0, bytes.length - 4)) }
+          const html = decodeHtml(bytes, type)
+          end(html === null ? null : { html })
+        }
+        // Only the start of the page is read: the head is where the title and description are.
+        response.on('data', guard((chunk: Buffer) => {
+          const room = previewLimits.maxBytes - size
+          chunks.push(room < chunk.length ? chunk.subarray(0, room) : chunk); size += Math.min(room, chunk.length)
+          if (size >= previewLimits.maxBytes) finish(true)
+        }))
+        response.on('end', guard(() => finish(false)))
+      }))
+      req.on('error', () => end(null))
+      signal.addEventListener('abort', () => end(null), { once: true })
+    } catch { end(null) }
   })
 }
 

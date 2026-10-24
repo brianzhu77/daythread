@@ -21,7 +21,7 @@ const html = (body: string, type = 'text/html; charset=utf-8') => (res: http.Ser
 test('public addresses only: private, loopback, link-local, CGNAT, multicast and their IPv6 forms are refused', () => {
   for (const ip of ['8.8.8.8', '1.1.1.1', '93.184.216.34', '2606:4700:4700::1111']) assert.equal(isPublicAddress(ip), true, ip)
   for (const ip of ['127.0.0.1', '10.0.0.5', '172.16.3.4', '172.31.255.255', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0', '224.0.0.1', '255.255.255.255', '198.18.0.1',
-    '::1', '::', 'fc00::1', 'fd12:3456::1', 'fe80::1', 'ff02::1', '::ffff:127.0.0.1', '::ffff:10.0.0.1', '::ffff:7f00:1', '::ffff:a9fe:a9fe', '64:ff9b::7f00:1', '2001:db8::1', 'not-an-ip'])
+    '::1', '::', 'fc00::1', 'fd12:3456::1', 'fe80::1', 'fec0::1', 'ff02::1', '::ffff:127.0.0.1', '::ffff:10.0.0.1', '::ffff:7f00:1', '::ffff:a9fe:a9fe', '64:ff9b::7f00:1', '2001:db8::1', 'not-an-ip'])
     assert.equal(isPublicAddress(ip), false, ip)
 })
 
@@ -104,4 +104,13 @@ test('long text is cut to its limit; control and invisible characters go', () =>
 
 test('a description that is only the site\'s name is dropped (Bumblebee)', () => {
   assert.deepEqual(readPreview('<meta property="og:title" content="A post"><meta property="og:site_name" content="GitHub"><meta property="og:description" content="github">'), { title: 'A post', description: null })
+})
+
+test('a malformed redirect gives no preview and never stops the server (Ratchet 80f75716)', async () => {
+  routes['/bad-location'] = res => { res.statusCode = 302; res.setHeader('location', 'http://['); res.end() }
+  routes['/bad-location-2'] = res => { res.statusCode = 301; res.setHeader('location', 'https://exa mple.com:99999/'); res.end() }
+  assert.deepEqual(await fetchLinkPreview(`${base}/bad-location`), { title: null, description: null })
+  assert.deepEqual(await fetchLinkPreview(`${base}/bad-location-2`), { title: null, description: null })
+  routes['/after'] = html('<title>Still serving</title>')
+  assert.equal((await fetchLinkPreview(`${base}/after`)).title, 'Still serving')
 })

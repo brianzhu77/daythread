@@ -55,8 +55,9 @@ export interface LinkPasteRecord {
   /** A made page's first title (the link text, or the URL default), so Undo can tell a rename. B43: or the title read
    * from the web, which isn't his edit either. */
   title?: string;
-  /** B43: the description quote the preview put on the made page, so Undo doesn't count it as his writing. */
-  preview?: { blockId: string; text: string };
+  /** B43: the description quote the preview put on the made page, and the whole body it wrote, so Undo doesn't count
+   * that as his writing, while any change to it (a word, a format, the quote turned into a bullet) does. */
+  preview?: { blockId: string; text: string; document: string };
   /** The day of the paste, for "Saved before · {day}". */
   on: LocalDate;
   /** References (`pageId/blockId`) to each page of the outcome at paste time; only ones added since block Undo. */

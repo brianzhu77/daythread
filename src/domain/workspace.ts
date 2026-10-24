@@ -520,10 +520,11 @@ function checkLinkIdentity(state: Workspace): void {
 }
 /** Written or tracked on a link page since it was made: a title, any text or row, a review note. */
 function linkPageEdited(state: Workspace, p: Page, firstTitle: string = defaultLinkTitle(p.url ?? ""), preview?: LinkPasteRecord["preview"]): boolean {
-  // B43: the description quote the preview added, still as it put it, isn't his writing.
-  const ours = (b: NoteBlock) => Boolean(preview && b.id === preview.blockId && b.text === preview.text);
-  return p.title !== firstTitle || Boolean(p.reviewText.trim()) || state.pages.some((c) => c.parentId === p.id)
-    || p.sections.some((s) => s.title.trim() || s.blocks.some((b) => !ours(b) && (b.kind !== "paragraph" || b.text.trim())));
+  // B43: a body that is still exactly what the preview wrote isn't his writing; any change to it is (Ratchet a35f2026:
+  // the quote turned into a bullet, or formatted, with the same words).
+  const body = preview ? p.editorJSON !== preview.document
+    : p.sections.some((s) => s.title.trim() || s.blocks.some((b) => b.kind !== "paragraph" || b.text.trim()));
+  return p.title !== firstTitle || Boolean(p.reviewText.trim()) || state.pages.some((c) => c.parentId === p.id) || body;
 }
 /**
  * B43 (Lead, Ratchet): the title and description read from the web for a page a paste just made. Bound to that paste:
@@ -556,7 +557,7 @@ function applyLinkPreview(state: Workspace, action: Extract<Action, { type: "app
     p.sections = projectDocument(nodes, p, state);
     p.editorJSON = JSON.stringify(nodes);
     p.editorSections = JSON.stringify(p.sections);
-    r.preview = { blockId, text: quote };
+    r.preview = { blockId, text: quote, document: p.editorJSON };
   }
   r.title = p.title;
   return { message: title ? `Named '${p.title}'` : "Link page filled in", entityId: p.id };
