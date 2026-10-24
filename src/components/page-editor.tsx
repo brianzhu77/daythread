@@ -322,6 +322,36 @@ function hasDateFacts(task: Task): boolean {
 const touchHandleSize = 44
 // Viewport y of the middle of a block's first line of text. Works for empty blocks and wrapped text alike,
 // since it reads the line box of the inline content rather than the rendered glyphs.
+/**
+ * B48: where the phone toolbar sits with the keyboard up. iOS doesn't shrink the layout viewport for the keyboard, so a
+ * fixed bottom stays behind it; the visual viewport is what he can see. Returns the visible bottom edge in layout
+ * coordinates while a keyboard covers part of the screen, else null (the toolbar keeps its place above the tab bar).
+ */
+function useKeyboardTop(): number | null {
+  const [top, setTop] = useState<number | null>(null)
+  useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    let frame = 0
+    const measure = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const bottom = vv.offsetTop + vv.height
+        // Under ~100 px is Safari's bars moving, not a keyboard.
+        setTop(window.innerHeight - bottom > 100 ? Math.round(bottom) : null)
+      })
+    }
+    measure()
+    vv.addEventListener('resize', measure); vv.addEventListener('scroll', measure)
+    document.addEventListener('focusin', measure); document.addEventListener('focusout', measure)
+    return () => {
+      cancelAnimationFrame(frame)
+      vv.removeEventListener('resize', measure); vv.removeEventListener('scroll', measure)
+      document.removeEventListener('focusin', measure); document.removeEventListener('focusout', measure)
+    }
+  }, [])
+  return top
+}
 function firstLineCenter(block: HTMLElement): number {
   const inline = block.querySelector<HTMLElement>('.bn-inline-content, .editor-page-card-title') ?? block
   const style = getComputedStyle(inline)
@@ -1530,6 +1560,23 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const [lineStyle, setLineStyle] = useState<LineStyle | null>(null)
   const [headingOk, setHeadingOk] = useState(true)
   const [styleOpen, setStyleOpen] = useState(false)
+  const keyboardTop = useKeyboardTop()
+  const phoneToolbar = useRef<HTMLDivElement>(null)
+  // B48: iOS scrolls the caret to just above the keyboard, which is where the toolbar now sits, so keep the caret's line
+  // clear of the toolbar while the keyboard is up.
+  useEffect(() => {
+    if (keyboardTop === null) return
+    const reveal = () => requestAnimationFrame(() => {
+      const bar = phoneToolbar.current?.getBoundingClientRect(), selection = window.getSelection()
+      if (!bar?.height || !selection?.rangeCount || !editor.isFocused()) return
+      const range = selection.getRangeAt(0)
+      const caret = range.getBoundingClientRect().height ? range.getBoundingClientRect() : (range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement)?.getBoundingClientRect()
+      const overlap = caret ? caret.bottom + 8 - bar.top : 0
+      if (overlap > 0) window.scrollBy(0, overlap)
+    })
+    reveal()
+    return editor.onSelectionChange(reveal)
+  }, [editor, keyboardTop])
   // B44's paste menu reserves room above the toolbar, not above the style panel, so only one of them is open at a time.
   useEffect(() => { if (pasteMenu) setStyleOpen(false) }, [pasteMenu])
   useEffect(() => {
@@ -1988,7 +2035,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       onPointerCancel={() => { dragging.current = []; setTouchDragging(false); setDrop(null) }}><GripIcon /></button>}
     {/* F16 order: Aa · + · outdent / indent · undo / redo · hide keyboard. Indent and outdent are Tab and Shift+Tab
         (F11): a phone has no Tab key. */}
-    <div className="editor-phone-toolbar" aria-label="Editor tools">
+    <div ref={phoneToolbar} className="editor-phone-toolbar" aria-label="Editor tools" style={keyboardTop === null ? undefined : { top: keyboardTop - 8, bottom: 'auto', translate: '0 -100%' }}>
       {styleOpen && lineStyle && <div className="editor-style-panel" role="group" aria-label="Line style">
         {lineStyles.map(s => <button key={s.key} {...keepCaret} className={`is-${s.key}`} aria-pressed={lineStyle === s.key} disabled={s.type === 'heading' && !headingOk} onClick={() => setStyle(s.key)}>{s.label}</button>)}
       </div>}
