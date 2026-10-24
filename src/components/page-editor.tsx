@@ -39,6 +39,7 @@ import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorF
 import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
 import { openedByTurnover } from './use-screen-today'
+import { fixedOffset, seenArea } from './fixed-coords'
 import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
 
 const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' }, planDate: { default: '' } }, content: 'inline' }, {
@@ -234,7 +235,7 @@ function LineMenu({ anchor, onClose, onCopy }: { anchor: { top: number; bottom: 
     const { top, bottom } = visibleArea(), gap = 4, edge = 8
     const below = anchor.bottom + gap, above = anchor.top - gap - menu.height
     const y = below + menu.height <= bottom - edge ? below : above >= top + edge ? above : Math.max(top + edge, Math.min(below, bottom - edge - menu.height))
-    setAt({ top: y, left: Math.max(edge, Math.min(anchor.left, window.innerWidth - menu.width - edge)) })
+    setAt({ top: y + fixedOffset(), left: Math.max(edge, Math.min(anchor.left, window.innerWidth - menu.width - edge)) })
   }, [anchor])
   // Focus once it's placed: a hidden element can't take focus.
   const placed = at !== null
@@ -2192,12 +2193,13 @@ function PasteLinkMenu({ menu, detail, onKeep, onBookmark, onHighlight }: { menu
       // changes with what it holds (B5). A hidden toolbar measures 0 high and reserves nothing.
       const toolbar = line!.closest('.continuous-editor')?.querySelector('.editor-phone-toolbar')?.getBoundingClientRect()
       // B48: what he can see, in the same coordinates as the line, which moves when iOS scrolls the visible part.
-      const vv = window.visualViewport, seen = vv ? { top: vv.offsetTop, bottom: vv.offsetTop + vv.height } : { top: 0, bottom: window.innerHeight }
+      const seen = seenArea()
       const bottom = Math.min(seen.bottom, toolbar?.height ? toolbar.top : Infinity)
       const editor = line!.closest('.continuous-editor')?.getBoundingClientRect()
       const width = phone && editor ? editor.right - text.left - 8 : 280
       const below = rect.bottom + 4
-      setPlace({ top: below + height <= bottom - 8 ? below : Math.max(seen.top + 8, top.top - height - 4), left: text.left, width })
+      // Finding 11: measured on iOS from the visible part, placed as fixed from the layout viewport.
+      setPlace({ top: (below + height <= bottom - 8 ? below : Math.max(seen.top + 8, top.top - height - 4)) + fixedOffset(), left: text.left, width })
     }
     // The toolbar moves with the keyboard and the visible part (B48) a frame later, so measure after it has.
     let frame = 0
