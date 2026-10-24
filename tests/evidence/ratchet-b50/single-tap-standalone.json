@@ -1,0 +1,155 @@
+[
+  {
+    "events": [
+      {
+        "type": "pointerdown",
+        "x": 75,
+        "y": 406,
+        "target": "<p class=\"bn-inline-content\">明天</p>"
+      },
+      {
+        "type": "touchstart",
+        "x": null,
+        "y": null,
+        "target": "<p class=\"bn-inline-content\">明天</p>"
+      },
+      {
+        "type": "touchend",
+        "x": null,
+        "y": null,
+        "target": "<p class=\"bn-inline-content\">明天</p>"
+      },
+      {
+        "type": "mousedown",
+        "x": 75,
+        "y": 406,
+        "target": "<p class=\"bn-inline-content\">明天</p>"
+      },
+      {
+        "type": "mouseup",
+        "x": 75,
+        "y": 406,
+        "target": "<p class=\"bn-inline-content\">明天</p>"
+      },
+      {
+        "type": "click",
+        "x": 75,
+        "y": 406,
+        "target": "<p class=\"bn-inline-content\">明天</p>"
+      }
+    ],
+    "focused": "true",
+    "viewport": 408,
+    "menus": 0,
+    "task": [
+      [
+        "editor-task:day:2026-10-23:top3:template:0",
+        "TRV for Lu and Kathy",
+        "open"
+      ]
+    ],
+    "scenario": "text"
+  },
+  {
+    "events": [
+      {
+        "type": "pointerdown",
+        "x": 90,
+        "y": 406,
+        "target": "<div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\"><br class=\"ProseMirror-trailingBreak\"></p></div>"
+      },
+      {
+        "type": "touchstart",
+        "x": null,
+        "y": null,
+        "target": "<div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\"><br class=\"ProseMirror-trailingBreak\"></p></div>"
+      },
+      {
+        "type": "touchend",
+        "x": null,
+        "y": null,
+        "target": "<div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\"><br class=\"ProseMirror-trailingBreak\"></p></div>"
+      },
+      {
+        "type": "mousedown",
+        "x": 90,
+        "y": 406,
+        "target": "<div class=\"bn-block-content\" data-content-type=\"bulletListItem\"><p class=\"bn-inline-content\"><br class=\"ProseMirror-trailingBreak\"></p></div>"
+      },
+      {
+        "type": "mouseup",
+        "x": 90,
+        "y": 406,
+        "target": "<div class=\"bn-block-content\" data-content-type=\"bulletListItem\" data-is-empty-and-focused=\"true\"><p class=\"bn-inline-content\"><br class=\"ProseMirror-trailingBr"
+      },
+      {
+        "type": "click",
+        "x": 90,
+        "y": 406,
+        "target": "<div class=\"bn-block-content\" data-content-type=\"bulletListItem\" data-is-empty-and-focused=\"true\"><p class=\"bn-inline-content\"><br class=\"ProseMirror-trailingBr"
+      }
+    ],
+    "focused": "true",
+    "viewport": 408,
+    "menus": 0,
+    "task": [
+      [
+        "editor-task:day:2026-10-23:top3:template:0",
+        "TRV for Lu and Kathy",
+        "open"
+      ]
+    ],
+    "scenario": "empty"
+  },
+  {
+    "events": [
+      {
+        "type": "pointerdown",
+        "x": 43,
+        "y": 406,
+        "target": "<input contenteditable=\"false\" aria-label=\"Complete TRV for Lu and Kathy\" type=\"checkbox\">"
+      },
+      {
+        "type": "touchstart",
+        "x": null,
+        "y": null,
+        "target": "<input contenteditable=\"false\" aria-label=\"Complete TRV for Lu and Kathy\" type=\"checkbox\">"
+      },
+      {
+        "type": "touchend",
+        "x": null,
+        "y": null,
+        "target": "<input contenteditable=\"false\" aria-label=\"Complete TRV for Lu and Kathy\" type=\"checkbox\">"
+      },
+      {
+        "type": "mousedown",
+        "x": 43,
+        "y": 406,
+        "target": "<input contenteditable=\"false\" aria-label=\"Complete TRV for Lu and Kathy\" type=\"checkbox\">"
+      },
+      {
+        "type": "mouseup",
+        "x": 43,
+        "y": 406,
+        "target": "<input contenteditable=\"false\" aria-label=\"Complete TRV for Lu and Kathy\" type=\"checkbox\">"
+      },
+      {
+        "type": "click",
+        "x": 43,
+        "y": 406,
+        "target": "<input contenteditable=\"false\" aria-label=\"Complete TRV for Lu and Kathy\" type=\"checkbox\">"
+      }
+    ],
+    "focused": "true",
+    "viewport": 408,
+    "menus": 0,
+    "task": [
+      [
+        "editor-task:day:2026-10-23:top3:template:0",
+        "TRV for Lu and Kathy",
+        "done"
+      ]
+    ],
+    "scenario": "checkbox"
+  }
+]

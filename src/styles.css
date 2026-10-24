@@ -1094,7 +1094,10 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .tree-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tree-row.month { cursor: pointer; font-size: var(--text-meta); font-weight: var(--weight-medium); }
 .tree-acts { display: none; gap: 2px; }
-.tree-row:hover .tree-acts, .tree-row:focus-within .tree-acts { display: flex; }
+.tree-row:focus-within .tree-acts { display: flex; }
+/* B50: reveals on :hover only where a pointer hovers. On iOS a tap that makes something appear counts as a hover
+   and loses its click. */
+@media (hover: hover) { .tree-row:hover .tree-acts { display: flex; } }
 .tree-acts button { display: grid; place-items: center; width: 24px; height: 24px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-control); background: none; color: var(--ink-2); font: inherit; font-size: var(--text-ui); line-height: 1; cursor: pointer; }
 .tree-acts button:hover { background: var(--hover-dim); color: var(--ink); }
 @media (hover: none) { .tree-acts { display: none !important; } }
@@ -1261,7 +1264,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-row-menu { flex:none; display:inline-flex; order:0; }
 .editor-row-more { width:28px; height:24px; padding:0; border:0; border-radius:var(--radius-control); background:transparent; color:var(--ink-3); font-size:var(--text-row); line-height:1; opacity:0; }
 .editor-row-more:hover, .editor-row-more:focus-visible { background:var(--app-surface); color:var(--ink); }
-.bn-block-outer:hover .editor-row-more, .editor-task:focus-within .editor-row-more, .bn-block-outer:has(.ProseMirror-selectednode, [data-is-empty-and-focused]) .editor-row-more,
+.editor-task:focus-within .editor-row-more, .bn-block-outer:has(.ProseMirror-selectednode, [data-is-empty-and-focused]) .editor-row-more,
 .editor-row-more:focus-visible, .editor-row-more[aria-expanded='true'] { opacity:1; }
 .editor-row-menu .app-menu { font-size:var(--text-small); }
 /* Jazz f58abeaf: done rows are also grey and struck through, so the label and the empty box say Cancelled. */
@@ -1278,6 +1281,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-selection-bar.is-row-actions > button, .editor-bar-button { min-height:44px; padding:0 10px; border:0; border-radius:var(--radius-inline); background:transparent; color:var(--ink); font-size:var(--text-small); white-space:nowrap; }
 .editor-selection-bar.is-row-actions .app-menu { top:auto; bottom:calc(100% + 8px); }
 @media(hover:none) { .editor-row-more { display:none; } }
+@media(hover:hover) { .bn-block-outer:hover .editor-row-more { opacity:1; } }
 
 /* Sign-in (empty-start-states.md §2) on the v1 tokens (tokens.md §7). */
 .sign-in {
