@@ -1,0 +1,8 @@
+C: kept: Thu, Oct 22 not saved yet · trying again
+C: other device saved: Saved
+C: line after retry: null
+C: copies mine/theirs: [1,1]
+C: status: 
+D: lines left: [null,null]
+D: copies of the closed tab text: 1
+errors: none
