@@ -1,0 +1,12 @@
+ok   iPhone profile: (hover: none), as on the phone
+ok   a hover over a line makes nothing appear (no ⋮⋮ side menu) ({"seen":[],"sideMenus":0})
+ok   a hover over a link opens no link toolbar (0)
+ok   one tap on the link shows its toolbar with Open (["Edit link","Open in new tab","Remove link"])
+ok   no caret: no handle
+ok   the handle sits beside the caret's line ({"shown":true,"handleMid":277,"line":[262,292],"id":"eca952d0-9310-4e0e-bd97-cf339a077606"})
+ok   the caret moves up a line: the handle moves with it ({"shown":true,"handleMid":247,"line":[232,262],"id":"ad58ba97-cc0b-4dd0-be5e-ff4556e2fc2d"})
+ok   the line moves without a window scroll: the handle follows it ({"shown":true,"handleMid":367,"line":[352,382],"id":"ad58ba97-cc0b-4dd0-be5e-ff4556e2fc2d"})
+ok   editing ends: no handle
+ok   no page errors
+ok   desktop: the hover ⋮⋮ handle still shows
+all passed

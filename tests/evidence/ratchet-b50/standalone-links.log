@@ -1,0 +1,4 @@
+{'url': 'http://127.0.0.1:3620/pages?page=f256bac7-ec0a-4b52-8739-085449b84bee', 'standalone': True}
+standalone-card-open http://127.0.0.1:3620/pages?page=f256bac7-ec0a-4b52-8739-085449b84bee 0
+contexts ['NATIVE_APP', 'WEBVIEW_64720.1']
+destination WEBVIEW_64720.1 http://127.0.0.1:3620/day/2026-10-24
