@@ -1,15 +1,16 @@
 // B44 (Jazz's states §1–§5, §9; Lead 17ab8da6 for §4a): pasting a link gives a plain link and a menu; every way out
 // keeps the link; "Bookmark page" makes A2's card and page as a second undo step; a kept link is still remembered and
 // goes with its line. Built server, sign-in off, a fresh store per run:
-//   DB=<store> node tests/evidence/b44/menu-check.mjs <base> <keep|bookmark|several|typing|sentence|saved|phone-bookmark|three|good-stuffs> [width]
+//   DB=<store> node tests/evidence/b44/menu-check.mjs <base> <keep|bookmark|several|typing|sentence|saved|phone-bookmark|three|good-stuffs|offline|offline-closed> [width]
 import { chromium, webkit } from '@playwright/test'
 import { DatabaseSync } from 'node:sqlite'
 const [base, mode = 'keep', width = '1280'] = process.argv.slice(2), DB = process.env.DB
 if (!base || !['127.0.0.1', 'localhost'].includes(new URL(base).hostname) || new URL(base).port === '3000' || !DB?.startsWith('/tmp/rb-b44-')) throw Error('Use a disposable loopback server and a fresh /tmp/rb-b44-* store')
 const phone = Number(width) < 600, mod = process.platform === 'darwin' ? 'Meta' : 'Control'
 const browser = await (phone ? webkit : chromium).launch()
-const p = await browser.newPage({ viewport: { width: Number(width), height: 900 }, ...(phone ? { hasTouch: true, isMobile: true } : {}) })
-const errors = []; p.on('pageerror', e => errors.push(e.message))
+const context = await browser.newContext({ viewport: { width: Number(width), height: 900 }, ...(phone ? { hasTouch: true, isMobile: true } : {}) })
+let p = await context.newPage()
+const errors = []; p.on('pageerror', e => { errors.push(e.message); if (process.env.STACK) console.log('pageerror', e.stack?.slice(0, 1200)) })
 let failed = 0
 const log = (ok, what, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${width} ${mode}: ${what}${detail ? ` (${detail})` : ''}`) }
 const q = (sql, ...args) => { const d = new DatabaseSync(DB, { readOnly: true }); try { return d.prepare(sql).all(...args) } finally { d.close() } }
@@ -47,7 +48,7 @@ if (mode === 'keep') {
   const made = pagesFor(U)
   log(await cards() === 1 && made.length === 1, 'Bookmark page: the card and its page, A2\'s paste', JSON.stringify(made))
   log(/Made a page/.test(await p.locator('[role="alert"], [data-slot="toast"]').allInnerTexts().then(t => t.join(' | '))), 'A2\'s notice "Made a page · Undo"')
-  log(materialFor(U) && JSON.parse(materialFor(U).sources).length === 1, 'one remembered item for the link, now on the card')
+  log(materialFor(U) && JSON.parse(materialFor(U).sources).length === 1, 'one remembered item for the link, now on the card', JSON.stringify(q("SELECT id, sources FROM materials WHERE snapshot='current'")))
   if (!phone) {
     await p.keyboard.press(`${mod}+z`); await p.waitForTimeout(2500)
     log(await cards() === 0 && (await lineTexts()).some(t => t.includes('xiachufang')) && pagesFor(U).length === 0 && materialFor(U), '⌘Z (step 2) gives back the plain link: page gone, link still remembered', JSON.stringify({ pages: pagesFor(U), m: Boolean(materialFor(U)) }))
@@ -88,6 +89,27 @@ if (mode === 'keep') {
   log(boxes.toolbarTop === null || boxes.menuBottom <= boxes.toolbarTop, 'the menu is clear of the phone toolbar', JSON.stringify(boxes))
   if (phone) await p.locator('#paste-menu-bookmark').tap(); else await p.locator('#paste-menu-bookmark').click()
   log(await until(async () => await cards() === 3), '"Bookmark 3 pages" makes three cards', String(await cards()))
+} else if (mode === 'offline') {
+  // Ratchet 517c25c: kept offline, the link was never remembered. The editor save carries it now, retries included.
+  await clickNotes(); await context.setOffline(true); await paste(U); await p.waitForTimeout(800)
+  await p.keyboard.press('Escape'); await p.waitForTimeout(2500)
+  log(!materialFor(U), 'offline: nothing saved yet')
+  await context.setOffline(false)
+  log(await until(async () => Boolean(materialFor(U)) && (await lineTexts()).some(t => t.includes(U)), 15000), 'back online: the line and the remembered link are saved', JSON.stringify(materialFor(U) ?? null))
+} else if (mode === 'offline-closed') {
+  // Kept offline and the tab closed before it could save: its draft keeps the link, and the next tab to open the page
+  // merges that draft and saves both (B35).
+  await clickNotes(); await context.setOffline(true); await paste(U); await p.waitForTimeout(800)
+  await p.keyboard.press('Escape'); await p.waitForTimeout(1500)
+  const slot = await p.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('daythread:editor:')).map(k => JSON.parse(localStorage.getItem(k)).keptPlainLinks ?? null))
+  log(slot.some(x => x?.length === 1), 'the draft holds the kept link', JSON.stringify(slot))
+  // WebKit doesn't always fire pagehide on a closed page, so the slot may not say "closed"; a short gone-after (B35's
+  // check hook) makes it a gone tab's either way.
+  await context.addInitScript(() => { globalThis.__daythreadGoneAfterMs = 1500 })
+  const next = await context.newPage(); next.on('pageerror', e => errors.push(e.message))
+  await p.close({ runBeforeUnload: true }); await context.setOffline(false); p = next
+  await new Promise(r => setTimeout(r, 1600)); await p.goto(`${base}/`, { waitUntil: 'networkidle' })
+  log(await until(async () => Boolean(materialFor(U)) && (await lineTexts()).some(t => t.includes(U)), 15000), 'another tab merges the draft, saves it and remembers the link', JSON.stringify({ m: materialFor(U) ?? null, line: (await lineTexts()).some(t => t.includes(U)), slots: await p.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('daythread:editor:')).map(k => { const v = JSON.parse(localStorage.getItem(k)); return { closed: v.closed, claimed: Boolean(v.claimedBy), kept: v.keptPlainLinks?.length ?? 0, age: Date.now() - v.seen } })) }))
 } else if (mode === 'good-stuffs') {
   // Ratchet: a link pasted into Good Stuffs and kept is a deliberate save; deleting its line keeps the item.
   const gs = `day:${today}:good-stuffs:template:0`
@@ -103,8 +125,8 @@ if (mode === 'keep') {
   await p.locator('.continuous-editor .bn-inline-content').last().click(); await p.keyboard.press('Enter'); await paste(U); await p.waitForTimeout(500)
   log(/Saved before · Today/.test(await menuText()), 'a link with a page already: "Saved before · Today"', await menuText())
 }
-await p.screenshot({ path: `/tmp/rb-b44-${mode}-${width}.png` })
-log(errors.length === 0, 'no page errors', errors.slice(0, 2).join(' / '))
+if (!p.isClosed()) await p.screenshot({ path: `/tmp/rb-b44-${mode}-${width}.png` })
+log(errors.length === 0, 'no page errors', errors.slice(0, 2).map(e => e.replace(/payload=[^ ]*/, 'payload=…')).join(' / '))
 await browser.close()
 console.log(failed ? `${failed} FAILED` : 'all passed')
 process.exitCode = failed ? 1 : 0

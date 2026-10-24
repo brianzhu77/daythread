@@ -295,7 +295,7 @@ export type ServerAction =
 export type Action =
   | { type: "plan-tasks"; date: LocalDate; items: { taskId: string; section: "top3" | "other" }[] }
   | { type: "bring-line"; date: LocalDate; sourcePageId: string; sourceBlockId: string }
-  | { type: "save-editor"; pageId: string; expectedContent: string; document: string; singleDeleteIds?: string[]; /** B33: tasks whose rows were cut (a move), never deleted with their line. */ cutTaskIds?: string[]; today?: string; historyTaskVersions?: Record<string, number>; history?: boolean }
+  | { type: "save-editor"; pageId: string; expectedContent: string; document: string; singleDeleteIds?: string[]; /** B33: tasks whose rows were cut (a move), never deleted with their line. */ cutTaskIds?: string[]; today?: string; historyTaskVersions?: Record<string, number>; history?: boolean; /** B44 §4a: links pasted and kept plain on this save's lines, remembered with it (one write, no order to get wrong). */ keptPlainLinks?: { blockId: string; url: string }[] }
   | { type: "ensure-day"; date: LocalDate }
   | { type: "rename-section"; pageId: string; sectionId: string; title: string }
   | { type: "add-section"; pageId: string; title: string }
@@ -382,10 +382,11 @@ export type Action =
   | { type: "material-resurface"; materialId: string; enabled: boolean }
   | { type: "create-document"; title: string; body: string; pageId?: string; parentId?: string }
   /** A2: URLs pasted onto an empty line of `pageId`, one card each, in order. `sectionId`: the heading above them. */
+  /** B44 at b358ac8 only; see `keptPlainLinks` on save-editor. */
+  | { type: "save-plain-link"; pageId: string; items: { blockId: string; url: string }[] }
   | { type: "paste-links"; pageId: string; sectionId?: string; today: LocalDate; items: { url: string; pageId: string; cardBlockId: string; lineType: string; title?: string }[] }
   | { type: "undo-paste-links"; pageId: string; operationId: string; today: LocalDate }
   /** B44: links pasted and kept as plain links (the menu's default): each still recorded, with no page, on its line. */
-  | { type: "save-plain-link"; pageId: string; items: { blockId: string; url: string }[] }
   /** B43: a made link page's title and description, read from the web after the paste; applied only to that untouched page. */
   | { type: "apply-link-preview"; parentPageId: string; cardBlockId: string; pageId: string; url: string; title: string | null; description: string | null }
   | { type: "rename-page"; pageId: string; title: string }

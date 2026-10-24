@@ -10,6 +10,8 @@ export interface DraftSlot {
   base: string
   document: string
   cutTaskIds?: string[]
+  /** B44: links pasted and kept plain on its lines, remembered with the save that carries them. */
+  keptPlainLinks?: { blockId: string; url: string }[]
   /** Last time the tab that owns it was alive (ms). */
   seen: number
   /** Set when the tab closed (pagehide). */
@@ -285,4 +287,9 @@ export function withoutSaved<N extends DraftNode>(draft: N[], latest: N[]): N[] 
     return [{ ...n, children }]
   })
   return clean(draft) as N[]
+}
+
+/** A draft's kept links once its lines are merged into a page (B44: a line may come back under a new id). */
+export function keptAfterMerge(kept: DraftSlot['keptPlainLinks'], placed: ReadonlyMap<string, string>): { blockId: string; url: string }[] {
+  return (kept ?? []).map(x => ({ blockId: placed.get(x.blockId) ?? x.blockId, url: x.url }))
 }

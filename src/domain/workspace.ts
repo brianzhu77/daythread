@@ -450,8 +450,8 @@ function linkMaterialLines(state: Workspace, p: Page, nodes: readonly EditorNode
       const node = byId.get(b.id), link = lineLink(node, b.text);
       const m = b.kind === "material" ? state.materials.find((m) => m.id === b.materialId) : undefined;
       if (m) {
-        // A line in Good Stuffs is a deliberate save, whichever came first: this save or the paste's `save-plain-link`
-        // (Ratchet, B44). Its record is no longer plain, so deleting the line keeps the item.
+        // A line in Good Stuffs is a deliberate save, even when it came in as a kept plain link (Ratchet, B44): its
+        // record is no longer plain, so deleting the line keeps the item.
         const own = m.sources.find((x) => x.blockId === b.id);
         if (own) delete own.plain;
         if (link && untouchedLineMaterial(m, b.id, previousById.get(b.id))) {
@@ -536,14 +536,16 @@ function linkPageEdited(state: Workspace, p: Page, firstTitle: string = defaultL
  * B44 §4a (Lead 17ab8da6): a link pasted and kept plain is still remembered, as a saved item with no page, so the
  * morning draft, Review and Weave keep seeing it. It belongs to its line: an item this made goes when no line of that
  * page holds the link any more (`dropUnheldPlainLinks`). A link he already has keeps its item as it is; only the line is
- * added, with no re-save of its review state.
+ * added, with no re-save of its review state. The editor save that carries the line carries the link too (Lead
+ * 5be8b479, Ratchet 517c25c): one write, retried and kept in drafts with the text, so nothing is lost offline. A link
+ * whose line this save doesn't hold (undone, or already a card) is left out.
  */
-function savePlainLink(state: Workspace, action: Extract<Action, { type: "save-plain-link" }>): { message: string; entityId?: string } {
-  const p = page(state, action.pageId);
-  for (const item of action.items) {
+function keepPlainLinks(state: Workspace, p: Page, nodes: readonly EditorNode[] | null, items: readonly { blockId: string; url: string }[]): void {
+  const byId = new Map((nodes ?? []).map((n) => [n.id, n]));
+  for (const item of items) {
     const url = text(item.url.trim(), 10_000);
-    const owner = urlOwner(state, url);
-    if (owner.key === null) throw new DomainError("Use an http(s) link");
+    const owner = urlOwner(state, url), line = byId.get(item.blockId);
+    if (owner.key === null || (nodes && (!line || !holdsLink(line, owner.key)))) continue;
     const source = { pageId: p.id, blockId: item.blockId, note: "", plain: true as const };
     if (owner.material) {
       if (!owner.material.sources.some((x) => x.pageId === p.id && x.blockId === item.blockId)) owner.material.sources.push(source);
@@ -553,6 +555,14 @@ function savePlainLink(state: Workspace, action: Extract<Action, { type: "save-p
     // Its title stays the URL this round (Lead: B43's fetch is for bookmark pages only).
     state.materials.push({ id: `material:${item.blockId}`, url, title: url, body: "", savedOn: day, reviewState: "pending", nextReviewOn: null, resurface: true, lastDecisionOn: null, skippedUntil: null, sources: [source], decisions: [] });
   }
+}
+/**
+ * Tabs still open on b358ac8 (B44's first build) send this right after a paste, before the line is saved; it's kept
+ * so their links are remembered (no line check: the line comes with their next save). This build sends
+ * `keptPlainLinks` with the save instead.
+ */
+function savePlainLink(state: Workspace, action: Extract<Action, { type: "save-plain-link" }>): { message: string } {
+  keepPlainLinks(state, page(state, action.pageId), null, action.items);
   return { message: action.items.length === 1 ? "Link kept" : `${action.items.length} links kept` };
 }
 /** Does this line hold a link to `key`: an inline link, or a link card for it. */
@@ -1310,6 +1320,7 @@ function execute(
       }
       }
       p.sections = projectDocument(nodes, p, state);
+      keepPlainLinks(state, p, all, action.keptPlainLinks ?? []);
       dropUnheldPlainLinks(state, p, nodes);
       // A11 §2: each task row on the page now is stamped with this save's revision, from its first save on, so a link
       // to its task can pick the most recent document page that shows it.
@@ -1741,12 +1752,12 @@ function execute(
     }
     case "paste-links":
       return pasteLinks(state, action, operationId);
+    case "save-plain-link":
+      return savePlainLink(state, action);
     case "undo-paste-links":
       return undoPasteLinks(state, action);
     case "apply-link-preview":
       return applyLinkPreview(state, action);
-    case "save-plain-link":
-      return savePlainLink(state, action);
     case "rename-page": {
       const p = page(state, action.pageId);
       if (p.type !== "document") throw new DomainError("Day pages are named by their date");

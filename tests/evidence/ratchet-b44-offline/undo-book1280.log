@@ -1,0 +1,13 @@
+(node:33693) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ok   1280 bookmark: Bookmark page: the card and its page, A2's paste ([{"id":"784a56c0-5493-43c0-91e6-f12433ced31b","title":"xiachufang.com/recipe/10324"}])
+ok   1280 bookmark: A2's notice "Made a page · Undo"
+ok   1280 bookmark: one remembered item for the link, now on the card
+focus {
+  tag: '<div aria-autocomplete="list" aria-haspopup="listbox" contenteditable="true" role="textbox" tabindex="0" translate="no" class="tiptap ProseMirror bn-editor bn-default-styles placeh',
+  selection: ''
+}
+ok   1280 bookmark: ⌘Z (step 2) gives back the plain link: page gone, link still remembered ({"pages":[],"m":true})
+ok   1280 bookmark: ⌘Z again (step 1) removes the paste and what it remembered (null)
+ok   1280 bookmark: no page errors
+all passed

@@ -118,3 +118,11 @@ test('a line he nested stays nested: under its parent, after its sibling; flat o
   const gone = merge(b, draft, [line('q', 'next')])
   assert.deepEqual(texts(gone.document), ['next', '  only child', 'new first child', 'new after old'], 'the other side deleted the parent: his lines still come back')
 })
+
+test('B44: placed says where each of his lines went, so what rides on a line (a kept link) can follow it', () => {
+  const draft = [line('1', 'one'), line('2', 'https://sspai.com/post/1 (mine)'), line('3', 'three'), line('5', 'five')]
+  const latest = [line('1', 'one'), line('2', 'two (theirs)'), line('3', 'three'), line('5', 'five')]
+  const { document, placed } = merge(base, draft, latest)
+  assert.equal(placed.get('2'), 'new-1')
+  assert.equal(inlineText(document.find(x => x.id === 'new-1')!.content), 'https://sspai.com/post/1 (mine)')
+})
