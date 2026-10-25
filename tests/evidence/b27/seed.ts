@@ -28,6 +28,6 @@ async function write(day: string, lines: unknown[][]) {
 }
 const prev = (n: number) => { const d = new Date(`${today}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10) }
 await write(prev(2), [[text('PAC Lunch '), chip('2026-11-20', '12:00')], [text('Dentist '), chip(today, '15:00')]])
-await write(prev(1), [[text('Bake sale at school '), chip(today)]])
+await write(prev(1), [[text('Bake sale at school '), chip(today)], [text('Lunch with Kathy '), chip(today, '12:00')]])
 const ws = await write(today, [[text('Call the plumber '), chip(today, '09:30')]])
 console.log('store', db, 'revision', ws.revision)

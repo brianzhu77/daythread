@@ -28,6 +28,7 @@ const layout = p => p.evaluate(() => {
     headingBottom: rect(heading?.querySelector('.bn-block-content'))?.bottom,
     nextTop: rect(host?.nextElementSibling?.querySelector('.bn-block-content'))?.top,
     timeX: rect(document.querySelector('.day-event-time'))?.left,
+    titleXs: [...document.querySelectorAll('.day-event')].map(r => [r.querySelector('.day-event-time')?.textContent, Math.round(r.querySelector('.day-event-title').getBoundingClientRect().left * 10) / 10]),
     bulletTextX: bullet ? textX(bullet) : null,
     caretBlock: getSelection()?.anchorNode?.parentElement?.closest('[data-node-type="blockContainer"]')?.getAttribute('data-id') ?? null,
     headingId: heading?.getAttribute('data-id'),
@@ -43,9 +44,11 @@ async function desktop() {
   const later = p.getByRole('button', { name: 'Later', exact: true }); if (await later.count()) await later.click()
   let g = await layout(p)
   log(g.widgets === 1 && g.inside && g.afterHeading, 'one widget, inside the editor, right after the Events heading', JSON.stringify({ widgets: g.widgets, inside: g.inside, afterHeading: g.afterHeading }))
-  log(JSON.stringify(g.rows) === JSON.stringify(['Bake sale at school', 'Call the plumber', 'Dentist']), 'rows: all-day first, then by time; the chip in this page\'s Notes shows too', JSON.stringify(g.rows))
+  log(JSON.stringify(g.rows) === JSON.stringify(['Bake sale at school', 'Call the plumber', 'Lunch with Kathy', 'Dentist']), 'rows: all-day first, then by time; the chip in this page\'s Notes shows too', JSON.stringify(g.rows))
   log(g.rowsInBlocks === 0, 'no row inside any block')
   log(g.bulletTextX !== null && Math.abs(g.timeX - g.bulletTextX) <= 1, 'the row starts at the bullet text column', `time x ${g.timeX}, bullet text x ${g.bulletTextX}`)
+  const titles = xs => new Set(xs.map(([, x]) => x)).size === 1 && ['All day', '9:30 AM', '12:00 PM', '3:00 PM'].every(t => xs.some(([time]) => time === t))
+  log(titles(g.titleXs), 'titles start at one x for All day, 9:30 AM, 12:00 PM and 3:00 PM rows (Jazz 61959d99)', JSON.stringify(g.titleXs))
   const events = p.locator('.bn-editor h2', { hasText: /^Events$/ })
   await events.scrollIntoViewIfNeeded()
   await p.screenshot({ path: `${out}/rows-1280.png`, clip: { x: 300, y: Math.max(0, g.headingBottom - 120), width: 680, height: 320 } })
@@ -73,7 +76,7 @@ async function desktop() {
   await events.click(); await p.keyboard.press('End')
   await p.keyboard.press('Meta+Z'); await p.waitForTimeout(1500)
   g = await layout(p)
-  log(g.widgets === 1 && g.afterHeading && g.rows.length === 3, 'after ⌘Z, still one widget with all rows')
+  log(g.widgets === 1 && g.afterHeading && g.rows.length === 4, 'after ⌘Z, still one widget with all rows')
   log(!errors.length, 'no page errors', errors.join(' | '))
   await p.close()
 }
@@ -94,6 +97,7 @@ async function phone() {
   const later = p.getByRole('button', { name: 'Later', exact: true }); if (await later.count()) await later.tap()
   let g = await layout(p)
   log(g.widgets === 1 && g.afterHeading && Math.abs(g.timeX - g.bulletTextX) <= 1, '390: rows after the heading, at the bullet text column', `time x ${g.timeX}, bullet text x ${g.bulletTextX}`)
+  log(new Set(g.titleXs.map(([, x]) => x)).size === 1 && g.titleXs.some(([t]) => t === '12:00 PM'), '390: titles start at one x, 12:00 PM included', JSON.stringify(g.titleXs))
   const events = p.locator('.bn-editor h2', { hasText: /^Events$/ })
   await events.scrollIntoViewIfNeeded()
   await p.screenshot({ path: `${out}/rows-390.png` })
