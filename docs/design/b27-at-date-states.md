@@ -59,6 +59,18 @@ shows. Create page then makes the page, and the same rows appear under its Event
 - **Text form** (section text, Tasks, morning card): `@Nov 20`, `@Nov 20 3pm`, `@Jan 5, 2027` (year only when it isn't
   the holding page's year). No weekday, no Today/Tomorrow, so the text never goes stale and `@` reads it back.
 
+## 3d. Today's events in the facts strip (Lead d29b9a16)
+
+On **today's page only**, when it has events: one fact line, first in the strip (events are tied to a time; the rest
+of the strip isn't), same style as "Suggestions · 9 ▸" (`fact-line link-line`).
+
+- Calendar glyph (the chip's, 14 px, `--ink-3`), then the events in row order (all-day first, then by time), joined
+  with " · ": **PAC Lunch · All day ▸**; **PAC Lunch · Dentist 3:00 PM ▸**.
+- More than two: the first two, then "+N more": **PAC Lunch · Dentist 3:00 PM · +1 more ▸**. Long titles truncate
+  with an ellipsis so the line stays one line at 390.
+- Tap: jumps to the rows under Events and flashes them briefly (the A11 line-jump flash).
+- No events: no line. Past days and future days: no line (their Events rows are on the page itself).
+
 ## 4. Rows in the editor (decided after Roadbuster's spike 6d30c17)
 
 **Decided: inside the editor, under Events** (spike: column, caret, keyboard-up and alignment 250/0 all fine). Time
