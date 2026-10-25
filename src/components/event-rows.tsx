@@ -10,6 +10,7 @@ import type { DayEvent } from '../domain/chip-events'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { displayPageTitle } from './page-title'
 import { createContext, useContext } from 'react'
+import { useComponentsContext, type DefaultReactSuggestionItem, type SuggestionMenuProps } from '@blocknote/react'
 import { addDays, fromIso, todayIso } from './dates'
 import { CalendarIcon } from './icons'
 import { LineRefChip } from './line-ref-chip'
@@ -57,6 +58,11 @@ export function rowsFor(page: Page, events: DayEvent[]): DayEvent[] {
   return events.filter(e => !(e.line && e.line.pageId === page.id && own.has(e.line.lineId)))
 }
 
+/** "3 PM", "3:30 PM": the chip's and the strip's time. */
+export const shortTime = (time: string) => {
+  const [h, m] = time.split(':').map(Number) as [number, number]
+  return `${h % 12 || 12}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'AM' : 'PM'}`
+}
 export const rowTime = (time: string | null) => {
   if (!time) return 'All day'
   const [h, m] = time.split(':').map(Number) as [number, number]
@@ -125,4 +131,21 @@ export function DateChip({ date, time, today, pageDate }: { date: LocalDate; tim
     <span className="page-ref-icon"><CalendarIcon /></span>
     <span className="page-ref-title">{chipLabel(date, time, today, pageDate)}</span>
   </span>
+}
+
+/** A row of the `@` list; `hint` is the "Keep typing a date" row, which isn't a choice (Jazz 2cf1591a). */
+export type DateMenuItem = DefaultReactSuggestionItem & { hint?: boolean }
+/**
+ * The `@` list: BlockNote's own menu parts (same look and keys as the `[[` list), with the right label as quiet text
+ * rather than a pill, and the hint row drawn as plain text that never looks picked.
+ */
+export function DateMenu({ items, selectedIndex, onItemClick }: SuggestionMenuProps<DateMenuItem>) {
+  const Components = useComponentsContext()!
+  return (
+    <Components.SuggestionMenu.Root id="bn-suggestion-menu" className="bn-suggestion-menu date-menu">
+      {items.map((item, i) => item.hint
+        ? <div key="hint" className="date-menu-hint" role="presentation"><div className="date-menu-hint-title">{item.title}</div><div className="date-menu-hint-sub">{item.subtext}</div></div>
+        : <Components.SuggestionMenu.Item key={item.title} className="bn-suggestion-menu-item date-menu-item" item={item} id={`bn-suggestion-menu-item-${i}`} isSelected={i === selectedIndex} onClick={() => onItemClick?.(item)} />)}
+    </Components.SuggestionMenu.Root>
+  )
 }

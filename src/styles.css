@@ -1376,8 +1376,18 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 .day-event-title { color: var(--ink); overflow-wrap: anywhere; }
 .day-event-title.is-untitled { color: var(--ink-3); }
 .day-event.is-here .day-event-title { color: var(--ink-2); }
-.future-day-events .event-rows-list { padding-left: 0; }
+
 .today-events { display: flex; align-items: center; min-width: 0; max-width: 100%; overflow: hidden; white-space: nowrap; }
 .today-events-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .today-events-more { flex: none; }
 .today-events-go { flex: none; margin-left: 0.3em; }
+/* B27 `@` list (Jazz 2cf1591a): quiet right labels, and a hint row that never looks picked. */
+.date-menu .date-menu-item [data-position="right"] > * { background: none; border: 0; padding: 0; color: var(--ink-3); font-weight: normal; }
+.date-menu-hint { padding: 6px 8px; cursor: default; user-select: none; color: var(--ink-3); }
+.date-menu-hint-title { font-size: 1rem; }
+.date-menu-hint-sub { font-size: .75rem; }
+.future-day-events { margin-top: 24px; }
+.future-day-events h2 { font-size: var(--text-section); line-height: 1.35; font-weight: var(--weight-semibold); margin-bottom: 4px; }
+
+.today-events { gap: 0; }
+.today-events .page-ref-icon { margin-right: 6px; }

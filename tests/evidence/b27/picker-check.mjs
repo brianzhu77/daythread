@@ -15,7 +15,7 @@ const errors = []; p.on('pageerror', e => { if (!/ResizeObserver loop/.test(e.me
 await p.goto(`${base}/day/${today}`, { waitUntil: 'networkidle' }); await p.waitForTimeout(1200)
 const later = p.getByRole('button', { name: 'Later', exact: true }); if (await later.count()) await later.click()
 
-const menu = () => p.evaluate(() => [...document.querySelectorAll('.bn-suggestion-menu [role="option"], .bn-suggestion-menu-item.text-base')].filter(e => e.classList.contains('text-base')).map(e => e.parentElement?.parentElement?.textContent?.trim()))
+const menu = () => p.evaluate(() => [...document.querySelectorAll('.date-menu [role="option"], .date-menu .date-menu-hint')].map(e => e.textContent?.trim()))
 /** The line that starts with `start`: its text and its chips. */
 const lineState = start => p.evaluate(start => {
   const el = [...document.querySelectorAll('.bn-editor .bn-inline-content')].find(e => e.textContent?.startsWith(start))

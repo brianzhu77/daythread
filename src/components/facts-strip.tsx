@@ -7,7 +7,7 @@ import { displayTitle } from './day-page'
 import { useNavigate } from '@tanstack/react-router'
 import { eveningPicks, isCardDraft, linkPageOf } from '../domain/workspace'
 import { displayPageTitle } from './page-title'
-import { rowTime } from './event-rows'
+import { shortTime } from './event-rows'
 import { CalendarIcon } from './icons'
 import { jumpToBlock } from './line-jump'
 
@@ -208,7 +208,8 @@ function RelatedLine({ view, workspace, date }: { view: DayView; workspace: Work
  * fold on the phone. The same list as the rows under Events; a tap jumps to those rows.
  */
 function TodayEvents({ events, headingId }: { events: DayEvent[]; headingId?: string }) {
-  const named = events.slice(0, 2).map(e => `${e.title || 'Untitled event'}${e.time ? ` ${rowTime(e.time)}` : ''}`)
+  // Time first for timed events, all-day ones bare; a single all-day event says so (Jazz 2cf1591a).
+  const named = events.slice(0, 2).map(e => `${e.time ? `${shortTime(e.time)} ` : ''}${e.title || 'Untitled event'}`)
   const parts = [...named, ...(events.length === 1 && !events[0]!.time ? ['All day'] : [])]
   // Titles truncate; "+N more" stays readable at 390 (Jazz §3d).
   const more = events.length > 2 ? `\u00a0· +${events.length - 2} more` : ''

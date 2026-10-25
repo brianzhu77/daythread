@@ -42,7 +42,7 @@ import { RowMenu } from './row-menu'
 import { openedByTurnover } from './use-screen-today'
 import { fixedOffset, seenArea } from './fixed-coords'
 import { LineRefChip } from './line-ref-chip'
-import { ChipPageDate, DateChipInPage, EventRows, eventRows, pickerLabel, refreshEventRows, relativeDay, rowTime, rowsFor, type RowsAnchor } from './event-rows'
+import { ChipPageDate, DateChipInPage, DateMenu, type DateMenuItem, EventRows, eventRows, pickerLabel, refreshEventRows, relativeDay, rowTime, rowsFor, type RowsAnchor } from './event-rows'
 import { dayEvents } from '../domain/chip-events'
 import { mayRead, readDate, type Reading } from '../domain/date-reading'
 import { mentionText } from '../domain/date-chip'
@@ -1262,7 +1262,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return items
   }
   /** B27 (plan §3, Jazz b27-at-date-states §1): the `@` list. It reads against the page's date (today on a document page). */
-  function dateItems(query: string, trigger: string) {
+  function dateItems(query: string, trigger: string): DateMenuItem[] {
     const menu = editor.getExtension(SuggestionMenu)
     const anchor = page.type === 'daily' && page.date ? page.date : todayIso()
     // Mid-composition the query is pinyin on its way to 明天 or 周五: keep the list open until the word is committed.
@@ -1281,8 +1281,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * The "Keep typing a date" row. Return on it is an ordinary Return (Bumblebee 37b2c238): the list closes, the text
    * stays as typed, and the line splits as if no list had been open.
    */
-  function keepTyping(trigger: string, query: string) {
-    return { title: 'Keep typing a date', subtext: 'Nov 20 · Fri · 3pm', onItemClick: () => {
+  function keepTyping(trigger: string, query: string): DateMenuItem {
+    return { title: 'Keep typing a date', subtext: 'Nov 20 · Fri · 3pm', hint: true, onItemClick: () => {
       editor.getExtension(SuggestionMenu)?.closeMenu()
       // The menu clears what was typed after the trigger before this runs; put it back exactly.
       const view0 = editor.prosemirrorView, { $from } = view0.state.selection
@@ -2154,7 +2154,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}
       {['[[', '【【'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} shouldOpen={() => false} getItems={async query => linkItems(query, trigger)} onItemClick={item => item.onItemClick()} />)}
-      {['@', '＠'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} shouldOpen={() => false} getItems={async query => dateItems(query, trigger)} onItemClick={item => item.onItemClick()} />)}
+      {['@', '＠'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} shouldOpen={() => false} getItems={async query => dateItems(query, trigger)} onItemClick={item => item.onItemClick()} suggestionMenuComponent={DateMenu} />)}
       {hoverPointer && <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />}
       {(hoverPointer || linkTapped) && <LinkToolbarController />}
     </BlockNoteView>
