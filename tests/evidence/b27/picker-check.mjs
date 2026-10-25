@@ -44,6 +44,14 @@ await p.keyboard.type('at school')
 let s = await lineState('PAC Lunch')
 log(s.chips.length === 1 && /Nov 20 · 12 PM/.test(s.chips[0]) && /PAC Lunch\s*.*at school/.test(s.text), 'Return made the chip and typing goes on after it', JSON.stringify(s))
 
+// ⌘Z right after choosing, at typing speed, gives back exactly what was typed (Ratchet 6dfe2029, Bumblebee).
+await freshLine()
+await p.keyboard.type('undo check @Nov 20'); await p.keyboard.press('Enter'); await p.waitForTimeout(150)
+const made = await lineState('undo check')
+await p.keyboard.press('Meta+z'); await p.waitForTimeout(500)
+const undone = await lineState('undo check')
+log(made.chips.length === 1 && undone.text === 'undo check @Nov 20' && !undone.chips.length, '⌘Z right after a fast Return gives back the typed line', JSON.stringify({ made, undone }))
+
 // Esc leaves the text.
 await freshLine()
 await p.keyboard.type('Dentist @fri'); await p.waitForTimeout(200)
@@ -96,6 +104,27 @@ await p.keyboard.type('3pm'); await p.waitForTimeout(250)
 await p.keyboard.press('Enter'); await p.waitForTimeout(150)
 const todo = await p.evaluate(() => { const row = [...document.querySelectorAll('.bn-block-outer')].find(b => b.querySelector('[data-content-type="task"]') && b.textContent.includes('Call plumber')); return row ? [...row.querySelectorAll('.date-ref')].map(c => c.textContent) : null })
 log(todo?.length === 1 && /Today · 3 PM/.test(todo[0]), 'a to-do row holds a chip (a time alone is the page\'s day)', JSON.stringify(todo))
+
+// Copying a chip-bearing line's text makes a second event; cutting and pasting it back keeps the one (Ratchet 26291155).
+const ids = () => p.evaluate(() => [...document.querySelectorAll('.bn-editor [data-inline-content-type="dateMention"]')].map(e => e.getAttribute('data-event-id')))
+const pacId = (await p.evaluate(() => [...document.querySelectorAll('.bn-editor .bn-inline-content')].find(e => e.textContent.startsWith('PAC Lunch'))?.querySelector('[data-event-id]')?.getAttribute('data-event-id')))
+const pac = p.locator('.bn-editor .bn-inline-content', { hasText: /^PAC Lunch/ })
+if (phone) await pac.tap({ position: { x: 4, y: 6 } }); else await pac.click({ position: { x: 4, y: 6 } })
+await p.keyboard.press('Meta+ArrowLeft'); await p.keyboard.press('Meta+Shift+ArrowRight')
+await p.keyboard.press('Meta+C'); await p.waitForTimeout(150)
+const target = p.locator(`.bn-block-outer[data-id="day:${today}:notes:template:0"] .bn-inline-content`)
+// Centred first, so a fixed toolbar at the bottom of a phone screen can't take the tap.
+await target.evaluate(e => e.scrollIntoView({ block: 'center' })); await p.waitForTimeout(150)
+if (phone) await target.tap(); else await target.click()
+await p.waitForTimeout(150); await p.keyboard.press('Meta+V'); await p.waitForTimeout(300)
+let all = await ids()
+log(all.filter(x => x === pacId).length === 1 && all.length >= 2, 'a pasted copy of the line gets its own event id', JSON.stringify({ pacId, all }))
+// Cut the pasted copy's chip line and paste it back: same id.
+const copyId = all.find(x => x !== pacId && !x.startsWith('7351'))
+await p.keyboard.press('Meta+ArrowLeft'); await p.keyboard.press('Meta+Shift+ArrowRight'); await p.keyboard.press('Meta+X'); await p.waitForTimeout(150)
+await p.keyboard.press('Meta+V'); await p.waitForTimeout(300)
+all = await ids()
+log(all.includes(copyId), 'cut and paste back keeps its id', JSON.stringify({ copyId, all }))
 
 // Saved, the chips are rows on their days: today shows "Call plumber" under Events.
 await p.waitForTimeout(2000)

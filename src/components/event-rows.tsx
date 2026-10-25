@@ -2,7 +2,7 @@
 // of the document. One ProseMirror widget holds them; React renders into it through a portal. The widget has no
 // position in the text, so it can't be typed into, selected, copied or saved.
 import { createExtension } from '@blocknote/core'
-import type { Node as PMNode } from '@tiptap/pm/model'
+import { Fragment, Slice, type Node as PMNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { useNavigate } from '@tanstack/react-router'
@@ -45,6 +45,43 @@ export const eventRows = (host: HTMLElement, anchor: () => RowsAnchor) => create
     props: { decorations: state => key.getState(state) },
   })],
 })
+/** Chips cut from this tab (by id), so pasting them back is a move that keeps the event (Ratchet 26291155). */
+const cutChips = new Set<string>()
+const chipIds = (frag: Fragment, into: string[] = []) => { frag.forEach(n => { if (n.type.name === 'dateMention' && n.attrs.eventId) into.push(String(n.attrs.eventId)); else chipIds(n.content, into) }); return into }
+/**
+ * B27: a pasted `@date` chip is a new event unless it's a move. Covers every paste that goes through ProseMirror
+ * (text selections, BlockNote's HTML, drag and drop); the app's own whole-block clipboard handles its own (page-editor).
+ * A move keeps the id: a drag that moves, or a paste of chips cut from this tab that the document no longer holds.
+ */
+export const dateChipPaste = () => createExtension({
+  key: 'daythreadDateChipPaste',
+  prosemirrorPlugins: [new Plugin({
+    props: {
+      transformPasted: (slice, view) => {
+        if (!chipIds(slice.content).length) return slice
+        const moving = Boolean((view as unknown as { dragging?: { move?: boolean } }).dragging?.move)
+        const held = new Set(chipIds(view.state.doc.content))
+        const remap = (frag: Fragment): Fragment => {
+          const nodes: PMNode[] = []
+          frag.forEach(n => {
+            if (n.type.name === 'dateMention') {
+              const id = String(n.attrs.eventId ?? '')
+              const keep = moving || (cutChips.has(id) && !held.has(id))
+              if (keep) cutChips.delete(id)
+              nodes.push(keep ? n : n.type.create({ ...n.attrs, eventId: crypto.randomUUID() }, n.content, n.marks))
+            } else nodes.push(n.isLeaf ? n : n.copy(remap(n.content)))
+          })
+          return Fragment.fromArray(nodes)
+        }
+        return new Slice(remap(slice.content), slice.openStart, slice.openEnd)
+      },
+      handleDOMEvents: {
+        cut: view => { for (const id of chipIds(view.state.selection.content().content)) cutChips.add(id); return false },
+      },
+    },
+  })],
+})
+
 export const refreshEventRows = (view: { state: { tr: import('@tiptap/pm/state').Transaction }; dispatch: (tr: import('@tiptap/pm/state').Transaction) => void; isDestroyed?: boolean }) => {
   if (!view.isDestroyed) view.dispatch(view.state.tr.setMeta(key, true).setMeta('addToHistory', false))
 }
