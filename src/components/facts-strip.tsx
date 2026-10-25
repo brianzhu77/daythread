@@ -212,7 +212,7 @@ function TodayEvents({ events, headingId }: { events: DayEvent[]; headingId?: st
   const named = events.slice(0, 2).map(e => `${e.time ? `${shortTime(e.time)} ` : ''}${e.title || 'Untitled event'}`)
   const parts = [...named, ...(events.length === 1 && !events[0]!.time ? ['All day'] : [])]
   // Titles truncate; "+N more" stays readable at 390 (Jazz §3d).
-  const more = events.length > 2 ? `\u00a0· +${events.length - 2} more` : ''
+  const more = events.length > 2 ? `· +${events.length - 2} more` : ''
   // Every event may be a line under Events itself (no rows drawn): then the heading is where they are.
   const jump = () => { const at = document.querySelector<HTMLElement>('.event-rows') ?? (headingId ? document.querySelector<HTMLElement>(`.bn-block-outer[data-id="${CSS.escape(headingId)}"]`) : null); if (at) jumpToBlock(at) }
   return (
