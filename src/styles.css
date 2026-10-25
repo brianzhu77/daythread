@@ -250,6 +250,8 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
 .quiet { color: var(--ink-2); font-weight: var(--weight-regular); }
 .eyebrow { font-size: .78rem; font-weight: var(--weight-semibold); color: var(--ink-faint); text-transform: uppercase; letter-spacing: .08em; }
 .ok { color: var(--app-accent); font-weight: var(--weight-medium); }
+/* B9: the page's space while its editor mounts, so nothing jumps when it appears. */
+.page-opening { min-height: 52vh; }
 .loading, .empty { padding: 48px 0; color: var(--ink-soft); text-align: center; display: grid; gap: 12px; justify-items: center; }
 
 /* ---------- Day header: the page title ---------- */
