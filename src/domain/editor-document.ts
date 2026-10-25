@@ -1,5 +1,6 @@
 import type { NoteBlock, Page, PageRefEntry, Section, SectionKind, Workspace } from './types.ts'
 import { inlineRefs, lineText, referenceIndex, savedTitle } from './page-refs.ts'
+import { mentionText, readMention } from './date-chip.ts'
 
 /** The default content of a new day page, like a Notion template: each heading and the empty rows under it. */
 export const dayTemplate: readonly { kind: SectionKind; title: string; rows: readonly ('task' | 'bullet')[] }[] = [
@@ -22,11 +23,22 @@ export interface EditorNode {
   content?: unknown
   children?: EditorNode[]
 }
-export function inlineText(content: unknown): string {
+/**
+ * A line's words. A `@date` chip reads as its stored text form (B27), with the year left out when it's `pageDate`'s
+ * year; with no `pageDate` (a document page, or a reader with no page at hand) the year is always there.
+ */
+export function inlineText(content: unknown, pageDate?: string | null): string {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
-  return content.map(c => typeof c === 'object' && c !== null ? ('text' in c ? String(c.text) : 'content' in c ? inlineText(c.content) : '') : '').join('')
+  return content.map(c => {
+    if (typeof c !== 'object' || c === null) return ''
+    const mention = readMention(c)
+    if (mention) return mentionText(mention, pageDate)
+    return 'text' in c ? String(c.text) : 'content' in c ? inlineText(c.content, pageDate) : ''
+  }).join('')
 }
+/** The date a day page's chips are read against for their stored text: its own date; none for a document page. */
+export const textDate = (page: Pick<Page, 'type' | 'date'>): string | null => page.type === 'daily' ? page.date ?? null : null
 export function pageContentKey(page: Page): string { return JSON.stringify([page.sections, page.editorJSON ?? null]) }
 // Template rows are empty; a task row keeps the `editor-task:` draft identity, so no Task exists until it has text.
 function templateRows(section: Section, page: Page): EditorNode[] {
@@ -60,7 +72,7 @@ export function editorSeed(page: Page, workspace: Workspace, options: { template
   for (const s of page.sections) {
     if (!s.id.startsWith('intro:')) {
       const heading = byId.get(s.id)
-      const node = heading ? { ...heading, content: lineText(heading.content, savedTitle(s)) === s.title ? heading.content : s.title } : { id: s.id, type: 'heading', props: { level: 2 }, content: s.title }
+      const node = heading ? { ...heading, content: lineText(heading.content, savedTitle(s), textDate(page)) === s.title ? heading.content : s.title } : { id: s.id, type: 'heading', props: { level: 2 }, content: s.title }
       result.push(node); mark(node)
     }
     for (const b of s.blocks) {
@@ -69,7 +81,7 @@ export function editorSeed(page: Page, workspace: Workspace, options: { template
       // A page card has no inline content; its title is read live from the page it points at.
       const node: EditorNode = prior?.type === 'pageLink' ? prior
         // A line with `[[` links is compared with the titles it was saved with, so a rename never turns it into text.
-        : prior ? { ...prior, content: lineText(prior.content, savedTitle(b)) === b.text ? prior.content : b.text }
+        : prior ? { ...prior, content: lineText(prior.content, savedTitle(b), textDate(page)) === b.text ? prior.content : b.text }
         : b.taskId ? { id: b.id, type: 'task', props: { taskId: b.taskId, role: b.planRole ?? (s.kind === 'top3' || s.kind === 'other' ? 'plan' : 'reference'), planDate: page.date ?? '' }, content: workspace.tasks.find(t => t.id === b.taskId)?.title ?? b.text }
         : b.eventId ? { id: b.id, type: 'paragraph', content: workspace.events.find(e => e.id === b.eventId)?.title ?? b.text }
         : b.targetPageId ? { id: b.id, type: 'pageLink', props: { pageId: b.targetPageId } }
@@ -124,7 +136,7 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
     if (node.type === 'heading') {
       // A heading holds `[[` links like any line: checked, timed and stored on the section.
       const refs = refsOf(node)
-      const title = refs.length ? lineText(node.content, ref => refs.find(r => r.refId === ref.refId)?.title ?? '') : inlineText(node.content)
+      const title = refs.length ? lineText(node.content, ref => refs.find(r => r.refId === ref.refId)?.title ?? '', textDate(page)) : inlineText(node.content, textDate(page))
       const stored = page.sections.find(s => s.id === node.id)?.kind
       current = { id: node.id, kind: stored ?? 'custom', title, blocks: [], ...(refs.length ? { refs } : {}) }
       sections.push(current)
@@ -144,7 +156,7 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
         const target = workspace.tasks.find(t => t.id === node.props?.taskId)
         if (!target && node.props?.taskId === `editor-task:${node.id}` && !inlineText(node.content)) { current.blocks.push({ id: node.id, kind: 'paragraph', text: '' }); return }
         if (!target) throw new Error('Task reference not found')
-        const nextTitle = inlineText(node.content)
+        const nextTitle = inlineText(node.content, textDate(page))
         const previous = old.get(node.id)
         if (previous && previous.text !== nextTitle) {
           if (target.title !== previous.text && target.title !== nextTitle) throw new Error('Task title changed elsewhere; editor draft kept')
@@ -157,7 +169,7 @@ export function projectDocument(nodes: EditorNode[], page: Page, workspace: Work
         const previous = old.get(node.id)
         const prior = previous?.kind === 'reference' || previous?.kind === 'task' ? undefined : previous
         const refs = refsOf(node)
-        const value = refs.length ? lineText(node.content, ref => refs.find(r => r.refId === ref.refId)?.title ?? '') : inlineText(node.content)
+        const value = refs.length ? lineText(node.content, ref => refs.find(r => r.refId === ref.refId)?.title ?? '', textDate(page)) : inlineText(node.content, textDate(page))
         if (prior?.eventId && prior.text !== value) {
           const event = workspace.events.find(e => e.id === prior.eventId)
           if (event) {

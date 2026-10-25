@@ -452,6 +452,11 @@ export interface DayView {
   handoffBlocks: { pageId: string; block: NoteBlock }[];
   openPool: Task[];
   paused: Task[];
-  events: Event[];
+  /** The day's events, stored and from `@date` chips (B27), from `dayEvents`: every reader goes through this one list. */
+  events: DayEvent[];
   materialReview: Material[];
 }
+/** A line that holds a `@date` chip: the event's link back (B27, the A11 line ref). */
+export interface EventLine { pageId: string; lineId: string }
+/** One event on a day: a stored one (capture, `add-event`) or one computed from a chip (`line` set). */
+export interface DayEvent { id: string; title: string; date: LocalDate; time: string | null; line?: EventLine }

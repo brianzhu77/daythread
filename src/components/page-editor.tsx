@@ -41,6 +41,11 @@ import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-r
 import { RowMenu } from './row-menu'
 import { openedByTurnover } from './use-screen-today'
 import { fixedOffset, seenArea } from './fixed-coords'
+import { LineRefChip } from './line-ref-chip'
+import { ChipPageDate, DateChipInPage, DateMenu, dateChipPaste, type DateMenuItem, EventRows, eventRows, pickerLabel, refreshEventRows, relativeDay, rowTime, rowsFor, type RowsAnchor } from './event-rows'
+import { dayEvents } from '../domain/chip-events'
+import { mayRead, readDate, type Reading } from '../domain/date-reading'
+import { mentionText } from '../domain/date-chip'
 import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
 
 const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' }, planDate: { default: '' } }, content: 'inline' }, {
@@ -70,7 +75,13 @@ const pageRef = createReactInlineContentSpec({ type: 'pageRef', propSchema: { pa
     ? <a href={lineLinkPath({ pageId: props.pageId, lineId: props.lineId, ...(props.taskId ? { taskId: props.taskId } : {}) })}>Line</a>
     : <a href={`/pages?page=${encodeURIComponent(props.pageId)}`}>{props.newTitle || 'Page'}</a>,
 })
-const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef } })
+// B27 (plan §1, Jazz b27-at-date-states §2): a `@date` chip. It holds the date and time he chose and the id of the
+// event it makes; the event itself is read from the documents (chip-events.ts). Like a link, it has no text of its own.
+const dateMention = createReactInlineContentSpec({ type: 'dateMention', propSchema: { eventId: { default: '' }, date: { default: '' }, time: { default: '' } }, content: 'none' }, {
+  render: ({ inlineContent: { props } }) => <DateChipInPage date={props.date} time={props.time || null} />,
+  toExternalHTML: ({ inlineContent: { props } }) => <span>{mentionText({ date: props.date, time: props.time || null }, null)}</span>,
+})
+const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef, dateMention } })
 /** Lines a `[[` link can live in (plan §1): never a task row. */
 const linkableLines = new Set(['paragraph', 'bulletListItem', 'numberedListItem', 'heading', 'quote'])
 // B5 Aa (F16): the styles a line can take from the phone toolbar, in the order the panel shows them.
@@ -251,36 +262,6 @@ function LineMenu({ anchor, onClose, onCopy }: { anchor: { top: number; bottom: 
     <button type="button" role="menuitem" onClick={onCopy}>Copy link to line</button>
   </div>, document.body)
 }
-/**
- * A11 (Jazz line-links-states §3-§5): a link to one line. It shows the line's current words and where it is now, from
- * the same resolver as the URL and Linked from. Tap: jump in place when that page is open, else open it at the line;
- * a line that's gone opens its page at the top with "Couldn't find that line"; a page that's gone does nothing.
- */
-function LineRefChip({ target }: { target: LineTarget }) {
-  const { workspace } = useWorkspace()
-  const navigate = useNavigate()
-  const view = lineRefView(workspace, target), r = view.resolved
-  const open = () => {
-    const page = r && workspace?.pages.find(p => p.id === r.pageId)
-    if (!r || !page) return
-    if (r.state === 'line-not-found' || !r.blockId) {
-      toast("Couldn't find that line", { timeout: 4000 })
-      if (new URLSearchParams(window.location.search).get('page') === page.id || window.location.pathname === `/day/${page.date}`) window.scrollTo({ top: 0 })
-      else void navigate({ href: pageHref(page) })
-      return
-    }
-    // Nothing stays focused after a jump, so a phone keyboard goes down (Jazz §4).
-    if (!page.trashedAt && jumpInPage(page.id, r.blockId)) { (document.activeElement as HTMLElement | null)?.blur(); return }
-    void navigate({ href: pageHref(page, r.blockId), resetScroll: false })
-  }
-  const live = view.state !== 'page-not-found'
-  return <span className={`page-ref line-ref is-${view.state}`} contentEditable={false} title={view.full} role={live ? 'link' : undefined} tabIndex={live ? -1 : undefined}
-    onMouseDown={e => e.preventDefault()} onClick={open} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); open() } }}>
-    <span className="page-ref-icon">{view.icon}</span>
-    <span className="line-ref-words">{view.words}</span>
-    {view.where && <span className="line-ref-where">{`\u00a0· ${view.where}`}</span>}
-  </span>
-}
 /** B35: a failure the network caused (worth retrying), not a refusal from the server (which would refuse again). */
 /** The host without `www.`, for the card's quiet domain. */
 function hostLabel(url: string): string {
@@ -357,7 +338,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // No gap cursor (Brian 967fd04b): BlockNote's custom blocks are `isolating`, so ProseMirror found a gap at every
   // task row's edge, stopped ↑/↓ there and drew its gap cursor, a blinking 20 px line beside the row. rowArrows moves
   // the caret between task rows instead. The page has no tables or other blocks that need a gap cursor.
-  const editor = useCreateBlockNote({ schema, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  // B27 (plan §4): the day's events, read live under the Events heading; never part of the document.
+  const rowsHost = useMemo(() => Object.assign(document.createElement('div'), { className: 'event-rows', contentEditable: 'false' }), [])
+  const rows = useMemo(() => page.type === 'daily' && page.date ? rowsFor(page, dayEvents(workspace, page.date)) : [], [page, workspace])
+  const rowsAnchor = useRef<RowsAnchor>(undefined)
+  rowsAnchor.current = rows.length ? { headingId: page.sections.find(s => s.kind === 'events')?.id ?? null } : undefined
+  const editor = useCreateBlockNote({ schema, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
     pastingNow.current = true; setTimeout(() => { pastingNow.current = false }, 0)
@@ -399,7 +385,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const moving = payload.cut && (cutTokens.has(payload.token) || localStorage.getItem(`daythread:cut:${payload.token}`) === JSON.stringify(payload.blocks))
         // A9a §1: a pasted copy's `[[` links are new references (new refIds); a cut-and-paste move keeps them. A task row
         // can't hold a link, so there it becomes the page's title as text.
-        const freshContent = (node: EditorNode): unknown => !Array.isArray(node.content) ? node.content : (node.content as { type?: string; props?: Record<string, string> }[]).map(c => c?.type !== 'pageRef' ? c
+        // B27: a pasted copy's `@date` chips are new events (new ids); a cut-and-paste move keeps them, as with links.
+        const freshContent = (node: EditorNode): unknown => !Array.isArray(node.content) ? node.content : (node.content as { type?: string; props?: Record<string, string> }[]).map(c => c?.type === 'dateMention' ? (moving ? c : { ...c, props: { ...c.props, eventId: crypto.randomUUID() } }) : c?.type !== 'pageRef' ? c
           : node.type === 'task' ? { type: 'text', text: c.props?.lineId ? lineRefView(latestWorkspace.current, { pageId: c.props.pageId ?? '', lineId: c.props.lineId, ...(c.props.taskId ? { taskId: c.props.taskId } : {}) }).resolved?.words ?? '' : pageRefView(latestWorkspace.current, c.props?.pageId ?? '', c.props?.newTitle || undefined).label, styles: {} }
           : moving ? c : { ...c, props: { ...c.props, refId: crypto.randomUUID() } })
         const fresh = (node: EditorNode): EditorNode => {
@@ -445,6 +432,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }, initialContent: (initial.current.nodes.length ? initial.current.nodes : [{ type: 'paragraph' }]) as never })
   const base = useRef(initial.current.base)
   const latestWorkspace = useRef(workspace); latestWorkspace.current = workspace
+  // B27: an open `@` list reads its query again once a composition is committed (the commit lands while composing).
+  const [, setCompositionsEnded] = useState(0)
+  // B27: new rows (the workspace changed) redraw the widget; a document change already does.
+  const rowsKey = JSON.stringify([rowsAnchor.current, rows])
+  useEffect(() => { const view = editor.prosemirrorView; if (view) refreshEventRows(view) }, [rowsKey, editor])
   const dirty = useRef(initial.current.recovered)
   const sending = useRef(false)
   const historyPending = useRef(false)
@@ -1232,14 +1224,45 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const menu = editor.getExtension(SuggestionMenu)
     if (!menu || menu.shown()) return
     const { selection } = editor.prosemirrorState
-    if (!selection.empty || !linkableLines.has(editor.getTextCursorPosition().block.type)) return
+    const lineType = editor.getTextCursorPosition().block.type
+    if (!selection.empty || !(linkableLines.has(lineType) || lineType === 'task')) return
     const $from = selection.$from
     const before = $from.parent.textBetween(Math.max(0, $from.parentOffset - 2), $from.parentOffset, undefined, '\ufffc')
-    const trigger = before === '[[' ? '[[' : before === '【【' ? '【【' : null
+    // B27 (plan §3): `@`/`＠` after a space, the line's start or any non-word character; never inside an email, a
+    // handle or a price (`a@b.com`, `x@y`, `$5@3`). A task row takes a date but not a `[[` link.
+    const at = /[@＠]$/.test(before) && !/[A-Za-z0-9._%+\-@＠]/.test(before.length > 1 ? before[0]! : '') ? before.at(-1)! : null
+    const trigger = at ?? (lineType === 'task' ? null : before === '[[' ? '[[' : before === '【【' ? '【【' : null)
     if (!trigger) { lastTrigger.current = -1; return }
     if (lastTrigger.current === selection.from) return
     lastTrigger.current = selection.from
     menu.openSuggestionMenu(trigger, { deleteTriggerCharacter: false })
+  }
+  /**
+   * B27 on iOS (Simulator, pinyin): BlockNote drops the `@` list while WebKit composes, and nothing brings it back once
+   * the word is committed (`＠明天` stayed text). After a composition, a line ending in `@word` that reads (or may still
+   * read) as a date opens the list again over that word: the word is taken out and put back (in the composition's
+   * history group), so the list sees it as its query. Only after a composition, so Esc on a list is never undone by typing on.
+   */
+  function reopenDateListAfterComposition() {
+    const menu = editor.getExtension(SuggestionMenu)
+    if (!menu || menu.shown() || composing.current || pastingNow.current) return
+    const view = editor.prosemirrorView, sel = view.state.selection
+    if (!view || !sel.empty) return
+    const lineType = editor.getTextCursorPosition().block.type
+    if (!(linkableLines.has(lineType) || lineType === 'task')) return
+    const before = sel.$from.parent.textBetween(0, sel.$from.parentOffset, undefined, '\ufffc')
+    const m = /(?:^|[^A-Za-z0-9._%+\-@＠])([@＠])([^@＠\ufffc\n]{1,24})$/.exec(before)
+    if (!m) return
+    const [, trigger, query] = m as unknown as [string, string, string]
+    const anchor = page.type === 'daily' && page.date ? page.date : todayIso()
+    if (!readDate(query, anchor) && !mayRead(query, anchor)) return
+    // Both steps go into history right after the composition, so they join its group and cancel out there: Undo then
+    // takes the committed word away whole, as it would without the list (Lead ee5df19e, Ratchet 4340f78a). Kept out of
+    // history, they left the composition's own step mapped onto nothing and 明天 stuck.
+    view.dispatch(view.state.tr.delete(sel.from - query.length, sel.from))
+    lastTrigger.current = view.state.selection.from
+    menu.openSuggestionMenu(trigger, { deleteTriggerCharacter: false })
+    view.dispatch(view.state.tr.insertText(query))
   }
   /** §3: where a page lives, for the list's second line. */
   function whereLabel(p: Page): string {
@@ -1264,6 +1287,61 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const items = pages.map(p => ({ title: pageLabel(p), subtext: whereLabel(p), icon: pageRefView(ws, p.id).icon, onItemClick: () => chooseLink(trigger, query, p.id) }))
     if (q) items.push({ title: `New page "${query.trim()}"`, subtext: pages.length ? '' : `No page called ${query.trim()}`, icon: <PlusIcon />, onItemClick: () => chooseLink(trigger, query, crypto.randomUUID(), query.trim()) })
     return items
+  }
+  /** B27 (plan §3, Jazz b27-at-date-states §1): the `@` list. It reads against the page's date (today on a document page). */
+  function dateItems(query: string, trigger: string): DateMenuItem[] {
+    const menu = editor.getExtension(SuggestionMenu)
+    const anchor = page.type === 'daily' && page.date ? page.date : todayIso()
+    // Mid-composition the query is pinyin on its way to 明天 or 周五: keep the list open until the word is committed.
+    if (editor.prosemirrorView?.composing) return [keepTyping(trigger, query)]
+    // Nothing he could still be typing toward a date (`@brian`): the list closes and the text stays (Jazz §1).
+    if (!mayRead(query, anchor)) { queueMicrotask(() => menu?.closeMenu()); return [] }
+    const today = todayIso(), pageDate = page.type === 'daily' ? page.date ?? null : null
+    const item = (reading: Reading, badge: string) => ({ title: pickerLabel(reading.date, pageDate ?? today), badge, onItemClick: () => chooseDate(trigger, query, reading) })
+    const reading = query ? readDate(query, anchor) : null
+    if (reading) return [item(reading, reading.time ? rowTime(reading.time) : 'All day')]
+    if (!query) return [0, 1, 2, 3].map(i => addDays(anchor, i)).map(date => item({ date, time: null, used: 0 }, relativeDay(date, today)))
+    // On its way to a date (`Nov`, `11/`): a quiet row, since BlockNote closes a list left empty for a few keys.
+    return [keepTyping(trigger, query)]
+  }
+  /**
+   * The "Keep typing a date" row. Return on it is an ordinary Return (Bumblebee 37b2c238): the list closes, the text
+   * stays as typed, and the line splits as if no list had been open.
+   */
+  function keepTyping(trigger: string, query: string): DateMenuItem {
+    return { title: 'Keep typing a date', subtext: 'Nov 20 · Fri · 3pm', hint: true, onItemClick: () => {
+      editor.getExtension(SuggestionMenu)?.closeMenu()
+      // The menu clears what was typed after the trigger before this runs; put it back exactly.
+      const view0 = editor.prosemirrorView, { $from } = view0.state.selection
+      const before = $from.parent.textBetween(0, $from.parentOffset, undefined, '\ufffc')
+      if (query && !before.endsWith(trigger + query) && before.endsWith(trigger)) view0.dispatch(view0.state.tr.insertText(query))
+      lastTrigger.current = editor.prosemirrorState.selection.from
+      // Once the list's own key handler is gone (it goes with the list), the Return reaches the editor.
+      requestAnimationFrame(() => { const view = editor.prosemirrorView; if (view && !view.isDestroyed) view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true })) })
+    } }
+  }
+  /** `@query` becomes the chip, as one editor step; whatever of the query the reading didn't use stays as text. */
+  function chooseDate(trigger: string, query: string, reading: Reading) {
+    editor.getExtension(SuggestionMenu)?.closeMenu()
+    const view = editor.prosemirrorView, schema = view.state.schema
+    // The menu clears the query before this runs. Put it back as part of the typing (so the clear and this cancel out
+    // in one history group), then make the chip as its own step: one ⌘Z gives back exactly `@query` (plan §5,
+    // Ratchet 6dfe2029).
+    const typedBefore = (s: typeof view.state) => s.selection.$from.parent.textBetween(0, s.selection.$from.parentOffset, undefined, '\ufffc')
+    if (query && !typedBefore(view.state).endsWith(trigger + query) && typedBefore(view.state).endsWith(trigger)) view.dispatch(view.state.tr.insertText(query))
+    const { $from } = view.state.selection, to = $from.pos
+    const before = typedBefore(view.state)
+    const typed = before.endsWith(trigger + query) ? trigger.length + query.length : before.endsWith(trigger) ? trigger.length : 0
+    const rest = query.slice(reading.used)
+    const node = schema.nodes.dateMention!.create({ eventId: crypto.randomUUID(), date: reading.date, time: reading.time ?? '' })
+    const next = view.state.doc.textBetween(to, Math.min(to + 1, view.state.selection.$from.end()), undefined, '\ufffc')
+    // The rest he typed comes back after the chip when the menu had already cleared it; a space follows the chip.
+    const tail = typed === trigger.length + query.length ? rest : ''
+    const after = tail ? (/^\s/.test(tail) ? tail : ` ${tail}`) : next && /\s/.test(next) ? '' : ' '
+    const tr = closeHistory(view.state.tr).replaceWith(to - typed, to, after ? [node, schema.text(after)] : node)
+    const caret = to - typed + node.nodeSize + (tail ? after.length : after ? 1 : 0)
+    view.dispatch(tr.setSelection(TextSelection.create(tr.doc, caret)).scrollIntoView())
+    lastTrigger.current = -1
   }
   /** §4: `[[query` becomes the link, as one editor step. A new page is made under this one, like `/page`. */
   function chooseLink(trigger: string, query: string, pageId: string, newTitle?: string) {
@@ -1915,7 +1993,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     onMouseOverCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
     onMouseMoveCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
     // A9a §3: after the composition, once ProseMirror has finished it (its DOM and decorations are drawn again).
-    onCompositionEndCapture={() => { composing.current = false; setTimeout(repairComposition, 0); setTimeout(maybeOpenLinkList, 50); requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
+    onCompositionEndCapture={() => { composing.current = false; if (editor.getExtension(SuggestionMenu)?.shown()) requestAnimationFrame(() => setCompositionsEnded(n => n + 1)); setTimeout(repairComposition, 0); setTimeout(maybeOpenLinkList, 50); setTimeout(reopenDateListAfterComposition, 80); requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
     onDropCapture={e => {
       // Drops go to the row boundary under the pointer at release. BlockNote's line can lag the pointer when
       // dragover events stop arriving (Ratchet task #49: a long drag stayed put, the line stuck near the start),
@@ -2007,13 +2085,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       }
       if (e.key === ' ' && !e.nativeEvent.isComposing && editor.getTextCursorPosition().block.type === 'task' && /^(?:#{1,3}|[-*>]|1\.|\[\])$/.test(editor.prosemirrorState.selection.$from.parent.textBetween(0, editor.prosemirrorState.selection.$from.parentOffset))) { e.preventDefault(); editor.insertInlineContent(' '); return }
 
-      if (e.key === 'Enter' && !e.nativeEvent.isComposing && editor.getTextCursorPosition().block.type === 'task' && editor.prosemirrorState.selection.empty) {
+      // An open `@` list takes Return itself (B27): it makes the chip.
+      if (e.key === 'Enter' && !e.nativeEvent.isComposing && editor.getTextCursorPosition().block.type === 'task' && editor.prosemirrorState.selection.empty && !editor.getExtension(SuggestionMenu)?.shown()) {
         e.preventDefault(); e.stopPropagation()
         const block = editor.getTextCursorPosition().block
         const parent = editor.prosemirrorState.selection.$from.parent
         const offset = editor.prosemirrorState.selection.$from.parentOffset
-        const left = parent.textBetween(0, offset), right = parent.textBetween(offset, parent.content.size)
-        if (!parent.textContent) { editor.updateBlock(block.id, { type: 'paragraph', content: '' }); return }
+        // Each half keeps its words and its `@date` chips (B27); other marks go, as before.
+        const half = (from: number, to: number) => { const out: unknown[] = []; parent.content.cut(from, to).forEach(n => { if (n.isText) out.push({ type: 'text', text: n.text, styles: {} }); else if (n.type.name === 'dateMention') out.push({ type: 'dateMention', props: { ...n.attrs } }) }); return out }
+        const left = half(0, offset), right = half(offset, parent.content.size)
+        if (!parent.childCount) { editor.updateBlock(block.id, { type: 'paragraph', content: '' }); return }
         const id = crypto.randomUUID()
         editor.transact(() => {
           editor.updateBlock(block.id, { content: left } as never)
@@ -2067,6 +2148,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     {pasteMenu && <PasteLinkMenu menu={pasteMenu} detail={bookmarkDetail(pasteMenu.urls)} onKeep={() => setPasteMenu(null)} onBookmark={bookmarkPasted} onHighlight={h => setPasteMenu({ ...pasteMenu, highlight: h })} />}
     <div ref={saveLine} className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? conflictText : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
+    <ChipPageDate.Provider value={page.type === 'daily' ? page.date ?? null : null}>
+    {createPortal(<EventRows rows={rows} page={page} workspace={workspace} pageEnd={!rowsAnchor.current?.headingId || !editor.getBlock(rowsAnchor.current.headingId)} />, rowsHost)}
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} shadCNComponents={doneInputs}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
       {!compact && !selectionLabel && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
@@ -2103,9 +2186,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}
       {['[[', '【【'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} shouldOpen={() => false} getItems={async query => linkItems(query, trigger)} onItemClick={item => item.onItemClick()} />)}
+      {['@', '＠'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} shouldOpen={() => false} getItems={async query => dateItems(query, trigger)} onItemClick={item => item.onItemClick()} suggestionMenuComponent={DateMenu} />)}
       {hoverPointer && <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />}
       {(hoverPointer || linkTapped) && <LinkToolbarController />}
     </BlockNoteView>
+    </ChipPageDate.Provider>
     </RowActionsContext.Provider>
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}
       onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); dragging.current = sectionRange(nodes(), touchHandle.id); setTouchDragging(true) }}

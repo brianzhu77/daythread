@@ -1,4 +1,5 @@
-import { dayTemplate, editorSeed, needsTemplateRows, pageContentKey, projectDocument, inlineText, sectionRange, templateKind, type EditorNode } from "./editor-document.ts";
+import { dayTemplate, editorSeed, needsTemplateRows, pageContentKey, projectDocument, inlineText, sectionRange, templateKind, textDate, type EditorNode } from "./editor-document.ts";
+import { dayEvents } from "./chip-events.ts";
 import { isTrashed, moveRefusal, referencesTo as pageReferences, subtreeIds } from "./page-tree.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import { cardsPresent, undoCards, type UndoCard } from "./link-paste.ts";
@@ -1007,7 +1008,8 @@ export function getDayView(state: Workspace, day: string): DayView {
         ((!!t.deadlineOn && t.deadlineOn <= day) ||
           (!!t.attentionOn && t.attentionOn <= day)),
     ),
-    events: state.events.filter((e) => !e.cancelled && e.date === day),
+    // Read on demand: a command that builds a day view mid-way never computes events from half-changed documents.
+    get events() { return dayEvents(state, day); },
     materialReview,
   };
 }
@@ -1300,9 +1302,9 @@ function execute(
         const checklistConversion = pastedChecklists.has(node.id) && (node.props?.role === 'reference' || node.props?.role === 'plan' && Boolean(p.date));
         if (node.props?.taskId !== `editor-task:${node.id}` || existingRow && !checklistConversion) throw new DomainError("Unknown Task identity");
         const planned = node.props.role === 'plan' ? p.date : null;
-        const t = createTask(state, inlineText(node.content) || 'Untitled task', p, planned);
+        const t = createTask(state, inlineText(node.content, textDate(p)) || 'Untitled task', p, planned);
         t.id = node.props.taskId;
-        t.title = inlineText(node.content);
+        t.title = inlineText(node.content, textDate(p));
         (p.editorCreations ??= {})[node.id] = t.id;
         if (planned) place(state, t, planned);
       }
