@@ -124,13 +124,13 @@ test('moving a task to a future day creates that page from the template and take
   // The row sits in the first section, before its trailing empty row.
   assert.equal(tdoc.findIndex(n => n.id === row.id), headingIndex(tdoc, 'TODO') + 1)
   assert.equal(tdoc[headingIndex(tdoc, 'TODO') + 2]!.type, 'task'); assert.equal(inlineText(tdoc[headingIndex(tdoc, 'TODO') + 2]!.content), '')
-  // From a past day: the old row stays as history (a reference), the plan moves.
+  // From a past day: the old row stays as history (still a plan row; the newest day is the plan), the plan moves.
   h.day(twoDaysAgo)
   h.save(dayId(twoDaysAgo), doc => under(doc, 'TODO', todo('old', 'Old one', 'plan', twoDaysAgo)))
   const oldId = h.task('Old one').id
   h.run({ type: 'plan-task', taskId: oldId, date: today, from: twoDaysAgo, today })
   assert.equal(plannedOn(h.ws, oldId), today)
-  assert.equal(taskRowsOn(h.page(dayId(twoDaysAgo))).find(r => r.taskId === oldId)!.role, 'reference')
+  assert.equal(taskRowsOn(h.page(dayId(twoDaysAgo))).find(r => r.taskId === oldId)!.role, 'plan')
   assert.equal(taskRowsOn(h.page(dayId(today))).find(r => r.taskId === oldId)!.role, 'plan')
   // Moving it back to an earlier day: the newest plan row wins, and today's row leaves.
   h.run({ type: 'plan-task', taskId: oldId, date: twoDaysAgo, from: today, today })
@@ -157,13 +157,18 @@ test('Not today pauses and removes the row; a stale row is removed without pausi
   h.run({ type: 'plan-task', taskId: id, date: today })
   assert.equal(h.ws.tasks.find(t => t.id === id)!.paused, false)
   assert.deepEqual(getDayView(h.ws, today).planned.map(t => t.id), [id])
-  // A stale row: planned for tomorrow from the Tasks tab (no `from`), the row today becomes history; removing it pauses nothing.
+  // Planned for tomorrow from the Tasks tab (no `from`): today's row stays as history, the newest day is the plan.
   h.run({ type: 'plan-task', taskId: id, date: tomorrow })
   assert.equal(plannedOn(h.ws, id), tomorrow)
-  assert.ok(!taskRowsOn(h.page(dayId(today))).some(r => r.taskId === id), 'a row on today or later leaves when the task moves')
+  assert.ok(taskRowsOn(h.page(dayId(today))).some(r => r.taskId === id), 'a row on an earlier day stays as history')
+  // Back to today: the later row leaves (a later plan can't stand next to the newest one).
   h.run({ type: 'plan-task', taskId: id, date: today })
+  assert.equal(plannedOn(h.ws, id), today)
+  assert.ok(!taskRowsOn(h.page(dayId(tomorrow))).some(r => r.taskId === id))
+  // Moved from today's page itself: that row leaves. Not today on a day that isn't the plan pauses nothing.
   h.run({ type: 'plan-task', taskId: id, date: tomorrow, from: today, today })
-  h.run({ type: 'not-today', taskId: id, date: today })
+  assert.ok(!taskRowsOn(h.page(dayId(today))).some(r => r.taskId === id))
+  h.run({ type: 'not-today', taskId: id, date: today, onlyThisDay: true })
   assert.equal(h.ws.tasks.find(t => t.id === id)!.paused, false)
   assert.equal(plannedOn(h.ws, id), tomorrow)
 })
@@ -261,7 +266,7 @@ test('bring-line copies a text line under the same-named heading, keeps its chip
   const copy = doc[notes + 1]!
   assert.equal(copy.type, 'bulletListItem')
   assert.notEqual(copy.id, 'n1')
-  assert.equal(inlineText(copy.content), 'Call about the roof @Oct 23 9:30am')
+  assert.equal(inlineText(copy.content, today), 'Call about the roof @Oct 23 9:30am')
   assert.equal((copy.content as { props?: { eventId?: string } }[]).find(c => c.props?.eventId)?.props?.eventId, 'ev-1')
   assert.equal(dayEvents(h.ws, tomorrow).length, 1, 'the same chip in two lines is one event')
   assert.deepEqual(getDayView(h.ws, today).handoffBlocks.map(b => b.block.id), ['n2'])
@@ -281,7 +286,7 @@ test('events come from chips on any live page, one per chip id, dated by the chi
   h.run({ type: 'create-document', title: 'Trip', body: '', pageId: 'T' })
   h.save('T', doc => [...doc, para('x', text('Flight '), chip('f1', tomorrow, '07:00'))])
   h.save(dayId(today), doc => under(doc, 'Events', bullet('e1', text('Dentist '), chip('d1', today, '15:00')), bullet('e2', text('All day '), chip('a1', today))))
-  assert.deepEqual(getDayView(h.ws, today).events.map(e => [e.title, e.time]), [['Dentist', '15:00'], ['All day', null]])
+  assert.deepEqual(getDayView(h.ws, today).events.map(e => [e.title, e.time]), [['All day', null], ['Dentist', '15:00']])
   assert.deepEqual(dayEvents(h.ws, tomorrow).map(e => [e.title, e.line?.pageId]), [['Flight', 'T']])
   h.run({ type: 'delete-page', pageId: 'T', at: '2026-10-22T10:00:00.000Z' })
   assert.deepEqual(dayEvents(h.ws, tomorrow), [])
@@ -333,7 +338,8 @@ test('Upcoming and the calendar read the documents: planned days, start and due 
   h.run({ type: 'create-document', title: 'Doc', body: '', pageId: 'D' })
   h.save('D', doc => [...doc, todo('d', 'On a doc', 'reference', '')])
   h.run({ type: 'delete-page', pageId: 'D', at: '2026-10-22T10:00:00.000Z' })
-  assert.ok(!h.ws.tasks.some(t => t.title === 'On a doc') || !getDayView(h.ws, today).openPool.some(t => t.title === 'On a doc'))
+  assert.ok(h.ws.tasks.some(t => t.title === 'On a doc'), 'trashing a page never deletes a task')
+  assert.equal(plannedOn(h.ws, h.task('On a doc').id), null)
 })
 
 test('remove-task-row takes a task off a day page (the review\'s Remove): a born-here task goes, one with history stays open', () => {
@@ -348,7 +354,7 @@ test('remove-task-row takes a task off a day page (the review\'s Remove): a born
   h.run({ type: 'remove-task-row', pageId: dayId(tomorrow), taskId: carried, today })
   assert.ok(h.ws.tasks.some(t => t.id === carried))
   assert.equal(h.ws.tasks.find(t => t.id === carried)!.paused, false, 'not today only pauses on today')
-  assert.equal(plannedOn(h.ws, carried), null)
+  assert.equal(plannedOn(h.ws, carried), today, "today's row is history: the plan falls back to it")
 })
 
 test('a document page holds a card to a page; removing the card never touches the page', () => {

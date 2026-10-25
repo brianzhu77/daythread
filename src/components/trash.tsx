@@ -1,7 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { editorSeed, inlineText, type EditorNode } from '../domain/editor-document'
-import { isTrashed, parentOf, subtreeIds, trashBatch, trashBatches, trashedChildPages } from '../domain/page-tree'
+import { cardTo, isTrashed, parentOf, subtreeIds, trashBatch, trashBatches, trashedChildPages } from '../domain/page-tree'
 import type { Page, Receipt, Workspace } from '../domain/types'
 import { longLabel, toIso } from './dates'
 import { flushEditor } from './editor-flush'
@@ -36,7 +36,7 @@ export function useDeletePage() {
     const subtree = subtreeIds(workspace, page.id)
     for (const id of subtree) if (!(await flushEditor(id))) return
     const parent = parentOf(workspace, page)
-    const card = parent?.sections.flatMap(s => s.blocks).find(b => b.kind === 'reference' && b.targetPageId === page.id)
+    const card = (parent ? cardTo(parent, page.id) : undefined)
     const receipt = await run({ type: 'delete-page', pageId: page.id, at: new Date().toISOString() },
       r => ({ text: r.message, undoOperationId: r.operationId }))
     if (receipt && openPageId && subtree.has(openPageId)) void navigate({ href: parent ? pageHref(parent, card?.id) : '/pages', resetScroll: !card })

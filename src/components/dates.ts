@@ -60,7 +60,8 @@ export function deadlinePassed(task: Task, today: LocalDate): boolean {
   return task.deadlineOn !== null && daysBetween(today, task.deadlineOn) < 0
 }
 
-export function taskDateTag(task: Task, today: LocalDate, pageDate: LocalDate = today): string {
+/** `planned`: the task's planned day (derived from the pages); null reads "Unscheduled" when no other date is set. */
+export function taskDateTag(task: Task, today: LocalDate, pageDate: LocalDate = today, planned: LocalDate | null = null): string {
   const parts: string[] = []
   const due = task.deadlineOn
   const start = task.attentionOn
@@ -73,7 +74,7 @@ export function taskDateTag(task: Task, today: LocalDate, pageDate: LocalDate = 
     if (dueFirst) parts.push(startTag)
     else parts.unshift(startTag)
   }
-  if (!parts.length && !task.plannedOn) return 'Unscheduled'
+  if (!parts.length && !planned) return 'Unscheduled'
   return parts.join(' · ')
 }
 

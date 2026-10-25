@@ -4,7 +4,7 @@ import { Button, toast } from '@heroui/react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Action, DayView, LocalDate, Receipt, Workspace } from '../domain/types'
 import { getDayView } from '../domain/workspace'
-import { draftMyDay as draftMyDayFn, loadWorkspace, retryCapture as retryCaptureFn, runCommand, submitCapture as submitCaptureFn } from '../server/functions'
+import { loadWorkspace, runCommand } from '../server/functions'
 import { configureDebug, debugClient } from '../lib/debug'
 import { sampleActions } from './fixture'
 import { todayIso } from './dates'
@@ -15,14 +15,10 @@ export interface Transport {
   run(workspace: Workspace, action: Action, operationId?: string): Promise<{ workspace: Workspace; receipt: Receipt }>
 }
 
-/** What the server says about the model (feat/model step 1); "simulated" means no key, so captures stay simulated. */
-export interface ModelInfo { state: 'simulated' | 'ready' | 'paused' | 'budget-used'; model: string | null; mode: 'auto' | 'confirm'; costUnknown: string[] }
-let latestModel: ModelInfo = { state: 'simulated', model: null, mode: 'auto', costUnknown: [] }
 const serverTransport: Transport = {
   load: async (operationId = newOperationId(), triggerOperationId) => {
     const response=await loadWorkspace({data:{operationId,triggerOperationId}})
     configureDebug(response.debug)
-    if (response.model) latestModel = response.model
     return response.workspace
   },
   run: (workspace, action, operationId = newOperationId()) => runCommand({ data: { operationId, expectedRevision: workspace.revision, action } }),
@@ -37,8 +33,6 @@ export type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
 export function isConflict(message: string | null): boolean {
   return message !== null && /saved elsewhere|changed|cannot undo/i.test(message)
 }
-/** Which simulated provider outcome the next capture or draft uses (01 §9 item 6). */
-export type SimOutcome = 'success' | 'failure' | 'budget' | 'context'
 
 /** A HeroUI toast after a command: Undo while the domain's single undo slot still holds it, plus an optional extra action. */
 export interface Notice {
@@ -59,8 +53,6 @@ interface WorkspaceContextValue {
   saveError: string | null
   /** The command that failed and Retry would resend, if any. */
   failedAction: Action['type'] | null
-  simOutcome: SimOutcome
-  setSimOutcome(o: SimOutcome): void
   run(action: Action, notice?: NoticeArg, operationId?: string, options?: RunOptions): Promise<Receipt | null>
   /** The workspace as of the last command or load, before React re-renders: what a command just did. */
   latest(): Workspace | null
@@ -68,14 +60,6 @@ interface WorkspaceContextValue {
   reload(): void
   refresh(triggerOperationId?: string): Promise<Workspace>
   addSampleData(): Promise<void>
-  /** The model's state from the last load. */
-  model: ModelInfo
-  /** Saves a capture: through the model when it's set up, otherwise the simulated capture. False = not saved. */
-  submitCapture(pageId: string, text: string, outcome?: SimOutcome): Promise<boolean>
-  /** Organizes a failed model capture again (same capture, new revision). */
-  retryCapture(captureId: string): Promise<boolean>
-  /** Draft my day (A6b): the model when it's set up, otherwise the simulated draft. False = nothing started. */
-  draftMyDay(date: LocalDate): Promise<boolean>
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
@@ -86,7 +70,6 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
   const [lastFailed, setLastFailed] = useState<{ action: Action; notice?: NoticeArg; operationId: string } | null>(null)
-  const [simOutcome, setSimOutcome] = useState<SimOutcome>('success')
   // Commands are applied one at a time against the latest revision.
   const wsRef = useRef<Workspace | null>(null)
   const queue = useRef<Promise<unknown>>(Promise.resolve())
@@ -230,55 +213,6 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     if (lastFailed) { debugClient('command.retry',{operationId:lastFailed.operationId,command:lastFailed.action.type}); void run(lastFailed.action, lastFailed.notice, lastFailed.operationId) }
   }, [lastFailed, run])
 
-  const [model, setModel] = useState<ModelInfo>(latestModel)
-  useEffect(() => { setModel(latestModel) }, [workspace])
-  const submitCapture = useCallback(async (pageId: string, text: string, outcome?: SimOutcome) => {
-    if (latestModel.state === 'simulated') return Boolean(await run({ type: 'capture', pageId, text, ...(outcome ? { outcome } : {}) }, null))
-    // His words are saved by the server before any model call; organizing then continues there.
-    const job = queue.current.then(async () => {
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try { const r = await submitCaptureFn({ data: { operationId: newOperationId(), pageId, text } }); await refresh(); return r.captureId !== null || r.info.state !== 'simulated' }
-        catch (error) { if (attempt === 1 || !/Saved elsewhere/.test(error instanceof Error ? error.message : '')) return false; await refresh() }
-      }
-      return false
-    })
-    queue.current = job.catch(() => undefined)
-    return job
-  }, [run, refresh])
-  const retryCapture = useCallback(async (captureId: string) => {
-    const job = queue.current.then(async () => {
-      try { const r = await retryCaptureFn({ data: { operationId: newOperationId(), captureId } }); await refresh(); return r.ok }
-      catch { await refresh().catch(() => undefined); return false }
-    })
-    queue.current = job.catch(() => undefined)
-    return job
-  }, [refresh])
-  const draftMyDay = useCallback(async (date: LocalDate) => {
-    if (latestModel.state === 'simulated') return Boolean(await run({ type: 'generate-draft', date, trigger: 'card', outcome: simOutcome }, null))
-    const job = queue.current.then(async () => {
-      try { await draftMyDayFn({ data: { operationId: newOperationId(), date } }); await refresh(); return true }
-      catch { await refresh().catch(() => undefined); return false }
-    })
-    queue.current = job.catch(() => undefined)
-    return job
-  }, [run, refresh, simOutcome])
-  // While Draft my day is running, follow it; the server ends a run stuck past 90 s, so this stops on its own.
-  const draftPolls = useRef(0)
-  useEffect(() => {
-    if (!workspace?.pages.some(p => p.draft?.run?.status === 'drafting')) { draftPolls.current = 0; return }
-    if (draftPolls.current >= 80) return
-    const t = setTimeout(() => { draftPolls.current++; void refresh().catch(() => undefined) }, 1500)
-    return () => clearTimeout(t)
-  }, [workspace, refresh])
-  // While a capture is still being organized, follow it (the model answers in a few seconds; stop after ~90 s).
-  const polls = useRef(0)
-  useEffect(() => {
-    if (!workspace?.captures.some(c => c.status === 'organizing')) { polls.current = 0; return }
-    if (polls.current >= 75) return
-    const t = setTimeout(() => { polls.current++; void refresh().catch(() => undefined) }, 1200)
-    return () => clearTimeout(t)
-  }, [workspace, refresh])
-
   const addSampleData = useCallback(async () => {
     for (const action of sampleActions(todayIso())) if (!(await run(action))) return
     push({ text: 'Sample data added' })
@@ -293,19 +227,13 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       saveState,
       saveError,
       failedAction: lastFailed?.action.type ?? null,
-      simOutcome,
-      setSimOutcome,
       run,
       retry,
       reload,
       refresh,
       addSampleData,
-      model,
-      submitCapture,
-      retryCapture,
-      draftMyDay,
     }),
-    [workspace, latest, loadError, saveState, saveError, lastFailed, simOutcome, run, retry, reload, refresh, addSampleData, model, submitCapture, retryCapture, draftMyDay],
+    [workspace, latest, loadError, saveState, saveError, lastFailed, run, retry, reload, refresh, addSampleData],
   )
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }

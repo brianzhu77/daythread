@@ -11,7 +11,6 @@ import type { MenuItem } from './row-menu'
 export type RowIntent =
   | { kind: 'move'; date: LocalDate }
   | { kind: 'not-today' }
-  | { kind: 'section'; to: 'top3' | 'other' }
   | { kind: 'cancel' }
   | { kind: 'restore' }
   | { kind: 'bring-today' }
@@ -20,8 +19,6 @@ export interface RowActions {
   /** The page's day; null on a page that isn't a day. */
   pageDate: LocalDate | null
   today: LocalDate
-  /** The plan section the row is in on this page, if any. */
-  sectionOf(blockId: string): 'top3' | 'other' | null
   act(blockId: string, task: Task, intent: RowIntent): void
   /** A11: copies a link to the line, or null where Copy link to line isn't offered. */
   copyLink(blockId: string): (() => void) | null
@@ -44,10 +41,10 @@ export interface RowMenuModel {
 }
 
 /**
- * Jazz §1 / plan §1. A plan row is stale when its task is now planned for another day: it offers "Remove from {day}"
+ * A plan row is stale when its task is now planned for another day (`planned`): it offers "Remove from {day}"
  * instead of Not on, and never Tomorrow relative to a day that isn't today.
  */
-export function rowMenu(task: Task, role: string, section: 'top3' | 'other' | null, pageDate: LocalDate | null, today: LocalDate): RowMenuModel | null {
+export function rowMenu(task: Task, role: string, planned: LocalDate | null, pageDate: LocalDate | null, today: LocalDate): RowMenuModel | null {
   if (!pageDate) return null
   if (task.status === 'done') return null
   if (task.status === 'cancelled') return { primary: [], anotherDay: null, groups: [{ items: [{ label: 'Restore', intent: { kind: 'restore' } }] }] }
@@ -56,24 +53,23 @@ export function rowMenu(task: Task, role: string, section: 'top3' | 'other' | nu
   const anotherDay = anotherDayOptions(today).filter(o => o.date !== pageDate).map(o => ({ label: `${o.label} · ${shortLabel(o.date)}`, date: o.date }))
   const anotherDayGroup = { title: 'Another day', items: [...anotherDay.map(o => ({ label: o.label, intent: { kind: 'move', date: o.date } as RowIntent })), { label: 'Pick date…', intent: 'pick-date' as const }] }
   const cancel = { items: [{ label: 'Cancel task', intent: { kind: 'cancel' } as RowIntent, danger: true }] }
-  if (role !== 'plan' || !section) {
-    // Plan for today is already a button on the row (Jazz §1); the phone bar repeats it.
-    const plan = task.plannedOn === today ? [] : [{ label: 'Plan for today', intent: { kind: 'bring-today' } as RowIntent }]
+  if (role !== 'plan') {
+    // Plan for today is already a button on the row; the phone bar repeats it.
+    const plan = planned === today ? [] : [{ label: 'Plan for today', intent: { kind: 'bring-today' } as RowIntent }]
     return { primary: plan, anotherDay, groups: [anotherDayGroup, cancel] }
   }
   const tomorrow = addDays(today, 1)
-  const stale = Boolean(task.plannedOn && task.plannedOn !== pageDate)
+  const stale = Boolean(planned && planned !== pageDate)
   const off: { label: string; intent: RowIntent } = stale
     ? { label: `Remove from ${weekday(pageDate)}`, intent: { kind: 'not-today' } }
     : { label: pageDate === today ? 'Not today' : `Not on ${weekday(pageDate)}`, intent: { kind: 'not-today' } }
-  const first = pageDate === today && task.plannedOn !== tomorrow ? [{ label: `Tomorrow · ${noticeDate(tomorrow)}`, intent: { kind: 'move', date: tomorrow } as RowIntent }] : []
+  const first = pageDate === today && planned !== tomorrow ? [{ label: `Tomorrow · ${noticeDate(tomorrow)}`, intent: { kind: 'move', date: tomorrow } as RowIntent }] : []
   // Tomorrow is its own item on today's rows (Bumblebee 16ce6fe4), so Another day doesn't repeat it.
   if (first.length) { anotherDayGroup.items = anotherDayGroup.items.filter(i => !(i.intent !== 'pick-date' && i.intent.kind === 'move' && i.intent.date === tomorrow)) }
-  const swap = { label: section === 'top3' ? 'Move to Other' : 'Move to Top 3', intent: { kind: 'section', to: section === 'top3' ? 'other' : 'top3' } as RowIntent }
   return {
     primary: [...(first.length ? [{ label: 'Tomorrow', intent: first[0]!.intent }] : []), off],
     anotherDay,
-    groups: [{ items: [...first, off] }, anotherDayGroup, { items: [swap] }, cancel],
+    groups: [{ items: [...first, off] }, anotherDayGroup, cancel],
   }
 }
 

@@ -45,8 +45,8 @@ test('convert: every task is planned on the day the old field said; roles follow
   // Carried with nesting: the parent row on Oct 22 holds the child.
   assert.deepEqual(taskRows(ws, 'day:2026-10-22').find(r => r.taskId === 'editor-task:p1')!.children, ['editor-task:c1'])
   assert.deepEqual(getDayView(ws, today).planned.map(t => t.title), ['Parent task', 'Child task', 'Due Friday'])
-  // Oct 21's rows stay as they were typed, as history.
-  assert.deepEqual(taskRows(ws, 'day:2026-10-21').map(r => [r.text, r.role]), [['Parent task', 'reference'], ['Child task', 'reference'], ['Other one', 'plan'], ['Other two with deadline', 'plan']])
+  // Oct 21's rows stay as they were typed, as history: still plan rows, the newer day wins.
+  assert.deepEqual(taskRows(ws, 'day:2026-10-21').map(r => [r.text, r.role]), [['Parent task', 'plan'], ['Child task', 'plan'], ['Other one', 'plan'], ['Other two with deadline', 'plan']])
 })
 
 test('convert: a plan on a day with no page gets the page and its row; the page has the template headings', () => {
@@ -56,7 +56,7 @@ test('convert: a plan on a day with no page gets the page and its row; the page 
   const rows = taskRows(ws, 'day:2026-10-23')
   assert.deepEqual(rows.filter(r => r.text).map(r => [r.text, r.role]), [['Planned for Thursday', 'plan']])
   assert.ok(pageNodes(p).some(n => n.type === 'heading'))
-  assert.deepEqual(taskRows(ws, 'day:2026-10-24').map(r => [r.text, r.role]), [['Planned for Saturday', 'plan']])
+  assert.deepEqual(taskRows(ws, 'day:2026-10-24').filter(r => r.text).map(r => [r.text, r.role]), [['Planned for Saturday', 'plan']])
 })
 
 test('convert: the stored event becomes a line with a chip; chip events are kept; saved links become link lines and bookmark pages stay', () => {

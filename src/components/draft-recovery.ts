@@ -1,8 +1,8 @@
 import { mergeDraft } from '../domain/draft-merge.ts'
-import { editorSeed, needsTemplateRows, pageContentKey, type EditorNode } from '../domain/editor-document.ts'
+import { editorSeed, pageContentKey, type EditorNode } from '../domain/editor-document.ts'
 import type { Action, Page, Receipt, Workspace } from '../domain/types.ts'
 import { todayIso } from './dates.ts'
-import { claim, clearOwn, keptAfterMerge, orphans, ownDrafts, release, take, withoutSaved, type DraftSlot } from './draft-slots.ts'
+import { claim, clearOwn, orphans, ownDrafts, release, take, withoutSaved, type DraftSlot } from './draft-slots.ts'
 import { openEditorPages } from './editor-flush.ts'
 
 /**
@@ -11,16 +11,15 @@ import { openEditorPages } from './editor-flush.ts'
  * this tab's own draft as it is when the page hasn't changed since; otherwise merged into the latest page (B35's merge
  * for a gone tab's draft, Load latest's for a conflict). A live tab's draft is never taken.
  */
-export function recoveredDocument(ws: Workspace, page: Page, slot: DraftSlot, own: boolean, today = todayIso()): EditorNode[] {
-  return recovered(ws, page, slot, own, today).document
+export function recoveredDocument(ws: Workspace, page: Page, slot: DraftSlot, own: boolean): EditorNode[] {
+  return recovered(ws, page, slot, own).document
 }
 /** The same, with where its lines went (B44: its kept links follow them). */
-export function recovered(ws: Workspace, page: Page, slot: DraftSlot, own: boolean, today = todayIso()): { document: EditorNode[]; placed: Map<string, string> } {
+export function recovered(ws: Workspace, page: Page, slot: DraftSlot, own: boolean): { document: EditorNode[]; placed: Map<string, string> } {
   const draft = JSON.parse(slot.document) as EditorNode[]
   if (own && slot.base === pageContentKey(page)) return { document: draft, placed: new Map() }
-  const [baseSections, baseJSON] = JSON.parse(slot.base) as [Page['sections'], string | null]
-  const started = { ...page, sections: baseSections, editorJSON: baseJSON ?? undefined, editorSections: JSON.stringify(baseSections) } as Page
-  const seed = (p: Page) => editorSeed(p, ws, { templateRows: needsTemplateRows(p, today) }) as EditorNode[]
+  const started: Page = { ...page, document: slot.baseDocument ?? page.document }
+  const seed = (p: Page) => editorSeed(p, ws)
   const latest = seed(page)
   const merged = mergeDraft(seed(started), withoutSaved(draft, latest), latest, new Set(ws.tasks.map(t => t.id)))
   return { document: merged.document, placed: merged.placed }
@@ -97,13 +96,13 @@ export function saveKeptDrafts(refresh: () => Promise<Workspace>, run: Run, skip
       // Another tab (or that page's editor here) merged this gone tab's draft while we waited for the lock; else it's ours
       // until the save is done, so an editor opening the page elsewhere doesn't merge it too.
       if (key !== null && !take(pageId, key)) continue
-      let document: EditorNode[], kept: { blockId: string; url: string }[]
-      try { const r = recovered(ws, page, slot, key === null); document = r.document; kept = keptAfterMerge(slot.keptPlainLinks, r.placed) } catch { if (key !== null) release(pageId, key); return false }
+      let document: EditorNode[]
+      try { document = recovered(ws, page, slot, key === null).document } catch { if (key !== null) release(pageId, key); return false }
       let failure = ''
       let done!: () => void
       saving.set(pageId, new Promise<void>(resolve => { done = resolve }))
       try {
-        const receipt = await run({ type: 'save-editor', pageId, expectedContent: pageContentKey(page), document: JSON.stringify(document), ...(slot.cutTaskIds?.length ? { cutTaskIds: slot.cutTaskIds } : {}), ...(kept.length ? { keptPlainLinks: kept } : {}), today: todayIso() }, undefined, undefined, { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => { failure = 'changed elsewhere' }, onFailure: m => { failure = m }, quiet: options.quiet })
+        const receipt = await run({ type: 'save-editor', pageId, expectedContent: pageContentKey(page), document: JSON.stringify(document), ...(slot.cutTaskIds?.length ? { cutTaskIds: slot.cutTaskIds } : {}), today: todayIso() }, undefined, undefined, { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => { failure = 'changed elsewhere' }, onFailure: m => { failure = m }, quiet: options.quiet })
         if (!receipt) { if (key !== null) release(pageId, key); options.onFailure?.({ pageId, message: failure || 'not saved' }); return false }
         if (key === null) clearOwn(pageId, slot.document)
         // Its owner came back and wrote newer text while this save was out: the slot stays its own, unmarked. When the

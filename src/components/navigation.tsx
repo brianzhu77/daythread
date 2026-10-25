@@ -1,11 +1,9 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import { rememberOpened, SidebarTree, useToday } from './page-tree'
-import { useEffect, useRef, useState } from 'react'
-import { CaptureBar, CaptureReceipts } from './capture'
-import { todayIso } from './dates'
-import { CalendarIcon, PagesIcon, PlusIcon, ReviewIcon, TagsIcon, TasksIcon, TodayIcon } from './icons'
+import { useEffect } from 'react'
+import { CalendarIcon, PagesIcon, ReviewIcon, TagsIcon, TasksIcon, TodayIcon } from './icons'
 import type { LocalDate } from '../domain/types'
-import { useDay, useWorkspace } from './use-day'
+import { useWorkspace } from './use-day'
 import { useCreatePage } from './pages-screen'
 import { SidebarTrashRow } from './trash'
 import { AccountRow } from './account-row'
@@ -29,15 +27,9 @@ export function Navigation() {
   const openPageId = useRouterState({ select: s => (s.location.search as { page?: string }).page })
   const trashView = useRouterState({ select: s => (s.location.search as { view?: string }).view === 'trash' })
   const today = useToday()
-  const [captureOpen, setCaptureOpen] = useState(false)
   // B40: the tab where he'd find a page whose text isn't saved yet carries a dot (Today, Calendar for an earlier day, Pages).
   const unsavedTabs = new Set(useKeptDrafts().pages.map(p => p.tab))
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'j') { event.preventDefault(); setCaptureOpen(true) } }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
   return (
     <>
       <aside className="sidebar" aria-label="Navigation">
@@ -71,13 +63,7 @@ export function Navigation() {
             </Link>
           ))}
         </div>
-        <button type="button" className="tab-plus" aria-label="Capture" onClick={() => setCaptureOpen(true)}>
-          <PlusIcon />
-        </button>
       </nav>
-
-      <button type="button" className="desktop-capture-plus" aria-label="Capture · ⌘J" onClick={() => setCaptureOpen(true)}><PlusIcon /></button>
-      {captureOpen && <CaptureSheet onClose={() => setCaptureOpen(false)} />}
     </>
   )
 }
@@ -103,44 +89,3 @@ function PageGroups({ path, openPageId, trashView, today }: { path: string; open
   return <SidebarTree workspace={workspace} activeId={activeId} today={today} newPageRow={<><NewPageRow /><SidebarTrashRow current={trashOpen} /><AccountRow className="account-row-sidebar" /></>} />
 }
 
-/** Phone capture (craft-v1 §5.3): a bottom sheet with the cursor already in the field. */
-function CaptureSheet({ onClose }: { onClose: () => void }) {
-  const [today] = useState(todayIso)
-  const { run } = useWorkspace()
-  const { view, workspace } = useDay(today)
-  const page = view?.page ?? null
-  const sheetRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (workspace && !page) void run({ type: 'ensure-day', date: today })
-  }, [workspace, page, today, run])
-
-  useEffect(() => {
-    sheetRef.current?.querySelector('textarea')?.focus()
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [page, onClose])
-
-  return (
-    <div className="sheet-scrim" onPointerDown={e => e.target === e.currentTarget && onClose()}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-label="Capture" ref={sheetRef}>
-        <div className="sheet-handle" aria-hidden="true" />
-        <header className="sheet-head">
-          <h2>Capture</h2>
-          <button type="button" className="ghost" onClick={onClose}>
-            Close
-          </button>
-        </header>
-        {page && workspace ? (
-          <>
-            <CaptureBar page={page} placeholder="What’s on your mind?" />
-            <CaptureReceipts page={page} workspace={workspace} />
-          </>
-        ) : (
-          <p className="loading">Opening today…</p>
-        )}
-      </div>
-    </div>
-  )
-}

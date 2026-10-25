@@ -19,7 +19,7 @@ test('pages: create (top level and under a day), rename, move, a cycle refused, 
   h.run({ type: 'rename-page', pageId: 'W', title: 'Work 2026' })
   assert.equal(h.page('W').title, 'Work 2026')
   assert.throws(() => h.run({ type: 'rename-page', pageId: dayId(today), title: 'x' }), /named by their date/)
-  assert.throws(() => h.run({ type: 'move-page', pageId: 'W', parentId: 'G' }), /inside itself|its own/i)
+  assert.throws(() => h.run({ type: 'move-page', pageId: 'W', parentId: 'G' }), /into itself/)
   h.run({ type: 'move-page', pageId: 'D', parentId: 'W' })
   assert.deepEqual(childPages(h.ws, 'W').map(p => p.id), ['C', 'D'])
   assert.deepEqual([...subtreeIds(h.ws, 'W')].sort(), ['C', 'D', 'G', 'W'])

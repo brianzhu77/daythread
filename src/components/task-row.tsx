@@ -18,9 +18,9 @@ export function useTaskActions(today: LocalDate) {
     }))
   }
 
-  /** `from`: the day page the move is made from; its row leaves it unless that day is past (A12 §2, Lead 6c169851). */
-  const planOn = (task: Task, date: LocalDate, section?: 'top3' | 'other', from?: LocalDate) =>
-    run({ type: 'plan-task', taskId: task.id, date, section, ...(from ? { from, today } : {}) }, r => ({
+  /** `from`: the day page the move is made from; its row leaves it unless that day is past. */
+  const planOn = (task: Task, date: LocalDate, from?: LocalDate) =>
+    run({ type: 'plan-task', taskId: task.id, date, today, ...(from ? { from } : {}) }, r => ({
       text: date === today ? 'On today' : `Moved to ${shortLabel(date)}`,
       undoOperationId: r.operationId,
     }))
@@ -71,14 +71,13 @@ interface TaskRowProps {
   task: Task
   pageDate: LocalDate
   today: LocalDate
-  /** Plan rows carry the day's placement; past pages are read-only for placement (01 §8a F06). */
+  /** Plan rows carry the day's plan; past pages are read-only for it. */
   variant: 'plan' | 'ref' | 'past'
-  section?: 'top3' | 'other'
   onEditTitle?: (title: string) => void
   onDeleteRow?: () => void
 }
 
-export function TaskRow({ task, pageDate, today, variant, section, onEditTitle, onDeleteRow }: TaskRowProps) {
+export function TaskRow({ task, pageDate, today, variant, onEditTitle, onDeleteRow }: TaskRowProps) {
   const { markDone, planOn, notToday, cancel } = useTaskActions(today)
   const [title, setTitle] = useState(task.title)
   const done = task.status === 'done'
@@ -88,13 +87,10 @@ export function TaskRow({ task, pageDate, today, variant, section, onEditTitle, 
     variant === 'past'
       ? [{ items: [{ label: 'Bring to today', onSelect: () => planOn(task, today) }] }]
       : [
-          { title: 'Another day', items: anotherDayItems(task, today, planOn) },
+          { title: 'Another day', items: anotherDayItems(task, today, (t, d) => planOn(t, d, pageDate)) },
           {
             items: [
               { label: pageDate === today ? 'Not today' : `Not on ${shortLabel(pageDate)}`, onSelect: () => notToday(task, pageDate) },
-              section === 'top3'
-                ? { label: 'Move to Other', onSelect: () => planOn(task, pageDate, 'other') }
-                : { label: 'Move to Top 3', onSelect: () => planOn(task, pageDate, 'top3') },
               { label: 'Cancel task', onSelect: () => cancel(task), danger: true },
             ],
           },

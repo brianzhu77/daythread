@@ -8,6 +8,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { useNavigate } from '@tanstack/react-router'
 import type { DayEvent } from '../domain/chip-events'
 import type { LocalDate, Page, Workspace } from '../domain/types'
+import { flatNodes, inlineText, pageNodes, sectionRange, type EditorNode } from '../domain/editor-document'
 import { displayPageTitle } from './page-title'
 import { createContext, useContext } from 'react'
 import { useComponentsContext, type DefaultReactSuggestionItem, type SuggestionMenuProps } from '@blocknote/react'
@@ -91,8 +92,25 @@ export const refreshEventRows = (view: { state: { tr: import('@tiptap/pm/state')
  * already is the row, Jazz §3).
  */
 export function rowsFor(page: Page, events: DayEvent[]): DayEvent[] {
-  const own = new Set(page.sections.filter(s => s.kind === 'events').flatMap(s => s.blocks.map(b => b.id)))
+  const own = new Set(eventsSection(pageNodes(page)).map(n => n.id))
   return events.filter(e => !(e.line && e.line.pageId === page.id && own.has(e.line.lineId)))
+}
+/** The heading titled "Events" on a page, by its text: a display anchor, never a stored role. */
+export function eventsHeading(doc: readonly EditorNode[]): EditorNode | undefined {
+  return doc.find(n => n.type === 'heading' && inlineText(n.content).trim().toLowerCase() === 'events')
+}
+function eventsSection(doc: readonly EditorNode[]): EditorNode[] {
+  const h = eventsHeading(doc)
+  return h ? flatNodes(sectionRange(doc, h.id).slice(1)) : []
+}
+/** The nearest heading above a line, for "↗ Thu, Oct 22 · Notes". */
+function sectionTitleOf(page: Page, lineId: string): string {
+  let heading = ''
+  for (const n of pageNodes(page)) {
+    if (n.type === 'heading') heading = inlineText(n.content).trim()
+    if (n.id === lineId || flatNodes(n.children ?? []).some(c => c.id === lineId)) return heading
+  }
+  return ''
 }
 
 /** "3 PM", "3:30 PM": the chip's and the strip's time. */
@@ -109,7 +127,7 @@ export const rowTime = (time: string | null) => {
 /** The row's link back (Jazz §3): "↗ Thu, Oct 22 · Notes", "↗ Trip notes" on a document page, "↗ in Notes" here. */
 function backLabel(ws: Workspace, page: Page | null, line: NonNullable<DayEvent['line']>): string {
   const from = ws.pages.find(p => p.id === line.pageId)
-  const section = from?.sections.find(s => s.blocks.some(b => b.id === line.lineId))?.title.trim()
+  const section = from ? sectionTitleOf(from, line.lineId) : ''
   if (page && from?.id === page.id) return section ? `in ${section}` : 'on this page'
   const where = from?.type === 'daily' && from.date ? fromIso(from.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : from ? displayPageTitle(from) : ''
   return section && from?.type === 'daily' ? `${where} · ${section}` : where

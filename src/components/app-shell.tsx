@@ -3,7 +3,7 @@ import { useRouterState } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useState } from 'react'
 import { Navigation } from './navigation'
 import { KeptDrafts } from './kept-drafts'
-import { WorkspaceProvider, isConflict, useWorkspace, type SimOutcome } from './use-day'
+import { WorkspaceProvider, isConflict, useWorkspace } from './use-day'
 
 /** App frame (craft-v1 §3): sidebar on laptop, bottom tabs and + on phone, dev banner, undo notices. */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -60,7 +60,7 @@ function Toasts() {
 }
 
 function SampleBanner() {
-  const { workspace, loadError, reload, simOutcome, setSimOutcome, addSampleData } = useWorkspace()
+  const { workspace, loadError, reload, addSampleData } = useWorkspace()
   if (loadError)
     return (
       <p className="banner error" role="alert">
@@ -72,17 +72,8 @@ function SampleBanner() {
   if (import.meta.env.VITE_DEV_MENU !== '1' && !import.meta.env.VITE_TRIAL_BANNER) return null
   return (
     <details className="banner" role="note">
-      <summary>{import.meta.env.VITE_TRIAL_BANNER ?? 'Local only · AI simulated'}</summary>
-      <span>Saved on this Mac. Organizing and suggestions are simulated; no model is called.</span>
-      <label className="sim-control">
-        Next AI result
-        <select value={simOutcome} onChange={e => setSimOutcome(e.target.value as SimOutcome)}>
-          <option value="success">Works</option>
-          <option value="failure">Model error</option>
-          <option value="context">Too much linked material</option>
-          <option value="budget">Daily budget used up</option>
-        </select>
-      </label>
+      <summary>{import.meta.env.VITE_TRIAL_BANNER ?? 'Local only'}</summary>
+      <span>Saved on this Mac.</span>
       {import.meta.env.DEV && workspace && (
         <button type="button" className="app-link" onClick={() => void addSampleData()}>
           Add sample data

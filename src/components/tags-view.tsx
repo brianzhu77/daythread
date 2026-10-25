@@ -2,6 +2,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { lastUsed, tagIndex, type TagEntry, type TagOccurrence } from '../domain/tags'
 import { LineText } from './line-text'
+import { flatNodes, pageNodes } from '../domain/editor-document'
 import type { LocalDate } from '../domain/types'
 import { addDays, fromIso, longLabel, todayIso } from './dates'
 import { ChevronRightIcon } from './icons'
@@ -76,7 +77,7 @@ export function TagScreen({ tagKey }: { tagKey: string }) {
                 <li key={o.blockId}>
                   <button type="button" className="tag-block" onClick={() => open(o)}>
                     {task && <input type="checkbox" className="check" checked={task.status === 'done'} readOnly disabled tabIndex={-1} aria-label={task.status === 'done' ? 'Done' : 'Open'} />}
-                    <span className="tag-block-text">{(() => { const b = workspace.pages.find(p => p.id === o.pageId)?.sections.flatMap(s => s.blocks).find(x => x.id === o.blockId); return b ? <LineText workspace={workspace} pageId={o.pageId} block={b} /> : <TagText text={o.text} /> })()}</span>
+                    <span className="tag-block-text">{(() => { const p = workspace.pages.find(x => x.id === o.pageId); const n = p && flatNodes(pageNodes(p)).find(x => x.id === o.blockId); return n ? <LineText workspace={workspace} page={p} node={n} /> : <TagText text={o.text} /> })()}</span>
                     <span className="tag-block-section">{o.sectionTitle}</span>
                   </button>
                 </li>
