@@ -3,12 +3,9 @@ import { editorSeed, type EditorNode } from './editor-document.ts'
 import { readMention, type DateMention } from './date-chip.ts'
 import { liveTitle, type InlineRef } from './page-refs.ts'
 import { isTrashed } from './page-tree.ts'
-import type { Event, LocalDate, Workspace } from './types.ts'
+import type { DayEvent, Event, EventLine, LocalDate, Workspace } from './types.ts'
 
-/** A line that holds a chip: the event's link back (Jazz b27-at-date-states §3, the A11 line ref). */
-export interface EventLine { pageId: string; lineId: string }
-/** One event on a day: a stored one (capture, `add-event`) or one computed from a chip (`line` set). */
-export interface DayEvent { id: string; title: string; date: LocalDate; time: string | null; line?: EventLine }
+export type { DayEvent, EventLine }
 
 /** An event's title: the line's words with its chips left out, `[[` links as their titles, spaces collapsed. */
 function titleOf(content: unknown, ws: Workspace): string {

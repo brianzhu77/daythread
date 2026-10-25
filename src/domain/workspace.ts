@@ -1,4 +1,5 @@
 import { dayTemplate, editorSeed, needsTemplateRows, pageContentKey, projectDocument, inlineText, sectionRange, templateKind, textDate, type EditorNode } from "./editor-document.ts";
+import { dayEvents } from "./chip-events.ts";
 import { isTrashed, moveRefusal, referencesTo as pageReferences, subtreeIds } from "./page-tree.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import { cardsPresent, undoCards, type UndoCard } from "./link-paste.ts";
@@ -1007,7 +1008,8 @@ export function getDayView(state: Workspace, day: string): DayView {
         ((!!t.deadlineOn && t.deadlineOn <= day) ||
           (!!t.attentionOn && t.attentionOn <= day)),
     ),
-    events: state.events.filter((e) => !e.cancelled && e.date === day),
+    // Read on demand: a command that builds a day view mid-way never computes events from half-changed documents.
+    get events() { return dayEvents(state, day); },
     materialReview,
   };
 }
