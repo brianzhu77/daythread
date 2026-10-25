@@ -1,0 +1,12 @@
+import {webkit,chromium} from '@playwright/test';
+import assert from 'node:assert/strict';
+const engine=process.argv[2]||'webkit'; const browser=await ({webkit,chromium}[engine]).launch();
+const page=await browser.newPage({viewport:{width:390,height:844}});let mode='hold', calls=0, held=[];
+await page.route('**/*',async r=>{if(r.request().method()==='POST'&&(r.request().postData()||'').includes('ensure-day')){calls++;if(mode==='hold')await new Promise(resolve=>held.push(resolve));if(mode==='abort')return r.abort('failed');}return r.continue()});
+await page.goto('http://127.0.0.1:3638/day/2026-08-02',{waitUntil:'domcontentloaded'});
+await page.waitForTimeout(8000);
+console.log('held8s',JSON.stringify({calls,loading:await page.locator('.loading').allTextContents(),start:await page.getByRole('button',{name:'Start this page'}).count()}));
+mode='abort';held.forEach(f=>f());await page.getByRole('button',{name:'Start this page'}).waitFor({timeout:10000});
+console.log('failed',JSON.stringify({calls,text:await page.locator('.empty').innerText()}));
+mode='ok';await page.getByRole('button',{name:'Start this page'}).click({force:true}).catch(()=>{});await page.locator('.bn-editor').waitFor({timeout:15000});
+console.log('retry',{pass:true,calls}); await browser.close();
