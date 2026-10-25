@@ -64,21 +64,21 @@ export const rowTime = (time: string | null) => {
 }
 
 /** The row's link back (Jazz §3): "↗ Thu, Oct 22 · Notes", "↗ Trip notes" on a document page, "↗ in Notes" here. */
-function backLabel(ws: Workspace, page: Page, line: NonNullable<DayEvent['line']>): string {
+function backLabel(ws: Workspace, page: Page | null, line: NonNullable<DayEvent['line']>): string {
   const from = ws.pages.find(p => p.id === line.pageId)
   const section = from?.sections.find(s => s.blocks.some(b => b.id === line.lineId))?.title.trim()
-  if (from?.id === page.id) return section ? `in ${section}` : 'on this page'
+  if (page && from?.id === page.id) return section ? `in ${section}` : 'on this page'
   const where = from?.type === 'daily' && from.date ? fromIso(from.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : from ? displayPageTitle(from) : ''
   return section && from?.type === 'daily' ? `${where} · ${section}` : where
 }
 
-export function EventRows({ rows, page, workspace, pageEnd }: { rows: DayEvent[]; page: Page; workspace: Workspace; pageEnd: boolean }) {
+export function EventRows({ rows, page, workspace, pageEnd }: { rows: DayEvent[]; page: Page | null; workspace: Workspace; pageEnd: boolean }) {
   if (!rows.length) return null
   return (
     <div className="event-rows-list" role="list" aria-label="Events">
       {pageEnd && <div className="event-rows-label">Events</div>}
       {rows.map(e => {
-        const here = e.line?.pageId === page.id
+        const here = Boolean(page && e.line?.pageId === page.id)
         return (
           <div key={e.id} className={`day-event${here ? ' is-here' : ''}`} role="listitem">
             <span className={`day-event-time${e.time ? '' : ' is-all-day'}`}>{rowTime(e.time)}</span>
@@ -93,6 +93,15 @@ export function EventRows({ rows, page, workspace, pageEnd }: { rows: DayEvent[]
   )
 }
 
+/** The picker's date (Jazz §1): "Thu, Nov 20", with the year when it isn't the page's (or today's) year. */
+export function pickerLabel(date: LocalDate, yearOf: LocalDate): string {
+  return fromIso(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', ...(yearOf.slice(0, 4) === date.slice(0, 4) ? {} : { year: 'numeric' }) })
+}
+/** The picker's quiet right label for a suggested day: "Today", "Tomorrow", "in 3 days", "2 days ago". */
+export function relativeDay(date: LocalDate, today: LocalDate): string {
+  const n = Math.round((fromIso(date).getTime() - fromIso(today).getTime()) / 86_400_000)
+  return n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : n === -1 ? 'Yesterday' : n > 0 ? `in ${n} days` : `${-n} days ago`
+}
 /** The chip's own label (Jazz §2): "Thu, Nov 20 · 3 PM", "Today", "Tomorrow"; the year only off the page's year. */
 export function chipLabel(date: LocalDate, time: string | null, today: LocalDate, pageDate: LocalDate | null): string {
   const d = fromIso(date)

@@ -1,7 +1,8 @@
 import { AlertDialog, Button, Popover } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useState, type ReactNode } from 'react'
-import type { LocalDate, Task } from '../domain/types'
+import type { DayEvent, LocalDate, Task, Workspace } from '../domain/types'
+import { EventRows } from './event-rows'
 import { DateTag } from './date-tag'
 import { longLabel } from './dates'
 import { useWorkspace } from './use-day'
@@ -105,7 +106,7 @@ export function FutureDayPrompt({ date, children }: { date: LocalDate; children:
 }
 
 /** A future day opened by URL with no page yet (R7): no automatic creation, Create page plus what is planned. */
-export function FutureDayState({ date, today, tasks }: { date: LocalDate; today: LocalDate; tasks: Task[] }) {
+export function FutureDayState({ date, today, tasks, events, workspace }: { date: LocalDate; today: LocalDate; tasks: Task[]; events: DayEvent[]; workspace: Workspace }) {
   const { create, pending } = useCreateDay(date)
   return (
     <section className="future-day-state" aria-labelledby="future-day-heading">
@@ -114,6 +115,13 @@ export function FutureDayState({ date, today, tasks }: { date: LocalDate; today:
       <Button variant="primary" isPending={pending} onPress={() => void create()}>
         Create page
       </Button>
+      {/* B27 (Jazz b27-at-date-states §3b): the day's events, read without making its page (R7). */}
+      {events.length > 0 && (
+        <div className="future-day-events">
+          <h3>Events</h3>
+          <EventRows rows={events} page={null} workspace={workspace} pageEnd={false} />
+        </div>
+      )}
       {tasks.length > 0 && (
         <div className="future-day-planned">
           <h3>Planned or due this day</h3>

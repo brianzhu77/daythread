@@ -1,4 +1,4 @@
-import type { DayView, LocalDate, Task, Workspace } from '../domain/types'
+import type { DayEvent, DayView, LocalDate, Task, Workspace } from '../domain/types'
 import { shortLabel, taskDateTag } from './dates'
 import { Disclosure, RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
@@ -7,6 +7,9 @@ import { displayTitle } from './day-page'
 import { useNavigate } from '@tanstack/react-router'
 import { eveningPicks, isCardDraft, linkPageOf } from '../domain/workspace'
 import { displayPageTitle } from './page-title'
+import { rowTime } from './event-rows'
+import { CalendarIcon } from './icons'
+import { jumpToBlock } from './line-jump'
 
 interface Props {
   view: DayView
@@ -38,6 +41,7 @@ export function FactsStrip({ view, workspace, date, today, handoffCollapsed, han
 
   return (
     <div className="facts" aria-label="Facts for this day">
+      {isToday && view.events.length > 0 && <TodayEvents events={view.events} headingId={view.page?.sections.find(s => s.kind === 'events')?.id} />}
       {isToday && handoffCollapsed && (
         <button type="button" className="fact-line link-line" onClick={onReopenHandoff}>
           Suggestions · {handoffDrafting ? 'drafting…' : handoffCount} ▸
@@ -196,5 +200,26 @@ function RelatedLine({ view, workspace, date }: { view: DayView; workspace: Work
         )
       })}
     </div>
+  )
+}
+
+/**
+ * B27 (Jazz b27-at-date-states §3d): today's events as one fact line, first in the strip, so he sees them above the
+ * fold on the phone. The same list as the rows under Events; a tap jumps to those rows.
+ */
+function TodayEvents({ events, headingId }: { events: DayEvent[]; headingId?: string }) {
+  const named = events.slice(0, 2).map(e => `${e.title || 'Untitled event'}${e.time ? ` ${rowTime(e.time)}` : ''}`)
+  const parts = [...named, ...(events.length === 1 && !events[0]!.time ? ['All day'] : [])]
+  // Titles truncate; "+N more" stays readable at 390 (Jazz §3d).
+  const more = events.length > 2 ? `\u00a0· +${events.length - 2} more` : ''
+  // Every event may be a line under Events itself (no rows drawn): then the heading is where they are.
+  const jump = () => { const at = document.querySelector<HTMLElement>('.event-rows') ?? (headingId ? document.querySelector<HTMLElement>(`.bn-block-outer[data-id="${CSS.escape(headingId)}"]`) : null); if (at) jumpToBlock(at) }
+  return (
+    <button type="button" className="fact-line link-line today-events" onClick={jump}>
+      <span className="page-ref-icon" aria-hidden="true"><CalendarIcon /></span>
+      <span className="today-events-text">{parts.join(' · ')}</span>
+      {more && <span className="today-events-more">{more}</span>}
+      <span className="today-events-go">▸</span>
+    </button>
   )
 }

@@ -1376,3 +1376,8 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 .day-event-title { color: var(--ink); overflow-wrap: anywhere; }
 .day-event-title.is-untitled { color: var(--ink-3); }
 .day-event.is-here .day-event-title { color: var(--ink-2); }
+.future-day-events .event-rows-list { padding-left: 0; }
+.today-events { display: flex; align-items: center; min-width: 0; max-width: 100%; overflow: hidden; white-space: nowrap; }
+.today-events-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.today-events-more { flex: none; }
+.today-events-go { flex: none; margin-left: 0.3em; }

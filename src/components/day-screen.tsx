@@ -34,7 +34,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
       <div className="day-screen">
         <DayHeader date={date} today={today} />
         <div className="day-body">
-          <FutureDayState date={date} today={today} tasks={getCalendarTasks(workspace, date)} />
+          <FutureDayState date={date} today={today} tasks={getCalendarTasks(workspace, date)} events={view.events} workspace={workspace} />
         </div>
       </div>
     )

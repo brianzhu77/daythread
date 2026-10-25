@@ -42,8 +42,9 @@ import { RowMenu } from './row-menu'
 import { openedByTurnover } from './use-screen-today'
 import { fixedOffset, seenArea } from './fixed-coords'
 import { LineRefChip } from './line-ref-chip'
-import { ChipPageDate, DateChipInPage, EventRows, eventRows, refreshEventRows, rowsFor, type RowsAnchor } from './event-rows'
+import { ChipPageDate, DateChipInPage, EventRows, eventRows, pickerLabel, refreshEventRows, relativeDay, rowTime, rowsFor, type RowsAnchor } from './event-rows'
 import { dayEvents } from '../domain/chip-events'
+import { mayRead, readDate, type Reading } from '../domain/date-reading'
 import { mentionText } from '../domain/date-chip'
 import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
 
@@ -384,7 +385,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const moving = payload.cut && (cutTokens.has(payload.token) || localStorage.getItem(`daythread:cut:${payload.token}`) === JSON.stringify(payload.blocks))
         // A9a §1: a pasted copy's `[[` links are new references (new refIds); a cut-and-paste move keeps them. A task row
         // can't hold a link, so there it becomes the page's title as text.
-        const freshContent = (node: EditorNode): unknown => !Array.isArray(node.content) ? node.content : (node.content as { type?: string; props?: Record<string, string> }[]).map(c => c?.type !== 'pageRef' ? c
+        // B27: a pasted copy's `@date` chips are new events (new ids); a cut-and-paste move keeps them, as with links.
+        const freshContent = (node: EditorNode): unknown => !Array.isArray(node.content) ? node.content : (node.content as { type?: string; props?: Record<string, string> }[]).map(c => c?.type === 'dateMention' ? (moving ? c : { ...c, props: { ...c.props, eventId: crypto.randomUUID() } }) : c?.type !== 'pageRef' ? c
           : node.type === 'task' ? { type: 'text', text: c.props?.lineId ? lineRefView(latestWorkspace.current, { pageId: c.props.pageId ?? '', lineId: c.props.lineId, ...(c.props.taskId ? { taskId: c.props.taskId } : {}) }).resolved?.words ?? '' : pageRefView(latestWorkspace.current, c.props?.pageId ?? '', c.props?.newTitle || undefined).label, styles: {} }
           : moving ? c : { ...c, props: { ...c.props, refId: crypto.randomUUID() } })
         const fresh = (node: EditorNode): EditorNode => {
@@ -1220,10 +1222,14 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const menu = editor.getExtension(SuggestionMenu)
     if (!menu || menu.shown()) return
     const { selection } = editor.prosemirrorState
-    if (!selection.empty || !linkableLines.has(editor.getTextCursorPosition().block.type)) return
+    const lineType = editor.getTextCursorPosition().block.type
+    if (!selection.empty || !(linkableLines.has(lineType) || lineType === 'task')) return
     const $from = selection.$from
     const before = $from.parent.textBetween(Math.max(0, $from.parentOffset - 2), $from.parentOffset, undefined, '\ufffc')
-    const trigger = before === '[[' ? '[[' : before === '【【' ? '【【' : null
+    // B27 (plan §3): `@`/`＠` after a space, the line's start or any non-word character; never inside an email, a
+    // handle or a price (`a@b.com`, `x@y`, `$5@3`). A task row takes a date but not a `[[` link.
+    const at = /[@＠]$/.test(before) && !/[A-Za-z0-9._%+\-@＠]/.test(before.length > 1 ? before[0]! : '') ? before.at(-1)! : null
+    const trigger = at ?? (lineType === 'task' ? null : before === '[[' ? '[[' : before === '【【' ? '【【' : null)
     if (!trigger) { lastTrigger.current = -1; return }
     if (lastTrigger.current === selection.from) return
     lastTrigger.current = selection.from
@@ -1252,6 +1258,38 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const items = pages.map(p => ({ title: pageLabel(p), subtext: whereLabel(p), icon: pageRefView(ws, p.id).icon, onItemClick: () => chooseLink(trigger, query, p.id) }))
     if (q) items.push({ title: `New page "${query.trim()}"`, subtext: pages.length ? '' : `No page called ${query.trim()}`, icon: <PlusIcon />, onItemClick: () => chooseLink(trigger, query, crypto.randomUUID(), query.trim()) })
     return items
+  }
+  /** B27 (plan §3, Jazz b27-at-date-states §1): the `@` list. It reads against the page's date (today on a document page). */
+  function dateItems(query: string, trigger: string) {
+    const menu = editor.getExtension(SuggestionMenu)
+    const anchor = page.type === 'daily' && page.date ? page.date : todayIso()
+    // Nothing he could still be typing toward a date (`@brian`): the list closes and the text stays (Jazz §1).
+    if (!mayRead(query, anchor)) { queueMicrotask(() => menu?.closeMenu()); return [] }
+    const today = todayIso(), pageDate = page.type === 'daily' ? page.date ?? null : null
+    const item = (reading: Reading, badge: string) => ({ title: pickerLabel(reading.date, pageDate ?? today), badge, onItemClick: () => chooseDate(trigger, query, reading) })
+    const reading = query ? readDate(query, anchor) : null
+    if (reading) return [item(reading, reading.time ? rowTime(reading.time) : 'All day')]
+    if (!query) return [0, 1, 2, 3].map(i => addDays(anchor, i)).map(date => item({ date, time: null, used: 0 }, relativeDay(date, today)))
+    // On its way to a date (`Nov`, `11/`): a quiet row, so Return doesn't fall through; it closes the list.
+    return [{ title: 'Keep typing a date', subtext: 'Nov 20 · Fri · 3pm', onItemClick: () => menu?.closeMenu() }]
+  }
+  /** `@query` becomes the chip, as one editor step; whatever of the query the reading didn't use stays as text. */
+  function chooseDate(trigger: string, query: string, reading: Reading) {
+    editor.getExtension(SuggestionMenu)?.closeMenu()
+    const { $from } = editor.prosemirrorState.selection, to = $from.pos
+    const before = $from.parent.textBetween(0, $from.parentOffset, undefined, '\ufffc')
+    const typed = before.endsWith(trigger + query) ? trigger.length + query.length : before.endsWith(trigger) ? trigger.length : 0
+    const rest = query.slice(reading.used)
+    const view = editor.prosemirrorView, schema = view.state.schema
+    const node = schema.nodes.dateMention!.create({ eventId: crypto.randomUUID(), date: reading.date, time: reading.time ?? '' })
+    const next = view.state.doc.textBetween(to, Math.min(to + 1, view.state.selection.$from.end()), undefined, '\ufffc')
+    // The rest he typed comes back after the chip when the menu had already cleared it; a space follows the chip.
+    const tail = typed === trigger.length + query.length ? rest : ''
+    const after = tail ? (/^\s/.test(tail) ? tail : ` ${tail}`) : next && /\s/.test(next) ? '' : ' '
+    const tr = view.state.tr.replaceWith(to - typed, to, after ? [node, schema.text(after)] : node)
+    const caret = to - typed + node.nodeSize + (tail ? after.length : after ? 1 : 0)
+    view.dispatch(tr.setSelection(TextSelection.create(tr.doc, caret)).scrollIntoView())
+    lastTrigger.current = -1
   }
   /** §4: `[[query` becomes the link, as one editor step. A new page is made under this one, like `/page`. */
   function chooseLink(trigger: string, query: string, pageId: string, newTitle?: string) {
@@ -1995,13 +2033,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       }
       if (e.key === ' ' && !e.nativeEvent.isComposing && editor.getTextCursorPosition().block.type === 'task' && /^(?:#{1,3}|[-*>]|1\.|\[\])$/.test(editor.prosemirrorState.selection.$from.parent.textBetween(0, editor.prosemirrorState.selection.$from.parentOffset))) { e.preventDefault(); editor.insertInlineContent(' '); return }
 
-      if (e.key === 'Enter' && !e.nativeEvent.isComposing && editor.getTextCursorPosition().block.type === 'task' && editor.prosemirrorState.selection.empty) {
+      // An open `@` list takes Return itself (B27): it makes the chip.
+      if (e.key === 'Enter' && !e.nativeEvent.isComposing && editor.getTextCursorPosition().block.type === 'task' && editor.prosemirrorState.selection.empty && !editor.getExtension(SuggestionMenu)?.shown()) {
         e.preventDefault(); e.stopPropagation()
         const block = editor.getTextCursorPosition().block
         const parent = editor.prosemirrorState.selection.$from.parent
         const offset = editor.prosemirrorState.selection.$from.parentOffset
-        const left = parent.textBetween(0, offset), right = parent.textBetween(offset, parent.content.size)
-        if (!parent.textContent) { editor.updateBlock(block.id, { type: 'paragraph', content: '' }); return }
+        // Each half keeps its words and its `@date` chips (B27); other marks go, as before.
+        const half = (from: number, to: number) => { const out: unknown[] = []; parent.content.cut(from, to).forEach(n => { if (n.isText) out.push({ type: 'text', text: n.text, styles: {} }); else if (n.type.name === 'dateMention') out.push({ type: 'dateMention', props: { ...n.attrs } }) }); return out }
+        const left = half(0, offset), right = half(offset, parent.content.size)
+        if (!parent.childCount) { editor.updateBlock(block.id, { type: 'paragraph', content: '' }); return }
         const id = crypto.randomUUID()
         editor.transact(() => {
           editor.updateBlock(block.id, { content: left } as never)
@@ -2093,6 +2134,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}
       {['[[', '【【'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} shouldOpen={() => false} getItems={async query => linkItems(query, trigger)} onItemClick={item => item.onItemClick()} />)}
+      {['@', '＠'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} shouldOpen={() => false} getItems={async query => dateItems(query, trigger)} onItemClick={item => item.onItemClick()} />)}
       {hoverPointer && <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />}
       {(hoverPointer || linkTapped) && <LinkToolbarController />}
     </BlockNoteView>
