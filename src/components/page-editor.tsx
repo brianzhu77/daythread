@@ -1591,6 +1591,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const form = [...document.querySelectorAll('[data-slot="popover-content"]')].find(p => p.getBoundingClientRect().height && p.querySelector('input'))
       const bar = phoneToolbar.current?.getBoundingClientRect()
       if (!form || !bar?.height) return
+      // Return saves this form (its OK is a screen-reader-only button), so the keyboard's key says "done" (Bumblebee).
+      form.querySelectorAll('input').forEach(input => { input.enterKeyHint = 'done' })
       const overlap = form.getBoundingClientRect().bottom + 8 - bar.top
       if (overlap > 0) window.scrollBy(0, overlap)
     })

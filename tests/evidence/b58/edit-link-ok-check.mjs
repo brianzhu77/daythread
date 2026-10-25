@@ -46,6 +46,7 @@ try {
   assert.ok(form && toolbar, `form and toolbar measured ${JSON.stringify({ form, toolbar })}`)
   assert.ok(form.bottom <= toolbar.top, `the URL form ends above the toolbar (form ${form.bottom}, toolbar ${toolbar.top})`)
   const url = page.locator('[data-slot="popover-content"] input:visible').first()
+  assert.deepEqual(await page.locator('[data-slot="popover-content"] input:visible').evaluateAll(xs => xs.map(x => x.enterKeyHint)), ['done', 'done'], 'the keyboard key reads "done" in both fields')
   await url.fill(NEW); await settle()
   // BlockNote's form has no visible OK: its "OK" is a 1 px screen-reader submit (bn-screen-reader-only-submit), and
   // Return saves, on desktop and on the phone's keyboard alike.
