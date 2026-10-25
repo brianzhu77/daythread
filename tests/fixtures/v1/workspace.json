@@ -1,0 +1,1904 @@
+{
+ "schemaVersion": 1,
+ "revision": 27,
+ "timezone": "America/Vancouver",
+ "pages": [
+  {
+   "id": "day:2026-10-20",
+   "type": "daily",
+   "date": "2026-10-20",
+   "title": "2026-10-20",
+   "reviewText": "",
+   "reviewSaved": false,
+   "handoffDone": false,
+   "draft": null,
+   "sections": [
+    {
+     "id": "day:2026-10-20:top3",
+     "kind": "top3",
+     "title": "TODO - Top 3",
+     "blocks": [
+      {
+       "id": "786d63d5-54cc-47de-83be-4fc496aa2f45",
+       "kind": "task",
+       "taskId": "c5483035-f4a7-4b69-a2d2-8c92513d4514",
+       "text": "Finished on Monday"
+      }
+     ]
+    },
+    {
+     "id": "day:2026-10-20:other",
+     "kind": "other",
+     "title": "TODO - Other",
+     "blocks": []
+    },
+    {
+     "id": "day:2026-10-20:events",
+     "kind": "events",
+     "title": "Events",
+     "blocks": [
+      {
+       "id": "e3bd0b37-65ad-426d-8a8f-c47df897a92f",
+       "kind": "event",
+       "eventId": "20114176-c6c1-4230-bbf2-2b15c6402dee",
+       "text": "Dentist"
+      }
+     ]
+    },
+    {
+     "id": "day:2026-10-20:good-stuffs",
+     "kind": "good-stuffs",
+     "title": "Good Stuffs",
+     "blocks": [
+      {
+       "id": "c705fe59-99a0-45e1-ac82-0b68bfad96dc",
+       "kind": "material",
+       "materialId": "eaa1e006-3037-4847-b46a-642da04da9af",
+       "text": "https://www.inkandswitch.com/local-first/"
+      }
+     ]
+    },
+    {
+     "id": "day:2026-10-20:notes",
+     "kind": "notes",
+     "title": "Notes",
+     "blocks": [
+      {
+       "id": "1e1bf6c4-53b7-4f50-a2c7-3cc35580a776",
+       "kind": "paragraph",
+       "text": "Idea #rewind: keep the daily loop"
+      }
+     ]
+    }
+   ],
+   "editorBlockMetadata": {
+    "786d63d5-54cc-47de-83be-4fc496aa2f45": {
+     "id": "786d63d5-54cc-47de-83be-4fc496aa2f45",
+     "kind": "task",
+     "taskId": "c5483035-f4a7-4b69-a2d2-8c92513d4514",
+     "text": "Finished on Monday"
+    },
+    "6808b19a-b3fa-47a3-9143-af1839f0f90d": {
+     "id": "6808b19a-b3fa-47a3-9143-af1839f0f90d",
+     "kind": "task",
+     "taskId": "27a9e39c-06d0-4970-a5f3-2ed1501f5ce1",
+     "text": "Set aside later"
+    }
+   }
+  },
+  {
+   "id": "R",
+   "type": "document",
+   "date": null,
+   "title": "Korean soup",
+   "sections": [
+    {
+     "id": "eb5875e9-3c6e-4bf8-b52f-9046ef6541ac",
+     "kind": "notes",
+     "title": "Notes",
+     "blocks": [
+      {
+       "id": "4e17b2bb-3304-4b35-9b50-c94360ca3b23",
+       "kind": "paragraph",
+       "text": "Recipe notes"
+      }
+     ]
+    }
+   ],
+   "reviewText": "",
+   "reviewSaved": false,
+   "handoffDone": false,
+   "draft": null
+  },
+  {
+   "id": "R-child",
+   "type": "document",
+   "date": null,
+   "title": "Sub of soup",
+   "parentId": "R",
+   "sections": [
+    {
+     "id": "intro:R-child",
+     "kind": "custom",
+     "title": "",
+     "blocks": [
+      {
+       "id": "4594d29b-31ec-4fb9-8e5a-6857abaadfe5",
+       "kind": "paragraph",
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "reviewText": "",
+   "reviewSaved": false,
+   "handoffDone": false,
+   "draft": null
+  },
+  {
+   "id": "T",
+   "type": "document",
+   "date": null,
+   "title": "To be trashed",
+   "sections": [
+    {
+     "id": "222a859a-d537-4ce6-a0a9-25059428082e",
+     "kind": "notes",
+     "title": "Notes",
+     "blocks": [
+      {
+       "id": "dbd1c1d2-2262-475b-86d7-709673f7599d",
+       "kind": "paragraph",
+       "text": "gone"
+      }
+     ]
+    }
+   ],
+   "reviewText": "",
+   "reviewSaved": false,
+   "handoffDone": false,
+   "draft": null,
+   "trashedAt": "2026-10-21T20:00:00.000Z",
+   "trashId": "fx-16"
+  },
+  {
+   "id": "day:2026-10-21",
+   "type": "daily",
+   "date": "2026-10-21",
+   "title": "2026-10-21",
+   "reviewText": "",
+   "reviewSaved": true,
+   "handoffDone": false,
+   "draft": null,
+   "sections": [
+    {
+     "id": "day:2026-10-21:top3",
+     "kind": "top3",
+     "title": "TODO - Top 3",
+     "blocks": [
+      {
+       "id": "p1",
+       "kind": "task",
+       "taskId": "editor-task:p1",
+       "text": "Parent task",
+       "planRole": "plan"
+      },
+      {
+       "id": "c1",
+       "kind": "task",
+       "taskId": "editor-task:c1",
+       "text": "Child task",
+       "planRole": "plan"
+      }
+     ]
+    },
+    {
+     "id": "day:2026-10-21:other",
+     "kind": "other",
+     "title": "TODO - Other",
+     "blocks": [
+      {
+       "id": "o1",
+       "kind": "task",
+       "taskId": "editor-task:o1",
+       "text": "Other one",
+       "planRole": "plan"
+      },
+      {
+       "id": "o2",
+       "kind": "task",
+       "taskId": "editor-task:o2",
+       "text": "Other two with deadline",
+       "planRole": "plan"
+      }
+     ]
+    },
+    {
+     "id": "day:2026-10-21:events",
+     "kind": "events",
+     "title": "Events",
+     "blocks": []
+    },
+    {
+     "id": "day:2026-10-21:good-stuffs",
+     "kind": "good-stuffs",
+     "title": "Good Stuffs",
+     "blocks": [
+      {
+       "id": "card-1",
+       "kind": "reference",
+       "targetPageId": "L1",
+       "text": "An article",
+       "at": 15
+      }
+     ]
+    },
+    {
+     "id": "day:2026-10-21:notes",
+     "kind": "notes",
+     "title": "Notes",
+     "blocks": [
+      {
+       "id": "n-chip",
+       "kind": "paragraph",
+       "text": "Call about the roof @Oct 23 9:30am"
+      },
+      {
+       "id": "n-ref",
+       "kind": "paragraph",
+       "text": "see Korean soup for dinner #cook",
+       "refs": [
+        {
+         "refId": "ref-1",
+         "pageId": "R",
+         "at": 13,
+         "title": "Korean soup"
+        }
+       ]
+      },
+      {
+       "id": "n-card",
+       "kind": "reference",
+       "targetPageId": "T",
+       "text": "To be trashed",
+       "at": 13
+      }
+     ]
+    }
+   ],
+   "editorBlockMetadata": {
+    "heading:day:2026-10-21:top3": {
+     "id": "heading:day:2026-10-21:top3",
+     "kind": "paragraph",
+     "text": "TODO - Top 3",
+     "sectionKind": "top3"
+    },
+    "heading:day:2026-10-21:other": {
+     "id": "heading:day:2026-10-21:other",
+     "kind": "paragraph",
+     "text": "TODO - Other",
+     "sectionKind": "other"
+    },
+    "heading:day:2026-10-21:events": {
+     "id": "heading:day:2026-10-21:events",
+     "kind": "paragraph",
+     "text": "Events",
+     "sectionKind": "events"
+    },
+    "heading:day:2026-10-21:good-stuffs": {
+     "id": "heading:day:2026-10-21:good-stuffs",
+     "kind": "paragraph",
+     "text": "Good Stuffs",
+     "sectionKind": "good-stuffs"
+    },
+    "heading:day:2026-10-21:notes": {
+     "id": "heading:day:2026-10-21:notes",
+     "kind": "paragraph",
+     "text": "Notes",
+     "sectionKind": "notes"
+    },
+    "696a4745-7cc8-4d82-b6fa-299f71aeaea2": {
+     "id": "696a4745-7cc8-4d82-b6fa-299f71aeaea2",
+     "kind": "task",
+     "taskId": "editor-task:p1",
+     "text": "Parent task"
+    },
+    "c519aacc-b9eb-45f6-8c78-ae59d254f211": {
+     "id": "c519aacc-b9eb-45f6-8c78-ae59d254f211",
+     "kind": "task",
+     "taskId": "editor-task:c1",
+     "text": "Child task"
+    },
+    "14721f82-5c0f-484c-87cd-8ca9b3475227": {
+     "id": "14721f82-5c0f-484c-87cd-8ca9b3475227",
+     "kind": "task",
+     "taskId": "editor-task:o1",
+     "text": "Other one"
+    },
+    "d4b904e9-7741-4f3d-b65b-300996036e7c": {
+     "id": "d4b904e9-7741-4f3d-b65b-300996036e7c",
+     "kind": "task",
+     "taskId": "editor-task:o2",
+     "text": "Other two with deadline"
+    },
+    "p1": {
+     "id": "p1",
+     "kind": "task",
+     "taskId": "editor-task:p1",
+     "text": "Parent task",
+     "planRole": "plan",
+     "seen": 15
+    },
+    "c1": {
+     "id": "c1",
+     "kind": "task",
+     "taskId": "editor-task:c1",
+     "text": "Child task",
+     "planRole": "plan",
+     "seen": 15
+    },
+    "o1": {
+     "id": "o1",
+     "kind": "task",
+     "taskId": "editor-task:o1",
+     "text": "Other one",
+     "planRole": "plan",
+     "seen": 15
+    },
+    "o2": {
+     "id": "o2",
+     "kind": "task",
+     "taskId": "editor-task:o2",
+     "text": "Other two with deadline",
+     "planRole": "plan",
+     "seen": 15
+    },
+    "paste:card-1": {
+     "id": "paste:card-1",
+     "kind": "reference",
+     "text": "https://example.com/article",
+     "linkPaste": {
+      "operationId": "fx-14",
+      "cardBlockId": "card-1",
+      "url": "https://example.com/article",
+      "lineType": "paragraph",
+      "on": "2026-10-21",
+      "outcome": "made",
+      "pageId": "L1",
+      "refsBefore": [],
+      "title": "An article",
+      "materialId": "material:card-1",
+      "materialCreated": true
+     }
+    },
+    "n-chip": {
+     "id": "n-chip",
+     "kind": "paragraph",
+     "text": "Call about the roof @Oct 23 9:30am"
+    },
+    "n-ref": {
+     "id": "n-ref",
+     "kind": "paragraph",
+     "text": "see Korean soup for dinner #cook",
+     "refs": [
+      {
+       "refId": "ref-1",
+       "pageId": "R",
+       "at": 13,
+       "title": "Korean soup"
+      }
+     ]
+    },
+    "n-card": {
+     "id": "n-card",
+     "kind": "reference",
+     "targetPageId": "T",
+     "text": "To be trashed",
+     "at": 13
+    }
+   },
+   "editorCreations": {
+    "p1": "editor-task:p1",
+    "c1": "editor-task:c1",
+    "o1": "editor-task:o1",
+    "o2": "editor-task:o2"
+   },
+   "editorJSON": "[{\"id\":\"day:2026-10-21:top3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"TODO - Top 3\"},{\"id\":\"p1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:p1\",\"role\":\"plan\",\"planDate\":\"2026-10-21\"},\"content\":[{\"type\":\"text\",\"text\":\"Parent task\",\"styles\":{}}],\"children\":[{\"id\":\"c1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c1\",\"role\":\"plan\",\"planDate\":\"2026-10-21\"},\"content\":[{\"type\":\"text\",\"text\":\"Child task\",\"styles\":{}}],\"children\":[]}]},{\"id\":\"day:2026-10-21:other\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"TODO - Other\"},{\"id\":\"o1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:o1\",\"role\":\"plan\",\"planDate\":\"2026-10-21\"},\"content\":[{\"type\":\"text\",\"text\":\"Other one\",\"styles\":{}}],\"children\":[]},{\"id\":\"o2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:o2\",\"role\":\"plan\",\"planDate\":\"2026-10-21\"},\"content\":[{\"type\":\"text\",\"text\":\"Other two with deadline\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-21:events\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"Events\"},{\"id\":\"day:2026-10-21:good-stuffs\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"Good Stuffs\"},{\"id\":\"card-1\",\"type\":\"pageLink\",\"props\":{\"pageId\":\"L1\",\"url\":\"https://example.com/article\"}},{\"id\":\"day:2026-10-21:notes\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"Notes\"},{\"id\":\"n-chip\",\"type\":\"bulletListItem\",\"content\":[{\"type\":\"text\",\"text\":\"Call about the roof \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"ev-roof\",\"date\":\"2026-10-23\",\"time\":\"09:30\"}}]},{\"id\":\"n-ref\",\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"see \",\"styles\":{}},{\"type\":\"pageRef\",\"props\":{\"pageId\":\"R\",\"refId\":\"ref-1\"}},{\"type\":\"text\",\"text\":\" for dinner #cook\",\"styles\":{}}]},{\"id\":\"n-card\",\"type\":\"pageLink\",\"props\":{\"pageId\":\"T\"}}]",
+   "templateApplied": true,
+   "editorSections": "[{\"id\":\"day:2026-10-21:top3\",\"kind\":\"top3\",\"title\":\"TODO - Top 3\",\"blocks\":[{\"id\":\"p1\",\"kind\":\"task\",\"taskId\":\"editor-task:p1\",\"text\":\"Parent task\",\"planRole\":\"plan\"},{\"id\":\"c1\",\"kind\":\"task\",\"taskId\":\"editor-task:c1\",\"text\":\"Child task\",\"planRole\":\"plan\"}]},{\"id\":\"day:2026-10-21:other\",\"kind\":\"other\",\"title\":\"TODO - Other\",\"blocks\":[{\"id\":\"o1\",\"kind\":\"task\",\"taskId\":\"editor-task:o1\",\"text\":\"Other one\",\"planRole\":\"plan\"},{\"id\":\"o2\",\"kind\":\"task\",\"taskId\":\"editor-task:o2\",\"text\":\"Other two with deadline\",\"planRole\":\"plan\"}]},{\"id\":\"day:2026-10-21:events\",\"kind\":\"events\",\"title\":\"Events\",\"blocks\":[]},{\"id\":\"day:2026-10-21:good-stuffs\",\"kind\":\"good-stuffs\",\"title\":\"Good Stuffs\",\"blocks\":[{\"id\":\"card-1\",\"kind\":\"reference\",\"targetPageId\":\"L1\",\"text\":\"An article\",\"at\":15}]},{\"id\":\"day:2026-10-21:notes\",\"kind\":\"notes\",\"title\":\"Notes\",\"blocks\":[{\"id\":\"n-chip\",\"kind\":\"paragraph\",\"text\":\"Call about the roof @Oct 23 9:30am\"},{\"id\":\"n-ref\",\"kind\":\"paragraph\",\"text\":\"see Korean soup for dinner #cook\",\"refs\":[{\"refId\":\"ref-1\",\"pageId\":\"R\",\"at\":13,\"title\":\"Korean soup\"}]},{\"id\":\"n-card\",\"kind\":\"reference\",\"targetPageId\":\"T\",\"text\":\"To be trashed\",\"at\":13}]}]"
+  },
+  {
+   "id": "L1",
+   "type": "document",
+   "date": null,
+   "title": "An article",
+   "url": "https://example.com/article",
+   "parentId": "day:2026-10-21",
+   "sections": [
+    {
+     "id": "intro:L1",
+     "kind": "custom",
+     "title": "",
+     "blocks": [
+      {
+       "id": "d3498158-5303-49a8-8d3a-757eadc04b32",
+       "kind": "paragraph",
+       "text": ""
+      }
+     ]
+    }
+   ],
+   "reviewText": "",
+   "reviewSaved": false,
+   "handoffDone": false,
+   "draft": null
+  },
+  {
+   "id": "day:2026-10-22",
+   "type": "daily",
+   "date": "2026-10-22",
+   "title": "2026-10-22",
+   "reviewText": "",
+   "reviewSaved": false,
+   "handoffDone": true,
+   "draft": null,
+   "sections": [
+    {
+     "id": "day:2026-10-22:top3",
+     "kind": "top3",
+     "title": "TODO - Top 3",
+     "blocks": [
+      {
+       "id": "69a5b9a9-9542-4b8a-aac5-7a1de9eca6f0",
+       "kind": "task",
+       "taskId": "editor-task:p1",
+       "text": "Parent task"
+      },
+      {
+       "id": "02e6ddee-bdb7-4abe-a351-c331f9b8298a",
+       "kind": "task",
+       "taskId": "editor-task:c1",
+       "text": "Child task"
+      }
+     ]
+    },
+    {
+     "id": "day:2026-10-22:other",
+     "kind": "other",
+     "title": "TODO - Other",
+     "blocks": [
+      {
+       "id": "664c916e-2ba4-43a2-9671-d18f97f54ea5",
+       "kind": "task",
+       "taskId": "69cbf92f-05dd-4484-a682-5597e2e1aa47",
+       "text": "Due Friday"
+      },
+      {
+       "id": "7a4863e3-5967-4065-8630-f8e24a36771a",
+       "kind": "task",
+       "taskId": "72eb3047-01a2-4df3-a84d-8b2ecf764b37",
+       "text": "Starts Thursday"
+      }
+     ]
+    },
+    {
+     "id": "day:2026-10-22:events",
+     "kind": "events",
+     "title": "Events",
+     "blocks": []
+    },
+    {
+     "id": "day:2026-10-22:good-stuffs",
+     "kind": "good-stuffs",
+     "title": "Good Stuffs",
+     "blocks": []
+    },
+    {
+     "id": "day:2026-10-22:notes",
+     "kind": "notes",
+     "title": "Notes",
+     "blocks": []
+    }
+   ],
+   "editorBlockMetadata": {
+    "664c916e-2ba4-43a2-9671-d18f97f54ea5": {
+     "id": "664c916e-2ba4-43a2-9671-d18f97f54ea5",
+     "kind": "task",
+     "taskId": "69cbf92f-05dd-4484-a682-5597e2e1aa47",
+     "text": "Due Friday"
+    },
+    "7a4863e3-5967-4065-8630-f8e24a36771a": {
+     "id": "7a4863e3-5967-4065-8630-f8e24a36771a",
+     "kind": "task",
+     "taskId": "72eb3047-01a2-4df3-a84d-8b2ecf764b37",
+     "text": "Starts Thursday"
+    },
+    "d2a9961b-bd1d-41d0-8a97-bf9eba915146": {
+     "id": "d2a9961b-bd1d-41d0-8a97-bf9eba915146",
+     "kind": "task",
+     "taskId": "97183287-d55a-4b59-aa82-ca4c12c96273",
+     "text": "Planned for Thursday"
+    },
+    "2390f34d-5884-45aa-b8c7-aa719a4235aa": {
+     "id": "2390f34d-5884-45aa-b8c7-aa719a4235aa",
+     "kind": "task",
+     "taskId": "b1d9975d-1af4-4cc6-895e-6f34fa1e9a0b",
+     "text": "Planned for Saturday"
+    },
+    "69a5b9a9-9542-4b8a-aac5-7a1de9eca6f0": {
+     "id": "69a5b9a9-9542-4b8a-aac5-7a1de9eca6f0",
+     "kind": "task",
+     "taskId": "editor-task:p1",
+     "text": "Parent task"
+    },
+    "02e6ddee-bdb7-4abe-a351-c331f9b8298a": {
+     "id": "02e6ddee-bdb7-4abe-a351-c331f9b8298a",
+     "kind": "task",
+     "taskId": "editor-task:c1",
+     "text": "Child task"
+    }
+   },
+   "editorJSON": "[{\"id\":\"day:2026-10-22:top3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"TODO - Top 3\"},{\"id\":\"69a5b9a9-9542-4b8a-aac5-7a1de9eca6f0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:p1\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":\"Parent task\",\"children\":[{\"id\":\"02e6ddee-bdb7-4abe-a351-c331f9b8298a\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c1\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":\"Child task\"}]},{\"id\":\"day:2026-10-22:other\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"TODO - Other\"},{\"id\":\"664c916e-2ba4-43a2-9671-d18f97f54ea5\",\"type\":\"task\",\"props\":{\"taskId\":\"69cbf92f-05dd-4484-a682-5597e2e1aa47\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":\"Due Friday\"},{\"id\":\"7a4863e3-5967-4065-8630-f8e24a36771a\",\"type\":\"task\",\"props\":{\"taskId\":\"72eb3047-01a2-4df3-a84d-8b2ecf764b37\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":\"Starts Thursday\"},{\"id\":\"day:2026-10-22:events\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"Events\"},{\"id\":\"day:2026-10-22:good-stuffs\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"Good Stuffs\"},{\"id\":\"day:2026-10-22:notes\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"Notes\"}]"
+  },
+  {
+   "id": "day:2026-10-24",
+   "type": "daily",
+   "date": "2026-10-24",
+   "title": "2026-10-24",
+   "reviewText": "",
+   "reviewSaved": false,
+   "handoffDone": false,
+   "draft": null,
+   "sections": [
+    {
+     "id": "day:2026-10-24:top3",
+     "kind": "top3",
+     "title": "TODO - Top 3",
+     "blocks": []
+    },
+    {
+     "id": "day:2026-10-24:other",
+     "kind": "other",
+     "title": "TODO - Other",
+     "blocks": [
+      {
+       "id": "6d136d60-f95e-4d84-aa61-b3f43779e654",
+       "kind": "task",
+       "taskId": "b1d9975d-1af4-4cc6-895e-6f34fa1e9a0b",
+       "text": "Planned for Saturday"
+      }
+     ]
+    },
+    {
+     "id": "day:2026-10-24:events",
+     "kind": "events",
+     "title": "Events",
+     "blocks": []
+    },
+    {
+     "id": "day:2026-10-24:good-stuffs",
+     "kind": "good-stuffs",
+     "title": "Good Stuffs",
+     "blocks": []
+    },
+    {
+     "id": "day:2026-10-24:notes",
+     "kind": "notes",
+     "title": "Notes",
+     "blocks": []
+    }
+   ],
+   "editorBlockMetadata": {
+    "6d136d60-f95e-4d84-aa61-b3f43779e654": {
+     "id": "6d136d60-f95e-4d84-aa61-b3f43779e654",
+     "kind": "task",
+     "taskId": "b1d9975d-1af4-4cc6-895e-6f34fa1e9a0b",
+     "text": "Planned for Saturday"
+    }
+   }
+  }
+ ],
+ "tasks": [
+  {
+   "id": "c5483035-f4a7-4b69-a2d2-8c92513d4514",
+   "title": "Finished on Monday",
+   "status": "done",
+   "version": 3,
+   "plannedOn": "2026-10-20",
+   "attentionOn": null,
+   "deadlineOn": null,
+   "paused": false,
+   "createdOn": "2026-10-20",
+   "lastPlannedOn": "2026-10-20",
+   "sourcePageId": "day:2026-10-20",
+   "doneOn": "2026-10-20"
+  },
+  {
+   "id": "27a9e39c-06d0-4970-a5f3-2ed1501f5ce1",
+   "title": "Set aside later",
+   "status": "open",
+   "version": 3,
+   "plannedOn": null,
+   "attentionOn": null,
+   "deadlineOn": null,
+   "paused": true,
+   "createdOn": "2026-10-20",
+   "lastPlannedOn": "2026-10-20",
+   "sourcePageId": "day:2026-10-20"
+  },
+  {
+   "id": "editor-task:p1",
+   "title": "Parent task",
+   "status": "open",
+   "version": 3,
+   "plannedOn": "2026-10-22",
+   "attentionOn": null,
+   "deadlineOn": null,
+   "paused": false,
+   "createdOn": "2026-10-21",
+   "lastPlannedOn": "2026-10-22",
+   "sourcePageId": "day:2026-10-21"
+  },
+  {
+   "id": "editor-task:c1",
+   "title": "Child task",
+   "status": "open",
+   "version": 3,
+   "plannedOn": "2026-10-22",
+   "attentionOn": null,
+   "deadlineOn": null,
+   "paused": false,
+   "createdOn": "2026-10-21",
+   "lastPlannedOn": "2026-10-22",
+   "sourcePageId": "day:2026-10-21"
+  },
+  {
+   "id": "editor-task:o1",
+   "title": "Other one",
+   "status": "open",
+   "version": 2,
+   "plannedOn": "2026-10-21",
+   "attentionOn": null,
+   "deadlineOn": null,
+   "paused": false,
+   "createdOn": "2026-10-21",
+   "lastPlannedOn": "2026-10-21",
+   "sourcePageId": "day:2026-10-21"
+  },
+  {
+   "id": "editor-task:o2",
+   "title": "Other two with deadline",
+   "status": "open",
+   "version": 2,
+   "plannedOn": "2026-10-21",
+   "attentionOn": null,
+   "deadlineOn": null,
+   "paused": false,
+   "createdOn": "2026-10-21",
+   "lastPlannedOn": "2026-10-21",
+   "sourcePageId": "day:2026-10-21"
+  },
+  {
+   "id": "69cbf92f-05dd-4484-a682-5597e2e1aa47",
+   "title": "Due Friday",
+   "status": "open",
+   "version": 2,
+   "plannedOn": "2026-10-22",
+   "attentionOn": null,
+   "deadlineOn": "2026-10-24",
+   "paused": false,
+   "createdOn": "2026-10-22",
+   "lastPlannedOn": "2026-10-22",
+   "sourcePageId": "day:2026-10-22"
+  },
+  {
+   "id": "72eb3047-01a2-4df3-a84d-8b2ecf764b37",
+   "title": "Starts Thursday",
+   "status": "open",
+   "version": 1,
+   "plannedOn": null,
+   "attentionOn": "2026-10-23",
+   "deadlineOn": null,
+   "paused": false,
+   "createdOn": "2026-10-22",
+   "lastPlannedOn": null,
+   "sourcePageId": "day:2026-10-22"
+  },
+  {
+   "id": "97183287-d55a-4b59-aa82-ca4c12c96273",
+   "title": "Planned for Thursday",
+   "status": "open",
+   "version": 3,
+   "plannedOn": "2026-10-23",
+   "attentionOn": null,
+   "deadlineOn": null,
+   "paused": false,
+   "createdOn": "2026-10-22",
+   "lastPlannedOn": "2026-10-23",
+   "sourcePageId": "day:2026-10-22"
+  },
+  {
+   "id": "b1d9975d-1af4-4cc6-895e-6f34fa1e9a0b",
+   "title": "Planned for Saturday",
+   "status": "open",
+   "version": 3,
+   "plannedOn": "2026-10-24",
+   "attentionOn": null,
+   "deadlineOn": null,
+   "paused": false,
+   "createdOn": "2026-10-22",
+   "lastPlannedOn": "2026-10-24",
+   "sourcePageId": "day:2026-10-22"
+  }
+ ],
+ "events": [
+  {
+   "id": "20114176-c6c1-4230-bbf2-2b15c6402dee",
+   "title": "Dentist",
+   "date": "2026-10-20",
+   "time": "15:00",
+   "cancelled": false
+  }
+ ],
+ "placements": [
+  {
+   "taskId": "c5483035-f4a7-4b69-a2d2-8c92513d4514",
+   "date": "2026-10-20",
+   "state": "included",
+   "section": "top3"
+  },
+  {
+   "taskId": "27a9e39c-06d0-4970-a5f3-2ed1501f5ce1",
+   "date": "2026-10-20",
+   "state": "excluded",
+   "section": "other"
+  },
+  {
+   "taskId": "editor-task:p1",
+   "date": "2026-10-21",
+   "state": "moved",
+   "section": "other",
+   "order": 0
+  },
+  {
+   "taskId": "editor-task:c1",
+   "date": "2026-10-21",
+   "state": "moved",
+   "section": "other",
+   "order": 1
+  },
+  {
+   "taskId": "editor-task:o1",
+   "date": "2026-10-21",
+   "state": "included",
+   "section": "other",
+   "order": 2
+  },
+  {
+   "taskId": "editor-task:o2",
+   "date": "2026-10-21",
+   "state": "included",
+   "section": "other",
+   "order": 3
+  },
+  {
+   "taskId": "69cbf92f-05dd-4484-a682-5597e2e1aa47",
+   "date": "2026-10-22",
+   "state": "included",
+   "section": "other"
+  },
+  {
+   "taskId": "97183287-d55a-4b59-aa82-ca4c12c96273",
+   "date": "2026-10-22",
+   "state": "moved",
+   "section": "other"
+  },
+  {
+   "taskId": "97183287-d55a-4b59-aa82-ca4c12c96273",
+   "date": "2026-10-23",
+   "state": "included",
+   "section": "other"
+  },
+  {
+   "taskId": "b1d9975d-1af4-4cc6-895e-6f34fa1e9a0b",
+   "date": "2026-10-22",
+   "state": "moved",
+   "section": "other"
+  },
+  {
+   "taskId": "b1d9975d-1af4-4cc6-895e-6f34fa1e9a0b",
+   "date": "2026-10-24",
+   "state": "included",
+   "section": "other"
+  },
+  {
+   "taskId": "editor-task:p1",
+   "date": "2026-10-22",
+   "state": "included",
+   "section": "top3"
+  },
+  {
+   "taskId": "editor-task:c1",
+   "date": "2026-10-22",
+   "state": "included",
+   "section": "top3"
+  }
+ ],
+ "materials": [
+  {
+   "id": "eaa1e006-3037-4847-b46a-642da04da9af",
+   "url": "https://www.inkandswitch.com/local-first/",
+   "title": "https://www.inkandswitch.com/local-first/",
+   "body": "",
+   "savedOn": "2026-10-20",
+   "reviewState": "pending",
+   "nextReviewOn": null,
+   "resurface": true,
+   "lastDecisionOn": null,
+   "skippedUntil": null,
+   "sources": [
+    {
+     "pageId": "day:2026-10-20",
+     "blockId": "c705fe59-99a0-45e1-ac82-0b68bfad96dc",
+     "note": ""
+    }
+   ],
+   "decisions": []
+  },
+  {
+   "id": "material:card-1",
+   "url": "https://example.com/article",
+   "title": "An article",
+   "body": "",
+   "savedOn": "2026-10-21",
+   "reviewState": "pending",
+   "nextReviewOn": null,
+   "resurface": true,
+   "lastDecisionOn": null,
+   "skippedUntil": null,
+   "sources": [
+    {
+     "pageId": "day:2026-10-21",
+     "blockId": "card-1",
+     "note": ""
+    }
+   ],
+   "decisions": []
+  }
+ ],
+ "captures": [],
+ "receipts": {
+  "fx-1": {
+   "operationId": "fx-1",
+   "message": "Day opened",
+   "entityId": "day:2026-10-20",
+   "fingerprint": "c128:9d70c7db0288dd9ab48ad4824ba1970b"
+  },
+  "fx-2": {
+   "operationId": "fx-2",
+   "message": "Task saved",
+   "entityId": "c5483035-f4a7-4b69-a2d2-8c92513d4514",
+   "fingerprint": "c128:2b821bd50f6d4659b91d33ff301876cc"
+  },
+  "fx-3": {
+   "operationId": "fx-3",
+   "message": "Task saved",
+   "entityId": "27a9e39c-06d0-4970-a5f3-2ed1501f5ce1",
+   "fingerprint": "c128:c9eda9b3ce249dcaf1bc1331fe67d7b0"
+  },
+  "fx-4": {
+   "operationId": "fx-4",
+   "message": "Link saved; no source text fetched",
+   "entityId": "eaa1e006-3037-4847-b46a-642da04da9af",
+   "fingerprint": "c128:727dc74060e7c12b5b15cac3e01aac28"
+  },
+  "fx-5": {
+   "operationId": "fx-5",
+   "message": "Text saved",
+   "entityId": "1e1bf6c4-53b7-4f50-a2c7-3cc35580a776",
+   "fingerprint": "c128:1dd4e01f20b2de89e02eaa0d111d6a37"
+  },
+  "fx-6": {
+   "operationId": "fx-6",
+   "message": "Event saved",
+   "entityId": "20114176-c6c1-4230-bbf2-2b15c6402dee",
+   "fingerprint": "c128:3ee7e76b0867681deb255578611054b9"
+  },
+  "fx-7": {
+   "operationId": "fx-7",
+   "message": "Task done",
+   "entityId": "c5483035-f4a7-4b69-a2d2-8c92513d4514",
+   "fingerprint": "c128:2f445b274022b5faf88a1d2ac2776df5"
+  },
+  "fx-8": {
+   "operationId": "fx-8",
+   "message": "Not today — carry-over stopped; deadline kept · Undo",
+   "entityId": "27a9e39c-06d0-4970-a5f3-2ed1501f5ce1",
+   "fingerprint": "c128:2c353559659ee802bb643c918f7e5e37"
+  },
+  "fx-9": {
+   "operationId": "fx-9",
+   "message": "Page saved",
+   "entityId": "R",
+   "fingerprint": "c128:147b611b342f1181aba2d31fab02b430"
+  },
+  "fx-10": {
+   "operationId": "fx-10",
+   "message": "Page saved",
+   "entityId": "R-child",
+   "fingerprint": "c128:56e9d16e2dc26e78ae6ed91d5b8a49ce"
+  },
+  "fx-11": {
+   "operationId": "fx-11",
+   "message": "Page saved",
+   "entityId": "T",
+   "fingerprint": "c128:d685ad44491ba845710b5ae8dadb9b14"
+  },
+  "fx-12": {
+   "operationId": "fx-12",
+   "message": "Day opened",
+   "entityId": "day:2026-10-21",
+   "fingerprint": "c128:2f34bb4ca4e8638c9a3afdb510c9e32e"
+  },
+  "fx-13": {
+   "operationId": "fx-13",
+   "message": "Page saved; task arrangements unchanged",
+   "fingerprint": "c128:805cb8f7327ed97a29cc488229a185ac"
+  },
+  "fx-14": {
+   "operationId": "fx-14",
+   "message": "Links saved",
+   "entityId": "L1",
+   "fingerprint": "c128:ac9cae5de427b25d2681ec9bd7d09328"
+  },
+  "fx-15": {
+   "operationId": "fx-15",
+   "message": "Page saved; task arrangements unchanged",
+   "fingerprint": "c128:098e45b3ec86e3a80e0a737cede53110"
+  },
+  "fx-16": {
+   "operationId": "fx-16",
+   "message": "Moved to trash",
+   "entityId": "T",
+   "fingerprint": "c128:4e5cde328bbe9253acf08c98bf93c346"
+  },
+  "fx-17": {
+   "operationId": "fx-17",
+   "message": "Day opened",
+   "entityId": "day:2026-10-22",
+   "fingerprint": "c128:7f5019bbf722c3d31eedea98e19a537c"
+  },
+  "fx-18": {
+   "operationId": "fx-18",
+   "message": "Task saved",
+   "entityId": "69cbf92f-05dd-4484-a682-5597e2e1aa47",
+   "fingerprint": "c128:36b64e653f68ae3f4e0477a8825b17ab"
+  },
+  "fx-19": {
+   "operationId": "fx-19",
+   "message": "Task saved",
+   "entityId": "72eb3047-01a2-4df3-a84d-8b2ecf764b37",
+   "fingerprint": "c128:509f927af3c143566cbbe6b926a0072b"
+  },
+  "fx-20": {
+   "operationId": "fx-20",
+   "message": "Task saved",
+   "entityId": "97183287-d55a-4b59-aa82-ca4c12c96273",
+   "fingerprint": "c128:30c656b52a31dec292c3d7324504abc3"
+  },
+  "fx-21": {
+   "operationId": "fx-21",
+   "message": "Planned for 2026-10-23",
+   "entityId": "97183287-d55a-4b59-aa82-ca4c12c96273",
+   "fingerprint": "c128:9cc025a29aa707b9d76787457316d137"
+  },
+  "fx-22": {
+   "operationId": "fx-22",
+   "message": "Day opened",
+   "entityId": "day:2026-10-24",
+   "fingerprint": "c128:14a6ff924b761581f9d56274e0e878d0"
+  },
+  "fx-23": {
+   "operationId": "fx-23",
+   "message": "Task saved",
+   "entityId": "b1d9975d-1af4-4cc6-895e-6f34fa1e9a0b",
+   "fingerprint": "c128:9838bc8f918973c047b99e2a8d18bc54"
+  },
+  "fx-24": {
+   "operationId": "fx-24",
+   "message": "Planned for 2026-10-24",
+   "entityId": "b1d9975d-1af4-4cc6-895e-6f34fa1e9a0b",
+   "fingerprint": "c128:f9a4e30d99132eec94934da0bf02d765"
+  },
+  "fx-25": {
+   "operationId": "fx-25",
+   "message": "Added 2 tasks",
+   "fingerprint": "c128:8a8cbf23b6a9117fce33e74cdd9d99de"
+  },
+  "fx-26": {
+   "operationId": "fx-26",
+   "message": "Morning hand-off saved",
+   "fingerprint": "c128:b143ed45869238e91577229d1a5011af"
+  },
+  "fx-27": {
+   "operationId": "fx-27",
+   "message": "Review saved",
+   "fingerprint": "c128:ad8b0d2d5e58e1ca6ed197490852166d"
+  }
+ },
+ "undo": {
+  "operationId": "fx-27",
+  "revision": 27,
+  "before": {
+   "schemaVersion": 1,
+   "revision": 26,
+   "timezone": "America/Vancouver",
+   "pages": [
+    {
+     "id": "day:2026-10-20",
+     "type": "daily",
+     "date": "2026-10-20",
+     "title": "2026-10-20",
+     "reviewText": "",
+     "reviewSaved": false,
+     "handoffDone": false,
+     "draft": null,
+     "sections": [
+      {
+       "id": "day:2026-10-20:top3",
+       "kind": "top3",
+       "title": "TODO - Top 3",
+       "blocks": [
+        {
+         "id": "786d63d5-54cc-47de-83be-4fc496aa2f45",
+         "kind": "task",
+         "taskId": "c5483035-f4a7-4b69-a2d2-8c92513d4514",
+         "text": "Finished on Monday"
+        }
+       ]
+      },
+      {
+       "id": "day:2026-10-20:other",
+       "kind": "other",
+       "title": "TODO - Other",
+       "blocks": []
+      },
+      {
+       "id": "day:2026-10-20:events",
+       "kind": "events",
+       "title": "Events",
+       "blocks": [
+        {
+         "id": "e3bd0b37-65ad-426d-8a8f-c47df897a92f",
+         "kind": "event",
+         "eventId": "20114176-c6c1-4230-bbf2-2b15c6402dee",
+         "text": "Dentist"
+        }
+       ]
+      },
+      {
+       "id": "day:2026-10-20:good-stuffs",
+       "kind": "good-stuffs",
+       "title": "Good Stuffs",
+       "blocks": [
+        {
+         "id": "c705fe59-99a0-45e1-ac82-0b68bfad96dc",
+         "kind": "material",
+         "materialId": "eaa1e006-3037-4847-b46a-642da04da9af",
+         "text": "https://www.inkandswitch.com/local-first/"
+        }
+       ]
+      },
+      {
+       "id": "day:2026-10-20:notes",
+       "kind": "notes",
+       "title": "Notes",
+       "blocks": [
+        {
+         "id": "1e1bf6c4-53b7-4f50-a2c7-3cc35580a776",
+         "kind": "paragraph",
+         "text": "Idea #rewind: keep the daily loop"
+        }
+       ]
+      }
+     ],
+     "editorBlockMetadata": {
+      "786d63d5-54cc-47de-83be-4fc496aa2f45": {
+       "id": "786d63d5-54cc-47de-83be-4fc496aa2f45",
+       "kind": "task",
+       "taskId": "c5483035-f4a7-4b69-a2d2-8c92513d4514",
+       "text": "Finished on Monday"
+      },
+      "6808b19a-b3fa-47a3-9143-af1839f0f90d": {
+       "id": "6808b19a-b3fa-47a3-9143-af1839f0f90d",
+       "kind": "task",
+       "taskId": "27a9e39c-06d0-4970-a5f3-2ed1501f5ce1",
+       "text": "Set aside later"
+      }
+     }
+    },
+    {
+     "id": "R",
+     "type": "document",
+     "date": null,
+     "title": "Korean soup",
+     "sections": [
+      {
+       "id": "eb5875e9-3c6e-4bf8-b52f-9046ef6541ac",
+       "kind": "notes",
+       "title": "Notes",
+       "blocks": [
+        {
+         "id": "4e17b2bb-3304-4b35-9b50-c94360ca3b23",
+         "kind": "paragraph",
+         "text": "Recipe notes"
+        }
+       ]
+      }
+     ],
+     "reviewText": "",
+     "reviewSaved": false,
+     "handoffDone": false,
+     "draft": null
+    },
+    {
+     "id": "R-child",
+     "type": "document",
+     "date": null,
+     "title": "Sub of soup",
+     "parentId": "R",
+     "sections": [
+      {
+       "id": "intro:R-child",
+       "kind": "custom",
+       "title": "",
+       "blocks": [
+        {
+         "id": "4594d29b-31ec-4fb9-8e5a-6857abaadfe5",
+         "kind": "paragraph",
+         "text": ""
+        }
+       ]
+      }
+     ],
+     "reviewText": "",
+     "reviewSaved": false,
+     "handoffDone": false,
+     "draft": null
+    },
+    {
+     "id": "T",
+     "type": "document",
+     "date": null,
+     "title": "To be trashed",
+     "sections": [
+      {
+       "id": "222a859a-d537-4ce6-a0a9-25059428082e",
+       "kind": "notes",
+       "title": "Notes",
+       "blocks": [
+        {
+         "id": "dbd1c1d2-2262-475b-86d7-709673f7599d",
+         "kind": "paragraph",
+         "text": "gone"
+        }
+       ]
+      }
+     ],
+     "reviewText": "",
+     "reviewSaved": false,
+     "handoffDone": false,
+     "draft": null,
+     "trashedAt": "2026-10-21T20:00:00.000Z",
+     "trashId": "fx-16"
+    },
+    {
+     "id": "day:2026-10-21",
+     "type": "daily",
+     "date": "2026-10-21",
+     "title": "2026-10-21",
+     "reviewText": "",
+     "reviewSaved": false,
+     "handoffDone": false,
+     "draft": null,
+     "sections": [
+      {
+       "id": "day:2026-10-21:top3",
+       "kind": "top3",
+       "title": "TODO - Top 3",
+       "blocks": [
+        {
+         "id": "p1",
+         "kind": "task",
+         "taskId": "editor-task:p1",
+         "text": "Parent task",
+         "planRole": "plan"
+        },
+        {
+         "id": "c1",
+         "kind": "task",
+         "taskId": "editor-task:c1",
+         "text": "Child task",
+         "planRole": "plan"
+        }
+       ]
+      },
+      {
+       "id": "day:2026-10-21:other",
+       "kind": "other",
+       "title": "TODO - Other",
+       "blocks": [
+        {
+         "id": "o1",
+         "kind": "task",
+         "taskId": "editor-task:o1",
+         "text": "Other one",
+         "planRole": "plan"
+        },
+        {
+         "id": "o2",
+         "kind": "task",
+         "taskId": "editor-task:o2",
+         "text": "Other two with deadline",
+         "planRole": "plan"
+        }
+       ]
+      },
+      {
+       "id": "day:2026-10-21:events",
+       "kind": "events",
+       "title": "Events",
+       "blocks": []
+      },
+      {
+       "id": "day:2026-10-21:good-stuffs",
+       "kind": "good-stuffs",
+       "title": "Good Stuffs",
+       "blocks": [
+        {
+         "id": "card-1",
+         "kind": "reference",
+         "targetPageId": "L1",
+         "text": "An article",
+         "at": 15
+        }
+       ]
+      },
+      {
+       "id": "day:2026-10-21:notes",
+       "kind": "notes",
+       "title": "Notes",
+       "blocks": [
+        {
+         "id": "n-chip",
+         "kind": "paragraph",
+         "text": "Call about the roof @Oct 23 9:30am"
+        },
+        {
+         "id": "n-ref",
+         "kind": "paragraph",
+         "text": "see Korean soup for dinner #cook",
+         "refs": [
+          {
+           "refId": "ref-1",
+           "pageId": "R",
+           "at": 13,
+           "title": "Korean soup"
+          }
+         ]
+        },
+        {
+         "id": "n-card",
+         "kind": "reference",
+         "targetPageId": "T",
+         "text": "To be trashed",
+         "at": 13
+        }
+       ]
+      }
+     ],
+     "editorBlockMetadata": {
+      "heading:day:2026-10-21:top3": {
+       "id": "heading:day:2026-10-21:top3",
+       "kind": "paragraph",
+       "text": "TODO - Top 3",
+       "sectionKind": "top3"
+      },
+      "heading:day:2026-10-21:other": {
+       "id": "heading:day:2026-10-21:other",
+       "kind": "paragraph",
+       "text": "TODO - Other",
+       "sectionKind": "other"
+      },
+      "heading:day:2026-10-21:events": {
+       "id": "heading:day:2026-10-21:events",
+       "kind": "paragraph",
+       "text": "Events",
+       "sectionKind": "events"
+      },
+      "heading:day:2026-10-21:good-stuffs": {
+       "id": "heading:day:2026-10-21:good-stuffs",
+       "kind": "paragraph",
+       "text": "Good Stuffs",
+       "sectionKind": "good-stuffs"
+      },
+      "heading:day:2026-10-21:notes": {
+       "id": "heading:day:2026-10-21:notes",
+       "kind": "paragraph",
+       "text": "Notes",
+       "sectionKind": "notes"
+      },
+      "696a4745-7cc8-4d82-b6fa-299f71aeaea2": {
+       "id": "696a4745-7cc8-4d82-b6fa-299f71aeaea2",
+       "kind": "task",
+       "taskId": "editor-task:p1",
+       "text": "Parent task"
+      },
+      "c519aacc-b9eb-45f6-8c78-ae59d254f211": {
+       "id": "c519aacc-b9eb-45f6-8c78-ae59d254f211",
+       "kind": "task",
+       "taskId": "editor-task:c1",
+       "text": "Child task"
+      },
+      "14721f82-5c0f-484c-87cd-8ca9b3475227": {
+       "id": "14721f82-5c0f-484c-87cd-8ca9b3475227",
+       "kind": "task",
+       "taskId": "editor-task:o1",
+       "text": "Other one"
+      },
+      "d4b904e9-7741-4f3d-b65b-300996036e7c": {
+       "id": "d4b904e9-7741-4f3d-b65b-300996036e7c",
+       "kind": "task",
+       "taskId": "editor-task:o2",
+       "text": "Other two with deadline"
+      },
+      "p1": {
+       "id": "p1",
+       "kind": "task",
+       "taskId": "editor-task:p1",
+       "text": "Parent task",
+       "planRole": "plan",
+       "seen": 15
+      },
+      "c1": {
+       "id": "c1",
+       "kind": "task",
+       "taskId": "editor-task:c1",
+       "text": "Child task",
+       "planRole": "plan",
+       "seen": 15
+      },
+      "o1": {
+       "id": "o1",
+       "kind": "task",
+       "taskId": "editor-task:o1",
+       "text": "Other one",
+       "planRole": "plan",
+       "seen": 15
+      },
+      "o2": {
+       "id": "o2",
+       "kind": "task",
+       "taskId": "editor-task:o2",
+       "text": "Other two with deadline",
+       "planRole": "plan",
+       "seen": 15
+      },
+      "paste:card-1": {
+       "id": "paste:card-1",
+       "kind": "reference",
+       "text": "https://example.com/article",
+       "linkPaste": {
+        "operationId": "fx-14",
+        "cardBlockId": "card-1",
+        "url": "https://example.com/article",
+        "lineType": "paragraph",
+        "on": "2026-10-21",
+        "outcome": "made",
+        "pageId": "L1",
+        "refsBefore": [],
+        "title": "An article",
+        "materialId": "material:card-1",
+        "materialCreated": true
+       }
+      },
+      "n-chip": {
+       "id": "n-chip",
+       "kind": "paragraph",
+       "text": "Call about the roof @Oct 23 9:30am"
+      },
+      "n-ref": {
+       "id": "n-ref",
+       "kind": "paragraph",
+       "text": "see Korean soup for dinner #cook",
+       "refs": [
+        {
+         "refId": "ref-1",
+         "pageId": "R",
+         "at": 13,
+         "title": "Korean soup"
+        }
+       ]
+      },
+      "n-card": {
+       "id": "n-card",
+       "kind": "reference",
+       "targetPageId": "T",
+       "text": "To be trashed",
+       "at": 13
+      }
+     },
+     "editorCreations": {
+      "p1": "editor-task:p1",
+      "c1": "editor-task:c1",
+      "o1": "editor-task:o1",
+      "o2": "editor-task:o2"
+     },
+     "editorJSON": "[{\"id\":\"day:2026-10-21:top3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"TODO - Top 3\"},{\"id\":\"p1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:p1\",\"role\":\"plan\",\"planDate\":\"2026-10-21\"},\"content\":[{\"type\":\"text\",\"text\":\"Parent task\",\"styles\":{}}],\"children\":[{\"id\":\"c1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c1\",\"role\":\"plan\",\"planDate\":\"2026-10-21\"},\"content\":[{\"type\":\"text\",\"text\":\"Child task\",\"styles\":{}}],\"children\":[]}]},{\"id\":\"day:2026-10-21:other\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"TODO - Other\"},{\"id\":\"o1\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:o1\",\"role\":\"plan\",\"planDate\":\"2026-10-21\"},\"content\":[{\"type\":\"text\",\"text\":\"Other one\",\"styles\":{}}],\"children\":[]},{\"id\":\"o2\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:o2\",\"role\":\"plan\",\"planDate\":\"2026-10-21\"},\"content\":[{\"type\":\"text\",\"text\":\"Other two with deadline\",\"styles\":{}}],\"children\":[]},{\"id\":\"day:2026-10-21:events\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"Events\"},{\"id\":\"day:2026-10-21:good-stuffs\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"Good Stuffs\"},{\"id\":\"card-1\",\"type\":\"pageLink\",\"props\":{\"pageId\":\"L1\",\"url\":\"https://example.com/article\"}},{\"id\":\"day:2026-10-21:notes\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"Notes\"},{\"id\":\"n-chip\",\"type\":\"bulletListItem\",\"content\":[{\"type\":\"text\",\"text\":\"Call about the roof \",\"styles\":{}},{\"type\":\"dateMention\",\"props\":{\"eventId\":\"ev-roof\",\"date\":\"2026-10-23\",\"time\":\"09:30\"}}]},{\"id\":\"n-ref\",\"type\":\"paragraph\",\"content\":[{\"type\":\"text\",\"text\":\"see \",\"styles\":{}},{\"type\":\"pageRef\",\"props\":{\"pageId\":\"R\",\"refId\":\"ref-1\"}},{\"type\":\"text\",\"text\":\" for dinner #cook\",\"styles\":{}}]},{\"id\":\"n-card\",\"type\":\"pageLink\",\"props\":{\"pageId\":\"T\"}}]",
+     "templateApplied": true,
+     "editorSections": "[{\"id\":\"day:2026-10-21:top3\",\"kind\":\"top3\",\"title\":\"TODO - Top 3\",\"blocks\":[{\"id\":\"p1\",\"kind\":\"task\",\"taskId\":\"editor-task:p1\",\"text\":\"Parent task\",\"planRole\":\"plan\"},{\"id\":\"c1\",\"kind\":\"task\",\"taskId\":\"editor-task:c1\",\"text\":\"Child task\",\"planRole\":\"plan\"}]},{\"id\":\"day:2026-10-21:other\",\"kind\":\"other\",\"title\":\"TODO - Other\",\"blocks\":[{\"id\":\"o1\",\"kind\":\"task\",\"taskId\":\"editor-task:o1\",\"text\":\"Other one\",\"planRole\":\"plan\"},{\"id\":\"o2\",\"kind\":\"task\",\"taskId\":\"editor-task:o2\",\"text\":\"Other two with deadline\",\"planRole\":\"plan\"}]},{\"id\":\"day:2026-10-21:events\",\"kind\":\"events\",\"title\":\"Events\",\"blocks\":[]},{\"id\":\"day:2026-10-21:good-stuffs\",\"kind\":\"good-stuffs\",\"title\":\"Good Stuffs\",\"blocks\":[{\"id\":\"card-1\",\"kind\":\"reference\",\"targetPageId\":\"L1\",\"text\":\"An article\",\"at\":15}]},{\"id\":\"day:2026-10-21:notes\",\"kind\":\"notes\",\"title\":\"Notes\",\"blocks\":[{\"id\":\"n-chip\",\"kind\":\"paragraph\",\"text\":\"Call about the roof @Oct 23 9:30am\"},{\"id\":\"n-ref\",\"kind\":\"paragraph\",\"text\":\"see Korean soup for dinner #cook\",\"refs\":[{\"refId\":\"ref-1\",\"pageId\":\"R\",\"at\":13,\"title\":\"Korean soup\"}]},{\"id\":\"n-card\",\"kind\":\"reference\",\"targetPageId\":\"T\",\"text\":\"To be trashed\",\"at\":13}]}]"
+    },
+    {
+     "id": "L1",
+     "type": "document",
+     "date": null,
+     "title": "An article",
+     "url": "https://example.com/article",
+     "parentId": "day:2026-10-21",
+     "sections": [
+      {
+       "id": "intro:L1",
+       "kind": "custom",
+       "title": "",
+       "blocks": [
+        {
+         "id": "d3498158-5303-49a8-8d3a-757eadc04b32",
+         "kind": "paragraph",
+         "text": ""
+        }
+       ]
+      }
+     ],
+     "reviewText": "",
+     "reviewSaved": false,
+     "handoffDone": false,
+     "draft": null
+    },
+    {
+     "id": "day:2026-10-22",
+     "type": "daily",
+     "date": "2026-10-22",
+     "title": "2026-10-22",
+     "reviewText": "",
+     "reviewSaved": false,
+     "handoffDone": true,
+     "draft": null,
+     "sections": [
+      {
+       "id": "day:2026-10-22:top3",
+       "kind": "top3",
+       "title": "TODO - Top 3",
+       "blocks": [
+        {
+         "id": "69a5b9a9-9542-4b8a-aac5-7a1de9eca6f0",
+         "kind": "task",
+         "taskId": "editor-task:p1",
+         "text": "Parent task"
+        },
+        {
+         "id": "02e6ddee-bdb7-4abe-a351-c331f9b8298a",
+         "kind": "task",
+         "taskId": "editor-task:c1",
+         "text": "Child task"
+        }
+       ]
+      },
+      {
+       "id": "day:2026-10-22:other",
+       "kind": "other",
+       "title": "TODO - Other",
+       "blocks": [
+        {
+         "id": "664c916e-2ba4-43a2-9671-d18f97f54ea5",
+         "kind": "task",
+         "taskId": "69cbf92f-05dd-4484-a682-5597e2e1aa47",
+         "text": "Due Friday"
+        },
+        {
+         "id": "7a4863e3-5967-4065-8630-f8e24a36771a",
+         "kind": "task",
+         "taskId": "72eb3047-01a2-4df3-a84d-8b2ecf764b37",
+         "text": "Starts Thursday"
+        }
+       ]
+      },
+      {
+       "id": "day:2026-10-22:events",
+       "kind": "events",
+       "title": "Events",
+       "blocks": []
+      },
+      {
+       "id": "day:2026-10-22:good-stuffs",
+       "kind": "good-stuffs",
+       "title": "Good Stuffs",
+       "blocks": []
+      },
+      {
+       "id": "day:2026-10-22:notes",
+       "kind": "notes",
+       "title": "Notes",
+       "blocks": []
+      }
+     ],
+     "editorBlockMetadata": {
+      "664c916e-2ba4-43a2-9671-d18f97f54ea5": {
+       "id": "664c916e-2ba4-43a2-9671-d18f97f54ea5",
+       "kind": "task",
+       "taskId": "69cbf92f-05dd-4484-a682-5597e2e1aa47",
+       "text": "Due Friday"
+      },
+      "7a4863e3-5967-4065-8630-f8e24a36771a": {
+       "id": "7a4863e3-5967-4065-8630-f8e24a36771a",
+       "kind": "task",
+       "taskId": "72eb3047-01a2-4df3-a84d-8b2ecf764b37",
+       "text": "Starts Thursday"
+      },
+      "d2a9961b-bd1d-41d0-8a97-bf9eba915146": {
+       "id": "d2a9961b-bd1d-41d0-8a97-bf9eba915146",
+       "kind": "task",
+       "taskId": "97183287-d55a-4b59-aa82-ca4c12c96273",
+       "text": "Planned for Thursday"
+      },
+      "2390f34d-5884-45aa-b8c7-aa719a4235aa": {
+       "id": "2390f34d-5884-45aa-b8c7-aa719a4235aa",
+       "kind": "task",
+       "taskId": "b1d9975d-1af4-4cc6-895e-6f34fa1e9a0b",
+       "text": "Planned for Saturday"
+      },
+      "69a5b9a9-9542-4b8a-aac5-7a1de9eca6f0": {
+       "id": "69a5b9a9-9542-4b8a-aac5-7a1de9eca6f0",
+       "kind": "task",
+       "taskId": "editor-task:p1",
+       "text": "Parent task"
+      },
+      "02e6ddee-bdb7-4abe-a351-c331f9b8298a": {
+       "id": "02e6ddee-bdb7-4abe-a351-c331f9b8298a",
+       "kind": "task",
+       "taskId": "editor-task:c1",
+       "text": "Child task"
+      }
+     },
+     "editorJSON": "[{\"id\":\"day:2026-10-22:top3\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"TODO - Top 3\"},{\"id\":\"69a5b9a9-9542-4b8a-aac5-7a1de9eca6f0\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:p1\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":\"Parent task\",\"children\":[{\"id\":\"02e6ddee-bdb7-4abe-a351-c331f9b8298a\",\"type\":\"task\",\"props\":{\"taskId\":\"editor-task:c1\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":\"Child task\"}]},{\"id\":\"day:2026-10-22:other\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"TODO - Other\"},{\"id\":\"664c916e-2ba4-43a2-9671-d18f97f54ea5\",\"type\":\"task\",\"props\":{\"taskId\":\"69cbf92f-05dd-4484-a682-5597e2e1aa47\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":\"Due Friday\"},{\"id\":\"7a4863e3-5967-4065-8630-f8e24a36771a\",\"type\":\"task\",\"props\":{\"taskId\":\"72eb3047-01a2-4df3-a84d-8b2ecf764b37\",\"role\":\"plan\",\"planDate\":\"2026-10-22\"},\"content\":\"Starts Thursday\"},{\"id\":\"day:2026-10-22:events\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"Events\"},{\"id\":\"day:2026-10-22:good-stuffs\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"Good Stuffs\"},{\"id\":\"day:2026-10-22:notes\",\"type\":\"heading\",\"props\":{\"level\":2},\"content\":\"Notes\"}]"
+    },
+    {
+     "id": "day:2026-10-24",
+     "type": "daily",
+     "date": "2026-10-24",
+     "title": "2026-10-24",
+     "reviewText": "",
+     "reviewSaved": false,
+     "handoffDone": false,
+     "draft": null,
+     "sections": [
+      {
+       "id": "day:2026-10-24:top3",
+       "kind": "top3",
+       "title": "TODO - Top 3",
+       "blocks": []
+      },
+      {
+       "id": "day:2026-10-24:other",
+       "kind": "other",
+       "title": "TODO - Other",
+       "blocks": [
+        {
+         "id": "6d136d60-f95e-4d84-aa61-b3f43779e654",
+         "kind": "task",
+         "taskId": "b1d9975d-1af4-4cc6-895e-6f34fa1e9a0b",
+         "text": "Planned for Saturday"
+        }
+       ]
+      },
+      {
+       "id": "day:2026-10-24:events",
+       "kind": "events",
+       "title": "Events",
+       "blocks": []
+      },
+      {
+       "id": "day:2026-10-24:good-stuffs",
+       "kind": "good-stuffs",
+       "title": "Good Stuffs",
+       "blocks": []
+      },
+      {
+       "id": "day:2026-10-24:notes",
+       "kind": "notes",
+       "title": "Notes",
+       "blocks": []
+      }
+     ],
+     "editorBlockMetadata": {
+      "6d136d60-f95e-4d84-aa61-b3f43779e654": {
+       "id": "6d136d60-f95e-4d84-aa61-b3f43779e654",
+       "kind": "task",
+       "taskId": "b1d9975d-1af4-4cc6-895e-6f34fa1e9a0b",
+       "text": "Planned for Saturday"
+      }
+     }
+    }
+   ],
+   "tasks": [
+    {
+     "id": "c5483035-f4a7-4b69-a2d2-8c92513d4514",
+     "title": "Finished on Monday",
+     "status": "done",
+     "version": 3,
+     "plannedOn": "2026-10-20",
+     "attentionOn": null,
+     "deadlineOn": null,
+     "paused": false,
+     "createdOn": "2026-10-20",
+     "lastPlannedOn": "2026-10-20",
+     "sourcePageId": "day:2026-10-20",
+     "doneOn": "2026-10-20"
+    },
+    {
+     "id": "27a9e39c-06d0-4970-a5f3-2ed1501f5ce1",
+     "title": "Set aside later",
+     "status": "open",
+     "version": 3,
+     "plannedOn": null,
+     "attentionOn": null,
+     "deadlineOn": null,
+     "paused": true,
+     "createdOn": "2026-10-20",
+     "lastPlannedOn": "2026-10-20",
+     "sourcePageId": "day:2026-10-20"
+    },
+    {
+     "id": "editor-task:p1",
+     "title": "Parent task",
+     "status": "open",
+     "version": 3,
+     "plannedOn": "2026-10-22",
+     "attentionOn": null,
+     "deadlineOn": null,
+     "paused": false,
+     "createdOn": "2026-10-21",
+     "lastPlannedOn": "2026-10-22",
+     "sourcePageId": "day:2026-10-21"
+    },
+    {
+     "id": "editor-task:c1",
+     "title": "Child task",
+     "status": "open",
+     "version": 3,
+     "plannedOn": "2026-10-22",
+     "attentionOn": null,
+     "deadlineOn": null,
+     "paused": false,
+     "createdOn": "2026-10-21",
+     "lastPlannedOn": "2026-10-22",
+     "sourcePageId": "day:2026-10-21"
+    },
+    {
+     "id": "editor-task:o1",
+     "title": "Other one",
+     "status": "open",
+     "version": 2,
+     "plannedOn": "2026-10-21",
+     "attentionOn": null,
+     "deadlineOn": null,
+     "paused": false,
+     "createdOn": "2026-10-21",
+     "lastPlannedOn": "2026-10-21",
+     "sourcePageId": "day:2026-10-21"
+    },
+    {
+     "id": "editor-task:o2",
+     "title": "Other two with deadline",
+     "status": "open",
+     "version": 2,
+     "plannedOn": "2026-10-21",
+     "attentionOn": null,
+     "deadlineOn": null,
+     "paused": false,
+     "createdOn": "2026-10-21",
+     "lastPlannedOn": "2026-10-21",
+     "sourcePageId": "day:2026-10-21"
+    },
+    {
+     "id": "69cbf92f-05dd-4484-a682-5597e2e1aa47",
+     "title": "Due Friday",
+     "status": "open",
+     "version": 2,
+     "plannedOn": "2026-10-22",
+     "attentionOn": null,
+     "deadlineOn": "2026-10-24",
+     "paused": false,
+     "createdOn": "2026-10-22",
+     "lastPlannedOn": "2026-10-22",
+     "sourcePageId": "day:2026-10-22"
+    },
+    {
+     "id": "72eb3047-01a2-4df3-a84d-8b2ecf764b37",
+     "title": "Starts Thursday",
+     "status": "open",
+     "version": 1,
+     "plannedOn": null,
+     "attentionOn": "2026-10-23",
+     "deadlineOn": null,
+     "paused": false,
+     "createdOn": "2026-10-22",
+     "lastPlannedOn": null,
+     "sourcePageId": "day:2026-10-22"
+    },
+    {
+     "id": "97183287-d55a-4b59-aa82-ca4c12c96273",
+     "title": "Planned for Thursday",
+     "status": "open",
+     "version": 3,
+     "plannedOn": "2026-10-23",
+     "attentionOn": null,
+     "deadlineOn": null,
+     "paused": false,
+     "createdOn": "2026-10-22",
+     "lastPlannedOn": "2026-10-23",
+     "sourcePageId": "day:2026-10-22"
+    },
+    {
+     "id": "b1d9975d-1af4-4cc6-895e-6f34fa1e9a0b",
+     "title": "Planned for Saturday",
+     "status": "open",
+     "version": 3,
+     "plannedOn": "2026-10-24",
+     "attentionOn": null,
+     "deadlineOn": null,
+     "paused": false,
+     "createdOn": "2026-10-22",
+     "lastPlannedOn": "2026-10-24",
+     "sourcePageId": "day:2026-10-22"
+    }
+   ],
+   "events": [
+    {
+     "id": "20114176-c6c1-4230-bbf2-2b15c6402dee",
+     "title": "Dentist",
+     "date": "2026-10-20",
+     "time": "15:00",
+     "cancelled": false
+    }
+   ],
+   "placements": [
+    {
+     "taskId": "c5483035-f4a7-4b69-a2d2-8c92513d4514",
+     "date": "2026-10-20",
+     "state": "included",
+     "section": "top3"
+    },
+    {
+     "taskId": "27a9e39c-06d0-4970-a5f3-2ed1501f5ce1",
+     "date": "2026-10-20",
+     "state": "excluded",
+     "section": "other"
+    },
+    {
+     "taskId": "editor-task:p1",
+     "date": "2026-10-21",
+     "state": "moved",
+     "section": "other",
+     "order": 0
+    },
+    {
+     "taskId": "editor-task:c1",
+     "date": "2026-10-21",
+     "state": "moved",
+     "section": "other",
+     "order": 1
+    },
+    {
+     "taskId": "editor-task:o1",
+     "date": "2026-10-21",
+     "state": "included",
+     "section": "other",
+     "order": 2
+    },
+    {
+     "taskId": "editor-task:o2",
+     "date": "2026-10-21",
+     "state": "included",
+     "section": "other",
+     "order": 3
+    },
+    {
+     "taskId": "69cbf92f-05dd-4484-a682-5597e2e1aa47",
+     "date": "2026-10-22",
+     "state": "included",
+     "section": "other"
+    },
+    {
+     "taskId": "97183287-d55a-4b59-aa82-ca4c12c96273",
+     "date": "2026-10-22",
+     "state": "moved",
+     "section": "other"
+    },
+    {
+     "taskId": "97183287-d55a-4b59-aa82-ca4c12c96273",
+     "date": "2026-10-23",
+     "state": "included",
+     "section": "other"
+    },
+    {
+     "taskId": "b1d9975d-1af4-4cc6-895e-6f34fa1e9a0b",
+     "date": "2026-10-22",
+     "state": "moved",
+     "section": "other"
+    },
+    {
+     "taskId": "b1d9975d-1af4-4cc6-895e-6f34fa1e9a0b",
+     "date": "2026-10-24",
+     "state": "included",
+     "section": "other"
+    },
+    {
+     "taskId": "editor-task:p1",
+     "date": "2026-10-22",
+     "state": "included",
+     "section": "top3"
+    },
+    {
+     "taskId": "editor-task:c1",
+     "date": "2026-10-22",
+     "state": "included",
+     "section": "top3"
+    }
+   ],
+   "materials": [
+    {
+     "id": "eaa1e006-3037-4847-b46a-642da04da9af",
+     "url": "https://www.inkandswitch.com/local-first/",
+     "title": "https://www.inkandswitch.com/local-first/",
+     "body": "",
+     "savedOn": "2026-10-20",
+     "reviewState": "pending",
+     "nextReviewOn": null,
+     "resurface": true,
+     "lastDecisionOn": null,
+     "skippedUntil": null,
+     "sources": [
+      {
+       "pageId": "day:2026-10-20",
+       "blockId": "c705fe59-99a0-45e1-ac82-0b68bfad96dc",
+       "note": ""
+      }
+     ],
+     "decisions": []
+    },
+    {
+     "id": "material:card-1",
+     "url": "https://example.com/article",
+     "title": "An article",
+     "body": "",
+     "savedOn": "2026-10-21",
+     "reviewState": "pending",
+     "nextReviewOn": null,
+     "resurface": true,
+     "lastDecisionOn": null,
+     "skippedUntil": null,
+     "sources": [
+      {
+       "pageId": "day:2026-10-21",
+       "blockId": "card-1",
+       "note": ""
+      }
+     ],
+     "decisions": []
+    }
+   ],
+   "captures": [],
+   "receipts": {}
+  }
+ }
+}

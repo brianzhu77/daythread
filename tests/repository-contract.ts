@@ -33,9 +33,9 @@ export function repositoryContract(name: string, fixture: () => Promise<{ create
       const r=f.create()
       await r.execute({operationId:'day',expectedRevision:0,action:{type:'ensure-day',date:'2026-10-17'}})
       const page=(await r.load()).pages[0]!
-      await r.execute({operationId:'task',expectedRevision:1,action:{type:'add-task',pageId:page.id,sectionId:page.sections[0]!.id,title:'Before'}})
+      await r.execute({operationId:'task',expectedRevision:1,action:{type:'add-task',pageId:page.id,title:'Before'}})
       const before=await r.load(),restore=await f.failBeforeCommit('injected-failure')
-      await assert.rejects(r.execute({operationId:'injected-failure',expectedRevision:before.revision,action:{type:'add-task',pageId:page.id,sectionId:page.sections[0]!.id,title:'Must roll back'}}))
+      await assert.rejects(r.execute({operationId:'injected-failure',expectedRevision:before.revision,action:{type:'add-task',pageId:page.id,title:'Must roll back'}}))
       assert.deepEqual(await f.create().load(),before)
       restore()
       await r.execute({operationId:'after-failure',expectedRevision:before.revision,action:{type:'ensure-day',date:'2026-10-18'}})
