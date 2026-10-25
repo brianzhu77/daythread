@@ -33,13 +33,13 @@ chip is the result, not a dialog.
 
 - **Layout:** one row per event, in the Events section, before his own Events lines. All-day first, then by time.
   Row = time in the marker/text column ("3:00 PM", or "All day" in `--ink-3`), title, then the line ref to where he
-  wrote it ("↗ Thu, Oct 22 · Notes"), using the A11 line chip. Rows aren't editable lines: no caret, no checkbox, no
+  wrote it ("↳ Thu, Oct 22 · Notes"), using the A11 line chip. Rows aren't editable lines: no caret, no checkbox, no
   ⋯ menu; the line chip is the only control. They align to the section's text column like a bullet line.
 - **With a time / without:** as above.
 - **Untitled** (the line is only a chip): "Untitled event" in `--ink-3`.
-- **Written on a document page:** the line chip shows the page's title ("↗ Trip notes").
+- **Written on a document page:** the line chip shows the page's title ("↳ Trip notes").
 - **Written on the same day's page** (`@3pm`, `@今天` in Notes): the row reads as a link, not a copy: title in
-  `--ink-2` and the chip says "↗ in Notes". (A chip written under that day's own Events heading gets no row.)
+  `--ink-2` and the chip says "↳ in Notes". (A chip written under that day's own Events heading gets no row.)
 - **No Events heading on that page:** the rows show at the end of the page under a small non-editable label "Events"
   (`--text-meta`, `--ink-2`), so they don't look like stray lines.
 - **Source page trashed:** no row (plan §2).
@@ -59,7 +59,11 @@ shows. Create page then makes the page, and the same rows appear under its Event
 - **Text form** (section text, Tasks, morning card): `@Nov 20`, `@Nov 20 3pm`, `@Jan 5, 2027` (year only when it isn't
   the holding page's year). No weekday, no Today/Tomorrow, so the text never goes stale and `@` reads it back.
 
-## 4. Choosing between rows in the editor and rows under the header (after Roadbuster's spike)
+## 4. Rows in the editor (decided after Roadbuster's spike 6d30c17)
+
+**Decided: inside the editor, under Events** (spike: column, caret, keyboard-up and alignment 250/0 all fine). Time
+column 64 px; at 390 a long row wraps its link under the title. Kept below as the criteria used.
+
 
 Prefer **inside the editor, under Events**: that's where he looks for the day's events and where his hand-written
 Events lines are. Take the fallback (under the day header) only if the spike shows one of these at 1280 or 390:
