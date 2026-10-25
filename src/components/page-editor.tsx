@@ -432,6 +432,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }, initialContent: (initial.current.nodes.length ? initial.current.nodes : [{ type: 'paragraph' }]) as never })
   const base = useRef(initial.current.base)
   const latestWorkspace = useRef(workspace); latestWorkspace.current = workspace
+  // B27: an open `@` list reads its query again once a composition is committed (the commit lands while composing).
+  const [, setCompositionsEnded] = useState(0)
   // B27: new rows (the workspace changed) redraw the widget; a document change already does.
   const rowsKey = JSON.stringify([rowsAnchor.current, rows])
   useEffect(() => { const view = editor.prosemirrorView; if (view) refreshEventRows(view) }, [rowsKey, editor])
@@ -1263,6 +1265,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   function dateItems(query: string, trigger: string) {
     const menu = editor.getExtension(SuggestionMenu)
     const anchor = page.type === 'daily' && page.date ? page.date : todayIso()
+    // Mid-composition the query is pinyin on its way to 明天 or 周五: keep the list open until the word is committed.
+    if (editor.prosemirrorView?.composing) return [{ title: 'Keep typing a date', subtext: 'Nov 20 · Fri · 3pm', onItemClick: () => menu?.closeMenu() }]
     // Nothing he could still be typing toward a date (`@brian`): the list closes and the text stays (Jazz §1).
     if (!mayRead(query, anchor)) { queueMicrotask(() => menu?.closeMenu()); return [] }
     const today = todayIso(), pageDate = page.type === 'daily' ? page.date ?? null : null
@@ -1941,7 +1945,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     onMouseOverCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
     onMouseMoveCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
     // A9a §3: after the composition, once ProseMirror has finished it (its DOM and decorations are drawn again).
-    onCompositionEndCapture={() => { composing.current = false; setTimeout(repairComposition, 0); setTimeout(maybeOpenLinkList, 50); requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
+    onCompositionEndCapture={() => { composing.current = false; if (editor.getExtension(SuggestionMenu)?.shown()) requestAnimationFrame(() => setCompositionsEnded(n => n + 1)); setTimeout(repairComposition, 0); setTimeout(maybeOpenLinkList, 50); requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
     onDropCapture={e => {
       // Drops go to the row boundary under the pointer at release. BlockNote's line can lag the pointer when
       // dragover events stop arriving (Ratchet task #49: a long drag stayed put, the line stuck near the start),
