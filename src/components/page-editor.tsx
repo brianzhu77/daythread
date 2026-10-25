@@ -1,13 +1,13 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
 import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { type ComponentProps, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
 import { BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, editorHasBlockWithType, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
 import { toast } from '@heroui/react'
-import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useEditorState, useExtensionState, usePortalElement, useUIMode } from '@blocknote/react'
-import { BlockNoteView } from '@blocknote/shadcn'
+import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, LinkToolbarController, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useEditorState, useExtensionState, usePortalElement, useUIMode } from '@blocknote/react'
+import { BlockNoteView, ShadCNDefaultComponents } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
@@ -1522,6 +1522,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * (selection changes, never hover); a mouse keeps the hover handle as before.
    */
   const lastPointer = useRef('')
+  // Finding 6 (iPhone sweep): on a touch screen the link toolbar ("Edit link") shows only after a tap on the link. It
+  // used to open whenever the caret sat in a link, so right after a paste it covered the lines above. Typing or a paste
+  // puts it away until the next tap on a link; a mouse keeps BlockNote's behaviour.
+  const [linkTapped, setLinkTapped] = useState(false)
+  const inText = (target: EventTarget) => Boolean((target as Element).closest?.('.bn-editor [contenteditable="true"], .bn-editor[contenteditable="true"]'))
   const [hoverPointer, setHoverPointer] = useState(() => typeof window !== 'undefined' && window.matchMedia('(hover: hover) and (pointer: fine)').matches)
   useEffect(() => {
     const query = window.matchMedia('(hover: hover) and (pointer: fine)'), changed = () => setHoverPointer(query.matches)
@@ -1577,6 +1582,25 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     reveal()
     return editor.onSelectionChange(reveal)
   }, [editor, keyboardTop, styleOpen])
+  // B58: Edit link's URL form opens below the link, and with the keyboard up its OK sat behind the toolbar (Ratchet's
+  // native run). When the form takes focus, the page scrolls it clear of the toolbar, the same rule as the caret's line.
+  useEffect(() => {
+    if (keyboardTop === null) return
+    const clear = () => requestAnimationFrame(() => {
+      // The open one: the page also keeps hidden forms (the formatting toolbar's), so take the visible popover with a field.
+      const form = [...document.querySelectorAll('[data-slot="popover-content"]')].find(p => p.getBoundingClientRect().height && p.querySelector('input'))
+      const bar = phoneToolbar.current?.getBoundingClientRect()
+      if (!form || !bar?.height) return
+      const overlap = form.getBoundingClientRect().bottom + 8 - bar.top
+      if (overlap > 0) window.scrollBy(0, overlap)
+    })
+    // The form opens with a short zoom, so it's measured again once that has finished.
+    const settled = () => { clear(); setTimeout(clear, 250) }
+    settled()
+    document.addEventListener('focusin', settled)
+    window.visualViewport?.addEventListener('resize', settled)
+    return () => { document.removeEventListener('focusin', settled); window.visualViewport?.removeEventListener('resize', settled) }
+  }, [keyboardTop])
   // B44's paste menu reserves room above the toolbar, not above the style panel, so only one of them is open at a time.
   useEffect(() => { if (pasteMenu) setStyleOpen(false) }, [pasteMenu])
   useEffect(() => {
@@ -1881,6 +1905,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // side menu and link toolbar): anything they showed would make iOS take the tap for a hover and drop the click.
     // On a device with both (a touch laptop, an iPad with a trackpad), the last pointer decides (Lead f6ade708).
     onPointerDownCapture={e => { lastPointer.current = e.pointerType }}
+    // Only the text itself counts: the toolbar and its URL form are portals whose events bubble here too, and clearing
+    // on them unmounted the toolbar before Edit link could open (Ratchet 9fff8995).
+    onPointerUpCapture={e => { if (e.pointerType === 'touch' && inText(e.target)) setLinkTapped(Boolean((e.target as Element).closest?.('a'))) }}
+    onPasteCapture={e => { if (inText(e.target)) setLinkTapped(false) }}
+    onBeforeInputCapture={e => { if (inText(e.target)) setLinkTapped(false) }}
+    onInputCapture={e => { if (inText(e.target)) setLinkTapped(false) }}
     onPointerMoveCapture={e => { lastPointer.current = e.pointerType }}
     onMouseOverCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
     onMouseMoveCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
@@ -2037,7 +2067,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     {pasteMenu && <PasteLinkMenu menu={pasteMenu} detail={bookmarkDetail(pasteMenu.urls)} onKeep={() => setPasteMenu(null)} onBookmark={bookmarkPasted} onHighlight={h => setPasteMenu({ ...pasteMenu, highlight: h })} />}
     <div ref={saveLine} className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? conflictText : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
-    <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false}>
+    <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} shadCNComponents={doneInputs}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
       {!compact && !selectionLabel && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
         <LineTypeSelect key="blockTypeSelect" isRoleHeading={isRoleHeading} canHoldHeading={canHoldHeading} />
@@ -2074,6 +2104,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}
       {['[[', '【【'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} shouldOpen={() => false} getItems={async query => linkItems(query, trigger)} onItemClick={item => item.onItemClick()} />)}
       {hoverPointer && <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />}
+      {(hoverPointer || linkTapped) && <LinkToolbarController />}
     </BlockNoteView>
     </RowActionsContext.Provider>
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}
@@ -2234,3 +2265,13 @@ function PasteLinkMenu({ menu, detail, onKeep, onBookmark, onHighlight }: { menu
     </div>
   )
 }
+
+/**
+ * B58: BlockNote's forms (Edit link's URL and title) save on Return, and their "OK" is a screen-reader-only button, so the
+ * key should read "done". iOS fixes the key's label when focus lands, so the attribute has to be on the input from the
+ * start; setting it on focus came too late (Roadbuster's native run). Every BlockNote input here is such a form field.
+ */
+function DoneInput(props: ComponentProps<'input'>) {
+  return <ShadCNDefaultComponents.Input.Input enterKeyHint="done" {...props} />
+}
+const doneInputs = { Input: { Input: DoneInput } }
