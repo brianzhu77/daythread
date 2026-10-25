@@ -26,10 +26,14 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
   // B9: while today's page is being made, the screen keeps its one loading line instead of flashing "No page yet ·
   // Start this page"; that state shows only if making the page failed.
   // Decided while rendering, not in the effect, so not even one frame shows the empty state before the call starts.
+  // On a connection that hangs (no reply, no error), it stops waiting after 6 s and offers Start, as before; the page still
+  // appears if the reply comes later (Bumblebee).
   const [failed, setFailed] = useState<LocalDate | null>(null)
   useEffect(() => {
     if (!workspace || page || isFuture) return
     void run({ type: 'ensure-day', date }).then(made => { if (!made) setFailed(date) })
+    const waited = setTimeout(() => setFailed(date), 6000)
+    return () => clearTimeout(waited)
   }, [workspace, page, date, isFuture, run])
 
   if (!view || !workspace || (!page && !isFuture && failed !== date)) return <p className="loading">Loading your day…</p>
