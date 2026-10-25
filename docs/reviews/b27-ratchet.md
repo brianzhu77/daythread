@@ -7,3 +7,11 @@ A selection confined to one parent returns early from copyBlocks (page-editor.ts
 Independently reproduced in Chromium on a disposable SQLite store, server3640. tests/evidence/ratchet-b27/seed.ts creates the source line. inline-copy.mjs selects that line's inline contents, triggers native browser Copy, reads the actual ClipboardEvent payload synchronously, and pastes its HTML/text at another line. Two date chips render and save, both eventId ratchet-copy. chipEvents therefore returns one event, contrary to the accepted rule that a copied line makes a separate event. Preserve identity only for cut/move; remap copied inline chips in the default/HTML clipboard path too. Re-run with inline Copy, inline Cut, custom block Copy/Cut, and reload.
 
 The eleven authored chip-events tests independently pass, including Bring, complete newest-holder selection, combined day view, trash/restore and to-do date preservation. Date-parser checks were not run in that invocation because the guessed filename tests/date-reading.test.ts does not exist; no parser-pass claim is made. Remaining browser/native acceptance is pending the revision.
+
+## Additional independent checks
+
+Date-chip/parser suite: 9 tests pass independently. WebKit390 picker-check passes all cases on the disposable store after explicitly adding its required template rows; an initial run without that fixture prerequisite timed out before any interaction and is excluded.
+
+Second finding (plan §5): undo-chip.mjs types `undo check @Nov 20`, waits 300ms, chooses via Return and presses native ⌘Z. The entire line is undone to empty. A 1000ms wait before Return gives the expected raw query back. The conversion merges with the recent typing history; isolate it if Undo is to remove only conversion as specified. No authored content is permanently lost (Redo exists); this is a history-boundary contract issue.
+
+Lead26ea2918 supersedes the earlier inline-copy timebox: B27 must not ship with that gap. Existing UI cannot edit a chip date in place; the ordinary directly reachable failure is copy + rename a different appointment on the same date. Divergent dates with reused ids require other document history/conflict paths; do not imply a date-edit UI exists.
