@@ -126,7 +126,7 @@ N = D1–D6 + A5 + A1a, A1b, A3 + A4 + A6a + A8 = 13.
 
 ## B. In our own specs, Brian never named them (tracked, not counted)
 
-**To-do order (Brian 180dd48c asked for it from his view, Lead 3a82c127, 2026-10-25):** tasks already being worked on continue. Then: **now** 1. B27 with B2 folded in (#125, #127), 2. B9 (#134). **Waiting until his use shows a need:** B22 (#124), B29 (#142), A6b-2 fold (#152), B21 (#123, after the first version unless he wants it sooner). **Closed:** B7 (#132, replaced by B31). B10 (#135) closes once Jazz confirms B44's paste menu covers it. **Bottom:** B6, B4, B14, B16, the capture rows B8, B13, B18, and B11 (pre-launch only).
+**To-do order (Brian 180dd48c asked for it from his view, Lead 3a82c127, 2026-10-25):** tasks already being worked on continue. Then: **now** 1. B27 with B2 folded in (#125, #127), 2. B9 (#134). **Waiting until his use shows a need:** B22 (#124), B29 (#142), A6b-2 fold (#152), B21 (#123, after the first version unless he wants it sooner). **Closed:** B7 (#132, replaced by B31). B10 (#135, covered by B44's paste menu, Jazz d0b8ccce). **Bottom:** B6, B4, B14, B16, the capture rows B8, B13, B18, and B11 (pre-launch only).
 
 | ID | Item | Source | Status |
 |---|---|---|---|
@@ -139,7 +139,7 @@ N = D1–D6 + A5 + A1a, A1b, A3 + A4 + A6a + A8 = 13.
 | B7 | Review as a sheet | craft-v1 step 5, Brian 0a58be58 | closed (Lead 3a82c127, 2026-10-25): replaced by B31's one-screen review. Was missing. **Brian's evidence (2026-10-23, 0a58be58):** the review's structure is too rigid for him; he opens it "just to see what's there", then closes it; 0 saves in 10 days (5 opens, desktop sidebar only). A sheet that keeps the same steps would not fix this; any redo starts from "show me what happened today", not a form (Lead 06:11). Same finding as B31 (task #150) |
 | B8 | Capture type chips Auto · Task · Page | craft-v1; C4 = Auto | missing |
 | B9 | One loading message on first open: today it can show "Loading your day…" then "Opening your page…" on every open | design audit; Lead 3a82c127 | missing (**now**, order 2, 2026-10-25) |
-| B10 | Notes: explicit "Save" for a link | v0.3 P16 | closing once Jazz confirms B44's paste menu (Bookmark page or plain link) covers it (Lead 2fde58bb, 2026-10-25) |
+| B10 | Notes: explicit "Save" for a link | v0.3 P16 | closed (2026-10-25): B44's paste menu covers it, "Bookmark page" saves the link as a page and "Keep as link" leaves it plain, on desktop and phone (Jazz d0b8ccce, Lead 2fde58bb) |
 | B11 | Craft-colour replacement before any App Store build | prelaunch list, 08a02686 | not started (pre-launch only) |
 | B12 | Past day without a page shows "Nothing written · Start this page" (date rule R10, team addition) | date-navigation-rules R10 | built; Brian may veto |
 | B13 | Capture receipt follow-ups after Step 1 (receipt-v2-design-check.md, Lead 85852c23): (1) no-key capture still shows the v1 receipt; (3) an older receipt shows its capture-time date, should show the task's current date; (4) a held row saved without fixing keeps its reason chip, drop it on Save; (5) inline refusal copy: "Task changed; not applied" → "Task changed since · not applied", "… not found" → "Item no longer exists" (Bumblebee 77b32429) | Jazz design check acdfa91 | missing (after Step 1 deploy) |
