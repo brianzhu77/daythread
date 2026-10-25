@@ -60,6 +60,24 @@ log(!(await menu()).length, '@brian: the list closed on its own')
 await p.keyboard.type(' costs $5@3'); await p.waitForTimeout(200)
 log(!(await menu()).length && (await lineState('mail brian')).chips.length === 0, 'a price never opens the list')
 
+// The list never gets in the way of ordinary text (Bumblebee 37b2c238, Lead e775b188): it closes on the first
+// character that can't lead to a date, and Return on "Keep typing a date" is an ordinary Return.
+await freshLine()
+await p.keyboard.type('Meet @ the cafe'); await p.waitForTimeout(250)
+log(!(await menu()).length && (await lineState('Meet')).text === 'Meet @ the cafe', '`@ ` closes the list; text as typed')
+await freshLine()
+await p.keyboard.type('Back @home soon'); await p.waitForTimeout(250)
+log(!(await menu()).length && (await lineState('Back')).text === 'Back @home soon', '`@home` closes the list; text as typed')
+await freshLine()
+await p.keyboard.type('Budget @Nov '); await p.waitForTimeout(250)
+const waiting = await menu()
+log(waiting.length === 1 && /Keep typing a date/.test(waiting[0]), '`@Nov ` waits for the day: Keep typing a date', JSON.stringify(waiting))
+const linesBefore = await p.locator('.bn-editor .bn-block-outer').count()
+await p.keyboard.press('Enter'); await p.waitForTimeout(400)
+await p.keyboard.type('next line')
+const after = await p.evaluate(() => [...document.querySelectorAll('.bn-editor .bn-inline-content')].map(e => e.textContent))
+log(after.includes('Budget @Nov ') && after.includes('next line') && (await p.locator('.bn-editor .bn-block-outer').count()) === linesBefore + 1 && !(await menu()).length, 'Return on Keep typing makes a new line; the text stays', JSON.stringify(after.filter(t => /Budget|next line/.test(t))))
+
 // Full-width ＠ and Chinese forms.
 await freshLine()
 await p.keyboard.type('开会'); await p.keyboard.insertText('＠'); await p.waitForTimeout(250)

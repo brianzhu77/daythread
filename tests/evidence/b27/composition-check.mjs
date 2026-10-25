@@ -25,6 +25,13 @@ log(read.length === 1 && /All day/.test(read[0]), 'after the commit, 明天 read
 await p.keyboard.press('Enter'); await p.waitForTimeout(200)
 const chips = await p.evaluate(() => [...document.querySelectorAll('.bn-editor .date-ref')].map(c => c.textContent))
 log(chips.includes('Tomorrow'), 'Return made the chip', JSON.stringify(chips))
+// ＠ and a committed word that isn't a date: the list closes, the text stays (Bumblebee 37b2c238).
+await p.keyboard.press('End'); await p.keyboard.press('Enter'); await p.waitForTimeout(100)
+await cdp.send('Input.insertText', { text: '找' }); await cdp.send('Input.insertText', { text: '＠' }); await p.waitForTimeout(250)
+for (const step of ['l', 'la', 'lao', "lao'w", "lao'wang"]) { await cdp.send('Input.imeSetComposition', { text: step, selectionStart: step.length, selectionEnd: step.length }); await p.waitForTimeout(60) }
+await cdp.send('Input.insertText', { text: '老王' }); await p.waitForTimeout(400)
+const text = await p.evaluate(() => [...document.querySelectorAll('.bn-editor .bn-inline-content')].map(e => e.textContent).find(t => t?.startsWith('找')))
+log(!(await menu()).length && text === '找＠老王', '＠老王: the list closed and the text is as typed', JSON.stringify(text))
 await browser.close()
 console.log(failed ? `${failed} FAILED` : 'all passed')
 process.exit(failed ? 1 : 0)

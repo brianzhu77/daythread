@@ -1266,7 +1266,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const menu = editor.getExtension(SuggestionMenu)
     const anchor = page.type === 'daily' && page.date ? page.date : todayIso()
     // Mid-composition the query is pinyin on its way to 明天 or 周五: keep the list open until the word is committed.
-    if (editor.prosemirrorView?.composing) return [{ title: 'Keep typing a date', subtext: 'Nov 20 · Fri · 3pm', onItemClick: () => menu?.closeMenu() }]
+    if (editor.prosemirrorView?.composing) return [keepTyping(trigger, query)]
     // Nothing he could still be typing toward a date (`@brian`): the list closes and the text stays (Jazz §1).
     if (!mayRead(query, anchor)) { queueMicrotask(() => menu?.closeMenu()); return [] }
     const today = todayIso(), pageDate = page.type === 'daily' ? page.date ?? null : null
@@ -1274,8 +1274,24 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const reading = query ? readDate(query, anchor) : null
     if (reading) return [item(reading, reading.time ? rowTime(reading.time) : 'All day')]
     if (!query) return [0, 1, 2, 3].map(i => addDays(anchor, i)).map(date => item({ date, time: null, used: 0 }, relativeDay(date, today)))
-    // On its way to a date (`Nov`, `11/`): a quiet row, so Return doesn't fall through; it closes the list.
-    return [{ title: 'Keep typing a date', subtext: 'Nov 20 · Fri · 3pm', onItemClick: () => menu?.closeMenu() }]
+    // On its way to a date (`Nov`, `11/`): a quiet row, since BlockNote closes a list left empty for a few keys.
+    return [keepTyping(trigger, query)]
+  }
+  /**
+   * The "Keep typing a date" row. Return on it is an ordinary Return (Bumblebee 37b2c238): the list closes, the text
+   * stays as typed, and the line splits as if no list had been open.
+   */
+  function keepTyping(trigger: string, query: string) {
+    return { title: 'Keep typing a date', subtext: 'Nov 20 · Fri · 3pm', onItemClick: () => {
+      editor.getExtension(SuggestionMenu)?.closeMenu()
+      // The menu clears what was typed after the trigger before this runs; put it back exactly.
+      const view0 = editor.prosemirrorView, { $from } = view0.state.selection
+      const before = $from.parent.textBetween(0, $from.parentOffset, undefined, '\ufffc')
+      if (query && !before.endsWith(trigger + query) && before.endsWith(trigger)) view0.dispatch(view0.state.tr.insertText(query))
+      lastTrigger.current = editor.prosemirrorState.selection.from
+      // Once the list's own key handler is gone (it goes with the list), the Return reaches the editor.
+      requestAnimationFrame(() => { const view = editor.prosemirrorView; if (view && !view.isDestroyed) view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true, cancelable: true })) })
+    } }
   }
   /** `@query` becomes the chip, as one editor step; whatever of the query the reading didn't use stays as text. */
   function chooseDate(trigger: string, query: string, reading: Reading) {
