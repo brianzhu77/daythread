@@ -1,6 +1,6 @@
 # B27 · `@date` states (design)
 
-Status: **proposal** for the first cut (Roadbuster's plan `docs/plan/b27-at-date-plan.md`, docs/b27-plan 62b921e; Lead
+Status: **agreed** (Lead 0a513a83, ad897748) for the first cut (Roadbuster's plan `docs/plan/b27-at-date-plan.md`, docs/b27-plan 62b921e; Lead
 74dbbfdd). Covers the states listed in the plan's §8. Reuses existing pieces: the `[[` link list for the picker, the
 page/line ref pill (`.page-ref`, `.line-ref`) for the chip and the row's link. No new tokens.
 
@@ -43,6 +43,21 @@ chip is the result, not a dialog.
 - **No Events heading on that page:** the rows show at the end of the page under a small non-editable label "Events"
   (`--text-meta`, `--ink-2`), so they don't look like stray lines.
 - **Source page trashed:** no row (plan §2).
+
+## 3b. A future day with no page yet (Ratchet 28c4cf20, Lead ad897748)
+
+Opening Nov 20 before its page exists stays write-free (R7): the future-day state ("Fri, Nov 20 hasn't happened yet ·
+Create page") gains an **Events** group above "Planned or due this day", same row as §3 (time or All day, title, line
+ref back). Header in the same style as "Planned or due this day" (`h3`). With events and no tasks, only the Events group
+shows. Create page then makes the page, and the same rows appear under its Events heading.
+
+## 3c. One chip held by two lines (Bring keeps the chip, Lead ad897748)
+
+- **One row** on the event's day; its line ref points at the **newest** holder (the brought line on today's page).
+- **The older line's chip** stays a normal chip; a tap still opens that day.
+- **Deleting a holder** keeps the event while any line still holds the chip; it goes with the last one.
+- **Text form** (section text, Tasks, morning card): `@Nov 20`, `@Nov 20 3pm`, `@Jan 5, 2027` (year only when it isn't
+  the holding page's year). No weekday, no Today/Tomorrow, so the text never goes stale and `@` reads it back.
 
 ## 4. Choosing between rows in the editor and rows under the header (after Roadbuster's spike)
 
