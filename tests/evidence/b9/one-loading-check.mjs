@@ -45,8 +45,18 @@ try {
     const startAfter = Date.now() - t0
     assert.ok(mode === 'cut' ? startAfter < 4000 : startAfter > 4500 && startAfter < 9000, `Start state after ${startAfter} ms`)
     if (mode === 'hang') {
+      // He taps Start while the first request is still out (Bumblebee d1a7be5b): one page for the day, not two.
+      await page.getByRole('button', { name: 'Start this page' }).click()
       await page.waitForSelector('.bn-editor', { timeout: 15000 })
       assert.equal(await page.locator('text=Start this page').count(), 0, 'the late reply opens the page')
+      await page.waitForTimeout(1500)
+      if (process.env.DB) {
+        const { DatabaseSync } = await import('node:sqlite')
+        const db = new DatabaseSync(process.env.DB, { readOnly: true })
+        const today = await page.evaluate(() => new Date().toLocaleDateString('en-CA'))
+        const rows = db.prepare("select count(*) as n from pages where type = 'daily' and date = ?").get(today)
+        assert.equal(rows.n, 1, `one ${today} page after Start during the hang (got ${rows.n})`)
+      }
     }
     console.log(JSON.stringify({ engine, w, mode, startAfter, seen: await page.evaluate(() => window.__seen), pass: true }))
     process.exit(0)
