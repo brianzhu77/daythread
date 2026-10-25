@@ -74,7 +74,7 @@ of the strip isn't), same style as "Suggestions · 9 ▸" (`fact-line link-line`
 ## 4. Rows in the editor (decided after Roadbuster's spike 6d30c17)
 
 **Decided: inside the editor, under Events** (spike: column, caret, keyboard-up and alignment 250/0 all fine). Time
-column 64 px; at 390 a long row wraps its link under the title. Kept below as the criteria used.
+column 4.75em (76 px at 16 px text, so "10:30 AM" and "12:00 PM" fit and titles line up; 64 px was too narrow); at 390 a long row wraps its link under the title. Kept below as the criteria used.
 
 
 Prefer **inside the editor, under Events**: that's where he looks for the day's events and where his hand-written
