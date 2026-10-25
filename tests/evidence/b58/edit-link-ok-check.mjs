@@ -57,6 +57,18 @@ try {
   // Return saves, on desktop and on the phone's keyboard alike.
   await url.press('Enter'); await settle(1500)
   assert.equal(await page.locator(`.bn-editor a[href="${NEW}"]`).count(), 1, 'Return saved the new URL')
+  // After a reload (fresh fields: BlockNote reuses the form's inputs, so a label set earlier would stick), the label is
+  // still there. Limit: here the tap on the link focuses the editor and raises the fake keyboard, so this doesn't
+  // reproduce iOS's keyboard-down path (Roadbuster 7dbe2a5f); Ratchet's native long-press run covers that.
+  await page.reload({ waitUntil: 'networkidle' }); await settle(800)
+  if (await later.count()) await later.tap()
+  await page.locator('.bn-editor a').first().scrollIntoViewIfNeeded()
+  await page.locator('.bn-editor .bn-inline-content', { hasText: 'see' }).first().tap({ position: { x: 4, y: 8 } }); await settle()
+  await page.evaluate(() => document.activeElement?.blur()); await settle(600)
+  await page.locator('.bn-editor a').first().tap(); await settle()
+  await page.getByRole('button', { name: 'Edit link', exact: true }).tap(); await settle(600)
+  const again = page.locator('[data-slot="popover-content"] input:visible').first()
+  assert.equal(await again.evaluate(x => x.enterKeyHint), 'done', 'the key reads "done" when Edit link opens from no keyboard')
   assert.deepEqual(errors, [])
   console.log(JSON.stringify({ engine, form, toolbar, pass: true }))
 } catch (e) {

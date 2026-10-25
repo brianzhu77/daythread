@@ -1596,18 +1596,21 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     })
     // The form opens with a short zoom, so it's measured again once that has finished.
     const settled = () => { clear(); setTimeout(clear, 250) }
-    // Return saves this form (its OK is a screen-reader-only button), so the keyboard's key says "done" (Bumblebee). Set
-    // as the field takes focus, before iOS raises the keyboard for it (Roadbuster).
-    const focused = (e: FocusEvent) => {
+    settled()
+    document.addEventListener('focusin', settled)
+    window.visualViewport?.addEventListener('resize', settled)
+    return () => { document.removeEventListener('focusin', settled); window.visualViewport?.removeEventListener('resize', settled) }
+  }, [keyboardTop])
+  // Return saves that form (its OK is a screen-reader-only button), so the keyboard's key says "done" (Bumblebee). Set as
+  // the field takes focus, before iOS raises the keyboard for it, also when no keyboard is up yet (Roadbuster 7dbe2a5f).
+  useEffect(() => {
+    const label = (e: FocusEvent) => {
       const target = e.target as Element
       if (target.matches?.('[data-slot="popover-content"] input')) (target as HTMLInputElement).enterKeyHint = 'done'
-      settled()
     }
-    settled()
-    document.addEventListener('focusin', focused)
-    window.visualViewport?.addEventListener('resize', settled)
-    return () => { document.removeEventListener('focusin', focused); window.visualViewport?.removeEventListener('resize', settled) }
-  }, [keyboardTop])
+    document.addEventListener('focusin', label)
+    return () => document.removeEventListener('focusin', label)
+  }, [])
   // B44's paste menu reserves room above the toolbar, not above the style panel, so only one of them is open at a time.
   useEffect(() => { if (pasteMenu) setStyleOpen(false) }, [pasteMenu])
   useEffect(() => {
