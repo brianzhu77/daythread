@@ -1379,7 +1379,7 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 
 .today-events { display: flex; align-items: center; min-width: 0; max-width: 100%; overflow: hidden; white-space: nowrap; }
 .today-events-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.today-events-more { flex: none; margin-left: 0.3em; }
+.today-events-more { flex: none; margin-left: .5em; }
 .today-events-go { flex: none; margin-left: 0.3em; }
 /* B27 `@` list (Jazz 2cf1591a): quiet right labels, and a hint row that never looks picked. */
 .date-menu .date-menu-item [data-position="right"] > * { background: none; border: 0; padding: 0; color: var(--ink-3); font-weight: normal; }

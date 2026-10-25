@@ -21,7 +21,7 @@ for (const width of [1280, 390]) {
     const tops = new Set([...range.getClientRects()].filter(x => x.width > 0).map(x => Math.round(x.top)))
     return el && { text: el.textContent, first: facts.firstElementChild === el, oneLine: tops.size === 1, inside: r.right <= innerWidth, wide: document.documentElement.scrollWidth <= innerWidth, top: r.top }
   })
-  log(info?.text === 'Bake sale at school · 9:30 AM Call the plumber· +1 more▸', `${width}: the line reads the day's events in row order`, JSON.stringify(info?.text))
+  log(info?.text === 'Bake sale at school · 9:30 AM Call the plumber+1 more▸', `${width}: the line reads the day's events in row order`, JSON.stringify(info?.text))
   log(info?.first, `${width}: first in the strip`)
   log(info?.oneLine && info.inside && info.wide, `${width}: one line, inside the page, nothing wider than the screen`, JSON.stringify(info))
   log(info && info.top < (phone ? 844 : 900), `${width}: above the fold`, String(info?.top))
