@@ -1240,8 +1240,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   /**
    * B27 on iOS (Simulator, pinyin): BlockNote drops the `@` list while WebKit composes, and nothing brings it back once
    * the word is committed (`＠明天` stayed text). After a composition, a line ending in `@word` that reads (or may still
-   * read) as a date opens the list again over that word: the word is taken out and put back without touching history,
-   * so the list sees it as its query. Only after a composition, so Esc on a list is never undone by typing on.
+   * read) as a date opens the list again over that word: the word is taken out and put back (in the composition's
+   * history group), so the list sees it as its query. Only after a composition, so Esc on a list is never undone by typing on.
    */
   function reopenDateListAfterComposition() {
     const menu = editor.getExtension(SuggestionMenu)
@@ -1256,10 +1256,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const [, trigger, query] = m as unknown as [string, string, string]
     const anchor = page.type === 'daily' && page.date ? page.date : todayIso()
     if (!readDate(query, anchor) && !mayRead(query, anchor)) return
-    view.dispatch(view.state.tr.delete(sel.from - query.length, sel.from).setMeta('addToHistory', false))
+    // Both steps go into history right after the composition, so they join its group and cancel out there: Undo then
+    // takes the committed word away whole, as it would without the list (Lead ee5df19e, Ratchet 4340f78a). Kept out of
+    // history, they left the composition's own step mapped onto nothing and 明天 stuck.
+    view.dispatch(view.state.tr.delete(sel.from - query.length, sel.from))
     lastTrigger.current = view.state.selection.from
     menu.openSuggestionMenu(trigger, { deleteTriggerCharacter: false })
-    view.dispatch(view.state.tr.insertText(query).setMeta('addToHistory', false))
+    view.dispatch(view.state.tr.insertText(query))
   }
   /** §3: where a page lives, for the list's second line. */
   function whereLabel(p: Page): string {
