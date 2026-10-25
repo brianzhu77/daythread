@@ -1,0 +1,8 @@
+webkit 1280 /day/2026-10-24 broken PASS
+webkit 1280 /pages?page=rollback-doc broken PASS
+webkit 390 /day/2026-10-24 broken PASS
+webkit 390 /pages?page=rollback-doc broken PASS
+chromium 1280 /day/2026-10-24 broken PASS
+chromium 1280 /pages?page=rollback-doc broken PASS
+chromium 390 /day/2026-10-24 broken PASS
+chromium 390 /pages?page=rollback-doc broken PASS

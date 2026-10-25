@@ -1,0 +1,5 @@
+(node:31917) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+dry-run and backup failure: no writes PASS
+6 chips now text; Undo cleared. Backup at /tmp/ratchet220-backup.sqlite.
+all stored pages, Trash, nested text, revision, sections, Undo and idempotence PASS
