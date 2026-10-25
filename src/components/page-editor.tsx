@@ -1,13 +1,13 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
 import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { type ComponentProps, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
 import { BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, editorHasBlockWithType, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
 import { toast } from '@heroui/react'
 import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, LinkToolbarController, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useEditorState, useExtensionState, usePortalElement, useUIMode } from '@blocknote/react'
-import { BlockNoteView } from '@blocknote/shadcn'
+import { BlockNoteView, ShadCNDefaultComponents } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
@@ -1601,16 +1601,6 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     window.visualViewport?.addEventListener('resize', settled)
     return () => { document.removeEventListener('focusin', settled); window.visualViewport?.removeEventListener('resize', settled) }
   }, [keyboardTop])
-  // Return saves that form (its OK is a screen-reader-only button), so the keyboard's key says "done" (Bumblebee). Set as
-  // the field takes focus, before iOS raises the keyboard for it, also when no keyboard is up yet (Roadbuster 7dbe2a5f).
-  useEffect(() => {
-    const label = (e: FocusEvent) => {
-      const target = e.target as Element
-      if (target.matches?.('[data-slot="popover-content"] input')) (target as HTMLInputElement).enterKeyHint = 'done'
-    }
-    document.addEventListener('focusin', label)
-    return () => document.removeEventListener('focusin', label)
-  }, [])
   // B44's paste menu reserves room above the toolbar, not above the style panel, so only one of them is open at a time.
   useEffect(() => { if (pasteMenu) setStyleOpen(false) }, [pasteMenu])
   useEffect(() => {
@@ -2077,7 +2067,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     {pasteMenu && <PasteLinkMenu menu={pasteMenu} detail={bookmarkDetail(pasteMenu.urls)} onKeep={() => setPasteMenu(null)} onBookmark={bookmarkPasted} onHighlight={h => setPasteMenu({ ...pasteMenu, highlight: h })} />}
     <div ref={saveLine} className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? conflictText : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
-    <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false}>
+    <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} shadCNComponents={doneInputs}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
       {!compact && !selectionLabel && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
         <LineTypeSelect key="blockTypeSelect" isRoleHeading={isRoleHeading} canHoldHeading={canHoldHeading} />
@@ -2275,3 +2265,13 @@ function PasteLinkMenu({ menu, detail, onKeep, onBookmark, onHighlight }: { menu
     </div>
   )
 }
+
+/**
+ * B58: BlockNote's forms (Edit link's URL and title) save on Return, and their "OK" is a screen-reader-only button, so the
+ * key should read "done". iOS fixes the key's label when focus lands, so the attribute has to be on the input from the
+ * start; setting it on focus came too late (Roadbuster's native run). Every BlockNote input here is such a form field.
+ */
+function DoneInput(props: ComponentProps<'input'>) {
+  return <ShadCNDefaultComponents.Input.Input enterKeyHint="done" {...props} />
+}
+const doneInputs = { Input: { Input: DoneInput } }
