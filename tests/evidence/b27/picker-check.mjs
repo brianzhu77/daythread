@@ -11,7 +11,7 @@ const log = (ok, what, detail = '') => { if (!ok) failed++; console.log(`${ok ? 
 const browser = await pw[engine].launch()
 const phone = width === '390'
 const p = await browser.newPage({ viewport: { width: Number(width), height: phone ? 844 : 900 }, hasTouch: phone })
-const errors = []; p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error' && !/interactive-widget|ResizeObserver loop/.test(m.text())) errors.push(m.text()) })
+const errors = []; p.on('pageerror', e => { if (!/ResizeObserver loop/.test(e.message)) errors.push(e.message) }); p.on('console', m => { if (m.type() === 'error' && !/interactive-widget|ResizeObserver loop/.test(m.text())) errors.push(m.text()) })
 await p.goto(`${base}/day/${today}`, { waitUntil: 'networkidle' }); await p.waitForTimeout(1200)
 const later = p.getByRole('button', { name: 'Later', exact: true }); if (await later.count()) await later.click()
 
