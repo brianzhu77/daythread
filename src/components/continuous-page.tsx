@@ -25,5 +25,14 @@ export function ContinuousPage({ page, workspace }: { page: Page; workspace: Wor
   }, [page.id])
   // From the first render the page counts as opening: no background save starts on it.
   useEffect(() => { if (waiting) return; noteEditorMounting(page.id); return () => doneEditorMounting(page.id) }, [page.id, waiting])
-  return mounted && !waiting ? <PageEditor key={page.id} page={page} workspace={workspace} /> : <p className="loading">Opening your page…</p>
+  // B9: the day screen has already said "Loading your day…", so a second message for the moment the editor mounts read as
+  // a second load. The page's space is kept, quietly; words show only if it takes a while (a kept draft still saving).
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    if (mounted && !waiting) return
+    const timer = setTimeout(() => setSlow(true), 1000)
+    return () => clearTimeout(timer)
+  }, [mounted, waiting])
+  if (mounted && !waiting) return <PageEditor key={page.id} page={page} workspace={workspace} />
+  return <div className="page-opening" aria-busy="true">{slow && <p className="loading">Opening your page…</p>}</div>
 }
