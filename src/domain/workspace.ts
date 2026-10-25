@@ -1,4 +1,4 @@
-import { dayTemplate, editorSeed, needsTemplateRows, pageContentKey, projectDocument, inlineText, sectionRange, templateKind, type EditorNode } from "./editor-document.ts";
+import { dayTemplate, editorSeed, needsTemplateRows, pageContentKey, projectDocument, inlineText, sectionRange, templateKind, textDate, type EditorNode } from "./editor-document.ts";
 import { isTrashed, moveRefusal, referencesTo as pageReferences, subtreeIds } from "./page-tree.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import { cardsPresent, undoCards, type UndoCard } from "./link-paste.ts";
@@ -1300,9 +1300,9 @@ function execute(
         const checklistConversion = pastedChecklists.has(node.id) && (node.props?.role === 'reference' || node.props?.role === 'plan' && Boolean(p.date));
         if (node.props?.taskId !== `editor-task:${node.id}` || existingRow && !checklistConversion) throw new DomainError("Unknown Task identity");
         const planned = node.props.role === 'plan' ? p.date : null;
-        const t = createTask(state, inlineText(node.content) || 'Untitled task', p, planned);
+        const t = createTask(state, inlineText(node.content, textDate(p)) || 'Untitled task', p, planned);
         t.id = node.props.taskId;
-        t.title = inlineText(node.content);
+        t.title = inlineText(node.content, textDate(p));
         (p.editorCreations ??= {})[node.id] = t.id;
         if (planned) place(state, t, planned);
       }

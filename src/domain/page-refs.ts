@@ -1,6 +1,7 @@
 // A9a (docs/plan/a9-page-links.md §1–§2): inline `[[` links in editor content, and the identity and time of every
 // reference (cards and links), so Linked from (B15), A2's Undo check and Trash all read the same thing.
 import type { NoteBlock, Page, PageRefEntry, Section, Workspace } from './types.ts'
+import { mentionText, readMention } from './date-chip.ts'
 
 export interface InlineRef { refId: string; pageId: string; newTitle?: string; lineId?: string; taskId?: string }
 type Inline = { type?: string; text?: string; content?: unknown; props?: Record<string, unknown> }
@@ -19,13 +20,15 @@ export function inlineRefs(content: unknown): InlineRef[] {
 }
 
 /** A line's words with each link read as a title (`titleOf(refId)`), for the stored `NoteBlock.text`. */
-export function lineText(content: unknown, titleOf: (ref: InlineRef) => string): string {
+export function lineText(content: unknown, titleOf: (ref: InlineRef) => string, pageDate?: string | null): string {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return ''
   return (content as Inline[]).map((c) => {
     if (!c || typeof c !== 'object') return ''
     if (c.type === 'pageRef') return titleOf({ refId: String(c.props?.refId ?? ''), pageId: String(c.props?.pageId ?? '') })
-    return 'text' in c ? String(c.text) : 'content' in c ? lineText(c.content, titleOf) : ''
+    const mention = readMention(c)
+    if (mention) return mentionText(mention, pageDate)
+    return 'text' in c ? String(c.text) : 'content' in c ? lineText(c.content, titleOf, pageDate) : ''
   }).join('')
 }
 

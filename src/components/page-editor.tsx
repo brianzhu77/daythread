@@ -41,6 +41,10 @@ import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-r
 import { RowMenu } from './row-menu'
 import { openedByTurnover } from './use-screen-today'
 import { fixedOffset, seenArea } from './fixed-coords'
+import { LineRefChip } from './line-ref-chip'
+import { ChipPageDate, DateChipInPage, EventRows, eventRows, refreshEventRows, rowsFor, type RowsAnchor } from './event-rows'
+import { dayEvents } from '../domain/chip-events'
+import { mentionText } from '../domain/date-chip'
 import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
 
 const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' }, planDate: { default: '' } }, content: 'inline' }, {
@@ -70,7 +74,13 @@ const pageRef = createReactInlineContentSpec({ type: 'pageRef', propSchema: { pa
     ? <a href={lineLinkPath({ pageId: props.pageId, lineId: props.lineId, ...(props.taskId ? { taskId: props.taskId } : {}) })}>Line</a>
     : <a href={`/pages?page=${encodeURIComponent(props.pageId)}`}>{props.newTitle || 'Page'}</a>,
 })
-const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef } })
+// B27 (plan §1, Jazz b27-at-date-states §2): a `@date` chip. It holds the date and time he chose and the id of the
+// event it makes; the event itself is read from the documents (chip-events.ts). Like a link, it has no text of its own.
+const dateMention = createReactInlineContentSpec({ type: 'dateMention', propSchema: { eventId: { default: '' }, date: { default: '' }, time: { default: '' } }, content: 'none' }, {
+  render: ({ inlineContent: { props } }) => <DateChipInPage date={props.date} time={props.time || null} />,
+  toExternalHTML: ({ inlineContent: { props } }) => <span>{mentionText({ date: props.date, time: props.time || null }, null)}</span>,
+})
+const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef, dateMention } })
 /** Lines a `[[` link can live in (plan §1): never a task row. */
 const linkableLines = new Set(['paragraph', 'bulletListItem', 'numberedListItem', 'heading', 'quote'])
 // B5 Aa (F16): the styles a line can take from the phone toolbar, in the order the panel shows them.
@@ -251,36 +261,6 @@ function LineMenu({ anchor, onClose, onCopy }: { anchor: { top: number; bottom: 
     <button type="button" role="menuitem" onClick={onCopy}>Copy link to line</button>
   </div>, document.body)
 }
-/**
- * A11 (Jazz line-links-states §3-§5): a link to one line. It shows the line's current words and where it is now, from
- * the same resolver as the URL and Linked from. Tap: jump in place when that page is open, else open it at the line;
- * a line that's gone opens its page at the top with "Couldn't find that line"; a page that's gone does nothing.
- */
-function LineRefChip({ target }: { target: LineTarget }) {
-  const { workspace } = useWorkspace()
-  const navigate = useNavigate()
-  const view = lineRefView(workspace, target), r = view.resolved
-  const open = () => {
-    const page = r && workspace?.pages.find(p => p.id === r.pageId)
-    if (!r || !page) return
-    if (r.state === 'line-not-found' || !r.blockId) {
-      toast("Couldn't find that line", { timeout: 4000 })
-      if (new URLSearchParams(window.location.search).get('page') === page.id || window.location.pathname === `/day/${page.date}`) window.scrollTo({ top: 0 })
-      else void navigate({ href: pageHref(page) })
-      return
-    }
-    // Nothing stays focused after a jump, so a phone keyboard goes down (Jazz §4).
-    if (!page.trashedAt && jumpInPage(page.id, r.blockId)) { (document.activeElement as HTMLElement | null)?.blur(); return }
-    void navigate({ href: pageHref(page, r.blockId), resetScroll: false })
-  }
-  const live = view.state !== 'page-not-found'
-  return <span className={`page-ref line-ref is-${view.state}`} contentEditable={false} title={view.full} role={live ? 'link' : undefined} tabIndex={live ? -1 : undefined}
-    onMouseDown={e => e.preventDefault()} onClick={open} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); open() } }}>
-    <span className="page-ref-icon">{view.icon}</span>
-    <span className="line-ref-words">{view.words}</span>
-    {view.where && <span className="line-ref-where">{`\u00a0· ${view.where}`}</span>}
-  </span>
-}
 /** B35: a failure the network caused (worth retrying), not a refusal from the server (which would refuse again). */
 /** The host without `www.`, for the card's quiet domain. */
 function hostLabel(url: string): string {
@@ -357,7 +337,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // No gap cursor (Brian 967fd04b): BlockNote's custom blocks are `isolating`, so ProseMirror found a gap at every
   // task row's edge, stopped ↑/↓ there and drew its gap cursor, a blinking 20 px line beside the row. rowArrows moves
   // the caret between task rows instead. The page has no tables or other blocks that need a gap cursor.
-  const editor = useCreateBlockNote({ schema, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  // B27 (plan §4): the day's events, read live under the Events heading; never part of the document.
+  const rowsHost = useMemo(() => Object.assign(document.createElement('div'), { className: 'event-rows', contentEditable: 'false' }), [])
+  const rows = useMemo(() => page.type === 'daily' && page.date ? rowsFor(page, dayEvents(workspace, page.date)) : [], [page, workspace])
+  const rowsAnchor = useRef<RowsAnchor>(undefined)
+  rowsAnchor.current = rows.length ? { headingId: page.sections.find(s => s.kind === 'events')?.id ?? null } : undefined
+  const editor = useCreateBlockNote({ schema, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current)], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
     pastingNow.current = true; setTimeout(() => { pastingNow.current = false }, 0)
@@ -445,6 +430,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }, initialContent: (initial.current.nodes.length ? initial.current.nodes : [{ type: 'paragraph' }]) as never })
   const base = useRef(initial.current.base)
   const latestWorkspace = useRef(workspace); latestWorkspace.current = workspace
+  // B27: new rows (the workspace changed) redraw the widget; a document change already does.
+  const rowsKey = JSON.stringify([rowsAnchor.current, rows])
+  useEffect(() => { const view = editor.prosemirrorView; if (view) refreshEventRows(view) }, [rowsKey, editor])
   const dirty = useRef(initial.current.recovered)
   const sending = useRef(false)
   const historyPending = useRef(false)
@@ -2067,6 +2055,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     {pasteMenu && <PasteLinkMenu menu={pasteMenu} detail={bookmarkDetail(pasteMenu.urls)} onKeep={() => setPasteMenu(null)} onBookmark={bookmarkPasted} onHighlight={h => setPasteMenu({ ...pasteMenu, highlight: h })} />}
     <div ref={saveLine} className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? conflictText : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
+    <ChipPageDate.Provider value={page.type === 'daily' ? page.date ?? null : null}>
+    {createPortal(<EventRows rows={rows} page={page} workspace={workspace} pageEnd={!rowsAnchor.current?.headingId || !editor.getBlock(rowsAnchor.current.headingId)} />, rowsHost)}
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} shadCNComponents={doneInputs}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
       {!compact && !selectionLabel && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
@@ -2106,6 +2096,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       {hoverPointer && <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />}
       {(hoverPointer || linkTapped) && <LinkToolbarController />}
     </BlockNoteView>
+    </ChipPageDate.Provider>
     </RowActionsContext.Provider>
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}
       onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); dragging.current = sectionRange(nodes(), touchHandle.id); setTouchDragging(true) }}

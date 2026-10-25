@@ -1362,3 +1362,17 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* One question at a time (Lead, Bumblebee): BlockNote's link toolbar stays hidden while the paste menu is open. It's
    rendered outside the editor element, so it's hidden from the page while that editor has the menu. */
 body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !important; }
+
+/* B27 (Jazz b27-at-date-states §2–§3): the `@date` chip, and the day's events read live under its Events heading. */
+.date-ref .page-ref-title { white-space: nowrap; }
+.event-rows { user-select: none; -webkit-user-select: none; cursor: default; }
+.event-rows-list { padding-left: var(--event-rows-indent, 45px); }
+.event-rows.is-page-end .event-rows-list { padding-top: 12px; }
+.event-rows-label { font-size: var(--text-meta); color: var(--ink-2); margin-bottom: 2px; }
+.day-event { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: 8px; padding: 3px 0; line-height: 1.5; }
+.day-event-body { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; min-width: 0; }
+.day-event-time { flex: none; min-width: 64px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.day-event-time.is-all-day { color: var(--ink-3); }
+.day-event-title { color: var(--ink); overflow-wrap: anywhere; }
+.day-event-title.is-untitled { color: var(--ink-3); }
+.day-event.is-here .day-event-title { color: var(--ink-2); }
