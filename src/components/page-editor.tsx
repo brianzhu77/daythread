@@ -42,7 +42,7 @@ import { RowMenu } from './row-menu'
 import { openedByTurnover } from './use-screen-today'
 import { fixedOffset, seenArea } from './fixed-coords'
 import { LineRefChip } from './line-ref-chip'
-import { ChipPageDate, DateChipInPage, DateMenu, type DateMenuItem, EventRows, eventRows, pickerLabel, refreshEventRows, relativeDay, rowTime, rowsFor, type RowsAnchor } from './event-rows'
+import { ChipPageDate, DateChipInPage, DateMenu, dateChipPaste, type DateMenuItem, EventRows, eventRows, pickerLabel, refreshEventRows, relativeDay, rowTime, rowsFor, type RowsAnchor } from './event-rows'
 import { dayEvents } from '../domain/chip-events'
 import { mayRead, readDate, type Reading } from '../domain/date-reading'
 import { mentionText } from '../domain/date-chip'
@@ -343,7 +343,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const rows = useMemo(() => page.type === 'daily' && page.date ? rowsFor(page, dayEvents(workspace, page.date)) : [], [page, workspace])
   const rowsAnchor = useRef<RowsAnchor>(undefined)
   rowsAnchor.current = rows.length ? { headingId: page.sections.find(s => s.kind === 'events')?.id ?? null } : undefined
-  const editor = useCreateBlockNote({ schema, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current)], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  const editor = useCreateBlockNote({ schema, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
     pastingNow.current = true; setTimeout(() => { pastingNow.current = false }, 0)
@@ -1296,17 +1296,22 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   /** `@query` becomes the chip, as one editor step; whatever of the query the reading didn't use stays as text. */
   function chooseDate(trigger: string, query: string, reading: Reading) {
     editor.getExtension(SuggestionMenu)?.closeMenu()
-    const { $from } = editor.prosemirrorState.selection, to = $from.pos
-    const before = $from.parent.textBetween(0, $from.parentOffset, undefined, '\ufffc')
+    const view = editor.prosemirrorView, schema = view.state.schema
+    // The menu clears the query before this runs. Put it back as part of the typing (so the clear and this cancel out
+    // in one history group), then make the chip as its own step: one ⌘Z gives back exactly `@query` (plan §5,
+    // Ratchet 6dfe2029).
+    const typedBefore = (s: typeof view.state) => s.selection.$from.parent.textBetween(0, s.selection.$from.parentOffset, undefined, '\ufffc')
+    if (query && !typedBefore(view.state).endsWith(trigger + query) && typedBefore(view.state).endsWith(trigger)) view.dispatch(view.state.tr.insertText(query))
+    const { $from } = view.state.selection, to = $from.pos
+    const before = typedBefore(view.state)
     const typed = before.endsWith(trigger + query) ? trigger.length + query.length : before.endsWith(trigger) ? trigger.length : 0
     const rest = query.slice(reading.used)
-    const view = editor.prosemirrorView, schema = view.state.schema
     const node = schema.nodes.dateMention!.create({ eventId: crypto.randomUUID(), date: reading.date, time: reading.time ?? '' })
     const next = view.state.doc.textBetween(to, Math.min(to + 1, view.state.selection.$from.end()), undefined, '\ufffc')
     // The rest he typed comes back after the chip when the menu had already cleared it; a space follows the chip.
     const tail = typed === trigger.length + query.length ? rest : ''
     const after = tail ? (/^\s/.test(tail) ? tail : ` ${tail}`) : next && /\s/.test(next) ? '' : ' '
-    const tr = view.state.tr.replaceWith(to - typed, to, after ? [node, schema.text(after)] : node)
+    const tr = closeHistory(view.state.tr).replaceWith(to - typed, to, after ? [node, schema.text(after)] : node)
     const caret = to - typed + node.nodeSize + (tail ? after.length : after ? 1 : 0)
     view.dispatch(tr.setSelection(TextSelection.create(tr.doc, caret)).scrollIntoView())
     lastTrigger.current = -1
