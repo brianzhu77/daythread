@@ -1237,6 +1237,30 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     lastTrigger.current = selection.from
     menu.openSuggestionMenu(trigger, { deleteTriggerCharacter: false })
   }
+  /**
+   * B27 on iOS (Simulator, pinyin): BlockNote drops the `@` list while WebKit composes, and nothing brings it back once
+   * the word is committed (`＠明天` stayed text). After a composition, a line ending in `@word` that reads (or may still
+   * read) as a date opens the list again over that word: the word is taken out and put back without touching history,
+   * so the list sees it as its query. Only after a composition, so Esc on a list is never undone by typing on.
+   */
+  function reopenDateListAfterComposition() {
+    const menu = editor.getExtension(SuggestionMenu)
+    if (!menu || menu.shown() || composing.current || pastingNow.current) return
+    const view = editor.prosemirrorView, sel = view.state.selection
+    if (!view || !sel.empty) return
+    const lineType = editor.getTextCursorPosition().block.type
+    if (!(linkableLines.has(lineType) || lineType === 'task')) return
+    const before = sel.$from.parent.textBetween(0, sel.$from.parentOffset, undefined, '\ufffc')
+    const m = /(?:^|[^A-Za-z0-9._%+\-@＠])([@＠])([^@＠\ufffc\n]{1,24})$/.exec(before)
+    if (!m) return
+    const [, trigger, query] = m as unknown as [string, string, string]
+    const anchor = page.type === 'daily' && page.date ? page.date : todayIso()
+    if (!readDate(query, anchor) && !mayRead(query, anchor)) return
+    view.dispatch(view.state.tr.delete(sel.from - query.length, sel.from).setMeta('addToHistory', false))
+    lastTrigger.current = view.state.selection.from
+    menu.openSuggestionMenu(trigger, { deleteTriggerCharacter: false })
+    view.dispatch(view.state.tr.insertText(query).setMeta('addToHistory', false))
+  }
   /** §3: where a page lives, for the list's second line. */
   function whereLabel(p: Page): string {
     if (p.url) { try { return new URL(p.url).hostname.replace(/^www\./, '') } catch { return p.url } }
@@ -1966,7 +1990,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     onMouseOverCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
     onMouseMoveCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
     // A9a §3: after the composition, once ProseMirror has finished it (its DOM and decorations are drawn again).
-    onCompositionEndCapture={() => { composing.current = false; if (editor.getExtension(SuggestionMenu)?.shown()) requestAnimationFrame(() => setCompositionsEnded(n => n + 1)); setTimeout(repairComposition, 0); setTimeout(maybeOpenLinkList, 50); requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
+    onCompositionEndCapture={() => { composing.current = false; if (editor.getExtension(SuggestionMenu)?.shown()) requestAnimationFrame(() => setCompositionsEnded(n => n + 1)); setTimeout(repairComposition, 0); setTimeout(maybeOpenLinkList, 50); setTimeout(reopenDateListAfterComposition, 80); requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
     onDropCapture={e => {
       // Drops go to the row boundary under the pointer at release. BlockNote's line can lag the pointer when
       // dragover events stop arriving (Ratchet task #49: a long drag stayed put, the line stuck near the start),
