@@ -11,6 +11,9 @@ Each value goes **directly** into `.env.local` on the Mac and/or the Vercel proj
 | `DATABASE_URL` | Supabase → Connect → Transaction pooler (port 6543), `postgres` user with your password | yes | yes |
 | `DAYTHREAD_SIGNUP` | `invite` (the default) or `open`. Who may sign up or sign in for the first time | optional | optional |
 | `DAYTHREAD_INVITES` | Invited addresses, comma-separated. Optional: the `daythread.invites` table does the same without a redeploy | optional | optional |
+| `DAYTHREAD_VAPID_PUBLIC_KEY`, `DAYTHREAD_VAPID_PRIVATE_KEY` | `node scripts/vapid-keys.mjs`, once. Reminders over web push (docs/design/reminders.md); without them the app shows no reminders control | optional | yes, for reminders |
+| `DAYTHREAD_VAPID_SUBJECT` | Optional `mailto:` address the push services may contact; the site's address when unset | optional | optional |
+| `CRON_SECRET` | Any long random string: what the scheduler sends to `/api/push/tick` (Vercel's cron sends it on its own) | optional | yes, for reminders |
 
 `OWNER_EMAIL` is no longer read (shot 2): any account with a workspace signs in; the invite list decides who gets one.
 

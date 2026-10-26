@@ -27,6 +27,10 @@ import { Route as ApiAuthResetPasswordRouteImport } from './routes/api/auth/rese
 import { Route as ApiAuthSignInRouteImport } from './routes/api/auth/sign-in'
 import { Route as ApiAuthSignOutRouteImport } from './routes/api/auth/sign-out'
 import { Route as ApiAuthSignUpRouteImport } from './routes/api/auth/sign-up'
+import { Route as ApiPushKeyRouteImport } from './routes/api/push/key'
+import { Route as ApiPushSubscribeRouteImport } from './routes/api/push/subscribe'
+import { Route as ApiPushTickRouteImport } from './routes/api/push/tick'
+import { Route as ApiPushUnsubscribeRouteImport } from './routes/api/push/unsubscribe'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -118,6 +122,26 @@ const ApiAuthSignUpRoute = ApiAuthSignUpRouteImport.update({
   path: '/api/auth/sign-up',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPushKeyRoute = ApiPushKeyRouteImport.update({
+  id: '/api/push/key',
+  path: '/api/push/key',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPushSubscribeRoute = ApiPushSubscribeRouteImport.update({
+  id: '/api/push/subscribe',
+  path: '/api/push/subscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPushTickRoute = ApiPushTickRouteImport.update({
+  id: '/api/push/tick',
+  path: '/api/push/tick',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPushUnsubscribeRoute = ApiPushUnsubscribeRouteImport.update({
+  id: '/api/push/unsubscribe',
+  path: '/api/push/unsubscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -138,6 +162,10 @@ export interface FileRoutesByFullPath {
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/auth/sign-up': typeof ApiAuthSignUpRoute
+  '/api/push/key': typeof ApiPushKeyRoute
+  '/api/push/subscribe': typeof ApiPushSubscribeRoute
+  '/api/push/tick': typeof ApiPushTickRoute
+  '/api/push/unsubscribe': typeof ApiPushUnsubscribeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -158,6 +186,10 @@ export interface FileRoutesByTo {
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/auth/sign-up': typeof ApiAuthSignUpRoute
+  '/api/push/key': typeof ApiPushKeyRoute
+  '/api/push/subscribe': typeof ApiPushSubscribeRoute
+  '/api/push/tick': typeof ApiPushTickRoute
+  '/api/push/unsubscribe': typeof ApiPushUnsubscribeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -179,6 +211,10 @@ export interface FileRoutesById {
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/auth/sign-up': typeof ApiAuthSignUpRoute
+  '/api/push/key': typeof ApiPushKeyRoute
+  '/api/push/subscribe': typeof ApiPushSubscribeRoute
+  '/api/push/tick': typeof ApiPushTickRoute
+  '/api/push/unsubscribe': typeof ApiPushUnsubscribeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -201,6 +237,10 @@ export interface FileRouteTypes {
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
     | '/api/auth/sign-up'
+    | '/api/push/key'
+    | '/api/push/subscribe'
+    | '/api/push/tick'
+    | '/api/push/unsubscribe'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -221,6 +261,10 @@ export interface FileRouteTypes {
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
     | '/api/auth/sign-up'
+    | '/api/push/key'
+    | '/api/push/subscribe'
+    | '/api/push/tick'
+    | '/api/push/unsubscribe'
   id:
     | '__root__'
     | '/'
@@ -241,6 +285,10 @@ export interface FileRouteTypes {
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
     | '/api/auth/sign-up'
+    | '/api/push/key'
+    | '/api/push/subscribe'
+    | '/api/push/tick'
+    | '/api/push/unsubscribe'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -262,6 +310,10 @@ export interface RootRouteChildren {
   ApiAuthSignInRoute: typeof ApiAuthSignInRoute
   ApiAuthSignOutRoute: typeof ApiAuthSignOutRoute
   ApiAuthSignUpRoute: typeof ApiAuthSignUpRoute
+  ApiPushKeyRoute: typeof ApiPushKeyRoute
+  ApiPushSubscribeRoute: typeof ApiPushSubscribeRoute
+  ApiPushTickRoute: typeof ApiPushTickRoute
+  ApiPushUnsubscribeRoute: typeof ApiPushUnsubscribeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -392,6 +444,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSignUpRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/push/key': {
+      id: '/api/push/key'
+      path: '/api/push/key'
+      fullPath: '/api/push/key'
+      preLoaderRoute: typeof ApiPushKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/push/subscribe': {
+      id: '/api/push/subscribe'
+      path: '/api/push/subscribe'
+      fullPath: '/api/push/subscribe'
+      preLoaderRoute: typeof ApiPushSubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/push/tick': {
+      id: '/api/push/tick'
+      path: '/api/push/tick'
+      fullPath: '/api/push/tick'
+      preLoaderRoute: typeof ApiPushTickRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/push/unsubscribe': {
+      id: '/api/push/unsubscribe'
+      path: '/api/push/unsubscribe'
+      fullPath: '/api/push/unsubscribe'
+      preLoaderRoute: typeof ApiPushUnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -414,6 +494,10 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSignInRoute: ApiAuthSignInRoute,
   ApiAuthSignOutRoute: ApiAuthSignOutRoute,
   ApiAuthSignUpRoute: ApiAuthSignUpRoute,
+  ApiPushKeyRoute: ApiPushKeyRoute,
+  ApiPushSubscribeRoute: ApiPushSubscribeRoute,
+  ApiPushTickRoute: ApiPushTickRoute,
+  ApiPushUnsubscribeRoute: ApiPushUnsubscribeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
