@@ -1,5 +1,8 @@
 # Daythread design tokens
 
+> **Colour and shape now follow `system-v2.md`** (Oct 26: one 12-step grey, blue for the few, 8px bordered controls).
+> §2 and §3 below record the values Today rendered before that; the names still exist as aliases onto the new steps.
+
 Status: **v1 merged (acd30ce), no visual change (§8). v1.1 item 1 (§6 app-wide) on `design/heroui-tokens`.** Values come from what Today renders on main 216a565. Brian (247ee3f3, Oct 22): "first build our design system and
 tokens based on the current design on today's route, then build the login page". This file replaces `craft-v1.md` §2
 as the source of truth for values; craft-v1 stays as the record of where they came from.
@@ -202,3 +205,21 @@ To finish "one system", these would change pixels slightly:
 
 My recommendation: do 1 now, since it makes the sign-in screen and the rest of the app one palette. Do 2 when each
 component is next touched, because the gain is consistency of the code more than anything he'd see.
+
+## 10. One surface (Oct 26)
+
+Brian, Oct 26: "align the entire site's style with Today's view." Craft v1's two surfaces (grouped grey for lists,
+white for documents) are retired. Every screen is a page on `--bg-doc`, laid out like Today:
+
+- the title in the day title's metrics (`--text-title` 28/34/700), 24px from the top (48px on laptop), 12px under it
+  and 20px before the first block; a right-hand slot for the screen's control (Today's arrows, Pages' +, Review's Done
+  as the primary pill);
+- section headings as the editor draws them (`--text-section` 19px, semibold, ink): Tasks' days, Calendar's days, a
+  tag's days, the review's groups;
+- rows on the page, not cards: lists of pages and tags are hairline rows like a page's Subpages; task rows are the
+  editor's rows; the calendar's note and the empty states are soft blocks (`--fill-soft`, `--radius-block`) like
+  Today's Start the day and Due soon;
+- pills (`--fill`, selected `--blue-soft`) for filters and the calendar's Earlier/Later, as Tasks already had.
+
+The grouped grey (`--bg-grouped`) remains on the laptop sidebar only. Screenshots of every screen at 1280 and 390
+before and after are in the pull request.

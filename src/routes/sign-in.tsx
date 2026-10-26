@@ -11,6 +11,9 @@ export const Route = createFileRoute('/sign-in')({
 /** The browser's zone, for a first sign-in's workspace; the server falls back to UTC when it is not one it knows. */
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone } catch { return undefined } }
 
+/** One line on what Daythread is, under the title of the sign-in and sign-up screens. */
+export const tagline = 'A page for each day, with the to-dos that carry over.'
+
 /** "in 4 min", or "in 30 s" under a minute, rounded up (Jazz 235e692). */
 const inWait = (seconds: number) => seconds < 60 ? `in ${Math.max(1, Math.ceil(seconds))} s` : `in ${Math.ceil(seconds / 60)} min`
 
@@ -115,6 +118,7 @@ function SignIn() {
       <p className="sign-in-brand">Daythread</p>
       <form onSubmit={forgot}>
         <h1>Forgot password</h1>
+        <p className="sign-in-sub">Type the address and we'll email a link to choose a new one.</p>
         <TextField type="email" name="email" autoComplete="username" inputMode="email" value={email} onChange={setEmail} isReadOnly={busy} autoFocus fullWidth>
           <Label>Email</Label>
           <Input />
@@ -130,6 +134,7 @@ function SignIn() {
       <p className="sign-in-brand">Daythread</p>
       <form onSubmit={reset}>
         <h1>Choose a new password</h1>
+        <p className="sign-in-sub">{email ? `For ${email}. ` : ''}You'll be signed in once it's saved.</p>
         <TextField type={shown ? 'text' : 'password'} name="password" autoComplete="new-password" value={password} onChange={setPassword} isReadOnly={busy} autoFocus fullWidth>
           <Label>New password</Label>
           <div className="sign-in-password">
@@ -147,12 +152,16 @@ function SignIn() {
       <p className="sign-in-brand">Daythread</p>
       <form onSubmit={signIn}>
         <h1>{mode === 'confirming' ? 'Confirming your email…' : 'Sign in'}</h1>
+        <p className="sign-in-sub">{tagline}</p>
         <TextField type="email" name="email" autoComplete="username" inputMode="email" value={email} onChange={setEmail} isReadOnly={busy} autoFocus fullWidth>
           <Label>Email</Label>
           <Input />
         </TextField>
         <TextField type={shown ? 'text' : 'password'} name="password" autoComplete="current-password" value={password} onChange={setPassword} isReadOnly={busy} fullWidth>
-          <Label>Password</Label>
+          <div className="sign-in-label-row">
+            <Label>Password</Label>
+            <button type="button" className="link" onClick={() => { setMode('forgot'); setError(null); setNote(null) }}>Forgot password?</button>
+          </div>
           <div className="sign-in-password">
             <Input ref={passwordInput} />
             <button type="button" className="link sign-in-show" onClick={() => setShown(s => !s)} aria-pressed={shown}>{shown ? 'Hide' : 'Show'}</button>
@@ -161,7 +170,7 @@ function SignIn() {
         {error && <p className="sign-in-error" role="alert">{error}</p>}
         {note && <p className="sign-in-note" role="status">{note}</p>}
         <Button type="submit" variant="primary" fullWidth isPending={busy} isDisabled={!email.trim() || !password}>Sign in</Button>
-        <p className="sign-in-meta">New here? <Link to="/sign-up" className="link">Create an account</Link> · <button type="button" className="link" onClick={() => { setMode('forgot'); setError(null); setNote(null) }}>Forgot password?</button></p>
+        <p className="sign-in-meta">New here? <Link to="/sign-up" className="link">Create an account</Link></p>
       </form>
     </main>
   )
