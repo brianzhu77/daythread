@@ -101,8 +101,24 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     }).catch(error => { this.ready = undefined; throw error })
     return this.ready
   }
-  /** Shot 1's one row becomes its account's workspace (or the local one when unlinked); a never-written row becomes nothing. */
+  /**
+   * Shot 1's one row becomes its account's workspace (or the local one when unlinked); a never-written row becomes nothing.
+   * Only once: when `workspace_shot1` is already there, the cutover happened and this `workspace` table came from an
+   * old build run against the database afterwards (Brian, Oct 26: every sign-in failed on "workspace_shot1 already
+   * exists"). It is kept aside under a dated name, never migrated over the live rows, and the start goes on.
+   */
   private async migrateShot1(tx: SqlClient): Promise<void> {
+    const [already] = await tx.query<{ n: number }>(`select count(*)::int as n from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace where n.nspname = $1 and c.relname = 'workspace_shot1'`, [this.schema])
+    if (already?.n) {
+      const taken = async (name: string) => (await tx.query<{ n: number }>(`select count(*)::int as n from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace where n.nspname = $1 and c.relname = $2`, [this.schema, name]))[0]!.n > 0
+      const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 17)
+      let stray = `workspace_stray_${stamp}`
+      for (let i = 2; await taken(stray); i++) stray = `workspace_stray_${stamp}_${i}`
+      const [row] = await tx.query<{ revision: number; user_id: string | null; updated_at: string }>(`select revision, user_id::text as user_id, updated_at::text as updated_at from ${this.t('workspace')} where id = 1`)
+      console.warn(JSON.stringify({ level: 'warn', event: 'storage.stray-shot1-table', renamedTo: stray, row: row ?? null }))
+      await tx.exec(`alter table ${this.t('workspace')} rename to ${stray}`)
+      return
+    }
     const [row] = await tx.query<{ data: string; revision: number; user_id: string | null }>(`select data::text as data, revision, user_id::text as user_id from ${this.t('workspace')} where id = 1`)
     if (row) {
       const ws = upgradeWorkspace(JSON.parse(row.data), this.today)

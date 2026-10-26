@@ -185,6 +185,29 @@ async function shot1Table(sql: SqlClient, data: unknown, revision: number, userI
   await sql.query('insert into daythread.workspace (id, revision, data, user_id) values (1, $1, $2::text::json, $3::uuid)', [revision, JSON.stringify(data), userId])
 }
 
+test('a stray shot 1 table after the cutover (an old build ran against the database): set aside, never migrated over live rows, the start completes', async () => {
+  const db = await PGlite.create()
+  try {
+    const sql = pgliteClient(db), expected = convertV1(v1(), today)
+    await shot1Table(sql, expected, expected.revision, A)
+    await new PostgresWorkspaceRepository(sql, undefined, { today }).prepare()
+    const before = stored(await asOwner(A, () => new PostgresWorkspaceRepository(sql, undefined, { today }).load()))
+    // The shot 1 build's own schema setup, run again after the cutover, with a row it wrote meanwhile.
+    await shot1Table(sql, { ...expected, pages: [], tasks: [], revision: 3 }, 3, A)
+    const repo = new PostgresWorkspaceRepository(sql, undefined, { today })
+    await repo.prepare()
+    const tables = (await sql.query<{ relname: string }>("select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'daythread' and c.relkind = 'r' order by relname")).map(r => r.relname)
+    assert.ok(!tables.includes('workspace'), 'the stray table is out of the way: ' + tables.join(','))
+    assert.ok(tables.includes('workspace_shot1'), 'the rollback copy stays')
+    assert.equal(tables.filter(t => t.startsWith('workspace_stray_')).length, 1, 'the stray table is kept aside, not dropped: ' + tables.join(','))
+    assert.deepEqual(stored(await asOwner(A, () => repo.load())), before, 'the live rows are untouched')
+    // A second stray, a minute later, is kept too.
+    await shot1Table(sql, { ...expected, pages: [], tasks: [], revision: 4 }, 4, A)
+    await new PostgresWorkspaceRepository(sql, undefined, { today }).prepare()
+    assert.equal((await sql.query<{ relname: string }>("select relname from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'daythread' and c.relname like 'workspace_stray_%'")).length, 2)
+  } finally { await db.close() }
+})
+
 test('migration: shot 1\'s linked row becomes the account\'s workspace, rows for rows, revision and receipts kept, the old table kept as workspace_shot1', async () => {
   const db = await PGlite.create()
   try {
