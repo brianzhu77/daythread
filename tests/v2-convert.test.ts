@@ -106,3 +106,14 @@ test('convert: a saved evening reflection and captured text the model never file
   assert.ok(!lines.includes('Already filed'))
   assert.deepEqual(convertV1(raw, today), ws, 'still deterministic')
 })
+
+test('convert: an empty template row with no task on a day page becomes a plan row, so a to-do typed there later is planned on that day', () => {
+  const raw = v1() as { pages: { id: string; editorJSON?: string }[] }
+  const p = raw.pages.find(x => x.id === 'day:2026-10-21')!
+  const doc = JSON.parse(p.editorJSON!) as { id: string; type: string; props: Record<string, string>; content: unknown[]; children: unknown[] }[]
+  doc.splice(1, 0, { id: 'day:2026-10-21:top3:template:9', type: 'task', props: { taskId: 'editor-task:day:2026-10-21:top3:template:9', role: 'reference', planDate: '' }, content: [], children: [] })
+  p.editorJSON = JSON.stringify(doc)
+  const ws = convertV1(raw, today)
+  const row = flat(pageNodes(ws.pages.find(x => x.id === 'day:2026-10-21')!)).find(n => n.id === 'day:2026-10-21:top3:template:9')!
+  assert.deepEqual({ role: row.props?.role, planDate: row.props?.planDate }, { role: 'plan', planDate: '2026-10-21' })
+})

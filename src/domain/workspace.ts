@@ -286,6 +286,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (buried) { state.deletedTasks = state.deletedTasks.filter((t) => t.id !== id); state.tasks.push(buried); continue; }
         if (!words.trim()) continue;
         createTask(state, words, p, on, id);
+        // A task born in a row on a day page is planned there: a reference row (an old build's empty template row) has nothing to refer to yet.
+        if (p.type === "daily" && p.date && rowRole(n) !== "plan") n.props = { ...n.props, role: "plan", planDate: p.date };
       }
       // Rows gone: a task with no row anywhere goes with its line; today's plan row removed one at a time is Not today.
       const cut = new Set(action.cutTaskIds ?? []), single = new Set(action.singleDeleteIds ?? []);

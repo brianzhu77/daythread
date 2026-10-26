@@ -38,7 +38,8 @@ export function convertV1(raw: unknown, today: string): Workspace {
       const id = rowTaskId(n)
       if (!id) continue
       const t = taskById.get(id)
-      const plan = p.type === 'daily' && !!p.date && !!t && (included.has(`${id}|${p.date}`) || t.plannedOn === p.date)
+      // A row with no task yet (an empty template row) is a plan row too: what gets typed there is planned on that day.
+      const plan = p.type === 'daily' && !!p.date && (t ? included.has(`${id}|${p.date}`) || t.plannedOn === p.date : true)
       n.props = { ...n.props, role: plan ? 'plan' : 'reference', planDate: plan ? p.date! : '' }
     }
     const page: Page = { id: p.id, type: p.type, date: p.date, title: p.title, document: JSON.stringify(nodes) }
