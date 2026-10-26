@@ -5,6 +5,7 @@ import { normalizeEmail, type AuthConfig } from './config.ts'
 
 export type VerifyResult = { ok: true; userId: string; email: string } | { ok: false; reason?: 'unconfirmed' }
 /** `confirm`: Supabase sent a confirmation email, sign-in works once it is clicked; `session`: the login is usable now. */
+export type ResetResult = { ok: true; userId: string; email: string } | { ok: false; reason: 'expired' } | { ok: false; reason: 'weak'; message: string }
 export type SignUpResult = { outcome: 'confirm' } | { outcome: 'session'; userId: string; email: string } | { outcome: 'exists' } | { outcome: 'weak'; message: string }
 
 async function call(config: AuthConfig, path: string, body: unknown, fetchImpl: typeof fetch, token?: string, method = 'POST'): Promise<{ ok: boolean; status: number; json: Record<string, unknown> }> {
@@ -61,4 +62,35 @@ export async function deleteUser(config: AuthConfig, userId: string, fetchImpl: 
   if (!config.secretKey) throw new Error('SUPABASE_SECRET_KEY is not set')
   const r = await call(config, `admin/users/${encodeURIComponent(userId)}`, undefined, fetchImpl, config.secretKey, 'DELETE')
   if (!r.ok && r.status !== 404) throw new Error(`Supabase Auth delete ${r.status}`)
+}
+
+/** Asks Supabase to send its recovery email. A 200 says nothing about whether the address exists; a 4xx other than a rate limit is treated the same. */
+export async function recover(config: AuthConfig, email: string, fetchImpl: typeof fetch = fetch): Promise<void> {
+  const r = await call(config, 'recover', { email: normalizeEmail(email) }, fetchImpl)
+  if (!r.ok && r.status !== 400 && r.status !== 422) throw new Error(`Supabase Auth recover ${r.status}`)
+}
+
+/** The new password, set with the access token the recovery link carried; Supabase's own sessions are then ended everywhere. */
+export async function resetPassword(config: AuthConfig, accessToken: string, password: string, fetchImpl: typeof fetch = fetch): Promise<ResetResult> {
+  if (!password || password.length > 1024) return { ok: false, reason: 'weak', message: 'Use a longer password' }
+  if (!accessToken || accessToken.length > 4096) return { ok: false, reason: 'expired' }
+  const r = await call(config, 'user', { password }, fetchImpl, accessToken, 'PUT')
+  if (!r.ok) {
+    const code = r.json.error_code, message = typeof r.json.msg === 'string' ? r.json.msg : 'That password is too weak'
+    if (code === 'weak_password' || code === 'validation_failed' || code === 'same_password') return { ok: false, reason: 'weak', message }
+    return { ok: false, reason: 'expired' }
+  }
+  const user = userOf(r.json)
+  if (!user) return { ok: false, reason: 'expired' }
+  void call(config, 'logout?scope=global', {}, fetchImpl, accessToken).catch(() => undefined)
+  return { ok: true, userId: user.id, email: user.email }
+}
+
+/** Who an access token (from the confirmation link) belongs to; null when it is stale or not a token. */
+export async function userFromToken(config: AuthConfig, accessToken: string, fetchImpl: typeof fetch = fetch): Promise<{ userId: string; email: string } | null> {
+  if (!accessToken || accessToken.length > 4096) return null
+  const r = await call(config, 'user', undefined, fetchImpl, accessToken, 'GET')
+  if (!r.ok) return null
+  const user = userOf(r.json)
+  return user ? { userId: user.id, email: user.email } : null
 }

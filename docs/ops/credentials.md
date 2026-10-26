@@ -49,3 +49,14 @@ operations carry the workspace id. Brian's shot 1 row was migrated into his work
 build; the old table is kept as `daythread.workspace_shot1` for rollback (rename it back to `workspace` and redeploy
 the shot 1 build). Delete account (the account row, with the password) removes the workspace and the sessions; the
 Supabase login goes too when `SUPABASE_SECRET_KEY` is set, else it stays and a new sign-in starts an empty workspace.
+
+## Password reset and the emailed links
+
+"Forgot password?" on the sign-in screen asks Supabase to send its recovery email. The link in it (and the one in the
+sign-up confirmation email) lands on the project's **Site URL** with a token in the fragment; the sign-in screen reads
+it and either shows "Choose a new password" or signs the person in. So, in Supabase → Authentication → URL
+Configuration, the Site URL must be the app's own address (`https://<the production domain>`); with `localhost` there,
+every emailed link dies. Nothing else is needed: no redirect allow-list entry, no Supabase code in the browser.
+
+Supabase's built-in mailer sends a few emails per hour and often lands in spam: enough for Brian's own tests, not for
+real users. Custom SMTP (Authentication → Emails → SMTP settings) is the launch item for both emails.

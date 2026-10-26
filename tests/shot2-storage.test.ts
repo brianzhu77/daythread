@@ -281,7 +281,7 @@ test('the operations log is pruned every 25th revision: operations older than 30
     const r = await run('t24', 24, { type: 'add-task', pageId: `day:${today}`, title: 'Task 24', plannedOn: today })
     assert.equal(r.workspace.revision, 25)
     const left = (await sql.query<{ operation_id: string }>('select operation_id from daythread.operations order by revision')).map(o => o.operation_id)
-    assert.deepEqual(left, ['t22', 't23', 't24'], 'the old ones are gone, the recent ones stay')
+    assert.deepEqual(left, ['t21', 't22', 't23', 't24'], 'the old ones are gone, the recent ones stay (t21 is revision 22, not aged)')
     // A replay of a pruned operation is a new operation now (its receipt is gone), refused at its old revision like any stale command.
     await assert.rejects(run('t5', 5, { type: 'add-task', pageId: `day:${today}`, title: 'Task 5', plannedOn: today }), /Saved elsewhere/)
     // Undo still works on the newest.

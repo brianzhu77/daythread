@@ -17,6 +17,11 @@ export function schemaName(value = process.env.DAYTHREAD_PG_SCHEMA ?? 'daythread
 }
 
 export interface WorkspaceInfo { id: string; timezone: string; revision: number }
+
+/** An operation is kept this long for replay (a lost response needs seconds; this is generous); the newest is always kept, it carries the Undo marker. */
+export const operationKeepMs = 30 * 24 * 3600_000
+/** The log is pruned inside the write transaction every this many revisions: no scheduler, no noticeable cost. */
+export const pruneEvery = 25
 interface Scope extends WorkspaceInfo { userId: string | null }
 
 const pageColumns = ['id', 'position', 'type', 'date', 'title', 'url', 'parent_id', 'trashed_at', 'trash_id', 'document', 'handoff_done', 'review_saved'] as const
@@ -89,6 +94,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
             primary key (workspace_id, operation_id)
           );
           create index if not exists operations_revision on ${s}.operations (workspace_id, revision desc);
+          create index if not exists operations_created on ${s}.operations (workspace_id, created_at);
           alter table ${s}.operations enable row level security;`)
         if ((await tables(tx)).includes('workspace')) await this.migrateShot1(tx)
       })
@@ -193,6 +199,11 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     await upsert('tasks', taskColumns, diff.tasks.upsert); await remove('tasks', diff.tasks.remove)
     await upsert('deleted_tasks', deletedColumns, diff.deleted.upsert); await remove('deleted_tasks', diff.deleted.remove)
   }
+  /** Operations older than `operationKeepMs` go, except the newest of the workspace (the Undo marker). */
+  async pruneOperations(tx: SqlClient, workspaceId: string, now: Date): Promise<void> {
+    await tx.query(`delete from ${this.t('operations')} where workspace_id = $1::uuid and created_at < $2
+      and revision < (select max(revision) from ${this.t('operations')} where workspace_id = $1::uuid)`, [workspaceId, new Date(now.getTime() - operationKeepMs).toISOString()])
+  }
   private async writeOperation(tx: SqlClient, workspaceId: string, receipt: Receipt, revision: number, type: string, inverse: RowDiff | null): Promise<void> {
     await tx.query(`insert into ${this.t('operations')} (workspace_id, operation_id, revision, type, receipt, inverse) values ($1::uuid, $2, $3, $4, $5::text::json, $6::text::json)`,
       [workspaceId, receipt.operationId, revision, type, JSON.stringify(receipt), inverse ? JSON.stringify(inverse) : null])
@@ -221,6 +232,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
         await this.writeDiff(tx, scope.id, write)
         await tx.query(`update ${this.t('workspaces')} set revision = $2, timezone = $3 where id = $1::uuid`, [scope.id, after.revision, after.timezone])
         await this.writeOperation(tx, scope.id, result.receipt, after.revision, command.action.type, after.undo?.operationId === command.operationId ? inverse : null)
+        if (after.revision % pruneEvery === 0) await this.pruneOperations(tx, scope.id, new Date())
       }
       // The browser and the caller get the Undo marker, never the copy, and no receipts: replay lookups are the store's.
       const { undo, ...rest } = after

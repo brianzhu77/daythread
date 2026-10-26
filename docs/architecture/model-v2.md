@@ -62,6 +62,9 @@ then writes only the rows that changed (`src/server/workspace-rows.ts` plans the
 append or a removal rewrites only the rows involved). Undo therefore needs no second copy of the workspace; walking
 the log for multi-step Undo is possible later.
 
+The log is pruned inside the write transaction every 25th revision: operations older than 30 days go, the newest one
+(the Undo marker) always stays. Replay of a lost response needs seconds, so 30 days is generous.
+
 Row-level security is on with no policies (Supabase's Data API serves nothing to the publishable key); isolation is
 the server's: every statement is scoped by the signed-in account's workspace id (`request-owner.ts`).
 
