@@ -1,5 +1,8 @@
 # Daythread design tokens
 
+> **Colour and shape now follow `system-v2.md`** (Oct 26: one 12-step grey, blue for the few, 8px bordered controls).
+> §2 and §3 below record the values Today rendered before that; the names still exist as aliases onto the new steps.
+
 Status: **v1 merged (acd30ce), no visual change (§8). v1.1 item 1 (§6 app-wide) on `design/heroui-tokens`.** Values come from what Today renders on main 216a565. Brian (247ee3f3, Oct 22): "first build our design system and
 tokens based on the current design on today's route, then build the login page". This file replaces `craft-v1.md` §2
 as the source of truth for values; craft-v1 stays as the record of where they came from.
