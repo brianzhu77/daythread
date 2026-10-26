@@ -213,9 +213,9 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
     <div className="review review-one">
       <header className="review-one-head">
         <h1>
-          {dayWord(next, today)} · {longLabel(next)}
+          <span className="relative-day">{dayWord(next, today)}</span><span className="relative-day-sep"> · </span>{longLabel(next)}
         </h1>
-        <button type="button" className="app-link review-done" onClick={() => void finish()} disabled={finishing}>
+        <button type="button" className="primary review-done" onClick={() => void finish()} disabled={finishing}>
           Done
         </button>
         <p className="quiet review-one-sub">

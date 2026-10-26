@@ -520,20 +520,22 @@ textarea.task-title:focus { outline: none; }
 .original { margin: 0; padding: 8px 12px; border-left: 3px solid var(--line); color: var(--ink-soft); white-space: pre-wrap; }
 
 /* ---------- Review (B31: one screen about the next day) ---------- */
-.review { display: grid; gap: 16px; padding-top: 8px; }
-.review-one { max-width: 640px; width: 100%; margin: 0 auto; gap: 20px; }
-.review-one-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 12px; }
-.review-one-head h1 { font-size: 1.5rem; letter-spacing: -.02em; margin: 0; }
+.review { display: grid; gap: 16px; }
+.review-one { gap: 8px; }
+.review-one-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 12px; padding: 24px 0 12px; margin-bottom: 8px; }
+@media (min-width: 900px) { .review-one-head { padding-top: 48px; } }
+.review-one-head h1 { font-size: var(--text-title); line-height: 34px; letter-spacing: -.02em; font-weight: var(--weight-bold); margin: 0; }
+/* On phones the relative day sits above the date, as on Today, so the title never wraps against Done. */
+@media (max-width: 599px) { .review-one-head h1 .relative-day { display: block; font-size: var(--text-meta); line-height: 18px; font-weight: var(--weight-semibold); } .review-one-head h1 .relative-day-sep { display: none; } }
 /* The only button, top right, where the phone keyboard never covers it. 44 px tall for the thumb. */
-.review-done { font-size: 1.06rem; font-weight: var(--weight-semibold, 600); min-height: var(--tap); padding: 0 4px; }
+.review-done { min-height: 40px; padding: 0 18px; font-size: var(--text-ui); }
 .review-done:disabled { opacity: .5; }
 .review-one-sub, .review-one-head .warn-line { grid-column: 1 / -1; margin: 0; }
-.review-group { display: grid; gap: 6px; }
-.review-group h2 { font-size: var(--text-meta); font-weight: var(--weight-medium); color: var(--ink-2); margin: 0 4px; letter-spacing: 0; }
-.review-list { display: grid; background: var(--card); border-radius: var(--radius-card); padding: 2px 16px; }
+.review-group { display: grid; gap: 6px; padding-top: 10px; }
+.review-group h2 { margin: 0; }
+.review-list { display: grid; }
 .review-list > .task-row { margin: 0 -8px; }
-.review-list > .task-row + .task-row { box-shadow: 0 -1px 0 var(--line); border-radius: 0; }
-.review-hint, .review-empty { margin: 0 4px; font-size: var(--text-meta); }
+.review-hint, .review-empty { margin: 0; font-size: var(--text-meta); color: var(--ink-2); }
 .review-list .is-moved .task-title { color: var(--ink-2); }
 /* A section, not a date: no alarm icon. */
 .task-row .app-tag.section-tag::before { display: none; }
@@ -584,10 +586,9 @@ details.banner { display: block; }
 details.banner > :not(summary) { display: inline-flex; align-items: center; margin: 0 12px 2px 0; }
 
 /* ---------- Navigation (craft-v1 §3) ---------- */
-body:has(.list-screen) { background: var(--bg-grouped); }
+/* One surface (Brian, Oct 26): every screen is a page on white like Today; the grouped grey stays on the sidebar only. */
 /* B52b (Jazz cf1067d6): what a screen is drawn on, for the strips that cover the edges (status bar, tab bar fade). */
 :root { --screen-bg: var(--bg); }
-body:has(.list-screen) { --screen-bg: var(--bg-grouped); }
 .sidebar {
   display: none;
   position: sticky;
@@ -674,31 +675,35 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 
 /* ---------- List screens: Tasks, Calendar, Pages ---------- */
 .list-screen { display: grid; gap: 12px; padding-top: 24px; }
+@media (min-width: 900px) { .list-screen, .doc-screen { padding-top: 48px; } }
 /* An open page is a document: white like a day page, not the grouped grey of lists (Jazz). */
 .doc-screen { display: grid; gap: 12px; padding-top: 24px; }
 .doc-screen > .back-link { display: block; max-width: 100%; min-height: 44px; line-height: 44px; margin: -12px 0 -12px; font-size: var(--text-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A title can be one unbroken word (a long page name or tag); break it rather than widen the screen. */
-.large-title { font-size: var(--text-large-title); line-height: 41px; font-weight: var(--weight-bold); letter-spacing: -.02em; overflow-wrap: anywhere; }
+.large-title { font-size: var(--text-title); line-height: 34px; font-weight: var(--weight-bold); letter-spacing: -.02em; overflow-wrap: anywhere; }
+/* The title block keeps Today's rhythm: 12px under the title, 20px before the first block. */
+.list-screen > .large-title, .list-screen > .title-row, .list-screen > div:has(> .large-title) { padding-bottom: 12px; margin-bottom: 8px; }
 .pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
-.pill { flex: none; display: inline-flex; align-items: center; min-height: 40px; padding: 0 16px; border-radius: var(--radius-pill); background: var(--fill); color: var(--ink); text-decoration: none; font-size: var(--text-ui); font-weight: 500; }
+.pill { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 16px; border-radius: var(--radius-pill); background: var(--fill); color: var(--ink); text-decoration: none; font-size: var(--text-ui); font-weight: 500; }
 .pill[aria-current='page'] { background: var(--blue-soft); color: var(--blue-text); font-weight: var(--weight-semibold); }
+.pill svg { width: 16px; height: 16px; }
 /* Four task pills must fit a 375-390px phone uncut; narrower screens still scroll the row. */
 @media (max-width: 430px) { .pills { gap: 6px; } .pill { padding: 0 11px; } }
 .list-section { display: grid; gap: 4px; padding-top: 12px; }
-.list-header { font-size: var(--text-heading); font-weight: var(--weight-semibold); }
+.list-header, .day-header, .tag-day-label, .review-group h2 { font-size: var(--text-section); line-height: 1.35; font-weight: var(--weight-semibold); letter-spacing: 0; color: var(--ink); }
+.list-section { padding-top: 18px; }
 .task-list { gap: 0; }
 .task-row.list { margin: 0; padding: 0 2px 0 4px; }
-.empty-box { display: grid; justify-items: center; gap: 6px; padding: 28px 20px; border-radius: var(--app-radius); background: var(--fill); color: var(--ink-2); text-align: center; }
+.empty-box { display: grid; justify-items: center; gap: 6px; padding: 28px 20px; border-radius: var(--radius-block); background: var(--fill-soft); color: var(--ink-2); text-align: center; }
 .empty-box.tall { padding: 48px 20px; }
 .empty-box svg { width: 32px; height: 32px; color: var(--ink-3); }
 
-.calendar-day { display: grid; gap: 8px; padding: 18px 0 6px; border-bottom: 1px solid var(--line); }
-.day-header { font-size: var(--text-heading); font-weight: var(--weight-bold); letter-spacing: -.01em; }
+.calendar-day { display: grid; gap: 8px; padding: 18px 0 6px; }
 .day-header .relative { color: var(--ink-2); font-weight: var(--weight-semibold); }
 .day-header .relative.is-today { color: var(--today); }
 .day-header .weekday { color: var(--ink-2); font-weight: var(--weight-regular); }
-.note-card { display: grid; gap: 4px; min-height: 96px; align-content: start; padding: 14px 16px; border-radius: var(--app-radius); background: var(--card); color: var(--ink); text-decoration: none; box-shadow: 0 1px 2px rgba(0, 0, 0, .04); }
-.note-card:hover { box-shadow: var(--shadow-float); }
+.note-card { display: grid; gap: 4px; min-height: 72px; align-content: start; padding: 14px 16px; border-radius: var(--radius-block); background: var(--fill-soft); color: var(--ink); text-decoration: none; }
+.note-card:hover { background: var(--fill); }
 .note-preview { font-size: var(--text-small); color: var(--ink-2); overflow-wrap: anywhere; }
 .calendar-task { display: flex; align-items: center; gap: 10px; min-height: 40px; }
 .check-mark { width: 18px; height: 18px; flex: none; border: 1.5px solid var(--check); border-radius: 5px; }
@@ -1007,17 +1012,18 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 @keyframes block-flash { from { background: var(--blue-soft); } to { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { .block-flash { animation: none; background: var(--blue-soft); } }
 
-/* Grouped cards (Pages, Tags, one tag): white rows on the grouped grey, like Tasks and Calendar (tags-r3). */
-.title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* Lists (Pages, Tags, one tag, Trash): plain rows on the page with hairlines, like a page's Subpages; no card box (one surface). */
+.title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .round-add { display: grid; place-items: center; flex: none; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: var(--fill); color: var(--ink); cursor: pointer; }
 .round-add svg { width: 20px; height: 20px; }
-.back-link { justify-self: start; color: var(--blue); text-decoration: none; }
+.back-link { justify-self: start; min-height: 44px; display: inline-flex; align-items: center; margin: -12px 0 -14px; color: var(--ink-2); font-size: var(--text-small); text-decoration: none; }
+.back-link:hover { color: var(--ink); }
 .card-section { display: grid; gap: 6px; padding-top: 4px; }
-.card-list { border-radius: var(--app-radius); background: var(--card); overflow: hidden; }
+.card-list { border-top: 1px solid var(--line); }
 /* Grid items default to their content's width; a long no-wrap title must ellipsize, not widen the card. */
 .card-list li { min-width: 0; }
 .card-list li + li { border-top: 1px solid var(--line); }
-.card-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 16px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.card-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 6px; border: 0; border-radius: var(--radius-inline); background: none; color: var(--ink); font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
 .card-row > svg { flex: none; color: var(--ink-3); }
 .card-row-icon { display: grid; place-items: center; flex: none; width: 22px; color: var(--ink-3); }
 .card-row-icon svg { width: 19px; height: 19px; }
@@ -1041,7 +1047,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* An undated page's title names its group: wrap it, but stop at two lines (Jazz). */
 .tag-day-label { margin: 0; padding: 8px 0 0; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: var(--text-heading); font-weight: var(--weight-semibold); letter-spacing: -.01em; }
 .tag-day-label span { color: var(--ink-2); font-weight: var(--weight-regular); }
-.tag-block { display: flex; align-items: flex-start; gap: 10px; width: 100%; white-space: normal; min-height: 48px; padding: 12px 16px; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.tag-block { display: flex; align-items: flex-start; gap: 10px; width: 100%; white-space: normal; min-height: 48px; padding: 12px 6px; border: 0; border-radius: var(--radius-inline); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 /* Read-only here (the row opens the block), but it should look like the day page's box, not a faded disabled one. */
 .tag-block .check { flex: none; margin-top: 3px; }
 .tag-block .check:disabled { opacity: 1; cursor: pointer; }

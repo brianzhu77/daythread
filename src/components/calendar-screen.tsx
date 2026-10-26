@@ -1,4 +1,3 @@
-import { buttonVariants } from '@heroui/react'
 import { Link } from '@tanstack/react-router'
 import type { LocalDate, Page, Task } from '../domain/types'
 import { getCalendarTasks } from '../domain/workspace'
@@ -11,7 +10,6 @@ import { useWorkspace } from './use-day'
 
 // Days shown per screen; "Later" extends the list through the URL.
 const DAYS_SHOWN = 10
-const secondary = buttonVariants({ variant: 'secondary' })
 
 /**
  * Calendar tab (craft-v1 §5.4, feature map C2): one header per day, that day's page as a card,
@@ -28,15 +26,15 @@ export function CalendarScreen({ from, today }: { from: LocalDate; today: LocalD
       <h1 className="large-title">Calendar</h1>
       {/* Earlier and Later never move; Today sits last, away from the aligned edge, and is hidden (keeping its space) when already there. */}
       <nav className="calendar-nav" aria-label="Move through days">
-        <Link to="/calendar" search={{ date: addDays(from, -DAYS_SHOWN) }} className={secondary} data-slot="button">
+        <Link to="/calendar" search={{ date: addDays(from, -DAYS_SHOWN) }} className="pill">
           <ArrowLeftIcon />
           Earlier
         </Link>
-        <Link to="/calendar" search={{ date: addDays(from, DAYS_SHOWN) }} className={secondary} data-slot="button">
+        <Link to="/calendar" search={{ date: addDays(from, DAYS_SHOWN) }} className="pill">
           Later
           <ArrowRightIcon />
         </Link>
-        <Link to="/calendar" search={{}} className={`${secondary} ${from === today ? 'invisible' : ''}`} data-slot="button">
+        <Link to="/calendar" search={{}} className={`pill ${from === today ? 'invisible' : ''}`}>
           Today
         </Link>
       </nav>
