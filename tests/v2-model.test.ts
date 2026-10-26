@@ -384,3 +384,12 @@ test('a task typed into a leftover reference row on a day page (an old build\'s 
   const row = flat(pageNodes(h.page(dayId(today)))).find(n => n.id === 'left')!
   assert.deepEqual({ role: row.props?.role, planDate: row.props?.planDate }, { role: 'plan', planDate: today })
 })
+
+test('set-timezone: a valid IANA zone is kept on the workspace; an unknown one is refused; the export uses it for its date', () => {
+  const h = harness()
+  h.run({ type: 'set-timezone', timezone: 'Asia/Tokyo' })
+  assert.equal(h.ws.timezone, 'Asia/Tokyo')
+  assert.throws(() => h.run({ type: 'set-timezone', timezone: 'Mars/Olympus' }), /time zone/i)
+  assert.throws(() => h.run({ type: 'set-timezone', timezone: '' }), /time zone/i)
+  assert.equal(h.ws.timezone, 'Asia/Tokyo')
+})
