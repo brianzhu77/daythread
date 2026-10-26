@@ -20,7 +20,10 @@ import { Route as ApiExportRouteImport } from './routes/api/export'
 import { Route as DayDateRouteImport } from './routes/day.$date'
 import { Route as TagsIndexRouteImport } from './routes/tags.index'
 import { Route as TagsTagRouteImport } from './routes/tags.$tag'
+import { Route as ApiAuthConfirmRouteImport } from './routes/api/auth/confirm'
 import { Route as ApiAuthDeleteAccountRouteImport } from './routes/api/auth/delete-account'
+import { Route as ApiAuthRecoverRouteImport } from './routes/api/auth/recover'
+import { Route as ApiAuthResetPasswordRouteImport } from './routes/api/auth/reset-password'
 import { Route as ApiAuthSignInRouteImport } from './routes/api/auth/sign-in'
 import { Route as ApiAuthSignOutRouteImport } from './routes/api/auth/sign-out'
 import { Route as ApiAuthSignUpRouteImport } from './routes/api/auth/sign-up'
@@ -80,9 +83,24 @@ const TagsTagRoute = TagsTagRouteImport.update({
   path: '/tags/$tag',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthConfirmRoute = ApiAuthConfirmRouteImport.update({
+  id: '/api/auth/confirm',
+  path: '/api/auth/confirm',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthDeleteAccountRoute = ApiAuthDeleteAccountRouteImport.update({
   id: '/api/auth/delete-account',
   path: '/api/auth/delete-account',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthRecoverRoute = ApiAuthRecoverRouteImport.update({
+  id: '/api/auth/recover',
+  path: '/api/auth/recover',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthResetPasswordRoute = ApiAuthResetPasswordRouteImport.update({
+  id: '/api/auth/reset-password',
+  path: '/api/auth/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthSignInRoute = ApiAuthSignInRouteImport.update({
@@ -113,7 +131,10 @@ export interface FileRoutesByFullPath {
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags/': typeof TagsIndexRoute
+  '/api/auth/confirm': typeof ApiAuthConfirmRoute
   '/api/auth/delete-account': typeof ApiAuthDeleteAccountRoute
+  '/api/auth/recover': typeof ApiAuthRecoverRoute
+  '/api/auth/reset-password': typeof ApiAuthResetPasswordRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/auth/sign-up': typeof ApiAuthSignUpRoute
@@ -130,7 +151,10 @@ export interface FileRoutesByTo {
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags': typeof TagsIndexRoute
+  '/api/auth/confirm': typeof ApiAuthConfirmRoute
   '/api/auth/delete-account': typeof ApiAuthDeleteAccountRoute
+  '/api/auth/recover': typeof ApiAuthRecoverRoute
+  '/api/auth/reset-password': typeof ApiAuthResetPasswordRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/auth/sign-up': typeof ApiAuthSignUpRoute
@@ -148,7 +172,10 @@ export interface FileRoutesById {
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags/': typeof TagsIndexRoute
+  '/api/auth/confirm': typeof ApiAuthConfirmRoute
   '/api/auth/delete-account': typeof ApiAuthDeleteAccountRoute
+  '/api/auth/recover': typeof ApiAuthRecoverRoute
+  '/api/auth/reset-password': typeof ApiAuthResetPasswordRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/auth/sign-up': typeof ApiAuthSignUpRoute
@@ -167,7 +194,10 @@ export interface FileRouteTypes {
     | '/day/$date'
     | '/tags/$tag'
     | '/tags/'
+    | '/api/auth/confirm'
     | '/api/auth/delete-account'
+    | '/api/auth/recover'
+    | '/api/auth/reset-password'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
     | '/api/auth/sign-up'
@@ -184,7 +214,10 @@ export interface FileRouteTypes {
     | '/day/$date'
     | '/tags/$tag'
     | '/tags'
+    | '/api/auth/confirm'
     | '/api/auth/delete-account'
+    | '/api/auth/recover'
+    | '/api/auth/reset-password'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
     | '/api/auth/sign-up'
@@ -201,7 +234,10 @@ export interface FileRouteTypes {
     | '/day/$date'
     | '/tags/$tag'
     | '/tags/'
+    | '/api/auth/confirm'
     | '/api/auth/delete-account'
+    | '/api/auth/recover'
+    | '/api/auth/reset-password'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
     | '/api/auth/sign-up'
@@ -219,7 +255,10 @@ export interface RootRouteChildren {
   DayDateRoute: typeof DayDateRoute
   TagsTagRoute: typeof TagsTagRoute
   TagsIndexRoute: typeof TagsIndexRoute
+  ApiAuthConfirmRoute: typeof ApiAuthConfirmRoute
   ApiAuthDeleteAccountRoute: typeof ApiAuthDeleteAccountRoute
+  ApiAuthRecoverRoute: typeof ApiAuthRecoverRoute
+  ApiAuthResetPasswordRoute: typeof ApiAuthResetPasswordRoute
   ApiAuthSignInRoute: typeof ApiAuthSignInRoute
   ApiAuthSignOutRoute: typeof ApiAuthSignOutRoute
   ApiAuthSignUpRoute: typeof ApiAuthSignUpRoute
@@ -304,11 +343,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TagsTagRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/confirm': {
+      id: '/api/auth/confirm'
+      path: '/api/auth/confirm'
+      fullPath: '/api/auth/confirm'
+      preLoaderRoute: typeof ApiAuthConfirmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/delete-account': {
       id: '/api/auth/delete-account'
       path: '/api/auth/delete-account'
       fullPath: '/api/auth/delete-account'
       preLoaderRoute: typeof ApiAuthDeleteAccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/recover': {
+      id: '/api/auth/recover'
+      path: '/api/auth/recover'
+      fullPath: '/api/auth/recover'
+      preLoaderRoute: typeof ApiAuthRecoverRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/reset-password': {
+      id: '/api/auth/reset-password'
+      path: '/api/auth/reset-password'
+      fullPath: '/api/auth/reset-password'
+      preLoaderRoute: typeof ApiAuthResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/sign-in': {
@@ -347,7 +407,10 @@ const rootRouteChildren: RootRouteChildren = {
   DayDateRoute: DayDateRoute,
   TagsTagRoute: TagsTagRoute,
   TagsIndexRoute: TagsIndexRoute,
+  ApiAuthConfirmRoute: ApiAuthConfirmRoute,
   ApiAuthDeleteAccountRoute: ApiAuthDeleteAccountRoute,
+  ApiAuthRecoverRoute: ApiAuthRecoverRoute,
+  ApiAuthResetPasswordRoute: ApiAuthResetPasswordRoute,
   ApiAuthSignInRoute: ApiAuthSignInRoute,
   ApiAuthSignOutRoute: ApiAuthSignOutRoute,
   ApiAuthSignUpRoute: ApiAuthSignUpRoute,

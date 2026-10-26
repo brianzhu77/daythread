@@ -1,4 +1,5 @@
-// A stand-in for Supabase Auth's HTTP API, for the browser run: password grant, sign-up, logout, admin delete.
+// A stand-in for Supabase Auth's HTTP API, for the browser run: password grant, sign-up, logout, admin delete,
+// recovery (the emailed link's token is read back from /_recovery) and the user behind a token.
 // Users live in memory. FAKE_CONFIRM=1 makes sign-up need a confirmation (confirmed later via POST /_confirm).
 import { createServer } from 'node:http'
 const port = Number(process.argv[2] ?? 54330), confirm = process.env.FAKE_CONFIRM === '1'
@@ -26,10 +27,32 @@ createServer(async (req, res) => {
     const needs = confirm || email.startsWith('confirm-')
     const u = { id: uuid(), password: body.password, confirmed: !needs }
     users.set(email, u)
-    if (needs) return json(res, 200, { id: u.id, email, confirmation_sent_at: new Date().toISOString() })
+    if (needs) { u.signupToken = 'sgn-' + Math.random().toString(36).slice(2); return json(res, 200, { id: u.id, email, confirmation_sent_at: new Date().toISOString() }) }
     return json(res, 200, { access_token: 'at-' + u.id, user: { id: u.id, email } })
   }
   if (req.method === 'POST' && path === '/auth/v1/logout') return json(res, 204, {})
+  // Recovery: the "email" is a token kept here; the browser run reads it from GET /_recovery?email= and opens the link.
+  if (req.method === 'POST' && path === '/auth/v1/recover') {
+    const u = users.get((body.email ?? '').toLowerCase())
+    if (u) { u.recovery = 'rec-' + Math.random().toString(36).slice(2); u.recoveryEmail = (body.email ?? '').toLowerCase() }
+    return json(res, 200, {})
+  }
+  if (req.method === 'GET' && path === '/_recovery') { const u = users.get((url.searchParams.get('email') ?? '').toLowerCase()); return json(res, 200, { token: u?.recovery ?? null, signup: u?.signupToken ?? null }) }
+  const bearer = (req.headers.authorization ?? '').replace(/^Bearer /, '')
+  const byToken = () => [...users].find(([, u]) => u.recovery === bearer || u.signupToken === bearer || 'at-' + u.id === bearer)
+  if (req.method === 'PUT' && path === '/auth/v1/user') {
+    const hit = byToken()
+    if (!hit) return json(res, 401, { error_code: 'bad_jwt', msg: 'invalid JWT' })
+    if ((body.password ?? '').length < 6) return json(res, 422, { error_code: 'weak_password', msg: 'Password should be at least 6 characters.' })
+    hit[1].password = body.password; hit[1].recovery = undefined
+    return json(res, 200, { id: hit[1].id, email: hit[0] })
+  }
+  if (req.method === 'GET' && path === '/auth/v1/user') {
+    const hit = byToken()
+    if (!hit) return json(res, 401, { error_code: 'bad_jwt', msg: 'invalid JWT' })
+    hit[1].confirmed = true
+    return json(res, 200, { id: hit[1].id, email: hit[0] })
+  }
   if (req.method === 'DELETE' && path.startsWith('/auth/v1/admin/users/')) {
     if (req.headers.authorization !== 'Bearer sb_secret_fake') return json(res, 401, { msg: 'no' })
     const id = decodeURIComponent(path.split('/').pop())

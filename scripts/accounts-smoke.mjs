@@ -23,7 +23,7 @@ async function run(name, fn, width = 1280) {
   const errors = []
   page.on('pageerror', e => errors.push(e.message))
   // A refused fetch (401/403 on purpose) is logged by the browser as a failed resource; not an error of the page.
-  page.on('console', m => { if (m.type() === 'error' && !/favicon|status of (401|403|404|429)/.test(m.text())) errors.push('console: ' + m.text()) })
+  page.on('console', m => { if (m.type() === 'error' && !/favicon|status of (400|401|403|404|429)/.test(m.text())) errors.push('console: ' + m.text()) })
   try { await fn(page, context); results.push({ name, ok: true, errors }) }
   catch (e) { results.push({ name, ok: false, error: e.message, errors }); await page.screenshot({ path: `${out}/fail-${name}.png`, fullPage: true }).catch(() => {}) }
   finally { await context.close() }
@@ -192,6 +192,66 @@ await run('phone-sign-in-and-account-row', async page => {
   await page.goto(base + '/pages'); await page.locator('.account-row-phone').waitFor({ timeout: 20000 })
   await page.screenshot({ path: `${out}/09-phone-pages-account.png`, fullPage: true })
 }, 390)
+
+await run('forgot-password-and-reset', async (page, context) => {
+  // Another device stays signed in with the old password; the reset ends that session too.
+  const other = await context.browser().newContext({ viewport: { width: 1280, height: 900 }, timezoneId: 'America/Vancouver' })
+  const otherPage = await other.newPage()
+  await signIn(otherPage, 'brian@test.com', 'right-pw')
+  await otherPage.waitForURL(u => new URL(u).pathname === '/', { timeout: 20000 })
+  await page.goto(base + '/sign-in'); await page.locator('.sign-in').waitFor({ timeout: 15000 })
+  await page.getByRole('button', { name: 'Forgot password?' }).click()
+  await page.getByLabel('Email').fill('brian@test.com')
+  await page.getByRole('button', { name: 'Email me a link' }).click()
+  await page.getByRole('status').waitFor({ timeout: 15000 })
+  assert((await page.getByRole('status').innerText()).includes('on its way'))
+  // The same line for an unknown address.
+  await page.getByRole('button', { name: 'Forgot password?' }).click()
+  await page.getByLabel('Email').fill('nobody@test.com')
+  await page.getByRole('button', { name: 'Email me a link' }).click()
+  await page.getByRole('status').waitFor({ timeout: 15000 })
+  assert((await page.getByRole('status').innerText()).includes('on its way'))
+  await page.screenshot({ path: `${out}/10-forgot-sent.png`, fullPage: true })
+  // "The email": the link lands on the site with the token in the fragment.
+  const { token } = await (await fetch(fake + '/_recovery?email=brian@test.com')).json()
+  assert(token, 'the fake recorded a recovery token')
+  await page.goto(`${base}/#access_token=${token}&type=recovery`)
+  await page.waitForURL(/\/sign-in/, { timeout: 15000 })
+  await page.getByRole('heading', { name: 'Choose a new password' }).waitFor({ timeout: 15000 })
+  assert(!page.url().includes('access_token'), 'the token left the address bar')
+  await page.screenshot({ path: `${out}/11-reset-form.png`, fullPage: true })
+  await page.getByLabel('New password').fill('x')
+  await page.getByRole('button', { name: 'Save and sign in' }).click()
+  await page.getByRole('alert').waitFor({ timeout: 15000 })
+  await page.getByLabel('New password').fill('fresh-pw-2026')
+  await page.getByRole('button', { name: 'Save and sign in' }).click()
+  await page.waitForURL(u => new URL(u).pathname === '/', { timeout: 20000 })
+  await page.locator('.editor-task-title').first().waitFor({ state: 'visible', timeout: 30000 })
+  assert((await page.locator('.sidebar').innerText()).includes('brian@test.com'), 'signed in after the reset')
+  // The other device is signed out by the reset.
+  await otherPage.goto(base + '/tasks'); await otherPage.waitForURL(/\/sign-in/, { timeout: 15000 })
+  await other.close()
+  // The old password is gone, the new one works; the used link is dead.
+  const stale = await page.request.post(base + '/api/auth/reset-password', { data: { accessToken: token, password: 'another-pw-2026' }, headers: { 'sec-fetch-site': 'same-origin' } })
+  assert.equal(stale.status(), 401)
+  await page.goto(base + '/sign-in'); await page.locator('.sign-in').waitFor({ timeout: 15000 })
+  await signIn(page, 'brian@test.com', 'right-pw')
+  await page.getByRole('alert').waitFor({ timeout: 15000 })
+  await signIn(page, 'brian@test.com', 'fresh-pw-2026')
+  await page.waitForURL(u => new URL(u).pathname === '/', { timeout: 20000 })
+})
+await run('confirmation-link-signs-in', async page => {
+  await sql.unsafe("insert into daythread.invites (email) values ('confirm-link@test.com') on conflict do nothing")
+  await signUp(page, 'confirm-link@test.com', 'confirm-pw')
+  await page.getByRole('status').waitFor({ timeout: 15000 })
+  const { signup } = await (await fetch(fake + '/_recovery?email=confirm-link@test.com')).json()
+  assert(signup, 'the fake recorded a confirmation token')
+  await page.goto(`${base}/#access_token=${signup}&type=signup`)
+  await page.waitForURL(u => u.pathname === '/' && !u.hash.includes('access_token'), { timeout: 20000 })
+  await page.locator('.editor-task-title').first().waitFor({ state: 'visible', timeout: 30000 })
+  assert((await page.locator('.sidebar').innerText()).includes('confirm-link@test.com'), 'signed in straight from the link')
+  assert.equal(await count('workspaces', "where user_id = (select user_id from daythread.accounts where email = 'confirm-link@test.com')"), 1)
+})
 await browser.close()
 await sql.end()
 console.log(JSON.stringify(results, null, 1))

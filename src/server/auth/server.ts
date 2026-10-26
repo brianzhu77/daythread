@@ -11,10 +11,10 @@ import { authConfig, authRequired, normalizeEmail, type AuthConfig } from './con
 import { AccountStore } from './accounts.ts'
 import { SessionStore, type CheckedSession, type Outcome } from './sessions.ts'
 import * as supabaseAuth from './supabase.ts'
-import type { SignUpResult, VerifyResult } from './supabase.ts'
+import type { ResetResult, SignUpResult, VerifyResult } from './supabase.ts'
 
 /** Reachable without a session: the sign-in and sign-up screens and the calls they make; build assets are public code. */
-const publicPaths = new Set(['/sign-in', '/sign-up', '/api/auth/sign-in', '/api/auth/sign-up', '/api/auth/sign-out'])
+const publicPaths = new Set(['/sign-in', '/sign-up', '/api/auth/sign-in', '/api/auth/sign-up', '/api/auth/sign-out', '/api/auth/recover', '/api/auth/reset-password', '/api/auth/confirm'])
 const isPublic = (path: string) => publicPaths.has(path) || path.startsWith('/assets/') || /^\/[\w-]+\.(ico|png|svg|webmanifest)$/.test(path)
 
 let store: SessionStore | undefined
@@ -34,6 +34,9 @@ interface Supabase {
   verifyPassword(config: AuthConfig, email: string, password: string): Promise<VerifyResult>
   signUp(config: AuthConfig, email: string, password: string, timezone: string | undefined): Promise<SignUpResult>
   deleteUser(config: AuthConfig, userId: string): Promise<void>
+  recover(config: AuthConfig, email: string): Promise<void>
+  resetPassword(config: AuthConfig, accessToken: string, password: string): Promise<ResetResult>
+  userFromToken(config: AuthConfig, accessToken: string): Promise<{ userId: string; email: string } | null>
 }
 let supabase: Supabase = supabaseAuth
 /** For tests: a workspace store on another database. */
@@ -144,6 +147,9 @@ const timezone = z.string().max(100).optional()
 const signInBody = z.object({ email, password, timezone })
 const signUpBody = z.object({ email, password, timezone })
 const deleteBody = z.object({ password })
+const recoverBody = z.object({ email })
+const tokenBody = z.object({ accessToken: z.string().min(1).max(4096), timezone })
+const resetBody = z.object({ accessToken: z.string().min(1).max(4096), password, timezone })
 const noStore = { 'cache-control': 'no-store' }
 const refuse = (status: number, error: string, extra: Record<string, unknown> = {}) => Response.json({ ok: false, error, ...extra }, { status, headers: noStore })
 const tooMany = (ms: number) => refuse(429, 'too-many', { retryAfter: Math.ceil(ms / 1000) })
@@ -254,4 +260,62 @@ export async function handleDeleteAccount(request: Request): Promise<Response> {
   let login: 'deleted' | 'kept' = 'kept'
   if (config.secretKey) { try { await supabase.deleteUser(config, session.userId); login = 'deleted' } catch (error) { console.error(JSON.stringify({ level: 'error', event: 'auth.delete-login', error: error instanceof Error ? error.message : String(error) })) } }
   return Response.json({ ok: true, login }, { headers: { ...noStore, 'set-cookie': sessionCookie(request, '', null) } })
+}
+
+/**
+ * Forgot password: Supabase sends its recovery email. The answer is the same whatever the address, so nothing is
+ * learned here; the per-address brake applies as to a sign-in.
+ */
+export async function handleRecover(request: Request): Promise<Response> {
+  const body = recoverBody.safeParse(await request.json().catch(() => null))
+  if (!body.success) return refuse(400, 'invalid')
+  const ipWait = ipWaitMs(clientIp(request))
+  if (ipWait > 0) return tooMany(ipWait)
+  try { await supabase.recover(authConfig(), body.data.email) } catch { return refuse(503, 'unavailable') }
+  return Response.json({ ok: true }, { headers: noStore })
+}
+
+/** A login the emailed link vouched for comes in: the account and workspace on first entry (invite list permitting), every older session ended, a fresh one issued. */
+async function enter(request: Request, userId: string, address: string, zone: string, endOthers: boolean): Promise<Response> {
+  const config = authConfig()
+  const known = (await accounts().account(userId)) ?? (await workspaceStore().workspaceOf(userId))
+  if (!known && !(await allowed(config, address))) return refuse(403, 'not-invited')
+  const issued = await sessions().transaction(async tx => {
+    if (endOthers) await sessions().deleteAll(userId, tx)
+    return admit(tx, userId, address, zone)
+  })
+  return Response.json({ ok: true }, { headers: { ...noStore, 'set-cookie': sessionCookie(request, issued.token, issued.expiresAt) } })
+}
+
+/**
+ * The new password, with the token the recovery link carried in its fragment. Supabase sets it; the person is then
+ * signed in here with every older session gone (a reset is the moment to drop any stray one). A stale link is 401
+ * 'expired'; a password Supabase refuses is 400 'weak' with its reason.
+ */
+export async function handleResetPassword(request: Request): Promise<Response> {
+  const body = resetBody.safeParse(await request.json().catch(() => null))
+  if (!body.success) return refuse(400, 'invalid')
+  const ipWait = ipWaitMs(clientIp(request))
+  if (ipWait > 0) return tooMany(ipWait)
+  let result: ResetResult
+  try {
+    await Promise.all([workspaceStore().prepare(), accounts().prepare(), sessions().prepare()])
+    result = await supabase.resetPassword(authConfig(), body.data.accessToken, body.data.password)
+    if (!result.ok) return result.reason === 'weak' ? refuse(400, 'weak', { message: result.message }) : refuse(401, 'expired')
+    return await enter(request, result.userId, result.email, zoneOf(body.data.timezone), true)
+  } catch { return refuse(503, 'unavailable') }
+}
+
+/** The confirmation link's landing: the token in its fragment names the login, which comes in without typing the password again. */
+export async function handleConfirm(request: Request): Promise<Response> {
+  const body = tokenBody.safeParse(await request.json().catch(() => null))
+  if (!body.success) return refuse(400, 'invalid')
+  const ipWait = ipWaitMs(clientIp(request))
+  if (ipWait > 0) return tooMany(ipWait)
+  try {
+    await Promise.all([workspaceStore().prepare(), accounts().prepare(), sessions().prepare()])
+    const user = await supabase.userFromToken(authConfig(), body.data.accessToken)
+    if (!user) return refuse(401, 'expired')
+    return await enter(request, user.userId, user.email, zoneOf(body.data.timezone), false)
+  } catch { return refuse(503, 'unavailable') }
 }

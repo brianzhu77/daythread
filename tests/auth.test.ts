@@ -165,11 +165,15 @@ async function handlers(env: Record<string, string> = {}) {
   const saved = { ...process.env }
   for (const key of ['OWNER_EMAIL', 'DAYTHREAD_SIGNUP', 'DAYTHREAD_INVITES', 'SUPABASE_SECRET_KEY']) delete process.env[key]
   Object.assign(process.env, { SUPABASE_URL: 'https://auth.test', SUPABASE_PUBLISHABLE_KEY: 'pk', ...env })
-  const supabase = { verified: new Map<string, string>(), signUpOutcome: { outcome: 'confirm' } as Awaited<ReturnType<typeof import('../src/server/auth/supabase.ts')['signUp']>>, deleted: [] as string[], signUpCalls: 0 }
+  const supabase = { verified: new Map<string, string>(), signUpOutcome: { outcome: 'confirm' } as Awaited<ReturnType<typeof import('../src/server/auth/supabase.ts')['signUp']>>, deleted: [] as string[], signUpCalls: 0, recovered: [] as string[], tokens: new Map<string, string>(), passwords: new Map<string, string>() }
+  // A token stands for a user (`tokens`: token -> email); resetPassword records the new password and verifyPassword honours it.
   server.useSupabase({
-    verifyPassword: async (_c, email, password) => password === 'right' && supabase.verified.has(email.trim().toLowerCase()) ? { ok: true, userId: supabase.verified.get(email.trim().toLowerCase())!, email: email.trim().toLowerCase() } : { ok: false },
+    verifyPassword: async (_c, email, password) => { const a = email.trim().toLowerCase(); return supabase.verified.has(a) && password === (supabase.passwords.get(a) ?? 'right') ? { ok: true, userId: supabase.verified.get(a)!, email: a } : { ok: false } },
     signUp: async () => { supabase.signUpCalls++; return supabase.signUpOutcome },
     deleteUser: async (_c, userId) => { supabase.deleted.push(userId) },
+    recover: async (_c, email) => { supabase.recovered.push(email) },
+    resetPassword: async (_c, token, password) => { const a = supabase.tokens.get(token); if (!a) return { ok: false, reason: 'expired' }; if (password.length < 6) return { ok: false, reason: 'weak', message: 'Password should be at least 6 characters.' }; supabase.passwords.set(a, password); return { ok: true, userId: supabase.verified.get(a)!, email: a } },
+    userFromToken: async (_c, token) => { const a = supabase.tokens.get(token); return a ? { userId: supabase.verified.get(a)!, email: a } : null },
   })
   const post = (path: string, body: unknown, cookie?: string) => new Request(`https://app.test${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'sec-fetch-site': 'same-origin', ...(cookie ? { cookie: `__Host-daythread_session=${cookie}` } : {}) }, body: JSON.stringify(body) })
   const cookieOf = (r: Response) => /__Host-daythread_session=([^;]*)/.exec(r.headers.get('set-cookie') ?? '')?.[1]
@@ -299,5 +303,95 @@ test('delete account: the wrong password changes nothing; the right one removes 
     assert.equal(r2.status, 200)
     assert.deepEqual(h.supabase.deleted, [B])
     assert.equal(await h.count('workspaces'), 0)
+  } finally { await h.close() }
+})
+
+test('recovery calls: recover always succeeds for a 200 (unknown addresses included); reset sets the password with the emailed token and ends Supabase\'s sessions; a stale token and a weak password are told apart; the token names its user', async () => {
+  const { recover, resetPassword, userFromToken } = await import('../src/server/auth/supabase.ts')
+  const calls: string[] = []
+  await recover(config, ' Someone@Example.com ', fakeFetch((path, body) => { assert.equal(body.email, 'someone@example.com'); return { status: 200, body: {} } }, calls))
+  assert.deepEqual(calls, ['recover'])
+  for (const status of [429, 500]) await assert.rejects(recover(config, 'someone@example.com', fakeFetch(() => ({ status, body: {} }))))
+  const reset: string[] = []
+  assert.deepEqual(await resetPassword(config, 'tok', 'new-password-9', fakeFetch(() => ({ status: 200, body: { id: 'u-1', email: 'someone@example.com' } }), reset)), { ok: true, userId: 'u-1', email: 'someone@example.com' })
+  assert.deepEqual(reset, ['user', 'logout?scope=global'])
+  assert.deepEqual(await resetPassword(config, 'stale', 'new-password-9', fakeFetch(() => ({ status: 401, body: { error_code: 'bad_jwt', msg: 'invalid JWT' } }))), { ok: false, reason: 'expired' })
+  assert.deepEqual(await resetPassword(config, 'tok', 'short', fakeFetch(() => ({ status: 422, body: { error_code: 'weak_password', msg: 'Password should be at least 6 characters.' } }))), { ok: false, reason: 'weak', message: 'Password should be at least 6 characters.' })
+  const none: string[] = []
+  assert.deepEqual(await resetPassword(config, 'tok', '', fakeFetch(() => ({ status: 200, body: {} }), none)), { ok: false, reason: 'weak', message: 'Use a longer password' })
+  assert.equal(none.length, 0)
+  assert.deepEqual(await userFromToken(config, 'tok', fakeFetch(() => ({ status: 200, body: { id: 'u-1', email: 'Someone@Example.com' } }))), { userId: 'u-1', email: 'someone@example.com' })
+  assert.equal(await userFromToken(config, 'stale', fakeFetch(() => ({ status: 401, body: {} }))), null)
+  assert.equal(await userFromToken(config, '', fakeFetch(() => ({ status: 200, body: {} }), none)), null)
+  assert.equal(none.length, 0, 'an empty token never reaches Supabase')
+})
+
+test('forgot password: the same answer for any address, Supabase asked for the known ones too; braked like a sign-in; Supabase down is 503', async () => {
+  const h = await handlers()
+  try {
+    for (const email of ['brian@example.com', 'nobody@example.com']) {
+      const r = await h.server.handleRecover(h.post('/api/auth/recover', { email }))
+      assert.equal(r.status, 200); assert.deepEqual(await r.json(), { ok: true })
+    }
+    assert.deepEqual(h.supabase.recovered, ['brian@example.com', 'nobody@example.com'])
+    assert.equal((await h.server.handleRecover(h.post('/api/auth/recover', { email: 'not an address' }))).status, 400)
+    h.server.useSupabase({ verifyPassword: async () => ({ ok: false }), signUp: async () => ({ outcome: 'confirm' }), deleteUser: async () => undefined, recover: async () => { throw new Error('Supabase Auth 503') }, resetPassword: async () => ({ ok: false, reason: 'expired' }), userFromToken: async () => null })
+    assert.equal((await h.server.handleRecover(h.post('/api/auth/recover', { email: 'brian@example.com' }))).status, 503)
+  } finally { await h.close() }
+})
+
+test('reset password: the emailed token sets the new password, ends every old session and signs the person in; a stale token is 401; the old password stops working', async () => {
+  const h = await handlers()
+  try {
+    h.supabase.verified.set('brian@example.com', A); await h.accounts.invite('brian@example.com')
+    const old = h.cookieOf(await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'brian@example.com', password: 'right' })))!
+    h.supabase.tokens.set('recovery-token', 'brian@example.com')
+    const stale = await h.server.handleResetPassword(h.post('/api/auth/reset-password', { accessToken: 'no-such-token', password: 'brand-new-pw' }))
+    assert.equal(stale.status, 401); assert.equal(((await stale.json()) as { error: string }).error, 'expired')
+    const weak = await h.server.handleResetPassword(h.post('/api/auth/reset-password', { accessToken: 'recovery-token', password: 'x' }))
+    assert.equal(weak.status, 400); assert.equal(((await weak.json()) as { error: string }).error, 'weak')
+    const r = await h.server.handleResetPassword(h.post('/api/auth/reset-password', { accessToken: 'recovery-token', password: 'brand-new-pw' }))
+    assert.equal(r.status, 200)
+    const fresh = h.cookieOf(r)!
+    assert.ok(fresh && fresh !== old)
+    assert.equal((await h.server.ownerSession(fresh))?.email, 'brian@example.com')
+    assert.equal(await h.server.ownerSession(old), null, 'the session from before the reset is gone')
+    assert.equal(await h.count('sessions'), 1)
+    assert.equal((await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'brian@example.com', password: 'right' }))).status, 401, 'the old password')
+    assert.equal((await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'brian@example.com', password: 'brand-new-pw' }))).status, 200)
+    assert.equal(await h.count('workspaces'), 1, 'the same workspace throughout')
+  } finally { await h.close() }
+})
+
+test('reset password for a login with no workspace yet: the password changes, and the person is admitted only when invited (the invite list still rules)', async () => {
+  const h = await handlers()
+  try {
+    h.supabase.verified.set('late@example.com', B)
+    h.supabase.tokens.set('t-late', 'late@example.com')
+    const refused = await h.server.handleResetPassword(h.post('/api/auth/reset-password', { accessToken: 't-late', password: 'brand-new-pw' }))
+    assert.equal(refused.status, 403); assert.equal(((await refused.json()) as { error: string }).error, 'not-invited')
+    assert.equal(h.supabase.passwords.get('late@example.com'), 'brand-new-pw', 'the password itself did change')
+    assert.equal(await h.count('workspaces'), 0)
+    await h.accounts.invite('late@example.com')
+    const r = await h.server.handleResetPassword(h.post('/api/auth/reset-password', { accessToken: 't-late', password: 'brand-new-pw', timezone: 'Europe/Paris' }))
+    assert.equal(r.status, 200); assert.ok(h.cookieOf(r))
+    assert.equal(await h.count('workspaces'), 1); assert.equal(await h.repo.timezoneOf(B), 'Europe/Paris')
+  } finally { await h.close() }
+})
+
+test('confirmation landing: the token from the emailed link signs the person in, making the workspace on first entry; a stale token is 401; uninvited is 403', async () => {
+  const h = await handlers()
+  try {
+    h.supabase.verified.set('new@example.com', A)
+    h.supabase.tokens.set('t-new', 'new@example.com')
+    const stale = await h.server.handleConfirm(h.post('/api/auth/confirm', { accessToken: 'nope' }))
+    assert.equal(stale.status, 401)
+    const refused = await h.server.handleConfirm(h.post('/api/auth/confirm', { accessToken: 't-new' }))
+    assert.equal(refused.status, 403)
+    await h.accounts.invite('new@example.com')
+    const r = await h.server.handleConfirm(h.post('/api/auth/confirm', { accessToken: 't-new', timezone: 'Asia/Tokyo' }))
+    assert.equal(r.status, 200); assert.ok(h.cookieOf(r))
+    assert.equal(await h.count('workspaces'), 1); assert.equal(await h.repo.timezoneOf(A), 'Asia/Tokyo')
+    assert.equal((await h.server.ownerSession(h.cookieOf(r)!))?.email, 'new@example.com')
   } finally { await h.close() }
 })
