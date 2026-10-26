@@ -56,6 +56,10 @@ The whole list. Anything not here is grey.
 | "Today" in the calendar and the sidebar | `--blue-11` |
 | The dot on a written day in the date picker | `--blue-9` |
 
+**The auth screens are grey only** (Brian, Oct 26): there is no primary among many, so the button is `--gray-12`
+with white text, links are `--gray-11` underlined, the focus ring is `--gray-12`. No blue on sign-in, sign-up,
+forgot or reset.
+
 Grey, where it used to be blue: the selected tab on the phone, the selected filter, the pressed style button in the
 editor, the Trash's back link, the secondary button (Today / Not today, Restore, Add), the sign-up and sign-in notes.
 

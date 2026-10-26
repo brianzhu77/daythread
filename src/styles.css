@@ -1325,6 +1325,8 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* Sign-in, sign-up, forgot and reset: the app's frame without the sidebar (one surface). The wordmark sits where the
    sidebar's brand sits; the title has the day title's metrics; fields are the page's soft blocks with a blue focus ring. */
 .sign-in {
+  /* Grey only (Brian, Oct 26): no primary among many here, so no blue at all. HeroUI's accent and focus follow. */
+  --accent: var(--gray-12); --focus: var(--gray-12); --accent-foreground: #fff;
   min-height: 100dvh; background: var(--bg-doc); color: var(--ink);
   max-width: 400px; margin: 0 auto; padding: 22vh 20px 40px; display: flex; flex-direction: column; gap: 4px;
 }
@@ -1338,18 +1340,20 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .sign-in-label-row .link { font-size: var(--text-meta); }
 .sign-in input { height: 48px; padding: 0 14px; font-size: var(--text-body); border-radius: var(--radius-control); background: var(--gray-1); box-shadow: inset 0 0 0 1px var(--gray-7); transition: box-shadow var(--dur-fast, .12s) ease; }
 .sign-in input:hover { box-shadow: inset 0 0 0 1px var(--gray-8); }
-.sign-in input:focus, .sign-in input:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--blue); background: var(--bg-doc); }
+.sign-in input:focus, .sign-in input:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--gray-12); background: var(--bg-doc); }
 .sign-in-hint { margin: 6px 0 0; font-size: var(--text-meta); color: var(--ink-3); }
-.sign-in button[type='submit'] { height: 48px; margin-top: 4px; border-radius: var(--radius-control); background: var(--blue-9); color: #fff; font-size: var(--text-body); font-weight: var(--weight-semibold); }
-.sign-in button[type='submit']:hover:not(:disabled) { background: var(--blue-pressed); }
+.sign-in button[type='submit'] { height: 48px; margin-top: 4px; border-radius: var(--radius-control); background: var(--gray-12); color: #fff; font-size: var(--text-body); font-weight: var(--weight-semibold); }
+.sign-in button[type='submit']:hover:not(:disabled) { background: var(--gray-11); }
+.sign-in button[type='submit']:disabled { opacity: .35; }
 .sign-in-meta { margin: 12px 0 0; font-size: var(--text-meta); color: var(--ink-2); }
 .sign-in-password { position: relative; }
 .sign-in-password input { width: 100%; padding-right: 64px; }
 .sign-in-show { position: absolute; right: 0; top: 0; height: 48px; min-width: 56px; padding: 0 12px; font-size: var(--text-meta); }
-.sign-in .link.sign-in-show { color: var(--gray-11); }
+.sign-in .link.sign-in-show { text-decoration: none; }
 .sign-in-error { font-size: var(--text-meta); color: var(--red); margin: -4px 0 0; }
 .sign-in-note { font-size: var(--text-meta); color: var(--ink-2); margin: -4px 0 0; line-height: 1.45; }
-.sign-in .link { color: var(--blue-11); }
+.sign-in .link { color: var(--gray-11); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--gray-7); }
+.sign-in .link:hover { color: var(--gray-12); text-decoration-color: var(--gray-12); }
 .link { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
 .account-row { color: var(--ink-3); font-size: var(--text-meta); margin: 1rem 0 0; }
 .account-row-sidebar { padding: 0 10px; } /* the same left edge as .side-label */
