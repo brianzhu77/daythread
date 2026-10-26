@@ -7,12 +7,13 @@ import type { Page, Receipt, Task, Workspace } from './types.ts'
 type V1Ref = { refId: string; pageId: string; at: number; title: string; pending?: boolean; lineId?: string; taskId?: string }
 interface V1Block { id: string; kind: string; text: string; taskId?: string; planRole?: 'plan' | 'reference'; eventId?: string; materialId?: string; targetPageId?: string; at?: number; refs?: V1Ref[] }
 interface V1Section { id: string; kind: string; title: string; blocks: V1Block[]; refs?: V1Ref[] }
-interface V1Page { id: string; type: 'daily' | 'document'; date: string | null; title: string; url?: string | null; parentId?: string | null; trashedAt?: string | null; trashId?: string | null; sections: V1Section[]; editorJSON?: string; editorSections?: string; templateApplied?: boolean; reviewSaved?: boolean; handoffDone?: boolean }
+interface V1Page { id: string; type: 'daily' | 'document'; date: string | null; title: string; url?: string | null; parentId?: string | null; trashedAt?: string | null; trashId?: string | null; sections: V1Section[]; editorJSON?: string; editorSections?: string; templateApplied?: boolean; reviewSaved?: boolean; handoffDone?: boolean; reviewText?: string }
+interface V1Capture { id: string; pageId: string; text: string; status: string }
 interface V1Task { id: string; title: string; status: Task['status']; version: number; plannedOn: string | null; attentionOn: string | null; deadlineOn: string | null; paused: boolean; createdOn: string; lastPlannedOn: string | null; sourcePageId: string; doneOn?: string | null }
 interface V1Placement { taskId: string; date: string; state: 'included' | 'excluded' | 'moved'; order?: number; section: string }
 interface V1Event { id: string; title: string; date: string; time: string | null; cancelled: boolean }
 interface V1Material { id: string; url: string; title: string }
-interface V1Workspace { schemaVersion: 1; revision: number; timezone: string; pages: V1Page[]; tasks: V1Task[]; events: V1Event[]; placements: V1Placement[]; materials: V1Material[]; captures: unknown[]; receipts: Record<string, Receipt> }
+interface V1Workspace { schemaVersion: 1; revision: number; timezone: string; pages: V1Page[]; tasks: V1Task[]; events: V1Event[]; placements: V1Placement[]; materials: V1Material[]; captures: V1Capture[]; receipts: Record<string, Receipt> }
 
 const isV1 = (raw: unknown): raw is V1Workspace => !!raw && typeof raw === 'object' && (raw as { schemaVersion?: unknown }).schemaVersion === 1 && Array.isArray((raw as V1Workspace).pages) && Array.isArray((raw as V1Workspace).tasks)
 const isV2 = (raw: unknown): raw is Workspace => !!raw && typeof raw === 'object' && (raw as { schemaVersion?: unknown }).schemaVersion === 2 && Array.isArray((raw as Workspace).pages) && Array.isArray((raw as Workspace).tasks)
@@ -73,6 +74,18 @@ export function convertV1(raw: unknown, today: string): Workspace {
     const events = doc.findIndex(n => n.type === 'heading' && inlineText(n.content).trim().toLowerCase() === 'events')
     const line: EditorNode = { id: `${page.id}:event:${e.id}`, type: 'bulletListItem', props: {}, content: [textRun(`${e.title} `), chip(e)], children: [] }
     doc.splice(events >= 0 ? events + 1 : doc.length, 0, line)
+    page.document = JSON.stringify(doc)
+  }
+  // Words that lived outside the document: a saved evening reflection, and captured text the model never filed. They
+  // go on their page as lines, at the end, so nothing he typed is lost.
+  for (const old of v1.pages) {
+    const page = pages.find(p => p.id === old.id)!
+    const reflection = old.reviewText?.trim()
+    const unfiled = (v1.captures ?? []).filter(c => c.pageId === old.id && ['organizing', 'needs_confirmation', 'failed'].includes(c.status) && c.text.trim())
+    if (!reflection && !unfiled.length) continue
+    const doc = JSON.parse(page.document) as EditorNode[]
+    if (reflection) doc.push(headingNode('Evening review', `${page.id}:review-h`), { id: `${page.id}:review`, type: 'paragraph', props: {}, content: [textRun(reflection)], children: [] })
+    if (unfiled.length) doc.push(headingNode('Captured', `${page.id}:captured-h`), ...unfiled.map(c => ({ id: `${page.id}:capture:${c.id}`, type: 'bulletListItem', props: {}, content: [textRun(c.text.trim())], children: [] })))
     page.document = JSON.stringify(doc)
   }
   // Never-saved day pages from today on get the template's empty rows, as the old editor added them on opening.

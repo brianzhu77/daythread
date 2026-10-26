@@ -91,3 +91,18 @@ test('convert: idempotent on a v2 workspace, and refused for an unknown shape', 
   assert.deepEqual(upgradeWorkspace(v1(), today), ws)
   assert.throws(() => upgradeWorkspace({ schemaVersion: 9 }, today), /Unsupported/)
 })
+
+test('convert: a saved evening reflection and captured text the model never filed become lines on their page; filed captures leave nothing', () => {
+  const raw = v1() as { pages: { id: string; reviewText?: string }[]; captures: unknown[] }
+  raw.pages.find(p => p.id === 'day:2026-10-21')!.reviewText = 'Good day, slow start.'
+  raw.captures = [
+    { id: 'c1', pageId: 'day:2026-10-21', text: 'Buy salt tomorrow', status: 'needs_confirmation', proposalRevision: 1, simulated: false, proposedTitle: '' },
+    { id: 'c2', pageId: 'day:2026-10-21', text: 'Already filed', status: 'applied', proposalRevision: 1, simulated: false, proposedTitle: '' },
+  ]
+  const ws = convertV1(raw, today)
+  const lines = flat(pageNodes(ws.pages.find(p => p.id === 'day:2026-10-21')!)).map(n => inlineText(n.content).trim())
+  assert.ok(lines.includes('Evening review') && lines.includes('Good day, slow start.'))
+  assert.ok(lines.includes('Captured') && lines.includes('Buy salt tomorrow'))
+  assert.ok(!lines.includes('Already filed'))
+  assert.deepEqual(convertV1(raw, today), ws, 'still deterministic')
+})
