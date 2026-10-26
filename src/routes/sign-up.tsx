@@ -1,6 +1,7 @@
 import { Button, Input, Label, TextField } from '@heroui/react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useRef, useState, type FormEvent } from 'react'
+import { tagline } from './sign-in'
 
 export const Route = createFileRoute('/sign-up')({ component: SignUp })
 
@@ -46,6 +47,7 @@ function SignUp() {
       <p className="sign-in-brand">Daythread</p>
       <form onSubmit={signUp}>
         <h1>Create an account</h1>
+        <p className="sign-in-sub">{tagline}</p>
         <TextField type="email" name="email" autoComplete="username" inputMode="email" value={email} onChange={setEmail} isReadOnly={busy || done} autoFocus fullWidth>
           <Label>Email</Label>
           <Input />
@@ -56,6 +58,7 @@ function SignUp() {
             <Input ref={passwordInput} />
             <button type="button" className="link sign-in-show" onClick={() => setShown(s => !s)} aria-pressed={shown}>{shown ? 'Hide' : 'Show'}</button>
           </div>
+          <p className="sign-in-hint">At least 6 characters.</p>
         </TextField>
         {error && <p className="sign-in-error" role="alert">{error}</p>}
         {note && <p className="sign-in-note" role="status">{note}</p>}

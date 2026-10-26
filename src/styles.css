@@ -1310,21 +1310,32 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 @media(hover:hover) { .bn-block-outer:hover .editor-row-more { opacity:1; } }
 
 /* Sign-in (empty-start-states.md §2) on the v1 tokens (tokens.md §7). */
+/* Sign-in, sign-up, forgot and reset: the app's frame without the sidebar (one surface). The wordmark sits where the
+   sidebar's brand sits; the title has the day title's metrics; fields are the page's soft blocks with a blue focus ring. */
 .sign-in {
   min-height: 100dvh; background: var(--bg-doc); color: var(--ink);
-  max-width: 360px; margin: 0 auto; padding: 18vh 18px 0; display: flex; flex-direction: column; gap: 20px;
+  max-width: 400px; margin: 0 auto; padding: 22vh 20px 40px; display: flex; flex-direction: column; gap: 4px;
 }
-.sign-in-brand { font-size: var(--text-ui); font-weight: var(--weight-semibold); margin: 0; }
-.sign-in h1 { font-size: var(--text-title); font-weight: var(--weight-bold); margin: 0; }
-.sign-in form { display: flex; flex-direction: column; gap: 14px; }
-.sign-in input { height: 48px; font-size: var(--text-body); }
-.sign-in button[type='submit'] { height: 48px; border-radius: var(--radius-pill); background: var(--blue); color: #fff; font-size: var(--text-body); }
-.sign-in-meta { font-size: var(--text-meta); color: var(--ink-2); margin: 0; }
+@media (max-width: 599px) { .sign-in { padding-top: 14vh; } }
+.sign-in-brand { position: fixed; top: 22px; left: 20px; margin: 0; font-weight: 650; font-size: .95rem; letter-spacing: -.01em; color: var(--ink); }
+.sign-in h1 { font-size: var(--text-title); line-height: 34px; letter-spacing: -.02em; font-weight: var(--weight-bold); margin: 0; }
+.sign-in-sub { margin: 4px 0 16px; font-size: var(--text-ui); line-height: 1.45; color: var(--ink-2); }
+.sign-in form { display: flex; flex-direction: column; gap: 16px; }
+.sign-in label, .sign-in [data-slot='label'] { font-size: var(--text-small); font-weight: var(--weight-medium); color: var(--ink-2); }
+.sign-in-label-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.sign-in-label-row .link { font-size: var(--text-meta); }
+.sign-in input { height: 48px; padding: 0 14px; font-size: var(--text-body); border-radius: var(--radius-block); background: var(--fill-soft); box-shadow: inset 0 0 0 1px var(--line); transition: box-shadow var(--dur-fast, .12s) ease; }
+.sign-in input:hover { box-shadow: inset 0 0 0 1px var(--line-strong); }
+.sign-in input:focus, .sign-in input:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--blue); background: var(--bg-doc); }
+.sign-in-hint { margin: 6px 0 0; font-size: var(--text-meta); color: var(--ink-3); }
+.sign-in button[type='submit'] { height: 48px; margin-top: 4px; border-radius: var(--radius-pill); background: var(--blue); color: #fff; font-size: var(--text-body); font-weight: var(--weight-semibold); }
+.sign-in button[type='submit']:hover:not(:disabled) { background: var(--blue-pressed); }
+.sign-in-meta { margin: 12px 0 0; font-size: var(--text-meta); color: var(--ink-2); }
 .sign-in-password { position: relative; }
 .sign-in-password input { width: 100%; padding-right: 64px; }
 .sign-in-show { position: absolute; right: 0; top: 0; height: 48px; min-width: 56px; padding: 0 12px; font-size: var(--text-meta); }
-.sign-in-error { font-size: var(--text-meta); color: var(--red); margin: 0; }
-.sign-in-note { font-size: var(--text-meta); color: var(--ink-2); margin: 0; }
+.sign-in-error { font-size: var(--text-meta); color: var(--red); margin: -4px 0 0; }
+.sign-in-note { font-size: var(--text-meta); color: var(--ink-2); margin: -4px 0 0; line-height: 1.45; }
 .sign-in .link { color: var(--blue); }
 .link { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
 .account-row { color: var(--ink-3); font-size: var(--text-meta); margin: 1rem 0 0; }
