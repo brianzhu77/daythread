@@ -459,9 +459,6 @@ textarea.task-title:focus { outline: none; }
 .add-section input::placeholder { color: var(--placeholder); }
 .add-section input:focus { outline: none; }
 
-.review-entry { display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: var(--radius-control); background: var(--gray-1); box-shadow: inset 0 0 0 1px var(--gray-7); color: var(--gray-12); text-decoration: none; font-weight: 500; font-size: .94rem; }
-.review-entry:hover { background: var(--gray-2); }
-
 /* ---------- Row menu ---------- */
 .row-menu { position: relative; flex: none; }
 .row-menu .icon { color: var(--ink-2); }
@@ -530,32 +527,23 @@ textarea.task-title:focus { outline: none; }
 .failed-line { display: grid; gap: 6px; color: var(--app-danger); }
 .original { margin: 0; padding: 8px 12px; border-left: 3px solid var(--line); color: var(--ink-soft); white-space: pre-wrap; }
 
-/* ---------- Review (B31: one screen about the next day) ---------- */
-.review { display: grid; gap: 16px; }
-.review-one { gap: 8px; }
-.review-one-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 12px; padding: 24px 0 12px; margin-bottom: 8px; }
-@media (min-width: 900px) { .review-one-head { padding-top: 48px; } }
-.review-one-head h1 { font-size: var(--text-title); line-height: 34px; letter-spacing: -.02em; font-weight: var(--weight-bold); margin: 0; }
-/* On phones the relative day sits above the date, as on Today, so the title never wraps against Done. */
-@media (max-width: 599px) { .review-one-head h1 .relative-day { display: block; font-size: var(--text-meta); line-height: 18px; font-weight: var(--weight-semibold); } .review-one-head h1 .relative-day-sep { display: none; } }
-/* The only button, top right, where the phone keyboard never covers it. 44 px tall for the thumb. */
-.review-done { min-height: 40px; padding: 0 18px; font-size: var(--text-ui); }
-.review-done:disabled { opacity: .5; }
-.review-one-sub, .review-one-head .warn-line { grid-column: 1 / -1; margin: 0; }
-.review-group { display: grid; gap: 6px; padding-top: 10px; }
-.review-group h2 { margin: 0; }
-.review-list { display: grid; }
-.review-list > .task-row { margin: 0 -8px; }
-.review-hint, .review-empty { margin: 0; font-size: var(--text-meta); color: var(--ink-2); }
-.review-list .is-moved .task-title { color: var(--ink-2); }
+/* ---------- Tomorrow (the review on the page, docs/design/review-on-the-page.md) ---------- */
+.tomorrow { display: grid; gap: 2px; margin-top: 36px; padding: 14px 0 0; border-top: 1px solid var(--line); }
+.tomorrow-title { margin: 0 0 4px; font-size: var(--text-section); line-height: 1.35; font-weight: var(--weight-semibold); color: var(--ink); }
+.tomorrow-title span { color: var(--ink-2); font-weight: var(--weight-regular); }
+.tomorrow-list { display: grid; }
+.tomorrow-list > .task-row { margin: 0 -8px; }
+/* A to-do marker, not a control: tomorrow's boxes are ticked tomorrow. */
+.tomorrow-box { margin-top: 12px; cursor: default; }
+.tomorrow-new-box { border-style: dashed; }
+.tomorrow-line-state { flex: none; margin-top: 11px; font-size: var(--text-meta); }
+.tomorrow-line-state.warn { color: var(--warn); }
+.tomorrow-new-input { font: inherit; color: var(--ink); line-height: 1.45; }
+.tomorrow-new-input:focus { outline: none; }
+.tomorrow-new-input::placeholder { color: var(--ink-faint); }
+.tomorrow-hint { margin: 6px 0 0; font-size: var(--text-meta); color: var(--ink-2); }
 /* A section, not a date: no alarm icon. */
 .task-row .app-tag.section-tag::before { display: none; }
-.review-line-state { flex: none; margin-top: 11px; font-size: var(--text-meta); }
-.review-line-state.warn { color: var(--warn); }
-.review-new-box { border-style: dashed; margin-top: 12px; }
-.review-new-input { font: inherit; color: var(--ink); line-height: 1.45; }
-.review-new-input:focus { outline: none; }
-.review-new-input::placeholder { color: var(--ink-faint); }
 .warn-line { color: var(--warn); background: var(--warn-soft); border-radius: var(--radius-row); padding: 10px 14px; }
 
 /* ---------- Touch: row actions stay visible (no hover to reveal them) ---------- */
@@ -1009,7 +997,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .safe-top { position:fixed; left:0; right:0; top:var(--vv-top, 0px); height:env(safe-area-inset-top); background:var(--screen-bg); z-index:25; pointer-events:none; }
 /* B52b: at scroll 0 nothing starts under the clock (the inset is 0 wherever the page doesn't reach under it). */
 @media (max-width: 899px) { .app-content { padding-top: env(safe-area-inset-top); } }
-/* B56: on the review, phone notices sit at the bottom, clear of the tab bar (12 px off the bottom, 60 px tall). */
+/* B56: phone notices at the bottom sit clear of the tab bar (12 px off the bottom, 60 px tall). */
 @media (max-width: 599px) { .app-toasts.toast-region--bottom { bottom:calc(84px + env(safe-area-inset-bottom)); } }
 /* Phone notices sit under the status bar and the strip, at the top of what he can see. */
 .app-toasts.toast-region--top { top:calc(16px + env(safe-area-inset-top) + var(--vv-top, 0px)); }
@@ -1173,8 +1161,10 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .linked-from-more { padding: 0 4px; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); cursor: pointer; }
 
 /* The editor's bottom room moves below the list, so the list isn't pushed far down (layout §4). */
-.continuous-editor:has(+ .subpages) { min-height: 0; padding-bottom: 0; }
+.continuous-editor:has(+ .subpages), .continuous-editor:has(+ .tomorrow) { min-height: 0; padding-bottom: 0; }
 .subpages { margin-top: 36px; padding: 14px 0 140px; border-top: 1px solid var(--line); }
+.subpages:has(+ .tomorrow) { padding-bottom: 0; }
+.tomorrow { padding-bottom: 140px; }
 .subpages-title { margin: 0 0 4px; font-size: var(--text-meta); font-weight: var(--weight-semibold); color: var(--ink-2); }
 .subpages-title span { color: var(--ink-3); font-weight: 500; }
 .subpages li, .tree li { min-width: 0; }
