@@ -9,7 +9,7 @@ import { useDay, useWorkspace } from './use-day'
 import { DayHeader } from './day-header'
 import { FutureDayState } from './future-day'
 import { useEffect, useState } from 'react'
-import { Link } from '@tanstack/react-router'
+import { TomorrowBlock } from './tomorrow-block'
 
 /** Today (and any other date): header, facts strip, Start the day, the page. */
 export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }) {
@@ -84,12 +84,8 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
             </button>
           </div>
         )}
-        {page && date <= today && (
-          // A router link, not a document load (B41): offline, a full load is the browser's error page.
-          <Link className="review-entry" to="/review" search={{ date }}>
-            {page.reviewSaved ? 'Review saved · open again' : `Review ${isToday ? 'today' : longLabel(date)}`}
-          </Link>
-        )}
+        {/* The review on the page: lines for tomorrow, typed here; what is left open comes along in the morning. */}
+        {page && isToday && <TomorrowBlock today={today} view={view} workspace={workspace} />}
       </div>
 
 

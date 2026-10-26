@@ -1,7 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import { rememberOpened, SidebarTree, useToday } from './page-tree'
 import { useEffect } from 'react'
-import { CalendarIcon, PagesIcon, ReviewIcon, TagsIcon, TasksIcon, TodayIcon } from './icons'
+import { CalendarIcon, PagesIcon, TagsIcon, TasksIcon, TodayIcon } from './icons'
 import type { LocalDate } from '../domain/types'
 import { useWorkspace } from './use-day'
 import { useCreatePage } from './pages-screen'
@@ -46,10 +46,6 @@ export function Navigation() {
               {label}
             </Link>
           ))}
-          <Link to="/review" className="side-row" aria-current={path.startsWith('/review') ? 'page' : undefined}>
-            <ReviewIcon />
-            Review
-          </Link>
         </nav>
         <PageGroups path={path} openPageId={openPageId} trashView={trashView} today={today} />
       </aside>

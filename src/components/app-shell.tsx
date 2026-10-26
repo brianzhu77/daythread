@@ -42,9 +42,9 @@ function Toasts() {
     return () => media.removeEventListener('change', update)
   }, [])
   return (
-    // B56: the review's header (title and Done) is at the top, so its notices go at the bottom, above the tab bar; a tap
+    // The review lives on today's page now; phone notices sit at the top on every screen.
     // on Done hit the notice, or its Undo.
-    <Toast.Provider placement={phone && path !== '/review' ? 'top' : 'bottom'} className="app-toasts">
+    <Toast.Provider placement={phone ? 'top' : 'bottom'} className="app-toasts">
       {({ toast: t }) => (
         <Toast toast={t}>
           <Toast.Content>
