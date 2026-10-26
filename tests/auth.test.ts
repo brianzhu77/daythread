@@ -161,7 +161,7 @@ async function handlers(env: Record<string, string> = {}) {
   const { AccountStore } = await import('../src/server/auth/accounts.ts')
   const db = await PGlite.create(), sql = pgliteClient(db)
   const repo = new PostgresWorkspaceRepository(sql), sessions = new SessionStore(sql, 'daythread', { workspaces: 'daythread.workspaces' }), accounts = new AccountStore(sql)
-  server.useSessionStore(sessions); server.useWorkspaceStore(repo); server.useAccountStore(accounts)
+  server.useSessionStore(sessions); server.useWorkspaceStore(repo); server.useAccountStore(accounts); server.resetTries()
   const saved = { ...process.env }
   for (const key of ['OWNER_EMAIL', 'DAYTHREAD_SIGNUP', 'DAYTHREAD_INVITES', 'SUPABASE_SECRET_KEY']) delete process.env[key]
   Object.assign(process.env, { SUPABASE_URL: 'https://auth.test', SUPABASE_PUBLISHABLE_KEY: 'pk', ...env })

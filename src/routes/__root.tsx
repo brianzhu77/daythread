@@ -29,8 +29,8 @@ export const Route = createRootRoute({
 })
 
 function Root() {
-  // The sign-in screen stands alone: the app frame would load the workspace.
-  const signIn = useRouterState({ select: s => s.location.pathname === '/sign-in' })
+  // The sign-in and sign-up screens stand alone: the app frame would load the workspace.
+  const signIn = useRouterState({ select: s => s.location.pathname === '/sign-in' || s.location.pathname === '/sign-up' })
   return (
     <html lang="en">
       <head>

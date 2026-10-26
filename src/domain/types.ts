@@ -102,6 +102,8 @@ export type Action =
   | { type: "delete-page"; pageId: string; at: string }
   | { type: "restore-page"; pageId: string }
   | { type: "restore-batch"; trashId: string }
+  /** The account's time zone (an IANA name), used for conversions and the export's date. */
+  | { type: "set-timezone"; timezone: string }
   | { type: "undo"; targetOperationId: string };
 
 export interface Command {

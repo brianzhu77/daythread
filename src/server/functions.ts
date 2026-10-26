@@ -28,10 +28,12 @@ export const runCommand = createServerFn({ method: "POST" })
     return { ...result, workspace: forBrowser(result.workspace) };
   });
 
-/** The signed-in address for "{email} · Sign out"; null when sign-in is off. */
+/** The signed-in account for "{email} · Sign out" and its time zone; null when sign-in is off. */
 export const getAccount = createServerFn({ method: "GET" }).handler(async () => {
-  const { currentEmail } = await import("./auth/server");
-  return { email: await currentEmail() };
+  const { currentAccount } = await import("./auth/server");
+  const { timezones } = await import("./timezones");
+  const account = await currentAccount();
+  return { email: account?.email ?? null, timezone: account?.timezone ?? null, timezones: account ? timezones() : [] };
 });
 
 /** Where a plain line URL goes, resolved on the full workspace, with the address to open. */

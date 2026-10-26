@@ -7,8 +7,14 @@ import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
 
 export class DomainError extends Error {}
-export function createEmptyWorkspace(): Workspace {
-  return { schemaVersion: 2, revision: 0, timezone: "America/Vancouver", pages: [], tasks: [], deletedTasks: [], receipts: {} };
+export function createEmptyWorkspace(timezone = "America/Vancouver"): Workspace {
+  return { schemaVersion: 2, revision: 0, timezone: validTimezone(timezone), pages: [], tasks: [], deletedTasks: [], receipts: {} };
+}
+/** An IANA time zone name the runtime knows; anything else is refused. */
+export function validTimezone(value: string): string {
+  if (typeof value !== "string" || !value || value.length > 100) throw new DomainError("Unknown time zone");
+  try { new Intl.DateTimeFormat("en-CA", { timeZone: value }); } catch { throw new DomainError("Unknown time zone"); }
+  return value;
 }
 /** Tombstones kept for ⌘Z (B33): newest last. */
 export const tombstoneLimit = 100;
@@ -19,9 +25,14 @@ function date(value: string): string {
     throw new DomainError("Invalid calendar date");
   return value;
 }
+/** Text as typed, except U+0000, which no text column can hold (Postgres refuses it) and no keyboard produces. */
 function text(value: string, limit = 100_000): string {
   if (typeof value !== "string" || value.length > limit) throw new DomainError("Text exceeds limit");
-  return value;
+  return value.replace(/\u0000/g, "");
+}
+/** The same for the text runs of a document's nodes, in place. */
+function cleanRuns(nodes: EditorNode[]): void {
+  for (const n of flatNodes(nodes)) if (Array.isArray(n.content)) for (const c of n.content as { type?: string; text?: string }[]) if (c && typeof c.text === "string" && c.text.includes("\u0000")) c.text = c.text.replace(/\u0000/g, "");
 }
 export function addDays(value: string, days: number): string {
   const d = new Date(`${date(value)}T12:00:00Z`);
@@ -264,6 +275,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (!Array.isArray(nodes) || nodes.length > 5000) throw new DomainError("Invalid editor document");
       const all = flatNodes(nodes);
       if (all.length > 20_000) throw new DomainError("Invalid editor document");
+      cleanRuns(nodes);
       const ids = new Set<string>();
       for (const n of all) { if (!n || typeof n.id !== "string" || !n.id || typeof n.type !== "string" || ids.has(n.id)) throw new DomainError("Duplicate editor block identity"); ids.add(n.id); }
       const before = flatNodes(pageNodes(p));
@@ -480,6 +492,9 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const top = pages.find((x) => !x.parentId || !ids.has(x.parentId))!;
       return { message: toTopLevel.includes(top) ? "Restored to Pages" : "Restored", entityId: top.id };
     }
+    case "set-timezone":
+      state.timezone = validTimezone(action.timezone);
+      return { message: "Time zone saved" };
     case "undo":
       throw new DomainError("Unreachable");
   }

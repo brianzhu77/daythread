@@ -1,30 +1,49 @@
-// Server side of sign-in: the gate's checks, the session cookie, and the /api/auth handlers.
+// Server side of sign-in: the gate's checks, the session cookie, and the /api/auth handlers (sign-in, sign-up,
+// sign-out, delete-account). Shot 2: any account on the invite list (or anyone, with DAYTHREAD_SIGNUP=open) may come
+// in; the first sign-in makes its account row and its workspace.
 import { getCookie, appendResponseHeader, getRequestIP } from '@tanstack/react-start/server'
 import { z } from 'zod'
 import { getRepository, postgresSql } from '../storage.ts'
 import { PostgresWorkspaceRepository, schemaName } from '../postgres-repository.ts'
-import { authConfig, authRequired } from './config.ts'
+import type { SqlClient } from '../db/sql.ts'
+import { validTimezone } from '../../domain/workspace.ts'
+import { authConfig, authRequired, normalizeEmail, type AuthConfig } from './config.ts'
+import { AccountStore } from './accounts.ts'
 import { SessionStore, type CheckedSession, type Outcome } from './sessions.ts'
-import { verifyPassword, type VerifyResult } from './supabase.ts'
+import * as supabaseAuth from './supabase.ts'
+import type { SignUpResult, VerifyResult } from './supabase.ts'
 
-/** Reachable without a session: the sign-in screen and the calls it makes; build assets are public code. */
-const publicPaths = new Set(['/sign-in', '/api/auth/sign-in', '/api/auth/sign-out'])
+/** Reachable without a session: the sign-in and sign-up screens and the calls they make; build assets are public code. */
+const publicPaths = new Set(['/sign-in', '/sign-up', '/api/auth/sign-in', '/api/auth/sign-up', '/api/auth/sign-out'])
 const isPublic = (path: string) => publicPaths.has(path) || path.startsWith('/assets/') || /^\/[\w-]+\.(ico|png|svg|webmanifest)$/.test(path)
 
 let store: SessionStore | undefined
-export const sessions = () => store ??= new SessionStore(postgresSql(), schemaName(), { workspace: `${schemaName()}.workspace` })
+export const sessions = () => store ??= new SessionStore(postgresSql(), schemaName(), { workspaces: `${schemaName()}.workspaces` })
+let accountStore: AccountStore | undefined
+export const accounts = () => accountStore ??= new AccountStore(postgresSql(), schemaName())
 let repo: PostgresWorkspaceRepository | undefined
-/** Sign-in needs the Postgres store: sessions sit beside the workspace and are checked against its link. */
+/** Sign-in needs the Postgres store: sessions and accounts sit beside the workspaces. */
 function workspaceStore(): PostgresWorkspaceRepository {
   if (repo) return repo
   const r = getRepository()
   if (!(r instanceof PostgresWorkspaceRepository)) throw new Error('Sign-in needs DAYTHREAD_STORAGE=postgres')
   return repo = r
 }
+/** Supabase's calls, replaceable in tests. */
+interface Supabase {
+  verifyPassword(config: AuthConfig, email: string, password: string): Promise<VerifyResult>
+  signUp(config: AuthConfig, email: string, password: string, timezone: string | undefined): Promise<SignUpResult>
+  deleteUser(config: AuthConfig, userId: string): Promise<void>
+}
+let supabase: Supabase = supabaseAuth
 /** For tests: a workspace store on another database. */
 export function useWorkspaceStore(next: PostgresWorkspaceRepository | undefined): void { repo = next }
-/** For tests: a store on another database. */
+/** For tests: a session store on another database. */
 export function useSessionStore(next: SessionStore | undefined): void { store = next }
+/** For tests: an account store on another database. */
+export function useAccountStore(next: AccountStore | undefined): void { accountStore = next }
+/** For tests: Supabase's answers. */
+export function useSupabase(next: Supabase | undefined): void { supabase = next ?? supabaseAuth }
 
 const secure = (request: Request) => new URL(request.url).protocol === 'https:'
 /** `__Host-` pins the cookie to this exact host over HTTPS; plain http (the Mac's 127.0.0.1) can't use it. */
@@ -84,76 +103,155 @@ export async function checkRequest(request: Request, handlerType: 'serverFn' | '
 }
 
 /**
- * A live session that still belongs to the current owner and to the account the workspace is linked to, read in the
- * same query. A session whose OWNER_EMAIL has changed (Ratchet 4f235d84), or whose account the workspace is no longer
- * linked to (an admin relink), is ended rather than honoured. One from before the link existed waits for a sign-in,
- * which links the workspace.
+ * A live session whose account still has its workspace, read in the same query. A session of an account whose
+ * workspace is gone (the account was deleted) is ended rather than honoured.
  */
 export async function ownerSession(token: string | undefined): Promise<CheckedSession | null> {
   if (!token) return null
-  await workspaceStore().prepare()
+  await Promise.all([workspaceStore().prepare(), accounts().prepare(), sessions().prepare()])
   const session = await sessions().check(token)
   if (!session) return null
-  if (session.email === authConfig().ownerEmail && session.userId === session.linkedUserId) return session
-  if (session.linkedUserId !== null || session.email !== authConfig().ownerEmail) await sessions().delete(token)
+  if (session.workspaceId !== null) return session
+  await sessions().delete(token)
   return null
 }
 
-/** The signed-in address, for "{email} · Sign out"; null when sign-in is off or the session is gone. */
-export async function currentEmail(): Promise<string | null> {
+/** The signed-in account for the account row: its address and time zone; null when sign-in is off or the session is gone. */
+export async function currentAccount(): Promise<{ email: string; timezone: string } | null> {
   if (!authRequired()) return null
   const name = secureCookieNames.find(n => getCookie(n))
   const session = name ? await ownerSession(getCookie(name)) : null
-  return session?.email ?? null
+  if (!session) return null
+  return { email: session.email, timezone: (await workspaceStore().timezoneOf(session.userId)) ?? 'UTC' }
 }
 const secureCookieNames = ['__Host-daythread_session', 'daythread_session']
 
 // Per-address brake on sign-in tries (failed or not) within one instance; the global failure backoff is in the store.
 const tries = new Map<string, number[]>()
-const ipWindowMs = 10 * 60_000, ipLimit = 10
+const ipWindowMs = 10 * 60_000, ipLimit = 30
 function ipWaitMs(ip: string, now = Date.now()): number {
   const recent = (tries.get(ip) ?? []).filter(t => now - t < ipWindowMs)
   if (recent.length >= ipLimit) { tries.set(ip, recent); return recent[0]! + ipWindowMs - now }
   recent.push(now); tries.set(ip, recent)
   return 0
 }
+/** For tests: the per-address brake starts over. */
+export function resetTries(): void { tries.clear() }
 const clientIp = (request: Request) => request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'local'
 
-const signInBody = z.object({ email: z.string().trim().email().max(320), password: z.string().min(1).max(1024) })
+const email = z.string().trim().email().max(320), password = z.string().min(1).max(1024)
+const timezone = z.string().max(100).optional()
+const signInBody = z.object({ email, password, timezone })
+const signUpBody = z.object({ email, password, timezone })
+const deleteBody = z.object({ password })
 const noStore = { 'cache-control': 'no-store' }
 const refuse = (status: number, error: string, extra: Record<string, unknown> = {}) => Response.json({ ok: false, error, ...extra }, { status, headers: noStore })
+const tooMany = (ms: number) => refuse(429, 'too-many', { retryAfter: Math.ceil(ms / 1000) })
+/** The browser's zone when it is one the runtime knows; UTC otherwise. */
+function zoneOf(value: string | undefined): string { try { return validTimezone(value ?? '') } catch { return 'UTC' } }
+
+/** Whether an address may come in: anyone with sign-up open, else the invite list. */
+async function allowed(config: AuthConfig, address: string, tx?: SqlClient): Promise<boolean> {
+  return config.signUp === 'open' || accounts().invited(address, config.envInvites, tx)
+}
+/** The account's row and workspace, made at its first sign-in; a session on top. */
+async function admit(tx: SqlClient, userId: string, address: string, zone: string): Promise<{ token: string; expiresAt: Date }> {
+  await accounts().ensureAccount(tx, userId, address)
+  await workspaceStore().createWorkspace(tx, userId, zone)
+  return sessions().create(userId, address, new Date(), tx)
+}
 
 /**
- * Email + password. Wrong password, unknown address and non-owner are one identical 401; a brake is 429 with the real
- * wait (the same for every address); Supabase unreachable is 503. The password is never logged or echoed. The right
- * password links the workspace (first time) and issues the session in the same transaction as the try, so nothing is
- * left half done; if the workspace is linked to another account, it's 403 'not-linked', counted neither way
- * (Bumblebee fb275f23).
+ * Email + password. A wrong password and an unknown address are one identical 401; an address whose email is not
+ * confirmed yet is 401 'unconfirmed'; a verified login that is not invited is 403 'not-invited' (counted neither way);
+ * a brake is 429 with the real wait; Supabase unreachable is 503. The password is never logged or echoed. The first
+ * sign-in makes the account and its workspace, in the same transaction as the session, so nothing is left half done.
  */
 export async function handleSignIn(request: Request): Promise<Response> {
   const body = signInBody.safeParse(await request.json().catch(() => null))
   if (!body.success) return refuse(401, 'wrong')
-  const tooMany = (ms: number) => refuse(429, 'too-many', { retryAfter: Math.ceil(ms / 1000) })
   const ipWait = ipWaitMs(clientIp(request))
   if (ipWait > 0) return tooMany(ipWait)
-  let issued: { token: string; expiresAt: Date } | undefined, attempt
+  let issued: { token: string; expiresAt: Date } | undefined, refusal: 'unconfirmed' | 'not-invited' | undefined, attempt
   try {
-    await workspaceStore().prepare()
+    const config = authConfig()
+    await Promise.all([workspaceStore().prepare(), accounts().prepare(), sessions().prepare()])
     attempt = await sessions().attempt(async (tx): Promise<Outcome> => {
-      const result: VerifyResult = await verifyPassword(authConfig(), body.data.email, body.data.password)
-      if (!result.ok) return 'fail'
-      if (await workspaceStore().link(tx, result.userId) === 'not-linked') return 'neutral'
-      issued = await sessions().create(result.userId, result.email, new Date(), tx)
+      const result = await supabase.verifyPassword(config, body.data.email, body.data.password)
+      if (!result.ok) { if (result.reason === 'unconfirmed') { refusal = 'unconfirmed'; return 'neutral' } return 'fail' }
+      // Known: an account row, or a workspace without one (the one migrated from shot 1 gets its account row now).
+      const known = (await accounts().account(result.userId, tx)) ?? (await workspaceStore().workspaceOf(result.userId, tx))
+      if (!known && !(await allowed(config, result.email, tx))) { refusal = 'not-invited'; return 'neutral' }
+      issued = await admit(tx, result.userId, result.email, zoneOf(body.data.timezone))
       return 'ok'
     })
   } catch { return refuse(503, 'unavailable') }
   if (attempt.waitMs > 0) return tooMany(attempt.waitMs)
-  if (attempt.outcome === 'neutral') return refuse(403, 'not-linked')
+  if (refusal === 'unconfirmed') return refuse(401, 'unconfirmed')
+  if (refusal === 'not-invited') return refuse(403, 'not-invited')
   if (attempt.outcome !== 'ok' || !issued) return refuse(401, 'wrong')
   return Response.json({ ok: true }, { headers: { ...noStore, 'set-cookie': sessionCookie(request, issued.token, issued.expiresAt) } })
 }
 
+/**
+ * A new login, for an invited address (or anyone, with sign-up open): the invite list is checked before Supabase is
+ * called, so an uninvited address learns nothing and costs nothing. Supabase then either sends its confirmation
+ * email (`confirm`: sign in after clicking it) or, with confirmation off, opens the login now, and the account,
+ * workspace and session are made at once.
+ */
+export async function handleSignUp(request: Request): Promise<Response> {
+  const body = signUpBody.safeParse(await request.json().catch(() => null))
+  if (!body.success) return refuse(400, 'invalid')
+  const ipWait = ipWaitMs(clientIp(request))
+  if (ipWait > 0) return tooMany(ipWait)
+  const address = normalizeEmail(body.data.email)
+  let result: SignUpResult, issued: { token: string; expiresAt: Date } | undefined
+  try {
+    const config = authConfig()
+    await Promise.all([workspaceStore().prepare(), accounts().prepare(), sessions().prepare()])
+    if (!(await allowed(config, address))) return refuse(403, 'not-invited')
+    result = await supabase.signUp(config, address, body.data.password, body.data.timezone)
+    if (result.outcome === 'session') {
+      const { userId, email: verified } = result
+      issued = await sessions().transaction(tx => admit(tx, userId, verified, zoneOf(body.data.timezone)))
+    }
+  } catch { return refuse(503, 'unavailable') }
+  if (result.outcome === 'exists') return refuse(409, 'exists')
+  if (result.outcome === 'weak') return refuse(400, 'weak', { message: result.message })
+  if (result.outcome === 'confirm') return Response.json({ ok: true, confirm: true }, { headers: noStore })
+  return Response.json({ ok: true }, { headers: { ...noStore, 'set-cookie': sessionCookie(request, issued!.token, issued!.expiresAt) } })
+}
 export async function handleSignOut(request: Request): Promise<Response> {
   await sessions().delete(tokenOf(request))
   return Response.json({ ok: true }, { headers: { ...noStore, 'set-cookie': sessionCookie(request, '', null) } })
+}
+
+/**
+ * The account's own delete, with the password typed again: the workspace's rows, the account row and every session
+ * go in one transaction; the Supabase login goes too when the secret key is set (best effort, after the rows).
+ */
+export async function handleDeleteAccount(request: Request): Promise<Response> {
+  const session = await ownerSession(tokenOf(request))
+  if (!session) return refuse(401, 'signed-out')
+  const body = deleteBody.safeParse(await request.json().catch(() => null))
+  if (!body.success) return refuse(401, 'wrong')
+  const ipWait = ipWaitMs(clientIp(request))
+  if (ipWait > 0) return tooMany(ipWait)
+  let attempt, config: AuthConfig
+  try {
+    config = authConfig()
+    attempt = await sessions().attempt(async (tx): Promise<Outcome> => {
+      const result = await supabase.verifyPassword(config, session.email, body.data.password)
+      if (!result.ok || result.userId !== session.userId) return 'fail'
+      await workspaceStore().deleteWorkspace(tx, session.userId)
+      await accounts().deleteAccount(tx, session.userId)
+      await sessions().deleteAll(session.userId, tx)
+      return 'ok'
+    })
+  } catch { return refuse(503, 'unavailable') }
+  if (attempt.waitMs > 0) return tooMany(attempt.waitMs)
+  if (attempt.outcome !== 'ok') return refuse(401, 'wrong')
+  let login: 'deleted' | 'kept' = 'kept'
+  if (config.secretKey) { try { await supabase.deleteUser(config, session.userId); login = 'deleted' } catch (error) { console.error(JSON.stringify({ level: 'error', event: 'auth.delete-login', error: error instanceof Error ? error.message : String(error) })) } }
+  return Response.json({ ok: true, login }, { headers: { ...noStore, 'set-cookie': sessionCookie(request, '', null) } })
 }

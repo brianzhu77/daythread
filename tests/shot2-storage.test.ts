@@ -125,7 +125,7 @@ test('a page save stores the page\'s previous document as its inverse, and undoi
     await run('d', 0, { type: 'ensure-day', date: today })
     await run('d2', 1, { type: 'ensure-day', date: '2026-10-23' })
     const page = (await asOwner(A, () => repo.load())).pages.find(p => p.id === `day:${today}`)!
-    const text = 'nul \u0000 · emoji 🧵 · quote " \\ · 中文'
+    const text = 'emoji 🧵 · quote " \\ · 中文 · tab\t'
     const doc = [{ id: 'l1', type: 'paragraph', props: {}, content: [{ type: 'text', text, styles: {} }], children: [] }]
     await run('s', 2, { type: 'save-editor', pageId: page.id, expectedContent: pageContentKey(page), document: JSON.stringify(doc), today })
     const saved = (await asOwner(A, () => repo.load())).pages.find(p => p.id === page.id)!
@@ -244,17 +244,18 @@ test('migration: an unlinked, never-written row (revision 0) migrates to nothing
   } finally { await db.close() }
 })
 
-test('text survives exactly in every column: a title and a tombstone with a NUL, emoji and quotes', async () => {
+test('text survives exactly in every column, emoji and quotes included; U+0000, which no text column holds, is dropped', async () => {
   const db = await PGlite.create()
   try {
     const { repo } = await withWorkspaces(db, [[A, 'America/Vancouver']])
     const { pageContentKey } = await import('../src/domain/editor-document.ts')
-    const title = 'nul \u0000 · emoji 🧵 · quote " \\ · 中文'
+    const typed = 'nul \u0000 · emoji 🧵 · quote " \\ · 中文', title = typed.replace('\u0000', '')
     const run = (operationId: string, expectedRevision: number, action: Parameters<typeof repo.execute>[0]['action']) => asOwner(A, () => repo.execute({ operationId, expectedRevision, action }))
     await run('d', 0, { type: 'ensure-day', date: today })
-    const t = await run('t', 1, { type: 'add-task', pageId: `day:${today}`, title, plannedOn: today })
+    const t = await run('t', 1, { type: 'add-task', pageId: `day:${today}`, title: typed, plannedOn: today })
     const page = (await asOwner(A, () => repo.load())).pages[0]!
     assert.equal((await asOwner(A, () => repo.load())).tasks[0]!.title, title)
+    assert.ok(page.document.includes('emoji 🧵') && !page.document.includes('\\u0000'), 'the row\'s words too')
     // Removing the task's only row tombstones it (deleted_tasks), title and all.
     const doc = JSON.parse(page.document) as { props?: { taskId?: string } }[]
     await run('s', 2, { type: 'save-editor', pageId: page.id, expectedContent: pageContentKey(page), document: JSON.stringify(doc.filter(n => n.props?.taskId !== t.receipt.entityId)), singleDeleteIds: [], today })

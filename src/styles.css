@@ -1325,6 +1325,11 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .account-row-sidebar { padding: 0 10px; } /* the same left edge as .side-label */
 /* Only the failure's Try again is underlined: in the same grey as the words around it, nothing else says it's a link (Jazz). */
 .account-row .link.retry { text-decoration: underline; }
+.account-row p { margin: 0; }
+.account-zone { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; max-width: 11em; text-overflow: ellipsis; }
+.account-delete { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.account-delete input { height: 36px; padding: 0 8px; border: 1px solid var(--line, #ddd); border-radius: 6px; font: inherit; background: var(--bg-doc, #fff); color: var(--ink); }
+.account-delete .link.danger { color: var(--red); }
 .account-row-phone { display: none; }
 @media (max-width: 599px) { .account-row-phone { display: block; } }
 /* B38 (Jazz): a save that hasn't gone through shows where he can still see it. Phone, typing: a dot on the toolbar.

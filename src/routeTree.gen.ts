@@ -14,13 +14,16 @@ import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as PagesRouteImport } from './routes/pages'
 import { Route as ReviewRouteImport } from './routes/review'
 import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as TasksRouteImport } from './routes/tasks'
 import { Route as ApiExportRouteImport } from './routes/api/export'
 import { Route as DayDateRouteImport } from './routes/day.$date'
 import { Route as TagsIndexRouteImport } from './routes/tags.index'
 import { Route as TagsTagRouteImport } from './routes/tags.$tag'
+import { Route as ApiAuthDeleteAccountRouteImport } from './routes/api/auth/delete-account'
 import { Route as ApiAuthSignInRouteImport } from './routes/api/auth/sign-in'
 import { Route as ApiAuthSignOutRouteImport } from './routes/api/auth/sign-out'
+import { Route as ApiAuthSignUpRouteImport } from './routes/api/auth/sign-up'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -45,6 +48,11 @@ const ReviewRoute = ReviewRouteImport.update({
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpRoute = SignUpRouteImport.update({
+  id: '/sign-up',
+  path: '/sign-up',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TasksRoute = TasksRouteImport.update({
@@ -72,6 +80,11 @@ const TagsTagRoute = TagsTagRouteImport.update({
   path: '/tags/$tag',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthDeleteAccountRoute = ApiAuthDeleteAccountRouteImport.update({
+  id: '/api/auth/delete-account',
+  path: '/api/auth/delete-account',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSignInRoute = ApiAuthSignInRouteImport.update({
   id: '/api/auth/sign-in',
   path: '/api/auth/sign-in',
@@ -82,6 +95,11 @@ const ApiAuthSignOutRoute = ApiAuthSignOutRouteImport.update({
   path: '/api/auth/sign-out',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthSignUpRoute = ApiAuthSignUpRouteImport.update({
+  id: '/api/auth/sign-up',
+  path: '/api/auth/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -89,13 +107,16 @@ export interface FileRoutesByFullPath {
   '/pages': typeof PagesRoute
   '/review': typeof ReviewRoute
   '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/tasks': typeof TasksRoute
   '/api/export': typeof ApiExportRoute
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags/': typeof TagsIndexRoute
+  '/api/auth/delete-account': typeof ApiAuthDeleteAccountRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
+  '/api/auth/sign-up': typeof ApiAuthSignUpRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -103,13 +124,16 @@ export interface FileRoutesByTo {
   '/pages': typeof PagesRoute
   '/review': typeof ReviewRoute
   '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/tasks': typeof TasksRoute
   '/api/export': typeof ApiExportRoute
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags': typeof TagsIndexRoute
+  '/api/auth/delete-account': typeof ApiAuthDeleteAccountRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
+  '/api/auth/sign-up': typeof ApiAuthSignUpRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -118,13 +142,16 @@ export interface FileRoutesById {
   '/pages': typeof PagesRoute
   '/review': typeof ReviewRoute
   '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/tasks': typeof TasksRoute
   '/api/export': typeof ApiExportRoute
   '/day/$date': typeof DayDateRoute
   '/tags/$tag': typeof TagsTagRoute
   '/tags/': typeof TagsIndexRoute
+  '/api/auth/delete-account': typeof ApiAuthDeleteAccountRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
+  '/api/auth/sign-up': typeof ApiAuthSignUpRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -134,13 +161,16 @@ export interface FileRouteTypes {
     | '/pages'
     | '/review'
     | '/sign-in'
+    | '/sign-up'
     | '/tasks'
     | '/api/export'
     | '/day/$date'
     | '/tags/$tag'
     | '/tags/'
+    | '/api/auth/delete-account'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
+    | '/api/auth/sign-up'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -148,13 +178,16 @@ export interface FileRouteTypes {
     | '/pages'
     | '/review'
     | '/sign-in'
+    | '/sign-up'
     | '/tasks'
     | '/api/export'
     | '/day/$date'
     | '/tags/$tag'
     | '/tags'
+    | '/api/auth/delete-account'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
+    | '/api/auth/sign-up'
   id:
     | '__root__'
     | '/'
@@ -162,13 +195,16 @@ export interface FileRouteTypes {
     | '/pages'
     | '/review'
     | '/sign-in'
+    | '/sign-up'
     | '/tasks'
     | '/api/export'
     | '/day/$date'
     | '/tags/$tag'
     | '/tags/'
+    | '/api/auth/delete-account'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
+    | '/api/auth/sign-up'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -177,13 +213,16 @@ export interface RootRouteChildren {
   PagesRoute: typeof PagesRoute
   ReviewRoute: typeof ReviewRoute
   SignInRoute: typeof SignInRoute
+  SignUpRoute: typeof SignUpRoute
   TasksRoute: typeof TasksRoute
   ApiExportRoute: typeof ApiExportRoute
   DayDateRoute: typeof DayDateRoute
   TagsTagRoute: typeof TagsTagRoute
   TagsIndexRoute: typeof TagsIndexRoute
+  ApiAuthDeleteAccountRoute: typeof ApiAuthDeleteAccountRoute
   ApiAuthSignInRoute: typeof ApiAuthSignInRoute
   ApiAuthSignOutRoute: typeof ApiAuthSignOutRoute
+  ApiAuthSignUpRoute: typeof ApiAuthSignUpRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -223,6 +262,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignInRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sign-up': {
+      id: '/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof SignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tasks': {
       id: '/tasks'
       path: '/tasks'
@@ -258,6 +304,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TagsTagRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/delete-account': {
+      id: '/api/auth/delete-account'
+      path: '/api/auth/delete-account'
+      fullPath: '/api/auth/delete-account'
+      preLoaderRoute: typeof ApiAuthDeleteAccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/sign-in': {
       id: '/api/auth/sign-in'
       path: '/api/auth/sign-in'
@@ -272,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSignOutRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/sign-up': {
+      id: '/api/auth/sign-up'
+      path: '/api/auth/sign-up'
+      fullPath: '/api/auth/sign-up'
+      preLoaderRoute: typeof ApiAuthSignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -281,13 +341,16 @@ const rootRouteChildren: RootRouteChildren = {
   PagesRoute: PagesRoute,
   ReviewRoute: ReviewRoute,
   SignInRoute: SignInRoute,
+  SignUpRoute: SignUpRoute,
   TasksRoute: TasksRoute,
   ApiExportRoute: ApiExportRoute,
   DayDateRoute: DayDateRoute,
   TagsTagRoute: TagsTagRoute,
   TagsIndexRoute: TagsIndexRoute,
+  ApiAuthDeleteAccountRoute: ApiAuthDeleteAccountRoute,
   ApiAuthSignInRoute: ApiAuthSignInRoute,
   ApiAuthSignOutRoute: ApiAuthSignOutRoute,
+  ApiAuthSignUpRoute: ApiAuthSignUpRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
