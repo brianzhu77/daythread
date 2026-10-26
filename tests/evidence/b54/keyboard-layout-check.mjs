@@ -6,7 +6,7 @@ import * as pw from '@playwright/test'
 const [base, engine = 'webkit'] = process.argv.slice(2)
 if (!base || new URL(base).hostname !== '127.0.0.1' || new URL(base).port === '3000') throw Error('Use a disposable loopback server')
 const KEYBOARD = 336
-const browser = await pw[engine].launch(), p = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true })
+const browser = await pw[engine].launch({ executablePath: engine === 'chromium' ? process.env.CHROMIUM : undefined }), p = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true })
 const errors = []; p.on('pageerror', e => errors.push(e.message))
 let failed = 0
 const log = (ok, what, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${engine}${iosRects ? ' ios-rects' : ''}: ${what}${detail ? ` (${detail})` : ''}`) }
@@ -40,7 +40,9 @@ const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancou
 await p.goto(`${base}/`, { waitUntil: 'networkidle' }); await p.waitForTimeout(800)
 const later = p.getByRole('button', { name: 'Later', exact: true }); if (await later.count()) await later.tap()
 log(await tabBar(), 'keyboard down: the tab bar shows')
-const notes = p.locator(`.bn-block-outer[data-id="day:${today}:notes:template:0"] .bn-inline-content`).first()
+// The Notes line: the first line after the Notes heading (the v2 template's ids differ from the converted v1 ones).
+const notesId = await p.evaluate(() => { const blocks = [...document.querySelectorAll('[data-node-type="blockContainer"]')]; const at = blocks.findIndex(b => b.querySelector('[data-content-type="heading"]')?.textContent.trim() === 'Notes'); return blocks[at + 1]?.dataset.id })
+const notes = p.locator(`.bn-block-outer[data-id="${notesId}"] .bn-inline-content`).first()
 await notes.tap(); await settle()
 log(!(await tabBar()), 'keyboard up: the tab bar is hidden')
 for (let i = 1; i <= 14; i++) { await p.keyboard.type(`line ${i}`); await p.keyboard.press('Enter') }

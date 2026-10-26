@@ -9,7 +9,7 @@ import * as pw from '@playwright/test'
 const base = process.argv[2] ?? 'http://127.0.0.1:3513'
 const engine = process.argv[3] ?? 'webkit'
 const KEYBOARD = 336 // an iPhone keyboard with its suggestion bar, in CSS px
-const browser = await pw[engine].launch({ headless: true })
+const browser = await pw[engine].launch({ headless: true, executablePath: engine === 'chromium' ? process.env.CHROMIUM : undefined })
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true })
 const errors = []
 page.on('pageerror', e => errors.push(e.message))
