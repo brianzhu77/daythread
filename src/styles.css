@@ -1361,16 +1361,22 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .sign-in input:hover { box-shadow: inset 0 0 0 1px var(--gray-8); }
 .sign-in input:focus, .sign-in input:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--gray-12); background: var(--bg-doc); }
 .sign-in-hint { margin: 6px 0 0; font-size: var(--text-meta); color: var(--ink-3); }
-.sign-in button[type='submit'] { height: 48px; margin-top: 4px; border-radius: var(--radius-control); background: var(--gray-12); color: var(--gray-1); font-size: var(--text-body); font-weight: var(--weight-semibold); }
-.sign-in button[type='submit']:hover:not(:disabled) { background: var(--gray-11); }
-.sign-in button[type='submit']:disabled { opacity: .35; }
+/* By class, not by type: while the request runs HeroUI turns the button's type to "button", and a type selector would
+   drop every rule here, so the button shrank to a 36px pill and sprang back (Brian, Oct 26: it felt jumpy). */
+.sign-in-submit { height: 48px; margin-top: 4px; border-radius: var(--radius-control); background: var(--gray-12); color: var(--gray-1); font-size: var(--text-body); font-weight: var(--weight-semibold); }
+.sign-in-submit:hover:not(:disabled):not([data-pending='true']) { background: var(--gray-11); }
+.sign-in-submit:disabled { opacity: .35; }
 .sign-in-meta { margin: 12px 0 0; font-size: var(--text-meta); color: var(--ink-2); }
 .sign-in-password { position: relative; }
 .sign-in-password input { width: 100%; padding-right: 64px; }
 .sign-in-show { position: absolute; right: 0; top: 0; height: 48px; min-width: 56px; padding: 0 12px; font-size: var(--text-meta); }
 .sign-in .link.sign-in-show { text-decoration: none; }
-.sign-in-error { font-size: var(--text-meta); color: var(--red); margin: -4px 0 0; }
-.sign-in-note { font-size: var(--text-meta); color: var(--ink-2); margin: -4px 0 0; line-height: 1.45; }
+/* Under the button (the button never moves when a message appears); a note after an error sits right under it. */
+.sign-in-error { font-size: var(--text-meta); color: var(--red); margin: -6px 0 0; }
+.sign-in-note { font-size: var(--text-meta); color: var(--ink-2); margin: -6px 0 0; line-height: 1.45; }
+.sign-in-error + .sign-in-note { margin-top: -12px; }
+/* While the request runs the button keeps its place, size and most of its weight; the spinner says it is busy. */
+.sign-in-submit[data-pending='true'] { opacity: .7; }
 .sign-in .link { color: var(--gray-11); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--gray-7); }
 .sign-in .link:hover { color: var(--gray-12); text-decoration-color: var(--gray-12); }
 .link { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }

@@ -123,8 +123,8 @@ function SignIn() {
           <Label>Email</Label>
           <Input />
         </TextField>
+        <Button type="submit" className="sign-in-submit" variant="primary" fullWidth isPending={busy} isDisabled={!email.trim()}>Email me a link</Button>
         {error && <p className="sign-in-error" role="alert">{error}</p>}
-        <Button type="submit" variant="primary" fullWidth isPending={busy} isDisabled={!email.trim()}>Email me a link</Button>
         <p className="sign-in-meta"><button type="button" className="link" onClick={() => { setMode('sign-in'); setError(null) }}>Back to sign in</button></p>
       </form>
     </main>
@@ -142,8 +142,8 @@ function SignIn() {
             <button type="button" className="link sign-in-show" onClick={() => setShown(s => !s)} aria-pressed={shown}>{shown ? 'Hide' : 'Show'}</button>
           </div>
         </TextField>
+        <Button type="submit" className="sign-in-submit" variant="primary" fullWidth isPending={busy} isDisabled={!password}>Save and sign in</Button>
         {error && <p className="sign-in-error" role="alert">{error}</p>}
-        <Button type="submit" variant="primary" fullWidth isPending={busy} isDisabled={!password}>Save and sign in</Button>
       </form>
     </main>
   )
@@ -167,9 +167,10 @@ function SignIn() {
             <button type="button" className="link sign-in-show" onClick={() => setShown(s => !s)} aria-pressed={shown}>{shown ? 'Hide' : 'Show'}</button>
           </div>
         </TextField>
+        {/* Messages sit under the button, so the button never moves when one appears (Brian, Oct 26: it felt jumpy). */}
+        <Button type="submit" className="sign-in-submit" variant="primary" fullWidth isPending={busy} isDisabled={!email.trim() || !password}>Sign in</Button>
         {error && <p className="sign-in-error" role="alert">{error}</p>}
         {note && <p className="sign-in-note" role="status">{note}</p>}
-        <Button type="submit" variant="primary" fullWidth isPending={busy} isDisabled={!email.trim() || !password}>Sign in</Button>
         <p className="sign-in-meta">New here? <Link to="/sign-up" className="link">Create an account</Link></p>
       </form>
     </main>
