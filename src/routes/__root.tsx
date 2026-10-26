@@ -9,7 +9,9 @@ export const Route = createRootRoute({
       { charSet: 'utf-8' },
       // viewport-fit=cover lets the capture bar sit above the iPhone home indicator.
       { name: 'viewport', content: 'width=device-width, initial-scale=1, interactive-widget=resizes-content, viewport-fit=cover' },
-      { name: 'theme-color', content: '#ffffff' }, // B52: the page's colour (--bg-doc), so Safari's bars match it
+      // B52: the page's colour (--gray-1 in each scheme), so Safari's bars match it.
+      { name: 'theme-color', content: '#ffffff', media: '(prefers-color-scheme: light)' },
+      { name: 'theme-color', content: '#111111', media: '(prefers-color-scheme: dark)' },
       { name: 'apple-mobile-web-app-capable', content: 'yes' },
       // B52b: in the Home Screen app the page reaches under the status bar and env(safe-area-inset-top) is its height,
       // so B52's strip covers what scrolls there. iOS 26 keeps the clock dark over our white (Roadbuster 3ddfd8f4).

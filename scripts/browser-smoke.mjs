@@ -50,7 +50,7 @@ await run('tasks', 1280, async page => {
   const open = await page.locator('main').innerText()
   assert(open.includes('Other one'), 'open list has a task from Oct 21')
   await page.goto(base + '/tasks?view=upcoming'); await page.locator('main').waitFor()
-  await page.goto(base + '/tasks?view=paused'); await page.locator('main').waitFor()
+  await page.goto(base + '/tasks?view=paused'); await page.locator('.task-list').first().waitFor({ timeout: 30000 })
   assert((await page.locator('main').innerText()).includes('Set aside later'), 'Not today list has the paused task')
 })
 await run('calendar-pages-tags-review', 1280, async page => {
