@@ -20,7 +20,12 @@ export const Route = createRootRoute({
     ],
     // B52b: the Home Screen app is the whole site, wherever its icon was added from (without this, an icon added on a
     // day page showed a browser bar on Tasks and the review).
-    links: [{ rel: 'manifest', href: '/manifest.webmanifest' }],
+    links: [
+      { rel: 'manifest', href: '/manifest.webmanifest' },
+      // The mark (docs/design/system-v2.md §6): the SVG favicon follows the tab's colour scheme; iOS takes the PNG tile.
+      { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
+      { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+    ],
   }),
   component: Root,
   notFoundComponent: () => (

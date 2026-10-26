@@ -1,4 +1,5 @@
 import { Button, Input, Label, TextField } from '@heroui/react'
+import { Mark } from '../components/mark'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { safeNext } from '../lib/safe-next'
@@ -115,7 +116,7 @@ function SignIn() {
 
   if (mode === 'forgot') return (
     <main className="sign-in sign-in-forgot">
-      <p className="sign-in-brand">Daythread</p>
+      <p className="sign-in-brand"><Mark size={18} />Daythread</p>
       <form onSubmit={forgot}>
         <h1>Forgot password</h1>
         <p className="sign-in-sub">Type the address and we'll email a link to choose a new one.</p>
@@ -131,7 +132,7 @@ function SignIn() {
   )
   if (mode === 'reset') return (
     <main className="sign-in sign-in-reset">
-      <p className="sign-in-brand">Daythread</p>
+      <p className="sign-in-brand"><Mark size={18} />Daythread</p>
       <form onSubmit={reset}>
         <h1>Choose a new password</h1>
         <p className="sign-in-sub">{email ? `For ${email}. ` : ''}You'll be signed in once it's saved.</p>
@@ -149,7 +150,7 @@ function SignIn() {
   )
   return (
     <main className="sign-in">
-      <p className="sign-in-brand">Daythread</p>
+      <p className="sign-in-brand"><Mark size={18} />Daythread</p>
       <form onSubmit={signIn}>
         <h1>{mode === 'confirming' ? 'Confirming your email…' : 'Sign in'}</h1>
         <p className="sign-in-sub">{tagline}</p>
