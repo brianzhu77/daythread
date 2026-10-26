@@ -2,18 +2,21 @@
 // in WebKit with an iPhone profile (ProseMirror takes its iOS paths). Picking the first candidate on an empty line:
 // insertCompositionText 万, then deleteCompositionText, where WebKit removes the line's whole bn-block-outer and
 // leaves a bare <br> in its group, then insertFromComposition 万 and compositionend. On main the line is replaced by a
-// new paragraph holding 万 and a line break. Built server, sign-in off, a fresh store per run:
-//   DB=/tmp/rb-b49/<store>.sqlite node tests/evidence/b49/pinyin-replay.mjs <base> <bullet|nested|todo|second>
-import { webkit, devices } from '@playwright/test'
+// new paragraph holding 万 and a line break. Built server, sign-in off, a fresh v2 SQLite store per run:
+//   DB=/tmp/rb-b49/<store>.sqlite node tests/evidence/b49/pinyin-replay.mjs <base> <bullet|nested|todo|second> [webkit|chromium]
+// WebKit takes ProseMirror's iOS paths; Chromium runs the same DOM sequence against the editor's repair, where no WebKit is installed.
+import * as pw from '@playwright/test'
 import { DatabaseSync } from 'node:sqlite'
-const [base, scenario = 'bullet'] = process.argv.slice(2), DB = process.env.DB
+const [base, scenario = 'bullet', engine = 'webkit'] = process.argv.slice(2), DB = process.env.DB
+const { devices } = pw
 if (!base || new URL(base).hostname !== '127.0.0.1' || new URL(base).port === '3000' || !DB?.startsWith('/tmp/')) throw Error('Use a disposable loopback server and a /tmp store')
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
-const browser = await webkit.launch(), context = await browser.newContext({ ...devices['iPhone 13'] }), p = await context.newPage()
+const browser = await pw[engine].launch({ executablePath: engine === 'chromium' ? process.env.CHROMIUM : undefined }), context = await browser.newContext({ ...devices['iPhone 13'], ...(engine === 'chromium' ? { defaultBrowserType: 'chromium' } : {}) }), p = await context.newPage()
 const errors = []; p.on('pageerror', e => errors.push(e.message))
 let failed = 0
 const log = (ok, what, detail = '') => { if (!ok) failed++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${scenario}: ${what}${detail ? ` (${detail})` : ''}`) }
-const saved = () => { const d = new DatabaseSync(DB, { readOnly: true }); try { return JSON.parse(d.prepare("SELECT editorJSON FROM pages WHERE snapshot='current' AND date=?").get(today)?.editorJSON ?? '[]') } finally { d.close() } }
+// The v2 store (shot 1): one workspace row, pages inside it, each page's document a JSON string.
+const saved = () => { const d = new DatabaseSync(DB, { readOnly: true }); try { const ws = JSON.parse(d.prepare('SELECT data FROM workspace WHERE id = 1').get()?.data ?? '{}'); const page = (ws.pages ?? []).find(p => p.type === 'daily' && p.date === today); return page ? JSON.parse(page.document) : [] } finally { d.close() } }
 const deep = ns => ns.flatMap(n => [n, ...deep(n.children ?? [])])
 const textOf = n => (Array.isArray(n.content) ? n.content.map(c => c.text ?? '').join('') : '')
 
@@ -48,7 +51,9 @@ const compose = (marks, word, structural) => p.evaluate(async ({ marks, word, st
 const caretLine = () => p.evaluate(() => { const a = getSelection().anchorNode, b = (a?.nodeType === 1 ? a : a?.parentElement)?.closest('[data-node-type="blockContainer"]'); return { id: b?.dataset.id, type: b?.querySelector('[data-content-type]')?.dataset.contentType, text: b?.querySelector('.bn-inline-content')?.textContent, focused: Boolean(document.activeElement?.closest('.bn-editor')) } })
 
 await p.goto(`${base}/`, { waitUntil: 'networkidle' }); await p.waitForTimeout(800)
-const notes = p.locator(`.bn-block-outer[data-id="day:${today}:notes:template:0"] .bn-inline-content`).first()
+// The Notes line: the first line after the Notes heading (the v2 template's ids differ from the converted v1 ones).
+const notesId = await p.evaluate(() => { const blocks = [...document.querySelectorAll('[data-node-type="blockContainer"]')]; const at = blocks.findIndex(b => b.querySelector('[data-content-type="heading"]')?.textContent.trim() === 'Notes'); return blocks[at + 1]?.dataset.id })
+const notes = p.locator(`.bn-block-outer[data-id="${notesId}"] .bn-inline-content`).first()
 await notes.tap()
 await notes.evaluate(el => { const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); getSelection().removeAllRanges(); getSelection().addRange(r) })
 await p.keyboard.type('明天'); await p.keyboard.press('Enter'); await p.waitForTimeout(400)
@@ -75,7 +80,7 @@ await p.waitForTimeout(1500)
 const row = deep(saved()).find(n => n.id === before.id)
 log(row && row.type === before.type && textOf(row).startsWith('万') && !textOf(row).includes('\n'), 'saved: his line with the word, no line break', JSON.stringify(row && { type: row.type, text: textOf(row) }))
 log(!deep(saved()).some(n => n.id !== before.id && textOf(n).includes('万')), 'saved: the word nowhere else')
-if (scenario === 'nested') log(deep(saved()).some(n => n.id === 'day:' + today + ':notes:template:0' && n.children?.some(c => c.id === before.id)), 'saved: still nested under 明天')
+if (scenario === 'nested') log(deep(saved()).some(n => n.id === notesId && n.children?.some(c => c.id === before.id)), 'saved: still nested under 明天')
 log(errors.length === 0, 'no page errors', errors.slice(0, 2).join(' / '))
 await browser.close()
 console.log(failed ? `${failed} FAILED` : 'all passed')
