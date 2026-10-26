@@ -152,6 +152,14 @@ const tokenBody = z.object({ accessToken: z.string().min(1).max(4096), timezone 
 const resetBody = z.object({ accessToken: z.string().min(1).max(4096), password, timezone })
 const noStore = { 'cache-control': 'no-store' }
 const refuse = (status: number, error: string, extra: Record<string, unknown> = {}) => Response.json({ ok: false, error, ...extra }, { status, headers: noStore })
+/**
+ * "Couldn't sign in · Try again" on the screen is this 503: Supabase or Postgres could not be reached, or the
+ * environment is missing a value. The cause goes to the server log (Vercel's runtime logs), never to the browser.
+ */
+const unavailable = (handler: string, error: unknown) => {
+  console.error(JSON.stringify({ level: 'error', event: 'auth.unavailable', handler, error: error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 300) : String(error).slice(0, 300), cause: error instanceof Error && error.cause instanceof Error ? error.cause.message.slice(0, 200) : undefined }))
+  return refuse(503, 'unavailable')
+}
 const tooMany = (ms: number) => refuse(429, 'too-many', { retryAfter: Math.ceil(ms / 1000) })
 /** The browser's zone when it is one the runtime knows; UTC otherwise. */
 function zoneOf(value: string | undefined): string { try { return validTimezone(value ?? '') } catch { return 'UTC' } }
@@ -191,7 +199,7 @@ export async function handleSignIn(request: Request): Promise<Response> {
       issued = await admit(tx, result.userId, result.email, zoneOf(body.data.timezone))
       return 'ok'
     })
-  } catch { return refuse(503, 'unavailable') }
+  } catch (error) { return unavailable('handleSignIn', error) }
   if (attempt.waitMs > 0) return tooMany(attempt.waitMs)
   if (refusal === 'unconfirmed') return refuse(401, 'unconfirmed')
   if (refusal === 'not-invited') return refuse(403, 'not-invited')
@@ -221,7 +229,7 @@ export async function handleSignUp(request: Request): Promise<Response> {
       const { userId, email: verified } = result
       issued = await sessions().transaction(tx => admit(tx, userId, verified, zoneOf(body.data.timezone)))
     }
-  } catch { return refuse(503, 'unavailable') }
+  } catch (error) { return unavailable('handleSignUp', error) }
   if (result.outcome === 'exists') return refuse(409, 'exists')
   if (result.outcome === 'weak') return refuse(400, 'weak', { message: result.message })
   if (result.outcome === 'confirm') return Response.json({ ok: true, confirm: true }, { headers: noStore })
@@ -254,7 +262,7 @@ export async function handleDeleteAccount(request: Request): Promise<Response> {
       await sessions().deleteAll(session.userId, tx)
       return 'ok'
     })
-  } catch { return refuse(503, 'unavailable') }
+  } catch (error) { return unavailable('handleDeleteAccount', error) }
   if (attempt.waitMs > 0) return tooMany(attempt.waitMs)
   if (attempt.outcome !== 'ok') return refuse(401, 'wrong')
   let login: 'deleted' | 'kept' = 'kept'
@@ -271,7 +279,7 @@ export async function handleRecover(request: Request): Promise<Response> {
   if (!body.success) return refuse(400, 'invalid')
   const ipWait = ipWaitMs(clientIp(request))
   if (ipWait > 0) return tooMany(ipWait)
-  try { await supabase.recover(authConfig(), body.data.email) } catch { return refuse(503, 'unavailable') }
+  try { await supabase.recover(authConfig(), body.data.email) } catch (error) { return unavailable('handleRecover', error) }
   return Response.json({ ok: true }, { headers: noStore })
 }
 
@@ -303,7 +311,7 @@ export async function handleResetPassword(request: Request): Promise<Response> {
     result = await supabase.resetPassword(authConfig(), body.data.accessToken, body.data.password)
     if (!result.ok) return result.reason === 'weak' ? refuse(400, 'weak', { message: result.message }) : refuse(401, 'expired')
     return await enter(request, result.userId, result.email, zoneOf(body.data.timezone), true)
-  } catch { return refuse(503, 'unavailable') }
+  } catch (error) { return unavailable('handleResetPassword', error) }
 }
 
 /** The confirmation link's landing: the token in its fragment names the login, which comes in without typing the password again. */
@@ -317,5 +325,5 @@ export async function handleConfirm(request: Request): Promise<Response> {
     const user = await supabase.userFromToken(authConfig(), body.data.accessToken)
     if (!user) return refuse(401, 'expired')
     return await enter(request, user.userId, user.email, zoneOf(body.data.timezone), false)
-  } catch { return refuse(503, 'unavailable') }
+  } catch (error) { return unavailable('handleConfirm', error) }
 }

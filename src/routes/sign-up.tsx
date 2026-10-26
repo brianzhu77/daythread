@@ -60,9 +60,9 @@ function SignUp() {
           </div>
           <p className="sign-in-hint">At least 6 characters.</p>
         </TextField>
+        {!done && <Button type="submit" className="sign-in-submit" variant="primary" fullWidth isPending={busy} isDisabled={!email.trim() || !password}>Create account</Button>}
         {error && <p className="sign-in-error" role="alert">{error}</p>}
         {note && <p className="sign-in-note" role="status">{note}</p>}
-        {!done && <Button type="submit" variant="primary" fullWidth isPending={busy} isDisabled={!email.trim() || !password}>Create account</Button>}
         <p className="sign-in-meta">Have an account? <Link to="/sign-in" search={{ next: undefined }} className="link">Sign in</Link></p>
       </form>
     </main>
