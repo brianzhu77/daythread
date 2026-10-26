@@ -14,8 +14,9 @@ import * as supabaseAuth from './supabase.ts'
 import type { ResetResult, SignUpResult, VerifyResult } from './supabase.ts'
 
 /** Reachable without a session: the sign-in and sign-up screens and the calls they make; build assets are public code. */
-const publicPaths = new Set(['/sign-in', '/sign-up', '/api/auth/sign-in', '/api/auth/sign-up', '/api/auth/sign-out', '/api/auth/recover', '/api/auth/reset-password', '/api/auth/confirm'])
-const isPublic = (path: string) => publicPaths.has(path) || path.startsWith('/assets/') || /^\/[\w-]+\.(ico|png|svg|webmanifest)$/.test(path)
+// /api/push/tick is the scheduler's, let in by CRON_SECRET; /sw.js is the service worker, fetched by the browser itself.
+const publicPaths = new Set(['/sign-in', '/sign-up', '/api/auth/sign-in', '/api/auth/sign-up', '/api/auth/sign-out', '/api/auth/recover', '/api/auth/reset-password', '/api/auth/confirm', '/api/push/tick'])
+const isPublic = (path: string) => publicPaths.has(path) || path.startsWith('/assets/') || /^\/[\w-]+\.(ico|png|svg|webmanifest|js)$/.test(path)
 
 let store: SessionStore | undefined
 export const sessions = () => store ??= new SessionStore(postgresSql(), schemaName(), { workspaces: `${schemaName()}.workspaces` })

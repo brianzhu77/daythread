@@ -158,6 +158,17 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     if (!row) throw new Error('Workspace not created')
     return row.id
   }
+  /** The workspace an account works in (null: this machine's, with sign-in off), made now if it has none. Returns its id. */
+  async workspaceIdFor(userId: string | null): Promise<string> {
+    await this.init()
+    return this.sql.transaction(tx => this.createWorkspaceIn(tx, userId, 'America/Vancouver'))
+  }
+  /** One workspace by id, for background work on every account (reminders): no owner scope, no Undo marker. */
+  async loadWorkspace(id: string): Promise<Workspace | null> {
+    await this.init()
+    const [info] = await this.sql.query<WorkspaceInfo>(`select id::text as id, timezone, revision from ${this.t('workspaces')} where id = $1::uuid`, [id])
+    return info ? workspaceOf(await this.readRows(this.sql, { ...info, userId: null })) : null
+  }
   /** Every row of the account's workspace goes (the tables cascade). */
   async deleteWorkspace(tx: SqlClient, userId: string): Promise<void> {
     await this.init()

@@ -3,6 +3,7 @@ import { getAccount } from '../server/functions'
 import { saveKeptDrafts } from './draft-recovery'
 import { flushAllEditors, openEditorPages } from './editor-flush'
 import { useWorkspace } from './use-day'
+import { Reminders } from './reminders'
 
 type Account = { email: string | null; timezone: string | null; timezones: string[] }
 
@@ -69,6 +70,7 @@ export function AccountRow({ className }: { className: string }) {
           </>
         )}
         {exportLink}
+        <Reminders prefix=" · " />
         {email && <> · <button type="button" className="link" onClick={() => void signOut()}>Sign out</button></>}
         {email && !deleting && <> · <button type="button" className="link" onClick={() => setDeleting(true)}>Delete account</button></>}
       </p>
