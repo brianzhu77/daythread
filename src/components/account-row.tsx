@@ -4,6 +4,8 @@ import { saveKeptDrafts } from './draft-recovery'
 import { flushAllEditors, openEditorPages } from './editor-flush'
 import { useWorkspace } from './use-day'
 import { Reminders } from './reminders'
+import { HomeScreenHint } from './home-screen-hint'
+import { clearOfflineData } from './offline-copy'
 
 type Account = { email: string | null; timezone: string | null; timezones: string[] }
 
@@ -23,6 +25,7 @@ export function AccountRow({ className }: { className: string }) {
   const email = account.email
   async function signOut() {
     await fetch('/api/auth/sign-out', { method: 'POST' }).catch(() => undefined)
+    await clearOfflineData()
     window.location.assign('/sign-in')
   }
   async function pickZone(timezone: string) {
@@ -71,6 +74,7 @@ export function AccountRow({ className }: { className: string }) {
         )}
         {exportLink}
         <Reminders prefix=" · " />
+        <HomeScreenHint prefix=" · " />
         {email && <> · <button type="button" className="link" onClick={() => void signOut()}>Sign out</button></>}
         {email && !deleting && <> · <button type="button" className="link" onClick={() => setDeleting(true)}>Delete account</button></>}
       </p>
@@ -93,7 +97,7 @@ function DeleteAccount({ onCancel }: { onCancel: () => void }) {
       const response = await fetch('/api/auth/delete-account', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password }) })
       r = await response.json().catch(() => ({ error: 'unavailable' }))
     } catch { r = { error: 'unavailable' } }
-    if (r.ok) return window.location.assign('/sign-in')
+    if (r.ok) { await clearOfflineData(); return window.location.assign('/sign-in') }
     setBusy(false)
     setError(r.error === 'wrong' ? "That didn't work · Check the password" : r.error === 'too-many' ? `Too many tries · Try again in ${Math.ceil((r.retryAfter ?? 60) / 60)} min` : "Couldn't delete the account · Try again")
   }

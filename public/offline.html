@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Offline · Daythread</title>
+<style>
+  :root { --ink: #202020; --ink-2: #646464; --line: #cecece; --bg: #ffffff; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #eeeeee; --ink-2: #b4b4b4; --line: #484848; --bg: #111111; } }
+  body { margin: 0; min-height: 100dvh; display: grid; place-items: center; background: var(--bg); color: var(--ink); font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  main { max-width: 360px; padding: 24px; display: grid; gap: 12px; }
+  h1 { margin: 0; font-size: 28px; line-height: 34px; letter-spacing: -.02em; }
+  p { margin: 0; color: var(--ink-2); }
+  .row { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+  button, a { font: inherit; height: 40px; padding: 0 16px; border-radius: 8px; display: inline-flex; align-items: center; text-decoration: none; cursor: pointer; }
+  button { background: var(--ink); color: var(--bg); border: 0; font-weight: 600; }
+  a { color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
+  svg { display: block; }
+</style>
+</head>
+<body>
+<main>
+  <svg width="40" height="40" viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M11 24H19M29 24H37" stroke="currentColor" stroke-width="3"/><circle cx="7" cy="24" r="4" stroke="currentColor" stroke-width="3"/><circle cx="41" cy="24" r="4" stroke="currentColor" stroke-width="3"/><circle cx="24" cy="24" r="5.5" fill="#0090ff"/></svg>
+  <h1>Offline</h1>
+  <p>This screen hasn't been opened on this device while connected, so there is no copy of it here. Today usually is.</p>
+  <div class="row">
+    <a href="/">Open Today</a>
+    <button type="button" onclick="location.reload()">Try again</button>
+  </div>
+</main>
+</body>
+</html>

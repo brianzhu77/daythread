@@ -9,6 +9,7 @@ import { configureDebug, debugClient } from '../lib/debug'
 import { sampleActions } from './fixture'
 import { todayIso } from './dates'
 import { flushAllEditors } from './editor-flush'
+import { offlineCopy } from './offline-copy'
 
 export interface Transport {
   load(operationId?: string, triggerOperationId?: string): Promise<Workspace>
@@ -49,6 +50,8 @@ type RunOptions = { inlineRefusal?: RegExp; onRefused?: (message: string) => voi
 interface WorkspaceContextValue {
   workspace: Workspace | null
   loadError: string | null
+  /** The workspace on screen is the last-loaded copy: the network is away (docs/design/pwa.md §2). */
+  offline: boolean
   saveState: SaveState
   saveError: string | null
   /** The command that failed and Retry would resend, if any. */
@@ -67,6 +70,7 @@ const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
 export function WorkspaceProvider({ children, transport = serverTransport }: { children: ReactNode; transport?: Transport }) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [offline, setOffline] = useState(false)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
   const [lastFailed, setLastFailed] = useState<{ action: Action; notice?: NoticeArg; operationId: string } | null>(null)
@@ -74,9 +78,11 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const wsRef = useRef<Workspace | null>(null)
   const queue = useRef<Promise<unknown>>(Promise.resolve())
 
-  const adopt = useCallback((ws: Workspace) => {
+  const adopt = useCallback((ws: Workspace, fromServer = true) => {
     wsRef.current = ws
     setWorkspace(ws)
+    // Every workspace that came from the server is the copy the next offline open shows.
+    if (fromServer) void offlineCopy.remember(ws)
   }, [])
 
   const refresh = useCallback(async (triggerOperationId?: string) => {
@@ -86,16 +92,29 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       // A load can be overtaken by a command that finished while it was in flight (he typed and it saved): its older
       // snapshot must not replace the newer one, or the editor would roll his text back (Ratchet #95).
       if (wsRef.current && next.revision < wsRef.current.revision) { debugClient('workspace.refresh.finish',{operationId,triggerOperationId,afterRevision:next.revision,elapsedMs:performance.now()-started,result:'stale'}); return wsRef.current }
-      adopt(next); debugClient('workspace.refresh.finish',{operationId,triggerOperationId,afterRevision:next.revision,elapsedMs:performance.now()-started,result:'ok'}); return next }
+      adopt(next); setOffline(false); debugClient('workspace.refresh.finish',{operationId,triggerOperationId,afterRevision:next.revision,elapsedMs:performance.now()-started,result:'ok'}); return next }
     catch(error) { debugClient('workspace.refresh.finish',{operationId,triggerOperationId,elapsedMs:performance.now()-started,result:'error',error:error instanceof Error?error.name:'UnknownError'}); throw error }
   }, [transport, adopt])
 
   const reload = useCallback(() => {
     setLoadError(null)
-    void refresh().catch((e: unknown) => setLoadError(e instanceof Error ? e.message : String(e)))
-  }, [refresh])
+    void refresh().catch(async (e: unknown) => {
+      // No network: the last-loaded copy opens the app, read as it was; any other failure is shown as before.
+      const copy = await offlineCopy.fallback(e)
+      if (copy && (!wsRef.current || copy.revision >= wsRef.current.revision)) {
+        adopt(copy, false); setOffline(true)
+        debugClient('workspace.offline-copy', { afterRevision: copy.revision })
+      } else if (copy && wsRef.current) setOffline(true)
+      else setLoadError(e instanceof Error ? e.message : String(e))
+    })
+  }, [refresh, adopt])
 
   useEffect(reload, [reload])
+  // The connection back: load again, and the offline line goes with the load.
+  useEffect(() => {
+    window.addEventListener('online', reload)
+    return () => window.removeEventListener('online', reload)
+  }, [reload])
 
   // An open tab only learns of edits made elsewhere (another tab, the phone) when it loads again. Coming back to the
   // tab loads again, after saving what was typed here, so the refresh never lands on unsaved typing. If that save is
@@ -224,6 +243,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       workspace,
       latest,
       loadError,
+      offline,
       saveState,
       saveError,
       failedAction: lastFailed?.action.type ?? null,
@@ -233,7 +253,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       refresh,
       addSampleData,
     }),
-    [workspace, latest, loadError, saveState, saveError, lastFailed, run, retry, reload, refresh, addSampleData],
+    [workspace, latest, loadError, offline, saveState, saveError, lastFailed, run, retry, reload, refresh, addSampleData],
   )
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }

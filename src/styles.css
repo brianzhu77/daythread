@@ -271,6 +271,8 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
 .banner[open] summary::after { transform: rotate(90deg); }
 .banner .app-link { font-weight: 500; color: var(--ink-soft); }
 .banner.error { color: var(--app-danger); font-size: .85rem; }
+/* The last-loaded copy is on screen (docs/design/pwa.md §2): a quiet line, not an alarm. */
+.banner.offline { color: var(--ink-2); font-size: .85rem; }
 .sim-control { display: inline-flex; align-items: center; gap: 6px; }
 .sim-control select { font-size: .74rem; padding: 1px 4px; border-radius: var(--radius-control); border: 1px solid var(--line); background: var(--paper); color: var(--ink-soft); }
 .sim {
