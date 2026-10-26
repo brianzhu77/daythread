@@ -5,14 +5,14 @@ import type { Sql, TransactionSql } from 'postgres'
 export interface SqlClient {
   /** One or more statements, no parameters (migration files). */
   exec(sql: string): Promise<void>
-  query<T extends Record<string, unknown> = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>
+  query<T extends object = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>
   transaction<T>(fn: (tx: SqlClient) => Promise<T>): Promise<T>
 }
 
 export function pgliteClient(db: PGlite | Transaction): SqlClient {
   return {
     exec: async sql => { await db.exec(sql) },
-    query: async <T,>(sql: string, params: unknown[] = []) => (await db.query<T>(sql, params)).rows,
+    query: async <T extends object,>(sql: string, params: unknown[] = []) => (await db.query<T>(sql, params)).rows,
     transaction: fn => 'transaction' in db ? (db as PGlite).transaction(tx => fn(pgliteClient(tx))) : fn(pgliteClient(db)),
   } as SqlClient
 }

@@ -4,7 +4,7 @@ import postgres from 'postgres'
 import { PostgresWorkspaceRepository } from '../src/server/postgres-repository.ts'
 import { postgresClient } from '../src/server/db/sql.ts'
 
-// The Postgres store through postgres-js on a real Postgres, as 3000 runs it: separate connections, prepare: false.
+// The Postgres store (rows, shot 2) through postgres-js on a real Postgres, as Vercel runs it: separate connections, prepare: false.
 // Skipped unless DATABASE_TEST_URL points at a disposable database (its `daythread_test_*` schemas are dropped).
 const url = process.env.DATABASE_TEST_URL
 const skip = url ? false : 'DATABASE_TEST_URL not set'
@@ -25,8 +25,8 @@ test('real Postgres: two processes racing at the same revision, one wins and not
     assert.equal((await ra.load()).pages.length, 2)
     const text = 'nul \u0000 · 🧵 · 中文'
     const page = (await ra.load()).pages[0]!
-    await ra.execute({ operationId: 't', expectedRevision: 2, action: { type: 'add-task', pageId: page.id, sectionId: page.sections[0]!.id, title: text } })
-    assert.equal((await rb.load()).tasks[0]!.title, text)
+    await ra.execute({ operationId: 't', expectedRevision: 2, action: { type: 'add-task', pageId: page.id, title: text, plannedOn: page.date } })
+    assert.equal((await rb.load()).tasks[0]!.title, text.replace('\u0000', ''), 'everything but U+0000, which a text column refuses')
   } finally {
     await a.unsafe(`drop schema if exists daythread_test_${process.pid} cascade`)
     await Promise.all([a.end(), b.end()])

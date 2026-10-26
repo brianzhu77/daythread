@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { applyCommand, createEmptyWorkspace, getDayView, plannedOn } from '../src/domain/workspace.ts'
-import { dayTemplate, editorSeed, inlineText, pageContentKey } from '../src/domain/editor-document.ts'
+import { dayTemplate, editorSeed, inlineText, pageContentKey, pageNodes } from '../src/domain/editor-document.ts'
 import { dayEvents } from '../src/domain/chip-events.ts'
 import { getUpcomingByDate } from '../src/domain/upcoming.ts'
 import { bullet, card, chip, dayId, flat, harness, heading, headingIndex, nodesOf, pageRef, para, taskRowsOn, text, today, todo, tomorrow, twoDaysAgo, under, yesterday } from './v2-helpers.ts'
@@ -373,4 +373,23 @@ test('save-review marks the day reviewed; ensure-day on a trashed-free workspace
   h.run({ type: 'save-review', date: yesterday })
   assert.equal(h.page(dayId(yesterday)).reviewSaved, true)
   assert.equal(createEmptyWorkspace().schemaVersion, 2)
+})
+
+test('a task typed into a leftover reference row on a day page (an old build\'s empty template row) is planned on that day', () => {
+  const h = harness()
+  h.day(today)
+  h.save(dayId(today), doc => [...doc, todo('left', 'Late idea', 'reference', '')])
+  const t = h.task('Late idea')
+  assert.equal(plannedOn(h.ws, t.id), today)
+  const row = flat(pageNodes(h.page(dayId(today)))).find(n => n.id === 'left')!
+  assert.deepEqual({ role: row.props?.role, planDate: row.props?.planDate }, { role: 'plan', planDate: today })
+})
+
+test('set-timezone: a valid IANA zone is kept on the workspace; an unknown one is refused; the export uses it for its date', () => {
+  const h = harness()
+  h.run({ type: 'set-timezone', timezone: 'Asia/Tokyo' })
+  assert.equal(h.ws.timezone, 'Asia/Tokyo')
+  assert.throws(() => h.run({ type: 'set-timezone', timezone: 'Mars/Olympus' }), /time zone/i)
+  assert.throws(() => h.run({ type: 'set-timezone', timezone: '' }), /time zone/i)
+  assert.equal(h.ws.timezone, 'Asia/Tokyo')
 })

@@ -1,22 +1,27 @@
 # Credentials: what to create and where it goes
 
-Five values. Each goes **directly** into `.env.local` on the Mac and/or the Vercel project's environment variables
-(scope **Preview** = staging). None goes into chat or git. GitHub needs nothing.
+Each value goes **directly** into `.env.local` on the Mac and/or the Vercel project's environment variables
+(scope **Preview** = staging, **Production** = the live app). None goes into chat or git. GitHub needs nothing.
 
-| Variable | Where it comes from | Local `.env.local` | Vercel Preview |
+| Variable | Where it comes from | Local `.env.local` | Vercel |
 | --- | --- | --- | --- |
 | `SUPABASE_URL` | Supabase → Project Settings → API → Project URL | yes | yes |
 | `SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API → Publishable key | yes | yes |
+| `SUPABASE_SECRET_KEY` | Supabase → Project Settings → API → Secret key. Optional: with it, Delete account removes the login too | optional | optional |
 | `DATABASE_URL` | Supabase → Connect → Transaction pooler (port 6543), `postgres` user with your password | yes | yes |
-| `OPENROUTER_API_KEY` | openrouter.ai → Keys. For staging, a separate key with a low credit limit | your current key | the staging key |
-| `OPENROUTER_MODEL` | The model id, e.g. `deepseek/deepseek-v4.1-flash-1017`. Optional: unset uses the code default | yes | yes |
+| `DAYTHREAD_SIGNUP` | `invite` (the default) or `open`. Who may sign up or sign in for the first time | optional | optional |
+| `DAYTHREAD_INVITES` | Invited addresses, comma-separated. Optional: the `daythread.invites` table does the same without a redeploy | optional | optional |
+
+`OWNER_EMAIL` is no longer read (shot 2): any account with a workspace signs in; the invite list decides who gets one.
 
 ## Supabase staging project (once)
 
 1. Create a project named `daythread-staging` in **West US (Oregon)**. The free plan is fine for staging.
 2. **Authentication → Users → Add user:** your email, tick **Auto Confirm User**. Do this before step 3.
-3. **Authentication → Sign In / Providers → Email:** keep Email on and **turn off "Allow new users to sign up"**. Only
-   your account can sign in from then on.
+3. **Authentication → Sign In / Providers → Email:** keep Email on and **keep "Allow new users to sign up" on**: our
+   server is the gate (the invite list), and Supabase has to accept the sign-up it forwards. "Confirm email" may stay
+   on; a new address then signs in after clicking the link Supabase sends (the built-in mailer is rate-limited; custom
+   SMTP is a launch item).
 
 ## Vercel
 
@@ -25,24 +30,22 @@ Optional, only if you want us to run the staging check against protected preview
 Protection → Protection Bypass for Automation** and pass it to the script when running it:
 `VERCEL_AUTOMATION_BYPASS_SECRET=… node scripts/smoke-staging.mjs <preview url>`. It is not app configuration.
 
-## The workspace's linked account
+## The invite list
 
-Brian's first successful sign-in links the workspace to his Supabase account (`daythread.workspace.user_id`). From
-then on only that account can open it. The database refuses any change to the link (trigger `workspace_user_id_guard`),
-so a stray update can't hand the workspace to another account.
-
-If he ever signs in with the right password and sees **"Your account isn't linked to this workspace · Your notes are
-safe"**, his Supabase account was recreated and has a new id. His notes are untouched, and 3000 on the Mac still opens
-them. **After confirming with him**, relink it to his current account in the Supabase SQL editor, as one transaction:
+While `DAYTHREAD_SIGNUP` is `invite` (the default), an address may sign up, or sign in for the first time, only when it
+is on the list. Two ways to add one; neither needs a deploy for the first:
 
 ```sql
-begin;
-set local daythread.allow_relink = 'on';  -- this transaction only; nothing else can set it
-update daythread.workspace
-   set user_id = (select id from auth.users where email = '<his sign-in email>')
- where id = 1;
-commit;
+insert into daythread.invites (email) values ('someone@example.com');
 ```
 
-The flag lasts only until `commit`. Sessions of the old account stop working at their next request, and he signs in
-once more.
+or `DAYTHREAD_INVITES=someone@example.com,another@example.com` in the environment. An invite is marked `used_at` at
+the first sign-in. Flipping to `DAYTHREAD_SIGNUP=open` lets anyone sign up.
+
+## Accounts and their workspaces
+
+Every account (`daythread.accounts`) has one workspace (`daythread.workspaces`, `user_id`); its pages, tasks and
+operations carry the workspace id. Brian's shot 1 row was migrated into his workspace on the first start of the shot 2
+build; the old table is kept as `daythread.workspace_shot1` for rollback (rename it back to `workspace` and redeploy
+the shot 1 build). Delete account (the account row, with the password) removes the workspace and the sessions; the
+Supabase login goes too when `SUPABASE_SECRET_KEY` is set, else it stays and a new sign-in starts an empty workspace.

@@ -1,0 +1,198 @@
+// Browser smoke for accounts (shot 2) on a real Postgres with scripts/fake-supabase-auth.mjs standing in for Supabase:
+// a shot 1 row migrated on the server's first start, sign-in, the account row (time zone, export, sign out), a second
+// account that sees nothing of the first, sign-up gated by the invite list, email confirmation, delete account. Run:
+//   psql $DB -f <seed: the shot 1 table and one row linked to 00000001-0000-4000-8000-000000000000>   (see tests/shot2-storage.test.ts shot1Table)
+//   FAKE_USERS="brian@test.com:right-pw:00000001-0000-4000-8000-000000000000" node scripts/fake-supabase-auth.mjs 54330 &
+//   DAYTHREAD_STORAGE=postgres DATABASE_URL=$DB SUPABASE_URL=http://127.0.0.1:54330 SUPABASE_PUBLISHABLE_KEY=pk SUPABASE_SECRET_KEY=sb_secret_fake \
+//     DAYTHREAD_SIGNUP=invite DAYTHREAD_INVITES=new@test.com TZ=America/Vancouver npx vite preview --port 3044 &
+//   DB=$DB TZ=America/Vancouver node scripts/accounts-smoke.mjs /tmp/smoke-out
+// Shot 2 browser run: accounts on a real Postgres with a fake Supabase. Brian's export seeded as a shot 1 row
+// (migrated on the server's first start), sign-in, the account row, a second account that sees nothing of his,
+// sign-up gated by the invite list, email confirmation, delete account.
+import assert from 'node:assert/strict'
+import { chromium } from '@playwright/test'
+import postgres from 'postgres'
+const base = 'http://127.0.0.1:3044', fake = 'http://127.0.0.1:54330'
+const out = process.argv[2]
+const sql = postgres(process.env.DB ?? 'postgres://postgres@127.0.0.1:54329/daythread_smoke', { prepare: false })
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM ?? '/opt/pw-browsers/chromium' })
+const results = []
+async function run(name, fn, width = 1280) {
+  const context = await browser.newContext({ viewport: { width, height: 900 }, timezoneId: 'America/Vancouver' })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', e => errors.push(e.message))
+  // A refused fetch (401/403 on purpose) is logged by the browser as a failed resource; not an error of the page.
+  page.on('console', m => { if (m.type() === 'error' && !/favicon|status of (401|403|404|429)/.test(m.text())) errors.push('console: ' + m.text()) })
+  try { await fn(page, context); results.push({ name, ok: true, errors }) }
+  catch (e) { results.push({ name, ok: false, error: e.message, errors }); await page.screenshot({ path: `${out}/fail-${name}.png`, fullPage: true }).catch(() => {}) }
+  finally { await context.close() }
+}
+const count = async (table, where = '') => (await sql.unsafe(`select count(*)::int as n from daythread.${table} ${where}`))[0].n
+async function signIn(page, email, password) {
+  await page.goto(base + '/sign-in')
+  await page.getByLabel('Email').fill(email)
+  await page.getByLabel('Password').fill(password)
+  await page.getByRole('button', { name: 'Sign in' }).click()
+}
+async function signUp(page, email, password) {
+  await page.goto(base + '/sign-up')
+  await page.getByLabel('Email').fill(email)
+  await page.getByLabel('Password').fill(password)
+  await page.getByRole('button', { name: 'Create account' }).click()
+}
+
+await run('signed-out-redirects', async page => {
+  await page.goto(base + '/')
+  await page.waitForURL(/\/sign-in/, { timeout: 15000 })
+  assert((await page.locator('main').innerText()).includes('Sign in'))
+  await page.goto(base + '/sign-up'); await page.locator('.sign-up').waitFor({ timeout: 15000 })
+  await page.screenshot({ path: `${out}/01-sign-up.png`, fullPage: true })
+})
+await run('migration-brian-signs-in', async page => {
+  await signIn(page, 'brian@test.com', 'right-pw')
+  await page.waitForURL(u => new URL(u).pathname === '/', { timeout: 20000 })
+  await page.locator('.editor-task-title').first().waitFor({ state: 'visible', timeout: 30000 })
+  const text = await page.locator('main').innerText()
+  assert(text.includes('TRV for Lu and Kathy') && text.includes('Check Mazda Grad Rebate'), 'today (Oct 25 in Vancouver) holds its tasks from the export')
+  await page.screenshot({ path: `${out}/02-brian-today.png`, fullPage: true })
+  await page.goto(base + '/pages'); await page.locator('.card-row').first().waitFor({ timeout: 30000 })
+  const pages = await page.locator('main').innerText()
+  assert(pages.includes('周报') && pages.includes('felixrieseberg'), 'his bookmark pages')
+  await page.goto(base + '/tasks?view=open'); await page.locator('.task-list').first().waitFor({ timeout: 30000 })
+  assert((await page.locator('main').innerText()).includes('TRV for Lu and Kathy'))
+  await page.goto(base + '/day/2026-10-23'); await page.locator('.bn-editor').first().waitFor({ timeout: 30000 })
+  const thu = await page.locator('main').innerText()
+  assert(thu.includes('Review 太难用了') && thu.includes('万圣节装饰、衣服'), 'his notes, every character')
+  await page.screenshot({ path: `${out}/03-brian-oct23.png`, fullPage: true })
+  // The database after the migration.
+  const tables = (await sql.unsafe("select c.relname from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace where n.nspname = 'daythread' and c.relkind = 'r' order by 1")).map(r => r.relname)
+  assert(tables.includes('workspace_shot1') && !tables.includes('workspace'), String(tables))
+  assert.equal(await count('workspaces'), 1); assert.equal(await count('pages'), 10); assert.equal(await count('tasks'), 12)
+  const [w] = await sql.unsafe("select user_id::text as u, revision, timezone from daythread.workspaces")
+  assert.deepEqual(w, { u: '00000001-0000-4000-8000-000000000000', revision: 408, timezone: 'America/Vancouver' })
+})
+await run('account-row-timezone-export-signout', async page => {
+  await signIn(page, 'brian@test.com', 'right-pw')
+  await page.waitForURL(u => new URL(u).pathname === '/', { timeout: 20000 })
+  await page.locator('.account-row-sidebar').waitFor({ timeout: 20000 })
+  const row = await page.locator('.account-row-sidebar').innerText()
+  assert(row.includes('brian@test.com') && row.includes('Export') && row.includes('Sign out') && row.includes('Delete account'), row)
+  const zone = page.getByLabel('Time zone')
+  assert.equal(await zone.inputValue(), 'America/Vancouver')
+  await zone.selectOption('Asia/Tokyo')
+  await page.getByText('Time zone: Asia/Tokyo').waitFor({ timeout: 10000 })
+  await page.reload(); await page.locator('.account-row-sidebar').waitFor({ timeout: 20000 })
+  assert.equal(await page.getByLabel('Time zone').inputValue(), 'Asia/Tokyo')
+  assert.deepEqual([...await sql.unsafe("select timezone from daythread.workspaces")].map(r => r.timezone), ['Asia/Tokyo'])
+  await page.screenshot({ path: `${out}/04-account-row.png`, fullPage: true })
+  const res = await page.request.get(base + '/api/export')
+  assert.equal(res.status(), 200)
+  const { unzipSync, strFromU8 } = await import('fflate')
+  const files = unzipSync(new Uint8Array(await res.body()))
+  const ws = JSON.parse(strFromU8(files[Object.keys(files).find(n => n.endsWith('workspace.json'))]))
+  assert.equal(ws.pages.length, 10); assert.equal(ws.timezone, 'Asia/Tokyo')
+  await page.getByRole('button', { name: 'Sign out' }).click()
+  await page.waitForURL(/\/sign-in/, { timeout: 15000 })
+  await page.goto(base + '/tasks'); await page.waitForURL(/\/sign-in/, { timeout: 15000 })
+})
+await run('sign-in-refusals', async page => {
+  await signIn(page, 'brian@test.com', 'wrong-pw')
+  await page.getByRole('alert').waitFor({ timeout: 15000 })
+  assert((await page.getByRole('alert').innerText()).includes("didn't work"))
+  await signIn(page, 'stranger@test.com', 'whatever-pw')
+  await page.getByRole('alert').waitFor({ timeout: 15000 })
+  assert((await page.getByRole('alert').innerText()).includes("didn't work"), 'an unknown address reads the same as a wrong password')
+})
+await run('sign-up-not-invited', async page => {
+  await signUp(page, 'stranger@test.com', 'stranger-pw')
+  await page.getByRole('status').waitFor({ timeout: 15000 })
+  assert((await page.getByRole('status').innerText()).includes("isn't on the invite list"))
+  const users = await (await fetch(fake + '/_users')).json()
+  assert(!users.some(u => u.email === 'stranger@test.com'), 'Supabase never heard of the stranger')
+  assert.equal(await count('workspaces'), 1)
+  await page.screenshot({ path: `${out}/05-not-invited.png`, fullPage: true })
+})
+await run('sign-up-second-account-sees-nothing', async page => {
+  await signUp(page, 'new@test.com', 'newcomer-pw')
+  await page.waitForURL(u => new URL(u).pathname === '/', { timeout: 20000 })
+  await page.locator('.editor-task-title').first().waitFor({ state: 'visible', timeout: 30000 })
+  const text = await page.locator('main').innerText()
+  assert(!text.includes('Mazda') && !text.includes('TRV'), 'nothing of Brian on the newcomer\'s today')
+  assert(text.includes('Events') && text.includes('Notes'), 'the template')
+  const side = await page.locator('.sidebar').innerText()
+  assert(!side.includes('周报') && !side.includes('felixrieseberg') && side.includes('new@test.com'), side)
+  await page.goto(base + '/tasks?view=open'); await page.locator('main').waitFor()
+  assert(!(await page.locator('main').innerText()).includes('TRV for Lu and Kathy'))
+  await page.goto(base + '/pages'); await page.locator('main').waitFor()
+  assert(!(await page.locator('main').innerText()).includes('周报'))
+  await page.goto(base + '/')
+  const empty = page.locator('.editor-task-title').filter({ hasText: /^$/ }).first()
+  await empty.waitFor({ state: 'visible', timeout: 30000 })
+  await empty.click()
+  await page.keyboard.type("Newcomer's first to-do")
+  await page.waitForFunction(() => document.querySelector('.editor-save-line')?.textContent === 'Saved', null, { timeout: 15000 })
+  await page.screenshot({ path: `${out}/06-newcomer-today.png`, fullPage: true })
+  assert.equal(await count('workspaces'), 2)
+  assert.equal(await count('tasks', "where title = 'Newcomer''s first to-do'"), 1)
+  assert.equal(await count('tasks', "where workspace_id = (select id from daythread.workspaces where user_id = '00000001-0000-4000-8000-000000000000')"), 12, 'Brian\'s tasks untouched')
+})
+await run('brian-sees-nothing-of-newcomer', async page => {
+  await signIn(page, 'brian@test.com', 'right-pw')
+  await page.waitForURL(u => new URL(u).pathname === '/', { timeout: 20000 })
+  await page.locator('.editor-task-title').first().waitFor({ state: 'visible', timeout: 30000 })
+  assert(!(await page.locator('main').innerText()).includes("Newcomer's first to-do"))
+  await page.goto(base + '/tasks?view=open'); await page.locator('.task-list').first().waitFor({ timeout: 30000 })
+  assert(!(await page.locator('main').innerText()).includes("Newcomer's first to-do"))
+})
+await run('sign-up-with-email-confirmation', async page => {
+  await sql.unsafe("insert into daythread.invites (email) values ('confirm-me@test.com') on conflict do nothing")
+  await signUp(page, 'confirm-me@test.com', 'confirm-pw')
+  await page.getByRole('status').waitFor({ timeout: 15000 })
+  assert((await page.getByRole('status').innerText()).includes('Check your email'))
+  assert.equal(await count('workspaces'), 2, 'no workspace until the first sign-in')
+  await signIn(page, 'confirm-me@test.com', 'confirm-pw')
+  await page.getByRole('status').waitFor({ timeout: 15000 })
+  assert((await page.getByRole('status').innerText()).includes('Confirm your email first'))
+  await fetch(fake + '/_confirm', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'confirm-me@test.com' }) })
+  await signIn(page, 'confirm-me@test.com', 'confirm-pw')
+  await page.waitForURL(u => new URL(u).pathname === '/', { timeout: 20000 })
+  await page.locator('.editor-task-title').first().waitFor({ state: 'visible', timeout: 30000 })
+  assert.equal(await count('workspaces'), 3)
+  assert.equal(await count('accounts'), 3)
+  const [inv] = await sql.unsafe("select used_at is not null as used from daythread.invites where email = 'confirm-me@test.com'")
+  assert.equal(inv?.used, true, 'the invite row is marked used')
+})
+await run('delete-account', async page => {
+  await signIn(page, 'new@test.com', 'newcomer-pw')
+  await page.waitForURL(u => new URL(u).pathname === '/', { timeout: 20000 })
+  await page.locator('.account-row-sidebar').waitFor({ timeout: 20000 })
+  await page.getByRole('button', { name: 'Delete account' }).click()
+  await page.getByLabel('Password').fill('wrong-pw')
+  await page.getByRole('button', { name: 'Delete everything' }).click()
+  await page.getByRole('alert').waitFor({ timeout: 15000 })
+  assert.equal(await count('workspaces'), 3)
+  await page.screenshot({ path: `${out}/07-delete-wrong.png`, fullPage: true })
+  await page.getByLabel('Password').fill('newcomer-pw')
+  await page.getByRole('button', { name: 'Delete everything' }).click()
+  await page.waitForURL(/\/sign-in/, { timeout: 20000 })
+  assert.equal(await count('workspaces'), 2)
+  assert.equal(await count('tasks', "where title = 'Newcomer''s first to-do'"), 0)
+  assert.equal(await count('sessions', "where email = 'new@test.com'"), 0)
+  const users = await (await fetch(fake + '/_users')).json()
+  assert(!users.some(u => u.email === 'new@test.com'), 'the login went too (secret key set)')
+  await signIn(page, 'new@test.com', 'newcomer-pw')
+  await page.getByRole('alert').waitFor({ timeout: 15000 })
+})
+await run('phone-sign-in-and-account-row', async page => {
+  await page.goto(base + '/sign-in'); await page.locator('.sign-in').waitFor({ timeout: 15000 })
+  await page.screenshot({ path: `${out}/08-phone-sign-in.png`, fullPage: true })
+  await signIn(page, 'brian@test.com', 'right-pw')
+  await page.waitForURL(u => new URL(u).pathname === '/', { timeout: 20000 })
+  await page.goto(base + '/pages'); await page.locator('.account-row-phone').waitFor({ timeout: 20000 })
+  await page.screenshot({ path: `${out}/09-phone-pages-account.png`, fullPage: true })
+}, 390)
+await browser.close()
+await sql.end()
+console.log(JSON.stringify(results, null, 1))
+process.exit(results.every(r => r.ok && !r.errors.length) ? 0 : 1)

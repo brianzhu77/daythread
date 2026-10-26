@@ -9,4 +9,6 @@ in `tests/v2-*.test.ts`), and `scripts/sqlite-browser-smoke.mjs` against a dispo
 save-and-retry path. No cloud project, credentials or model call is needed for any of them.
 
 Postgres locally: `DAYTHREAD_STORAGE=postgres DATABASE_URL=...` (the tests use PGlite, Postgres in WebAssembly, so no
-server is needed for them).
+server is needed for them). With sign-in off the Postgres store serves one local workspace (`workspaces.user_id` null);
+with sign-in on (`SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, see `docs/ops/credentials.md`) each account has its own.
+The real-Postgres tests run when `DATABASE_TEST_URL` points at a disposable database.

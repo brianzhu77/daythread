@@ -48,6 +48,8 @@ if (signedOut) {
   const r = await get('/sign-in'), html = r.status === 200 ? await r.text() : ''
   log(r.status === 200 && html.includes('<title>Daythread</title>') && html.includes('class="sign-in"'), 'the sign-in screen opens signed out', `status ${r.status}`)
   assetPath ??= html.match(/\/assets\/[^"']+\.js/)?.[0]
+  const su = await get('/sign-up'), suHtml = su.status === 200 ? await su.text() : ''
+  log(su.status === 200 && suHtml.includes('<title>Daythread</title>') && suHtml.includes('sign-up'), 'the sign-up screen opens signed out', `status ${su.status}`)
   for (const [what, response] of [['GET a server function', get('/_serverFn/smoke')], ['POST a server function', post('/_serverFn/smoke')], ['POST /api', post('/api/smoke')]])
     { const s = (await response).status; log(s === 401, `signed out: ${what} is 401`, `status ${s}`) }
   const s = (await post('/api/auth/send', 'https://evil.example')).status

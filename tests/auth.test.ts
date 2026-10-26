@@ -10,7 +10,8 @@ import { authRequired } from '../src/server/auth/config.ts'
 // against a running server in tests/evidence/sign-in/.
 const t0 = new Date('2026-10-22T17:00:00.000Z')
 const at = (ms: number) => new Date(t0.getTime() + ms)
-const config = { supabaseUrl: 'https://auth.test', publishableKey: 'pk', ownerEmail: 'owner@example.com' }
+const config = { supabaseUrl: 'https://auth.test', publishableKey: 'pk', secretKey: undefined, signUp: 'invite' as const, envInvites: [] as string[] }
+const A = '11111111-1111-4111-8111-111111111111', B = '22222222-2222-4222-8222-222222222222'
 
 test('sessions: only the token hash is stored; sign-out deletes it, so the same cookie is refused afterwards', async () => {
   const db = await PGlite.create()
@@ -53,17 +54,36 @@ const fakeFetch = (reply: (path: string, body: Record<string, unknown>) => Reply
     return new Response(JSON.stringify(r.body), { status: r.status })
   }) as typeof fetch
 
-test('password: wrong, unknown and non-owner are the same refusal; Supabase down throws; its session is ended', async () => {
+test('password: wrong and unknown are the same refusal; an unconfirmed address is told apart; Supabase down throws; its session is ended', async () => {
   const calls: string[] = []
   const ok = (email: string) => () => ({ status: 200, body: { access_token: 'at', user: { id: 'u-' + email, email } } })
   assert.deepEqual(await verifyPassword(config, ' Owner@Example.com ', 'pw', fakeFetch(ok('owner@example.com'), calls)), { ok: true, userId: 'u-owner@example.com', email: 'owner@example.com' })
   assert.deepEqual(calls, ['token?grant_type=password', 'logout?scope=local'])
-  assert.deepEqual(await verifyPassword(config, 'other@example.com', 'pw', fakeFetch(ok('other@example.com'))), { ok: false })
+  assert.deepEqual(await verifyPassword(config, 'other@example.com', 'pw', fakeFetch(ok('other@example.com'))), { ok: true, userId: 'u-other@example.com', email: 'other@example.com' }, 'any verified account passes the password check; the invite list is the server\'s')
   assert.deepEqual(await verifyPassword(config, 'owner@example.com', 'bad', fakeFetch(() => ({ status: 400, body: { error_code: 'invalid_credentials', msg: 'Invalid login credentials' } }))), { ok: false })
+  assert.deepEqual(await verifyPassword(config, 'new@example.com', 'pw', fakeFetch(() => ({ status: 400, body: { error_code: 'email_not_confirmed', msg: 'Email not confirmed' } }))), { ok: false, reason: 'unconfirmed' })
   for (const status of [429, 500, 503]) await assert.rejects(verifyPassword(config, 'owner@example.com', 'pw', fakeFetch(() => ({ status, body: {} }))))
   const none: string[] = []
   for (const password of ['', 'x'.repeat(1025)]) assert.deepEqual(await verifyPassword(config, 'owner@example.com', password, fakeFetch(ok('owner@example.com'), none)), { ok: false })
   assert.equal(none.length, 0, 'an empty or oversized password never reaches Supabase')
+})
+
+test('sign-up call: a confirmation email, a session right away, an address already taken, a weak password; Supabase down throws', async () => {
+  const { signUp } = await import('../src/server/auth/supabase.ts')
+  const calls: string[] = []
+  // Confirmation on: Supabase answers with the user and no session.
+  assert.deepEqual(await signUp(config, ' New@Example.com ', 'pw-long-enough', 'Asia/Tokyo', fakeFetch(() => ({ status: 200, body: { id: 'u-new', email: 'new@example.com', confirmation_sent_at: '2026-10-26T00:00:00Z' } }), calls)), { outcome: 'confirm' })
+  assert.deepEqual(calls, ['signup'])
+  // Confirmation off: a session comes back; it is ended, ours is issued by the server.
+  const withSession: string[] = []
+  assert.deepEqual(await signUp(config, 'new@example.com', 'pw-long-enough', 'Asia/Tokyo', fakeFetch(() => ({ status: 200, body: { access_token: 'at', user: { id: 'u-new', email: 'new@example.com' } } }), withSession)), { outcome: 'session', userId: 'u-new', email: 'new@example.com' })
+  assert.deepEqual(withSession, ['signup', 'logout?scope=local'])
+  assert.deepEqual(await signUp(config, 'new@example.com', 'pw-long-enough', 'Asia/Tokyo', fakeFetch(() => ({ status: 422, body: { error_code: 'user_already_exists', msg: 'User already registered' } }))), { outcome: 'exists' })
+  assert.deepEqual(await signUp(config, 'new@example.com', 'short', 'Asia/Tokyo', fakeFetch(() => ({ status: 422, body: { error_code: 'weak_password', msg: 'Password should be at least 6 characters.' } }))), { outcome: 'weak', message: 'Password should be at least 6 characters.' })
+  for (const status of [429, 500, 503]) await assert.rejects(signUp(config, 'new@example.com', 'pw-long-enough', 'Asia/Tokyo', fakeFetch(() => ({ status, body: {} }))))
+  const none: string[] = []
+  for (const password of ['', 'x'.repeat(1025)]) assert.deepEqual(await signUp(config, 'new@example.com', password, 'Asia/Tokyo', fakeFetch(() => ({ status: 200, body: {} }), none)), { outcome: 'weak', message: 'Use a longer password' })
+  assert.equal(none.length, 0)
 })
 
 test('brake: after 5 failures each try waits, doubling to 15 min; refused tries never push it out; success clears', async () => {
@@ -133,23 +153,151 @@ test('after sign-in, only a path on this site: nothing the browser would resolve
   assert.equal(safeNext('/day/2026-10-22', origin), '/day/2026-10-22')
 })
 
-test('a session issued to an earlier owner is ended, not honoured, once OWNER_EMAIL changes', async () => {
-  const { ownerSession, useSessionStore, useWorkspaceStore } = await import('../src/server/auth/server.ts')
+// The handlers, with the stores on PGlite and Supabase's answers injected (useSupabase). Requests are built as the
+// browser sends them: a same-origin POST with a JSON body.
+async function handlers(env: Record<string, string> = {}) {
+  const server = await import('../src/server/auth/server.ts')
   const { PostgresWorkspaceRepository } = await import('../src/server/postgres-repository.ts')
-  const db = await PGlite.create()
-  const repo = new PostgresWorkspaceRepository(pgliteClient(db))
-  const store = new SessionStore(pgliteClient(db), 'daythread', { workspace: 'daythread.workspace' })
-  useSessionStore(store); useWorkspaceStore(repo)
+  const { AccountStore } = await import('../src/server/auth/accounts.ts')
+  const db = await PGlite.create(), sql = pgliteClient(db)
+  const repo = new PostgresWorkspaceRepository(sql), sessions = new SessionStore(sql, 'daythread', { workspaces: 'daythread.workspaces' }), accounts = new AccountStore(sql)
+  server.useSessionStore(sessions); server.useWorkspaceStore(repo); server.useAccountStore(accounts); server.resetTries()
   const saved = { ...process.env }
-  Object.assign(process.env, { SUPABASE_URL: 'https://auth.test', SUPABASE_PUBLISHABLE_KEY: 'pk', OWNER_EMAIL: 'owner@example.com' })
+  for (const key of ['OWNER_EMAIL', 'DAYTHREAD_SIGNUP', 'DAYTHREAD_INVITES', 'SUPABASE_SECRET_KEY']) delete process.env[key]
+  Object.assign(process.env, { SUPABASE_URL: 'https://auth.test', SUPABASE_PUBLISHABLE_KEY: 'pk', ...env })
+  const supabase = { verified: new Map<string, string>(), signUpOutcome: { outcome: 'confirm' } as Awaited<ReturnType<typeof import('../src/server/auth/supabase.ts')['signUp']>>, deleted: [] as string[], signUpCalls: 0 }
+  server.useSupabase({
+    verifyPassword: async (_c, email, password) => password === 'right' && supabase.verified.has(email.trim().toLowerCase()) ? { ok: true, userId: supabase.verified.get(email.trim().toLowerCase())!, email: email.trim().toLowerCase() } : { ok: false },
+    signUp: async () => { supabase.signUpCalls++; return supabase.signUpOutcome },
+    deleteUser: async (_c, userId) => { supabase.deleted.push(userId) },
+  })
+  const post = (path: string, body: unknown, cookie?: string) => new Request(`https://app.test${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'sec-fetch-site': 'same-origin', ...(cookie ? { cookie: `__Host-daythread_session=${cookie}` } : {}) }, body: JSON.stringify(body) })
+  const cookieOf = (r: Response) => /__Host-daythread_session=([^;]*)/.exec(r.headers.get('set-cookie') ?? '')?.[1]
+  const count = async (table: string) => (await sql.query<{ n: number }>(`select count(*)::int as n from daythread.${table}`))[0]!.n
+  const close = async () => { process.env = saved; server.useSessionStore(undefined); server.useWorkspaceStore(undefined); server.useAccountStore(undefined); server.useSupabase(undefined); await db.close() }
+  return { server, repo, sessions, accounts, sql, supabase, post, cookieOf, count, close }
+}
+
+test('sign-in: an invited address gets its account and workspace on first sign-in, in the browser\'s time zone; a second sign-in reuses them; the invite is marked used', async () => {
+  const h = await handlers()
   try {
-    await repo.prepare()
-    const owner = '11111111-1111-4111-8111-111111111111'
-    await pgliteClient(db).transaction(tx => repo.link(tx, owner))
-    const { token } = await store.create(owner, 'owner@example.com')
-    assert.equal((await ownerSession(token))?.email, 'owner@example.com')
-    process.env.OWNER_EMAIL = 'new-owner@example.com'
-    assert.equal(await ownerSession(token), null)
-    assert.equal((await db.query<{ n: number }>('select count(*)::int as n from daythread.sessions')).rows[0]!.n, 0, 'the old session row is gone')
-  } finally { process.env = saved; useSessionStore(undefined); useWorkspaceStore(undefined); await db.close() }
+    h.supabase.verified.set('brian@example.com', A)
+    await h.accounts.invite('Brian@Example.com ')
+    const r = await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'brian@example.com', password: 'right', timezone: 'America/Vancouver' }))
+    assert.equal(r.status, 200)
+    const token = h.cookieOf(r)!
+    assert.ok(token)
+    assert.equal((await h.server.ownerSession(token))?.email, 'brian@example.com')
+    assert.equal(await h.count('workspaces'), 1); assert.equal(await h.count('accounts'), 1)
+    assert.equal(await h.repo.timezoneOf(A), 'America/Vancouver')
+    assert.ok((await h.sql.query<{ used_at: string | null }>("select used_at from daythread.invites where email = 'brian@example.com'"))[0]!.used_at)
+    const again = await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'brian@example.com', password: 'right', timezone: 'Asia/Tokyo' }))
+    assert.equal(again.status, 200)
+    assert.equal(await h.count('workspaces'), 1, 'the same workspace')
+    assert.equal(await h.repo.timezoneOf(A), 'America/Vancouver', 'the time zone is set at the first sign-in only')
+    assert.equal(await h.count('sessions'), 2)
+    const wrong = await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'brian@example.com', password: 'wrong' }))
+    assert.equal(wrong.status, 401); assert.equal(((await wrong.json()) as { error: string }).error, 'wrong')
+  } finally { await h.close() }
+})
+
+test('sign-in: a verified address that is not invited is refused and nothing is created; the invite list also reads DAYTHREAD_INVITES; DAYTHREAD_SIGNUP=open lets anyone in', async () => {
+  const h = await handlers()
+  try {
+    h.supabase.verified.set('other@example.com', B)
+    const r = await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'other@example.com', password: 'right' }))
+    assert.equal(r.status, 403); assert.equal(((await r.json()) as { error: string }).error, 'not-invited')
+    assert.equal(h.cookieOf(r), undefined)
+    assert.equal(await h.count('workspaces'), 0); assert.equal(await h.count('sessions'), 0)
+    process.env.DAYTHREAD_INVITES = 'someone@example.com, Other@Example.com'
+    assert.equal((await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'other@example.com', password: 'right' }))).status, 200)
+    assert.equal(await h.count('workspaces'), 1)
+    delete process.env.DAYTHREAD_INVITES
+    h.supabase.verified.set('anyone@example.com', A)
+    assert.equal((await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'anyone@example.com', password: 'right' }))).status, 403)
+    process.env.DAYTHREAD_SIGNUP = 'open'
+    assert.equal((await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'anyone@example.com', password: 'right' }))).status, 200)
+    assert.equal(await h.count('workspaces'), 2)
+  } finally { await h.close() }
+})
+
+test('sign-in: an account whose email is not confirmed yet is told so, not "wrong"; Supabase down is 503', async () => {
+  const h = await handlers()
+  try {
+    h.server.useSupabase({ verifyPassword: async () => ({ ok: false, reason: 'unconfirmed' }), signUp: async () => ({ outcome: 'confirm' }), deleteUser: async () => undefined })
+    const r = await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'new@example.com', password: 'right' }))
+    assert.equal(r.status, 401); assert.equal(((await r.json()) as { error: string }).error, 'unconfirmed')
+    h.server.useSupabase({ verifyPassword: async () => { throw new Error('Supabase Auth 503') }, signUp: async () => ({ outcome: 'confirm' }), deleteUser: async () => undefined })
+    assert.equal((await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'new@example.com', password: 'right' }))).status, 503)
+  } finally { await h.close() }
+})
+
+test('sign-up: an uninvited address never reaches Supabase; invited: a confirmation to wait for, or a session and the workspace right away; taken and weak are told apart', async () => {
+  const h = await handlers()
+  try {
+    const r = await h.server.handleSignUp(h.post('/api/auth/sign-up', { email: 'new@example.com', password: 'pw-long-enough', timezone: 'Asia/Tokyo' }))
+    assert.equal(r.status, 403); assert.equal(((await r.json()) as { error: string }).error, 'not-invited'); assert.equal(h.supabase.signUpCalls, 0)
+    await h.accounts.invite('new@example.com')
+    const confirm = await h.server.handleSignUp(h.post('/api/auth/sign-up', { email: 'new@example.com', password: 'pw-long-enough', timezone: 'Asia/Tokyo' }))
+    assert.equal(confirm.status, 200); assert.deepEqual(await confirm.json(), { ok: true, confirm: true })
+    assert.equal(h.cookieOf(confirm), undefined); assert.equal(await h.count('workspaces'), 0, 'the workspace is made at the first sign-in')
+    h.supabase.signUpOutcome = { outcome: 'session', userId: A, email: 'new@example.com' }
+    const now = await h.server.handleSignUp(h.post('/api/auth/sign-up', { email: 'new@example.com', password: 'pw-long-enough', timezone: 'Asia/Tokyo' }))
+    assert.equal(now.status, 200); assert.deepEqual(await now.json(), { ok: true })
+    assert.ok(h.cookieOf(now)); assert.equal(await h.count('workspaces'), 1); assert.equal(await h.repo.timezoneOf(A), 'Asia/Tokyo')
+    h.supabase.signUpOutcome = { outcome: 'exists' }
+    const taken = await h.server.handleSignUp(h.post('/api/auth/sign-up', { email: 'new@example.com', password: 'pw-long-enough' }))
+    assert.equal(taken.status, 409); assert.equal(((await taken.json()) as { error: string }).error, 'exists')
+    h.supabase.signUpOutcome = { outcome: 'weak', message: 'Password should be at least 6 characters.' }
+    const weak = await h.server.handleSignUp(h.post('/api/auth/sign-up', { email: 'new@example.com', password: 'x' }))
+    assert.equal(weak.status, 400); assert.deepEqual(await weak.json(), { ok: false, error: 'weak', message: 'Password should be at least 6 characters.' })
+    const bad = await h.server.handleSignUp(h.post('/api/auth/sign-up', { email: 'not an address', password: 'pw-long-enough' }))
+    assert.equal(bad.status, 400)
+    process.env.DAYTHREAD_SIGNUP = 'open'
+    h.supabase.signUpOutcome = { outcome: 'confirm' }
+    assert.equal((await h.server.handleSignUp(h.post('/api/auth/sign-up', { email: 'anyone@example.com', password: 'pw-long-enough' }))).status, 200)
+  } finally { await h.close() }
+})
+
+test('sessions: a session whose account has no workspace any more is ended, not honoured', async () => {
+  const h = await handlers()
+  try {
+    h.supabase.verified.set('brian@example.com', A)
+    await h.accounts.invite('brian@example.com')
+    const token = h.cookieOf(await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'brian@example.com', password: 'right' })))!
+    assert.equal((await h.server.ownerSession(token))?.workspaceId, (await h.repo.workspaceOf(A))!.id)
+    await h.sql.transaction(tx => h.repo.deleteWorkspace(tx, A))
+    assert.equal(await h.server.ownerSession(token), null)
+    assert.equal(await h.count('sessions'), 0, 'the session row is gone')
+  } finally { await h.close() }
+})
+
+test('delete account: the wrong password changes nothing; the right one removes the workspace, the account and every session, and the Supabase login when the secret key is set', async () => {
+  const h = await handlers()
+  try {
+    h.supabase.verified.set('brian@example.com', A); h.supabase.verified.set('other@example.com', B)
+    await h.accounts.invite('brian@example.com'); await h.accounts.invite('other@example.com')
+    const token = h.cookieOf(await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'brian@example.com', password: 'right' })))!
+    const second = h.cookieOf(await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'brian@example.com', password: 'right' })))!
+    const otherToken = h.cookieOf(await h.server.handleSignIn(h.post('/api/auth/sign-in', { email: 'other@example.com', password: 'right' })))!
+    const { asOwner } = await import('../src/server/auth/request-owner.ts')
+    await asOwner(A, () => h.repo.execute({ operationId: 'd', expectedRevision: 0, action: { type: 'ensure-day', date: '2026-10-22' } }))
+    const wrong = await h.server.handleDeleteAccount(h.post('/api/auth/delete-account', { password: 'wrong' }, token))
+    assert.equal(wrong.status, 401)
+    assert.equal(await h.count('workspaces'), 2); assert.equal(await h.count('pages'), 1); assert.equal(await h.count('sessions'), 3)
+    const signedOut = await h.server.handleDeleteAccount(h.post('/api/auth/delete-account', { password: 'right' }))
+    assert.equal(signedOut.status, 401, 'no session, nothing to delete')
+    const r = await h.server.handleDeleteAccount(h.post('/api/auth/delete-account', { password: 'right' }, token))
+    assert.equal(r.status, 200)
+    assert.match(r.headers.get('set-cookie') ?? '', /Max-Age=0/)
+    assert.equal(await h.count('workspaces'), 1); assert.equal(await h.count('pages'), 0); assert.equal(await h.count('accounts'), 1)
+    assert.equal(await h.server.ownerSession(second), null, 'every session of the account is gone')
+    assert.ok(await h.server.ownerSession(otherToken), 'the other account is untouched')
+    assert.deepEqual(h.supabase.deleted, [], 'no secret key: the login stays')
+    process.env.SUPABASE_SECRET_KEY = 'sb_secret_test'
+    const r2 = await h.server.handleDeleteAccount(h.post('/api/auth/delete-account', { password: 'right' }, otherToken))
+    assert.equal(r2.status, 200)
+    assert.deepEqual(h.supabase.deleted, [B])
+    assert.equal(await h.count('workspaces'), 0)
+  } finally { await h.close() }
 })

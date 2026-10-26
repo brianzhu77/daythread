@@ -14,8 +14,8 @@ export const freeFailures = 5
 export const maxWaitMs = 15 * 60_000
 
 export interface Session { email: string; userId: string; expiresAt: Date }
-/** `linkedUserId`: the account the workspace is linked to, read in the same query (null when not linked). */
-export interface CheckedSession extends Session { renewed: boolean; linkedUserId: string | null }
+/** `workspaceId`: the account's workspace, read in the same query (null when it has none: deleted, or never made). */
+export interface CheckedSession extends Session { renewed: boolean; workspaceId: string | null }
 /** A sign-in try: the password failed, it passed, or it passed but can't be used (not linked): counted neither way. */
 export type Outcome = 'ok' | 'fail' | 'neutral'
 
@@ -27,10 +27,10 @@ export class SessionStore {
   private readonly sql: SqlClient
   private readonly table: string
   private readonly failures: string
-  private readonly workspace: string | undefined
-  /** `workspace`: the workspace table whose link every check reads; omitted, sessions stand alone (tests). */
-  constructor(sql: SqlClient, schema = schemaName(), options: { workspace?: string } = {}) {
-    this.sql = sql; this.table = `${schema}.sessions`; this.failures = `${schema}.sign_in_failures`; this.workspace = options.workspace
+  private readonly workspaces: string | undefined
+  /** `workspaces`: the workspaces table every check reads the account's workspace from; omitted, sessions stand alone (tests). */
+  constructor(sql: SqlClient, schema = schemaName(), options: { workspaces?: string } = {}) {
+    this.sql = sql; this.table = `${schema}.sessions`; this.failures = `${schema}.sign_in_failures`; this.workspaces = options.workspaces
   }
 
   /**
@@ -65,6 +65,9 @@ export class SessionStore {
     return this.ready
   }
 
+  /** Ready to use: tables made before any transaction needs them (PGlite serves one connection, so setup inside a transaction would wait on itself). */
+  prepare(): Promise<void> { return this.init() }
+
   /** A new session for a verified owner; returns the token for the cookie (shown nowhere else). `tx`: inside a sign-in. */
   async create(userId: string, email: string, now = new Date(), tx: SqlClient = this.sql): Promise<{ token: string; expiresAt: Date }> {
     await this.init()
@@ -79,12 +82,12 @@ export class SessionStore {
   async check(token: string | undefined, now = new Date()): Promise<CheckedSession | null> {
     if (!token || !isToken(token)) return null
     await this.init()
-    const [row] = await this.sql.query<{ email: string; user_id: string; linked: string | null; created_at: string | Date; renewed_at: string | Date; expires_at: string | Date }>(
-      `select email, user_id, ${this.workspace ? `(select user_id::text from ${this.workspace} where id = 1)` : 'null::text'} as linked,
-        created_at, renewed_at, expires_at from ${this.table} where token_hash = $1`, [hash(token)])
+    const [row] = await this.sql.query<{ email: string; user_id: string; workspace_id: string | null; created_at: string | Date; renewed_at: string | Date; expires_at: string | Date }>(
+      `select s.email, s.user_id, ${this.workspaces ? `(select w.id::text from ${this.workspaces} w where w.user_id = s.user_id::uuid)` : 'null::text'} as workspace_id,
+        s.created_at, s.renewed_at, s.expires_at from ${this.table} s where s.token_hash = $1`, [hash(token)])
     if (!row || new Date(row.expires_at).getTime() <= now.getTime()) return null
     const createdAt = new Date(row.created_at), expiresAt = new Date(row.expires_at)
-    const session = { email: row.email, userId: row.user_id, linkedUserId: row.linked }
+    const session = { email: row.email, userId: row.user_id, workspaceId: row.workspace_id }
     if (now.getTime() - new Date(row.renewed_at).getTime() < renewEveryMs) return { ...session, expiresAt, renewed: false }
     const next = new Date(Math.min(now.getTime() + slidingMs, createdAt.getTime() + absoluteMs))
     await this.sql.query(`update ${this.table} set renewed_at = $2, expires_at = $3 where token_hash = $1`, [hash(token), now.toISOString(), next.toISOString()])
@@ -95,6 +98,13 @@ export class SessionStore {
     if (!token || !isToken(token)) return
     await this.init()
     await this.sql.query(`delete from ${this.table} where token_hash = $1`, [hash(token)])
+  }
+  /** A transaction on the sessions' database, for work that must commit with a new session (a sign-up's account and workspace). */
+  transaction<T>(fn: (tx: SqlClient) => Promise<T>): Promise<T> { return this.sql.transaction(fn) }
+  /** Every session of an account (its deletion). */
+  async deleteAll(userId: string, tx: SqlClient = this.sql): Promise<void> {
+    await this.init()
+    await tx.query(`delete from ${this.table} where user_id = $1`, [userId])
   }
 
   /**
