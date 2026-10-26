@@ -1,4 +1,5 @@
 import { createRootRoute, HeadContent, Outlet, Scripts, useRouterState } from '@tanstack/react-router'
+import { Analytics } from '@vercel/analytics/react'
 import { AppShell } from '../components/app-shell'
 import '../styles.css'
 
@@ -42,6 +43,7 @@ function Root() {
             <Outlet />
           </AppShell>
         )}
+        <Analytics />
         <Scripts />
       </body>
     </html>
