@@ -264,3 +264,41 @@ test('text survives exactly in every column, emoji and quotes included; U+0000, 
     assert.equal(after.deletedTasks[0]!.title, title)
   } finally { await db.close() }
 })
+
+test('the operations log is pruned every 25th revision: operations older than 30 days go, the newest one and the recent ones stay, Undo and replay unaffected', async () => {
+  const db = await PGlite.create()
+  try {
+    const { sql, repo } = await withWorkspaces(db, [[A, 'America/Vancouver']])
+    const { operationKeepMs, pruneEvery } = await import('../src/server/postgres-repository.ts')
+    assert.equal(pruneEvery, 25); assert.equal(operationKeepMs, 30 * 24 * 3600_000)
+    const run = (operationId: string, expectedRevision: number, action: Parameters<typeof repo.execute>[0]['action']) => asOwner(A, () => repo.execute({ operationId, expectedRevision, action }))
+    await run('d', 0, { type: 'ensure-day', date: today })
+    for (let i = 1; i < 23; i++) await run(`t${i}`, i, { type: 'add-task', pageId: `day:${today}`, title: `Task ${i}`, plannedOn: today })
+    // Revision 23 now. Age everything but the last two operations by 31 days.
+    await sql.query("update daythread.operations set created_at = now() - interval '31 days' where revision <= 21")
+    await run('t23', 23, { type: 'add-task', pageId: `day:${today}`, title: 'Task 23', plannedOn: today })
+    assert.equal((await sql.query<{ n: number }>('select count(*)::int as n from daythread.operations'))[0]!.n, 24, 'revision 24: nothing pruned yet')
+    const r = await run('t24', 24, { type: 'add-task', pageId: `day:${today}`, title: 'Task 24', plannedOn: today })
+    assert.equal(r.workspace.revision, 25)
+    const left = (await sql.query<{ operation_id: string }>('select operation_id from daythread.operations order by revision')).map(o => o.operation_id)
+    assert.deepEqual(left, ['t22', 't23', 't24'], 'the old ones are gone, the recent ones stay')
+    // A replay of a pruned operation is a new operation now (its receipt is gone), refused at its old revision like any stale command.
+    await assert.rejects(run('t5', 5, { type: 'add-task', pageId: `day:${today}`, title: 'Task 5', plannedOn: today }), /Saved elsewhere/)
+    // Undo still works on the newest.
+    const undone = await run('u', 25, { type: 'undo', targetOperationId: 't24' })
+    assert.ok(!undone.workspace.tasks.some(t => t.title === 'Task 24'))
+    // The newest operation is kept even when it is old: age everything, write 25 more, the one just before the prune survives only if recent.
+    await sql.query("update daythread.operations set created_at = now() - interval '31 days'")
+    const before = (await asOwner(A, () => repo.load())).revision
+    for (let i = 0; i < pruneEvery; i++) await run(`m${i}`, before + i, { type: 'ensure-day', date: `2027-01-${String(i + 1).padStart(2, '0')}` })
+    const after = (await sql.query<{ operation_id: string }>('select operation_id from daythread.operations order by revision')).map(o => o.operation_id)
+    assert.ok(after.every(id => id.startsWith('m')), 'only the recent ones remain: ' + after.join(','))
+    assert.equal(after.length, pruneEvery)
+    // pruneOperations itself: the newest stays whatever its age.
+    await sql.query("update daythread.operations set created_at = now() - interval '31 days'")
+    const ws = await repo.workspaceOf(A)
+    await sql.transaction(tx => repo.pruneOperations(tx, ws!.id, new Date()))
+    const last = (await sql.query<{ operation_id: string }>('select operation_id from daythread.operations')).map(o => o.operation_id)
+    assert.deepEqual(last, [`m${pruneEvery - 1}`])
+  } finally { await db.close() }
+})
