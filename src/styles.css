@@ -246,7 +246,9 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
 .wide { width: 100%; }
 
 /* ---------- Shell ---------- */
-.brand { font-weight: 650; font-size: .95rem; color: var(--ink); text-decoration: none; letter-spacing: -.01em; }
+.brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 650; font-size: .95rem; color: var(--ink); text-decoration: none; letter-spacing: -.01em; }
+/* The mark (docs/design/system-v2.md §6) sits on the text's baseline box; its strokes take the text colour. */
+.mark { flex: none; display: block; }
 .app-main { max-width: calc(var(--column) + 40px); margin: 0 auto; padding: 0 20px calc(136px + env(safe-area-inset-bottom)); } /* B20: clears the 120px fade under the tab bar with room to spare */
 
 /* Development-only controls: present but out of the way. */
@@ -1350,7 +1352,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
   max-width: 400px; margin: 0 auto; padding: 22vh 20px 40px; display: flex; flex-direction: column; gap: 4px;
 }
 @media (max-width: 599px) { .sign-in { padding-top: 14vh; } }
-.sign-in-brand { position: fixed; top: 22px; left: 20px; margin: 0; font-weight: 650; font-size: .95rem; letter-spacing: -.01em; color: var(--ink); }
+.sign-in-brand { position: fixed; top: 22px; left: 20px; margin: 0; display: inline-flex; align-items: center; gap: 8px; font-weight: 650; font-size: .95rem; letter-spacing: -.01em; color: var(--ink); }
 .sign-in h1 { font-size: var(--text-title); line-height: 34px; letter-spacing: -.02em; font-weight: var(--weight-bold); margin: 0; }
 .sign-in-sub { margin: 4px 0 16px; font-size: var(--text-ui); line-height: 1.45; color: var(--ink-2); }
 .sign-in form { display: flex; flex-direction: column; gap: 16px; }

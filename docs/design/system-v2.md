@@ -100,3 +100,19 @@ editor, the Trash's back link, the secondary button (Today / Not today, Restore,
 Lists and the sidebar lose their tint; blocks on Today get an edge instead of a fill; every button becomes a rounded
 rectangle; the selected tab, filter and nav row turn grey; the primary action and links keep their blue. Type, spacing,
 column and the one-surface layout do not move.
+
+## 6. The mark
+
+**Three days, one thread** (Brian, Oct 26, from ten candidates; variant B for the spacing): yesterday, today and
+tomorrow as three dots on one line, today filled in the app's one blue. The thread is the line; the day that matters
+is the only colour. Drawn on a 48 px grid, 3 px strokes, outer dots r 4 at 7 and 41, today r 5.5 at 24, the line in
+two segments between the dots (11–19, 29–37), so the mark needs no background and the strokes take the text colour.
+
+| Use | Cut | File |
+| --- | --- | --- |
+| Sidebar brand, sign-in and sign-up brand (18 px) | small: 5 px strokes, outer dots r 4.5 at 8 and 40, today r 7 | `src/components/mark.tsx` |
+| Favicon (16–32 px) | small, in `--gray-12`, `--gray-1` under a dark scheme | `public/favicon.svg` |
+| Home Screen and manifest icon | regular cut in white on a `--gray-12` tile, at 63% of the tile | `public/icon-512.png`, `icon-192.png`, `apple-touch-icon.png` (`scripts/render-icons.mjs`) |
+| Lockup | mark, 8 px, the wordmark in the app's title weight, tracked −1% | the brand links |
+
+Wordmark: Daythread, one capital. Clear space around the mark: one dot's width. Never recoloured, never a letterform.

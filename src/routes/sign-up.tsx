@@ -1,4 +1,5 @@
 import { Button, Input, Label, TextField } from '@heroui/react'
+import { Mark } from '../components/mark'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useRef, useState, type FormEvent } from 'react'
 import { tagline } from './sign-in'
@@ -44,7 +45,7 @@ function SignUp() {
 
   return (
     <main className="sign-in sign-up">
-      <p className="sign-in-brand">Daythread</p>
+      <p className="sign-in-brand"><Mark size={18} />Daythread</p>
       <form onSubmit={signUp}>
         <h1>Create an account</h1>
         <p className="sign-in-sub">{tagline}</p>

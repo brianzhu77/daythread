@@ -2,6 +2,7 @@ import { Link, useRouterState } from '@tanstack/react-router'
 import { rememberOpened, SidebarTree, useToday } from './page-tree'
 import { useEffect } from 'react'
 import { CalendarIcon, PagesIcon, TagsIcon, TasksIcon, TodayIcon } from './icons'
+import { Mark } from './mark'
 import type { LocalDate } from '../domain/types'
 import { useWorkspace } from './use-day'
 import { useCreatePage } from './pages-screen'
@@ -34,6 +35,7 @@ export function Navigation() {
     <>
       <aside className="sidebar" aria-label="Navigation">
         <Link to="/" className="brand">
+          <Mark size={18} />
           Daythread
         </Link>
         <nav className="sidebar-nav" aria-label="Main">
