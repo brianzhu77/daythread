@@ -26,6 +26,7 @@
     "@tanstack/react-router": "1.170.44",
     "@tanstack/react-start": "1.169.2",
     "@tiptap/pm": "3.32.0",
+    "@vercel/analytics": "^2.0.1",
     "@vercel/functions": "3.10.3",
     "fflate": "^0.8.3",
     "nitro": "3.0.260903-beta",
