@@ -11,5 +11,5 @@ export function debugLog(event: string, fields: LogFields = {}): void {
 }
 export function commandLogFields(c: Command): LogFields {
   const a = c.action
-  return {operationId:c.operationId,command:a.type,beforeRevision:c.expectedRevision,...('pageId' in a ? {pageId:a.pageId}:{}),...('taskId' in a ? {taskId:a.taskId}:{}),...('blockId' in a ? {blockId:a.blockId}:{})}
+  return {operationId:c.operationId,command:a.type,beforeRevision:c.expectedRevision,...('pageId' in a ? {pageId:a.pageId}:{}),...('taskId' in a ? {taskId:a.taskId}:{})}
 }

@@ -1,73 +1,97 @@
 import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, openSync, closeSync, readFileSync, existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
-import { isDeepStrictEqual } from 'node:util'
 import { applyCommand, createEmptyWorkspace } from '../domain/workspace.ts'
+import { upgradeWorkspace } from '../domain/convert-v1.ts'
 import type { Command, CommandResult, Workspace } from '../domain/types.ts'
-import type { ServerRepository } from './repository.ts'
-import { recordModelResult, type CommandOrBuild, type ModelResultOutcome } from './model-result.ts'
-import { readWorkspace, sqliteMigrations, writeWorkspace, verifySqliteLayout } from './sqlite-mapping.ts'
+import { todayIn, type ServerRepository } from './repository.ts'
+import { completeLegacyColumns, legacyTables, readLegacyWorkspace } from './sqlite-legacy.ts'
 import { commandLogFields, debugLog, logOperationId } from './debug-log.ts'
-import { markInterrupted, readAttempts, reconcileAttempt, reserveAttempt, type AttemptState, type ModelAttempt, type ReserveInput, type SettleInput } from './model-ledger.ts'
 
 const applicationId = 0x44544852
+/** Layout 8: the v2 workspace as one JSON document in one row. Layouts 1–7 are the v1 entity tables, converted on first open. */
+export const sqliteLayout = 8
+
+/**
+ * The workspace on SQLite: one row holding the document, its revision, and the Undo copy inside it, written under
+ * BEGIN IMMEDIATE so a command is one transaction. A v1 store (layouts 1–7) is converted in place on first open.
+ */
 export class SqliteWorkspaceRepository implements ServerRepository {
   private readonly path: string
   private readonly legacyPath?: string
   private readonly allowMissingLegacy: boolean
-  constructor(path: string, legacyPath?: string, options: {allowMissingLegacy?: boolean} = {}) {
-    this.path=resolve(path); this.legacyPath=legacyPath ? resolve(legacyPath):undefined
-    this.allowMissingLegacy=options.allowMissingLegacy ?? false
+  private readonly today: string
+  constructor(path: string, legacyPath?: string, options: { allowMissingLegacy?: boolean; today?: string } = {}) {
+    this.path = resolve(path); this.legacyPath = legacyPath ? resolve(legacyPath) : undefined
+    this.allowMissingLegacy = options.allowMissingLegacy ?? false
+    this.today = options.today ?? todayIn()
   }
   private open(operationId: string): DatabaseSync {
     // A typo in an explicitly configured import source must fail before creating even an empty DB file.
-    // Initialization is still rechecked under BEGIN IMMEDIATE; an existing initialized DB needs no source.
     if (this.legacyPath && !this.allowMissingLegacy && !existsSync(this.path)) readFileSync(this.legacyPath)
-    mkdirSync(dirname(this.path),{recursive:true,mode:0o700})
-    try { closeSync(openSync(this.path,'wx',0o600)) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
+    mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 })
+    try { closeSync(openSync(this.path, 'wx', 0o600)) } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
     const db = new DatabaseSync(this.path)
     try {
       db.exec('PRAGMA busy_timeout=5000')
       db.exec('BEGIN IMMEDIATE')
       const id = db.prepare('PRAGMA application_id').get()!.application_id
-      let version = Number(db.prepare('PRAGMA user_version').get()!.user_version)
-      const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all()
+      const version = Number(db.prepare('PRAGMA user_version').get()!.user_version)
+      const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").all().map(r => r.name as string)
       if (id !== applicationId && (id !== 0 || version !== 0 || tables.length)) throw new Error('Unrecognized database layout; existing file kept')
-      if (id === applicationId && version < 1 || version > sqliteMigrations.length) throw new Error('Unsupported database layout')
-      if (id === applicationId) {
-        // Never repair a damaged initialized store by re-importing an old JSON source.
-        for (const table of ['meta','pages','tasks','placements','events','materials','captures','receipts']) db.prepare(`SELECT * FROM ${table} LIMIT 0`).all()
-        if (!db.prepare("SELECT 1 FROM meta WHERE snapshot='current'").get()) throw new Error('Initialized database has no workspace')
-      }
-      while (version < sqliteMigrations.length) { sqliteMigrations[version]!(db); version++; db.exec(`PRAGMA user_version=${version}`) }
-      verifySqliteLayout(db)
+      if (id === applicationId && (version < 1 || version > sqliteLayout)) throw new Error('Unsupported database layout')
       if (id !== applicationId) {
-        let source: Workspace = createEmptyWorkspace(), imported=false
+        // A new store: empty, or the legacy JSON file (a v1 workspace, converted).
+        let source: Workspace = createEmptyWorkspace(), imported = false
         if (this.legacyPath) {
-          try { source=JSON.parse(readFileSync(this.legacyPath,'utf8')) as Workspace; imported=true }
-          catch(error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || !this.allowMissingLegacy) throw error }
+          try { source = upgradeWorkspace(JSON.parse(readFileSync(this.legacyPath, 'utf8')), this.today); imported = true }
+          catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || !this.allowMissingLegacy) throw error }
         }
-        writeWorkspace(db,undefined,source)
-        if (!isDeepStrictEqual(readWorkspace(db),source)) throw new Error('Workspace import round-trip mismatch; source kept')
+        db.exec('CREATE TABLE workspace (id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL, data TEXT NOT NULL) STRICT')
+        db.prepare('INSERT INTO workspace (id, revision, data) VALUES (1, ?, ?)').run(source.revision, JSON.stringify(source))
         db.exec(`PRAGMA application_id=${applicationId}`)
+        db.exec(`PRAGMA user_version=${sqliteLayout}`)
         db.exec('COMMIT')
-        console.info(JSON.stringify({level:'info',event:'storage.initialize',result:imported?'imported':'empty',pages:source.pages.length}))
-        debugLog('storage.initialize',{operationId,afterRevision:source.revision,result:imported?'imported':'empty'})
-      } else db.exec('COMMIT')
+        console.info(JSON.stringify({ level: 'info', event: 'storage.initialize', result: imported ? 'imported' : 'empty', pages: source.pages.length }))
+        debugLog('storage.initialize', { operationId, afterRevision: source.revision, result: imported ? 'imported' : 'empty' })
+      } else if (version < sqliteLayout) {
+        // A v1 store: read its current snapshot, convert, keep it as the one document, drop the old tables.
+        for (const table of ['meta', 'pages', 'tasks', 'placements', 'events', 'materials', 'captures', 'receipts']) if (!tables.includes(table)) throw new Error('Initialized database has no workspace')
+        completeLegacyColumns(db)
+        const legacy = readLegacyWorkspace(db)
+        if (!legacy) throw new Error('Initialized database has no workspace')
+        const converted = upgradeWorkspace(legacy, this.today)
+        db.exec('CREATE TABLE workspace (id INTEGER PRIMARY KEY CHECK(id = 1), revision INTEGER NOT NULL, data TEXT NOT NULL) STRICT')
+        db.prepare('INSERT INTO workspace (id, revision, data) VALUES (1, ?, ?)').run(converted.revision, JSON.stringify(converted))
+        for (const table of legacyTables) db.exec(`DROP TABLE IF EXISTS ${table}`)
+        db.exec(`PRAGMA user_version=${sqliteLayout}`)
+        db.exec('COMMIT')
+        console.info(JSON.stringify({ level: 'info', event: 'storage.upgrade', from: version, to: sqliteLayout, revision: converted.revision, pages: converted.pages.length }))
+      } else {
+        if (!tables.includes('workspace')) throw new Error('Initialized database has no workspace')
+        db.exec('COMMIT')
+      }
       db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL')
       return db
-    } catch(error) { try {db.exec('ROLLBACK')} catch {} db.close(); throw error }
+    } catch (error) { try { db.exec('ROLLBACK') } catch {} db.close(); throw error }
+  }
+  private read(db: DatabaseSync): Workspace {
+    const row = db.prepare('SELECT data FROM workspace WHERE id = 1').get() as { data: string } | undefined
+    if (!row) throw new Error('Workspace missing')
+    return upgradeWorkspace(JSON.parse(row.data), this.today)
+  }
+  private write(db: DatabaseSync, workspace: Workspace): void {
+    db.prepare('UPDATE workspace SET revision = ?, data = ? WHERE id = 1').run(workspace.revision, JSON.stringify(workspace))
   }
   async load(): Promise<Workspace> {
-    const started=performance.now(),operationId=logOperationId() ?? crypto.randomUUID(); let db:DatabaseSync|undefined
+    const started = performance.now(), operationId = logOperationId() ?? crypto.randomUUID(); let db: DatabaseSync | undefined
     try {
-      db=this.open(operationId); db.exec('BEGIN')
-      const current=readWorkspace(db)
-      if (!current) throw new Error('Workspace missing')
+      db = this.open(operationId); db.exec('BEGIN')
+      const current = this.read(db)
       db.exec('COMMIT')
-      debugLog('storage.load',{operationId,afterRevision:current.revision,elapsedMs:performance.now()-started,result:'ok'})
+      debugLog('storage.load', { operationId, afterRevision: current.revision, elapsedMs: performance.now() - started, result: 'ok' })
       return current
-    } catch(error) { try {db?.exec('ROLLBACK')} catch {} debugLog('storage.load',{operationId,elapsedMs:performance.now()-started,result:'error',error:error instanceof Error?error.name:'UnknownError'}); throw error }
+    } catch (error) { try { db?.exec('ROLLBACK') } catch {} debugLog('storage.load', { operationId, elapsedMs: performance.now() - started, result: 'error', error: error instanceof Error ? error.name : 'UnknownError' }); throw error }
     finally { db?.close() }
   }
   /** Runs `fn` in one BEGIN IMMEDIATE transaction; nothing it wrote survives an error. */
@@ -81,45 +105,29 @@ export class SqliteWorkspaceRepository implements ServerRepository {
     } catch (error) { try { db?.exec('ROLLBACK') } catch {} throw error }
     finally { db?.close() }
   }
-  /** The ledger is server-only; the browser gets `modelStatus` instead. */
-  async modelAttempts(): Promise<ModelAttempt[]> { return this.transact(crypto.randomUUID(), readAttempts) }
-  async reserveModelAttempt(input: ReserveInput): Promise<{ attempt: ModelAttempt; replayed: boolean }> { return this.transact(input.id, db => reserveAttempt(db, input)) }
-  /** Settles an attempt and, in the same transaction, applies the workspace command its result implies (model-result.ts). */
-  async recordModelResult(input: SettleInput, commandOrBuild?: CommandOrBuild, options: { failAfterWrite?: boolean } = {}): Promise<ModelResultOutcome> {
-    return this.transact(input.attemptId, db => recordModelResult(db, { read: () => readWorkspace(db), write: (before, after) => writeWorkspace(db, before, after) }, input, commandOrBuild, options))
-  }
-  /**
-   * A server-only command applied to the workspace as it is now, in one transaction: background work (a draft run)
-   * must not be refused because he typed meanwhile. Its own checks decide; replays return the first receipt.
-   */
   async executeOnLatest(operationId: string, action: Command['action']): Promise<CommandResult> {
     return this.transact(operationId, db => {
-      const current = readWorkspace(db)
-      if (!current) throw new Error('Workspace missing')
+      const current = this.read(db)
       const result = applyCommand(current, { operationId, expectedRevision: current.revision, action })
-      if (result.workspace.revision !== current.revision) writeWorkspace(db, current, result.workspace)
+      if (result.workspace.revision !== current.revision) this.write(db, result.workspace)
       return result
     })
   }
-  async markInterruptedModelAttempts(now: string, olderThan?: string): Promise<number> { return this.transact(crypto.randomUUID(), db => markInterrupted(db, now, olderThan)) }
-  async reconcileModelAttempt(attemptId: string, amount: number | 'worst-case', now: string, note?: string, from?: readonly AttemptState[]): Promise<ModelAttempt> { return this.transact(attemptId, db => reconcileAttempt(db, attemptId, amount, now, note, from)) }
   async execute(command: Command): Promise<CommandResult> {
-    const started=performance.now(),fields=commandLogFields(command); let db:DatabaseSync|undefined
-    debugLog('command.start',fields)
+    const started = performance.now(), fields = commandLogFields(command)
+    debugLog('command.start', fields)
     try {
-      db=this.open(command.operationId); db.exec('BEGIN IMMEDIATE')
-      const current=readWorkspace(db)
-      if (!current) throw new Error('Workspace missing')
-      const result=applyCommand(current,command)
-      const replay=result.workspace.revision===current.revision
-      if (!replay) writeWorkspace(db,current,result.workspace)
-      db.exec('COMMIT')
-      debugLog('command.finish',{...fields,beforeRevision:current.revision,afterRevision:result.workspace.revision,elapsedMs:performance.now()-started,result:replay?'replay':'committed'})
+      const { result, before } = this.transact(command.operationId, db => {
+        const current = this.read(db)
+        const result = applyCommand(current, command)
+        if (result.workspace.revision !== current.revision) this.write(db, result.workspace)
+        return { result, before: current.revision }
+      })
+      debugLog('command.finish', { ...fields, beforeRevision: before, afterRevision: result.workspace.revision, elapsedMs: performance.now() - started, result: result.workspace.revision === before ? 'replay' : 'committed' })
       return result
-    } catch(error) {
-      try {db?.exec('ROLLBACK')} catch {}
-      debugLog('command.finish',{...fields,elapsedMs:performance.now()-started,result:'error',error:error instanceof Error?error.name:'UnknownError'})
+    } catch (error) {
+      debugLog('command.finish', { ...fields, elapsedMs: performance.now() - started, result: 'error', error: error instanceof Error ? error.name : 'UnknownError' })
       throw error
-    } finally { db?.close() }
+    }
   }
 }

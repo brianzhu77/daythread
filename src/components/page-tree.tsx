@@ -1,7 +1,7 @@
 import { Modal, SearchField } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { childPages, linkedFrom, moveTargets, pageAncestors, pagesInDays, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
+import { cardTo, childPages, linkedFrom, moveTargets, pageAncestors, pagesInDays, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { fromIso, longLabel, todayIso } from './dates'
 import { ChevronRightIcon, PageKindIcon, PagesIcon } from './icons'
@@ -93,7 +93,7 @@ export function PageHeaderRow({ page, workspace }: { page: Page; workspace: Work
     return () => observer.disconnect()
   }, [])
   const parent = chain.at(-1)
-  const card = parent?.sections.flatMap(s => s.blocks).find(b => b.kind === 'reference' && b.targetPageId === page.id)
+  const card = (parent ? cardTo(parent, page.id) : undefined)
   // "Pages" heads a chain rooted in a document page; a day heads its own chain.
   const items: (Page | 'pages')[] = [...(chain[0]?.type === 'daily' ? [] : ['pages' as const]), ...chain]
   const crumb = (item: Page | 'pages', last: boolean) => item === 'pages'

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import type { LocalDate, Page, Task } from '../domain/types'
-import { carrySection, getDayView } from '../domain/workspace'
+import { getDayView } from '../domain/workspace'
 import { addDays, longLabel, shortLabel, weekday } from './dates'
 import { RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
@@ -76,16 +76,10 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
   const planAhead = next >= today
   const handedOff = Boolean(nextPage?.handoffDone)
 
-  // Where the review was opened from (04 counts "opened from the reminder").
-  const recorded = page?.reviewSource !== undefined
-  useEffect(() => {
-    if (page && !recorded) void run({ type: 'review-progress', date, step: 1, source: fromReminder ? 'reminder' : 'direct' }, null)
-  }, [page, recorded, fromReminder, date, run])
-
   useEffect(() => {
     if (comingIds === null && nextView && workspace) {
-      // In the order he sees them on the reviewed page: Top 3 first, then Other, top to bottom.
-      const onPage = (page?.sections ?? []).filter(s => s.kind === 'top3' || s.kind === 'other').flatMap(s => s.blocks.map(b => b.taskId))
+      // In the order he sees them on the reviewed page, top to bottom.
+      const onPage = getDayView(workspace, date).dayTasks.map(t => t.id)
       const at = (id: string) => (onPage.indexOf(id) + 1 || Infinity)
       setComingIds(handedOff || !planAhead ? [] : nextView.handoffTasks.map(t => t.id).sort((a, b) => at(a) - at(b)))
     }
@@ -111,11 +105,7 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
       const job = (async () => {
         setLines(all => all.map(l => (l.key === line.key ? { ...l, failed: false } : l)))
         const target = await ensureNextPage()
-        const section = target?.sections.find(s => s.kind === 'other') ?? target?.sections.find(s => s.kind === 'top3')
-        const receipt =
-          target && section
-            ? await run({ type: 'add-task', pageId: target.id, sectionId: section.id, title: line.title, plannedOn: next }, null, line.operationId, { quiet: true })
-            : null
+        const receipt = target ? await run({ type: 'add-task', pageId: target.id, title: line.title, plannedOn: next }, null, line.operationId, { quiet: true }) : null
         setLines(all => (receipt ? all.filter(l => l.key !== line.key) : all.map(l => (l.key === line.key ? { ...l, failed: true } : l))))
         return Boolean(receipt)
       })().finally(() => saving.current.delete(line.key))
@@ -158,20 +148,14 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
     return line
   }
 
-  const reviewed = workspace.tasks.filter(t => t.plannedOn === date && t.status !== 'cancelled')
+  const reviewed = view.dayTasks.filter(t => t.status !== 'cancelled')
   const doneCount = reviewed.filter(t => t.status === 'done').length
   const openCount = reviewed.length - doneCount
   const prevPage = previousDailyPage(workspace, next)
   const coming = comingIds.map(id => workspace.tasks.find(t => t.id === id)).filter((t): t is Task => t !== undefined)
   const stillComing = (t: Task) => nextView.handoffTasks.some(h => h.id === t.id)
   const shown = new Set(comingIds)
-  const onNext = nextPage
-    ? nextPage.sections
-        .filter(s => s.kind === 'top3' || s.kind === 'other')
-        .flatMap(s => s.blocks.filter(b => b.taskId && !shown.has(b.taskId)).map(b => ({ block: b, top3: s.kind === 'top3' })))
-        .map(r => ({ ...r, task: workspace.tasks.find(t => t.id === r.block.taskId) }))
-        .filter((r): r is typeof r & { task: Task } => Boolean(r.task) && r.task!.status !== 'cancelled' && r.task!.title.trim() !== '')
-    : []
+  const onNext = nextPage ? nextView.dayTasks.filter(t => !shown.has(t.id) && t.status !== 'cancelled' && t.title.trim() !== '') : []
 
   const finish = async () => {
     if (finishing) return
@@ -198,7 +182,7 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
           .map(id => ws.tasks.find(t => t.id === id))
           .filter((t): t is Task => t !== undefined && t.status === 'open')
           .filter(t => handoff.has(t.id))
-          .map(t => ({ taskId: t.id, section: carrySection(previousDailyPage(ws, next), t.id) }))
+          .map(t => ({ taskId: t.id }))
         if (items.length) {
           if (!(await ensureNextPage()) || !(await run({ type: 'plan-tasks', date: next, items }, null))) {
             setFinishError('Couldn’t set up the day')
@@ -207,14 +191,14 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
         }
         // Lines from the day's Notes are still offered by the morning card; Done closes it only when nothing is left.
         const after = latest()!
-        if (!cardLines(getDayView(after, next), after).length && !(await run({ type: 'handoff-done', date: next }, null))) {
+        if (!cardLines(getDayView(after, next)).length && !(await run({ type: 'handoff-done', date: next }, null))) {
           setFinishError('Couldn’t set up the day')
           return
         }
       }
-      const total = (latest()?.tasks ?? []).filter(t => t.plannedOn === next && t.status === 'open' && t.title.trim()).length
+      const total = latest() ? getDayView(latest()!, next).planned.filter(t => t.title.trim()).length : 0
       const set = planAhead ? `${dayName(next)} is set · ${total} to-do${total === 1 ? '' : 's'}` : 'Review saved'
-      if (!(await run({ type: 'save-review', date, text: page.reviewText ?? '', finish: true }, { text: set }))) {
+      if (!(await run({ type: 'save-review', date }, { text: set }))) {
         setFinishError('Review not saved')
         return
       }
@@ -273,7 +257,6 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
                       today={today}
                       depth={depth}
                       parentId={parentId}
-                      top3={carrySection(prevPage, t.id) === 'top3'}
                       label={t.status === 'done' ? undefined : stillComing(t) ? undefined : acted[t.id] ?? 'Not coming along'}
                       onActed={label => setActed(a => ({ ...a, [t.id]: label }))}
                     />
@@ -290,8 +273,8 @@ export function ReviewFlow({ date, today, fromReminder }: { date: LocalDate; tod
         <section className="review-group" aria-labelledby="ro-add">
           <h2 id="ro-add">{handedOff ? `On ${dayName(next)}` : `Add for ${dayWord(next, today).toLowerCase()}`}</h2>
           <div className="review-list">
-            {onNext.map(({ task, block, top3 }) => (
-              <NextRow key={block.id} task={task} blockId={block.id} pageId={nextPage!.id} next={next} today={today} top3={top3} />
+            {onNext.map(task => (
+              <NextRow key={task.id} task={task} pageId={nextPage!.id} today={today} />
             ))}
             {lines.map(line => (
               <div key={line.key} className="task-row plan review-pending">
@@ -349,7 +332,7 @@ function ComingTree({ tasks, children }: { tasks: readonly Task[]; children: (ta
 }
 const taskId = (t: Task) => t.id
 
-function ComingRow({ task, date, next, today, depth, parentId, top3, label, onActed }: { task: Task; date: LocalDate; next: LocalDate; today: LocalDate; depth: number; parentId: string | null; top3: boolean; label?: string; onActed: (label: string) => void }) {
+function ComingRow({ task, date, next, today, depth, parentId, label, onActed }: { task: Task; date: LocalDate; next: LocalDate; today: LocalDate; depth: number; parentId: string | null; label?: string; onActed: (label: string) => void }) {
   const { markDone, planOn, notToday } = useTaskActions(today)
   const done = task.status === 'done'
   const act = async (text: string, fn: () => Promise<unknown>) => {
@@ -362,12 +345,12 @@ function ComingRow({ task, date, next, today, depth, parentId, top3, label, onAc
         <ParentLine parentId={parentId} />
         <TagText text={task.title} />
       </span>
-      {label ? <span className="app-tag quiet">{label}</span> : top3 && !done ? <span className="app-tag section-tag">Top 3</span> : null}
+      {label ? <span className="app-tag quiet">{label}</span> : null}
       {!done && !label && (
         <RowMenu
           label={`Actions for ${task.title}`}
           groups={[
-            { title: 'Another day', items: anotherDayItems(task, today, (t, d) => act(`Moved to ${shortLabel(d)}`, () => planOn(t, d, undefined, date))).filter(i => !i.label.endsWith(shortLabel(next))) },
+            { title: 'Another day', items: anotherDayItems(task, today, (t, d) => act(`Moved to ${shortLabel(d)}`, () => planOn(t, d, date))).filter(i => !i.label.endsWith(shortLabel(next))) },
             { items: [{ label: `Not ${dayWord(next, today).toLowerCase()}`, onSelect: () => act('Not coming along', () => notToday(task, date)) }] },
           ]}
         />
@@ -376,9 +359,9 @@ function ComingRow({ task, date, next, today, depth, parentId, top3, label, onAc
   )
 }
 
-function NextRow({ task, blockId, pageId, next, today, top3 }: { task: Task; blockId: string; pageId: string; next: LocalDate; today: LocalDate; top3: boolean }) {
+function NextRow({ task, pageId, today }: { task: Task; pageId: string; today: LocalDate }) {
   const { run } = useWorkspace()
-  const { markDone, planOn } = useTaskActions(today)
+  const { markDone } = useTaskActions(today)
   const done = task.status === 'done'
   return (
     <div className={`task-row plan ${done ? 'is-done' : ''}`} data-task-id={task.id}>
@@ -386,15 +369,13 @@ function NextRow({ task, blockId, pageId, next, today, top3 }: { task: Task; blo
       <span className="task-title">
         <TagText text={task.title} />
       </span>
-      {top3 && !done && <span className="app-tag section-tag">Top 3</span>}
       <RowMenu
         label={`Actions for ${task.title}`}
         groups={[
           {
             items: [
-              top3 ? { label: 'Move to Other', onSelect: () => planOn(task, next, 'other') } : { label: 'Make it Top 3', onSelect: () => planOn(task, next, 'top3') },
-              // B33: removing the line deletes a task born there (with Undo), and a task with history leaves the day.
-              { label: `Remove from ${dayName(next)}`, danger: true, onSelect: () => run({ type: 'remove-blocks', pageId, blockIds: [blockId], bulk: false, today }, r => ({ text: 'Removed', undoOperationId: r.operationId })) },
+              // Removing the row deletes a task born there (with Undo); a task with history leaves the day.
+              { label: 'Remove from this day', danger: true, onSelect: () => run({ type: 'remove-task-row', pageId, taskId: task.id, today }, r => ({ text: 'Removed', undoOperationId: r.operationId })) },
             ],
           },
         ]}

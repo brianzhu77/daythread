@@ -1,6 +1,8 @@
 # Daythread — MVP specs
 
 产品名：Daythread，用户于 2026-10-14 确认。
+
+**当前代码（2026-10-25，shot 1）**：存储模型已收敛为 Page（含编辑器文档）与 Task 两种记录，其余全部从页面文档推导；见 [docs/architecture/model-v2.md](docs/architecture/model-v2.md)。下文规格是历史记录。
 版本：v0.1 · 2026-10-13
 状态：产品规格初稿，尚未实现。用户明确的约束与为使规格可执行而提出的默认规则分别标注。
 

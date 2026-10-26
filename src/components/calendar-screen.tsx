@@ -2,6 +2,7 @@ import { buttonVariants } from '@heroui/react'
 import { Link } from '@tanstack/react-router'
 import type { LocalDate, Page, Task } from '../domain/types'
 import { getCalendarTasks } from '../domain/workspace'
+import { pagePreview } from '../domain/page-tree'
 import { DateTag } from './date-tag'
 import { ArrowLeftIcon, ArrowRightIcon } from './icons'
 import { FutureDayPrompt } from './future-day'
@@ -99,10 +100,5 @@ function CalendarDay({ date, today, page, tasks }: { date: LocalDate; today: Loc
 
 /** First written lines of the page, for the card (task rows are listed below it). */
 function preview(page: Page): string {
-  return page.sections
-    .flatMap(s => s.blocks)
-    .filter(b => b.kind !== 'task' && b.text.trim())
-    .slice(0, 2)
-    .map(b => b.text.trim())
-    .join(' · ')
+  return pagePreview(page, 2, 160)
 }

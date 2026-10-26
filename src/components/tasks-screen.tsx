@@ -6,6 +6,7 @@ import { addDays, daysBetween, longLabel } from './dates'
 import { RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
 import { useDay, useWorkspace } from './use-day'
+import { plannedOn } from '../domain/workspace'
 import { TagText } from './tag-text'
 import { ParentLine, treeIndent, useTaskTree } from './task-tree'
 
@@ -97,7 +98,8 @@ function TaskList({ tasks, today, paused = false, empty }: { tasks: Task[]; toda
 
 function ListTaskRow({ task, today, paused, label, parentId = null }: { task: Task; today: LocalDate; paused: boolean; label?: string; parentId?: string | null }) {
   const { markDone, planOn, notToday } = useTaskActions(today)
-  const plannedToday = task.plannedOn === today
+  const { workspace } = useWorkspace()
+  const plannedToday = Boolean(workspace) && plannedOn(workspace!, task.id) === today
   return (
     <div className={`task-row list ${paused ? 'is-paused' : ''}`} data-task-id={task.id}>
       <input type="checkbox" className="check" checked={task.status === 'done'} aria-label={`Mark ${task.title} done`} onChange={() => markDone(task)} />
@@ -110,11 +112,11 @@ function ListTaskRow({ task, today, paused, label, parentId = null }: { task: Ta
         groups={[
           {
             items: [
-              ...(plannedToday ? [] : [{ label: paused ? 'Bring back to today' : 'Plan today', onSelect: () => planOn(task, today, 'other') }]),
+              ...(plannedToday ? [] : [{ label: paused ? 'Bring back to today' : 'Plan today', onSelect: () => planOn(task, today) }]),
               ...(plannedToday ? [{ label: 'Not today', onSelect: () => notToday(task, today) }] : []),
             ],
           },
-          { title: 'Another day', items: anotherDayItems(task, today, planOn) },
+          { title: 'Another day', items: anotherDayItems(task, today, (t, d) => planOn(t, d)) },
         ]}
       />
     </div>

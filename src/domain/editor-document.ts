@@ -1,20 +1,5 @@
-import type { NoteBlock, Page, PageRefEntry, Section, SectionKind, Workspace } from './types.ts'
-import { inlineRefs, lineText, referenceIndex, savedTitle } from './page-refs.ts'
+import type { LocalDate, Page, Task, Workspace } from './types.ts'
 import { mentionText, readMention } from './date-chip.ts'
-
-/** The default content of a new day page, like a Notion template: each heading and the empty rows under it. */
-export const dayTemplate: readonly { kind: SectionKind; title: string; rows: readonly ('task' | 'bullet')[] }[] = [
-  { kind: 'top3', title: 'TODO - Top 3', rows: ['task'] },
-  { kind: 'other', title: 'TODO - Other', rows: ['task'] },
-  { kind: 'events', title: 'Events', rows: ['bullet'] },
-  { kind: 'good-stuffs', title: 'Good Stuffs', rows: ['bullet'] },
-  { kind: 'notes', title: 'Notes', rows: ['bullet'] },
-]
-
-/** A day page's template heading is `<page id>:<kind>`, the role it was made with; undefined for any other heading. */
-export function templateKind(page: Page, sectionId: string): SectionKind | undefined {
-  return page.type === 'daily' ? dayTemplate.find(t => sectionId === `${page.id}:${t.kind}`)?.kind : undefined
-}
 
 export interface EditorNode {
   id: string
@@ -23,9 +8,37 @@ export interface EditorNode {
   content?: unknown
   children?: EditorNode[]
 }
+
+/** The built-in day template (fixed for now, flexible later): plain headings, one empty row each, nothing stored about them. */
+export const dayTemplate: readonly { title: string; row: 'task' | 'bullet' }[] = [
+  { title: 'TODO', row: 'task' },
+  { title: 'Events', row: 'bullet' },
+  { title: 'Good Stuffs', row: 'bullet' },
+  { title: 'Notes', row: 'bullet' },
+]
+
+const newId = (): string => crypto.randomUUID()
+export const textRun = (text: string) => ({ type: 'text', text, styles: {} })
+
+/** A to-do row as the editor makes it: a fresh identity until the save creates the task. */
+export function emptyTaskRow(date: LocalDate | null, id = newId()): EditorNode {
+  return { id, type: 'task', props: { taskId: `editor-task:${id}`, role: date ? 'plan' : 'reference', planDate: date ?? '' }, content: [], children: [] }
+}
+export function emptyLine(type: 'paragraph' | 'bulletListItem' = 'paragraph', id = newId()): EditorNode {
+  return { id, type, props: {}, content: [], children: [] }
+}
+export function headingNode(title: string, id = newId()): EditorNode {
+  return { id, type: 'heading', props: { level: 2 }, content: [textRun(title)], children: [] }
+}
+/** A new day page's document: each template heading with its one empty row. */
+export function templateDocument(pageId: string, date: LocalDate): EditorNode[] {
+  return dayTemplate.flatMap((t, i) => [headingNode(t.title, `${pageId}:h${i}`), t.row === 'task' ? emptyTaskRow(date, `${pageId}:r${i}`) : emptyLine('bulletListItem', `${pageId}:r${i}`)])
+}
+
 /**
- * A line's words. A `@date` chip reads as its stored text form (B27), with the year left out when it's `pageDate`'s
- * year; with no `pageDate` (a document page, or a reader with no page at hand) the year is always there.
+ * A line's words. A `@date` chip reads as its stored text form, with the year left out when it's `pageDate`'s year;
+ * with no `pageDate` (a document page, or a reader with no page at hand) the year is always there. A `[[` link reads
+ * as nothing: its title is live, never part of the line's words.
  */
 export function inlineText(content: unknown, pageDate?: string | null): string {
   if (typeof content === 'string') return content
@@ -39,63 +52,58 @@ export function inlineText(content: unknown, pageDate?: string | null): string {
 }
 /** The date a day page's chips are read against for their stored text: its own date; none for a document page. */
 export const textDate = (page: Pick<Page, 'type' | 'date'>): string | null => page.type === 'daily' ? page.date ?? null : null
-export function pageContentKey(page: Page): string { return JSON.stringify([page.sections, page.editorJSON ?? null]) }
-// Template rows are empty; a task row keeps the `editor-task:` draft identity, so no Task exists until it has text.
-function templateRows(section: Section, page: Page): EditorNode[] {
-  const rows = dayTemplate.find(t => t.kind === section.kind)?.rows ?? []
-  return rows.map((row, i) => {
-    const id = `${section.id}:template:${i}`
-    return row === 'task'
-      ? { id, type: 'task', props: { taskId: `editor-task:${id}`, role: 'plan', planDate: page.date ?? '' }, content: '' }
-      : { id, type: 'bulletListItem', content: '' }
-  })
+
+export const flatNodes = (list: readonly EditorNode[]): EditorNode[] => list.flatMap(n => [n, ...flatNodes(n.children ?? [])])
+export const isTaskRow = (n: EditorNode): boolean => n.type === 'task' && typeof n.props?.taskId === 'string'
+export const rowTaskId = (n: EditorNode): string | null => (isTaskRow(n) ? String(n.props!.taskId) : null)
+export const rowRole = (n: EditorNode): 'plan' | 'reference' => (n.props?.role === 'plan' ? 'plan' : 'reference')
+/** No words and nothing else inline (a chip, a link): the empty rows a template or a trailing line leaves. */
+export const isEmptyLine = (n: EditorNode): boolean => n.type !== 'pageLink' && n.type !== 'heading' && !inlineText(n.content).trim() && !(Array.isArray(n.content) && n.content.some(c => c && typeof c === 'object' && (c as { type?: string }).type !== 'text')) && !(n.children?.length)
+
+// The parsed document of a page, kept per document string: readers parse each page once per save.
+const parsed = new Map<string, EditorNode[]>()
+const parsedLimit = 2000
+/** The page's document as nodes. A page that fails to parse reads as empty, never as an error, so one bad page can't hide the rest. */
+export function pageNodes(page: Pick<Page, 'document'>): EditorNode[] {
+  const cached = parsed.get(page.document)
+  if (cached) return cached
+  let nodes: EditorNode[]
+  try { const value = JSON.parse(page.document); nodes = Array.isArray(value) ? value : [] } catch { nodes = [] }
+  if (parsed.size >= parsedLimit) parsed.delete(parsed.keys().next().value!)
+  parsed.set(page.document, nodes)
+  return nodes
 }
-/**
- * A day page for today or later whose template rows have never been saved. Past pages open exactly as saved.
- * A page never saved from the editor (no editorSections) gets the rows even if tasks were already placed on it,
- * e.g. kept from yesterday, also when a carry nested its rows in its document (B34b); a page saved before templates
- * existed only gets them while all sections are empty.
- */
-export function needsTemplateRows(page: Page, today: string): boolean {
-  if (page.type !== 'daily' || page.templateApplied || !page.date || page.date < today) return false
-  return !page.editorSections || page.sections.every(s => s.blocks.length === 0)
-}
-export function editorSeed(page: Page, workspace: Workspace, options: { templateRows?: boolean } = {}): EditorNode[] {
-  if (!options.templateRows && page.editorJSON && page.editorSections === JSON.stringify(page.sections)) return JSON.parse(page.editorJSON)
-  const previous: EditorNode[] = page.editorJSON ? JSON.parse(page.editorJSON) : []
-  const byId = new Map<string, EditorNode>()
-  const remember = (node: EditorNode) => { byId.set(node.id, node); node.children?.forEach(remember) }
-  previous.forEach(remember)
-  const emitted = new Set<string>()
-  const mark = (node: EditorNode) => { emitted.add(node.id); node.children?.forEach(mark) }
-  const result: EditorNode[] = []
-  for (const s of page.sections) {
-    if (!s.id.startsWith('intro:')) {
-      const heading = byId.get(s.id)
-      const node = heading ? { ...heading, content: lineText(heading.content, savedTitle(s), textDate(page)) === s.title ? heading.content : s.title } : { id: s.id, type: 'heading', props: { level: 2 }, content: s.title }
-      result.push(node); mark(node)
-    }
-    for (const b of s.blocks) {
-      if (emitted.has(b.id)) continue
-      const prior = byId.get(b.id)
-      // A page card has no inline content; its title is read live from the page it points at.
-      const node: EditorNode = prior?.type === 'pageLink' ? prior
-        // A line with `[[` links is compared with the titles it was saved with, so a rename never turns it into text.
-        : prior ? { ...prior, content: lineText(prior.content, savedTitle(b), textDate(page)) === b.text ? prior.content : b.text }
-        : b.taskId ? { id: b.id, type: 'task', props: { taskId: b.taskId, role: b.planRole ?? (s.kind === 'top3' || s.kind === 'other' ? 'plan' : 'reference'), planDate: page.date ?? '' }, content: workspace.tasks.find(t => t.id === b.taskId)?.title ?? b.text }
-        : b.eventId ? { id: b.id, type: 'paragraph', content: workspace.events.find(e => e.id === b.eventId)?.title ?? b.text }
-        : b.targetPageId ? { id: b.id, type: 'pageLink', props: { pageId: b.targetPageId } }
-        : b.materialId ? { id: b.id, type: 'paragraph', content: [{ type: 'link', href: workspace.materials.find(m => m.id === b.materialId)?.url ?? '#', content: b.text }] }
-        : { id: b.id, type: 'paragraph', content: b.text }
-      result.push(node); mark(node)
-    }
-    if (options.templateRows) result.push(...templateRows(s, page))
+
+/** A stale-save check: the saved document's fingerprint, short enough to travel with every save. */
+export function pageContentKey(page: Pick<Page, 'document'>): string {
+  let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762
+  const s = page.document
+  for (let i = 0; i < s.length; i++) {
+    const k = s.charCodeAt(i)
+    h1 = h2 ^ Math.imul(h1 ^ k, 597399067); h2 = h3 ^ Math.imul(h2 ^ k, 2869860233); h3 = h4 ^ Math.imul(h3 ^ k, 951274213); h4 = h1 ^ Math.imul(h4 ^ k, 2716044179)
   }
-  return result
+  h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067); h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233); h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213); h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179)
+  h1 ^= h2 ^ h3 ^ h4; h2 ^= h1; h3 ^= h1; h4 ^= h1
+  return `d:${s.length}:${[h1, h2, h3, h4].map(h => (h >>> 0).toString(16).padStart(8, '0')).join('')}`
 }
-function isEmptyParagraph(node: EditorNode): boolean {
-  return node.type === 'paragraph' && !inlineText(node.content).trim() && !node.children?.length
+
+/**
+ * What the editor opens: the stored document, with each task row's words read from its task (a title edited on
+ * another page shows here) and each card untouched (its title is read live by the card itself).
+ */
+export function editorSeed(page: Page, workspace: Workspace): EditorNode[] {
+  const tasks = new Map(workspace.tasks.map(t => [t.id, t]))
+  const visit = (n: EditorNode): EditorNode => {
+    const children = n.children?.map(visit)
+    const id = rowTaskId(n)
+    const task = id ? tasks.get(id) : undefined
+    const node = task && inlineText(n.content, textDate(page)) !== task.title ? { ...n, content: [textRun(task.title)] } : n
+    return children ? { ...node, children } : node
+  }
+  return pageNodes(page).map(visit)
 }
+
+/** The nodes of a heading's section: the heading and everything below it up to the next heading of its level or higher. */
 export function sectionRange(nodes: readonly EditorNode[], id: string): EditorNode[] {
   const start = nodes.findIndex(n => n.id === id)
   if (start < 0) return []
@@ -105,88 +113,30 @@ export function sectionRange(nodes: readonly EditorNode[], id: string): EditorNo
   while (end < nodes.length && !(nodes[end]!.type === 'heading' && Number(nodes[end]!.props?.level ?? 1) <= Number(first.props?.level ?? 1))) end++
   return nodes.slice(start, end)
 }
-export function projectDocument(nodes: EditorNode[], page: Page, workspace: Workspace): Section[] {
-  const ids = new Set<string>()
-  const sections: Section[] = []
-  const old = new Map([...Object.values(page.editorBlockMetadata ?? {}), ...page.sections.flatMap(s => s.blocks)].map(b => [b.id, b]))
-  // A9a §2: a reference keeps the time of the save that first held it; a new one gets this save's revision.
-  const index = referenceIndex(workspace), revision = workspace.revision + 1
-  const refIds = new Set<string>()
-  const pageOf = (id: string) => workspace.pages.find(p => p.id === id)
-  /** §4: the `[[` links of one line, checked and timed. */
-  const refsOf = (node: EditorNode): PageRefEntry[] => inlineRefs(node.content).map(ref => {
-    if (!ref.refId || !ref.pageId) throw new Error('Invalid page link')
-    if (refIds.has(ref.refId)) throw new Error('A page link appears twice on this page')
-    refIds.add(ref.refId)
-    const known = index.links.get(`${ref.refId}|${ref.pageId}`), target = pageOf(ref.pageId)
-    if (!known) {
-      if (!target && !(ref.newTitle && !workspace.pages.some(p => p.id === ref.pageId))) throw new Error('Page not found')
-      // A line link may name a line on a trashed page: the chip says so and opens it there (A11 §5).
-      if (target?.trashedAt && !ref.lineId) throw new Error('Page is in trash; restore it first')
-    }
-    const title = target?.title ?? ref.newTitle ?? known?.title ?? ''
-    return { refId: ref.refId, pageId: ref.pageId, at: known?.at ?? revision, title, ...(!target && (ref.newTitle || known?.pending) ? { pending: true } : {}),
-      ...(ref.lineId ? { lineId: ref.lineId } : {}), ...(ref.taskId ? { taskId: ref.taskId } : {}) }
-  })
-  let current: Section | undefined
-  const restored: [Section, SectionKind][] = []
-  function visit(node: EditorNode) {
-    if (!node.id || ids.has(node.id)) throw new Error('Duplicate editor block identity')
-    ids.add(node.id)
-    if (node.type === 'heading') {
-      // A heading holds `[[` links like any line: checked, timed and stored on the section.
-      const refs = refsOf(node)
-      const title = refs.length ? lineText(node.content, ref => refs.find(r => r.refId === ref.refId)?.title ?? '', textDate(page)) : inlineText(node.content, textDate(page))
-      const stored = page.sections.find(s => s.id === node.id)?.kind
-      current = { id: node.id, kind: stored ?? 'custom', title, blocks: [], ...(refs.length ? { refs } : {}) }
-      sections.push(current)
-      const role = (stored ? undefined : page.editorBlockMetadata?.[`heading:${node.id}`]?.sectionKind) ?? (stored === 'custom' || !stored ? templateKind(page, node.id) : undefined)
-      if (role && role !== 'custom') restored.push([current, role])
-    } else {
-      if (!current) { current = { id: `intro:${page.id}`, kind: 'custom', title: '', blocks: [] }; sections.push(current) }
-      if (node.type === 'pageLink') {
-        // pages-delta N-2: a page card is a reference. Removing it never touches the page it points at.
-        const targetPageId = String(node.props?.pageId ?? '')
-        // B15: a card keeps its time while it points at the same page; a card that points elsewhere now is a new reference.
-        const before = old.get(node.id)
-        const at = before?.targetPageId === targetPageId && before.at !== undefined ? before.at : index.cards.get(`${node.id}|${targetPageId}`) ?? revision
-        current.blocks.push({ id: node.id, kind: 'reference', targetPageId, text: workspace.pages.find(p => p.id === targetPageId)?.title ?? '', at })
-      } else if (node.type === 'task') {
-        if (inlineRefs(node.content).length) throw new Error('A task row cannot hold a page link')
-        const target = workspace.tasks.find(t => t.id === node.props?.taskId)
-        if (!target && node.props?.taskId === `editor-task:${node.id}` && !inlineText(node.content)) { current.blocks.push({ id: node.id, kind: 'paragraph', text: '' }); return }
-        if (!target) throw new Error('Task reference not found')
-        const nextTitle = inlineText(node.content, textDate(page))
-        const previous = old.get(node.id)
-        if (previous && previous.text !== nextTitle) {
-          if (target.title !== previous.text && target.title !== nextTitle) throw new Error('Task title changed elsewhere; editor draft kept')
-          if (target.title !== nextTitle) { target.title = nextTitle; target.version++ }
-        }
-        current.blocks.push({ id: node.id, kind: 'task', taskId: target.id, text: nextTitle, planRole: node.props?.role === 'plan' ? 'plan' : 'reference' })
-      } else {
-        // A card turned back into its URL line (A2 Undo) is a plain line now, not a reference to the page. A to-do turned
-        // into a bullet, text or a heading (B42) is a plain line too: its row no longer holds the task.
-        const previous = old.get(node.id)
-        const prior = previous?.kind === 'reference' || previous?.kind === 'task' ? undefined : previous
-        const refs = refsOf(node)
-        const value = refs.length ? lineText(node.content, ref => refs.find(r => r.refId === ref.refId)?.title ?? '', textDate(page)) : inlineText(node.content, textDate(page))
-        if (prior?.eventId && prior.text !== value) {
-          const event = workspace.events.find(e => e.id === prior.eventId)
-          if (event) {
-            if (event.title !== prior.text && event.title !== value) throw new Error('Event changed elsewhere')
-            event.title = value
-          }
-        }
-        const { refs: _oldRefs, ...rest } = (prior ?? {}) as Partial<NoteBlock>
-        current.blocks.push({ ...rest, id: node.id, kind: prior?.kind ?? 'paragraph', text: value, ...(refs.length ? { refs } : {}) })
-      }
-    }
-    node.children?.forEach(visit)
-  }
-  nodes.forEach(visit)
-  // A heading's role comes back (⌘Z or cut and paste via its metadata, or a day page's template heading stored as
-  // custom by the old one-key merge, Brian's Other 2026-10-22) only where no section on the page has that role yet,
-  // so a page never gets two Other sections (Ratchet #116).
-  for (const [section, role] of restored) if (!sections.some(s => s.kind === role)) section.kind = role
-  return sections
+
+/**
+ * Where a new row goes on a page: after the last top-level to-do row that holds a task, else at the end of the first
+ * heading's section, else at the end of the page; in each case above the trailing empty lines, so the empty row ready
+ * for typing stays last.
+ */
+export function rowInsertIndex(doc: readonly EditorNode[], tasks: ReadonlySet<string>): number {
+  const lastTask = doc.map((n, i) => (isTaskRow(n) && tasks.has(String(n.props!.taskId)) ? i : -1)).filter(i => i >= 0).at(-1)
+  if (lastTask !== undefined) return lastTask + 1
+  const heading = doc.findIndex(n => n.type === 'heading')
+  let end: number
+  if (heading >= 0) { const range = sectionRange(doc, doc[heading]!.id); end = heading + range.length } else end = doc.length
+  const floor = heading >= 0 ? heading + 1 : 0
+  while (end > floor && isEmptyLine(doc[end - 1]!)) end--
+  return end
 }
+/** The same for a line brought under a heading: before that section's trailing empty lines. */
+export function sectionInsertIndex(doc: readonly EditorNode[], headingId: string): number {
+  const heading = doc.findIndex(n => n.id === headingId)
+  if (heading < 0) return doc.length
+  let end = heading + sectionRange(doc, headingId).length
+  while (end > heading + 1 && isEmptyLine(doc[end - 1]!)) end--
+  return end
+}
+
+/** The task of a row, by id, when it exists. */
+export const taskOfRow = (workspace: Workspace, n: EditorNode): Task | undefined => { const id = rowTaskId(n); return id ? workspace.tasks.find(t => t.id === id) : undefined }

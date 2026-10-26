@@ -1,28 +1,18 @@
+import { flatNodes, inlineText, pageNodes, rowTaskId, textDate, type EditorNode } from './editor-document.ts'
 import { isTrashed } from './page-tree.ts'
 import type { LocalDate, Workspace } from './types.ts'
 
-// Tags are plain text Brian writes (#daythread:e36141c5): `#` (or full-width `＃`) followed by the tag characters
-// below, ending at the first other character (so `#工作。` is the tag 工作) or the end of the block. Nothing is
-// stored; every reader derives tags from the block text with the same rule, so the index can never disagree with
-// what is on the page.
+// Tags are plain text: `#` (or full-width `＃`) followed by the tag characters below, ending at the first other
+// character or the end of the line. Nothing is stored; every reader derives tags from the documents with the same rule.
 export interface TagMatch { tag: string; start: number; end: number }
 export interface TagOccurrence { pageId: string; blockId: string; date: LocalDate | null; pageTitle: string; sectionTitle: string; taskId?: string; text: string }
 export interface TagEntry { key: string; tag: string; occurrences: TagOccurrence[] }
 
 const isMark = (c: string | undefined) => c === '#' || c === '＃'
 const isSpace = (c: string) => /\s/u.test(c)
-// Obsidian's rule, Brian's choice (#daythread:e36141c5 5b496134): a tag is Unicode letters, numbers, `_`, `-` and
-// `/` (for nested names like #work/appx). Any other character ends it: whitespace, punctuation, symbols, emoji, `#`.
-// Combining marks stay with their letter, so a decomposed é or Thai and Hindi words are not cut (Bumblebee 8cf3d2a0).
+// Obsidian's rule: Unicode letters, numbers, `_`, `-` and `/`. Combining marks stay with their letter.
 const tagChar = /^[\p{L}\p{M}\p{N}_/-]$/u
-// A tag needs a letter or number (#_, #-, #/ are not tags) and can't be all decimal digits (#2026, #１２３ are plain
-// text); #v1, #1on1, #1-2 and #① are tags.
 const isTag = (tag: string) => /[\p{L}\p{N}]/u.test(tag) && !/^\p{Nd}+$/u.test(tag)
-// The text a link could run through before a `#`: it starts after the last whitespace or non-ASCII character, since a
-// URL holds neither and Brian's Chinese sentences have no spaces ("资料在https://a.com，很有用#学习" keeps 学习). A link's
-// fragment is not a tag: anywhere in that text a `scheme://` or `www.` (so "(https://x.io/#a)" and
-// "[doc](https://x.io/#a)" count), or, past opening brackets or quotes, a domain (example.com#x, "(example.com#x").
-// A domain needs a letters-only last part, so v1.2#note keeps its tag.
 const inLink = (run: string) => /[a-z][a-z\d+.-]*:\/\/|www\./iu.test(run) || /^[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:\/|$)/iu.test(run.replace(/^[([<"']+/u, ''))
 const endsLink = (c: string) => isSpace(c) || c > '~'
 
@@ -44,39 +34,40 @@ export function findTags(text: string): TagMatch[] {
   }
   return found
 }
-
-/** "Work", "work" and full-width "ｗｏｒｋ" are one tag. */
 export const tagKey = (tag: string) => tag.normalize('NFKC').toLowerCase()
 
-/** Every tag in paragraph and task blocks, most used first (then most recently used); each block counts once per tag. */
+const textTypes = new Set(['paragraph', 'bulletListItem', 'numberedListItem', 'quote', 'checkListItem', 'task', 'sourceChecklist', 'toggleListItem', 'heading'])
+
+/** Every tag on every line, most recently used first; each line counts once per tag. */
 export function tagIndex(workspace: Workspace): TagEntry[] {
   const byKey = new Map<string, { tag: string; page: string; occurrences: TagOccurrence[] }>()
-  // Newest first: day pages by date, then pages without a date, most recently created first (pages are stored in
-  // creation order). Reading this order backwards gives the oldest occurrence.
-  // A4 (Jazz 0f79066): lines in a trashed page leave every tag page and count until restored.
   const pages = workspace.pages.map((page, created) => ({ page, created })).filter(p => !isTrashed(p.page))
     .sort((a, b) => (b.page.date ?? '').localeCompare(a.page.date ?? '') || b.created - a.created).map(p => p.page)
-  for (const page of pages) for (const section of page.sections) for (const block of section.blocks) {
-    if (block.kind !== 'paragraph' && block.kind !== 'task') continue
-    const seen = new Set<string>()
-    for (const { tag } of findTags(block.text)) {
-      const key = tagKey(tag)
-      // Shown as first written, as Obsidian does (Ratchet c392d45, Jazz/Bumblebee b842c6d3): pages are read newest
-      // first with undated pages last, so the first form on the last page that has the tag wins.
-      const entry = byKey.get(key) ?? { tag, page: page.id, occurrences: [] }
-      if (entry.page !== page.id) Object.assign(entry, { tag, page: page.id })
-      byKey.set(key, entry)
-      if (seen.has(key)) continue
-      seen.add(key)
-      entry.occurrences.push({ pageId: page.id, blockId: block.id, date: page.date, pageTitle: page.title, sectionTitle: section.title, taskId: block.taskId, text: block.text })
+  for (const page of pages) {
+    let section = ''
+    const visit = (node: EditorNode) => {
+      if (node.type === 'heading') section = inlineText(node.content).trim()
+      if (textTypes.has(node.type)) {
+        const text = inlineText(node.content, textDate(page))
+        const seen = new Set<string>()
+        for (const { tag } of findTags(text)) {
+          const key = tagKey(tag)
+          const entry = byKey.get(key) ?? { tag, page: page.id, occurrences: [] }
+          if (entry.page !== page.id) Object.assign(entry, { tag, page: page.id })
+          byKey.set(key, entry)
+          if (seen.has(key)) continue
+          seen.add(key)
+          entry.occurrences.push({ pageId: page.id, blockId: node.id, date: page.date, pageTitle: page.title, sectionTitle: section, taskId: rowTaskId(node) ?? undefined, text })
+        }
+      }
+      node.children?.forEach(visit)
     }
+    pageNodes(page).forEach(visit)
   }
-  // Most recently used first (Jazz/Bumblebee tags-r3): the order he'd pick a tag back up in. Ties: more blocks, then name.
   return [...byKey].map(([key, { tag, occurrences }]) => ({ key, tag, occurrences }))
     .sort((a, b) => (lastUsed(b) ?? '').localeCompare(lastUsed(a) ?? '') || b.occurrences.length - a.occurrences.length || a.key.localeCompare(b.key))
 }
-
-/** The newest day a tag appears on; null when it is only on pages without a date. */
 export function lastUsed(entry: TagEntry): LocalDate | null {
   return entry.occurrences[0]?.date ?? null
 }
+export { flatNodes }

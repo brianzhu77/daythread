@@ -8,7 +8,7 @@ let repository: ServerRepository | undefined
 let client: SqlClient | undefined
 /**
  * DAYTHREAD_STORAGE picks the store: `postgres` (DATABASE_URL must be set in the environment) or `sqlite`. On Vercel
- * it defaults to `postgres`, so a deployment needs no extra setting (Bumblebee 0c8cc69e).
+ * it defaults to `postgres`, so a deployment needs no extra setting.
  */
 export function storageKind(): string | undefined {
   return process.env.DAYTHREAD_STORAGE ?? (process.env.VERCEL ? 'postgres' : undefined)
@@ -31,5 +31,5 @@ export function getRepository(): ServerRepository {
   if (storage === 'postgres') return repository = new PostgresWorkspaceRepository(postgresSql())
   if (storage !== 'sqlite') throw new Error('Configure DAYTHREAD_STORAGE=sqlite or postgres. No fallback storage is enabled.')
   if (process.env.VERCEL || process.env.NETLIFY) throw new Error('Unauthenticated local SQLite storage is disabled on hosting platforms')
-  return repository = new SqliteWorkspaceRepository(resolve(process.env.DAYTHREAD_SQLITE_PATH ?? '.daythread-local/workspace.sqlite'),resolve(process.env.DAYTHREAD_LOCAL_DATA_PATH ?? '.daythread-local/workspace.json'),{allowMissingLegacy:process.env.DAYTHREAD_LOCAL_DATA_PATH === undefined})
+  return repository = new SqliteWorkspaceRepository(resolve(process.env.DAYTHREAD_SQLITE_PATH ?? '.daythread-local/workspace.sqlite'), resolve(process.env.DAYTHREAD_LOCAL_DATA_PATH ?? '.daythread-local/workspace.json'), { allowMissingLegacy: process.env.DAYTHREAD_LOCAL_DATA_PATH === undefined })
 }

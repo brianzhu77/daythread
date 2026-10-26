@@ -11,13 +11,12 @@ import { BlockNoteView, ShadCNDefaultComponents } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
-import { editorSeed, inlineText, needsTemplateRows, pageContentKey, sectionRange, templateKind, type EditorNode } from '../domain/editor-document'
+import { editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, sectionRange, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
-import { announceSave, changedBy, claim, clearOwn, keptAfterMerge, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn } from './draft-slots'
-import { applyCommand, bornHere, deletesWithLine, pasteRecords, urlOwner } from '../domain/workspace'
+import { announceSave, changedBy, claim, clearOwn, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn } from './draft-slots'
+import { applyCommand, plannedOn, taskRows as rowsOfTask, urlOwner } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
-import { cardsPresent, urlLine, type UndoCard } from '../domain/link-paste'
 import { recentPages, visiblePages, parentOf } from '../domain/page-tree'
 import { lineRefView, pageRefView, whereLabel as placeLabel } from './line-text'
 import { lineClipboardType, lineLinkPath, parseLineClipboard, parseLineUrl } from '../domain/line-link'
@@ -32,7 +31,7 @@ import { DateTag } from './date-tag'
 import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
-import { addDays, fromIso, longLabel, todayIso, weekday } from './dates'
+import { addDays, fromIso, longLabel, shortLabel, todayIso, weekday } from './dates'
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
 import { endOfLineAbove, rowArrows } from './row-arrows'
@@ -42,7 +41,7 @@ import { RowMenu } from './row-menu'
 import { openedByTurnover } from './use-screen-today'
 import { fixedOffset, seenArea } from './fixed-coords'
 import { LineRefChip } from './line-ref-chip'
-import { ChipPageDate, DateChipInPage, DateMenu, dateChipPaste, type DateMenuItem, EventRows, eventRows, pickerLabel, refreshEventRows, relativeDay, rowTime, rowsFor, type RowsAnchor } from './event-rows'
+import { ChipPageDate, DateChipInPage, DateMenu, dateChipPaste, type DateMenuItem, EventRows, eventRows, eventsHeading, pickerLabel, refreshEventRows, relativeDay, rowTime, rowsFor, type RowsAnchor } from './event-rows'
 import { dayEvents } from '../domain/chip-events'
 import { mayRead, readDate, type Reading } from '../domain/date-reading'
 import { mentionText } from '../domain/date-chip'
@@ -131,7 +130,8 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
   const rows = useRowActions()
   const t = workspace?.tasks.find(t => t.id === taskId)
   // A12: the row's actions, on a ⋯ at the end of the row (Jazz §2). Done and draft rows have none.
-  const model = t && rows ? rowMenu(t, role, rows.sectionOf(blockId), rows.pageDate, rows.today) : null
+  const planned = t && workspace ? plannedOn(workspace, t.id) : null
+  const model = t && rows ? rowMenu(t, role, planned, rows.pageDate, rows.today) : null
   // A11: last, under a divider, after the task's own actions (Jazz line-links-states §1).
   const copy = model ? rows!.copyLink(blockId) : null
   // data-status: the task's real state, for checks such as scripts/check-alignment.mjs (Lead a2428bb1). Display only.
@@ -141,8 +141,10 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
     {/* Jazz f58abeaf: done rows are grey and struck through too, so the label is what says Cancelled. */}
     {t?.status === 'cancelled' && <span contentEditable={false} className="editor-cancelled-tag">Cancelled</span>}
     {role === 'reference' && <span contentEditable={false} className="editor-reference-tag">Reference</span>}
+    {/* A history row: the task's plan moved on to a later day; the row stays as the record of where it was. */}
+    {role === 'plan' && t?.status === 'open' && planned && planDate && planned !== planDate && <span contentEditable={false} className="editor-reference-tag">Moved to {shortLabel(planned)}</span>}
     {/* A done or cancelled task keeps the button's space, hidden, so a long title doesn't reflow when it's ticked (#9). */}
-    {role === 'reference' && t && <button className="editor-plan-action" contentEditable={false} {...(t.status === 'open' ? { onClick: () => void run({ type: 'plan-task', taskId, date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }, r => ({ text: 'Planned for today', undoOperationId: r.operationId })) } : { disabled: true, tabIndex: -1, 'aria-hidden': true, style: { visibility: 'hidden' as const } })}>Plan for today</button>}
+    {role === 'reference' && t && <button className="editor-plan-action" contentEditable={false} {...(t.status === 'open' ? { onClick: () => void run({ type: 'plan-task', taskId, date: todayIso(), today: todayIso() }, r => ({ text: 'Planned for today', undoOperationId: r.operationId })) } : { disabled: true, tabIndex: -1, 'aria-hidden': true, style: { visibility: 'hidden' as const } })}>Plan for today</button>}
     {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={[...menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent)), ...(copy ? [{ items: [{ label: 'Copy link to line', onSelect: copy }] }] : [])]} onEscape={() => rows!.focusRow(blockId)} /></span>}
     {t && t.status === 'open' && hasDateFacts(t) && <span contentEditable={false} className="editor-date-tag"><DateTag task={t} today={todayIso()} pageDate={planDate || todayIso()} /></span>}
   </div>
@@ -179,9 +181,9 @@ function PageCard({ pageId, cardId, url = '', line = '' }: { pageId: string; car
   const link = target?.url || url
   // A saved card whose page never got created (e.g. the tab closed during a failed create) can still be retried:
   // its parent is the page the card is saved on, and the id is the card's own. A link card retries its paste.
-  const savedOn = target || pendingPages.has(pageId) ? undefined : workspace?.pages.find(p => p.sections.some(s => s.blocks.some(b => b.id === cardId)))
+  const savedOn = target || pendingPages.has(pageId) ? undefined : workspace?.pages.find(p => flatNodes(pageNodes(p)).some(n => n.id === cardId))
   const retrySaved = (on: Page) => link
-    ? run({ type: 'paste-links', pageId: on.id, today: todayIso(), items: [{ url: link, pageId, cardBlockId: cardId, lineType: (['paragraph', 'bulletListItem', 'numberedListItem'].includes(line) ? line : 'paragraph') as 'paragraph' }] })
+    ? run({ type: 'make-link-pages', parentPageId: on.id, items: [{ url: link, pageId }] })
     : run({ type: 'create-document', title: '', body: '', pageId, parentId: on.id })
   const pending: PendingPage | undefined = target ? undefined : pendingPages.get(pageId)
     ?? (savedOn ? { state: 'failed', parentId: savedOn.id, retry: () => void retrySaved(savedOn) } : undefined)
@@ -221,7 +223,7 @@ function PageRefChip({ pageId, refId, newTitle }: { pageId: string; refId: strin
   const view = pageRefView(workspace, pageId, newTitle || undefined)
   const pending = view.target ? undefined : pendingPages.get(pageId)
   // Saved with its page never confirmed (the tab closed, or every try failed): Retry from the line it's saved on.
-  const holder = !view.target && !pending && newTitle ? workspace?.pages.find(p => p.sections.some(s => s.blocks.some(b => b.refs?.some(r => r.refId === refId)))) : undefined
+  const holder = !view.target && !pending && newTitle ? workspace?.pages.find(p => JSON.stringify(pageNodes(p)).includes(`"refId":"${refId}"`)) : undefined
   const state = pending ? pending.state : holder ? 'failed' : view.state
   const retry = () => { if (pending) pending.retry(); else if (holder) void run({ type: 'create-document', title: newTitle, body: '', pageId, parentId: holder.id }) }
   return <span className={`page-ref is-${state}`} contentEditable={false} role={state === 'live' || state === 'trashed' || state === 'failed' ? 'link' : undefined}
@@ -317,16 +319,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const runRef = useRef(run); runRef.current = run
   const navigate = useNavigate()
   const key = `daythread:editor:${page.id}`
-  const initial = useRef<{ nodes: EditorNode[]; base: string; recovered: boolean; cutTaskIds: string[]; keptPlainLinks: { blockId: string; url: string }[] } | null>(null)
+  const initial = useRef<{ nodes: EditorNode[]; base: string; baseDocument: string; recovered: boolean; cutTaskIds: string[] } | null>(null)
   if (!initial.current) {
     // B40: from here on, a background save of kept drafts leaves this page's draft to this editor.
     noteEditorMounting(page.id)
     const base = pageContentKey(page)
-    let nodes = editorSeed(page, workspace, { templateRows: needsTemplateRows(page, todayIso()) }), recovered = false, savedBase = base, cutTaskIds: string[] = [], keptPlainLinks: { blockId: string; url: string }[] = []
+    let nodes = editorSeed(page, workspace), recovered = false, savedBase = base, savedBaseDocument = page.document, cutTaskIds: string[] = []
     // B35: this tab's own slot; drafts other tabs left behind are merged in after mount. A recovered draft brings back
     // its cuts too (Ratchet 067be3eb): a cut row in it is a move, never a delete.
-    try { const stored = readOwn(page.id); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; recovered = true; cutTaskIds = (stored.cutTaskIds ?? []).filter((x: unknown) => typeof x === 'string'); keptPlainLinks = stored.keptPlainLinks ?? [] } } catch { /* fresh document */ }
-    initial.current = { nodes, base: savedBase, recovered, cutTaskIds, keptPlainLinks }
+    try { const stored = readOwn(page.id); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; savedBaseDocument = stored.baseDocument ?? page.document; recovered = true; cutTaskIds = (stored.cutTaskIds ?? []).filter((x: unknown) => typeof x === 'string') } } catch { /* fresh document */ }
+    initial.current = { nodes, base: savedBase, baseDocument: savedBaseDocument, recovered, cutTaskIds }
   }
   const [pastedChecklistIds, setPastedChecklistIds] = useState<string[]>(() => checklistIds(initial.current!.nodes))
   // The blocks the handle press picked; the drop handler moves exactly these.
@@ -334,7 +336,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const extendedIds = useRef<string[]>([])
   const latestPage = useRef(page); latestPage.current = page
   // Event and link rows keep their own kind on the page; the tag index reads only paragraph and task text.
-  const tagCounts = useCallback((id: string) => { const kind = latestPage.current.sections.flatMap(s => s.blocks).find(b => b.id === id)?.kind; return !kind || kind === 'paragraph' || kind === 'task' }, [])
+  const tagCounts = useCallback((_id: string) => true, [])
   // No gap cursor (Brian 967fd04b): BlockNote's custom blocks are `isolating`, so ProseMirror found a gap at every
   // task row's edge, stopped ↑/↓ there and drew its gap cursor, a blinking 20 px line beside the row. rowArrows moves
   // the caret between task rows instead. The page has no tables or other blocks that need a gap cursor.
@@ -342,7 +344,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const rowsHost = useMemo(() => Object.assign(document.createElement('div'), { className: 'event-rows', contentEditable: 'false' }), [])
   const rows = useMemo(() => page.type === 'daily' && page.date ? rowsFor(page, dayEvents(workspace, page.date)) : [], [page, workspace])
   const rowsAnchor = useRef<RowsAnchor>(undefined)
-  rowsAnchor.current = rows.length ? { headingId: page.sections.find(s => s.kind === 'events')?.id ?? null } : undefined
+  rowsAnchor.current = rows.length ? { headingId: eventsHeading(pageNodes(page))?.id ?? null } : undefined
   const editor = useCreateBlockNote({ schema, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
@@ -431,6 +433,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return defaultPasteHandler()
   }, initialContent: (initial.current.nodes.length ? initial.current.nodes : [{ type: 'paragraph' }]) as never })
   const base = useRef(initial.current.base)
+  // The document the editor started from, for merging a draft into a page that moved on (Load latest).
+  const baseDoc = useRef(initial.current.baseDocument)
   const latestWorkspace = useRef(workspace); latestWorkspace.current = workspace
   // B27: an open `@` list reads its query again once a composition is committed (the commit lands while composing).
   const [, setCompositionsEnded] = useState(0)
@@ -453,23 +457,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const lastTrigger = useRef(-1)
   const pastingNow = useRef(false)
   const knownSemantic = useRef(new Set<string>())
-  const expectedTaskVersions = useRef(new Map(workspace.tasks.map(t => [t.id, t.version])))
-  const invalidHistoryTasks = useRef(new Set<string>())
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const suppress = useRef(false)
   const semanticDeletes = useRef(new Set<string>())
   // B33: tasks whose rows were cut (a move): the next save says so, so the task isn't deleted with its line.
   const cutTasks = useRef(new Set<string>(initial.current.cutTaskIds))
-  /**
-   * B44 §4a: links pasted and kept plain, by line, until a save that carries them succeeds (Lead 5be8b479). They go with
-   * the text, so a save that fails offline, a retry, a draft and another tab's merge all bring them along.
-   */
-  const keptLinks = useRef(new Map<string, string>(initial.current.keptPlainLinks.map(x => [x.blockId, x.url])))
-  /** The kept links whose lines are in `document`, as a save sends them (and a draft keeps them). */
-  const keptOn = (document: readonly EditorNode[]) => {
-    const ids = new Set(deepNodes(document).map(n => n.id))
-    return [...keptLinks.current].filter(([id]) => ids.has(id)).slice(0, 50).map(([blockId, url]) => ({ blockId, url }))
-  }
   const composing = useRef(false)
   const selected = useRef<string[]>([])
   const dragging = useRef<EditorNode[]>([])
@@ -583,17 +575,6 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * end of the line before it, or Backspace at its start, does nothing (Brian's Delete bug, Lead). Selecting across it
    * and deleting still works, and ⌘Z brings it back with its role. Headings he adds himself edit as usual.
    */
-  function joinsRoleHeading(key: 'Delete' | 'Backspace'): boolean {
-    const { selection, doc } = editor.prosemirrorState
-    if (!selection.empty) return false
-    const $from = selection.$from
-    const isRoleHeading = ($pos: typeof $from) => $pos.parent.type.name === 'heading'
-      && page.sections.some(s => s.id === $pos.node($pos.depth - 1).attrs.id && s.kind !== 'custom')
-    if (key === 'Backspace') return $from.parentOffset === 0 && isRoleHeading($from)
-    if ($from.parentOffset !== $from.parent.content.size) return false
-    const next = Selection.findFrom(doc.resolve($from.after()), 1, true)
-    return !!next && isRoleHeading(next.$from)
-  }
   const selectionFocus = useRef<HTMLDivElement>(null)
   // Browser selection can survive React node-view replacement while ProseMirror's selection moves elsewhere.
   // Keep stable block IDs and inline offsets instead of positions tied to the replaced document.
@@ -627,11 +608,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, anchor, head)))
   }
   const nodes = () => editor.document as unknown as EditorNode[]
-  const insertionRole = (blockId: string) => {
-    const preceding = nodes().slice(0, nodes().findIndex(n => n.id === blockId) + 1).reverse().find(n => n.type === 'heading')
-    const section = latestPage.current.sections.find(s => s.id === preceding?.id)
-    return latestPage.current.date && (section?.kind === 'top3' || section?.kind === 'other') ? 'plan' : 'reference'
-  }
+  // A to-do typed on a day page is planned for that day, wherever it sits; on any other page it's a reference.
+  const insertionRole = (_blockId: string) => (latestPage.current.date ? 'plan' : 'reference')
   /**
    * B35: true (and handled) when another tab merged this tab's draft while it was away, e.g. an iOS tab suspended then
    * resumed (Lead): drop this copy, load the latest, and never save it again, or his lines would appear twice.
@@ -652,7 +630,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     })()
     return true
   }
-  const stash = () => { if (claimedAway()) return; try { const kept = keptOn(nodes()); writeOwn(page.id, { base: base.current, document: JSON.stringify(nodes()), ...(cutTasks.current.size ? { cutTaskIds: [...cutTasks.current] } : {}), ...(kept.length ? { keptPlainLinks: kept } : {}) }) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
+  const stash = () => { if (claimedAway()) return; try { writeOwn(page.id, { base: base.current, baseDocument: baseDoc.current, document: JSON.stringify(nodes()), ...(cutTasks.current.size ? { cutTaskIds: [...cutTasks.current] } : {}) }) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
   const flushRef = useRef<() => Promise<void>>(async () => {})
   /**
    * B35: a save that failed on the network tries again by itself, with the same operation id (a lost reply replays
@@ -676,11 +654,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (claimedAway()) return
     // The page moved on only by his own save from when he last left it: start from that.
     // B40: or by another tab saving this tab's own earlier text while this tab was away and then came back.
-    if (isOwnLeaveSave(page.id, latestPage.current.editorJSON) || savedForMe(page.id, latestPage.current.editorJSON)) base.current = pageContentKey(latestPage.current)
+    if (isOwnLeaveSave(page.id, latestPage.current.document) || savedForMe(page.id, latestPage.current.document)) { base.current = pageContentKey(latestPage.current); baseDoc.current = latestPage.current.document }
     // B35: the save went through but its reply was lost (the refresh after the failure shows the page as exactly this
     // document): it's saved. Sending it again would look like someone else's change (the browser has no receipts).
-    if (latestPage.current.editorJSON === JSON.stringify(editor.document) && lastSent.current === latestPage.current.editorJSON) {
-      base.current = pageContentKey(latestPage.current); dirty.current = false; pendingSave.current = null
+    if (latestPage.current.document === JSON.stringify(editor.document) && lastSent.current === latestPage.current.document) {
+      base.current = pageContentKey(latestPage.current); baseDoc.current = latestPage.current.document; dirty.current = false; pendingSave.current = null
       clearTimeout(retryTimer.current); retries.current = 0; offlineFailure.current = false
       semanticDeletes.current.clear(); setFailed(false); setUnsaved(null); setStatus('Saved')
       clearOwn(page.id)
@@ -688,10 +666,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     sending.current = true
     const document = JSON.stringify(editor.document)
-    const deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current], kept = keptOn(editor.document as unknown as EditorNode[])
+    const deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
     lastSent.current = document
     setStatus('Saving…')
-    const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), ...(kept.length ? { keptPlainLinks: kept } : {}), today: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }
+    const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), today: todayIso() }
     const fingerprint=JSON.stringify(action)
     if (pendingSave.current?.fingerprint !== fingerprint) pendingSave.current={fingerprint,operationId:newOperationId()}
     const operationId=pendingSave.current!.operationId
@@ -718,18 +696,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       announceSave(page.id)
       pendingSave.current=null; lastSaved.current = document
       debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
-      for (const t of source.tasks) if (expectedTaskVersions.current.get(t.id) !== t.version) invalidHistoryTasks.current.add(t.id)
-      for (const t of preview.tasks) if (source.tasks.find(old => old.id === t.id)?.version !== t.version) expectedTaskVersions.current.set(t.id, t.version)
       const savedPage = preview.pages.find(p => p.id === page.id)!
-      base.current = pageContentKey(savedPage)
+      base.current = pageContentKey(savedPage); baseDoc.current = savedPage.document
       // The editor has closed meanwhile: leaving takes it from here (it needs only the new starting point).
       if (left.current) return
       deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
       cutIds.forEach(id => cutTasks.current.delete(id))
-      // Remembered now. One this save left out (its line didn't hold the link: undone, say) stays for a later save, as
-      // does one pasted again on the same line since.
-      const remembered = (blockId: string) => preview.materials.some(m => m.sources.some(x => x.pageId === page.id && x.blockId === blockId))
-      kept.forEach(x => { if (keptLinks.current.get(x.blockId) === x.url && remembered(x.blockId)) keptLinks.current.delete(x.blockId) })
       dirty.current = JSON.stringify(editor.document) !== document
       // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
       const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
@@ -768,14 +740,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     let doc = nodes(), inserted = 0
     for (const { key: slotKey, slot } of found) {
       try {
-        const [baseSections, baseJSON] = JSON.parse(slot.base) as [Page['sections'], string | null]
-        const started = { ...current, sections: baseSections, editorJSON: baseJSON ?? undefined, editorSections: JSON.stringify(baseSections) } as Page
+        const started: Page = { ...current, document: slot.baseDocument ?? current.document }
         const draft = withoutSaved(JSON.parse(slot.document) as EditorNode[], doc)
-        const merged = mergeDraft(editorSeed(started, ws, { templateRows: needsTemplateRows(started, todayIso()) }) as EditorNode[], draft, doc, known)
+        const merged = mergeDraft(editorSeed(started, ws), draft, doc, known)
         doc = merged.document; inserted += merged.inserted.length
         // Its cuts were moves too (B33): the save that carries its text mustn't delete them.
         for (const id of slot.cutTaskIds ?? []) cutTasks.current.add(id)
-        for (const x of keptAfterMerge(slot.keptPlainLinks, merged.placed)) keptLinks.current.set(x.blockId, x.url)
       } catch { continue }
       claim(page.id, slotKey)
     }
@@ -801,24 +771,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   useEffect(() => editor.onBeforeChange(({ getChanges, tr }) => {
     if (historyGuardBypass.current || !isHistoryTransaction(tr)) return
     const changes = getChanges()
-    if (!changes.some(c => c.source.type === 'undo' || c.source.type === 'redo')) return
-    for (const c of changes) {
-      if (c.block.type !== 'task') continue
-      const taskId = String(c.block.props.taskId)
-      const target = latestWorkspace.current.tasks.find(t => t.id === taskId)
-      if (target && (invalidHistoryTasks.current.has(taskId) || expectedTaskVersions.current.get(taskId) !== target.version)) {
-        debugClient('editor.undo.rejected',{operationId:newOperationId(),pageId:page.id,taskId,result:'version-conflict'}); setStatus(`Can't undo: '${target.title}' changed since`); return false
-      }
-    }
-    for (const [blockId, effect] of Object.entries(latestPage.current.editorDeletions ?? {})) {
-      // Its row comes back: re-inserted (a delete undone) or turned back into that to-do (B42: a conversion undone).
-      if (!changes.some(c => c.block.id === blockId && (c.type === 'insert' || c.type === 'update' && c.block.type === 'task' && String(c.block.props.taskId) === effect.task.id))) continue
-      const target = latestWorkspace.current.tasks.find(t => t.id === effect.task.id)
-      if (!target || target.version !== effect.afterVersion) { debugClient('editor.undo.rejected',{operationId:newOperationId(),pageId:page.id,taskId:effect.task.id,result:'version-conflict'}); setStatus(`Can't undo: '${target?.title ?? effect.task.title}' changed since`); return false }
-    }
-    if (changes.some(c => c.source.type === 'redo')) {
-      for (const c of changes) if (c.type === 'delete' && knownSemantic.current.has(c.block.id)) semanticDeletes.current.add(c.block.id)
-    }
+    if (!changes.some(c => c.source.type === 'redo')) return
+    for (const c of changes) if (c.type === 'delete' && knownSemantic.current.has(c.block.id)) semanticDeletes.current.add(c.block.id)
   }), [editor])
   // B42: the to-do rows on the page as of the last change, to notice a line that stops being a to-do.
   const taskRows = useRef<Map<string, string> | null>(null)
@@ -856,9 +810,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (next === base.current) return
     // Our own save echoes back with the same document and sections projected from it. Anything else (Put back,
     // Keep from the morning hand-off, another tab) rewrote the page under us and the open editor must follow.
-    if (page.editorJSON === lastSent.current && page.editorSections === JSON.stringify(page.sections)) return
+    if (page.document === lastSent.current) return
     // His own save from when he left this page landed after he came back: carry on from it, it isn't a conflict.
-    if (dirty.current && (isOwnLeaveSave(page.id, page.editorJSON) || savedForMe(page.id, page.editorJSON))) { base.current = next; setFailed(false); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0); return }
+    if (dirty.current && (isOwnLeaveSave(page.id, page.document) || savedForMe(page.id, page.document))) { base.current = next; baseDoc.current = page.document; setFailed(false); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0); return }
     if (dirty.current) { debugClient('editor.external-refresh',{operationId:newOperationId(),triggerOperationId:pendingSave.current?.operationId,pageId:page.id,result:'conflict'}); setFailed(true); setUnsaved('refused'); setStatus('Page changed elsewhere · draft kept; copy it before reloading'); return }
     // Deferred: replacing blocks synchronously inside React's commit triggers a flushSync warning from BlockNote's views.
     queueMicrotask(() => {
@@ -876,12 +830,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const selection = browserSelection()
     suppress.current = true
     editor.transact(tr => {
-      editor.replaceBlocks(editor.document, editorSeed(p, ws, { templateRows: needsTemplateRows(p, todayIso()) }) as never)
+      editor.replaceBlocks(editor.document, editorSeed(p, ws) as never)
       tr.setMeta('addToHistory', false)
     })
     restoreBrowserSelection(selection)
     suppress.current = false
-    base.current = pageContentKey(p)
+    base.current = pageContentKey(p); baseDoc.current = p.document
   }
   /**
    * B23 (save-conflict-states §2): the page changed elsewhere since he started. Load the latest page, then put his
@@ -899,11 +853,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     editor.isEditable = true
     const latestNow = ws.pages.find(p => p.id === page.id)
     if (!latestNow) { setStatus("Couldn't load the latest · draft kept"); return }
-    const [baseSections, baseJSON] = JSON.parse(base.current) as [Page['sections'], string | null]
-    const started = { ...latestNow, sections: baseSections, editorJSON: baseJSON ?? undefined, editorSections: JSON.stringify(baseSections) } as Page
-    const seed = (p: Page) => editorSeed(p, ws, { templateRows: needsTemplateRows(p, todayIso()) }) as EditorNode[]
+    const started: Page = { ...latestNow, document: baseDoc.current }
+    const seed = (p: Page) => editorSeed(p, ws)
     const merged = mergeDraft(seed(started), nodes(), seed(latestNow), new Set(ws.tasks.map(t => t.id)))
-    for (const x of keptAfterMerge([...keptLinks.current].map(([blockId, url]) => ({ blockId, url })), merged.placed)) keptLinks.current.set(x.blockId, x.url)
     clearTimeout(timer.current)
     semanticDeletes.current.clear(); pendingSave.current = null
     applyServerPage(latestNow, ws)
@@ -932,12 +884,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // Now the draft is stashed as before and then saved. If that save is refused or fails, the stash stays and
       // this page shows it on return ("Recovered unsaved draft", or Load latest after a conflict).
       stash()
-      const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current], kept = keptOn(editor.document as unknown as EditorNode[])
+      const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
       trackLeaveSave((async () => {
         // A save already on its way finishes first, so this one starts from the page it produced.
         await inflight.current
         if (document !== lastSaved.current) {
-          const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), ...(kept.length ? { keptPlainLinks: kept } : {}), today: todayIso() }
+          const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), today: todayIso() }
           debugClient('editor.save.leave',{pageId:page.id})
           const result = await runRef.current(action, undefined, newOperationId(), { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => {} })
           if (!result) return false
@@ -1000,8 +952,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }
   /**
    * B44 (Jazz's states, Lead d5258c8): a pasted link goes in as a plain link, one per line, and a menu under it offers
-   * "Bookmark page" (A2's paste, applied to these lines). Every way out keeps the link. The links are remembered either
-   * way (§4a: the next editor save carries them, `keptPlainLinks`); the menu itself fetches nothing.
+   * "Bookmark page" (A2's paste, applied to these lines). Every way out keeps the link; the menu itself fetches nothing.
    */
   type PasteMenu = { blockIds: string[]; urls: string[]; lineType: string; linkText?: string; highlight: 0 | 1 }
   const [pasteMenu, setPasteMenuState] = useState<PasteMenu | null>(null)
@@ -1011,8 +962,6 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     setPasteMenu(null)
     const ids = [blockId, ...urls.slice(1).map(() => crypto.randomUUID())]
     const content = (url: string, i: number) => [{ type: 'link', href: url, content: i === 0 && linkText ? linkText : url }]
-    // Before the edit: the change it makes stashes the draft at once, and the draft must carry the links too.
-    urls.forEach((url, i) => keptLinks.current.set(ids[i]!, url))
     editor.transact(tr => {
       closeHistory(tr)
       editor.updateBlock(blockId, { content: content(urls[0]!, 0) } as never)
@@ -1035,13 +984,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const ws = latestWorkspace.current, here = latestPage.current
     const where = here.type === 'daily' && here.date ? dayLabel(here.date) : here.title || 'Untitled'
     const owners = urls.map(u => urlOwner(ws, u).page)
-    const made = (pageId: string) => ws.pages.flatMap(p => Object.values(p.editorBlockMetadata ?? {})).map(b => b.linkPaste).filter(r => r?.outcome === 'made' && r.pageId === pageId).map(r => r!.on).sort()[0]
     if (urls.length === 1) {
       const owner = owners[0]
       if (!owner) return `New page in ${where}`
       if (owner.trashedAt) return 'Restores it from the trash'
-      const on = made(owner.id)
-      return on ? `Saved before · ${dayLabel(on)}` : 'Saved before'
+      return 'Saved before'
     }
     const fresh = owners.filter(o => !o).length, trashed = owners.filter(o => o?.trashedAt).length, saved = urls.length - fresh - trashed
     if (!saved && !trashed) return `${fresh} new pages in ${where}`
@@ -1072,16 +1019,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * or at a new id; then one paste-links for all of them, retried like `/page` (3 tries, then "Not created · Retry").
    */
   async function pasteLinkLines(blockIds: string[], lineType: string, urls: string[], linkText?: string, fromMenu = false) {
-    const operationId = newOperationId(), blockId = blockIds[0]!
+    const operationId = newOperationId()
     if (fromMenu) bookmarkOps.current.add(operationId)
-    const preceding = nodes().slice(0, nodes().findIndex(n => n.id === blockId) + 1).reverse().find(n => n.type === 'heading')
     const items = urls.map(url => {
       const known = latestWorkspace.current.pages.find(p => p.url && urlKey(p.url) === urlKey(url))
-      return { url, pageId: known?.id ?? crypto.randomUUID(), cardBlockId: crypto.randomUUID(), lineType: lineType as 'paragraph', ...(linkText ? { title: linkText } : {}) }
+      return { url, pageId: known?.id ?? crypto.randomUUID(), cardBlockId: crypto.randomUUID(), ...(linkText ? { title: linkText } : {}) }
     })
-    // §4a: a kept link not yet saved goes onto its card, so it's remembered while the card stands; its line keeps its
-    // entry too, for the Undo that brings the line back.
-    if (fromMenu) items.forEach((it, i) => { const url = keptLinks.current.get(blockIds[i]!); if (url) keptLinks.current.set(it.cardBlockId, url) })
     // B44: its own undo step after the paste (Jazz §9): ⌘Z gives back the plain links, a second ⌘Z the paste.
     editor.transact(tr => {
       closeHistory(tr)
@@ -1090,18 +1033,19 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const [next] = editor.insertBlocks([{ type: lineType } as never], insertedBlocks.at(-1)!, 'after')
       editor.setTextCursorPosition(next!, 'start')
     })
-    const action = { type: 'paste-links' as const, pageId: page.id, ...(preceding ? { sectionId: preceding.id } : {}), today: todayIso(), items }
+    const action: Extract<Action, { type: 'make-link-pages' }> = { type: 'make-link-pages', parentPageId: page.id, items: items.map(({ url, pageId, title }) => ({ url, pageId, ...(title ? { title } : {}) })) }
     const fresh = items.filter(it => !latestWorkspace.current.pages.some(p => p.id === it.pageId))
-    const retry = () => void confirmLinks(action, operationId, fresh.map(it => it.pageId))
+    const retry = () => void confirmLinks(action, items.map(it => it.cardBlockId), operationId, fresh.map(it => it.pageId))
     for (const it of fresh) setPending(it.pageId, { state: 'creating', parentId: page.id, retry })
-    await confirmLinks(action, operationId, fresh.map(it => it.pageId))
+    await confirmLinks(action, items.map(it => it.cardBlockId), operationId, fresh.map(it => it.pageId))
   }
-  async function confirmLinks(action: Extract<Parameters<typeof run>[0], { type: 'paste-links' }>, operationId: string, freshIds: string[]) {
-    const retry = () => void confirmLinks(action, operationId, freshIds)
+  async function confirmLinks(action: Extract<Action, { type: 'make-link-pages' }>, cardIds: string[], operationId: string, freshIds: string[]) {
+    const retry = () => void confirmLinks(action, cardIds, operationId, freshIds)
     for (const id of freshIds) setPending(id, { state: 'creating', parentId: page.id, retry })
+    const before = latestWorkspace.current
     let preview: Workspace | null = null
     for (let attempt = 0; attempt < 3 && !preview; attempt++) {
-      if (!action.items.some(it => editor.getBlock(it.cardBlockId))) { freshIds.forEach(id => setPending(id, null)); return } // undone: abandon
+      if (!cardIds.some(id => editor.getBlock(id))) { freshIds.forEach(id => setPending(id, null)); return } // undone: abandon
       const source = latestWorkspace.current
       let candidate: Workspace
       try { candidate = applyCommand(source, { operationId, expectedRevision: source.revision, action }).workspace }
@@ -1110,18 +1054,21 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     if (!preview) { for (const id of freshIds) setPending(id, { state: 'failed', parentId: page.id, retry }); setStatus('Page not created · card kept, tap it to retry'); return }
     freshIds.forEach(id => setPending(id, null))
-    // The card save below projects page titles from the workspace, so it starts from the server's, not from a render
-    // that hasn't happened yet.
     try { preview = await refresh(operationId) } catch { /* offline again: the local preview of the same command */ }
     latestWorkspace.current = preview; latestPage.current = preview.pages.find(p => p.id === page.id)!
-    const records = pasteRecords(preview.pages.find(p => p.id === page.id)!, operationId)
+    // What each URL became: a page made now, one saved before, or one back from the trash.
+    const records = action.items.map((it, i) => {
+      const owner = preview!.pages.find(p => p.url && urlKey(p.url) === urlKey(it.url))
+      const was = before.pages.find(p => p.id === owner?.id)
+      return { cardBlockId: cardIds[i]!, pageId: owner?.id ?? it.pageId, url: it.url, outcome: !was ? 'made' as const : was.trashedAt ? 'restored' as const : 'reused' as const }
+    })
     // Another device made the page first: the card points at that one (not part of his history).
     const moved = records.filter(r => { const b = editor.getBlock(r.cardBlockId); return b && (b.props as { pageId: string }).pageId !== r.pageId })
     if (moved.length) editor.transact(tr => { for (const r of moved) editor.updateBlock(r.cardBlockId, { props: { pageId: r.pageId } } as never); tr.setMeta('addToHistory', false) })
-    showLinkNotice(preview, operationId, records)
+    showLinkNotice(operationId, records)
     // B43: each page this paste made takes the linked page's own title and description, read on the server, in the
     // background. Nothing waits on it; it changes only a page still untouched, and a failure shows nothing.
-    for (const r of records.filter(x => x.outcome === 'made')) void previewLinkPage({ data: { parentPageId: page.id, cardBlockId: r.cardBlockId, pageId: r.pageId, url: r.url } })
+    for (const r of records.filter(x => x.outcome === 'made')) void previewLinkPage({ data: { pageId: r.pageId, url: r.url } })
       .then(result => { if (result.applied) void refresh().catch(() => undefined) }, () => undefined)
     // As `/page`: once the pages exist, the cards are saved now, not at his next edit (e.g. after a Retry).
     if (dirty.current && !sending.current) { clearTimeout(timer.current); void flushRef.current() }
@@ -1130,20 +1077,14 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const linkNotice = useRef<{ key: string; operationId: string; fingerprint: string } | null>(null)
   // Its Undo belongs to this editor: leaving the page retires it.
   useEffect(() => () => { if (linkNotice.current) toast.close(linkNotice.current.key) }, [])
-  function showLinkNotice(ws: Workspace, operationId: string, records: ReturnType<typeof pasteRecords>) {
+  function showLinkNotice(operationId: string, records: { pageId: string; outcome: 'made' | 'reused' | 'restored' }[]) {
     const pages = new Set(records.map(r => r.pageId)), made = records.filter(r => r.outcome === 'made').length
     const reused = records.filter(r => r.outcome === 'reused' && !records.some(o => o.outcome === 'made' && o.pageId === r.pageId))
     const restored = records.filter(r => r.outcome === 'restored')
-    const firstMade = (pageId: string) => ws.pages.flatMap(p => Object.values(p.editorBlockMetadata ?? {})).map(b => b.linkPaste).filter(r => r?.outcome === 'made' && r.pageId === pageId).map(r => r!.on).sort()[0]
     let text: string
-    if (pages.size === 1 && restored.length) {
-      const p = ws.pages.find(x => x.id === restored[0]!.pageId)!, before = restored[0]!.restored?.find(e => e.pageId === p.id)
-      const parent = before?.parentBefore && !p.parentId ? ws.pages.find(x => x.id === before.parentBefore) : undefined
-      text = parent ? `Restored to Pages · ${displayPageTitle(parent)} is in trash` : 'Restored from trash'
-    } else if (pages.size === 1 && !made) {
-      const on = firstMade(records[0]!.pageId)
-      text = on ? `Saved before · ${dayLabel(on)}` : 'Saved before'
-    } else if (!reused.length && !restored.length) text = made === 1 ? 'Made a page' : `Made ${made} pages`
+    if (pages.size === 1 && restored.length) text = 'Restored from trash'
+    else if (pages.size === 1 && !made) text = 'Saved before'
+    else if (!reused.length && !restored.length) text = made === 1 ? 'Made a page' : `Made ${made} pages`
     else text = [made && `Made ${made} ${made === 1 ? 'page' : 'pages'}`, reused.length && `${reused.length} saved before`, restored.length && `${restored.length} restored from trash`].filter(Boolean).join(' · ')
     if (linkNotice.current) toast.close(linkNotice.current.key)
     const key = toast(text, {
@@ -1154,60 +1095,24 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     linkNotice.current = { key, operationId, fingerprint: JSON.stringify(editor.document) }
   }
   /**
-   * A2 §4, the targeted merge (Ratchet df3285ef / 9c42d967, Lead): save what he typed, send Undo with autosave held,
-   * and on success apply the same `undoCards` change to the editor's current document, so typing during the request
-   * stays. The server's page must equal that change applied to the flushed document; otherwise nothing is merged and
-   * the normal refresh (or "Page changed elsewhere · draft kept") takes over.
+   * The paste's Undo: the editor's own history step gives the plain links back (nothing typed since), and the server's
+   * Undo takes the pages the paste made or restored back with it. Edited since: refused, the cards and pages stay.
    */
   async function undoLinkPaste(operationId: string) {
-    // B44: read before the notice closes below: a menu bookmark with nothing edited since steps back through history.
-    const viaHistory = bookmarkOps.current.has(operationId) && linkNotice.current?.operationId === operationId && linkNotice.current.fingerprint === JSON.stringify(editor.document)
-    // A refusal is a notice too: the status line is replaced as soon as he types.
+    const fresh = linkNotice.current?.operationId === operationId && linkNotice.current.fingerprint === JSON.stringify(editor.document)
     const refuse = (text: string) => { setStatus(text); toast(text, { timeout: 6000 }) }
     if (linkNotice.current?.operationId === operationId) { toast.close(linkNotice.current.key); linkNotice.current = null }
-    clearTimeout(timer.current)
-    for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
-    if (dirty.current) await flushRef.current()
-    for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
-    if (dirty.current || sending.current) { refuse("Couldn't undo · card kept"); return }
-    const action = { type: 'undo-paste-links' as const, pageId: page.id, operationId, today: todayIso() }
-    const undoOperationId = newOperationId()
-    // The server's page must be exactly what this editor last saved (Ratchet 9c42d967); if another device changed it,
-    // nothing is undone and the normal refresh, or "Page changed elsewhere · draft kept", takes over.
-    let source: Workspace
-    try { source = await refresh(undoOperationId) } catch { refuse("Couldn't undo · card kept"); return }
-    const onServer = source.pages.find(p => p.id === page.id)
-    if (!onServer || pageContentKey(onServer) !== base.current) { refuse("Couldn't undo · page changed elsewhere"); return }
-    latestWorkspace.current = source
-    let preview: Workspace
-    try { preview = applyCommand(source, { operationId: undoOperationId, expectedRevision: source.revision, action }).workspace }
-    catch (error) { refuse(error instanceof Error ? error.message : "Couldn't undo · card kept"); return }
-    const before = source.pages.find(p => p.id === page.id)!
-    const cards: UndoCard[] = pasteRecords(before, operationId).filter(r => !r.undone).map(r => ({ blockId: r.cardBlockId, pageId: r.pageId, url: r.url, lineType: r.lineType }))
-    const expected = preview.pages.find(p => p.id === page.id)!
+    if (!fresh || dirty.current || sending.current) { refuse("Can't undo · edited since"); return }
     undoingPaste.current = true
     try {
-      const receipt = await run(action, r => (r.message === 'Paste undone' ? null : { text: r.message }), undoOperationId, { inlineRefusal: /Page changed · nothing was undone|Nothing to undo|Saved elsewhere/, onRefused: () => refuse("Couldn't undo · card kept") })
+      const receipt = await run({ type: 'undo', targetOperationId: operationId }, null, newOperationId(), { inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => refuse("Can't undo · edited since") })
       if (!receipt) return
-      suppress.current = true
-      // B44 (Jazz §9): a bookmark made from the paste menu, nothing edited since: its own undo step gives back the plain
-      // links exactly as pasted and leaves the paste as the next step. Otherwise A2's way: the cards become URL lines.
-      let undone = false
-      if (viaHistory) {
-        historyGuardBypass.current = true
-        try { undone = historyUndo(editor.prosemirrorState, tr => editor.prosemirrorView.dispatch(tr)) } finally { historyGuardBypass.current = false }
-      }
-      if (!undone) editor.transact(tr => {
-        for (const c of cardsPresent(nodes(), cards)) { const line = urlLine(c); editor.updateBlock(c.blockId, { type: line.type, props: {}, content: line.content } as never) }
-        tr.setMeta('addToHistory', false)
-      })
+      historyGuardBypass.current = true; suppress.current = true
+      try { historyUndo(editor.prosemirrorState, tr => editor.prosemirrorView.dispatch(tr)) } finally { historyGuardBypass.current = false; suppress.current = false }
       bookmarkOps.current.delete(operationId)
-      suppress.current = false
-      latestWorkspace.current = preview; latestPage.current = expected
-      base.current = pageContentKey(expected); lastSent.current = expected.editorJSON ?? ''
-      pendingSave.current = null
-      dirty.current = JSON.stringify(editor.document) !== expected.editorJSON
-      if (!dirty.current) { clearOwn(page.id); setStatus('Saved') }
+      const ws = latest(), p = ws?.pages.find(x => x.id === page.id)
+      if (ws && p) { latestWorkspace.current = ws; latestPage.current = p; base.current = pageContentKey(p); baseDoc.current = p.document }
+      dirty.current = JSON.stringify(editor.document) !== latestPage.current.document
     } finally {
       undoingPaste.current = false
       if (dirty.current) { stash(); timer.current = setTimeout(() => void flushRef.current(), 0) }
@@ -1394,14 +1299,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const nextDocument = docToBlocks(transaction.doc) as unknown as EditorNode[]
     const oldNodes = deepNodes(nodes()), nextNodes = deepNodes(nextDocument)
     const oldById = new Map(oldNodes.map(n => [n.id, n])), nextById = new Map(nextNodes.map(n => [n.id, n]))
+    // Semantic: a to-do row appears or disappears, or its words change; then the server must see the document.
     const semantic = [...affected].some(taskId => {
       const old = oldNodes.find(n => n.type === 'task' && n.props?.taskId === taskId)
       const next = nextNodes.find(n => n.type === 'task' && n.props?.taskId === taskId)
-      return !latestWorkspace.current.tasks.some(t => t.id === taskId) && [old, next].some(n => n?.props?.taskId === `editor-task:${n?.id}`)
-        || old && next && inlineText(old.content) !== inlineText(next.content)
-        || Object.entries(latestPage.current.editorDeletions ?? {}).some(([id, effect]) => effect.task.id === taskId && nextById.get(id)?.type === 'task' && nextById.get(id)?.props?.taskId === taskId && !(oldById.get(id)?.type === 'task' && oldById.get(id)?.props?.taskId === taskId))
-        || direction === 'redo' && [...knownSemantic.current].some(id => oldById.get(id)?.props?.taskId === taskId && !nextById.has(id))
-        || Object.entries(latestPage.current.editorCreations ?? {}).some(([id, createdTask]) => createdTask === taskId && (oldById.get(id)?.type === 'task') !== (nextById.get(id)?.type === 'task'))
+      return Boolean(old) !== Boolean(next) || (old && next && inlineText(old.content) !== inlineText(next.content))
     })
     if (!semantic) { historyGuardBypass.current = true; editor.prosemirrorView.dispatch(transaction); historyGuardBypass.current = false; debugClient('editor.history.finish',{operationId:historyOperationId,pageId:page.id,result:'local'}); return }
     historyPending.current = true; setHistoryBusy(true); editor.isEditable = false
@@ -1420,15 +1322,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const document = JSON.stringify(docToBlocks(transaction.doc))
       const candidateNodes = JSON.parse(document) as EditorNode[]
       const remaining = new Set(deepNodes(candidateNodes).map(n => n.id))
-      const deleted = direction === 'redo' ? deepNodes(nodes()).filter(n => knownSemantic.current.has(n.id) && !remaining.has(n.id)).map(n => n.id) : []
-      const historyTaskVersions = Object.fromEntries([...affected].map(id => [id, current.tasks.some(t => t.id === id) ? expectedTaskVersions.current.get(id) ?? -1 : 0]))
-      const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deleted, historyTaskVersions, history: true, today: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' }) }
+      const deleted = deepNodes(nodes()).filter(n => n.type === 'task' && !remaining.has(n.id)).map(n => n.id)
+      const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deleted, today: todayIso() }
       const preview = applyCommand(current, { operationId: historyOperationId, expectedRevision: current.revision, action }).workspace
       const receipt = await run(action,undefined,historyOperationId)
       if (!receipt) throw new Error("Can't undo: the page or task changed since · nothing restored")
       const saved = preview.pages.find(p => p.id === page.id)!
-      latestPage.current = saved; latestWorkspace.current = preview; base.current = pageContentKey(saved)
-      for (const task of preview.tasks) if (current.tasks.find(t => t.id === task.id)?.version !== task.version) expectedTaskVersions.current.set(task.id, task.version)
+      latestPage.current = saved; latestWorkspace.current = preview; base.current = pageContentKey(saved); baseDoc.current = saved.document
       lastSent.current = document
       suppress.current = true; historyGuardBypass.current = true
       editor.prosemirrorView.dispatch(transaction)
@@ -1458,17 +1358,22 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     selectionFocus.current?.focus()
     window.getSelection()?.removeAllRanges()
   }
-  /** B33: the save's own decision (deletesWithLine), on the document as it is after the delete. */
-  const goesWithLine = (taskId: unknown, after: readonly EditorNode[]) => typeof taskId === 'string'
-    && deletesWithLine(latestWorkspace.current, latestPage.current, taskId, new Set(deepNodes(after).filter(n => n.type === 'task').map(n => String(n.props?.taskId))))
+  /** B33: the save's own decision, on the document as it is after the delete: a task with no row left anywhere goes. */
+  const goesWithLine = (taskId: unknown, after: readonly EditorNode[]) => {
+    if (typeof taskId !== 'string') return false
+    const ws = latestWorkspace.current, t = ws.tasks.find(x => x.id === taskId)
+    if (!t || t.paused || deepNodes(after).some(n => n.type === 'task' && n.props?.taskId === taskId)) return false
+    return !rowsOfTask(ws, taskId).some(r => r.page.id !== page.id)
+  }
   /**
-   * A new to-do that stays because another page still has a line of it (Ratchet 164): the notice says where, not "To-do
-   * deleted" and not "Not today", which he didn't choose (Jazz 57dd5a4e).
+   * A to-do that stays because another page still has a line of it: the notice says where, not "To-do deleted" and
+   * not "Not today", which he didn't choose.
    */
   const stillElsewhere = (taskId: unknown, after: readonly EditorNode[]) => {
+    if (typeof taskId !== 'string') return null
     const ws = latestWorkspace.current, here = latestPage.current, t = ws.tasks.find(x => x.id === taskId)
-    if (!t || !bornHere(ws, t, here) || deepNodes(after).some(n => n.type === 'task' && n.props?.taskId === t.id)) return null
-    const other = ws.pages.find(o => o.id !== here.id && o.sections.some(s => s.blocks.some(b => b.taskId === t.id)))
+    if (!t || t.sourcePageId !== here.id || deepNodes(after).some(n => n.type === 'task' && n.props?.taskId === t.id)) return null
+    const other = rowsOfTask(ws, t.id).find(r => r.page.id !== here.id)?.page
     if (!other) return null
     const from = here.type === 'daily' && here.date === todayIso() ? 'today' : here.type === 'daily' ? placeLabel(here) : 'this page'
     return `Removed from ${from} · ${other.type === 'daily' ? `still on ${placeLabel(other)}` : `still in ${placeLabel(other)}`}`
@@ -1620,12 +1525,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const { block, prevBlock } = editor.getTextCursorPosition()
     return editor.canNestBlock() && block.type !== 'heading' && prevBlock?.type !== 'heading'
   }
-  /** The day's role headings (Top 3, Other, Events, Notes…) are structure; a heading he wrote is just a line. */
-  const isRoleHeading = (blockId: string) => {
-    if (editor.getBlock(blockId)?.type !== 'heading') return false
-    const section = latestPage.current.sections.find(x => x.id === blockId)
-    return Boolean((section && section.kind !== 'custom') || templateKind(latestPage.current, blockId))
-  }
+  /** Every heading is a line he wrote: nothing on the page is structure the editor has to protect. */
+  const isRoleHeading = (_blockId: string) => false
   // canIndent's rule from the other side: a line that is indented, or has lines indented under it, can't become a heading.
   const canHoldHeading = (blockId: string) => !editor.getParentBlock(blockId) && !editor.getBlock(blockId)?.children.length
   // Whether the phone toolbar's indent / outdent can act on the caret's line, and the line's style for Aa (F16).
@@ -1803,11 +1704,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   async function rowAct(blockId: string, t: Task, intent: RowIntent) {
     const today = todayIso(), day = page.date
     if (!day) return
-    if (intent.kind === 'section') { moveToSection(blockId, intent.to); return }
-    const section = sectionOf(blockId)
     const action: Action =
-      intent.kind === 'move' ? { type: 'plan-task', taskId: t.id, date: intent.date, section: section ?? undefined, from: day, today }
-      : intent.kind === 'bring-today' ? { type: 'plan-task', taskId: t.id, date: today }
+      intent.kind === 'move' ? { type: 'plan-task', taskId: t.id, date: intent.date, from: day, today }
+      : intent.kind === 'bring-today' ? { type: 'plan-task', taskId: t.id, date: today, today }
       : intent.kind === 'not-today' ? { type: 'not-today', taskId: t.id, date: day, onlyThisDay: true }
       : { type: 'task-status', taskId: t.id, status: intent.kind === 'cancel' ? 'cancelled' : 'open' }
     // The caret leaves a row that goes: to the end of the line above (Jazz §3).
@@ -1821,11 +1720,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // The menu took focus; give it back to the row (or the line above, if the row left) so ⌘Z and typing go on.
     const caretTo = editor.getBlock(blockId) ? blockId : above && editor.getBlock(above) ? above : null
     if (caretTo && (caretHere || document.activeElement === document.body || !editor.domElement?.contains(document.activeElement))) { editor.setTextCursorPosition(caretTo, 'end'); editor.focus() }
-    const fallback = receipt.message.indexOf(' · Top 3 is full')
     const text =
-      intent.kind === 'move' ? `Moved to ${noticeDate(intent.date)}${fallback >= 0 ? receipt.message.slice(fallback) : ''}`
+      intent.kind === 'move' ? `Moved to ${noticeDate(intent.date)}`
       : intent.kind === 'bring-today' ? 'On today'
-      : intent.kind === 'not-today' ? (receipt.message.startsWith('Removed from') ? `Removed from ${weekday(day)} · still planned for ${weekday(t.plannedOn ?? day)}` : notTodayText(t, day, today))
+      : intent.kind === 'not-today' ? (receipt.message.startsWith('Removed from') ? `Removed from ${weekday(day)} · still planned for ${weekday(plannedOn(latestWorkspace.current, t.id) ?? day)}` : notTodayText(t, day, today))
       : intent.kind === 'cancel' ? 'Cancelled' : 'Restored'
     const key: string = toast(text, {
       timeout: 8000,
@@ -1841,25 +1739,6 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const receipt = await onServer({ type: 'undo', targetOperationId: operationId }, newOperationId(), { inlineRefusal: /Cannot undo after later changes/, onRefused: m => { refused = m } })
     if (receipt) toast('Undone', { timeout: 4000 })
     else notDone(refused ? "Can't undo · changed since" : "Couldn't undo · your text is kept")
-  }
-  function sectionOf(blockId: string): 'top3' | 'other' | null {
-    const list = nodes()
-    const heading = list.slice(0, list.findIndex(n => n.id === blockId) + 1).reverse().find(n => n.type === 'heading')
-    const kind = latestPage.current.sections.find(s => s.id === heading?.id)?.kind
-    return kind === 'top3' || kind === 'other' ? kind : null
-  }
-  /** Move to Top 3 / Other (Jazz §3): a local edit like dragging the row, to the end of the other section; ⌘Z undoes it. */
-  function moveToSection(blockId: string, to: 'top3' | 'other') {
-    const heading = latestPage.current.sections.find(s => s.kind === to)
-    const block = editor.getBlock(blockId)
-    if (!heading || !block || !editor.getBlock(heading.id)) return
-    editor.transact(() => {
-      editor.removeBlocks([blockId])
-      const range = sectionRange(nodes(), heading.id)
-      const last = [...range].reverse().find(n => n.type !== 'heading' && (n.type !== 'paragraph' || inlineText(n.content).trim())) ?? range[0]!
-      editor.insertBlocks([block as never], last.id, 'after')
-    })
-    editor.setTextCursorPosition(blockId, 'end'); editor.focus()
   }
   /**
    * A12 at 390 (Jazz §2): the handle selects one open task row, and the selection bar shows its actions instead of
@@ -1878,7 +1757,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       <button type="button" onClick={deleteSelected}>Delete line</button>
     </div>
     if (t.status !== 'open') return null
-    const model = rowMenu(t, block.props.role, sectionOf(id), page.date ?? null, todayIso())
+    const model = rowMenu(t, block.props.role, plannedOn(latestWorkspace.current, t.id), page.date ?? null, todayIso())
     if (!model) return null
     const choose = (intent: RowIntent) => { selected.current = []; setSelectionLabel(''); void rowAct(id, t, intent) }
     const keep = (e: { preventDefault(): void }) => e.preventDefault()
@@ -1939,7 +1818,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return true
   }
   const rowActions: RowActions = {
-    pageDate: page.date ?? null, today: todayIso(), sectionOf, act: (id, t, intent) => void rowAct(id, t, intent),
+    pageDate: page.date ?? null, today: todayIso(), act: (id, t, intent) => void rowAct(id, t, intent),
     copyLink: id => lineLinkTarget(id) ? () => copyLineLink(id) : null,
     focusRow: id => {
       if (!editor.getBlock(id)) return
@@ -2125,9 +2004,6 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // Jazz's title spec: Backspace at the start of the first line goes up into the title, as in Notion.
         const title = document.querySelector<HTMLElement>('.page-title-field')
         if (title) { e.preventDefault(); e.stopPropagation(); focusAtEnd(title) }
-      } else if ((e.key === 'Delete' || e.key === 'Backspace') && !e.nativeEvent.isComposing && !e.altKey && !e.metaKey && !e.ctrlKey && joinsRoleHeading(e.key)) {
-        // Silent, like any key that has nothing to do (Jazz).
-        e.preventDefault(); e.stopPropagation()
       } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && editor.prosemirrorState.selection.empty && editor.getTextCursorPosition().block.type === 'task' && !inlineText(editor.getTextCursorPosition().block.content)) {
         // The caret goes to the end of the line above, as when any line is deleted (Brian 301105c0), not to the start of
         // the line that moves up. Everything above the removed row keeps its positions, so `above` holds after removal.

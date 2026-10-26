@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from 'react'
-import type { LocalDate, NoteBlock, Page, Workspace } from '../domain/types'
-import { inlineText, type EditorNode } from '../domain/editor-document'
+import type { LocalDate, Page, Workspace } from '../domain/types'
+import { inlineText, textDate, type EditorNode } from '../domain/editor-document'
 import { CalendarIcon, GlobeIcon, LineLinkIcon, PagesIcon, TrashIcon } from './icons'
 import { resolveLine, type LineTarget, type ResolvedLine } from '../domain/page-refs'
 import { fromIso, todayIso } from './dates'
@@ -62,25 +62,11 @@ export function InlineWithRefs({ content, workspace }: { content: unknown; works
       : <TagText key={i} text={c.text ?? inlineText(c.content)} />)
 }
 
-const nodeCache = new WeakMap<Page, Map<string, EditorNode>>()
-function nodeOf(page: Page, blockId: string): EditorNode | undefined {
-  let byId = nodeCache.get(page)
-  if (!byId) {
-    byId = new Map()
-    const walk = (list: EditorNode[]) => list.forEach(n => { byId!.set(n.id, n); walk(n.children ?? []) })
-    try { walk(JSON.parse(page.editorJSON ?? '[]')) } catch { /* no document: the stored text */ }
-    nodeCache.set(page, byId)
-  }
-  return byId.get(blockId)
-}
-
 /**
- * A line as shown outside the editor (Jazz: tag pages and "lines from {day}"). A line with `[[` links is drawn from
- * its editor content, so each link shows its page's current title; any other line is its stored text.
+ * A line as shown outside the editor (tag pages, "lines from {day}"): its inline content, so each `[[` link shows its
+ * page's current title and each chip its date.
  */
-export function LineText({ workspace, pageId, block }: { workspace: Workspace | null | undefined; pageId: string; block: NoteBlock }) {
-  const page = block.refs?.length ? workspace?.pages.find(p => p.id === pageId) : undefined
-  const node = page ? nodeOf(page, block.id) : undefined
-  if (!node || !Array.isArray(node.content)) return <TagText text={block.text} />
+export function LineText({ workspace, page, node }: { workspace: Workspace | null | undefined; page: Page | undefined; node: EditorNode }) {
+  if (!Array.isArray(node.content)) return <TagText text={inlineText(node.content, page ? textDate(page) : null)} />
   return <>{InlineWithRefs({ content: node.content, workspace })}</>
 }

@@ -16,7 +16,7 @@ test('debug logs default off; enabled commands correlate and never serialize con
   process.env.DAYTHREAD_LOG='debug'
   const first=await r.execute({operationId:'create-day',expectedRevision:0,action:{type:'ensure-day',date:'2026-10-17'}})
   const p=first.workspace.pages[0]!
-  const command={operationId:'save-private',expectedRevision:1,action:{type:'add-task' as const,pageId:p.id,sectionId:p.sections[0]!.id,title:'SECRET_NOTE_SENTINEL'}}
+  const command={operationId:'save-private',expectedRevision:1,action:{type:'add-task' as const,pageId:p.id,title:'SECRET_NOTE_SENTINEL'}}
   await r.execute(command);await r.execute(command)
   await assert.rejects(r.execute({...command,action:{...command.action,title:'SECRET_OTHER_SENTINEL'}}))
   const logs=lines.map(s=>JSON.parse(s))

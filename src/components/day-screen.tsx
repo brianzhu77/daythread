@@ -1,18 +1,17 @@
 import type { LocalDate } from '../domain/types'
 import { getCalendarTasks } from '../domain/workspace'
 import { longLabel } from './dates'
-import { CaptureBar, CaptureReceipts } from './capture'
 import { ContinuousPage } from './continuous-page'
 import { LinkedFrom, Subpages } from './page-tree'
 import { FactsStrip } from './facts-strip'
-import { StartTheDay, cardLines, hasHandoffContent, liveProposals, taskSuggestions, useHandoffLater } from './start-the-day'
+import { StartTheDay, cardLines, hasHandoffContent, taskSuggestions, useHandoffLater } from './start-the-day'
 import { useDay, useWorkspace } from './use-day'
 import { DayHeader } from './day-header'
 import { FutureDayState } from './future-day'
 import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 
-/** Today (and any other date): header, facts strip, Start the day, receipts, the page, capture. */
+/** Today (and any other date): header, facts strip, Start the day, the page. */
 export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }) {
   const { run } = useWorkspace()
   const { view, workspace } = useDay(date)
@@ -67,13 +66,11 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
           date={date}
           today={today}
           handoffCollapsed={isToday && Boolean(page && !page.handoffDone && later && hasHandoffContent(view, workspace, today))}
-          handoffCount={suggestions.length + cardLines(view, workspace).length + (page ? liveProposals(page, workspace).length : 0)}
-          handoffDrafting={page?.draft?.run?.status === 'drafting'}
+          handoffCount={suggestions.length + cardLines(view).length}
           cardTaskIds={showHandoff ? new Set(suggestions.map(s => s.task.id)) : undefined}
           onReopenHandoff={() => setLater(false)}
           handoffSettled={handoffSettled}
         />
-        {page && <CaptureReceipts page={page} workspace={workspace} />}
         {page ? (
           <>
             <ContinuousPage key={page.id} page={page} workspace={workspace} />

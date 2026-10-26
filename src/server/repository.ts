@@ -1,6 +1,4 @@
 import type { Command, CommandResult, Workspace } from "../domain/types";
-import type { AttemptState, ModelAttempt, ReserveInput, SettleInput } from "./model-ledger";
-import type { CommandOrBuild, ModelResultOutcome } from "./model-result";
 
 /** Adapter boundary: atomic revision check + domain mutation + receipt persistence.
  * Replays with the same operationId and action return the original receipt even at an old revision.
@@ -10,13 +8,11 @@ export interface WorkspaceRepository {
   execute(command: Command): Promise<CommandResult>;
 }
 
-/** What the server (model work included) needs from a store: the workspace plus the model budget ledger, which
- * lives outside the workspace so Undo never brings back spend. Implemented by SQLite and Postgres. */
+/** What the server needs from a store. Implemented by SQLite and Postgres. */
 export interface ServerRepository extends WorkspaceRepository {
-  modelAttempts(): Promise<ModelAttempt[]>;
-  reserveModelAttempt(input: ReserveInput): Promise<{ attempt: ModelAttempt; replayed: boolean }>;
-  recordModelResult(input: SettleInput, commandOrBuild?: CommandOrBuild, options?: { failAfterWrite?: boolean }): Promise<ModelResultOutcome>;
+  /** A server-only command applied to the workspace as it is now (the link preview): not refused because he typed meanwhile. */
   executeOnLatest(operationId: string, action: Command["action"]): Promise<CommandResult>;
-  markInterruptedModelAttempts(now: string, olderThan?: string): Promise<number>;
-  reconcileModelAttempt(attemptId: string, amount: number | "worst-case", now: string, note?: string, from?: readonly AttemptState[]): Promise<ModelAttempt>;
 }
+
+/** The day a store converts an older workspace against, in the app's time zone. */
+export const todayIn = (timeZone = 'America/Vancouver'): string => new Intl.DateTimeFormat('en-CA', { timeZone }).format(new Date())
