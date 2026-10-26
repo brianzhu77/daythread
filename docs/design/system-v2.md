@@ -11,8 +11,8 @@ shape rules of `tokens.md` (§2, §3) and `craft-v1.md` §1; type and spacing st
    scale. No tinted greys (the lavender of Craft v1 goes), no second accent.
 2. **White is the surface.** Pages, the sidebar and cards are white; hairlines separate, fills do not. A block that
    needs an edge gets a 1px border, not a grey background.
-3. **Blue is for the few.** The primary action, links, the focus ring, the checked box, the text selection and the
-   word "Today". Nothing else. A selected tab or filter is grey.
+3. **Blue is for the very few.** The focus ring, the checked box, the text selection, the editor's chips and the
+   word "Today". Nothing else: the primary action and links are grey too. A selected tab or filter is grey.
 4. **Rounded rectangles, not pills.** Controls are 8px rounded rectangles with a 1px border; pills remain only for the
    small badges (a tag, a date chip) and the phone's floating tab bar.
 
@@ -48,8 +48,6 @@ The whole list. Anything not here is grey.
 
 | Use | Token |
 | --- | --- |
-| The primary button (Done, Sign in, Create account, Save and sign in) | `--blue-9`, hover `--blue-10`, white text |
-| A link, Forgot password, Create an account, Plan for today | `--blue-11` |
 | The focus ring | `--blue-9`, 2px |
 | A checked box | `--blue-9` (accent-color) |
 | Text selection, the `/` and `@` chips in the editor, a line that just moved | `--blue-3` background, `--blue-11` text |
@@ -59,6 +57,10 @@ The whole list. Anything not here is grey.
 **The auth screens are grey only** (Brian, Oct 26): there is no primary among many, so the button is `--gray-12`
 with white text, links are `--gray-11` underlined, the focus ring is `--gray-12`. No blue on sign-in, sign-up,
 forgot or reset.
+
+**The primary button is the darkest grey** (`--gray-12`, white text, hover `--gray-11`) everywhere, and **links are
+grey and underlined** (`--gray-11`, the underline in `--gray-7`, both `--gray-12` on hover): Done, Sign in, Plan for
+today, Forgot password, a link in a note. Brian, Oct 26, after seeing the auth screens: the same on the app.
 
 Grey, where it used to be blue: the selected tab on the phone, the selected filter, the pressed style button in the
 editor, the Trash's back link, the secondary button (Today / Not today, Restore, Add), the sign-up and sign-in notes.
@@ -70,7 +72,7 @@ editor, the Trash's back link, the secondary button (Today / Not today, Restore,
 | Page, sidebar, card | `--gray-1`. The sidebar has a 1px `--gray-5` right edge; the active row is `--gray-3` with `--gray-12` text; other rows `--gray-11` |
 | Hairline | 1px `--gray-5`: under the title block's first section, between list rows, around a block that needs an edge |
 | Block on a page (Start the day, Due soon, the calendar's note, an empty state) | white, 1px `--gray-5` border, 12px radius; no grey fill |
-| Primary button | `--blue-9`, white text, 8px radius, 40px (48px on the auth screens) |
+| Primary button | `--gray-12`, white text, 8px radius, 40px (48px on the auth screens); hover `--gray-11` |
 | Secondary button | white, 1px `--gray-7` border, `--gray-12` text, 8px radius; hover `--gray-2` |
 | Ghost button (arrows, ⋯, Later) | no border, `--gray-11`; hover `--gray-3` |
 | Filter chip (Tasks' lists, the calendar's Earlier / Later) | white, 1px `--gray-6`, `--gray-11` text, 8px radius; selected: `--gray-3`, 1px `--gray-7`, `--gray-12` semibold |

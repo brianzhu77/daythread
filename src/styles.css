@@ -157,8 +157,8 @@
 :root {
   --foreground: var(--ink); --surface-foreground: var(--ink); --overlay-foreground: var(--ink);
   --field-foreground: var(--ink); --default-foreground: var(--ink); --segment-foreground: var(--ink); --link: var(--ink);
-  --muted: var(--ink-2); --default: var(--fill); --accent: var(--blue); --focus: var(--blue);
-  --accent-foreground: var(--ink-on-blue); --danger: var(--red); --danger-foreground: var(--ink-on-blue);
+  --muted: var(--ink-2); --default: var(--fill); --accent: var(--gray-12); --focus: var(--blue); /* HeroUI's primary is the dark grey; the focus ring stays blue */
+  --accent-foreground: #fff; --danger: var(--red); --danger-foreground: var(--ink-on-blue);
   --background: var(--bg-doc); --surface: var(--card); --overlay: var(--card); --segment: var(--card);
   --surface-secondary: var(--fill-soft);
   --border: var(--line); --separator: var(--line);
@@ -177,7 +177,9 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 h1, h2, h3, p { margin: 0; }
-a:where(:not([data-slot])) { color: var(--blue-11); }
+/* Links are grey and underlined (system-v2 §3, Brian): the underline says link, the colour stays with the text. */
+a:where(:not([data-slot])) { color: var(--gray-11); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--gray-7); }
+a:where(:not([data-slot])):hover { color: var(--gray-12); text-decoration-color: var(--gray-12); }
 button:where(:not([data-slot])), input:where(:not([data-slot])), textarea:where(:not([data-slot])), select:where(:not([data-slot])) { font: inherit; color: inherit; }
 ::selection { background: var(--blue-soft); }
 
@@ -204,15 +206,15 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
   outline: 2px solid var(--app-accent);
   outline-offset: 2px;
 }
-.primary { background: var(--app-accent); color: var(--ink-on-blue); font-weight: var(--weight-semibold); }
-.primary:hover:not(:disabled) { background: var(--blue-pressed); }
+.primary { background: var(--gray-12); color: #fff; font-weight: var(--weight-semibold); }
+.primary:hover:not(:disabled) { background: var(--gray-11); }
 .secondary { background: var(--gray-1); border-color: var(--gray-7); color: var(--gray-12); font-weight: var(--weight-medium); }
 .secondary:hover:not(:disabled) { background: var(--gray-2); }
 .ghost { color: var(--ink-soft); }
 .ghost:hover, .icon:hover { background: var(--app-surface-hover); }
 .icon { min-width: var(--tap); padding: 0; color: var(--ink-soft); font-size: 1.1rem; }
-.app-link { min-height: auto; padding: 0; border-radius: var(--radius-tight); color: var(--blue-11); text-decoration: none; font-weight: var(--weight-medium); }
-.app-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.app-link { min-height: auto; padding: 0; border-radius: var(--radius-tight); color: var(--gray-11); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--gray-7); font-weight: var(--weight-medium); }
+.app-link:hover { color: var(--gray-12); text-decoration-color: var(--gray-12); }
 .danger { color: var(--app-danger); }
 .wide { width: 100%; }
 
@@ -865,7 +867,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* B19: no plan-row bar; it read as a quote border. The padding keeps checkboxes on the bullet column. */
 .continuous-editor .bn-block-content[data-content-type=task] { border-left:2px solid transparent; padding-left:8px; }
 .editor-reference-tag,.editor-plan-tag { font-size:11px;color:var(--ink-2);white-space:nowrap; }
-.editor-plan-action { background:transparent;color:var(--blue-text);border:0;font-size:var(--text-caption);padding:2px 4px; }
+.editor-plan-action { background:transparent;color:var(--gray-11);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--gray-7);border:0;font-size:var(--text-caption);padding:2px 4px; }
 /* Plan for today appears when a document task saves (open reference tasks only). It no longer takes the global 44px
    min-height, so the row keeps its height when it appears or goes (Ratchet #117, 390 touch +12px). Its tap area is the
    full height of its own row (stretch) and 6px wider each side; never taller, or a tap would plan the next task (Lead). */
@@ -962,7 +964,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* Paste polish: an imported checklist shares the Task checkbox/text inset without becoming a Task. */
 .editor-source-checklist { padding-left:10px; gap:10px; align-items:center; min-height:32px; width:100%; }
 .editor-source-checklist > input { width:18px; height:18px; flex:none; accent-color:var(--blue); }
-.editor-paste-notice button { border:0; background:transparent; color:var(--blue-text); padding:3px; }
+.editor-paste-notice button { border:0; background:transparent; color:var(--gray-11); text-decoration:underline; text-underline-offset:3px; padding:3px; }
 @media(max-width:700px) { .editor-source-checklist { gap:8px; } }
 @media(max-width:599px) {
   .editor-reference-tag { display:none; }
