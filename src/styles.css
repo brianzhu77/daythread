@@ -147,18 +147,44 @@
   --shadow-card-soft: 0 1px 2px rgba(17, 17, 26, .04);
   --shadow-fab: 0 5px 24px #0002;
   --dur-fast: .12s;
-  /* Light only until dark mode is designed: HeroUI's dark theme was never wired up (step 3 review). */
-  color-scheme: light;
+  color-scheme: light dark;
+}
+/* Dark (system-v2 §2, the Dark column): the same twelve steps, Radix's dark values, so every rule that names a step
+   or an alias follows. Only the few colours off the scales are restated. The scheme follows the system setting. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --gray-1: #111111; --gray-2: #191919; --gray-3: #222222; --gray-4: #2a2a2a; --gray-5: #313131; --gray-6: #3a3a3a;
+    --gray-7: #484848; --gray-8: #606060; --gray-9: #6e6e6e; --gray-10: #7b7b7b; --gray-11: #b4b4b4; --gray-12: #eeeeee;
+    --blue-1: #0d1520; --blue-2: #111927; --blue-3: #0d2847; --blue-4: #003362; --blue-5: #004074; --blue-6: #104d87;
+    --blue-7: #205d9e; --blue-8: #2870bd; --blue-9: #0090ff; --blue-10: #3b9eff; --blue-11: #70b8ff; --blue-12: #c2e6ff;
+    --red: #ff6369;
+    --warn: #f1a865; --warn-soft: #2b1d10; --warn-line: #4a331c;
+    --sim: #b19cf5; --sim-soft: #221c38;
+    --toast-bg: rgba(58, 58, 60, .96); --toast-ink: #f5f5f7;
+    --glass: rgba(28, 28, 30, .86);
+    --scrim: rgba(0, 0, 0, .55);
+    --hover-dim: rgba(255, 255, 255, .08);
+    --drop-line: var(--blue-9);
+    --shadow-float: 0 2px 6px rgba(0, 0, 0, .35), 0 10px 30px rgba(0, 0, 0, .5);
+    --shadow-row: 0 1px 2px rgba(0, 0, 0, .4);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, .3);
+    --shadow-card-soft: 0 1px 2px rgba(0, 0, 0, .3);
+    --shadow-fab: 0 5px 24px rgba(0, 0, 0, .6);
+    --red-line: #5c2a2c;
+  }
 }
 
 /* HeroUI's theme on our tokens (tokens.md §6): one palette for HeroUI parts and our own rules. On :root, after
    HeroUI's theme, so its derived variables (--field-focus, --accent-soft, ...) resolve from these. The editor's
-   .bn-shadcn scope still remaps --accent and --muted for its menus. */
-:root {
+   .bn-shadcn scope still remaps --accent and --muted for its menus. BlockNote's container carries HeroUI's .light
+   class (its theme prop), which would restate HeroUI's own light values there, so the mapping is restated on it too,
+   and the container follows the page's colour scheme rather than the class. */
+:root, .bn-container {
   --foreground: var(--ink); --surface-foreground: var(--ink); --overlay-foreground: var(--ink);
   --field-foreground: var(--ink); --default-foreground: var(--ink); --segment-foreground: var(--ink); --link: var(--ink);
   --muted: var(--ink-2); --default: var(--fill); --accent: var(--gray-12); --focus: var(--blue); /* HeroUI's primary is the dark grey; the focus ring stays blue */
-  --accent-foreground: #fff; --danger: var(--red); --danger-foreground: var(--ink-on-blue);
+  --accent-foreground: var(--gray-1); --danger: var(--red); --danger-foreground: #fff;
   --background: var(--bg-doc); --surface: var(--card); --overlay: var(--card); --segment: var(--card);
   --surface-secondary: var(--fill-soft);
   --border: var(--line); --separator: var(--line);
@@ -166,6 +192,7 @@
   --field-focus: var(--gray-1); --field-hover: var(--gray-1); --field-shadow: inset 0 0 0 1px var(--gray-7);
   --disabled-opacity: .4;
 }
+.bn-container { color-scheme: inherit; }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -206,7 +233,7 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
   outline: 2px solid var(--app-accent);
   outline-offset: 2px;
 }
-.primary { background: var(--gray-12); color: #fff; font-weight: var(--weight-semibold); }
+.primary { background: var(--gray-12); color: var(--gray-1); font-weight: var(--weight-semibold); }
 .primary:hover:not(:disabled) { background: var(--gray-11); }
 .secondary { background: var(--gray-1); border-color: var(--gray-7); color: var(--gray-12); font-weight: var(--weight-medium); }
 .secondary:hover:not(:disabled) { background: var(--gray-2); }
@@ -843,11 +870,11 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor .bn-block-content[data-content-type=heading] h1 { font-size:var(--text-title); }
 .continuous-editor .bn-block-content[data-content-type=heading] h3 { font-size:18px; }
 .editor-touch-handle,.editor-phone-toolbar { display:none; }
-.editor-selection-bar { position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:var(--bg);box-shadow:0 8px 32px #0002;border-radius:var(--radius-block);padding:8px 12px;display:flex;gap:14px;align-items:center;z-index:100;font-size:var(--text-meta); }
+.editor-selection-bar { position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:var(--bg);box-shadow:var(--shadow-float);border-radius:var(--radius-block);padding:8px 12px;display:flex;gap:14px;align-items:center;z-index:100;font-size:var(--text-meta); }
 .is-touch-drag .bn-block-outer:not(:has(> .bn-block > .bn-block-content[data-content-type=heading])) { display:none; }
 @media(max-width:700px) {
  .editor-touch-handle { display:flex;align-items:center;justify-content:center;position:fixed;right:12px;z-index:70;touch-action:none;border:0;padding:0;background:var(--bg);color:var(--ink-2);width:32px;height:44px;font-size:22px; }
- .editor-phone-toolbar { display:flex;position:fixed;bottom:90px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 16px);gap:4px;background:var(--bg);border-radius:14px;box-shadow:0 3px 20px #0002;z-index:60;padding:3px; }
+ .editor-phone-toolbar { display:flex;position:fixed;bottom:90px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 16px);gap:4px;background:var(--bg);border-radius:14px;box-shadow:var(--shadow-float);z-index:60;padding:3px; }
  /* B5 Aa: seven buttons fit 390 (42 px each, no side padding), so the bar never runs off the screen. */
  .editor-phone-toolbar button { min-width:42px;height:36px;padding:0;background:transparent;color:var(--ink);border:0; }
  .editor-phone-toolbar button:disabled { color:var(--ink-3); }
@@ -859,7 +886,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor.has-style-panel { margin-bottom:120px; }
 /* B58: room for the page to scroll Edit link's form clear of the toolbar, also at the page's end. */
 @media (hover: none) { body:has([data-slot="popover-content"] input) .continuous-editor { margin-bottom:240px; } }
-.editor-style-panel { display:grid;grid-template-columns:repeat(4,1fr);gap:4px;position:absolute;bottom:calc(100% + 8px);left:0;right:0;padding:4px;background:var(--bg);border-radius:14px;box-shadow:0 3px 20px #0002;z-index:60; }
+.editor-style-panel { display:grid;grid-template-columns:repeat(4,1fr);gap:4px;position:absolute;bottom:calc(100% + 8px);left:0;right:0;padding:4px;background:var(--bg);border-radius:14px;box-shadow:var(--shadow-float);z-index:60; }
  .editor-style-panel button { min-height:44px;padding:0 4px;border:0;border-radius:10px;background:transparent;color:var(--ink);font-size:var(--text-meta);line-height:1.2; }
  .editor-style-panel button[aria-pressed='true'] { background:var(--gray-3);color:var(--gray-12);font-weight:600; }
  .editor-style-panel .is-h1, .editor-style-panel .is-h2, .editor-style-panel .is-h3 { font-weight:600; }
@@ -951,7 +978,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 @media(max-width:899px) { .continuous-editor { overflow-x:clip; } .editor-selection-bar { max-width:calc(100vw - 32px); } }
 .editor-source-checklist { display:flex; gap:8px; align-items:baseline; }
 .editor-source-checklist > span:last-child { flex:1; min-width:0; }
-.editor-paste-notice { display:flex; align-items:center; gap:12px; max-width:min(90vw,600px); padding:8px 12px; border-radius:14px; background:var(--bg); color:var(--ink-2); box-shadow:0 5px 26px #0003; font-size:var(--text-meta); pointer-events:auto; }
+.editor-paste-notice { display:flex; align-items:center; gap:12px; max-width:min(90vw,600px); padding:8px 12px; border-radius:14px; background:var(--bg); color:var(--ink-2); box-shadow:var(--shadow-float); font-size:var(--text-meta); pointer-events:auto; }
 @media(max-width:899px) { .editor-paste-notice { width:calc(100vw - 32px); } }
 
 .editor-selection-bar { width:max-content; min-height:44px; }
@@ -1328,7 +1355,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
    sidebar's brand sits; the title has the day title's metrics; fields are the page's soft blocks with a blue focus ring. */
 .sign-in {
   /* Grey only (Brian, Oct 26): no primary among many here, so no blue at all. HeroUI's accent and focus follow. */
-  --accent: var(--gray-12); --focus: var(--gray-12); --accent-foreground: #fff;
+  --accent: var(--gray-12); --focus: var(--gray-12); --accent-foreground: var(--gray-1);
   min-height: 100dvh; background: var(--bg-doc); color: var(--ink);
   max-width: 400px; margin: 0 auto; padding: 22vh 20px 40px; display: flex; flex-direction: column; gap: 4px;
 }
@@ -1344,7 +1371,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .sign-in input:hover { box-shadow: inset 0 0 0 1px var(--gray-8); }
 .sign-in input:focus, .sign-in input:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--gray-12); background: var(--bg-doc); }
 .sign-in-hint { margin: 6px 0 0; font-size: var(--text-meta); color: var(--ink-3); }
-.sign-in button[type='submit'] { height: 48px; margin-top: 4px; border-radius: var(--radius-control); background: var(--gray-12); color: #fff; font-size: var(--text-body); font-weight: var(--weight-semibold); }
+.sign-in button[type='submit'] { height: 48px; margin-top: 4px; border-radius: var(--radius-control); background: var(--gray-12); color: var(--gray-1); font-size: var(--text-body); font-weight: var(--weight-semibold); }
 .sign-in button[type='submit']:hover:not(:disabled) { background: var(--gray-11); }
 .sign-in button[type='submit']:disabled { opacity: .35; }
 .sign-in-meta { margin: 12px 0 0; font-size: var(--text-meta); color: var(--ink-2); }
@@ -1372,7 +1399,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
    Otherwise, while the header's status is scrolled away: a quiet line in the dock (desktop) or above the tab bar
    (phone, keyboard down). State only: Retry and Copy draft stay in the header. */
 .editor-toolbar-unsaved { position:absolute; top:-3px; right:-3px; width:8px; height:8px; box-shadow:0 0 0 2px var(--bg); border-radius:50%; background:var(--warn); pointer-events:none; }
-.editor-unsaved-line { display:flex; align-items:center; gap:8px; max-width:calc(100vw - 32px); padding:6px 12px; border-radius:var(--radius-pill); background:var(--bg); color:var(--ink-2); box-shadow:0 2px 12px #0002; font-size:var(--text-caption); white-space:nowrap; pointer-events:none; }
+.editor-unsaved-line { display:flex; align-items:center; gap:8px; max-width:calc(100vw - 32px); padding:6px 12px; border-radius:var(--radius-pill); background:var(--bg); color:var(--ink-2); box-shadow:var(--shadow-float); font-size:var(--text-caption); white-space:nowrap; pointer-events:none; }
 .editor-unsaved-dot { flex:none; width:7px; height:7px; border-radius:50%; background:var(--warn); }
 @media(max-width:899px) {
   .bottom-dock .editor-unsaved-line { position:fixed; bottom:90px; left:50%; transform:translateX(-50%); }
