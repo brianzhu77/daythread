@@ -1,9 +1,15 @@
 {
+  "id": "/",
   "name": "Daythread",
   "short_name": "Daythread",
+  "description": "A page for each day, with the to-dos that carry over.",
+  "lang": "en",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": [
+    "standalone"
+  ],
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
   "icons": [

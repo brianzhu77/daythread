@@ -1,6 +1,7 @@
 import { createRootRoute, HeadContent, Outlet, Scripts, useRouterState } from '@tanstack/react-router'
 import { Analytics } from '@vercel/analytics/react'
 import { AppShell } from '../components/app-shell'
+import { splashLinks } from '../components/splash'
 import '../styles.css'
 
 export const Route = createRootRoute({
@@ -13,6 +14,7 @@ export const Route = createRootRoute({
       { name: 'theme-color', content: '#ffffff', media: '(prefers-color-scheme: light)' },
       { name: 'theme-color', content: '#111111', media: '(prefers-color-scheme: dark)' },
       { name: 'apple-mobile-web-app-capable', content: 'yes' },
+      { name: 'apple-mobile-web-app-title', content: 'Daythread' },
       // B52b: in the Home Screen app the page reaches under the status bar and env(safe-area-inset-top) is its height,
       // so B52's strip covers what scrolls there. iOS 26 keeps the clock dark over our white (Roadbuster 3ddfd8f4).
       { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
@@ -25,6 +27,8 @@ export const Route = createRootRoute({
       // The mark (docs/design/system-v2.md §6): the SVG favicon follows the tab's colour scheme; iOS takes the PNG tile.
       { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
       { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+      // The launch screen in the Home Screen app (docs/design/pwa.md §3): the mark on the page's own colour.
+      ...splashLinks(),
     ],
   }),
   component: Root,

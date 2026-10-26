@@ -8,6 +8,7 @@ import { WorkspaceProvider, isConflict, useWorkspace } from './use-day'
 /** App frame (craft-v1 §3): sidebar on laptop, bottom tabs and + on phone, dev banner, undo notices. */
 export function AppShell({ children }: { children: ReactNode }) {
   useVisibleTop()
+  useServiceWorker()
   return (
     <WorkspaceProvider>
       <div className="app">
@@ -59,8 +60,22 @@ function Toasts() {
   )
 }
 
+/** The service worker (docs/design/pwa.md): the shell and its assets kept for an open with no connection; reminders. */
+function useServiceWorker() {
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => undefined)
+  }, [])
+}
+
 function SampleBanner() {
-  const { workspace, loadError, reload, addSampleData } = useWorkspace()
+  const { workspace, loadError, offline, reload, addSampleData } = useWorkspace()
+  if (offline)
+    return (
+      <p className="banner offline" role="status">
+        Offline · showing what was last loaded
+      </p>
+    )
   if (loadError)
     return (
       <p className="banner error" role="alert">
