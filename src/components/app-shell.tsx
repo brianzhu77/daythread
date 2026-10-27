@@ -3,6 +3,7 @@ import { useRouterState } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useState } from 'react'
 import { Navigation } from './navigation'
 import { KeptDrafts } from './kept-drafts'
+import { GlobalSearch } from './search-dialog'
 import { WorkspaceProvider, isConflict, useWorkspace } from './use-day'
 
 /** App frame (craft-v1 §3): sidebar on laptop, bottom tabs and + on phone, dev banner, undo notices. */
@@ -23,6 +24,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <KeptDrafts />
         </div>
         <Toasts />
+        <GlobalSearch />
         <div className="safe-top" aria-hidden="true" />
       </div>
     </WorkspaceProvider>

@@ -1,0 +1,7 @@
+{"name":"laptop-shortcut-and-results","ok":true,"errors":["404 /_vercel/insights/script.js","console: Failed to load resource: the server responded with a status of 404 (Not Found)"]}
+{"name":"tags-group-shown-for-#","ok":true,"note":"the fixture has tags, the Tags group showed"}
+{"name":"laptop-no-results-and-tags","ok":true,"errors":["404 /_vercel/insights/script.js","console: Failed to load resource: the server responded with a status of 404 (Not Found)"]}
+{"name":"laptop-dark","ok":true,"errors":["404 /_vercel/insights/script.js","console: Failed to load resource: the server responded with a status of 404 (Not Found)"]}
+{"name":"phone-line-opened","ok":true,"where":"Wed, Oct 21 · Notes","url":"http://127.0.0.1:3043/day/2026-10-21"}
+{"name":"phone-button-sheet-and-line-jump","ok":true,"errors":["404 /_vercel/insights/script.js","console: Failed to load resource: the server responded with a status of 404 (Not Found)"]}
+{"name":"phone-dark-empty","ok":true,"errors":["404 /_vercel/insights/script.js","console: Failed to load resource: the server responded with a status of 404 (Not Found)"]}

@@ -509,9 +509,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const dropParam = () => { const url = new URL(window.location.href); for (const k of ['block', 'task', 'from']) url.searchParams.delete(k); window.history.replaceState(window.history.state, '', url) }
     const search = new URLSearchParams(window.location.search)
     const isLineUrl = window.location.pathname === '/pages' && search.get('page') === page.id
-    // From the Tags list: the line on the page the list names; only a row that's gone follows its task (Bumblebee
-    // 54096b19). Anything else opened at a line (a day page's tag) just finds it here.
-    const fromTags = isLineUrl && search.get('from') === 'tags'
+    // From the Tags list or a search result: the line on the page the list names; only a row that's gone follows its
+    // task (Bumblebee 54096b19). Anything else opened at a line (a day page's tag) just finds it here.
+    const fromTags = isLineUrl && (search.get('from') === 'tags' || search.get('from') === 'search')
     const find = (blockId: string) => {
       if (cancelled) return
       if (!jumpWithin(blockId)) { if (++tries < 120) frame = requestAnimationFrame(() => find(blockId)); return }

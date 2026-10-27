@@ -188,7 +188,8 @@ export function rememberOpened(pageId: string) {
     localStorage.setItem(recentKey, JSON.stringify(list))
   } catch { /* storage unavailable: no Recent group */ }
 }
-function recentIds(): string[] {
+/** The ids `rememberOpened` kept, newest first; the search's empty state lists them too. */
+export function recentIds(): string[] {
   try { return JSON.parse(localStorage.getItem(recentKey) ?? '[]') } catch { return [] }
 }
 
