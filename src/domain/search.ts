@@ -84,11 +84,14 @@ export function queryTerms(query: string): string[] {
 
 const bare = (term: string) => term.replace(/^[#＃]/u, '')
 const matchesAll = (folded: string, terms: readonly string[]) => terms.every(t => folded.includes(bare(t)))
+/** A day's date words match at word starts only ("oct", "october 21", "2026-10-21"), so "on" doesn't list every Monday. */
+const matchesWords = (folded: string, terms: readonly string[]) => { const words = folded.split(' '); return terms.every(t => words.some(w => w.startsWith(bare(t)))) }
 
 /**
  * What matches `query`: pages by title (days by their date words, or "today" / "yesterday"), tags by name, lines by
- * every word typed (in any order, anywhere in the line). Pages whose title starts with the query come first; lines
- * keep the index's order, newest day first.
+ * every word typed (in any order, anywhere in the line). Pages rank: the day "today" / "yesterday" names, a title that
+ * starts with the words, a title that holds them, then days by their date words (a convenience, after the pages he
+ * named). Lines keep the index's order, newest day first.
  */
 export function search(index: SearchIndex, query: string, today: LocalDate, yesterday?: LocalDate): SearchResults {
   const terms = queryTerms(query)
@@ -97,8 +100,8 @@ export function search(index: SearchIndex, query: string, today: LocalDate, yest
   const relative = q === 'today' ? today : q === 'yesterday' && yesterday ? yesterday : null
   const pageHits = index.pages
     .map(p => {
-      const words = p.page.type === 'daily' ? p.dayWords : p.folded
-      const rank = relative && p.page.date === relative ? 0 : p.folded.startsWith(q) ? 1 : matchesAll(words, terms) ? 2 : -1
+      const day = p.page.type === 'daily'
+      const rank = relative && p.page.date === relative ? 0 : day ? (matchesWords(p.dayWords, terms) ? 3 : -1) : p.folded.startsWith(q) ? 1 : matchesAll(p.folded, terms) ? 2 : -1
       return { p, rank }
     })
     .filter(x => x.rank >= 0)
@@ -117,6 +120,17 @@ export function search(index: SearchIndex, query: string, today: LocalDate, yest
     else moreLines++
   }
   return { pages: pageHits, tags: tagHits, lines: lineHits, moreLines }
+}
+
+/** The matched lines under the page each was written on, in the order they came (newest day first, document order). */
+export function linesByPage(lines: readonly LineHit[]): { page: Page; lines: LineHit[] }[] {
+  const groups: { page: Page; lines: LineHit[] }[] = []
+  for (const line of lines) {
+    const last = groups.at(-1)
+    if (last?.page.id === line.page.id) last.lines.push(line)
+    else groups.push({ page: line.page, lines: [line] })
+  }
+  return groups
 }
 
 /** Where each typed word sits in `text` (folded positions map one to one for the scripts this app writes), for bolding. */

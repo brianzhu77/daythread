@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildSearchIndex, matchRanges, queryTerms, search, snippet } from '../src/domain/search.ts'
+import { buildSearchIndex, linesByPage, matchRanges, queryTerms, search, snippet } from '../src/domain/search.ts'
 import { bullet, dayId, harness, para, text, today, todo, under, yesterday } from './v2-helpers.ts'
 
 // Search (docs/design/search-states.md): pages by title, days by their date, tags by name, lines by every word typed.
@@ -35,6 +35,10 @@ test('pages: titles match by prefix first, then anywhere; a nested page carries 
   assert.deepEqual(search(index, 'today', today, yesterday).pages.map(p => p.page.id), [dayId(today)])
   assert.deepEqual(search(index, 'yesterday', today, yesterday).pages.map(p => p.page.id), [dayId(yesterday)])
   assert.equal(search(index, 'Café notes', today).pages[0]!.path, yesterday, "a day's subpage carries its day")
+  // Days match at word starts and come after the pages named by title: "o" lists Work (by title) before the October days.
+  assert.deepEqual(search(index, 'o', today).pages.map(p => p.page.id), ['C', 'S', 'W', dayId(today), dayId(yesterday)])
+  assert.deepEqual(search(index, 'ber', today).pages.map(p => p.page.type), [], '"ber" is inside October, not a word start')
+  assert.deepEqual(search(index, 'oct', today).pages.map(p => p.page.id), [dayId(today), dayId(yesterday)])
 })
 
 test('lines: every word typed must appear, in any order; a to-do row reads its task title; results run newest day first; blank lines and headings are never hits', () => {
@@ -52,6 +56,10 @@ test('lines: every word typed must appear, in any order; a to-do row reads its t
   assert.equal(t.lines[0]!.taskId, h.task('Renew passport photos').id)
   assert.equal(t.lines[0]!.text, 'Renew passport photos')
   assert.deepEqual(search(index, 'belly', today).lines.map(l => l.page.id), ['S'], 'document pages are searched too')
+  // Grouped by the page each line was written on, a day page being a page, in the order the lines came.
+  const o = search(index, 'o', today)
+  assert.deepEqual(linesByPage(o.lines).map(g => [g.page.id, g.lines.length]), [[dayId(today), 3], [dayId(yesterday), 1], ["S", 1]])
+  assert.deepEqual(linesByPage(o.lines).map(g => g.page.id), [dayId(today), dayId(yesterday), 'S'])
   assert.equal(search(index, '   ', today).lines.length, 0, 'nothing typed, nothing listed')
 })
 

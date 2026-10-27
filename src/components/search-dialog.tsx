@@ -1,7 +1,7 @@
 import { Modal, SearchField } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { buildSearchIndex, matchRanges, search, snippet, type LineHit, type PageHit, type TagHit } from '../domain/search'
+import { buildSearchIndex, linesByPage, matchRanges, search, snippet, type LineHit, type PageHit, type TagHit } from '../domain/search'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { addDays, fromIso, longLabel } from './dates'
 import { CalendarIcon, PageKindIcon, SearchIcon, TagsIcon } from './icons'
@@ -71,12 +71,6 @@ const shortDay = (date: LocalDate, today: LocalDate) => date === today ? 'Today'
 
 type Row = { key: string; href: string; render: (active: boolean) => ReactNode }
 
-/** Where a matched line is: its day or page, then its section, " · " between. */
-function lineWhere(hit: LineHit, today: LocalDate): string {
-  const where = hit.page.type === 'daily' && hit.date ? dayWord(hit.date, today) : hit.page.title || 'Untitled'
-  return hit.sectionTitle ? `${where} · ${hit.sectionTitle}` : where
-}
-
 function lineHref(hit: LineHit): string {
   return hit.page.type === 'daily' && hit.date
     ? `/day/${hit.date}?block=${encodeURIComponent(hit.blockId)}`
@@ -130,8 +124,9 @@ export function SearchDialog({ onClose }: { onClose: () => void }) {
           <div className="search-list" role="listbox" aria-label={trimmed ? 'Results' : 'Recent'} ref={listRef}>
             {!workspace && <p className="search-note">Loading…</p>}
             {groups.map(g => (
-              <Fragment key={g.title ?? 'first'}>
+              <Fragment key={g.page ? `page:${g.page.id}` : g.title ?? 'first'}>
                 {g.title && <p className="search-group">{g.title}{g.count !== undefined && <span className="search-group-count">{g.count}</span>}</p>}
+                {g.page && <PageHeading page={g.page} workspace={workspace!} today={today} />}
                 {g.rows.map(r => (
                   <button key={r.key} type="button" role="option" aria-selected={r.key === activeKey} className={`search-row ${r.key === activeKey ? 'active' : ''}`}
                     onClick={() => go(r.href)} onMouseMove={() => { const i = rows.findIndex(x => x.key === r.key); if (i >= 0 && i !== active) setActive(i) }}>
@@ -155,7 +150,8 @@ export function SearchDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
-interface Group { title?: string; count?: number; rows: Row[] }
+/** A group label ("Pages", "Lines"), or the page a run of matched lines was written on; either may carry rows. */
+interface Group { title?: string; count?: number; page?: Page; rows: Row[] }
 
 /** The groups shown: Today and Recent for an empty field; Pages, Tags and Lines for a query. */
 function build(workspace: Workspace | null, results: ReturnType<typeof search> | null, query: string, today: LocalDate): Group[] {
@@ -174,7 +170,12 @@ function build(workspace: Workspace | null, results: ReturnType<typeof search> |
   const groups: Group[] = []
   if (results.pages.length) groups.push({ title: 'Pages', rows: results.pages.map((h: PageHit) => ({ key: `p:${h.page.id}`, href: pageHref(h.page), render: () => <PageRow page={h.page} today={today} path={h.path} query={query} /> })) })
   if (results.tags.length) groups.push({ title: 'Tags', rows: results.tags.map((t: TagHit) => ({ key: `t:${t.key}`, href: `/tags/${encodeURIComponent(t.key)}`, render: () => <TagRow hit={t} query={query} /> })) })
-  if (results.lines.length) groups.push({ title: 'Lines', count: results.lines.length + results.moreLines, rows: results.lines.map((l: LineHit) => ({ key: `l:${l.page.id}:${l.blockId}`, href: lineHref(l), render: () => <LineRow hit={l} today={today} query={query} workspace={workspace} /> })) })
+  // Lines sit under the page they were written on (Brian: grouped by page, a day page being a page), newest day first.
+  if (results.lines.length) {
+    groups.push({ title: 'Lines', count: results.lines.length + results.moreLines, rows: [] })
+    for (const g of linesByPage(results.lines))
+      groups.push({ page: g.page, rows: g.lines.map((l: LineHit) => ({ key: `l:${l.page.id}:${l.blockId}`, href: lineHref(l), render: () => <LineRow hit={l} query={query} workspace={workspace} /> })) })
+  }
   return groups
 }
 
@@ -209,7 +210,19 @@ function TagRow({ hit, query }: { hit: TagHit; query: string }) {
   )
 }
 
-function LineRow({ hit, today, query, workspace }: { hit: LineHit; today: LocalDate; query: string; workspace: Workspace }) {
+/** The page a run of lines was written on: its icon and label, its path quietly after. Not a row: the lines open it. */
+function PageHeading({ page, workspace, today }: { page: Page; workspace: Workspace; today: LocalDate }) {
+  const path = pathOf(workspace, page, today)
+  return (
+    <p className="search-page">
+      <span className="search-row-icon">{page.type === 'daily' ? <CalendarIcon /> : <PageKindIcon url={page.url} />}</span>
+      <span className={`search-page-title ${page.type === 'document' && !page.title ? 'untitled' : ''}`}>{page.type === 'daily' && page.date ? dayWord(page.date, today) : pageLabel(page, today)}</span>
+      {path && <small>{path}</small>}
+    </p>
+  )
+}
+
+function LineRow({ hit, query, workspace }: { hit: LineHit; query: string; workspace: Workspace }) {
   const task = hit.taskId ? workspace.tasks.find(t => t.id === hit.taskId) : undefined
   return (
     <>
@@ -220,7 +233,7 @@ function LineRow({ hit, today, query, workspace }: { hit: LineHit; today: LocalD
       </span>
       <span className="search-row-text">
         <span className={`search-row-line ${task?.status === 'done' ? 'is-done' : ''}`}><Marked text={snippet(hit.text, query)} query={query} /></span>
-        <small>{lineWhere(hit, today)}</small>
+        {hit.sectionTitle && <small>{hit.sectionTitle}</small>}
       </span>
     </>
   )

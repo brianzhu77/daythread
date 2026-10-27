@@ -1252,6 +1252,12 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .search-row-text { display: grid; flex: 1; min-width: 0; gap: 1px; }
 .search-row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 24px; }
 .search-row-title.untitled { color: var(--ink-3); }
+/* The page a run of lines was written on: a heading between the rows, the page's own icon, its label in ink, its path after. */
+.search-page { display: flex; align-items: center; gap: 10px; margin: 0; padding: 10px 10px 2px; min-width: 0; }
+.search-group + .search-page { padding-top: 2px; }
+.search-page-title { font-weight: var(--weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.search-page-title.untitled { color: var(--ink-3); font-weight: var(--weight-regular); }
+.search-page small { flex: none; font-size: var(--text-meta); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A matched line wraps to two lines at most, so a long note doesn't take the list; the typed words are bold, nothing is coloured. */
 .search-row-line { line-height: 24px; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .search-row-line.is-done { color: var(--ink-2); text-decoration: line-through; text-decoration-color: var(--ink-3); }

@@ -43,14 +43,16 @@ compares.
 | Page | its title (a bookmark page: its URL too) | icon · title · "Pages › Parent" or the day it was made in |
 | Day | its date words: "Sun, Oct 18", "October 18, 2026", "2026-10-18", and "today" / "yesterday" | calendar icon · the day's label |
 | Tag | its name, with or without `#` | `#` tag · "N blocks" |
-| Line | its words, every typed word somewhere on the line, in any order | the line (two lines at most, cut around the first match) · "Today · Notes" or "Page title · Section" |
+| Line | its words, every typed word somewhere on the line, in any order | under the page it was written on (a day is a page: "Today", "Wed, Oct 21"; a page: its title and path): the line, two lines at most, cut around the first match, its section quietly under it |
 
 Case, width and accents are folded ("cafe" finds "Café", full-width letters find their ASCII twins). A to-do row is
 searched by its task's current title, as the editor shows it; headings are context (the section under a line), never
 hits of their own; a `[[` link's title is live and not part of a line's words (editor-document `inlineText`).
 
-Order: Pages (a title that starts with the words first, 8 at most), Tags (5 at most), then Lines newest day first, in
-document order within a page, 50 at most with "N more lines match · keep typing to narrow it down" under them.
+Order: Pages (a title that starts with the words first, 8 at most), Tags (5 at most), then Lines grouped by page
+(Brian, Oct 27: "grouped by pages, remember day page is a page"), newest day first, document order within a page, 50
+at most with "N more lines match · keep typing to narrow it down" under them. A page's heading is not a row: the lines
+open it, at the line.
 
 ## 4. States
 
@@ -74,9 +76,10 @@ v1 fixture at 390 and 1280, light and dark: the shortcut, the sidebar row, the p
 44px target inside the 16px edge, the sheet, results with the match bold, ↑↓ Enter, Esc and Cancel, a line opening
 where it was written with the tint, no horizontal overflow at 390).
 
-## 6. Open for Brian
+## 6. Decided
 
-- Should the phone's search button replace a tab instead (Tags, say, since a `#word` finds a tag)? The button keeps
-  five tabs at ~55px each; a sixth tab would be the other way to keep everything.
-- Should a day's lines be grouped under the day (as the tag page does) once results run long, rather than one list with
-  the day under each line? One list reads faster for a few hits; groups scan better for many.
+- **The phone keeps the round button beside the capsule** (Brian, Oct 27: the call on UX was left here). Search is an
+  action from any screen, not a destination: it has no "current" state to show in a tab, it closes back to where he was,
+  and the five destinations keep their tabs at ~55px. It also matches the capsule's own grammar (Craft's `+` slot).
+- **Lines are grouped by page**, a day page being a page (Brian, Oct 27). One heading per page, its icon and label, the
+  path after it for a nested page; the row under it keeps only its section.

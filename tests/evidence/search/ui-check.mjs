@@ -49,7 +49,13 @@ await run('laptop-shortcut-and-results', 1280, async page => {
   await dialog(page).locator('.search-group', { hasText: 'Lines' }).waitFor({ timeout: 5000 })
   const lines = await dialog(page).innerText()
   assert(lines.includes('Call about the roof'), 'a to-do row by its words')
-  assert(lines.includes('Wed, Oct 21'), 'with the day it was written on')
+  assert.equal(await dialog(page).locator('.search-page .search-page-title').first().innerText(), 'Wed, Oct 21', 'under the day it was written on')
+  assert.equal(await dialog(page).locator('.search-row small').first().innerText(), 'Notes', 'the row keeps only its section')
+  // Several pages: one heading per page, newest day first.
+  await field(page).fill('o')
+  await page.waitForFunction(() => document.querySelectorAll('.search-page').length >= 2)
+  const headings = await dialog(page).locator('.search-page-title').allInnerTexts()
+  assert.deepEqual(headings, [...new Set(headings)], 'each page heads its lines once')
   await settled(page)
   await page.screenshot({ path: `${out}/laptop-results.png` })
   // ↓ moves, Enter opens the active row and the dialog closes.
@@ -111,7 +117,7 @@ await run('phone-button-sheet-and-line-jump', 390, async page => {
   await page.screenshot({ path: `${out}/phone-results.png` })
   // A line opens where it was written and the block jump tints it.
   const line = dialog(page).locator('.search-row', { has: page.locator('.search-row-line') }).first()
-  const where = await line.locator('small').innerText()
+  const where = `${await dialog(page).locator('.search-page-title').first().innerText()} · ${await line.locator('small').innerText()}`
   await line.click()
   await dialog(page).waitFor({ state: 'hidden', timeout: 5000 })
   await page.locator('.block-flash').first().waitFor({ timeout: 15000 })
