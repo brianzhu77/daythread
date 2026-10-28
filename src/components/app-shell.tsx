@@ -5,6 +5,7 @@ import { Navigation } from './navigation'
 import { KeptDrafts } from './kept-drafts'
 import { GlobalSearch } from './search-dialog'
 import { WorkspaceProvider, isConflict, useWorkspace } from './use-day'
+import { flushAllEditors } from './editor-flush'
 
 /** App frame (craft-v1 §3): sidebar on laptop, bottom tabs and + on phone, dev banner, undo notices. */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -75,9 +76,20 @@ function useServiceWorker() {
       const assets = performance.getEntriesByType('resource').map(e => e.name).filter(ours)
       sw.controller?.postMessage({ type: 'warm', pages, assets })
     }
+    // A worker that replaces this one (the rollback tombstone, #27) asks the page to reload onto the server's build. It
+    // reloads only once everything typed is saved, so the reload never lands on typing or raises a leave-page prompt;
+    // while a save can't go through (offline) it keeps waiting, and the page stays as it is.
+    let reloading = false
+    const onMessage = async (event: MessageEvent) => {
+      if (event.data?.type !== 'reload-when-saved' || reloading) return
+      reloading = true
+      while (!(await flushAllEditors())) await new Promise(resolve => setTimeout(resolve, 5000))
+      location.reload()
+    }
     sw.addEventListener('controllerchange', warm)
+    sw.addEventListener('message', onMessage)
     sw.register('/sw.js', { updateViaCache: 'none' }).catch(() => undefined)
-    return () => sw.removeEventListener('controllerchange', warm)
+    return () => { sw.removeEventListener('controllerchange', warm); sw.removeEventListener('message', onMessage) }
   }, [])
 }
 

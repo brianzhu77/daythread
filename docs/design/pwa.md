@@ -33,6 +33,10 @@ came.
 - The first open, and any page a new worker version takes over, loaded before the worker controlled it, so nothing of
   it was kept. When a worker takes control (`controllerchange`), the page tells it the addresses it opened and the
   files it loaded; the worker fetches them again and keeps them by the same rules (Ratchet #222). Nothing reloads.
+- Rollback is a tombstone at the same `/sw.js` (branch `rollback/b24-kill-worker`): it stays installed, has no fetch
+  handler, deletes our caches when it takes over, shortly after and on every message (the warm-up), and keeps the
+  reminder handlers. It asks each open page to `reload-when-saved`; the page reloads only once everything typed is
+  saved, so a tab with unsaved typing stays as it is until it can (Lead, Ratchet #222).
 - The worker is versioned; a new version takes over on the next launch and drops the old caches. It never caches
   anything that could carry another person's data: only `/assets/*`, the root static files, and the HTML of app
   routes, whose server-rendered body holds no workspace data (the data is loaded by the client).
