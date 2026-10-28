@@ -12,7 +12,7 @@ import { ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon } from './icons'
  * Day title that opens a date picker, and `Today ‹ ›` (date navigation rules R2, R3; Jazz's HeroUI note f853703).
  * Arrows move only up to today (R2); the title's picker opens any day, and a future one only as its preview.
  */
-export function DayHeader({ date, today }: { date: LocalDate; today: LocalDate }) {
+export function DayHeader({ date, today, firstDay = false }: { date: LocalDate; today: LocalDate; firstDay?: boolean }) {
   const navigate = useNavigate()
   const { workspace } = useWorkspace()
   // A dot under a day that has something written (or subpages): the sidebar Days rule, so browsing makes no dots.
@@ -94,6 +94,7 @@ export function DayHeader({ date, today }: { date: LocalDate; today: LocalDate }
           </Button>
         )}
       </nav>
+      {firstDay && <p className="day-first">A page for each day. Write anything; unfinished to-dos come along to tomorrow.</p>}
     </header>
   )
 }
