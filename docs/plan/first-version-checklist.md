@@ -68,6 +68,13 @@ Found in the team's reads (Jazz, Roadbuster, 2026-10-28):
 
 Section S (Supabase storage plan C1–C7) is superseded by #13, #14 and #24: per-row storage, operations with Undo from the inverse, sign-in by password (not emailed code), offline read copy. Port 3000 (old build on his production database) was stopped 2026-10-28 05:50Z, then `live` was deleted (Lead). The dev service on 3000 now runs main on local SQLite (an Oct 21 copy of his data) and never touches Supabase. Never redeploy or roll back a Vercel build from before 2026-10-26 04:35Z (#13): it recreates the old table and his writes would go there.
 
+### Letting other people in (Brian d456ab31: next goal; plan beeba03c, waiting on his answers)
+
+Must before the first invite: (1) each person's offline copy stays theirs (#27, in review); (2) sign-up and reset emails from his own address (custom SMTP); (3) a new person's first empty Today gets one quiet line on what Daythread is for (Jazz; no tour); (4) the team reads only Brian's workspace from the first invite on (`scripts/pg-read-v2.mjs` in Bumblebee's workspace is scoped to it), and invitees are told he can technically see their pages.
+Not needed yet: an invite screen (one SQL line), open sign-up, reminders, two-device editing.
+Asked Brian: a domain for email (recommended: buy one, send through Resend, move the app to it); who comes first and how many (2–3; language); the same template for them (recommended: keep it).
+Success check: each invitee signs up without his help and writes on 3 of their first 7 days. Nobody builds for this until he says yes (Lead 026d5aab).
+
 ### What only Brian can do (one sitting)
 
 1. Reminders (#19): set the VAPID keys and `CRON_SECRET` in Vercel, and a pinger that calls `/api/push/tick` every minute (the Hobby plan runs crons once a day). Then turn reminders on from the Home Screen app.
