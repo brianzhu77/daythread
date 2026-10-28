@@ -54,7 +54,7 @@ function Root() {
             <Outlet />
           </AppShell>
         )}
-        <Analytics />
+        {import.meta.env.DAYTHREAD_VERCEL_ANALYTICS && <Analytics />}
         <Scripts />
       </body>
     </html>

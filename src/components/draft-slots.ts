@@ -39,7 +39,9 @@ const goneAfter = () => (globalThis as { __daythreadGoneAfterMs?: number }).__da
  * (Ratchet 66accf58, Bumblebee 5ab67ef1): each page load records that it owns its id, and a load that finds the id
  * owned by another live load takes a new one. A reload releases its record on pagehide, so it keeps its id.
  */
-const instance = typeof crypto !== 'undefined' ? crypto.randomUUID() : String(Math.random())
+// Made on first use, not at module load: the server renders this module too, and Workers refuse random values there.
+let instanceId: string | undefined
+const instance = () => instanceId ??= crypto.randomUUID()
 let resolvedTab: string | null = null
 const ownerKey = (id: string) => `daythread:tab-owner:${id}`
 export function tabId(): string {
@@ -47,11 +49,11 @@ export function tabId(): string {
   try {
     let id = sessionStorage.getItem('daythread.tab')
     const owner = id ? (JSON.parse(localStorage.getItem(ownerKey(id)) ?? 'null') as { instance?: string; seen?: number } | null) : null
-    if (!id || (owner && owner.instance !== instance && Date.now() - (owner.seen ?? 0) < goneAfter())) {
+    if (!id || (owner && owner.instance !== instance() && Date.now() - (owner.seen ?? 0) < goneAfter())) {
       id = crypto.randomUUID()
       sessionStorage.setItem('daythread.tab', id)
     }
-    localStorage.setItem(ownerKey(id), JSON.stringify({ instance, seen: Date.now() }))
+    localStorage.setItem(ownerKey(id), JSON.stringify({ instance: instance(), seen: Date.now() }))
     // Kept fresh and released from any screen, not only while an editor is open. A reload from Pages used to find its
     // own record still live, take a new id and leave its draft unrecovered for 10 minutes; and a tab opened from one
     // that had sat on Pages over 10 minutes found a stale record and kept the same id (the copied-tab loss).
@@ -70,7 +72,7 @@ export function touchTab(release = false): void {
   try {
     const id = tabId()
     if (release) localStorage.removeItem(ownerKey(id))
-    else localStorage.setItem(ownerKey(id), JSON.stringify({ instance, seen: Date.now() }))
+    else localStorage.setItem(ownerKey(id), JSON.stringify({ instance: instance(), seen: Date.now() }))
   } catch { /* storage unavailable */ }
 }
 

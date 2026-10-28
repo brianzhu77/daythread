@@ -1,35 +1,70 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { resolve } from 'node:path'
-import postgres from 'postgres'
+import postgres, { type Sql } from 'postgres'
 import type { ServerRepository } from './repository.ts'
 import { SqliteWorkspaceRepository } from './sqlite-repository.ts'
 import { PostgresWorkspaceRepository } from './postgres-repository.ts'
 import { postgresClient, type SqlClient } from './db/sql.ts'
+import { onHostingPlatform, onWorkers } from './hosting.ts'
 let repository: ServerRepository | undefined
 let client: SqlClient | undefined
 /**
- * DAYTHREAD_STORAGE picks the store: `postgres` (DATABASE_URL must be set in the environment) or `sqlite`. On Vercel
- * it defaults to `postgres`, so a deployment needs no extra setting.
+ * DAYTHREAD_STORAGE picks the store: `postgres` (DATABASE_URL must be set in the environment) or `sqlite`. On a
+ * hosting platform it defaults to `postgres`, so a deployment needs no extra setting.
  */
 export function storageKind(): string | undefined {
-  return process.env.DAYTHREAD_STORAGE ?? (process.env.VERCEL ? 'postgres' : undefined)
+  return process.env.DAYTHREAD_STORAGE ?? (onHostingPlatform() ? 'postgres' : undefined)
 }
-/** The one Postgres connection pool of this process (workspace and sign-in sessions alike); Postgres storage only. */
+/**
+ * The one Postgres client of this process (workspace and sign-in sessions alike); Postgres storage only. On a Worker a
+ * socket belongs to the request that opened it, so there the client opens one connection per request instead of a
+ * shared pool: `withRequestDatabase` (the gate) scopes it, and every query in that request goes through it.
+ */
 export function postgresSql(): SqlClient {
   if (client) return client
   if (storageKind() !== 'postgres') throw new Error('Needs DAYTHREAD_STORAGE=postgres')
+  return client = onWorkers() ? requestScopedClient() : postgresClient(connect(4))
+}
+function connect(max: number): Sql {
   const url = process.env.DATABASE_URL
   if (!url) throw new Error('DAYTHREAD_STORAGE=postgres needs DATABASE_URL in the environment')
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname)
   // prepare: false so the same code runs on Supabase's transaction pooler. TLS for anything not on this machine,
   // unless the URL sets its own sslmode.
-  const sql = postgres(url, { prepare: false, max: 4, onnotice: () => {}, ...(local || /[?&]sslmode=/.test(url) ? {} : { ssl: 'require' as const }) })
-  return client = postgresClient(sql)
+  return postgres(url, { prepare: false, max, onnotice: () => {}, ...(local || /[?&]sslmode=/.test(url) ? {} : { ssl: 'require' as const }) })
+}
+
+const requestDatabase = new AsyncLocalStorage<{ sql?: Sql }>()
+/** Runs one request with its own database connection (opened on first query), closed once the request is answered. */
+export async function withRequestDatabase<T>(fn: () => Promise<T>): Promise<T> {
+  if (!onWorkers()) return fn()
+  const scope: { sql?: Sql } = {}
+  try {
+    return await requestDatabase.run(scope, fn)
+  } finally {
+    const sql = scope.sql
+    scope.sql = undefined
+    // Waits for queries still running (a streamed page), then closes; nothing to wait for if nothing was asked.
+    if (sql) void sql.end({ timeout: 5 }).catch(() => undefined)
+  }
+}
+function requestScopedClient(): SqlClient {
+  const current = (): SqlClient => {
+    const scope = requestDatabase.getStore()
+    if (!scope) throw new Error('A database query outside a request (withRequestDatabase) on a Worker')
+    return postgresClient(scope.sql ??= connect(1))
+  }
+  return {
+    exec: text => current().exec(text),
+    query: (text, params) => current().query(text, params),
+    transaction: fn => current().transaction(fn),
+  } as SqlClient
 }
 export function getRepository(): ServerRepository {
   if (repository) return repository
   const storage = storageKind()
   if (storage === 'postgres') return repository = new PostgresWorkspaceRepository(postgresSql())
   if (storage !== 'sqlite') throw new Error('Configure DAYTHREAD_STORAGE=sqlite or postgres. No fallback storage is enabled.')
-  if (process.env.VERCEL || process.env.NETLIFY) throw new Error('Unauthenticated local SQLite storage is disabled on hosting platforms')
+  if (onHostingPlatform()) throw new Error('Unauthenticated local SQLite storage is disabled on hosting platforms')
   return repository = new SqliteWorkspaceRepository(resolve(process.env.DAYTHREAD_SQLITE_PATH ?? '.daythread-local/workspace.sqlite'), resolve(process.env.DAYTHREAD_LOCAL_DATA_PATH ?? '.daythread-local/workspace.json'), { allowMissingLegacy: process.env.DAYTHREAD_LOCAL_DATA_PATH === undefined })
 }
