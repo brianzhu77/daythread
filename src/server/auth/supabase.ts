@@ -5,8 +5,11 @@ import { normalizeEmail, type AuthConfig } from './config.ts'
 
 export type VerifyResult = { ok: true; userId: string; email: string } | { ok: false; reason?: 'unconfirmed' }
 /** `confirm`: Supabase sent a confirmation email, sign-in works once it is clicked; `session`: the login is usable now. */
-export type ResetResult = { ok: true; userId: string; email: string } | { ok: false; reason: 'expired' } | { ok: false; reason: 'weak'; message: string }
+export type ResetResult = { ok: true; userId: string; email: string } | { ok: false; reason: 'expired' | 'same' } | { ok: false; reason: 'weak'; message: string }
 export type SignUpResult = { outcome: 'confirm' } | { outcome: 'session'; userId: string; email: string } | { outcome: 'exists' } | { outcome: 'weak'; message: string }
+
+/** Supabase limiting how often: callers that can say "wait a minute" catch this; to the rest it is any other failure. */
+export class SupabaseRateLimit extends Error {}
 
 async function call(config: AuthConfig, path: string, body: unknown, fetchImpl: typeof fetch, token?: string, method = 'POST'): Promise<{ ok: boolean; status: number; json: Record<string, unknown> }> {
   const response = await fetchImpl(`${config.supabaseUrl}/auth/v1/${path}`, {
@@ -17,7 +20,8 @@ async function call(config: AuthConfig, path: string, body: unknown, fetchImpl: 
   })
   const json = await response.json().catch(() => ({})) as Record<string, unknown>
   // Supabase is down or limiting us: that's "couldn't sign in", not a wrong password.
-  if (response.status >= 500 || response.status === 429) throw new Error(`Supabase Auth ${response.status}`)
+  if (response.status === 429) throw new SupabaseRateLimit('Supabase Auth 429')
+  if (response.status >= 500) throw new Error(`Supabase Auth ${response.status}`)
   return { ok: response.ok, status: response.status, json }
 }
 const endSession = (config: AuthConfig, json: Record<string, unknown>, fetchImpl: typeof fetch) => {
@@ -70,6 +74,22 @@ export async function recover(config: AuthConfig, email: string, fetchImpl: type
   if (!r.ok && r.status !== 400 && r.status !== 422) throw new Error(`Supabase Auth recover ${r.status}`)
 }
 
+/**
+ * Sends the sign-up confirmation again, for an address that signed in with the right password but hasn't confirmed.
+ * Supabase sends only to an unconfirmed login and answers 200 for any other address, so this says nothing about who
+ * exists; `wait` is its once-a-minute limit for that address.
+ */
+export async function resendConfirmation(config: AuthConfig, email: string, fetchImpl: typeof fetch = fetch): Promise<'sent' | 'wait'> {
+  try {
+    const r = await call(config, 'resend', { type: 'signup', email: normalizeEmail(email) }, fetchImpl)
+    if (!r.ok && r.status !== 400 && r.status !== 422) throw new Error(`Supabase Auth resend ${r.status}`)
+    return 'sent'
+  } catch (error) {
+    if (error instanceof SupabaseRateLimit) return 'wait'
+    throw error
+  }
+}
+
 /** The new password, set with the access token the recovery link carried; Supabase's own sessions are then ended everywhere. */
 export async function resetPassword(config: AuthConfig, accessToken: string, password: string, fetchImpl: typeof fetch = fetch): Promise<ResetResult> {
   if (!password || password.length > 1024) return { ok: false, reason: 'weak', message: 'Use a longer password' }
@@ -77,7 +97,9 @@ export async function resetPassword(config: AuthConfig, accessToken: string, pas
   const r = await call(config, 'user', { password }, fetchImpl, accessToken, 'PUT')
   if (!r.ok) {
     const code = r.json.error_code, message = typeof r.json.msg === 'string' ? r.json.msg : 'That password is too weak'
-    if (code === 'weak_password' || code === 'validation_failed' || code === 'same_password') return { ok: false, reason: 'weak', message }
+    // An invitee sent here by "Forgot password?" often types the password they signed up with: not weak, just theirs.
+    if (code === 'same_password') return { ok: false, reason: 'same' }
+    if (code === 'weak_password' || code === 'validation_failed') return { ok: false, reason: 'weak', message }
     return { ok: false, reason: 'expired' }
   }
   const user = userOf(r.json)
