@@ -8,7 +8,7 @@ import type { Workspace } from '../src/domain/types.ts'
 const ws = (revision: number): Workspace => ({ schemaVersion: 2, revision, timezone: 'UTC', pages: [], tasks: [], deletedTasks: [], receipts: {} })
 const memory = (): CopyStore & { data: Map<string, unknown> } => {
   const data = new Map<string, unknown>()
-  return { data, get: async k => data.get(k), set: async (k, v) => { data.set(k, v) } }
+  return { data, get: async k => data.get(k), update: async (k, next) => { const v = next(data.get(k)); if (v !== undefined) data.set(k, v) } }
 }
 const a = (startedAt: number) => ({ owner: 'account-a', startedAt }), b = (startedAt: number) => ({ owner: 'account-b', startedAt })
 
@@ -36,7 +36,7 @@ test('OfflineCopy: remember after a load, recall only on a network failure, forg
 })
 
 test('OfflineCopy: a store that throws (private mode, no IndexedDB) is a copy that is simply absent', async () => {
-  const broken: CopyStore = { get: async () => { throw new Error('no idb') }, set: async () => { throw new Error('no idb') } }
+  const broken: CopyStore = { get: async () => { throw new Error('no idb') }, update: async () => { throw new Error('no idb') } }
   const copy = new OfflineCopy(broken)
   await copy.remember(ws(1), a(1))
   assert.equal(await copy.recall(), null)
@@ -84,4 +84,30 @@ test('OfflineCopy: a record in the earlier one-workspace format is no copy, and 
   assert.equal(await copy.recall(), null, 'whose it was is unknown')
   await copy.remember(ws(3), b(1))
   assert.equal((await copy.recall())?.revision, 3)
+})
+
+// Ratchet #222 account-race.ts: A's remember read the slot, the sign-in cleared it, then A wrote its copy back. The store
+// now decides inside its one transaction; here, transactions run one at a time as IndexedDB runs readwrite ones.
+test("OfflineCopy: a sign-in that clears the slot while A's reply is being stored never ends with A's copy", async () => {
+  const data = new Map<string, unknown>()
+  let queue = Promise.resolve(), release!: () => void
+  const gate = new Promise<void>(r => { release = r })
+  let first = true
+  const serial: CopyStore = {
+    get: async k => data.get(k),
+    update: (k, next) => {
+      const hold = first; first = false
+      const run = queue.then(async () => { if (hold) await gate; const v = next(data.get(k)); if (v !== undefined) data.set(k, v) })
+      queue = run.catch(() => undefined)
+      return run
+    },
+  }
+  // A's reply goes first and is held mid-transaction; the clear waits behind it, as in IndexedDB.
+  const copy = new OfflineCopy(serial, () => 200)
+  const storing = copy.remember(ws(100), a(100)), clearing = copy.forget()
+  release(); await storing; await clearing
+  assert.equal(await copy.recall(), null, 'A stored, then cleared')
+  // The other order: the clear lands first, then A's reply sent before it is refused inside its transaction.
+  await copy.remember(ws(101), a(150))
+  assert.equal(await copy.recall(), null, 'a reply sent before the clear is dropped')
 })

@@ -5,7 +5,11 @@ import type { Workspace } from '../domain/types'
 
 export interface CopyStore {
   get(key: string): Promise<unknown>
-  set(key: string, value: unknown): Promise<void>
+  /**
+   * Reads the key and writes `next(current)` in one transaction (`undefined`: leave it), so nothing lands between the
+   * read and the write: a clear can't be overwritten by a decision made on what was there before it (Ratchet #222).
+   */
+  update(key: string, next: (current: unknown) => unknown): Promise<void>
 }
 
 /** A fetch that never reached the server: Chromium, WebKit and Node word it differently; the browser may also say so outright. */
@@ -40,11 +44,13 @@ export class OfflineCopy {
    */
   async remember(ws: Workspace, stamp: CopyStamp): Promise<void> {
     try {
-      const raw = await this.store.get(key), have = isRecord(raw) ? raw : undefined
-      if (have?.owner === stamp.owner) { if (have.workspace && have.workspace.revision > ws.revision) return }
-      else if (have && stamp.startedAt < have.since) return
-      const since = have?.owner === stamp.owner ? have.since : stamp.startedAt
-      await this.store.set(key, { owner: stamp.owner, since, workspace: ws } satisfies CopyRecord)
+      await this.store.update(key, raw => {
+        const have = isRecord(raw) ? raw : undefined
+        if (have?.owner === stamp.owner) { if (have.workspace && have.workspace.revision > ws.revision) return undefined }
+        else if (have && stamp.startedAt < have.since) return undefined
+        const since = have?.owner === stamp.owner ? have.since : stamp.startedAt
+        return { owner: stamp.owner, since, workspace: ws } satisfies CopyRecord
+      })
     } catch { /* no store: no copy */ }
   }
   async recall(): Promise<Workspace | null> {
@@ -56,7 +62,7 @@ export class OfflineCopy {
   }
   /** Sign-in, sign-out, Delete account: the slot is emptied and belongs to no one until a request sent from now on answers. */
   async forget(): Promise<void> {
-    try { await this.store.set(key, { owner: null, since: this.now(), workspace: null } satisfies CopyRecord) } catch { /* nothing to drop */ }
+    try { await this.store.update(key, () => ({ owner: null, since: this.now(), workspace: null }) satisfies CopyRecord) } catch { /* nothing to drop */ }
   }
 }
 
@@ -78,10 +84,18 @@ function idbStore(): CopyStore {
   }
   return {
     get: k => run('readonly', s => s.get(k)),
-    set: async (k, v) => { await run('readwrite', s => s.put(v, k)) },
+    // IndexedDB runs readwrite transactions on one store one at a time; the put is issued from the get's own success
+    // callback, inside the same transaction, so the read and the write are one step.
+    update: async (k, next) => {
+      await run('readwrite', s => {
+        const req = s.get(k)
+        req.onsuccess = () => { const value = next(req.result); if (value !== undefined) s.put(value, k) }
+        return req
+      })
+    },
   }
 }
-const noStore: CopyStore = { get: async () => undefined, set: async () => undefined }
+const noStore: CopyStore = { get: async () => undefined, update: async () => undefined }
 
 export const offlineCopy = new OfflineCopy(typeof indexedDB !== 'undefined' ? idbStore() : noStore)
 
