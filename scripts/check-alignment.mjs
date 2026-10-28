@@ -4,8 +4,10 @@
 //   node scripts/check-alignment.mjs <base url> [path ...] [--all]
 //   e.g. node scripts/check-alignment.mjs http://127.0.0.1:3361
 //
-// Run it against a build serving a copy of Brian's data with scripts/align-fixtures.ts applied (it adds the row types
-// his data lacks on /day/2026-12-31). Paths default to Oct 18, Oct 19, today and 2026-12-31. At 1280 and 390:
+// Run it against a build serving a SQLite copy with scripts/align-fixtures.ts applied (it adds every row type to
+// /day/2026-12-31 and a line to today). On the test fixture (tests/fixtures/v1/workspace.sqlite), pass the paths:
+//   node scripts/check-alignment.mjs <base url> /day/2026-10-21 /day/<today> /day/2026-12-31
+// Paths default to Oct 18, Oct 19, today and 2026-12-31 (a copy of Brian's data). At 1280 and 390:
 //   1. Columns. Each row against its own expected column:
 //      - top-level rows (open/done/cancelled tasks, bullets, numbered lines, page and link cards, empty rows): one
 //        shared text column, the one most rows use;
