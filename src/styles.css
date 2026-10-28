@@ -559,13 +559,14 @@ textarea.task-title:focus { outline: none; }
 .original { margin: 0; padding: 8px 12px; border-left: 3px solid var(--line); color: var(--ink-soft); white-space: pre-wrap; }
 
 /* ---------- Tomorrow (the review on the page, docs/design/review-on-the-page.md) ---------- */
-.tomorrow { display: grid; gap: 2px; margin-top: 36px; padding: 14px 0 0; border-top: 1px solid var(--line); }
+.tomorrow { display: grid; gap: 2px; padding: 14px 0 0; border-top: 1px solid var(--line); }
 .tomorrow-title { margin: 0 0 4px; font-size: var(--text-section); line-height: 1.35; font-weight: var(--weight-semibold); color: var(--ink); }
 .tomorrow-title span { color: var(--ink-2); font-weight: var(--weight-regular); }
 .tomorrow-list { display: grid; }
-.tomorrow-list > .task-row { margin: 0 -8px; }
-/* A to-do marker, not a control: tomorrow's boxes are ticked tomorrow. */
-.tomorrow-box { margin-top: 12px; cursor: default; }
+/* Rows sit on the page's to-do column: the box where the editor's checkbox is, the text where its text starts. */
+.tomorrow-list > .task-row { margin: 0 -8px; padding-left: 22px; column-gap: 13px; }
+/* A to-do marker, not a control: tomorrow's boxes are ticked tomorrow. Sized like the editor's checkbox. */
+.tomorrow-list .tomorrow-box { width: 18px; height: 18px; margin-top: 13px; cursor: default; }
 .tomorrow-new-box { border-style: dashed; }
 .tomorrow-line-state { flex: none; margin-top: 11px; font-size: var(--text-meta); }
 .tomorrow-line-state.warn { color: var(--warn); }
@@ -1193,6 +1194,8 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 
 /* The editor's bottom room moves below the list, so the list isn't pushed far down (layout §4). */
 .continuous-editor:has(+ .subpages), .continuous-editor:has(+ .tomorrow) { min-height: 0; padding-bottom: 0; }
+/* Above Tomorrow the editor keeps only a short tap room, so the block stays close to the last line. */
+.continuous-editor:has(+ .tomorrow) .bn-editor { padding-bottom: 24px; }
 .subpages { margin-top: 36px; padding: 14px 0 140px; border-top: 1px solid var(--line); }
 .subpages:has(+ .tomorrow) { padding-bottom: 0; }
 .tomorrow { padding-bottom: 140px; }
@@ -1237,6 +1240,8 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .search-head { display: flex; align-items: center; gap: 12px; }
 .search-head > :first-child { flex: 1; min-width: 0; }
 .search-cancel { flex: none; font-weight: var(--weight-regular); }
+/* The input may shrink below its intrinsic size, or the clear button is pushed past the group and clipped on a phone. */
+.search-head .search-field__input { min-width: 0; }
 .search-list { display: grid; margin-top: 8px; max-height: min(60vh, 560px); overflow-y: auto; overscroll-behavior: contain; }
 .search-dialog.is-sheet .search-list { max-height: 62vh; }
 .search-group { display: flex; align-items: baseline; gap: 6px; margin: 0; padding: 14px 10px 4px; font-size: var(--text-caption); font-weight: var(--weight-semibold); color: var(--ink-2); text-transform: uppercase; letter-spacing: .05em; }

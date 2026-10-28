@@ -23,8 +23,9 @@ screen. What this leaves out: sorting controls, grid views, filters by date or t
 ## 2. Where it is
 
 - **Laptop:** the first row of the sidebar, above Today: the magnifier, "Search", and the shortcut as a quiet `⌘K`
-  (`Ctrl K` elsewhere) at the row's right edge. ⌘K opens it from any screen unless a field or the editor has the keys
-  (BlockNote uses ⌘K for links).
+  (`Ctrl K` elsewhere) at the row's right edge. ⌘K opens it from any screen, including from the editor when only a caret is
+  there (Today puts the caret in the page on load). It stays with a field, and with the editor while text is selected
+  (BlockNote's link shortcut).
 - **Phone:** a round glass button beside the tab capsule, the capsule's height, where Craft keeps `+` (craft-v1 §3.1).
   One tap from any screen; it goes with the tab bar while a keyboard is up.
 - **The window:** the Move to… dialog (pages-tree-layout §5): a 560px dialog 96px from the top on a laptop, a sheet
