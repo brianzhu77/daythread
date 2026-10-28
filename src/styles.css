@@ -1486,7 +1486,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !important; }
 
 /* B27 (Jazz b27-at-date-states §2–§3): the `@date` chip, and the day's events read live under its Events heading. */
-.date-ref .page-ref-title { white-space: nowrap; }
+/* The whole chip is one piece: a line may break before it, never between its icon and its date. In the editor it has
+   to outrank ProseMirror's `.ProseMirror [contenteditable="false"] { white-space: normal }`. */
+.date-ref, .bn-editor .page-ref.date-ref { white-space: nowrap; }
 .event-rows { user-select: none; -webkit-user-select: none; cursor: default; }
 .event-rows-list { padding-left: var(--event-rows-indent, 45px); }
 .event-rows.is-page-end .event-rows-list { padding-top: 12px; }
