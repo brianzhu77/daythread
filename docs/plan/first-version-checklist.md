@@ -55,10 +55,10 @@ While the team was paused (Oct 25–27), Brian built and merged these himself. T
 | #19 | Reminders for `@date` chips by web push | **code only**: production has no subscription table yet, so it has never been turned on |
 | #21, #22 | Sign-in failures are logged; a stray old table no longer takes sign-in down (the Oct 26 outage) | live |
 | #23 | The mark (logo), favicon, Home Screen icons | live; the phone icon updates only after re-adding the app |
-| #24 | Home Screen app opens offline with the last-loaded copy; splash screens | live; first real offline open on his iPhone untested |
-| #25 | Search (⌘K, phone button) over pages, days, lines and tags | live |
+| #24 | Home Screen app opens offline with the last-loaded copy; splash screens | **merged, not deployed** (production at `58abec8`; `vercel.json` turns off auto-deploy from main). Ratchet reviews, Lead deploys. Then the first real offline open on his iPhone |
+| #25 | Search (⌘K, phone button) over pages, days, lines and tags | **merged, not deployed**, same as #24 |
 
-New rows (tracked, not counted): **B59** search (built, #25), **B60** reminders (code built, not switched on), **B61** accounts, sign-up and password reset (built; custom SMTP open before anyone else is invited), **B62** offline Home Screen app (built, his iPhone unverified), **B63** mark and icons (built), **B64** design system v2 (built; replaces the Craft colours, so B11 is done, Jazz's design read 2026-10-28).
+New rows (tracked, not counted): **B59** search (built, #25, not deployed yet), **B60** reminders (code built, not switched on), **B61** accounts, sign-up and password reset (built; custom SMTP open before anyone else is invited), **B62** offline Home Screen app (built, not deployed yet, his iPhone unverified), **B63** mark and icons (built), **B64** design system v2 (built; replaces the Craft colours, so B11 is done, Jazz's design read 2026-10-28).
 
 Found in the team's reads (Jazz, Roadbuster, 2026-10-28):
 
@@ -66,7 +66,7 @@ Found in the team's reads (Jazz, Roadbuster, 2026-10-28):
 - **B66** two devices editing the same page still need a manual "Load latest" (Roadbuster); the offline app makes it more likely. Later, usage trigger: he reports a conflict or loses a line.
 - **B36** now also means re-running the real-day replay and the basics checks (B33, B34, B42, B49, A11) on model v2, since #12 rewrote the domain.
 
-Section S (Supabase storage plan C1–C7) is superseded by #13, #14 and #24: per-row storage, operations with Undo from the inverse, sign-in by password (not emailed code), offline read copy. Port 3000 (old build on his production database) was stopped 2026-10-28 05:50Z.
+Section S (Supabase storage plan C1–C7) is superseded by #13, #14 and #24: per-row storage, operations with Undo from the inverse, sign-in by password (not emailed code), offline read copy. Port 3000 (old build on his production database) was stopped 2026-10-28 05:50Z, and `live` now runs `7ecc88c` (Lead). Never redeploy or roll back a Vercel build from before 2026-10-26 04:35Z (#13): it recreates the old table and his writes would go there.
 
 ### What only Brian can do (one sitting)
 
@@ -82,7 +82,7 @@ Section S (Supabase storage plan C1–C7) is superseded by #13, #14 and #24: per
 - Links are his most frequent action after typing: 12 bookmark pages, 7 of them from Oct 25–27. All of them are empty inside.
 - One `@date` chip (Oct 26, under Events). No reminder could fire (B60 off).
 - 14 tasks, 4 open. "TRV for Lu and Kathy" has carried since Oct 23.
-- Not measurable from the data: search use (nothing stored).
+- Search can't be measured from his data, since nothing is stored. It isn't deployed yet anyway.
 
 ## Basics first (Brian 0a58be58, 2026-10-23)
 
