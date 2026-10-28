@@ -296,6 +296,7 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
 /* ---------- Day header: the page title ---------- */
 .day-head { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 2px 12px; padding: 24px 0 12px; }
 .day-head h1 { font-size: var(--text-title); line-height: 34px; letter-spacing: -.02em; font-weight: var(--weight-bold); }
+.day-first { grid-column: 1 / -1; margin: 6px 0 0; font-size: var(--text-small); line-height: 20px; color: var(--ink-2); text-wrap: pretty; }
 .day-nav { display: flex; align-items: center; gap: 6px; color: var(--ink-faint); }
 /* Brian 116a40ab (option A): the day buttons keep their grey shape but use the page's ink, not the accent blue;
    blue is left to the checkboxes. Disabled keeps HeroUI's 50% opacity over a lighter ink. */

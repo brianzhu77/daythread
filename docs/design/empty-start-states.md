@@ -32,12 +32,25 @@ What the build shows today, and the change for each. Only text and visibility ch
 | **Today, first day** | the template plus the morning card, "Start the day · No suggestions from last night · **Draft my day** · Done · Later" | **Hide the morning card when there's nothing to start from**: no earlier day page and no open task. "From last night" is false on day one, and Draft my day has nothing to read. The card appears from day two, or as soon as there's an open task. |
 | Today, empty task rows | empty checkbox under each plan heading | Unchanged. The existing placeholder shows when the caret is in the row. |
 | **Tasks** | "Nothing planned for today." (and the other views' own lines) | Add one second line, only while the workspace has **no task at all**: "Add tasks on **today's page**" (link to today). Once any task exists, back to today's lines. |
-| **Pages** | "No pages yet. Tap + to start one." at both widths | Use "**Use + to start one**" so it reads right with a mouse too. |
+| **Pages** | "No pages yet. Tap + to start one." at both widths | Use "**Use + to start one**" so it reads right with a mouse too. Applied on the pre-invite PR. |
 | **Tags** | "No tags yet · Type # and a word…" | Unchanged. It already teaches the one thing needed. |
 | **Calendar** | the list of days, no dots | Unchanged. No dots is the correct "nothing written". |
 | **Review, first evening** | "Wed · **0 open of 0** · Nothing on today's plan." over four steps | When the day has no tasks, the headline reads "**Wed · nothing planned**", with no count. The steps stay, since reflection and tomorrow still apply. |
 | **Sidebar** | "DAYS · Today", "PAGES · + New page" | Unchanged. |
 | **Trash** | not shown when empty | Unchanged. |
+
+### 2a. The first-day line (pre-invite, Lead `b20588bc`)
+
+A new person's Today shows the template and nothing says what the app is for. One line, no tour:
+
+- **Words:** "A page for each day. Write anything; unfinished to-dos come along to tomorrow." It's the sign-in
+  tagline's voice, so it doesn't add a second explanation.
+- **Where:** under the day title, on Today only, full column width, `--text-small` in `--ink-2`.
+- **When:** while the workspace is blank: nothing written on any day (`writtenDays`, so the template alone doesn't
+  count) and no page outside the days, trashed ones aside (`isBlankWorkspace`).
+- **When it goes:** decided once per visit to the day. Typing doesn't remove it, so the page never jumps under the
+  caret; it's gone the next time Today opens. If someone empties every day and trashes every page, it comes back,
+  which is right for a workspace that's blank again. Brian never sees it.
 
 ## 3. Switch day: the read-only archive (Bumblebee `ad163028`, `aa0fc5db`)
 
