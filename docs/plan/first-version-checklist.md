@@ -62,7 +62,7 @@ New rows (tracked, not counted): **B59** search (built, #25; passed Ratchet #222
 
 Found in the team's reads (Jazz, Roadbuster, 2026-10-28):
 
-- **B65** polish after Brian's PRs (Jazz; **built on `design/v2-polish` a8669c6**, needs Ratchet's look and Lead's or Brian's call to merge): ⌘K doesn't open Search on Today because the editor holds the keys (suggested: ⌘K opens Search unless text is selected); the Tomorrow block's to-dos sit 15 px left of the page's; about 145 px of empty space above Tomorrow; on the phone the Search field's clear × is cut in half. Dark-mode empty to-do reads as a filled square (low, check on his iPhone).
+- **B65** polish after Brian's PRs (Jazz; **built, PR #26** (`design/v2-polish` a8669c6); Ratchet reviews after the #24 fix, then it ships in the same release as #24 and #25 (Lead 50864313; alignment fixes need no separate yes from Brian)): ⌘K doesn't open Search on Today because the editor holds the keys (suggested: ⌘K opens Search unless text is selected); the Tomorrow block's to-dos sit 15 px left of the page's; about 145 px of empty space above Tomorrow; on the phone the Search field's clear × is cut in half. Dark-mode empty to-do reads as a filled square (low, check on his iPhone).
 - **B66** two devices editing the same page still need a manual "Load latest" (Roadbuster); the offline app makes it more likely. Later, usage trigger: he reports a conflict or loses a line.
 - **B36** now also means re-running the real-day replay and the basics checks (B33, B34, B42, B49, A11) on model v2, since #12 rewrote the domain.
 
