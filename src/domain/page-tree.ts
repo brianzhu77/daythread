@@ -128,6 +128,10 @@ export function hasContent(page: Page): boolean {
 export function writtenDays(ws: Workspace): Set<string> {
   return new Set(ws.pages.filter((p) => p.type === "daily" && p.date && !p.trashedAt && (hasContent(p) || childPages(ws, p.id).length > 0)).map((p) => p.date!));
 }
+/** Nothing written on any day and no other page: a new account, before its first word (empty-start-states §2a). */
+export function isBlankWorkspace(ws: Workspace): boolean {
+  return writtenDays(ws).size === 0 && !ws.pages.some((p) => p.type !== "daily" && !p.trashedAt);
+}
 /**
  * The sidebar's Days group, newest first: this month's days (today always) plus future days, then earlier months by
  * month. A past day is listed when it has content or subpages; a future day only with subpages or when it holds the open page.

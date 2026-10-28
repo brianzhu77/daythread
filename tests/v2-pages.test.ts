@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { editorSeed, inlineText } from '../src/domain/editor-document.ts'
-import { childPages, isTrashed, linkedFrom, subtreeIds, trashBatches } from '../src/domain/page-tree.ts'
+import { childPages, isBlankWorkspace, isTrashed, linkedFrom, subtreeIds, trashBatches } from '../src/domain/page-tree.ts'
 import { resolveLine } from '../src/domain/page-refs.ts'
 import { tagIndex } from '../src/domain/tags.ts'
 import { exportFiles, exportJson } from '../src/domain/export.ts'
@@ -34,6 +34,18 @@ test('pages: create (top level and under a day), rename, move, a cycle refused, 
   assert.deepEqual(h.ws.pages.filter(isTrashed), [])
   assert.equal(h.page('C').parentId, 'W')
   assert.throws(() => h.run({ type: 'delete-page', pageId: dayId(today), at: '2026-10-22T12:00:00.000Z' }), /can't be deleted/)
+})
+
+test('a new account is blank until a word is written on a day or a page exists; a trashed page does not count', () => {
+  const h = harness()
+  h.day(today)
+  assert.equal(isBlankWorkspace(h.ws), true, 'the template alone is not writing')
+  h.run({ type: 'create-document', title: 'Ideas', body: '', pageId: 'P' })
+  assert.equal(isBlankWorkspace(h.ws), false)
+  h.run({ type: 'delete-page', pageId: 'P', at: '2026-10-22T12:00:00.000Z' })
+  assert.equal(isBlankWorkspace(h.ws), true)
+  h.save(dayId(today), doc => under(doc, 'Notes', para('n1', text('first line'))))
+  assert.equal(isBlankWorkspace(h.ws), false)
 })
 
 test('bookmark pages: one page per URL; a live one is reused, a trashed one restored; the title comes from the link text; the preview fills only an untouched page', () => {
