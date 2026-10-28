@@ -10,6 +10,8 @@ import { SidebarTrashRow } from './trash'
 import { AccountRow } from './account-row'
 import { useKeptDrafts } from './kept-drafts'
 import { useKeyboardTop } from './keyboard'
+import { openSearch, SidebarSearchRow } from './search-dialog'
+import { SearchIcon } from './icons'
 
 // Highlight only where you are: Today is today's page, not any day (another day highlights its Days row, or nothing).
 const destinations = [
@@ -39,6 +41,8 @@ export function Navigation() {
           Daythread
         </Link>
         <nav className="sidebar-nav" aria-label="Main">
+          {/* Search heads the sidebar (craft-v1 §3.2; docs/design/search-states.md): one row, the shortcut as a hint. */}
+          <SidebarSearchRow />
           {destinations.map(({ to, label, Icon, match }) => (
             // An open page is highlighted in the tree, so the sidebar's Pages row is only current on the list itself;
             // the Link's own active state has to compare the search too, or it marks the row current anyway.
@@ -61,6 +65,8 @@ export function Navigation() {
             </Link>
           ))}
         </div>
+        {/* The round button beside the capsule (where Craft keeps +, craft-v1 §3.1): search from any screen, one tap. */}
+        <button type="button" className="tab-search" aria-label="Search" onClick={openSearch}><SearchIcon size={22} /></button>
       </nav>
     </>
   )
