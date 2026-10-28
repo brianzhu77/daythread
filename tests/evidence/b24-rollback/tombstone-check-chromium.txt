@@ -1,0 +1,11 @@
+before index-WsZCtVvM.js {"registrations":1,"caches":["daythread-1-shell","daythread-1-assets"]}
+PASS the new open gets the rollback build · index-DiuIaCeC.js
+PASS the clean tab reloaded by itself into the rollback build · index-DiuIaCeC.js
+PASS the typing tab was not reloaded over its typing
+PASS no leave-page prompt · []
+PASS right after: no cache of ours · {"registrations":1,"caches":[]}
+PASS once its typing saved, the typing tab reloaded by itself into the rollback build · index-DiuIaCeC.js
+PASS and the typed line is there after the reload
+PASS after 60 s: no cache of ours · {"registrations":1,"caches":[]}
+PASS offline, nothing is served from a cache · navigation failed: page.reload: net::ERR_INTERNET_DISCONNECTED
+PASS the typing was saved to the server
