@@ -40,12 +40,21 @@ export const Route = createRootRoute({
   ),
 })
 
+/**
+ * An emailed link lands on the Site URL (`/`) with its token or error in the fragment, which the server never sees.
+ * Signed out, the server's redirect to /sign-in keeps the fragment; signed in, `/` is the app (from the server or the
+ * service worker's copy) and would drop the link. This runs before the page paints and hands the fragment to
+ * /sign-in, which reads it either way; also when only the fragment changes on an open page.
+ */
+const emailedLinkHandoff = `(function(){function f(){var p=new URLSearchParams(location.hash.slice(1));if(location.pathname!=='/sign-in'&&((p.get('access_token')&&p.get('type'))||p.get('error_code')))location.replace('/sign-in'+location.hash)}f();addEventListener('hashchange',f)})()`
+
 function Root() {
   // The sign-in and sign-up screens stand alone: the app frame would load the workspace.
   const signIn = useRouterState({ select: s => s.location.pathname === '/sign-in' || s.location.pathname === '/sign-up' })
   return (
     <html lang="en">
       <head>
+        <script dangerouslySetInnerHTML={{ __html: emailedLinkHandoff }} />
         <HeadContent />
       </head>
       <body>

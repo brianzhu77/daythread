@@ -19,12 +19,44 @@ export const tagline = 'A page for each day, with the to-dos that carry over.'
 /** "in 4 min", or "in 30 s" under a minute, rounded up (Jazz 235e692). */
 const inWait = (seconds: number) => seconds < 60 ? `in ${Math.max(1, Math.ceil(seconds))} s` : `in ${Math.ceil(seconds / 60)} min`
 
-/** What Supabase's emailed links put in the fragment when they land on the Site URL: a token and what it is for. */
-function linkToken(): { accessToken: string; type: string } | null {
+/**
+ * What Supabase's emailed links put in the fragment when they land on the Site URL: a token and what it is for, or,
+ * for a link that expired or was already used, an error (`otp_expired`) that doesn't say which kind of link it was.
+ */
+type EmailedLink = { accessToken: string; type: string } | { error: string }
+function emailedLink(): EmailedLink | null {
   const hash = typeof window === 'undefined' ? '' : window.location.hash.replace(/^#/, '')
   const params = new URLSearchParams(hash), accessToken = params.get('access_token'), type = params.get('type')
-  return accessToken && type ? { accessToken, type } : null
+  const error = params.get('error_code') ?? params.get('error')
+  return accessToken && type ? { accessToken, type } : error ? { error } : null
 }
+
+/** A note line, optionally ending in one action ("Confirm your email first · Send the link again"). */
+export type Note = { text: string; action?: { label: string; run: () => void }; joiner?: string }
+export function NoteLine({ note, className = 'sign-in-note' }: { note: Note; className?: string }) {
+  return (
+    <p className={className} role="status">
+      {note.text}
+      {note.action && <>{note.joiner ?? ' · '}<button type="button" className="link" onClick={note.action.run}>{note.action.label}</button></>}
+    </p>
+  )
+}
+
+/**
+ * The sign-up confirmation again, for an address that is waiting on it: after sign-up, or after the right password
+ * met "Confirm your email first". `again` is the note that offers it once more.
+ */
+export async function sendConfirmationAgain(email: string, again: () => void): Promise<{ note?: Note; error?: string }> {
+  const r = await post('/api/auth/resend', { email })
+  if (r.ok) return { note: { text: `Sent again to ${email.trim()} · it can take a minute` } }
+  if (r.error === 'too-soon') return { note: { text: 'Wait a minute, then', joiner: ' ', action: { label: 'send it again', run: again } } }
+  if (r.error === 'too-many') return { error: `Too many tries · Try again ${inWait(r.retryAfter ?? 60)}` }
+  return { error: "Couldn't send the email · Try again" }
+}
+
+const expiredLink = "That link has expired or was already used · Sign in, or use Forgot password if you don't know it"
+const brokenLink = "That link didn't work · Sign in, or use Forgot password if you don't know it"
+
 const post = async (path: string, body: unknown): Promise<{ ok?: boolean; error?: string; message?: string; retryAfter?: number }> => {
   try {
     const response = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
@@ -45,23 +77,26 @@ function SignIn() {
   const [shown, setShown] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [note, setNote] = useState<string | null>(null)
+  const [note, setNote] = useState<Note | null>(null)
   const [mode, setMode] = useState<'sign-in' | 'forgot' | 'reset' | 'confirming'>('sign-in')
   const [token, setToken] = useState<string | null>(null)
   const passwordInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const link = linkToken()
+    const link = emailedLink()
     if (!link) return
     // The token is for this one visit: it leaves the address bar so a reload or a shared link doesn't carry it.
     history.replaceState(null, '', window.location.pathname + window.location.search)
+    // Which kind of link it was is unknown here, so sign-in tells the cases apart: an unconfirmed address hears
+    // "Confirm your email first" and gets a new confirmation; a reset needs Forgot password, as any forgotten one does.
+    if ('error' in link) return setNote({ text: link.error === 'otp_expired' ? expiredLink : brokenLink })
     if (link.type === 'recovery') { setToken(link.accessToken); setMode('reset'); return }
     if (link.type === 'signup' || link.type === 'magiclink' || link.type === 'email') {
       setMode('confirming'); setBusy(true)
       void post('/api/auth/confirm', { accessToken: link.accessToken, timezone: browserZone() }).then(r => {
         if (r.ok) return enterApp('/')
         setBusy(false); setMode('sign-in')
-        setNote(r.error === 'not-invited' ? "This address isn't on the invite list yet" : r.error === 'expired' ? 'That link has expired · Sign in, or ask for a new one' : "Couldn't confirm the address · Sign in to try again")
+        setNote({ text: r.error === 'not-invited' ? "This address isn't on the invite list yet" : r.error === 'expired' ? expiredLink : "Couldn't confirm the address · Sign in to try again" })
       })
     }
   }, [])
@@ -76,7 +111,7 @@ function SignIn() {
     if (r.error === 'invalid') return setError('Check the email address')
     if (!r.ok) return setError("Couldn't send the email · Try again")
     setMode('sign-in')
-    setNote(`If ${email.trim()} has an account, an email with a link is on its way`)
+    setNote({ text: `If ${email.trim()} has an account, an email with a link is on its way` })
   }
 
   async function reset(event: FormEvent) {
@@ -87,10 +122,23 @@ function SignIn() {
     if (r.ok) return enterApp('/')
     setBusy(false)
     if (r.error === 'weak') { setError(r.message ?? 'Use a longer password'); return }
-    if (r.error === 'expired') { setMode('sign-in'); setToken(null); return setNote('That link has expired · Ask for a new one with Forgot password') }
-    if (r.error === 'not-invited') { setMode('sign-in'); return setNote("Password saved · this address isn't on the invite list yet") }
+    if (r.error === 'expired') { setMode('sign-in'); setToken(null); return setNote({ text: 'That link has expired · Ask for a new one with Forgot password' }) }
+    if (r.error === 'not-invited') { setMode('sign-in'); return setNote({ text: "Password saved · this address isn't on the invite list yet" }) }
+    if (r.error === 'same') {
+      setPassword('')
+      return setNote({ text: "That's already your password", action: { label: 'Sign in with it', run: () => { setMode('sign-in'); setToken(null); setNote(null) } } })
+    }
     if (r.error === 'too-many') return setError(`Too many tries · Try again ${inWait(r.retryAfter ?? 60)}`)
     setError("Couldn't save the password · Try again")
+  }
+
+  const unconfirmed = (): Note => ({ text: 'Confirm your email first', action: { label: 'Send the link again', run: () => void again() } })
+  async function again() {
+    if (busy) return
+    setBusy(true); setError(null)
+    const r = await sendConfirmationAgain(email, () => void again())
+    setBusy(false)
+    setNote(r.note ?? unconfirmed()); setError(r.error ?? null)
   }
 
   async function signIn(event: FormEvent) {
@@ -106,8 +154,8 @@ function SignIn() {
     setBusy(false)
     if (r.error === 'too-many') return setError(`Too many tries · Try again ${inWait(r.retryAfter ?? 60)}`)
     // Only after the right password, so they say nothing to anyone else; not red, everything was typed right (Jazz ac124ed).
-    if (r.error === 'not-invited') return setNote("This address isn't on the invite list yet")
-    if (r.error === 'unconfirmed') return setNote('Confirm your email first · the link is in your inbox')
+    if (r.error === 'not-invited') return setNote({ text: "This address isn't on the invite list yet" })
+    if (r.error === 'unconfirmed') return setNote(unconfirmed())
     if (r.error !== 'wrong') return setError("Couldn't sign in · Try again")
     setError("That didn't work · Check the email and password")
     // The email stays; the password empties and gets the caret.
@@ -146,6 +194,7 @@ function SignIn() {
         </TextField>
         <Button type="submit" className="sign-in-submit" variant="primary" fullWidth isPending={busy} isDisabled={!password}>Save and sign in</Button>
         {error && <p className="sign-in-error" role="alert">{error}</p>}
+        {note && <NoteLine note={note} />}
       </form>
     </main>
   )
@@ -172,7 +221,7 @@ function SignIn() {
         {/* Messages sit under the button, so the button never moves when one appears (Brian, Oct 26: it felt jumpy). */}
         <Button type="submit" className="sign-in-submit" variant="primary" fullWidth isPending={busy} isDisabled={!email.trim() || !password}>Sign in</Button>
         {error && <p className="sign-in-error" role="alert">{error}</p>}
-        {note && <p className="sign-in-note" role="status">{note}</p>}
+        {note && <NoteLine note={note} />}
         <p className="sign-in-meta">New here? <Link to="/sign-up" className="link">Create an account</Link></p>
       </form>
     </main>
