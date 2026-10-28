@@ -18,10 +18,15 @@ export function openSearch() {
   window.dispatchEvent(new Event(openEvent))
 }
 
-/** A field, textarea or the editor has the keys: ⌘K there is theirs (BlockNote's link shortcut), not the search's. */
+/**
+ * A field or textarea has the keys, or the editor has selected text: ⌘K there is theirs (BlockNote's link shortcut),
+ * not the search's. With only a caret in the editor ⌘K opens search, since Today puts the caret in the page on load.
+ */
 function typing(): boolean {
   const el = document.activeElement
-  return Boolean(el && (el.closest('.bn-editor, input, textarea, select, [contenteditable="true"]')))
+  if (!el) return false
+  if (el.closest('.bn-editor')) return !(window.getSelection()?.isCollapsed ?? true)
+  return Boolean(el.closest('input, textarea, select, [contenteditable="true"]'))
 }
 
 /** Mounted once in the app frame: listens for `openSearch()` and ⌘K / Ctrl+K, and shows the dialog. */
@@ -30,7 +35,7 @@ export function GlobalSearch() {
   useEffect(() => {
     const show = () => setOpen(true)
     const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && !e.isComposing && !typing()) { e.preventDefault(); setOpen(true) }
+      if (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && !e.isComposing && !e.defaultPrevented && !typing()) { e.preventDefault(); setOpen(true) }
     }
     window.addEventListener(openEvent, show)
     window.addEventListener('keydown', onKey)

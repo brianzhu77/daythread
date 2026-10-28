@@ -98,7 +98,7 @@ editor, the Trash's back link, the secondary button (Today / Not today, Restore,
 ## 5. What this changes on screen
 
 Lists and the sidebar lose their tint; blocks on Today get an edge instead of a fill; every button becomes a rounded
-rectangle; the selected tab, filter and nav row turn grey; the primary action and links keep their blue. Type, spacing,
+rectangle; the selected tab, filter and nav row turn grey; the primary action and links turn grey too (§3). Type, spacing,
 column and the one-surface layout do not move.
 
 ## 6. The mark
