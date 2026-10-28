@@ -66,7 +66,18 @@ function Toasts() {
 function useServiceWorker() {
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
-    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => undefined)
+    const sw = navigator.serviceWorker
+    // This page loaded before the worker controlled it (the first open, or a new version that dropped the old caches):
+    // the worker is told what the page loaded so it can keep it, with no reload over what's being typed.
+    const warm = () => {
+      const ours = (u: string) => u.startsWith(location.origin + '/')
+      const pages = [...new Set([...performance.getEntriesByType('navigation').map(e => e.name), location.href])].filter(ours)
+      const assets = performance.getEntriesByType('resource').map(e => e.name).filter(ours)
+      sw.controller?.postMessage({ type: 'warm', pages, assets })
+    }
+    sw.addEventListener('controllerchange', warm)
+    sw.register('/sw.js', { updateViaCache: 'none' }).catch(() => undefined)
+    return () => sw.removeEventListener('controllerchange', warm)
   }, [])
 }
 
