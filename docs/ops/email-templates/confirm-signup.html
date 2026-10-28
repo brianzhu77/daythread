@@ -1,27 +1,57 @@
 <!doctype html>
 <html lang="en">
-<body style="margin:0;padding:0;background:#f9f9f9;">
-<div style="display:none;max-height:0;overflow:hidden;">Confirm your address, and Daythread opens on today's page.</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f9f9f9;">
-<tr><td align="center" style="padding:32px 16px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#ffffff;border:1px solid #e0e0e0;border-radius:12px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','PingFang SC','Segoe UI',system-ui,sans-serif;color:#202020;">
-<tr><td style="padding:32px 32px 0;">
-<img src="https://daythread.dogrod.com/icon-192.png" width="32" height="32" alt="" style="display:inline-block;vertical-align:middle;border-radius:8px;border:0;">
-<span style="display:inline-block;vertical-align:middle;margin-left:8px;font-size:17px;font-weight:600;letter-spacing:-0.01em;">Daythread</span>
-</td></tr>
-<tr><td style="padding:28px 32px 0;">
-<h1 style="margin:0;font-size:22px;line-height:1.3;font-weight:600;">Confirm your address</h1>
-<p style="margin:8px 0 0;font-size:15px;line-height:1.55;color:#646464;">A page for each day, with the to-dos that carry over.</p>
-<p style="margin:20px 0 0;font-size:15px;line-height:1.55;">You signed up as <strong>{{ .Email }}</strong>. Confirm it, and Daythread opens on today's page, signed in.</p>
-</td></tr>
-<tr><td style="padding:24px 32px 0;">
-<a href="{{ .ConfirmationURL }}" style="display:inline-block;background:#202020;color:#ffffff;font-size:15px;font-weight:600;line-height:48px;padding:0 24px;border-radius:8px;text-decoration:none;">Confirm and open Daythread</a>
-</td></tr>
-<tr><td style="padding:24px 32px 32px;font-size:13px;line-height:1.55;color:#646464;">
-The link works once. If you didn't sign up, ignore this email and nothing happens.
-</td></tr>
-</table>
-</td></tr>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+<title>Confirm your email</title>
+</head>
+<body style="margin:0; padding:0; background:#ffffff;">
+<div style="display:none; max-height:0; overflow:hidden; opacity:0;">One tap to confirm your address and open Daythread.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;">
+  <tr>
+    <td align="center" style="padding:40px 24px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:440px; font-family:-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Segoe UI', system-ui, sans-serif;">
+        <tr>
+          <td style="padding-bottom:32px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="vertical-align:middle;"><img src="https://daythread.dogrod.com/icon-192.png" width="28" height="28" alt="" style="display:block; border:0; border-radius:7px;"></td>
+                <td style="vertical-align:middle; padding-left:10px; font-size:15px; font-weight:600; color:#202020;">Daythread</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-size:22px; line-height:1.3; font-weight:600; color:#202020; padding-bottom:12px;">Confirm your email</td>
+        </tr>
+        <tr>
+          <td style="font-size:15px; line-height:1.55; color:#202020; padding-bottom:28px;">Tap the button to confirm {{ .Email }}. You&#8217;ll be signed in and land on today&#8217;s page.</td>
+        </tr>
+        <tr>
+          <td style="padding-bottom:28px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="background:#202020; border-radius:8px;">
+                  <a href="{{ .ConfirmationURL }}" style="display:inline-block; padding:12px 20px; font-size:15px; font-weight:600; line-height:1.2; color:#ffffff; text-decoration:none;">Confirm and open Daythread</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="font-size:13px; line-height:1.55; color:#646464; padding-bottom:12px;">If you didn&#8217;t create a Daythread account, you can ignore this email. Nothing happens until the link is used.</td>
+        </tr>
+        <tr>
+          <td style="font-size:13px; line-height:1.55; color:#646464; padding-bottom:32px;">If the button doesn&#8217;t work, copy this link into your browser:<br><a href="{{ .ConfirmationURL }}" style="color:#646464; text-decoration:underline; word-break:break-all;">{{ .ConfirmationURL }}</a></td>
+        </tr>
+        <tr>
+          <td style="border-top:1px solid #e0e0e0; padding-top:16px; font-size:12px; line-height:1.5; color:#8d8d8d;">Daythread &#183; A page for each day, with the to-dos that carry over.</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
 </table>
 </body>
 </html>
