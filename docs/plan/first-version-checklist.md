@@ -66,12 +66,12 @@ Found in the team's reads (Jazz, Roadbuster, 2026-10-28):
 - **B66** two devices editing the same page still need a manual "Load latest" (Roadbuster); the offline app makes it more likely. Later, usage trigger: he reports a conflict or loses a line.
 - **B36** now also means re-running the real-day replay and the basics checks (B33, B34, B42, B49, A11) on model v2, since #12 rewrote the domain.
 
-Section S (Supabase storage plan C1–C7) is superseded by #13, #14 and #24: per-row storage, operations with Undo from the inverse, sign-in by password (not emailed code), offline read copy. Port 3000 (old build on his production database) was stopped 2026-10-28 05:50Z, and `live` now runs `7ecc88c` (Lead). Never redeploy or roll back a Vercel build from before 2026-10-26 04:35Z (#13): it recreates the old table and his writes would go there.
+Section S (Supabase storage plan C1–C7) is superseded by #13, #14 and #24: per-row storage, operations with Undo from the inverse, sign-in by password (not emailed code), offline read copy. Port 3000 (old build on his production database) was stopped 2026-10-28 05:50Z, then `live` was deleted (Lead). The dev service on 3000 now runs main on local SQLite (an Oct 21 copy of his data) and never touches Supabase. Never redeploy or roll back a Vercel build from before 2026-10-26 04:35Z (#13): it recreates the old table and his writes would go there.
 
 ### What only Brian can do (one sitting)
 
 1. Reminders (#19): set the VAPID keys and `CRON_SECRET` in Vercel, and a pinger that calls `/api/push/tick` every minute (the Hobby plan runs crons once a day). Then turn reminders on from the Home Screen app.
-2. Give Vercel Preview deployments their own database URL (#22's advice; a preview on the production database is the likely outage path).
+2. ~~Give Vercel Preview deployments their own database URL~~ done by Lead 2026-10-28: the `live` preview and its deployments are deleted, and no preview has a database URL now.
 3. Remove and re-add the Home Screen app: it picks up the icon, splash, offline shell and the B52 strip in one go.
 4. Before inviting anyone: custom SMTP for the sign-up and reset emails.
 
