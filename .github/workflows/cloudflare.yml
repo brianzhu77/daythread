@@ -47,6 +47,28 @@ jobs:
         run: npm run build
         env:
           DAYTHREAD_TARGET: cloudflare
+      # Supabase's certificate isn't one the Workers runtime accepts, so the Worker reaches the database through
+      # Hyperdrive (Cloudflare's pooled connector). Its origin is Supabase's session pooler (5432) on the same host as
+      # DATABASE_URL's transaction pooler; caching is off, since a cached read could show a page older than its last
+      # save. Made once, then bound to every deploy as HYPERDRIVE.
+      - name: Hyperdrive
+        run: |
+          set -euo pipefail
+          api() { curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' "$@"; }
+          account=$(api https://api.cloudflare.com/client/v4/accounts | jq -r '.result[0].id')
+          id=$(api "https://api.cloudflare.com/client/v4/accounts/$account/hyperdrive/configs" | jq -r '[.result[]? | select(.name == "daythread")][0].id // empty')
+          if [ -z "$id" ]; then
+            body=$(node -e 'const u=new URL(process.env.DATABASE_URL);process.stdout.write(JSON.stringify({name:"daythread",origin:{scheme:"postgres",host:u.hostname,port:5432,database:u.pathname.slice(1)||"postgres",user:decodeURIComponent(u.username),password:decodeURIComponent(u.password)},caching:{disabled:true}}))')
+            id=$(api -X POST "https://api.cloudflare.com/client/v4/accounts/$account/hyperdrive/configs" -d "$body" | jq -r 'if .success then .result.id else ("refused: " + (.errors|tostring)) end')
+            case "$id" in refused:*) echo "Cloudflare $id"; exit 1;; esac
+            echo "made Hyperdrive config $id"
+          fi
+          jq --arg id "$id" '.hyperdrive = [{binding: "HYPERDRIVE", id: $id}]' .output/server/wrangler.json > "$RUNNER_TEMP/w.json"
+          mv "$RUNNER_TEMP/w.json" .output/server/wrangler.json
+          echo "bound Hyperdrive $id"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Deploy
         run: npx wrangler@4 deploy -c .output/server/wrangler.json
         env:

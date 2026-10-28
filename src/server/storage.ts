@@ -25,7 +25,10 @@ export function postgresSql(): SqlClient {
   if (storageKind() !== 'postgres') throw new Error('Needs DAYTHREAD_STORAGE=postgres')
   return client = onWorkers() ? requestScopedClient() : postgresClient(connect(4))
 }
-function connect(max: number): Sql {
+function connect(max: number, hyperdrive?: string): Sql {
+  // Through Hyperdrive (a Worker with the binding), Cloudflare holds the TLS connection to Supabase and pools it; the
+  // Worker's own hop is local, so no TLS here, and no type lookup on every new connection.
+  if (hyperdrive) return postgres(hyperdrive, { prepare: false, max, fetch_types: false, onnotice: () => {} })
   const url = process.env.DATABASE_URL
   if (!url) throw new Error('DAYTHREAD_STORAGE=postgres needs DATABASE_URL in the environment')
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname)
@@ -34,11 +37,12 @@ function connect(max: number): Sql {
   return postgres(url, { prepare: false, max, onnotice: () => {}, ...(local || /[?&]sslmode=/.test(url) ? {} : { ssl: 'require' as const }) })
 }
 
-const requestDatabase = new AsyncLocalStorage<{ sql?: Sql }>()
+type RequestScope = { sql?: Sql; hyperdrive?: string }
+const requestDatabase = new AsyncLocalStorage<RequestScope>()
 /** Runs one request with its own database connection (opened on first query), closed once the request is answered. */
 export async function withRequestDatabase<T>(fn: () => Promise<T>): Promise<T> {
   if (!onWorkers()) return fn()
-  const scope: { sql?: Sql } = {}
+  const scope: RequestScope = { hyperdrive: await hyperdriveUrl() }
   try {
     return await requestDatabase.run(scope, fn)
   } finally {
@@ -48,11 +52,23 @@ export async function withRequestDatabase<T>(fn: () => Promise<T>): Promise<T> {
     if (sql) void sql.end({ timeout: 5 }).catch(() => undefined)
   }
 }
+/**
+ * The Worker's Hyperdrive connection string, when the deploy bound one (`HYPERDRIVE`). Supabase's certificate isn't
+ * one the Workers runtime accepts, so in production the database is only reachable through Hyperdrive; without the
+ * binding (wrangler dev on the Mac) DATABASE_URL is used as is. The specifier is a variable so no other build tries
+ * to resolve the Workers-only module.
+ */
+let hyperdrive: Promise<string | undefined> | undefined
+function hyperdriveUrl(): Promise<string | undefined> {
+  const workers = 'cloudflare:workers'
+  return hyperdrive ??= (import(/* @vite-ignore */ workers) as Promise<{ env: { HYPERDRIVE?: { connectionString: string } } }>)
+    .then(({ env }) => env.HYPERDRIVE?.connectionString)
+}
 function requestScopedClient(): SqlClient {
   const current = (): SqlClient => {
     const scope = requestDatabase.getStore()
     if (!scope) throw new Error('A database query outside a request (withRequestDatabase) on a Worker')
-    return postgresClient(scope.sql ??= connect(1))
+    return postgresClient(scope.sql ??= connect(1, scope.hyperdrive))
   }
   return {
     exec: text => current().exec(text),
