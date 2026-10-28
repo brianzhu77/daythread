@@ -165,14 +165,15 @@ async function handlers(env: Record<string, string> = {}) {
   const saved = { ...process.env }
   for (const key of ['OWNER_EMAIL', 'DAYTHREAD_SIGNUP', 'DAYTHREAD_INVITES', 'SUPABASE_SECRET_KEY']) delete process.env[key]
   Object.assign(process.env, { SUPABASE_URL: 'https://auth.test', SUPABASE_PUBLISHABLE_KEY: 'pk', ...env })
-  const supabase = { verified: new Map<string, string>(), signUpOutcome: { outcome: 'confirm' } as Awaited<ReturnType<typeof import('../src/server/auth/supabase.ts')['signUp']>>, deleted: [] as string[], signUpCalls: 0, recovered: [] as string[], tokens: new Map<string, string>(), passwords: new Map<string, string>() }
+  const supabase = { verified: new Map<string, string>(), signUpOutcome: { outcome: 'confirm' } as Awaited<ReturnType<typeof import('../src/server/auth/supabase.ts')['signUp']>>, deleted: [] as string[], signUpCalls: 0, recovered: [] as string[], resent: [] as string[], resendAnswer: 'sent' as 'sent' | 'wait', tokens: new Map<string, string>(), passwords: new Map<string, string>() }
   // A token stands for a user (`tokens`: token -> email); resetPassword records the new password and verifyPassword honours it.
   server.useSupabase({
     verifyPassword: async (_c, email, password) => { const a = email.trim().toLowerCase(); return supabase.verified.has(a) && password === (supabase.passwords.get(a) ?? 'right') ? { ok: true, userId: supabase.verified.get(a)!, email: a } : { ok: false } },
     signUp: async () => { supabase.signUpCalls++; return supabase.signUpOutcome },
     deleteUser: async (_c, userId) => { supabase.deleted.push(userId) },
     recover: async (_c, email) => { supabase.recovered.push(email) },
-    resetPassword: async (_c, token, password) => { const a = supabase.tokens.get(token); if (!a) return { ok: false, reason: 'expired' }; if (password.length < 6) return { ok: false, reason: 'weak', message: 'Password should be at least 6 characters.' }; supabase.passwords.set(a, password); return { ok: true, userId: supabase.verified.get(a)!, email: a } },
+    resendConfirmation: async (_c, email) => { supabase.resent.push(email); return supabase.resendAnswer },
+    resetPassword: async (_c, token, password) => { const a = supabase.tokens.get(token); if (!a) return { ok: false, reason: 'expired' }; if (password === (supabase.passwords.get(a) ?? 'right')) return { ok: false, reason: 'same' }; if (password.length < 6) return { ok: false, reason: 'weak', message: 'Password should be at least 6 characters.' }; supabase.passwords.set(a, password); return { ok: true, userId: supabase.verified.get(a)!, email: a } },
     userFromToken: async (_c, token) => { const a = supabase.tokens.get(token); return a ? { userId: supabase.verified.get(a)!, email: a } : null },
   })
   const post = (path: string, body: unknown, cookie?: string) => new Request(`https://app.test${path}`, { method: 'POST', headers: { 'content-type': 'application/json', 'sec-fetch-site': 'same-origin', ...(cookie ? { cookie: `__Host-daythread_session=${cookie}` } : {}) }, body: JSON.stringify(body) })
@@ -326,6 +327,36 @@ test('recovery calls: recover always succeeds for a 200 (unknown addresses inclu
   assert.equal(none.length, 0, 'an empty token never reaches Supabase')
 })
 
+test('resend call: the sign-up confirmation again for the address; 200 and a refused address are both "sent" (Supabase answers alike for confirmed and unknown ones); its once-a-minute 429 is "wait"; Supabase down throws', async () => {
+  const { resendConfirmation, resetPassword } = await import('../src/server/auth/supabase.ts')
+  const calls: string[] = []
+  assert.equal(await resendConfirmation(config, ' Late@Example.com ', fakeFetch((path, body) => { assert.deepEqual(body, { type: 'signup', email: 'late@example.com' }); return { status: 200, body: {} } }, calls)), 'sent')
+  assert.deepEqual(calls, ['resend'])
+  for (const status of [400, 422]) assert.equal(await resendConfirmation(config, 'late@example.com', fakeFetch(() => ({ status, body: {} }))), 'sent')
+  // The local auth server's answer within the minute (tests/evidence/sign-in-links/probe-output.txt).
+  assert.equal(await resendConfirmation(config, 'late@example.com', fakeFetch(() => ({ status: 429, body: { code: 429, error_code: 'over_email_send_rate_limit', msg: 'For security purposes, you can only request this after 8 seconds.' } }))), 'wait')
+  await assert.rejects(resendConfirmation(config, 'late@example.com', fakeFetch(() => ({ status: 500, body: {} }))))
+  // The same password again is not "too weak": the screen says it is already theirs (the local auth server's 422).
+  assert.deepEqual(await resetPassword(config, 'tok', 'pw-long-enough-1', fakeFetch(() => ({ status: 422, body: { code: 422, error_code: 'same_password', msg: 'New password should be different from the old password.' } }))), { ok: false, reason: 'same' })
+})
+
+test('send the link again: the same answer for any address, Supabase asked each time; its once-a-minute limit is 429 too-soon; braked like a sign-in; Supabase down is 503', async () => {
+  const h = await handlers()
+  try {
+    for (const email of ['late@example.com', 'nobody@example.com']) {
+      const r = await h.server.handleResend(h.post('/api/auth/resend', { email }))
+      assert.equal(r.status, 200); assert.deepEqual(await r.json(), { ok: true })
+    }
+    assert.deepEqual(h.supabase.resent, ['late@example.com', 'nobody@example.com'])
+    h.supabase.resendAnswer = 'wait'
+    const soon = await h.server.handleResend(h.post('/api/auth/resend', { email: 'late@example.com' }))
+    assert.equal(soon.status, 429); assert.equal((await soon.json()).error, 'too-soon')
+    assert.equal((await h.server.handleResend(h.post('/api/auth/resend', { email: 'not an address' }))).status, 400)
+    h.server.useSupabase({ verifyPassword: async () => ({ ok: false }), signUp: async () => ({ outcome: 'confirm' }), deleteUser: async () => undefined, recover: async () => undefined, resendConfirmation: async () => { throw new Error('Supabase Auth 503') }, resetPassword: async () => ({ ok: false, reason: 'expired' }), userFromToken: async () => null })
+    assert.equal((await h.server.handleResend(h.post('/api/auth/resend', { email: 'late@example.com' }))).status, 503)
+  } finally { await h.close() }
+})
+
 test('forgot password: the same answer for any address, Supabase asked for the known ones too; braked like a sign-in; Supabase down is 503', async () => {
   const h = await handlers()
   try {
@@ -350,6 +381,10 @@ test('reset password: the emailed token sets the new password, ends every old se
     assert.equal(stale.status, 401); assert.equal(((await stale.json()) as { error: string }).error, 'expired')
     const weak = await h.server.handleResetPassword(h.post('/api/auth/reset-password', { accessToken: 'recovery-token', password: 'x' }))
     assert.equal(weak.status, 400); assert.equal(((await weak.json()) as { error: string }).error, 'weak')
+    // The password they already have: told so (400 'same'), nothing changes, the old session still stands.
+    const same = await h.server.handleResetPassword(h.post('/api/auth/reset-password', { accessToken: 'recovery-token', password: 'right' }))
+    assert.equal(same.status, 400); assert.equal(((await same.json()) as { error: string }).error, 'same'); assert.equal(same.headers.get('set-cookie'), null)
+    assert.ok(await h.server.ownerSession(old))
     const r = await h.server.handleResetPassword(h.post('/api/auth/reset-password', { accessToken: 'recovery-token', password: 'brand-new-pw' }))
     assert.equal(r.status, 200)
     const fresh = h.cookieOf(r)!
@@ -373,7 +408,7 @@ test('reset password for a login with no workspace yet: the password changes, an
     assert.equal(h.supabase.passwords.get('late@example.com'), 'brand-new-pw', 'the password itself did change')
     assert.equal(await h.count('workspaces'), 0)
     await h.accounts.invite('late@example.com')
-    const r = await h.server.handleResetPassword(h.post('/api/auth/reset-password', { accessToken: 't-late', password: 'brand-new-pw', timezone: 'Europe/Paris' }))
+    const r = await h.server.handleResetPassword(h.post('/api/auth/reset-password', { accessToken: 't-late', password: 'brand-new-pw-2', timezone: 'Europe/Paris' }))
     assert.equal(r.status, 200); assert.ok(h.cookieOf(r))
     assert.equal(await h.count('workspaces'), 1); assert.equal(await h.repo.timezoneOf(B), 'Europe/Paris')
   } finally { await h.close() }

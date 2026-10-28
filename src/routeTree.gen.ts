@@ -23,6 +23,7 @@ import { Route as TagsTagRouteImport } from './routes/tags.$tag'
 import { Route as ApiAuthConfirmRouteImport } from './routes/api/auth/confirm'
 import { Route as ApiAuthDeleteAccountRouteImport } from './routes/api/auth/delete-account'
 import { Route as ApiAuthRecoverRouteImport } from './routes/api/auth/recover'
+import { Route as ApiAuthResendRouteImport } from './routes/api/auth/resend'
 import { Route as ApiAuthResetPasswordRouteImport } from './routes/api/auth/reset-password'
 import { Route as ApiAuthSignInRouteImport } from './routes/api/auth/sign-in'
 import { Route as ApiAuthSignOutRouteImport } from './routes/api/auth/sign-out'
@@ -102,6 +103,11 @@ const ApiAuthRecoverRoute = ApiAuthRecoverRouteImport.update({
   path: '/api/auth/recover',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthResendRoute = ApiAuthResendRouteImport.update({
+  id: '/api/auth/resend',
+  path: '/api/auth/resend',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthResetPasswordRoute = ApiAuthResetPasswordRouteImport.update({
   id: '/api/auth/reset-password',
   path: '/api/auth/reset-password',
@@ -158,6 +164,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/confirm': typeof ApiAuthConfirmRoute
   '/api/auth/delete-account': typeof ApiAuthDeleteAccountRoute
   '/api/auth/recover': typeof ApiAuthRecoverRoute
+  '/api/auth/resend': typeof ApiAuthResendRoute
   '/api/auth/reset-password': typeof ApiAuthResetPasswordRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
@@ -182,6 +189,7 @@ export interface FileRoutesByTo {
   '/api/auth/confirm': typeof ApiAuthConfirmRoute
   '/api/auth/delete-account': typeof ApiAuthDeleteAccountRoute
   '/api/auth/recover': typeof ApiAuthRecoverRoute
+  '/api/auth/resend': typeof ApiAuthResendRoute
   '/api/auth/reset-password': typeof ApiAuthResetPasswordRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
@@ -207,6 +215,7 @@ export interface FileRoutesById {
   '/api/auth/confirm': typeof ApiAuthConfirmRoute
   '/api/auth/delete-account': typeof ApiAuthDeleteAccountRoute
   '/api/auth/recover': typeof ApiAuthRecoverRoute
+  '/api/auth/resend': typeof ApiAuthResendRoute
   '/api/auth/reset-password': typeof ApiAuthResetPasswordRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
@@ -233,6 +242,7 @@ export interface FileRouteTypes {
     | '/api/auth/confirm'
     | '/api/auth/delete-account'
     | '/api/auth/recover'
+    | '/api/auth/resend'
     | '/api/auth/reset-password'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
@@ -257,6 +267,7 @@ export interface FileRouteTypes {
     | '/api/auth/confirm'
     | '/api/auth/delete-account'
     | '/api/auth/recover'
+    | '/api/auth/resend'
     | '/api/auth/reset-password'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
@@ -281,6 +292,7 @@ export interface FileRouteTypes {
     | '/api/auth/confirm'
     | '/api/auth/delete-account'
     | '/api/auth/recover'
+    | '/api/auth/resend'
     | '/api/auth/reset-password'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
@@ -306,6 +318,7 @@ export interface RootRouteChildren {
   ApiAuthConfirmRoute: typeof ApiAuthConfirmRoute
   ApiAuthDeleteAccountRoute: typeof ApiAuthDeleteAccountRoute
   ApiAuthRecoverRoute: typeof ApiAuthRecoverRoute
+  ApiAuthResendRoute: typeof ApiAuthResendRoute
   ApiAuthResetPasswordRoute: typeof ApiAuthResetPasswordRoute
   ApiAuthSignInRoute: typeof ApiAuthSignInRoute
   ApiAuthSignOutRoute: typeof ApiAuthSignOutRoute
@@ -416,6 +429,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthRecoverRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/resend': {
+      id: '/api/auth/resend'
+      path: '/api/auth/resend'
+      fullPath: '/api/auth/resend'
+      preLoaderRoute: typeof ApiAuthResendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/reset-password': {
       id: '/api/auth/reset-password'
       path: '/api/auth/reset-password'
@@ -490,6 +510,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthConfirmRoute: ApiAuthConfirmRoute,
   ApiAuthDeleteAccountRoute: ApiAuthDeleteAccountRoute,
   ApiAuthRecoverRoute: ApiAuthRecoverRoute,
+  ApiAuthResendRoute: ApiAuthResendRoute,
   ApiAuthResetPasswordRoute: ApiAuthResetPasswordRoute,
   ApiAuthSignInRoute: ApiAuthSignInRoute,
   ApiAuthSignOutRoute: ApiAuthSignOutRoute,

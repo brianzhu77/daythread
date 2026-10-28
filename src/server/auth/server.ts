@@ -16,7 +16,7 @@ import type { ResetResult, SignUpResult, VerifyResult } from './supabase.ts'
 
 /** Reachable without a session: the sign-in and sign-up screens and the calls they make; build assets are public code. */
 // /api/push/tick is the scheduler's, let in by CRON_SECRET; /sw.js is the service worker, fetched by the browser itself.
-const publicPaths = new Set(['/sign-in', '/sign-up', '/api/auth/sign-in', '/api/auth/sign-up', '/api/auth/sign-out', '/api/auth/recover', '/api/auth/reset-password', '/api/auth/confirm', '/api/push/tick'])
+const publicPaths = new Set(['/sign-in', '/sign-up', '/api/auth/sign-in', '/api/auth/sign-up', '/api/auth/sign-out', '/api/auth/recover', '/api/auth/resend', '/api/auth/reset-password', '/api/auth/confirm', '/api/push/tick'])
 const isPublic = (path: string) => publicPaths.has(path) || path.startsWith('/assets/') || path.startsWith('/splash/') || /^\/[\w-]+\.(ico|png|svg|webmanifest|js|html)$/.test(path)
 
 let store: SessionStore | undefined
@@ -37,6 +37,7 @@ interface Supabase {
   signUp(config: AuthConfig, email: string, password: string, timezone: string | undefined): Promise<SignUpResult>
   deleteUser(config: AuthConfig, userId: string): Promise<void>
   recover(config: AuthConfig, email: string): Promise<void>
+  resendConfirmation(config: AuthConfig, email: string): Promise<'sent' | 'wait'>
   resetPassword(config: AuthConfig, accessToken: string, password: string): Promise<ResetResult>
   userFromToken(config: AuthConfig, accessToken: string): Promise<{ userId: string; email: string } | null>
 }
@@ -290,6 +291,21 @@ export async function handleRecover(request: Request): Promise<Response> {
   return Response.json({ ok: true }, { headers: noStore })
 }
 
+/**
+ * "Send the link again", offered only after sign-in said the address is unconfirmed (so the right password was typed)
+ * and on the sign-up wait. Supabase sends only to an unconfirmed login and answers the same for any other address;
+ * 429 'too-soon' is its once-a-minute limit for that address, apart from this server's own brake.
+ */
+export async function handleResend(request: Request): Promise<Response> {
+  const body = recoverBody.safeParse(await request.json().catch(() => null))
+  if (!body.success) return refuse(400, 'invalid')
+  const ipWait = ipWaitMs(clientIp(request))
+  if (ipWait > 0) return tooMany(ipWait)
+  let sent: 'sent' | 'wait'
+  try { sent = await supabase.resendConfirmation(authConfig(), body.data.email) } catch (error) { return unavailable('handleResend', error) }
+  return sent === 'wait' ? refuse(429, 'too-soon') : Response.json({ ok: true }, { headers: noStore })
+}
+
 /** A login the emailed link vouched for comes in: the account and workspace on first entry (invite list permitting), every older session ended, a fresh one issued. */
 async function enter(request: Request, userId: string, address: string, zone: string, endOthers: boolean): Promise<Response> {
   const config = authConfig()
@@ -316,7 +332,7 @@ export async function handleResetPassword(request: Request): Promise<Response> {
   try {
     await Promise.all([workspaceStore().prepare(), accounts().prepare(), sessions().prepare()])
     result = await supabase.resetPassword(authConfig(), body.data.accessToken, body.data.password)
-    if (!result.ok) return result.reason === 'weak' ? refuse(400, 'weak', { message: result.message }) : refuse(401, 'expired')
+    if (!result.ok) return result.reason === 'weak' ? refuse(400, 'weak', { message: result.message }) : result.reason === 'same' ? refuse(400, 'same') : refuse(401, 'expired')
     return await enter(request, result.userId, result.email, zoneOf(body.data.timezone), true)
   } catch (error) { return unavailable('handleResetPassword', error) }
 }

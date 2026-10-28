@@ -1,0 +1,46 @@
+ok   [chromium] sign-up wait: says the link signs you in (Check your email · we sent a link to late-mvsoxd8v-chromium@rig.local. It signs you in.)
+ok   [chromium] sign-up: a confirmation email arrives (Confirm your email address)
+ok   [chromium] sign-up wait: "Didn't get it? Check spam, or send it again" (Didn't get it? Check spam, or send it again)
+ok   [chromium] send it again: a second, different confirmation link (2 emails)
+ok   [chromium] send it again: "Sent again to … · it can take a minute"
+ok   [chromium] again within the minute: 429 too-soon, no email (429)
+     waiting 31 s for the 30 s link to expire…
+ok   [chromium] expired link: lands on sign-in, the fragment cleared (http://127.0.0.1:3580/sign-in?next=%2F)
+ok   [chromium] expired link: the note (That link has expired or was already used · Sign in, or use Forgot password if you don't know it)
+ok   [chromium] right password, unconfirmed: "Confirm your email first · Send the link again" (Confirm your email first · Send the link again)
+ok   [chromium] send the link again: a new CONFIRMATION, not a reset (Confirm your email address)
+ok   [chromium] the new link signs them in and opens today (http://127.0.0.1:3580/)
+ok   [chromium] used link: the same note (That link has expired or was already used · Sign in, or use Forgot password if you don't know it)
+ok   [chromium] another link error: "That link didn't work" (That link didn't work · Sign in, or use Forgot password if you don't know it)
+ok   [chromium] forgot password asked
+ok   [chromium] a reset email arrives (Reset your password)
+ok   [chromium] signed in: the reset link still reaches "Choose a new password" (/sign-in, service worker active)
+ok   [chromium] signed in: the token left the address bar
+ok   [chromium] the same password: "That's already your password · Sign in with it" (That's already your password · Sign in with it)
+ok   [chromium] a new password: saved, signed in, today (http://127.0.0.1:3580/)
+ok   [chromium] signed in, expired link in a new tab: the note shows on sign-in (/sign-in)
+ok   [chromium] signed in, expired link on an open today: the note shows on sign-in (/sign-in)
+all passed
+ok   [webkit] sign-up wait: says the link signs you in (Check your email · we sent a link to late-mvsoyc86-webkit@rig.local. It signs you in.)
+ok   [webkit] sign-up: a confirmation email arrives (Confirm your email address)
+ok   [webkit] sign-up wait: "Didn't get it? Check spam, or send it again" (Didn't get it? Check spam, or send it again)
+ok   [webkit] send it again: a second, different confirmation link (2 emails)
+ok   [webkit] send it again: "Sent again to … · it can take a minute"
+ok   [webkit] again within the minute: 429 too-soon, no email (429)
+     waiting 31 s for the 30 s link to expire…
+ok   [webkit] expired link: lands on sign-in, the fragment cleared (http://127.0.0.1:3580/sign-in?next=%2F)
+ok   [webkit] expired link: the note (That link has expired or was already used · Sign in, or use Forgot password if you don't know it)
+ok   [webkit] right password, unconfirmed: "Confirm your email first · Send the link again" (Confirm your email first · Send the link again)
+ok   [webkit] send the link again: a new CONFIRMATION, not a reset (Confirm your email address)
+ok   [webkit] the new link signs them in and opens today (http://127.0.0.1:3580/)
+ok   [webkit] used link: the same note (That link has expired or was already used · Sign in, or use Forgot password if you don't know it)
+ok   [webkit] another link error: "That link didn't work" (That link didn't work · Sign in, or use Forgot password if you don't know it)
+ok   [webkit] forgot password asked
+ok   [webkit] a reset email arrives (Reset your password)
+ok   [webkit] signed in: the reset link still reaches "Choose a new password" (/sign-in, service worker active)
+ok   [webkit] signed in: the token left the address bar
+ok   [webkit] the same password: "That's already your password · Sign in with it" (That's already your password · Sign in with it)
+ok   [webkit] a new password: saved, signed in, today (http://127.0.0.1:3580/)
+ok   [webkit] signed in, expired link in a new tab: the note shows on sign-in (/sign-in)
+ok   [webkit] signed in, expired link on an open today: the note shows on sign-in (/sign-in)
+all passed

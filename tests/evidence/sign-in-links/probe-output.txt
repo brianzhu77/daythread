@@ -1,0 +1,28 @@
+sign-up (e: its link is left to expire)
+    200 {"id":"094e7e27-a63e-4859-998d-129a0924a9c3","aud":"authenticated","role":"authenticated","email":"e-mvsotkma@rig.local","phone":"","confirmation_sent_at":"2026
+sign-up (u)
+    200 {"id":"7bee2078-b10c-4be3-9e60-dabccbde4c1a","aud":"authenticated","role":"authenticated","email":"u-mvsotkma@rig.local","phone":"","confirmation_sent_at":"2026
+password sign-in before confirming
+    400 {"code":400,"error_code":"email_not_confirmed","msg":"Email not confirmed"}
+resend signup within the minute (10 s on the rig)
+    429 {"code":429,"error_code":"over_email_send_rate_limit","msg":"For security purposes, you can only request this after 9 seconds."}
+resend signup, unconfirmed
+    200 {}; emails to it: 2
+resend signup, unknown address
+    200 {}
+the re-sent link lands on
+    http://127.0.0.1:3580#access_token=<token>&expires_at=1793230217&expires_in=3600&refresh_token=<token>&sb=&token_type=bearer&type=signup
+the same link again (used) lands on
+    http://127.0.0.1:3580#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired&sb=
+resend signup, now confirmed
+    200 {}; emails to it: 2 -> 2
+e's confirmation link after 31 s (GOTRUE_MAILER_OTP_EXP=30) lands on
+    http://127.0.0.1:3580#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired&sb=
+sign-up, unconfirmed (c)
+    200 {"id":"5283c40d-5a9a-4247-9ef1-36ea1af6d4c4","aud":"authenticated","role":"authenticated","email":"c-mvsotkma@rig.local","phone":"","confirmation_sent_at":"2026
+recover, unconfirmed (c)
+    200 {}; subject: Reset your password
+its link lands on
+    http://127.0.0.1:3580#access_token=<token>&expires_at=1793230247&expires_in=3600&refresh_token=<token>&sb=&token_type=bearer&type=recovery
+password sign-in after following it (it confirmed the address)
+    200 {"access_token":"eyJhbGciOiJIUzI1NiI
