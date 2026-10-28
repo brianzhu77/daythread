@@ -19,6 +19,9 @@ const hosting = target === 'cloudflare'
           name: 'daythread',
           placement: { region: 'aws:us-east-1' },
           observability: { enabled: true },
+          // Files are served at their own names: the Home Screen worker caches /offline.html, and a redirect to /offline
+          // can't stand in for a navigation.
+          assets: { html_handling: 'none' },
           vars: { DAYTHREAD_STORAGE: 'postgres' },
         },
       },
