@@ -1,12 +1,18 @@
-# Deploys the Worker (B67). Runs only when the Lead pushes a commit to the `cloudflare-deploy` branch, never on PRs, so
-# a fork can't reach the secrets. The Cloudflare token (CLOUDFLARE_API_TOKEN) is Brian's, added by him as a repository
-# secret; the app's own values are the same five as on Vercel, set as repository secrets from Vercel's production env.
-# The domain (daythread.dogrod.com) is not touched here: until the cutover the Worker answers on workers.dev only.
+# The Worker (B67), run by the Lead only: `gh workflow run cloudflare.yml --ref <branch> -f action=<action>`.
+#   deploy            build the ref and deploy it to the `daythread` Worker (workers.dev until the domain moves)
+#   domain-to-worker  daythread.dogrod.com answers from the Worker (its CNAME to Vercel is replaced)
+#   domain-to-vercel  the rollback: the Worker lets go of the name and the CNAME to Vercel comes back
+# Never runs on PRs, so a fork can't reach the secrets. The Cloudflare token (CLOUDFLARE_API_TOKEN) is Brian's, added by
+# him as a repository secret; the app's five values are the same as Vercel's production env, as repository secrets.
 name: Cloudflare
 
 on:
-  push:
-    branches: [cloudflare-deploy]
+  workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        options: [deploy, domain-to-worker, domain-to-vercel]
+        required: true
 
 permissions:
   contents: read
@@ -15,8 +21,16 @@ concurrency:
   group: cloudflare
   cancel-in-progress: false
 
+env:
+  HOSTNAME: daythread.dogrod.com
+  ZONE: dogrod.com
+  WORKER: daythread
+  # Where the name pointed before the move (DNS only), recorded 2026-10-28.
+  VERCEL_TARGET: 50995c4cd509d12f.vercel-dns-017.com
+
 jobs:
   deploy:
+    if: inputs.action == 'deploy'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -51,3 +65,32 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+
+  domain:
+    if: inputs.action == 'domain-to-worker' || inputs.action == 'domain-to-vercel'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Move ${{ env.HOSTNAME }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACTION: ${{ inputs.action }}
+        run: |
+          set -euo pipefail
+          api() { curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' "$@"; }
+          ok() { jq -e '.success' >/dev/null || { echo "Cloudflare refused: $(jq -c '.errors')"; exit 1; }; }
+          account=$(api https://api.cloudflare.com/client/v4/accounts | jq -r '.result[0].id')
+          zone=$(api "https://api.cloudflare.com/client/v4/zones?name=$ZONE" | jq -r '.result[0].id')
+          records() { api "https://api.cloudflare.com/client/v4/zones/$zone/dns_records?name=$HOSTNAME"; }
+          domains() { api "https://api.cloudflare.com/client/v4/accounts/$account/workers/domains?hostname=$HOSTNAME"; }
+          echo "before: $(records | jq -c '[.result[] | {type, content, proxied}]') · worker domains $(domains | jq -c '[.result[] | .service]')"
+          if [ "$ACTION" = domain-to-worker ]; then
+            api -X PUT "https://api.cloudflare.com/client/v4/accounts/$account/workers/domains" \
+              -d "{\"hostname\":\"$HOSTNAME\",\"service\":\"$WORKER\",\"zone_id\":\"$zone\",\"environment\":\"production\",\"override_existing_dns_record\":true}" | ok
+          else
+            for id in $(domains | jq -r '.result[].id'); do api -X DELETE "https://api.cloudflare.com/client/v4/accounts/$account/workers/domains/$id" >/dev/null; done
+            for id in $(records | jq -r '.result[].id'); do api -X DELETE "https://api.cloudflare.com/client/v4/zones/$zone/dns_records/$id" | ok; done
+            api -X POST "https://api.cloudflare.com/client/v4/zones/$zone/dns_records" \
+              -d "{\"type\":\"CNAME\",\"name\":\"$HOSTNAME\",\"content\":\"$VERCEL_TARGET\",\"proxied\":false,\"ttl\":60}" | ok
+          fi
+          echo "after: $(records | jq -c '[.result[] | {type, content, proxied}]') · worker domains $(domains | jq -c '[.result[] | .service]')"
