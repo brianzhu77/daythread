@@ -33,9 +33,12 @@ came.
 - The worker is versioned; a new version takes over on the next launch and drops the old caches. It never caches
   anything that could carry another person's data: only `/assets/*`, the root static files, and the HTML of app
   routes, whose server-rendered body holds no workspace data (the data is loaded by the client).
-- The offline copy belongs to whoever was signed in when it was written. It is written only after a successful
-  network load, overwritten by every later one, and removed on sign-out and account deletion. It is read only when
-  the network is the reason a load failed.
+- The offline copy belongs to the account the server answered as: every load and command reply carries its `owner`,
+  and the copy is kept under it. The same account's copy is replaced by a newer revision; another account's always
+  replaces it, unless its request was sent before the slot became the current account's (a late reply from the
+  previous account). Every sign-in, sign-up, confirmed or reset link, sign-out and account deletion empties the slot
+  first, so a new session that goes offline before its first load shows no copy rather than someone else's. It is
+  read only when the network is the reason a load failed (Ratchet #222, B61).
 - No background sync, no offline queue of commands: the editor's draft keeping already covers the case that matters
   (typing), and a queue of domain commands would need conflict rules the model does not have yet.
 

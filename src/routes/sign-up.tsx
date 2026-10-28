@@ -3,6 +3,7 @@ import { Mark } from '../components/mark'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useRef, useState, type FormEvent } from 'react'
 import { tagline } from './sign-in'
+import { enterApp } from '../components/offline-copy'
 
 export const Route = createFileRoute('/sign-up')({ component: SignUp })
 
@@ -32,7 +33,7 @@ function SignUp() {
       const response = await fetch('/api/auth/sign-up', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password, timezone: browserZone() }) })
       r = await response.json().catch(() => ({ error: 'unavailable' }))
     } catch { r = { error: 'unavailable' } }
-    if (r.ok && !r.confirm) return window.location.assign('/')
+    if (r.ok && !r.confirm) return enterApp('/')
     setBusy(false)
     if (r.ok) { setDone(true); return setNote(`Check your email · a link to confirm ${email.trim()} is on its way; sign in once you've clicked it`) }
     if (r.error === 'not-invited') return setNote("This address isn't on the invite list yet")

@@ -3,6 +3,7 @@ import { Mark } from '../components/mark'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { safeNext } from '../lib/safe-next'
+import { enterApp } from '../components/offline-copy'
 
 export const Route = createFileRoute('/sign-in')({
   validateSearch: (search: Record<string, unknown>) => ({ next: typeof search.next === 'string' ? search.next : undefined }),
@@ -58,7 +59,7 @@ function SignIn() {
     if (link.type === 'signup' || link.type === 'magiclink' || link.type === 'email') {
       setMode('confirming'); setBusy(true)
       void post('/api/auth/confirm', { accessToken: link.accessToken, timezone: browserZone() }).then(r => {
-        if (r.ok) return window.location.assign('/')
+        if (r.ok) return enterApp('/')
         setBusy(false); setMode('sign-in')
         setNote(r.error === 'not-invited' ? "This address isn't on the invite list yet" : r.error === 'expired' ? 'That link has expired · Sign in, or ask for a new one' : "Couldn't confirm the address · Sign in to try again")
       })
@@ -83,7 +84,7 @@ function SignIn() {
     if (busy || !password || !token) return
     setBusy(true); setError(null); setNote(null)
     const r = await post('/api/auth/reset-password', { accessToken: token, password, timezone: browserZone() })
-    if (r.ok) return window.location.assign('/')
+    if (r.ok) return enterApp('/')
     setBusy(false)
     if (r.error === 'weak') { setError(r.message ?? 'Use a longer password'); return }
     if (r.error === 'expired') { setMode('sign-in'); setToken(null); return setNote('That link has expired · Ask for a new one with Forgot password') }
@@ -101,7 +102,7 @@ function SignIn() {
       const response = await fetch('/api/auth/sign-in', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password, timezone: browserZone() }) })
       r = await response.json().catch(() => ({ error: 'unavailable' }))
     } catch { r = { error: 'unavailable' } }
-    if (r.ok) return window.location.assign(safeNext(next, window.location.origin))
+    if (r.ok) return enterApp(safeNext(next, window.location.origin))
     setBusy(false)
     if (r.error === 'too-many') return setError(`Too many tries · Try again ${inWait(r.retryAfter ?? 60)}`)
     // Only after the right password, so they say nothing to anyone else; not red, everything was typed right (Jazz ac124ed).
