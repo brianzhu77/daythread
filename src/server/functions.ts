@@ -12,8 +12,9 @@ export const loadWorkspace = createServerFn({ method: "GET" })
     try {
       const workspace = await withLogOperation(data.operationId, () => getRepository().load());
       debugLog('request.load.finish', { ...data, afterRevision: workspace.revision, elapsedMs: performance.now() - started, result: 'ok' });
-      const { forBrowser } = await import("./browser-workspace");
-      return { workspace: forBrowser(workspace), debug: debugEnabled() };
+      const [{ forBrowser }, { currentOwner }] = await Promise.all([import("./browser-workspace"), import("./auth/request-owner")]);
+      // `owner`: whose workspace this is, so the browser's offline copy is never another account's (pwa.md §2).
+      return { workspace: forBrowser(workspace), owner: currentOwner() ?? "local", debug: debugEnabled() };
     } catch (error) {
       debugLog('request.load.finish', { ...data, elapsedMs: performance.now() - started, result: 'error', error: error instanceof Error ? error.name : 'UnknownError' });
       throw error;
@@ -23,9 +24,9 @@ export const runCommand = createServerFn({ method: "POST" })
   .validator((input: unknown) => commandSchema.parse(input))
   .handler(async ({ data }) => {
     const { getRepository } = await import("./storage");
-    const { forBrowser } = await import("./browser-workspace");
+    const [{ forBrowser }, { currentOwner }] = await Promise.all([import("./browser-workspace"), import("./auth/request-owner")]);
     const result = await getRepository().execute(data);
-    return { ...result, workspace: forBrowser(result.workspace) };
+    return { ...result, workspace: forBrowser(result.workspace), owner: currentOwner() ?? "local" };
   });
 
 /** The signed-in account for "{email} · Sign out" and its time zone; null when sign-in is off. */

@@ -65,6 +65,30 @@ self.addEventListener('fetch', event => {
   })())
 })
 
+// Warm-up (Ratchet #222): a page that loaded before this worker controlled it (the first open, a new version) kept
+// nothing, so going offline right after showed "This screen hasn't been opened". Once the worker controls it, the page
+// lists its addresses and the files it loaded (app-shell.tsx); each is fetched again and kept by the same rules as above.
+async function warm(pages, assets) {
+  const jobs = [], shell = await caches.open(SHELL)
+  for (const page of Array.isArray(pages) ? pages.slice(0, 5) : [])
+    if (typeof page === 'string' && strategyFor({ url: page, method: 'GET', mode: 'navigate' }) === 'network-first')
+      jobs.push((async () => {
+        const response = await fetch(page, { credentials: 'same-origin', headers: { accept: 'text/html' } })
+        if (keepable(response)) await shell.put(page, response)
+      })())
+  const cache = await caches.open(ASSETS)
+  for (const url of Array.isArray(assets) ? assets.slice(0, 200) : [])
+    if (typeof url === 'string' && strategyFor({ url, method: 'GET', mode: 'no-cors' }) === 'cache-first')
+      jobs.push((async () => { if (!(await cache.match(url))) await cache.add(url) })())
+  await Promise.allSettled(jobs)
+}
+self.__daythread.warm = warm
+
+self.addEventListener('message', event => {
+  const data = event.data
+  if (data && data.type === 'warm') event.waitUntil(warm(data.pages, data.assets))
+})
+
 // Reminders: show the pushed reminder; open its page on tap.
 self.addEventListener('push', event => {
   let data = {}

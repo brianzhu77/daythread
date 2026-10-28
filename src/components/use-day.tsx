@@ -16,13 +16,21 @@ export interface Transport {
   run(workspace: Workspace, action: Action, operationId?: string): Promise<{ workspace: Workspace; receipt: Receipt }>
 }
 
+// Every workspace the server answers with is the copy the next offline open shows, kept under the account it belongs to.
 const serverTransport: Transport = {
   load: async (operationId = newOperationId(), triggerOperationId) => {
+    const startedAt = Date.now()
     const response=await loadWorkspace({data:{operationId,triggerOperationId}})
     configureDebug(response.debug)
+    void offlineCopy.remember(response.workspace, { owner: response.owner, startedAt })
     return response.workspace
   },
-  run: (workspace, action, operationId = newOperationId()) => runCommand({ data: { operationId, expectedRevision: workspace.revision, action } }),
+  run: async (workspace, action, operationId = newOperationId()) => {
+    const startedAt = Date.now()
+    const { owner, ...result } = await runCommand({ data: { operationId, expectedRevision: workspace.revision, action } })
+    void offlineCopy.remember(result.workspace, { owner, startedAt })
+    return result
+  },
 }
 
 export function newOperationId(): string {
@@ -78,11 +86,9 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   const wsRef = useRef<Workspace | null>(null)
   const queue = useRef<Promise<unknown>>(Promise.resolve())
 
-  const adopt = useCallback((ws: Workspace, fromServer = true) => {
+  const adopt = useCallback((ws: Workspace) => {
     wsRef.current = ws
     setWorkspace(ws)
-    // Every workspace that came from the server is the copy the next offline open shows.
-    if (fromServer) void offlineCopy.remember(ws)
   }, [])
 
   const refresh = useCallback(async (triggerOperationId?: string) => {
@@ -102,7 +108,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       // No network: the last-loaded copy opens the app, read as it was; any other failure is shown as before.
       const copy = await offlineCopy.fallback(e)
       if (copy && (!wsRef.current || copy.revision >= wsRef.current.revision)) {
-        adopt(copy, false); setOffline(true)
+        adopt(copy); setOffline(true)
         debugClient('workspace.offline-copy', { afterRevision: copy.revision })
       } else if (copy && wsRef.current) setOffline(true)
       else setLoadError(e instanceof Error ? e.message : String(e))

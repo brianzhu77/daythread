@@ -31,3 +31,36 @@ test('sw: assets cache-first, app screens network-first with the copy kept, ever
   assert.equal(dt.strategyFor(req('/sw.js')), 'network-only', 'the worker itself is never cached by the worker')
   assert.equal(dt.strategyFor({ url: 'https://fonts.example/x.css', method: 'GET', mode: 'cors' }), 'network-only', 'another origin')
 })
+
+// Ratchet #222: the first open loaded its screen and files before the worker controlled the page, so nothing was kept.
+test('sw warm-up: the page it is told about and its files are kept by the same rules; nothing with a session in it', async () => {
+  const source = readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8')
+  const stored = new Map<string, Map<string, unknown>>(), fetched: string[] = []
+  const open = async (name: string) => {
+    const m = stored.get(name) ?? new Map<string, unknown>(); stored.set(name, m)
+    const key = (r: string) => new URL(r, 'https://daythread.test').href
+    return {
+      match: async (r: string) => m.get(key(r)),
+      put: async (r: string, v: unknown) => { m.set(key(r), v) },
+      add: async (r: string) => { fetched.push(new URL(key(r)).pathname); m.set(key(r), 'asset') },
+    }
+  }
+  const respond = (path: string) => path === '/day/2026-10-27'
+    ? { ok: true, redirected: true, type: 'basic' } // signed out: the server sends sign-in
+    : { ok: true, redirected: false, type: 'basic' }
+  const self = { addEventListener() {}, registration: {}, clients: {}, location: { origin: 'https://daythread.test' }, skipWaiting() {} }
+  const context = vm.createContext({ self, URL, Response, console, caches: { open }, fetch: async (url: string) => { const p = new URL(url, 'https://daythread.test').pathname; fetched.push(p); return respond(p) } })
+  vm.runInContext(source, context)
+  const warm = (self as unknown as { __daythread: { warm: (pages: unknown, assets: unknown) => Promise<void> } }).__daythread.warm
+  const at = (p: string) => 'https://daythread.test' + p
+  await warm([at('/'), at('/sign-in'), at('/day/2026-10-27'), 'https://other.example/'], [at('/assets/main-abc.js'), at('/assets/styles-abc.css'), at('/_serverFn/load'), at('/api/push/key'), 'https://fonts.example/x.css'])
+  const shell = [...(stored.get('daythread-1-shell')?.keys() ?? [])].map(u => new URL(u).pathname)
+  const assets = [...(stored.get('daythread-1-assets')?.keys() ?? [])].map(u => new URL(u).pathname).sort()
+  assert.deepEqual(shell, ['/'], 'the app screen is kept; sign-in, a redirect (signed out) and another origin are not')
+  assert.deepEqual(assets, ['/assets/main-abc.js', '/assets/styles-abc.css'], 'only cache-first files')
+  assert.ok(!fetched.includes('/sign-in') && !fetched.includes('/_serverFn/load') && !fetched.includes('/api/push/key'), 'never even fetched')
+  fetched.length = 0
+  await warm([], [at('/assets/main-abc.js')])
+  assert.deepEqual(fetched, [], 'a file already kept is not fetched again')
+  await warm('not a list', 42)
+})
