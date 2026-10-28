@@ -70,9 +70,9 @@ Section S (Supabase storage plan C1–C7) is superseded by #13, #14 and #24: per
 
 ### Letting other people in (Brian d456ab31: next goal; plan beeba03c, waiting on his answers)
 
-Must before the first invite: (1) each person's offline copy stays theirs (#27, in review); (2) sign-up and reset emails from his own address (custom SMTP); (3) a new person's first empty Today gets one quiet line on what Daythread is for (Jazz; no tour); (4) the team reads only Brian's workspace from the first invite on (`scripts/pg-read-v2.mjs` in Bumblebee's workspace is scoped to it), and invitees are told he can technically see their pages.
+Must before the first invite: (1) each person's offline copy stays theirs (#27, in review); (2) sign-up and reset emails from his own address (custom SMTP); (3) a new person's first empty Today gets one quiet line on what Daythread is for (Jazz e69355a2: under the title on Today only, grey meta, "A page for each day. Write anything; unfinished to-dos come along to tomorrow.", gone for good once anything is written on any day; plus the Pages empty state "Use + to start one" on a laptop; about an hour, not built); (4) the team reads only Brian's workspace from the first invite on (`scripts/pg-read-v2.mjs` in Bumblebee's workspace is scoped to it), and invitees are told he can technically see their pages.
 Not needed yet: an invite screen (one SQL line), open sign-up, reminders, two-device editing.
-Asked Brian: a domain for email (recommended: buy one, send through Resend, move the app to it); who comes first and how many (2–3; language); the same template for them (recommended: keep it).
+Asked Brian: a domain for email (recommended: buy one, send through Resend, move the app to it); who comes first and how many (2–3; language); the same template for them (recommended: keep it; Jazz: a new person will read "Good Stuffs" as a fixed section, though anyone can rename it).
 Success check: each invitee signs up without his help and writes on 3 of their first 7 days. Nobody builds for this until he says yes (Lead 026d5aab).
 
 ### What only Brian can do (one sitting)
