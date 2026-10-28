@@ -27,8 +27,9 @@ export function postgresSql(): SqlClient {
 }
 function connect(max: number, hyperdrive?: string): Sql {
   // Through Hyperdrive (a Worker with the binding), Cloudflare holds the TLS connection to Supabase and pools it; the
-  // Worker's own hop is local, so no TLS here, and no type lookup on every new connection.
-  if (hyperdrive) return postgres(hyperdrive, { prepare: false, max, fetch_types: false, onnotice: () => {} })
+  // Worker's own hop is local, so no TLS here. Types are still fetched: without them postgres.js can't send an array
+  // parameter (`any($2::text[])`, Roadbuster 50f96d06).
+  if (hyperdrive) return postgres(hyperdrive, { prepare: false, max, onnotice: () => {} })
   const url = process.env.DATABASE_URL
   if (!url) throw new Error('DAYTHREAD_STORAGE=postgres needs DATABASE_URL in the environment')
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(new URL(url).hostname)
