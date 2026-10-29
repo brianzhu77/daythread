@@ -56,6 +56,10 @@ export class OfflineCopy {
   async recall(): Promise<Workspace | null> {
     try { const raw = await this.store.get(key); return isRecord(raw) ? raw.workspace : null } catch { return null }
   }
+  /** Whose the copy is; null for a cleared slot. */
+  async recallOwner(): Promise<string | null> {
+    try { const raw = await this.store.get(key); return isRecord(raw) ? raw.owner : null } catch { return null }
+  }
   /** The copy, when the network is why a load failed; nothing for any other failure (signed out, a server error). */
   async fallback(error: unknown): Promise<Workspace | null> {
     return isNetworkFailure(error) ? this.recall() : null

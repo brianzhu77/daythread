@@ -4,7 +4,7 @@ import { getDayView } from '../domain/workspace'
 import { addDays, longLabel, weekday } from './dates'
 import { RowMenu } from './row-menu'
 import { TagText } from './tag-text'
-import { newOperationId, useWorkspace } from './use-day'
+import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
 
 /**
  * The review on the page (docs/design/review-on-the-page.md): a Tomorrow block at the bottom of today's page. Lines he
@@ -28,30 +28,43 @@ interface PendingLine {
   typedOn: LocalDate
   /** Every add sent under the operation id. One may have landed with its reply lost; replaying it names the task. */
   sent?: AddSent[]
-  /** The plan-tasks that moves a recovered task to the line's day, kept so a retry replays it. */
-  moveOperationId?: string
+  /**
+   * The plan-tasks that moves a recovered task to a day, one operation id per day, kept so a retry replays it. A move
+   * that landed with its reply lost and is retried on a later day gets that day's own id, which moves it again.
+   */
+  moves?: Record<LocalDate, string>
 }
 interface AddSent { pageId: string; plannedOn: LocalDate }
 
-const linesKey = 'daythread.tomorrow-lines'
-const draftKey = 'daythread.tomorrow-draft'
-/** Before B68 a day's unsaved lines lived under its own key and were never read again after midnight. */
+/**
+ * Unsaved lines and the draft exist only on this device, so they're kept under the account they belong to: another
+ * account on the same browser never sees or sends them, and they're back when that account signs in again. Sign-out
+ * leaves them (the server doesn't have them). With no known account, nothing is read or kept.
+ */
+const linesKey = (owner: string) => `daythread.tomorrow-lines.${owner}`
+const draftKey = (owner: string) => `daythread.tomorrow-draft.${owner}`
+/**
+ * Before B68 a day's unsaved lines lived under its own key, for no account, and were never read again after midnight.
+ * They can only come from builds before invites, when his was the one account, so the first account to open the block
+ * after the update takes them, once (Lead's ruling on #227).
+ */
 const legacyPrefix = 'daythread.review-lines.'
 
-function readLines(): PendingLine[] {
+function readLines(owner: string | null): PendingLine[] {
+  if (!owner) return []
   try {
-    const raw = localStorage.getItem(linesKey)
+    const raw = localStorage.getItem(linesKey(owner))
     return raw ? (JSON.parse(raw) as PendingLine[]) : []
   } catch {
     return []
   }
 }
 
-/** Moves lines left under the old per-day keys into the shared list, once per device. */
-function adoptLegacyLines(): void {
+/** Moves lines left under the old per-day keys to this account's list and deletes the old keys. */
+function adoptLegacyLines(owner: string): void {
   const keys = Object.keys(localStorage).filter(k => k.startsWith(legacyPrefix))
   if (!keys.length) return
-  const lines = readLines()
+  const lines = readLines(owner)
   const known = new Set(lines.map(l => l.operationId))
   for (const key of keys) {
     const day = key.slice(legacyPrefix.length)
@@ -71,31 +84,41 @@ function adoptLegacyLines(): void {
       }
     }
   }
-  localStorage.setItem(linesKey, JSON.stringify(lines))
+  localStorage.setItem(linesKey(owner), JSON.stringify(lines))
   for (const key of keys) localStorage.removeItem(key)
 }
 
 /**
  * The unsaved lines, written to storage synchronously on every change: a line added as the page is hidden is kept
  * even if the page is frozen before React renders again. Each change starts from what storage holds, so two tabs
- * don't drop each other's lines.
+ * don't drop each other's lines. With no known account the lines live in memory only.
  */
-function usePendingLines(): [PendingLine[] | null, (change: (all: PendingLine[]) => PendingLine[]) => void, () => PendingLine[]] {
+function usePendingLines(owner: string | null): [PendingLine[] | null, (change: (all: PendingLine[]) => PendingLine[]) => void, () => PendingLine[]] {
   // null until read from storage, so a resumed block never flashes its blank state.
   const [value, setValue] = useState<PendingLine[] | null>(null)
+  const memory = useRef<PendingLine[]>([])
+  const current = useCallback(() => (owner ? readLines(owner) : memory.current), [owner])
   useEffect(() => {
-    adoptLegacyLines()
-    setValue(readLines())
-    const onStorage = (e: StorageEvent) => e.key === linesKey && setValue(readLines())
+    if (!owner) {
+      setValue(memory.current)
+      return
+    }
+    adoptLegacyLines(owner)
+    setValue(readLines(owner))
+    const onStorage = (e: StorageEvent) => e.key === linesKey(owner) && setValue(readLines(owner))
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
-  }, [])
-  const update = useCallback((change: (all: PendingLine[]) => PendingLine[]) => {
-    const next = change(readLines())
-    localStorage.setItem(linesKey, JSON.stringify(next))
-    setValue(next)
-  }, [])
-  return [value, update, readLines]
+  }, [owner])
+  const update = useCallback(
+    (change: (all: PendingLine[]) => PendingLine[]) => {
+      const next = change(current())
+      if (owner) localStorage.setItem(linesKey(owner), JSON.stringify(next))
+      else memory.current = next
+      setValue(next)
+    },
+    [current, owner],
+  )
+  return [value, update, current]
 }
 
 /** "From last night" for a line typed yesterday, else the weekday it was typed. */
@@ -114,20 +137,25 @@ export function TomorrowBlock({ today, view, workspace }: { today: LocalDate; vi
   const next = addDays(today, 1)
   const nextView = getDayView(workspace, next)
   const nextPage = nextView.page ?? null
-  const [lines, setLines, currentLines] = usePendingLines()
+  // The account is known by the time the block shows: the workspace it renders came with it.
+  const owner = workspaceOwner()
+  const [lines, setLines, currentLines] = usePendingLines(owner)
   const [draft, setDraftState] = useState('')
   const draftRef = useRef('')
-  const setDraft = useCallback((text: string) => {
-    draftRef.current = text
-    if (text) localStorage.setItem(draftKey, text)
-    else localStorage.removeItem(draftKey)
-    setDraftState(text)
-  }, [])
+  const setDraft = useCallback(
+    (text: string) => {
+      draftRef.current = text
+      if (owner && text) localStorage.setItem(draftKey(owner), text)
+      else if (owner) localStorage.removeItem(draftKey(owner))
+      setDraftState(text)
+    },
+    [owner],
+  )
   // A draft left by a reload or a closed app goes back in the input, not into the list: he never confirmed it.
   useEffect(() => {
-    const kept = localStorage.getItem(draftKey)
+    const kept = owner ? localStorage.getItem(draftKey(owner)) : null
     if (kept) setDraft(kept)
-  }, [setDraft])
+  }, [owner, setDraft])
   const composing = useRef(false)
 
   /** A day's page, made from the template the first time a line needs it; lines saved together share one call. */
@@ -168,8 +196,8 @@ export function TomorrowBlock({ today, view, workspace }: { today: LocalDate; vi
       const task = latest()?.tasks.find(t => t.id === taskId)
       // Ticked, removed or already on the day since: nothing to move.
       if (!task || task.status !== 'open' || getDayView(latest()!, date).dayTasks.some(t => t.id === taskId)) return true
-      const moveOperationId = line.moveOperationId ?? newOperationId()
-      if (!line.moveOperationId) setLines(all => all.map(l => (l.key === key ? { ...l, moveOperationId } : l)))
+      const moveOperationId = line.moves?.[date] ?? newOperationId()
+      if (!line.moves?.[date]) setLines(all => all.map(l => (l.key === key ? { ...l, moves: { ...l.moves, [date]: moveOperationId } } : l)))
       return Boolean(await run({ type: 'plan-tasks', date, items: [{ taskId }] }, null, moveOperationId, { quiet: true }))
     },
     [currentLines, latest, run, setLines],
@@ -267,22 +295,30 @@ export function TomorrowBlock({ today, view, workspace }: { today: LocalDate; vi
         {onNext.map(task => (
           <TomorrowRow key={task.id} task={task} pageId={nextPage!.id} today={today} />
         ))}
-        {lines.map(line => (
-          <div key={line.key} className="task-row plan tomorrow-pending">
-            <span className="check tomorrow-box" aria-hidden="true" />
-            <span className="task-title">{line.title}</span>
-            {line.failed ? (
-              <span className="tomorrow-line-state warn">
-                {line.typedOn < today && `${carriedLabel(line.typedOn, today)} · `}Not added ·{' '}
-                <button type="button" className="app-link" onClick={() => void saveLine(line)}>
-                  Retry
-                </button>
+        {lines.map(line => {
+          // A carried line sits under tomorrow's header but saves to today, so its state says so (Jazz, PR #32).
+          const carried = line.typedOn < today ? `${carriedLabel(line.typedOn, today)} · ` : ''
+          return (
+            <div key={line.key} className="task-row plan tomorrow-pending">
+              <span className="check tomorrow-box" aria-hidden="true" />
+              {/* The state on its own line under the title, so the title keeps the full width at 390. */}
+              <span className="tomorrow-pending-text">
+                <span className="task-title">{line.title}</span>
+                {line.failed ? (
+                  <span className="tomorrow-line-state warn">
+                    {carried}
+                    {carried ? 'Not added to today' : 'Not added'} ·{' '}
+                    <button type="button" className="app-link" onClick={() => void saveLine(line)}>
+                      Retry
+                    </button>
+                  </span>
+                ) : (
+                  <span className="tomorrow-line-state quiet">{carried}Adding…</span>
+                )}
               </span>
-            ) : (
-              <span className="tomorrow-line-state quiet">{line.typedOn < today && `${carriedLabel(line.typedOn, today)} · `}Adding…</span>
-            )}
-          </div>
-        ))}
+            </div>
+          )
+        })}
         <div className="task-row plan tomorrow-new">
           <span className="check tomorrow-box tomorrow-new-box" aria-hidden="true" />
           {/* A plain input, not the page editor: Return while a pinyin candidate is open confirms it (B49). */}

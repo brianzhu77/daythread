@@ -40,7 +40,7 @@ const pageText = page => page.locator('.continuous-editor').first().innerText()
 const cardText = page => page.locator('.start-the-day').innerText().catch(() => '')
 const blockText = page => page.locator('.tomorrow').innerText()
 const pendingText = page => page.locator('.tomorrow-pending').allInnerTexts().then(t => t.join(' / '))
-const storedLines = page => page.evaluate(() => JSON.parse(localStorage.getItem('daythread.tomorrow-lines') ?? '[]').map(l => l.title))
+const storedLines = page => page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith('daythread.tomorrow-lines.')).flatMap(k => JSON.parse(localStorage.getItem(k)).map(l => l.title)))
 const isAdd = route => route.request().method() === 'POST' && (route.request().postData() ?? '').includes('"add-task"')
 const failAdds = page => page.route('**/_serverFn/**', route => (isAdd(route) ? route.abort() : route.continue()))
 // The add reaches the server and is applied; the browser never hears back.
@@ -56,7 +56,10 @@ for (const [engine, width] of [[chromium, 1280], [webkit, 390]].filter(([e]) => 
   const context = await browser.newContext({ viewport: { width, height: 900 }, timezoneId: 'America/Vancouver', serviceWorkers: 'block' })
   let page = await context.newPage()
   const errors = []
-  page.on('pageerror', e => errors.push(e.message))
+  // WebKit reports a request cancelled by a navigation (the save pagehide starts, cut off by the next page) as a page
+  // error, "... due to access control checks". No unhandled rejection or window error is raised in the page with it.
+  const cancelled = /\/_serverFn\/.* due to access control checks/
+  page.on('pageerror', e => { if (!cancelled.test(e.message)) errors.push(e.message) })
   if (process.env.DEBUG_ERRORS) page.on('pageerror', e => console.log('PAGEERROR', e.stack))
   await page.clock.install({ time: evening(27) })
 
@@ -151,7 +154,7 @@ for (const [engine, width] of [[chromium, 1280], [webkit, 390]].filter(([e]) => 
   const killed = `Typed then killed ${stamp}`
   await input(page).fill(killed)
   const reopened = await context.newPage()
-  reopened.on('pageerror', e => errors.push(e.message))
+  reopened.on('pageerror', e => { if (!cancelled.test(e.message)) errors.push(e.message) })
   await openDay(reopened, at('2026-11-05', '21:00'))
   const kept = await input(reopened).inputValue(), pendingKilled = await pendingText(reopened)
   check(`${tag} unsent: killed with no event, the draft is back in the input, not in the list`, kept === killed && !pendingKilled.includes(killed), `input "${kept}"`)
