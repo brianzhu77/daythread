@@ -3,6 +3,7 @@
 #   domain-to-worker  daythread.dogrod.com answers from the Worker (its CNAME to Vercel is replaced)
 #   domain-to-vercel  the rollback: the Worker lets go of the name and the CNAME to Vercel comes back
 #   check-token       what the token may do (status and the Hyperdrive permission names), nothing secret printed
+#   timings           the Worker's requests in the last HOURS (default 6) from Workers observability: time, method, path, status, wall ms
 # Never runs on PRs, so a fork can't reach the secrets. The Cloudflare token (CLOUDFLARE_API_TOKEN) is Brian's, added by
 # him as a repository secret; the app's five values are the same as Vercel's production env, as repository secrets.
 name: Cloudflare
@@ -12,8 +13,11 @@ on:
     inputs:
       action:
         type: choice
-        options: [deploy, domain-to-worker, domain-to-vercel, check-token]
+        options: [deploy, domain-to-worker, domain-to-vercel, check-token, timings]
         required: true
+      hours:
+        type: string
+        default: '6'
 
 permissions:
   contents: read
@@ -151,3 +155,22 @@ jobs:
           echo "observability: $(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' -X POST "https://api.cloudflare.com/client/v4/accounts/$account/workers/observability/telemetry/query" -d "{\"queryId\":\"check-token\",\"timeframe\":{\"from\":$((now - 3600000)),\"to\":$now},\"view\":\"events\",\"limit\":1,\"parameters\":{\"filters\":[{\"key\":\"\$metadata.service\",\"operation\":\"eq\",\"type\":\"string\",\"value\":\"daythread\"}]}}" | jq -c '{success, errors}')"
           [ -n "$zone" ] && echo "dns records: $(api "https://api.cloudflare.com/client/v4/zones/$zone/dns_records?name=daythread.dogrod.com" | jq -c '{success, errors, n: (.result // [] | length)}')"
           echo "worker domains: $(api "https://api.cloudflare.com/client/v4/accounts/$account/workers/domains" | jq -c '{success, errors}')"
+
+  timings:
+    if: inputs.action == 'timings'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Requests
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          HOURS: ${{ inputs.hours }}
+        run: |
+          set -euo pipefail
+          api() { curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' "$@"; }
+          account=$(api https://api.cloudflare.com/client/v4/accounts | jq -r '.result[0].id')
+          now=$(($(date +%s) * 1000))
+          body=$(jq -nc --argjson from $((now - ${HOURS:-6} * 3600000)) --argjson to $now '{queryId: "timings", timeframe: {from: $from, to: $to}, view: "events", limit: 2000, parameters: {filters: [{key: "$metadata.service", operation: "eq", type: "string", value: "daythread"}]}}')
+          api -X POST "https://api.cloudflare.com/client/v4/accounts/$account/workers/observability/telemetry/query" -d "$body" > "$RUNNER_TEMP/q.json"
+          jq -c '{success, errors, resultKeys: (.result | keys? // null)}' "$RUNNER_TEMP/q.json"
+          jq -c '.result.events.events[0] // .result.events[0] // empty' "$RUNNER_TEMP/q.json" | cut -c1-3000
