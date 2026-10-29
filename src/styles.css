@@ -569,7 +569,9 @@ textarea.task-title:focus { outline: none; }
 /* A to-do marker, not a control: tomorrow's boxes are ticked tomorrow. Sized like the editor's checkbox. */
 .tomorrow-list .tomorrow-box { width: 18px; height: 18px; margin-top: 13px; cursor: default; }
 .tomorrow-new-box { border-style: dashed; }
-.tomorrow-line-state { flex: none; margin-top: 11px; font-size: var(--text-meta); }
+.tomorrow-pending-text { display: grid; flex: 1 1 0; min-width: 0; padding-bottom: 6px; }
+.tomorrow-pending-text .task-title { padding-bottom: 2px; }
+.tomorrow-line-state { font-size: var(--text-meta); line-height: 18px; color: var(--ink-2); }
 .tomorrow-line-state.warn { color: var(--warn); }
 .tomorrow-new-input { font: inherit; color: var(--ink); line-height: 1.45; }
 .tomorrow-new-input:focus { outline: none; }

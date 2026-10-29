@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { DayView, LocalDate, Page, Task, Workspace } from '../domain/types'
+import type { DayView, LocalDate, Page, Receipt, Task, Workspace } from '../domain/types'
 import { getDayView } from '../domain/workspace'
-import { addDays, longLabel } from './dates'
+import { addDays, longLabel, weekday } from './dates'
 import { RowMenu } from './row-menu'
 import { TagText } from './tag-text'
-import { newOperationId, useWorkspace } from './use-day'
+import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
 
 /**
  * The review on the page (docs/design/review-on-the-page.md): a Tomorrow block at the bottom of today's page. Lines he
  * types become to-dos on tomorrow's page at once; what is left open comes along in the morning, as the morning card
  * does. No screen, no Done. The line-saving rules are B31's: a plain input (Return while a pinyin candidate is open
  * confirms it, B49), one operation id per line, an unsaved line stays with Retry and survives a reload.
+ *
+ * B68 (task #227): nothing typed here vanishes. Unsaved lines are kept under one key for every day, each with the date
+ * it was meant for, so a line still unsaved at midnight shows in the next day's block and saves to the later of its
+ * date and today. The input itself is kept as he types and becomes a line when he leaves it, never mid-pinyin.
  */
 
 interface PendingLine {
@@ -19,50 +23,185 @@ interface PendingLine {
   /** One operation id per line: a retry after a lost response replays the same add, never a second task. */
   operationId: string
   failed: boolean
+  /** The day the line is for, and the day it was typed on. */
+  date: LocalDate
+  typedOn: LocalDate
+  /** Every add sent under the operation id. One may have landed with its reply lost; replaying it names the task. */
+  sent?: AddSent[]
+  /**
+   * The plan-tasks that moves a recovered task to a day, one operation id per day, kept so a retry replays it. A move
+   * that landed with its reply lost and is retried on a later day gets that day's own id, which moves it again.
+   */
+  moves?: Record<LocalDate, string>
+}
+interface AddSent { pageId: string; plannedOn: LocalDate }
+
+/**
+ * Unsaved lines and the draft exist only on this device, so they're kept under the account they belong to: another
+ * account on the same browser never sees or sends them, and they're back when that account signs in again. Sign-out
+ * leaves them (the server doesn't have them). With no known account, nothing is read or kept.
+ */
+const linesKey = (owner: string) => `daythread.tomorrow-lines.${owner}`
+const draftKey = (owner: string) => `daythread.tomorrow-draft.${owner}`
+/**
+ * Before B68 a day's unsaved lines lived under its own key, for no account, and were never read again after midnight.
+ * They can only come from builds before invites, when his was the one account, so the first account to open the block
+ * after the update takes them, once (Lead's ruling on #227).
+ */
+const legacyPrefix = 'daythread.review-lines.'
+
+function readLines(owner: string | null): PendingLine[] {
+  if (!owner) return []
+  try {
+    const raw = localStorage.getItem(linesKey(owner))
+    return raw ? (JSON.parse(raw) as PendingLine[]) : []
+  } catch {
+    return []
+  }
 }
 
-function useStored<T>(key: string, blank: T): [T | null, (next: T | ((prev: T) => T)) => void] {
+/** Moves lines left under the old per-day keys to this account's list and deletes the old keys. */
+function adoptLegacyLines(owner: string): void {
+  const keys = Object.keys(localStorage).filter(k => k.startsWith(legacyPrefix))
+  if (!keys.length) return
+  const lines = readLines(owner)
+  const known = new Set(lines.map(l => l.operationId))
+  for (const key of keys) {
+    const day = key.slice(legacyPrefix.length)
+    let old: unknown
+    try {
+      old = JSON.parse(localStorage.getItem(key) ?? '[]')
+    } catch {
+      old = []
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day) && Array.isArray(old)) {
+      for (const l of old as Partial<PendingLine>[]) {
+        if (typeof l?.title !== 'string' || !l.title.trim() || typeof l.operationId !== 'string' || known.has(l.operationId)) continue
+        known.add(l.operationId)
+        // The old block sent its add to the next day's page, whose id is fixed (`day:<date>`).
+        const date = addDays(day, 1)
+        lines.push({ key: l.key ?? newOperationId(), title: l.title, operationId: l.operationId, failed: true, date, typedOn: day, sent: [{ pageId: `day:${date}`, plannedOn: date }] })
+      }
+    }
+  }
+  localStorage.setItem(linesKey(owner), JSON.stringify(lines))
+  for (const key of keys) localStorage.removeItem(key)
+}
+
+/**
+ * The unsaved lines, written to storage synchronously on every change: a line added as the page is hidden is kept
+ * even if the page is frozen before React renders again. Each change starts from what storage holds, so two tabs
+ * don't drop each other's lines. With no known account the lines live in memory only.
+ */
+function usePendingLines(owner: string | null): [PendingLine[] | null, (change: (all: PendingLine[]) => PendingLine[]) => void, () => PendingLine[]] {
   // null until read from storage, so a resumed block never flashes its blank state.
-  const [value, setValue] = useState<T | null>(null)
+  const [value, setValue] = useState<PendingLine[] | null>(null)
+  const memory = useRef<PendingLine[]>([])
+  const current = useCallback(() => (owner ? readLines(owner) : memory.current), [owner])
   useEffect(() => {
-    const raw = localStorage.getItem(key)
-    setValue(raw ? (JSON.parse(raw) as T) : blank)
-    // `blank` is a constant per call site.
-  }, [key])
+    if (!owner) {
+      setValue(memory.current)
+      return
+    }
+    adoptLegacyLines(owner)
+    setValue(readLines(owner))
+    const onStorage = (e: StorageEvent) => e.key === linesKey(owner) && setValue(readLines(owner))
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [owner])
   const update = useCallback(
-    (next: T | ((prev: T) => T)) =>
-      setValue(prev => {
-        const value = typeof next === 'function' ? (next as (p: T) => T)(prev ?? blank) : next
-        localStorage.setItem(key, JSON.stringify(value))
-        return value
-      }),
-    [key],
+    (change: (all: PendingLine[]) => PendingLine[]) => {
+      const next = change(current())
+      if (owner) localStorage.setItem(linesKey(owner), JSON.stringify(next))
+      else memory.current = next
+      setValue(next)
+    },
+    [current, owner],
   )
-  return [value, update]
+  return [value, update, current]
 }
 
-const noLines: PendingLine[] = []
+/** "From last night" for a line typed yesterday, else the weekday it was typed. */
+function carriedLabel(typedOn: LocalDate, today: LocalDate): string {
+  return typedOn === addDays(today, -1) ? 'From last night' : `From ${weekday(typedOn)}`
+}
+
+/**
+ * The server's refusal of an add whose operation id already holds a different add: one sent on an earlier day landed
+ * and its reply was lost. Only this refusal is recovered; any other stays on Retry.
+ */
+const addedEarlier = /Operation identity reused with different input/
 
 export function TomorrowBlock({ today, view, workspace }: { today: LocalDate; view: DayView; workspace: Workspace }) {
   const { run, latest } = useWorkspace()
   const next = addDays(today, 1)
   const nextView = getDayView(workspace, next)
   const nextPage = nextView.page ?? null
-  // The same key B31's review used for this day, so a line left unsaved there is still here.
-  const [lines, setLines] = useStored<PendingLine[]>(`daythread.review-lines.${today}`, noLines)
-  const [draft, setDraft] = useState('')
+  // The account is known by the time the block shows: the workspace it renders came with it.
+  const owner = workspaceOwner()
+  const [lines, setLines, currentLines] = usePendingLines(owner)
+  const [draft, setDraftState] = useState('')
+  const draftRef = useRef('')
+  const setDraft = useCallback(
+    (text: string) => {
+      draftRef.current = text
+      if (owner && text) localStorage.setItem(draftKey(owner), text)
+      else if (owner) localStorage.removeItem(draftKey(owner))
+      setDraftState(text)
+    },
+    [owner],
+  )
+  // A draft left by a reload or a closed app goes back in the input, not into the list: he never confirmed it.
+  useEffect(() => {
+    const kept = owner ? localStorage.getItem(draftKey(owner)) : null
+    if (kept) setDraft(kept)
+  }, [owner, setDraft])
   const composing = useRef(false)
 
-  /** Tomorrow's page, made from the template the first time a line needs it; lines typed together share one call. */
-  const creating = useRef<Promise<Page | null> | null>(null)
-  const ensureNextPage = useCallback((): Promise<Page | null> => {
-    const find = () => latest()?.pages.find(p => p.type === 'daily' && p.date === next) ?? null
-    if (find()) return Promise.resolve(find())
-    creating.current ??= run({ type: 'ensure-day', date: next }, null, undefined, { quiet: true })
-      .then(receipt => (receipt ? find() : null))
-      .finally(() => (creating.current = null))
-    return creating.current
-  }, [latest, next, run])
+  /** A day's page, made from the template the first time a line needs it; lines saved together share one call. */
+  const creating = useRef(new Map<LocalDate, Promise<Page | null>>())
+  const ensurePage = useCallback(
+    (date: LocalDate): Promise<Page | null> => {
+      const find = () => latest()?.pages.find(p => p.type === 'daily' && p.date === date) ?? null
+      if (find()) return Promise.resolve(find())
+      let job = creating.current.get(date)
+      if (!job) {
+        job = run({ type: 'ensure-day', date }, null, undefined, { quiet: true })
+          .then(receipt => (receipt ? find() : null))
+          .finally(() => creating.current.delete(date))
+        creating.current.set(date, job)
+      }
+      return job
+    },
+    [latest, run],
+  )
+
+  /**
+   * An add sent on an earlier day landed but its reply was lost. Replaying the earlier adds under the same operation id
+   * makes the server name the task it made (a replay never applies twice); the task is then planned for the line's day,
+   * as the morning card does, so it ends up on today's page once. False keeps the line on Retry.
+   */
+  const recoverEarlierAdd = useCallback(
+    async (key: string, date: LocalDate): Promise<boolean> => {
+      const line = currentLines().find(l => l.key === key)
+      if (!line) return true
+      let taskId: string | undefined
+      for (const sent of line.sent ?? []) {
+        if (sent.plannedOn === date) continue
+        const receipt = await run({ type: 'add-task', pageId: sent.pageId, title: line.title, plannedOn: sent.plannedOn }, null, line.operationId, { quiet: true, inlineRefusal: addedEarlier })
+        taskId = receipt?.entityId
+        if (taskId) break
+      }
+      if (!taskId) return false
+      const task = latest()?.tasks.find(t => t.id === taskId)
+      // Ticked, removed or already on the day since: nothing to move.
+      if (!task || task.status !== 'open' || getDayView(latest()!, date).dayTasks.some(t => t.id === taskId)) return true
+      const moveOperationId = line.moves?.[date] ?? newOperationId()
+      if (!line.moves?.[date]) setLines(all => all.map(l => (l.key === key ? { ...l, moves: { ...l.moves, [date]: moveOperationId } } : l)))
+      return Boolean(await run({ type: 'plan-tasks', date, items: [{ taskId }] }, null, moveOperationId, { quiet: true }))
+    },
+    [currentLines, latest, run, setLines],
+  )
 
   // One save per line at a time: Return and a retry on reconnect wait on the save already running.
   const saving = useRef(new Map<string, Promise<boolean>>())
@@ -72,50 +211,77 @@ export function TomorrowBlock({ today, view, workspace }: { today: LocalDate; vi
       if (running) return running
       const job = (async () => {
         setLines(all => all.map(l => (l.key === line.key ? { ...l, failed: false } : l)))
-        const target = await ensureNextPage()
-        const receipt = target ? await run({ type: 'add-task', pageId: target.id, title: line.title, plannedOn: next }, null, line.operationId, { quiet: true }) : null
-        setLines(all => (receipt ? all.filter(l => l.key !== line.key) : all.map(l => (l.key === line.key ? { ...l, failed: true } : l))))
+        // Never onto a past page: a line still unsaved after its day goes to today's.
+        const date = line.date > today ? line.date : today
+        const target = await ensurePage(date)
+        let receipt: Receipt | null = null
+        let landedEarlier = false
+        if (target) {
+          const sent: AddSent = { pageId: target.id, plannedOn: date }
+          // Recorded before sending: if this one lands and its reply is lost, a later day can still replay it.
+          setLines(all => all.map(l => (l.key === line.key && !l.sent?.some(x => x.pageId === sent.pageId) ? { ...l, sent: [...(l.sent ?? []), sent] } : l)))
+          receipt = await run({ type: 'add-task', pageId: sent.pageId, title: line.title, plannedOn: date }, null, line.operationId, {
+            quiet: true,
+            inlineRefusal: addedEarlier,
+            onRefused: () => (landedEarlier = true),
+          })
+        }
+        const saved = receipt ? true : landedEarlier ? await recoverEarlierAdd(line.key, date) : false
+        setLines(all => (saved ? all.filter(l => l.key !== line.key) : all.map(l => (l.key === line.key ? { ...l, failed: true } : l))))
         // The day's record says he planned the next day from this page; nothing else reads the flag.
-        const todayPage = latest()?.pages.find(p => p.type === 'daily' && p.date === today)
-        if (receipt && todayPage && !todayPage.reviewSaved) void run({ type: 'save-review', date: today }, null, undefined, { quiet: true })
-        return Boolean(receipt)
+        const typedPage = latest()?.pages.find(p => p.type === 'daily' && p.date === line.typedOn)
+        if (saved && typedPage && !typedPage.reviewSaved) void run({ type: 'save-review', date: line.typedOn }, null, undefined, { quiet: true })
+        return saved
       })().finally(() => saving.current.delete(line.key))
       saving.current.set(line.key, job)
       return job
     },
-    [ensureNextPage, latest, next, run, setLines, today],
+    [ensurePage, latest, recoverEarlierAdd, run, setLines, today],
   )
 
   // B35's way: a line that didn't save is tried again when the connection comes back or the page is shown again,
-  // and once when the block mounts (a line left from a reload). The same operation id makes a repeat harmless.
-  const linesRef = useRef(lines)
-  linesRef.current = lines
+  // and once when the block mounts (a line left from a reload or an earlier day). The same operation id makes a
+  // repeat harmless.
   const retryAll = useCallback(() => {
-    for (const line of linesRef.current ?? []) void saveLine(line)
-  }, [saveLine])
+    for (const line of currentLines()) void saveLine(line)
+  }, [currentLines, saveLine])
   const retriedOnOpen = useRef(false)
   useEffect(() => {
     if (lines === null || retriedOnOpen.current) return
     retriedOnOpen.current = true
     retryAll()
   }, [lines, retryAll])
+
+  const addLine = useCallback(
+    (title: string) => {
+      const line: PendingLine = { key: newOperationId(), title, operationId: newOperationId(), failed: false, date: next, typedOn: today }
+      setLines(all => [...all, line])
+      void saveLine(line)
+    },
+    [next, saveLine, setLines, today],
+  )
+  /** The input becomes a line: on Return, when he leaves it, and when the page is hidden. Never mid-pinyin. */
+  const commitDraft = useCallback(() => {
+    if (composing.current) return
+    const title = draftRef.current.trim()
+    if (!title) return
+    setDraft('')
+    addLine(title)
+  }, [addLine, setDraft])
+
   useEffect(() => {
     const visible = () => document.visibilityState === 'visible' && retryAll()
     window.addEventListener('online', retryAll)
     document.addEventListener('visibilitychange', visible)
+    window.addEventListener('pagehide', commitDraft)
     return () => {
       window.removeEventListener('online', retryAll)
       document.removeEventListener('visibilitychange', visible)
+      window.removeEventListener('pagehide', commitDraft)
     }
-  }, [retryAll])
+  }, [commitDraft, retryAll])
 
   if (lines === null) return null
-
-  const addLine = (title: string) => {
-    const line: PendingLine = { key: newOperationId(), title, operationId: newOperationId(), failed: false }
-    setLines(all => [...all, line])
-    void saveLine(line)
-  }
 
   const onNext = nextPage ? nextView.dayTasks.filter(t => t.status !== 'cancelled' && t.title.trim() !== '') : []
   const openToday = view.dayTasks.filter(t => t.status === 'open' && t.title.trim() !== '' && !t.paused).length
@@ -129,22 +295,30 @@ export function TomorrowBlock({ today, view, workspace }: { today: LocalDate; vi
         {onNext.map(task => (
           <TomorrowRow key={task.id} task={task} pageId={nextPage!.id} today={today} />
         ))}
-        {lines.map(line => (
-          <div key={line.key} className="task-row plan tomorrow-pending">
-            <span className="check tomorrow-box" aria-hidden="true" />
-            <span className="task-title">{line.title}</span>
-            {line.failed ? (
-              <span className="tomorrow-line-state warn">
-                Not added ·{' '}
-                <button type="button" className="app-link" onClick={() => void saveLine(line)}>
-                  Retry
-                </button>
+        {lines.map(line => {
+          // A carried line sits under tomorrow's header but saves to today, so its state says so (Jazz, PR #32).
+          const carried = line.typedOn < today ? `${carriedLabel(line.typedOn, today)} · ` : ''
+          return (
+            <div key={line.key} className="task-row plan tomorrow-pending">
+              <span className="check tomorrow-box" aria-hidden="true" />
+              {/* The state on its own line under the title, so the title keeps the full width at 390. */}
+              <span className="tomorrow-pending-text">
+                <span className="task-title">{line.title}</span>
+                {line.failed ? (
+                  <span className="tomorrow-line-state warn">
+                    {carried}
+                    {carried ? 'Not added to today' : 'Not added'} ·{' '}
+                    <button type="button" className="app-link" onClick={() => void saveLine(line)}>
+                      Retry
+                    </button>
+                  </span>
+                ) : (
+                  <span className="tomorrow-line-state quiet">{carried}Adding…</span>
+                )}
               </span>
-            ) : (
-              <span className="tomorrow-line-state quiet">Adding…</span>
-            )}
-          </div>
-        ))}
+            </div>
+          )
+        })}
         <div className="task-row plan tomorrow-new">
           <span className="check tomorrow-box tomorrow-new-box" aria-hidden="true" />
           {/* A plain input, not the page editor: Return while a pinyin candidate is open confirms it (B49). */}
@@ -160,14 +334,12 @@ export function TomorrowBlock({ today, view, workspace }: { today: LocalDate; vi
               // WebKit sends the Return that confirms a candidate after compositionend; let that one pass.
               setTimeout(() => (composing.current = false), 0)
             }}
+            onBlur={commitDraft}
             onKeyDown={e => {
               if (e.key !== 'Enter') return
               if (e.nativeEvent.isComposing || e.keyCode === 229 || composing.current) return
               e.preventDefault()
-              const title = draft.trim()
-              if (!title) return
-              setDraft('')
-              addLine(title)
+              commitDraft()
             }}
           />
         </div>
