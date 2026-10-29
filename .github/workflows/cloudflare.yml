@@ -141,3 +141,10 @@ jobs:
           echo "user groups: $(api https://api.cloudflare.com/client/v4/user/tokens/permission_groups | jq -c 'if .success then [.result[] | select(.name | test("yperdrive")) | {name, scopes}] else .errors end')"
           echo "account groups: $(api "https://api.cloudflare.com/client/v4/accounts/$account/tokens/permission_groups" | jq -c 'if .success then [.result[] | select(.name | test("yperdrive")) | {name, scopes}] else .errors end')"
           echo "hyperdrive list: $(api "https://api.cloudflare.com/client/v4/accounts/$account/hyperdrive/configs" | jq -c '{success, errors}')"
+          echo "account verify: $(api "https://api.cloudflare.com/client/v4/accounts/$account/tokens/verify" | jq -c '{success, status: .result.status, errors}')"
+          zones=$(api "https://api.cloudflare.com/client/v4/zones?name=dogrod.com")
+          echo "zones: $(echo "$zones" | jq -c '{success, errors, names: [.result[]? | .name]}')"
+          zone=$(echo "$zones" | jq -r '.result[0].id // empty')
+          echo "zones (any): $(api "https://api.cloudflare.com/client/v4/zones" | jq -c '{success, errors, names: [.result[]? | .name]}')"
+          [ -n "$zone" ] && echo "dns records: $(api "https://api.cloudflare.com/client/v4/zones/$zone/dns_records?name=daythread.dogrod.com" | jq -c '{success, errors, n: (.result // [] | length)}')"
+          echo "worker domains: $(api "https://api.cloudflare.com/client/v4/accounts/$account/workers/domains" | jq -c '{success, errors}')"
