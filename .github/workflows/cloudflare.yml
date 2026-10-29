@@ -172,5 +172,9 @@ jobs:
           now=$(($(date +%s) * 1000))
           body=$(jq -nc --argjson from $((now - ${HOURS:-6} * 3600000)) --argjson to $now '{queryId: "timings", timeframe: {from: $from, to: $to}, view: "events", limit: 2000, parameters: {filters: [{key: "$metadata.service", operation: "eq", type: "string", value: "daythread"}]}}')
           api -X POST "https://api.cloudflare.com/client/v4/accounts/$account/workers/observability/telemetry/query" -d "$body" > "$RUNNER_TEMP/q.json"
-          jq -c '{success, errors, resultKeys: (.result | keys? // null)}' "$RUNNER_TEMP/q.json"
-          jq -c '.result.events.events[0] // .result.events[0] // empty' "$RUNNER_TEMP/q.json" | cut -c1-3000
+          jq -e '.success' "$RUNNER_TEMP/q.json" >/dev/null || { echo "Cloudflare refused: $(jq -c '.errors' "$RUNNER_TEMP/q.json")"; exit 1; }
+          # Only time, method, path, status and timings are printed: the raw events also carry the visitor's IP and location.
+          jq -r '[.result.events.events[]? | select(."$workers".eventType == "fetch") | ."$workers" as $w
+              | [(.timestamp / 1000 | todate), $w.event.request.method, ($w.event.request.url | sub("^https?://[^/]+"; "") | sub("\\?.*"; "")),
+                 $w.event.response.status, $w.outcome, $w.wallTimeMs, $w.cpuTimeMs]] | sort | .[] | @tsv' "$RUNNER_TEMP/q.json" \
+            | (echo -e "time\tmethod\tpath\tstatus\toutcome\twall_ms\tcpu_ms"; cat)
