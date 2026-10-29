@@ -1,0 +1,46 @@
+ok   1280 chromium saved: both lines are to-dos on Oct 29's page (TODO / Saved line A mvtt81yz / ⋯ / Saved line B 买狗窝 mvtt81yz / ⋯ /  /  / Events /  /  /  /  / Good Stuffs /  /  /  /  / Notes /  /  / )
+ok   1280 chromium saved: the card offers the line left open on Oct 28 (Start the day / TASKS / + / Control mvtt81yz left open / Unfinished · from Wed / ⋯ / Done / Later)
+ok   1280 chromium saved: the card doesn't offer the Tomorrow lines (they're already today's)
+ok   1280 chromium failed: on the evening the block shows the lines as not added (Tomorrow · Fri, Oct 30 / Unsaved line C mvtt81yz / Not added · Retry / Unsaved line D 买狗窝 mvtt81yz / Not added · Retry /  / 2 unfinished to-dos come along in the morning.)
+ok   1280 chromium failed: next morning, adds still failing, today's block shows them "From last night · Not added" (Unsaved line C mvtt81yz
+From last night · Not added · Retry / Unsaved line D 买狗窝 mvtt81yz
+From last night · Not added · Retry)
+ok   1280 chromium failed: with adds back, the lines are to-dos on Oct 30's page (TODO / Unsaved line C mvtt81yz / ⋯ / Unsaved line D 买狗窝 mvtt81yz / ⋯ /  /  / Events /  /  /  /  / Good Stuffs /  /  /  /  / Notes /  /  / )
+ok   1280 chromium failed: the card doesn't offer them (they're today's) (Start the day / TASKS / + / Saved line A mvtt81yz / Unfinished · from Thu / ⋯ / + / Saved line B 买狗窝 mvtt81yz / Unfinished · from Thu / ⋯ / Add all tasks / Done / Later)
+ok   1280 chromium failed: they've left the block and the device's store ( | [])
+ok   1280 chromium days late: Monday's block shows it "From Fri · Not added" (Late line E mvtt81yz
+From Fri · Not added · Retry)
+ok   1280 chromium days late: it's a to-do on Nov 2's page, not on Oct 31's (TODO / Late line E mvtt81yz / ⋯ /  /  / Events /  /  /  /  / Good Stuffs /  /  /  /  / Notes /  /  / )
+ok   1280 chromium lost reply: two days late, the line leaves the block and the device ( | [])
+ok   1280 chromium lost reply: Nov 5 has the recovered to-do and the same-titled one (2 rows) (Nov 5 ×2)
+ok   1280 chromium lost reply: no second copy was made (Nov 3 keeps its 1 row, Nov 4 has none) (Nov 3 ×1, Nov 4 ×0)
+ok   1280 chromium unsent: after pagehide and a reload it's a to-do for tomorrow (Tomorrow · Fri, Nov 6 / Typed no Return mvtt81yz / ⋯ /  / 2 unfinished to-dos come along in the morning.)
+ok   1280 chromium unsent: killed with no event, the draft is back in the input, not in the list (input "Typed then killed mvtt81yz")
+ok   1280 chromium pinyin: leaving mid-candidate adds nothing and keeps the text (Tomorrow · Fri, Nov 6 / Typed no Return mvtt81yz / ⋯ /  / 2 unfinished to-dos come along in the morning.)
+ok   1280 chromium pinyin: once confirmed, leaving the input adds it
+ok   1280 chromium: no page errors
+ok   390 webkit saved: both lines are to-dos on Oct 29's page (TODO /  / Saved line A mvtt81yz / ⋯ /  / Saved line B 买狗窝 mvtt81yz / ⋯ /  / Saved line A mvtt8h7n / ⋯ /  / Saved line B 买狗窝 mvtt8h7n / ⋯ /  /  / Events /  / Good Stuffs /  / Notes /  / Aa /  /  /  /  /  /  / )
+ok   390 webkit saved: the card offers the line left open on Oct 28 (Start the day / TASKS /  /  / + / Control mvtt81yz left open / Unfinished · from Wed / ⋯ /  / + / Control mvtt8h7n left open / Unfinished · from Wed / ⋯ / Add all tasks / Done / Later / )
+ok   390 webkit saved: the card doesn't offer the Tomorrow lines (they're already today's)
+ok   390 webkit failed: on the evening the block shows the lines as not added (Tomorrow · Fri, Oct 30 / Unsaved line C mvtt81yz / ⋯ / Unsaved line D 买狗窝 mvtt81yz / ⋯ / Unsaved line C mvtt8h7n / Not added · Retry / Unsaved line D 买狗窝 mvtt8h7n / Not added · Retry /  / 4 unfinished to-dos come along in the morning. / )
+ok   390 webkit failed: next morning, adds still failing, today's block shows them "From last night · Not added" (Unsaved line C mvtt8h7n
+From last night · Not added · Retry
+ / Unsaved line D 买狗窝 mvtt8h7n
+From last night · Not added · Retry
+)
+ok   390 webkit failed: with adds back, the lines are to-dos on Oct 30's page (TODO /  / Unsaved line C mvtt81yz / ⋯ /  / Unsaved line D 买狗窝 mvtt81yz / ⋯ /  / Unsaved line C mvtt8h7n / ⋯ /  / Unsaved line D 买狗窝 mvtt8h7n / ⋯ /  /  / Events /  / Good Stuffs /  / Notes /  / Aa /  /  /  /  /  /  / )
+ok   390 webkit failed: the card doesn't offer them (they're today's) (Start the day / TASKS /  /  / + / Saved line A mvtt81yz / Unfinished · from Thu / ⋯ /  / + / Saved line B 买狗窝 mvtt81yz / Unfinished · from Thu / ⋯ /  / + / Saved line A mvtt8h7n / Unfinished · from Thu / ⋯ /  / + / Saved line B 买狗窝 mvtt8h7n / Unfinished · from Thu / ⋯ / Add all tasks / Done / Later / )
+ok   390 webkit failed: they've left the block and the device's store ( | [])
+ok   390 webkit days late: Monday's block shows it "From Fri · Not added" (Late line E mvtt8h7n
+From Fri · Not added · Retry
+)
+ok   390 webkit days late: it's a to-do on Nov 2's page, not on Oct 31's (TODO /  / Late line E mvtt81yz / ⋯ /  / Late line E mvtt8h7n / ⋯ /  /  / Events /  / Good Stuffs /  / Notes /  / Aa /  /  /  /  /  /  / )
+ok   390 webkit lost reply: two days late, the line leaves the block and the device ( | [])
+ok   390 webkit lost reply: Nov 5 has the recovered to-do and the same-titled one (2 rows) (Nov 5 ×2)
+ok   390 webkit lost reply: no second copy was made (Nov 3 keeps its 1 row, Nov 4 has none) (Nov 3 ×1, Nov 4 ×0)
+ok   390 webkit unsent: after pagehide and a reload it's a to-do for tomorrow (Tomorrow · Fri, Nov 6 / Typed no Return mvtt81yz / ⋯ / 买狗窝 pinyin mvtt81yz / ⋯ / Typed no Return mvtt8h7n / ⋯ /  / 4 unfinished to-dos come along in the morning. / )
+ok   390 webkit unsent: killed with no event, the draft is back in the input, not in the list (input "Typed then killed mvtt8h7n")
+ok   390 webkit pinyin: leaving mid-candidate adds nothing and keeps the text (Tomorrow · Fri, Nov 6 / Typed no Return mvtt81yz / ⋯ / 买狗窝 pinyin mvtt81yz / ⋯ / Typed no Return mvtt8h7n / ⋯ /  / 4 unfinished to-dos come along in the morning. / )
+ok   390 webkit pinyin: once confirmed, leaving the input adds it
+ok   390 webkit: no page errors
+all passed
