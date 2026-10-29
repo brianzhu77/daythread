@@ -16,18 +16,29 @@ export interface Transport {
   run(workspace: Workspace, action: Action, operationId?: string): Promise<{ workspace: Workspace; receipt: Receipt }>
 }
 
+/**
+ * Whose workspace is on screen: the `owner` of the last server answer, or of the offline copy when the app opened
+ * offline. Null until either is known. Device-only records (the Tomorrow block's unsaved lines) are kept under it.
+ */
+let knownOwner: string | null = null
+export function workspaceOwner(): string | null {
+  return knownOwner
+}
+
 // Every workspace the server answers with is the copy the next offline open shows, kept under the account it belongs to.
 const serverTransport: Transport = {
   load: async (operationId = newOperationId(), triggerOperationId) => {
     const startedAt = Date.now()
     const response=await loadWorkspace({data:{operationId,triggerOperationId}})
     configureDebug(response.debug)
+    knownOwner = response.owner
     void offlineCopy.remember(response.workspace, { owner: response.owner, startedAt })
     return response.workspace
   },
   run: async (workspace, action, operationId = newOperationId()) => {
     const startedAt = Date.now()
     const { owner, ...result } = await runCommand({ data: { operationId, expectedRevision: workspace.revision, action } })
+    knownOwner = owner
     void offlineCopy.remember(result.workspace, { owner, startedAt })
     return result
   },
@@ -107,6 +118,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     void refresh().catch(async (e: unknown) => {
       // No network: the last-loaded copy opens the app, read as it was; any other failure is shown as before.
       const copy = await offlineCopy.fallback(e)
+      if (copy && !knownOwner) knownOwner = await offlineCopy.recallOwner()
       if (copy && (!wsRef.current || copy.revision >= wsRef.current.revision)) {
         adopt(copy); setOffline(true)
         debugClient('workspace.offline-copy', { afterRevision: copy.revision })

@@ -1,0 +1,13 @@
+ok   1280 chromium B sees neither A's line nor A's draft (Tomorrow · Fri, Oct 30 | input "")
+ok   1280 chromium nothing of A's is sent while B is signed in
+ok   1280 chromium B's page has neither
+ok   1280 chromium A signs in again: the line is back and saved to A's tomorrow (Tomorrow · Fri, Oct 30 / A's unsaved line mvttj2bk / ⋯ / A's draft mvttj2bk / ⋯)
+ok   1280 chromium A signs in again: the draft is back (as a line or in the input) (Tomorrow · Fri, Oct 30 / A's unsaved line mvttj2bk / ⋯ / A's draft mvttj2bk / ⋯ | input "")
+ok   1280 chromium: no page errors
+ok   390 webkit B sees neither A's line nor A's draft (Tomorrow · Fri, Oct 30 /  /  | input "")
+ok   390 webkit nothing of A's is sent while B is signed in
+ok   390 webkit B's page has neither
+ok   390 webkit A signs in again: the line is back and saved to A's tomorrow (Tomorrow · Fri, Oct 30 / A's unsaved line mvttj8dw / ⋯ / A's draft mvttj8dw / ⋯ /  / )
+ok   390 webkit A signs in again: the draft is back (as a line or in the input) (Tomorrow · Fri, Oct 30 / A's unsaved line mvttj8dw / ⋯ / A's draft mvttj8dw / ⋯ /  /  | input "")
+ok   390 webkit: no page errors
+all passed

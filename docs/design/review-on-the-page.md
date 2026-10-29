@@ -26,6 +26,14 @@ The review is a block at the bottom of today's page, under the page and its subp
    on tomorrow's page at once (`ensure-day` for tomorrow on the first line, then `add-task` into its TODO), the same
    mechanics as B31's add list: a plain input, so Return while a pinyin candidate is open confirms it (B49); every
    line has its own operation id and stays on screen with Retry until it is saved; a reload keeps unsaved lines.
+   B68 (Oct 29, task #227): nothing typed here vanishes. Unsaved lines are kept on the device under the signed-in
+   account (`daythread.tomorrow-lines.<owner>`; sign-out leaves them, another account never sees or sends them), each
+   with the date it was for. A line still unsaved after its day shows in the next day's block as "From last night ·
+   Not added to today · Retry" ("From Mon" when older) and saves to the later of its date and today. Every pending
+   row has its state on its own line under the title. Lines under the old per-day keys go once to the first account
+   that opens the block after the update. The input is kept as he types and becomes a line on Return, when he leaves it, and on `pagehide`, never while
+   a pinyin candidate is open; a draft found after the app was killed goes back in the input, not into the list.
+   The draft is kept under the account too.
 3. **One quiet line** under it when today still has open to-dos: "3 unfinished to-dos come along in the morning."
    That is what the morning card does; the block only says so.
 
