@@ -58,6 +58,10 @@ jobs:
           set -euo pipefail
           api() { curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' "$@"; }
           account=$(api https://api.cloudflare.com/client/v4/accounts | jq -r '.result[0].id')
+          if [ -n "${HYPERDRIVE_ID:-}" ]; then
+            # Made by Brian in the dashboard (caching off, session pooler); the token may not manage Hyperdrive itself.
+            id=$HYPERDRIVE_ID
+          else
           configs="https://api.cloudflare.com/client/v4/accounts/$account/hyperdrive/configs"
           body=$(node -e 'const u=new URL(process.env.DATABASE_URL);process.stdout.write(JSON.stringify({name:"daythread",origin:{scheme:"postgres",host:u.hostname,port:5432,database:u.pathname.slice(1)||"postgres",user:decodeURIComponent(u.username),password:decodeURIComponent(u.password)},caching:{disabled:true}}))')
           id=$(api "$configs" | jq -r '[.result[]? | select(.name == "daythread")][0].id // empty')
@@ -65,12 +69,14 @@ jobs:
           id=$(echo "$result" | jq -r 'if .success then .result.id else empty end')
           [ -n "$id" ] || { echo "Cloudflare refused: $(echo "$result" | jq -c '.errors')"; exit 1; }
           echo "Hyperdrive $id: caching disabled = $(echo "$result" | jq -r '.result.caching.disabled')"
+          fi
           jq --arg id "$id" '.hyperdrive = [{binding: "HYPERDRIVE", id: $id}]' .output/server/wrangler.json > "$RUNNER_TEMP/w.json"
           mv "$RUNNER_TEMP/w.json" .output/server/wrangler.json
           echo "bound Hyperdrive $id"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          HYPERDRIVE_ID: ${{ vars.HYPERDRIVE_ID }}
       - name: Deploy
         run: npx wrangler@4 deploy -c .output/server/wrangler.json
         env:
