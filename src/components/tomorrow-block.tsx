@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { DayView, LocalDate, Page, Task, Workspace } from '../domain/types'
+import type { DayView, LocalDate, Page, Receipt, Task, Workspace } from '../domain/types'
 import { getDayView } from '../domain/workspace'
 import { addDays, longLabel, weekday } from './dates'
 import { RowMenu } from './row-menu'
@@ -26,7 +26,12 @@ interface PendingLine {
   /** The day the line is for, and the day it was typed on. */
   date: LocalDate
   typedOn: LocalDate
+  /** Every add sent under the operation id. One may have landed with its reply lost; replaying it names the task. */
+  sent?: AddSent[]
+  /** The plan-tasks that moves a recovered task to the line's day, kept so a retry replays it. */
+  moveOperationId?: string
 }
+interface AddSent { pageId: string; plannedOn: LocalDate }
 
 const linesKey = 'daythread.tomorrow-lines'
 const draftKey = 'daythread.tomorrow-draft'
@@ -60,7 +65,9 @@ function adoptLegacyLines(): void {
       for (const l of old as Partial<PendingLine>[]) {
         if (typeof l?.title !== 'string' || !l.title.trim() || typeof l.operationId !== 'string' || known.has(l.operationId)) continue
         known.add(l.operationId)
-        lines.push({ key: l.key ?? newOperationId(), title: l.title, operationId: l.operationId, failed: true, date: addDays(day, 1), typedOn: day })
+        // The old block sent its add to the next day's page, whose id is fixed (`day:<date>`).
+        const date = addDays(day, 1)
+        lines.push({ key: l.key ?? newOperationId(), title: l.title, operationId: l.operationId, failed: true, date, typedOn: day, sent: [{ pageId: `day:${date}`, plannedOn: date }] })
       }
     }
   }
@@ -96,8 +103,11 @@ function carriedLabel(typedOn: LocalDate, today: LocalDate): string {
   return typedOn === addDays(today, -1) ? 'From last night' : `From ${weekday(typedOn)}`
 }
 
-/** A replay the server refuses because the add already happened under this operation id (its date moved since). */
-const alreadyAdded = /Operation identity reused with different input|already applied/
+/**
+ * The server's refusal of an add whose operation id already holds a different add: one sent on an earlier day landed
+ * and its reply was lost. Only this refusal is recovered; any other stays on Retry.
+ */
+const addedEarlier = /Operation identity reused with different input/
 
 export function TomorrowBlock({ today, view, workspace }: { today: LocalDate; view: DayView; workspace: Workspace }) {
   const { run, latest } = useWorkspace()
@@ -138,6 +148,33 @@ export function TomorrowBlock({ today, view, workspace }: { today: LocalDate; vi
     [latest, run],
   )
 
+  /**
+   * An add sent on an earlier day landed but its reply was lost. Replaying the earlier adds under the same operation id
+   * makes the server name the task it made (a replay never applies twice); the task is then planned for the line's day,
+   * as the morning card does, so it ends up on today's page once. False keeps the line on Retry.
+   */
+  const recoverEarlierAdd = useCallback(
+    async (key: string, date: LocalDate): Promise<boolean> => {
+      const line = currentLines().find(l => l.key === key)
+      if (!line) return true
+      let taskId: string | undefined
+      for (const sent of line.sent ?? []) {
+        if (sent.plannedOn === date) continue
+        const receipt = await run({ type: 'add-task', pageId: sent.pageId, title: line.title, plannedOn: sent.plannedOn }, null, line.operationId, { quiet: true, inlineRefusal: addedEarlier })
+        taskId = receipt?.entityId
+        if (taskId) break
+      }
+      if (!taskId) return false
+      const task = latest()?.tasks.find(t => t.id === taskId)
+      // Ticked, removed or already on the day since: nothing to move.
+      if (!task || task.status !== 'open' || getDayView(latest()!, date).dayTasks.some(t => t.id === taskId)) return true
+      const moveOperationId = line.moveOperationId ?? newOperationId()
+      if (!line.moveOperationId) setLines(all => all.map(l => (l.key === key ? { ...l, moveOperationId } : l)))
+      return Boolean(await run({ type: 'plan-tasks', date, items: [{ taskId }] }, null, moveOperationId, { quiet: true }))
+    },
+    [currentLines, latest, run, setLines],
+  )
+
   // One save per line at a time: Return and a retry on reconnect wait on the save already running.
   const saving = useRef(new Map<string, Promise<boolean>>())
   const saveLine = useCallback(
@@ -148,26 +185,30 @@ export function TomorrowBlock({ today, view, workspace }: { today: LocalDate; vi
         setLines(all => all.map(l => (l.key === line.key ? { ...l, failed: false } : l)))
         // Never onto a past page: a line still unsaved after its day goes to today's.
         const date = line.date > today ? line.date : today
-        let landedBefore = false
         const target = await ensurePage(date)
-        const receipt = target
-          ? await run({ type: 'add-task', pageId: target.id, title: line.title, plannedOn: date }, null, line.operationId, {
-              quiet: true,
-              inlineRefusal: alreadyAdded,
-              onRefused: () => (landedBefore = true),
-            })
-          : null
-        const saved = Boolean(receipt) || landedBefore
+        let receipt: Receipt | null = null
+        let landedEarlier = false
+        if (target) {
+          const sent: AddSent = { pageId: target.id, plannedOn: date }
+          // Recorded before sending: if this one lands and its reply is lost, a later day can still replay it.
+          setLines(all => all.map(l => (l.key === line.key && !l.sent?.some(x => x.pageId === sent.pageId) ? { ...l, sent: [...(l.sent ?? []), sent] } : l)))
+          receipt = await run({ type: 'add-task', pageId: sent.pageId, title: line.title, plannedOn: date }, null, line.operationId, {
+            quiet: true,
+            inlineRefusal: addedEarlier,
+            onRefused: () => (landedEarlier = true),
+          })
+        }
+        const saved = receipt ? true : landedEarlier ? await recoverEarlierAdd(line.key, date) : false
         setLines(all => (saved ? all.filter(l => l.key !== line.key) : all.map(l => (l.key === line.key ? { ...l, failed: true } : l))))
         // The day's record says he planned the next day from this page; nothing else reads the flag.
         const typedPage = latest()?.pages.find(p => p.type === 'daily' && p.date === line.typedOn)
-        if (receipt && typedPage && !typedPage.reviewSaved) void run({ type: 'save-review', date: line.typedOn }, null, undefined, { quiet: true })
+        if (saved && typedPage && !typedPage.reviewSaved) void run({ type: 'save-review', date: line.typedOn }, null, undefined, { quiet: true })
         return saved
       })().finally(() => saving.current.delete(line.key))
       saving.current.set(line.key, job)
       return job
     },
-    [ensurePage, latest, run, setLines, today],
+    [ensurePage, latest, recoverEarlierAdd, run, setLines, today],
   )
 
   // B35's way: a line that didn't save is tried again when the connection comes back or the page is shown again,

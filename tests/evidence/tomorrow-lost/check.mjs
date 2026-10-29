@@ -5,8 +5,9 @@
 //   failed:    on Oct 29 two lines while adds fail ("Not added · Retry"). Oct 30 with adds still failing: today's block
 //              shows them "From last night". With adds back: they're to-dos on Oct 30's page, off the card and the block.
 //   days late: a line left on Retry on Fri Oct 30, next opened Mon Nov 2: "From Fri", then saved to Nov 2's page.
-//   lost reply: the add lands but its reply is lost; two days later the replay (now for a later day) is refused as
-//              already applied, the line leaves the block, and the to-do is on the first day's page exactly once.
+//   lost reply: the add lands (Nov 3) but its reply is lost; retries fail until two days after its day. The replay for
+//              the later day is refused, the earlier add is replayed to name the task, and the task is planned for
+//              today: one task, not two, found by identity even with a same-titled to-do on today.
 //   unsent:    typed with no Return, then pagehide and a reload: it was added. Typed and the app killed (no event):
 //              back in the input after a reload, not in the list.
 //   pinyin:    leaving the input while a candidate is open adds nothing; once the candidate is confirmed it does.
@@ -109,28 +110,41 @@ for (const [engine, width] of [[chromium, 1280], [webkit, 390]].filter(([e]) => 
   const pageOct31 = await pageText(page)
   check(`${tag} days late: it's a to-do on Nov 2's page, not on Oct 31's`, pageNov2.includes(late) && !pageOct31.includes(late), flat(pageNov2.slice(0, 300)))
 
-  // Lost reply: the add lands on Nov 3 but the browser sees a failure; next opened on Wed Nov 4.
+  // Lost reply: the add lands on Tue Nov 3 but the browser sees a failure. Its retries fail until Thu Nov 5 (two days
+  // after its day). Meanwhile a second to-do with the same title is typed for Nov 5. The recovered one must be
+  // found by identity, not title: on Nov 5 both are there, and the device holds nothing.
   const replied = `Lost reply F ${stamp}`
   await openDay(page, at('2026-11-02', '21:00'))
   await loseAddReplies(page)
   await typeTomorrow(page, replied)
   await page.locator('.tomorrow-pending', { hasText: replied }).getByText('Not added').waitFor({ timeout: 15000 })
   await restoreAdds(page)
-  await openDay(page, at('2026-11-04', '09:00'))
+  await page.route('**/_serverFn/**', route => (isAdd(route) && route.request().postData().includes('"day:2026-11-04"') ? route.abort() : route.continue()))
+  await openDay(page, at('2026-11-04', '21:00'))
+  await page.locator('.tomorrow-pending', { hasText: replied }).getByText('Not added').waitFor({ timeout: 15000 })
+  await typeTomorrow(page, replied)
+  await page.locator('.tomorrow-row', { hasText: replied }).waitFor({ timeout: 15000 })
+  await restoreAdds(page)
+  await openDay(page, at('2026-11-05', '09:00'))
   await page.locator('.tomorrow-pending', { hasText: replied }).waitFor({ state: 'detached', timeout: 15000 }).catch(() => {})
-  const pendingNov4 = await pendingText(page), pageNov4 = await pageText(page), storedNov4 = await storedLines(page)
-  await openDay(page, at('2026-11-04', '09:00'), '/day/2026-11-03')
+  await page.waitForTimeout(1000)
+  await openDay(page, at('2026-11-05', '09:00'))
+  const pendingNov5 = await pendingText(page), pageNov5 = await pageText(page), storedNov5 = await storedLines(page)
+  await openDay(page, at('2026-11-05', '09:00'), '/day/2026-11-03')
   const pageNov3 = await pageText(page)
-  check(`${tag} lost reply: the replay is taken as saved and the line leaves the block`, !pendingNov4.includes(replied) && !storedNov4.includes(replied), `${pendingNov4} | ${JSON.stringify(storedNov4)}`)
-  check(`${tag} lost reply: the to-do is on Nov 3's page once, and not added again on Nov 4`, count(pageNov3, replied) === 1 && !pageNov4.includes(replied), `Nov 3 ×${count(pageNov3, replied)}`)
+  await openDay(page, at('2026-11-05', '09:00'), '/day/2026-11-04')
+  const pageNov4 = await pageText(page)
+  check(`${tag} lost reply: two days late, the line leaves the block and the device`, !pendingNov5.includes(replied) && !storedNov5.includes(replied), `${pendingNov5} | ${JSON.stringify(storedNov5)}`)
+  check(`${tag} lost reply: Nov 5 has the recovered to-do and the same-titled one (2 rows)`, count(pageNov5, replied) === 2, `Nov 5 ×${count(pageNov5, replied)}`)
+  check(`${tag} lost reply: no second copy was made (Nov 3 keeps its 1 row, Nov 4 has none)`, count(pageNov3, replied) === 1 && count(pageNov4, replied) === 0, `Nov 3 ×${count(pageNov3, replied)}, Nov 4 ×${count(pageNov4, replied)}`)
 
   // Unsent: typed but Return never pressed, then the app closes.
   const unsent = `Typed no Return ${stamp}`
-  await openDay(page, at('2026-11-04', '21:00'))
+  await openDay(page, at('2026-11-05', '21:00'))
   await input(page).fill(unsent)
   await page.evaluate(() => window.dispatchEvent(new Event('pagehide')))
   await page.locator('.tomorrow-row', { hasText: unsent }).waitFor({ timeout: 15000 }).catch(() => {})
-  await openDay(page, at('2026-11-04', '21:00'))
+  await openDay(page, at('2026-11-05', '21:00'))
   const blockUnsent = await blockText(page)
   check(`${tag} unsent: after pagehide and a reload it's a to-do for tomorrow`, (await page.locator('.tomorrow-row', { hasText: unsent }).count()) === 1, flat(blockUnsent))
   // Killed without any event: a navigation would fire pagehide, so a second tab opens while the first is still up.
@@ -138,7 +152,7 @@ for (const [engine, width] of [[chromium, 1280], [webkit, 390]].filter(([e]) => 
   await input(page).fill(killed)
   const reopened = await context.newPage()
   reopened.on('pageerror', e => errors.push(e.message))
-  await openDay(reopened, at('2026-11-04', '21:00'))
+  await openDay(reopened, at('2026-11-05', '21:00'))
   const kept = await input(reopened).inputValue(), pendingKilled = await pendingText(reopened)
   check(`${tag} unsent: killed with no event, the draft is back in the input, not in the list`, kept === killed && !pendingKilled.includes(killed), `input "${kept}"`)
   await input(reopened).fill('')
