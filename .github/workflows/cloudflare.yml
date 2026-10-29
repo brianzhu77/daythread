@@ -2,6 +2,7 @@
 #   deploy            build the ref and deploy it to the `daythread` Worker (workers.dev until the domain moves)
 #   domain-to-worker  daythread.dogrod.com answers from the Worker (its CNAME to Vercel is replaced)
 #   domain-to-vercel  the rollback: the Worker lets go of the name and the CNAME to Vercel comes back
+#   check-token       what the token may do (status and the Hyperdrive permission names), nothing secret printed
 # Never runs on PRs, so a fork can't reach the secrets. The Cloudflare token (CLOUDFLARE_API_TOKEN) is Brian's, added by
 # him as a repository secret; the app's five values are the same as Vercel's production env, as repository secrets.
 name: Cloudflare
@@ -11,7 +12,7 @@ on:
     inputs:
       action:
         type: choice
-        options: [deploy, domain-to-worker, domain-to-vercel]
+        options: [deploy, domain-to-worker, domain-to-vercel, check-token]
         required: true
 
 permissions:
@@ -117,3 +118,20 @@ jobs:
               -d "{\"type\":\"CNAME\",\"name\":\"$HOSTNAME\",\"content\":\"$VERCEL_TARGET\",\"proxied\":false,\"ttl\":60}" | ok
           fi
           echo "after: $(records | jq -c '[.result[] | {type, content, proxied}]') · worker domains $(domains | jq -c '[.result[] | .service]')"
+
+  check-token:
+    if: inputs.action == 'check-token'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          api() { curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$@"; }
+          echo "verify: $(api https://api.cloudflare.com/client/v4/user/tokens/verify | jq -c '{success, status: .result.status}')"
+          account=$(api https://api.cloudflare.com/client/v4/accounts | jq -r '.result[0].id')
+          echo "accounts: $(api https://api.cloudflare.com/client/v4/accounts | jq -c '[.result[] | .name]')"
+          echo "user groups: $(api https://api.cloudflare.com/client/v4/user/tokens/permission_groups | jq -c 'if .success then [.result[] | select(.name | test("yperdrive")) | {name, scopes}] else .errors end')"
+          echo "account groups: $(api "https://api.cloudflare.com/client/v4/accounts/$account/tokens/permission_groups" | jq -c 'if .success then [.result[] | select(.name | test("yperdrive")) | {name, scopes}] else .errors end')"
+          echo "hyperdrive list: $(api "https://api.cloudflare.com/client/v4/accounts/$account/hyperdrive/configs" | jq -c '{success, errors}')"
