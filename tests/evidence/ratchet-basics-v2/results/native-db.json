@@ -1,0 +1,381 @@
+{
+  "tasks": [
+    {
+      "id": "editor-task:carry-parent",
+      "title": "Carry parent",
+      "status": "open",
+      "sourcePageId": "day:2026-10-28"
+    },
+    {
+      "id": "editor-task:carry-child",
+      "title": "Carry child",
+      "status": "open",
+      "sourcePageId": "day:2026-10-28"
+    },
+    {
+      "id": "editor-task:new-task",
+      "title": "Fresh task",
+      "status": "open",
+      "sourcePageId": "ratchet229-writing"
+    },
+    {
+      "id": "editor-task:native-todo",
+      "title": "万",
+      "status": "open",
+      "sourcePageId": "ratchet229-writing"
+    },
+    {
+      "id": "9eaeeaf5-3706-40fe-b2cd-7d5f1eae165e",
+      "title": "万",
+      "status": "open",
+      "sourcePageId": "day:2026-10-30"
+    },
+    {
+      "id": "a3dd692d-abe8-43f9-8b71-b67fd16fe7a8",
+      "title": "万万",
+      "status": "open",
+      "sourcePageId": "day:2026-10-30"
+    }
+  ],
+  "writing": [
+    {
+      "id": "meeting",
+      "type": "heading",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left",
+        "level": 2,
+        "isToggleable": false
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Meeting notes",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "parent",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Parent note",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "child",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Child note",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "delete-line",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Delete this line",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "cut-line",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Cut this line",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "new-task",
+      "type": "task",
+      "props": {
+        "taskId": "editor-task:new-task",
+        "role": "reference",
+        "planDate": ""
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Fresh task",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "convert-task",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Convert placeholder",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "native-bullet",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Native parent",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "native-empty",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "万和",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "43f1b639-b242-4672-9129-a274a02ef928",
+      "type": "bulletListItem",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "万",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "native-todo",
+      "type": "task",
+      "props": {
+        "taskId": "editor-task:native-todo",
+        "role": "reference",
+        "planDate": ""
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "万",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    {
+      "id": "dark-empty229",
+      "type": "task",
+      "props": {
+        "taskId": "editor-task:dark-empty229",
+        "role": "reference",
+        "planDate": ""
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "",
+          "styles": {}
+        }
+      ],
+      "children": []
+    }
+  ],
+  "tomorrow": [
+    {
+      "id": "day:2026-10-30",
+      "nodes": [
+        {
+          "id": "day:2026-10-30:h0",
+          "type": "heading",
+          "props": {
+            "level": 2
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "TODO",
+              "styles": {}
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "08c8ef87-fd28-47e0-9773-de264ebf05d1",
+          "type": "task",
+          "props": {
+            "taskId": "9eaeeaf5-3706-40fe-b2cd-7d5f1eae165e",
+            "role": "plan",
+            "planDate": "2026-10-30"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "万",
+              "styles": {}
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "716a94b6-ad01-4d7a-922c-6d7a47a2e2dd",
+          "type": "task",
+          "props": {
+            "taskId": "a3dd692d-abe8-43f9-8b71-b67fd16fe7a8",
+            "role": "plan",
+            "planDate": "2026-10-30"
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "万万",
+              "styles": {}
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "day:2026-10-30:r0",
+          "type": "task",
+          "props": {
+            "taskId": "editor-task:day:2026-10-30:r0",
+            "role": "plan",
+            "planDate": "2026-10-30"
+          },
+          "content": [],
+          "children": []
+        },
+        {
+          "id": "day:2026-10-30:h1",
+          "type": "heading",
+          "props": {
+            "level": 2
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "Events",
+              "styles": {}
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "day:2026-10-30:r1",
+          "type": "bulletListItem",
+          "props": {},
+          "content": [],
+          "children": []
+        },
+        {
+          "id": "day:2026-10-30:h2",
+          "type": "heading",
+          "props": {
+            "level": 2
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "Good Stuffs",
+              "styles": {}
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "day:2026-10-30:r2",
+          "type": "bulletListItem",
+          "props": {},
+          "content": [],
+          "children": []
+        },
+        {
+          "id": "day:2026-10-30:h3",
+          "type": "heading",
+          "props": {
+            "level": 2
+          },
+          "content": [
+            {
+              "type": "text",
+              "text": "Notes",
+              "styles": {}
+            }
+          ],
+          "children": []
+        },
+        {
+          "id": "day:2026-10-30:r3",
+          "type": "bulletListItem",
+          "props": {},
+          "content": [],
+          "children": []
+        }
+      ]
+    }
+  ]
+}

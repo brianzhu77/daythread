@@ -1,0 +1,12 @@
+(node:93214) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS B34 morning carry parent and child once, preserve nesting/identity
+PASS continuous typing including Chinese persists and reloads
+PASS nest child under parent persists document tree
+PASS tick fresh task status same identity
+PASS delete selected prose, Undo restores text once
+PASS cut/paste prose retains one copy after reload
+PASS B42 remove checkbox deletes born-here task; Undo retains same id/status
+PASS B33 delete cleared fresh task removes task; Undo same id
+PASS failed editor save retains local words and reconnect retries
+PASS no unhandled browser errors

@@ -1,0 +1,4 @@
+(node:93807) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS B35 two closed tabs recover both unsaved drafts once
+PASS B35 frozen tab resumes after another tab recovered its draft without duplication

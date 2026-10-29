@@ -1,0 +1,19 @@
+{
+  "before": {
+    "value": "he万万万",
+    "rows": [
+      "万⋯",
+      "万万⋯",
+      "he⋯"
+    ]
+  },
+  "appStateAfterSwipe": 1,
+  "after": {
+    "value": "he万万万",
+    "rows": [
+      "万⋯",
+      "万万⋯",
+      "he⋯"
+    ]
+  }
+}

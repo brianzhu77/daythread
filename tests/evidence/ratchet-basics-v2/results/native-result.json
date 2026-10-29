@@ -1,0 +1,170 @@
+{
+  "before": {
+    "url": "http://127.0.0.1:3665/pages?page=ratchet229-writing",
+    "caret": "native-empty",
+    "rows": [
+      {
+        "id": "meeting",
+        "text": "Meeting notes",
+        "type": "heading"
+      },
+      {
+        "id": "parent",
+        "text": "Parent note",
+        "type": "paragraph"
+      },
+      {
+        "id": "child",
+        "text": "Child note",
+        "type": "paragraph"
+      },
+      {
+        "id": "delete-line",
+        "text": "Delete this line",
+        "type": "paragraph"
+      },
+      {
+        "id": "cut-line",
+        "text": "Cut this line",
+        "type": "paragraph"
+      },
+      {
+        "id": "new-task",
+        "text": "Fresh task",
+        "type": "task"
+      },
+      {
+        "id": "convert-task",
+        "text": "Convert placeholder",
+        "type": "paragraph"
+      },
+      {
+        "id": "native-bullet",
+        "text": "Native parent",
+        "type": "bulletListItem"
+      },
+      {
+        "id": "native-empty",
+        "text": "wan",
+        "type": "bulletListItem"
+      },
+      {
+        "id": "native-todo",
+        "text": "",
+        "type": "task"
+      }
+    ]
+  },
+  "after": {
+    "url": "http://127.0.0.1:3665/pages?page=ratchet229-writing",
+    "caret": "native-empty",
+    "rows": [
+      {
+        "id": "meeting",
+        "text": "Meeting notes",
+        "type": "heading"
+      },
+      {
+        "id": "parent",
+        "text": "Parent note",
+        "type": "paragraph"
+      },
+      {
+        "id": "child",
+        "text": "Child note",
+        "type": "paragraph"
+      },
+      {
+        "id": "delete-line",
+        "text": "Delete this line",
+        "type": "paragraph"
+      },
+      {
+        "id": "cut-line",
+        "text": "Cut this line",
+        "type": "paragraph"
+      },
+      {
+        "id": "new-task",
+        "text": "Fresh task",
+        "type": "task"
+      },
+      {
+        "id": "convert-task",
+        "text": "Convert placeholder",
+        "type": "paragraph"
+      },
+      {
+        "id": "native-bullet",
+        "text": "Native parent",
+        "type": "bulletListItem"
+      },
+      {
+        "id": "native-empty",
+        "text": "万",
+        "type": "bulletListItem"
+      },
+      {
+        "id": "native-todo",
+        "text": "",
+        "type": "task"
+      }
+    ]
+  },
+  "second": {
+    "url": "http://127.0.0.1:3665/pages?page=ratchet229-writing",
+    "caret": "native-empty",
+    "rows": [
+      {
+        "id": "meeting",
+        "text": "Meeting notes",
+        "type": "heading"
+      },
+      {
+        "id": "parent",
+        "text": "Parent note",
+        "type": "paragraph"
+      },
+      {
+        "id": "child",
+        "text": "Child note",
+        "type": "paragraph"
+      },
+      {
+        "id": "delete-line",
+        "text": "Delete this line",
+        "type": "paragraph"
+      },
+      {
+        "id": "cut-line",
+        "text": "Cut this line",
+        "type": "paragraph"
+      },
+      {
+        "id": "new-task",
+        "text": "Fresh task",
+        "type": "task"
+      },
+      {
+        "id": "convert-task",
+        "text": "Convert placeholder",
+        "type": "paragraph"
+      },
+      {
+        "id": "native-bullet",
+        "text": "Native parent",
+        "type": "bulletListItem"
+      },
+      {
+        "id": "native-empty",
+        "text": "万和",
+        "type": "bulletListItem"
+      },
+      {
+        "id": "native-todo",
+        "text": "",
+        "type": "task"
+      }
+    ]
+  }
+}

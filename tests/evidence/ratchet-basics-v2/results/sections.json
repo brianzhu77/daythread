@@ -1,0 +1,10 @@
+[
+  {
+    "name": "section delete removes heading, prose and fresh task; Undo restores identity",
+    "pass": true
+  },
+  {
+    "name": "long scroll pointer drag moves whole section and preserves task identity",
+    "pass": true
+  }
+]

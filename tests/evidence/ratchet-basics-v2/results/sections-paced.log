@@ -1,0 +1,4 @@
+(node:93206) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS section delete removes heading, prose and fresh task; Undo restores identity
+PASS long scroll pointer drag moves whole section and preserves task identity

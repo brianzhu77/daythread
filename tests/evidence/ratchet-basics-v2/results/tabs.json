@@ -1,0 +1,10 @@
+[
+  {
+    "name": "B35 two closed tabs recover both unsaved drafts once",
+    "pass": true
+  },
+  {
+    "name": "B35 frozen tab resumes after another tab recovered its draft without duplication",
+    "pass": true
+  }
+]
