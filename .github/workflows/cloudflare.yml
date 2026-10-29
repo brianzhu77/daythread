@@ -147,5 +147,7 @@ jobs:
           echo "zones: $(echo "$zones" | jq -c '{success, errors, names: [.result[]? | .name]}')"
           zone=$(echo "$zones" | jq -r '.result[0].id // empty')
           echo "zones (any): $(api "https://api.cloudflare.com/client/v4/zones" | jq -c '{success, errors, names: [.result[]? | .name]}')"
+          now=$(($(date +%s) * 1000))
+          echo "observability: $(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' -X POST "https://api.cloudflare.com/client/v4/accounts/$account/workers/observability/telemetry/query" -d "{\"queryId\":\"check-token\",\"timeframe\":{\"from\":$((now - 3600000)),\"to\":$now},\"view\":\"events\",\"limit\":1,\"parameters\":{\"filters\":[{\"key\":\"\$metadata.service\",\"operation\":\"eq\",\"type\":\"string\",\"value\":\"daythread\"}]}}" | jq -c '{success, errors}')"
           [ -n "$zone" ] && echo "dns records: $(api "https://api.cloudflare.com/client/v4/zones/$zone/dns_records?name=daythread.dogrod.com" | jq -c '{success, errors, n: (.result // [] | length)}')"
           echo "worker domains: $(api "https://api.cloudflare.com/client/v4/accounts/$account/workers/domains" | jq -c '{success, errors}')"
