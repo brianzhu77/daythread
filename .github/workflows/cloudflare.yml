@@ -108,12 +108,13 @@ jobs:
         run: |
           set -euo pipefail
           api() { curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' "$@"; }
-          ok() { jq -e '.success' >/dev/null || { echo "Cloudflare refused: $(jq -c '.errors')"; exit 1; }; }
+          ok() { local r; r=$(cat); echo "$r" | jq -e '.success' >/dev/null || { echo "Cloudflare refused: $(echo "$r" | jq -c '.errors')"; exit 1; }; }
           account=$(api https://api.cloudflare.com/client/v4/accounts | jq -r '.result[0].id')
           zone=$(api "https://api.cloudflare.com/client/v4/zones?name=$ZONE" | jq -r '.result[0].id')
           records() { api "https://api.cloudflare.com/client/v4/zones/$zone/dns_records?name=$HOSTNAME"; }
           domains() { api "https://api.cloudflare.com/client/v4/accounts/$account/workers/domains?hostname=$HOSTNAME"; }
-          echo "before: $(records | jq -c '[.result[] | {type, content, proxied}]') · worker domains $(domains | jq -c '[.result[] | .service]')"
+          records | ok  # stops here, before any change, if the token can't read the zone's DNS
+          echo "before: $(records | jq -c '[.result[] | {type, content, proxied}]') · worker domains $(domains | jq -c '[.result[]? | .service]')"
           if [ "$ACTION" = domain-to-worker ]; then
             api -X PUT "https://api.cloudflare.com/client/v4/accounts/$account/workers/domains" \
               -d "{\"hostname\":\"$HOSTNAME\",\"service\":\"$WORKER\",\"zone_id\":\"$zone\",\"environment\":\"production\",\"override_existing_dns_record\":true}" | ok
@@ -123,7 +124,7 @@ jobs:
             api -X POST "https://api.cloudflare.com/client/v4/zones/$zone/dns_records" \
               -d "{\"type\":\"CNAME\",\"name\":\"$HOSTNAME\",\"content\":\"$VERCEL_TARGET\",\"proxied\":false,\"ttl\":60}" | ok
           fi
-          echo "after: $(records | jq -c '[.result[] | {type, content, proxied}]') · worker domains $(domains | jq -c '[.result[] | .service]')"
+          echo "after: $(records | jq -c '[.result[]? | {type, content, proxied}]') · worker domains $(domains | jq -c '[.result[]? | .service]')"
 
   check-token:
     if: inputs.action == 'check-token'
