@@ -83,7 +83,7 @@ Success check: each invitee signs up without his help and writes on 3 of their f
 
 1. Reminders (#19): set the VAPID keys and `CRON_SECRET` in Vercel, and a pinger that calls `/api/push/tick` every minute (the Hobby plan runs crons once a day). Then turn reminders on from the Home Screen app.
 2. ~~Give Vercel Preview deployments their own database URL~~ done by Lead 2026-10-28: the `live` preview and its deployments are deleted, and no preview has a database URL now.
-3. Remove and re-add the Home Screen app: it picks up the icon, splash, offline shell and the B52 strip in one go.
+3. Optional: remove and re-add the Home Screen app, only for the new icon and splash. The installed app already gets the offline shell and fixes on its next connected open (Ratchet 33d0b735, 2026-10-29).
 4. Before inviting anyone: custom SMTP for the sign-up and reset emails.
 
 ### Usage read 2026-10-28 (read-only, rev 511, one workspace)
