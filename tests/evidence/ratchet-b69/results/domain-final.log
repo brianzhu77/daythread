@@ -1,0 +1,13 @@
+✔ B69: stored blank and whitespace checkbox rows remain on their pages but no day list counts or carries them (12.524375ms)
+✔ B69: paused, attention, deadline and Upcoming paths exclude blank tasks including whitespace titles (1.41025ms)
+✔ B69: search and Markdown omit blank tasks; raw workspace backup retains their exact row identities (2.312959ms)
+✔ B69: typing a title activates the same checkbox task; clearing it removes it from lists without deleting its line (1.967209ms)
+✔ B69: a newly inserted blank checkbox is only an editor row until text is typed (0.349167ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 88.641625

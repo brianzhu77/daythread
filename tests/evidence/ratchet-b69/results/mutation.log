@@ -1,0 +1,73 @@
+✖ B69: stored blank and whitespace checkbox rows remain on their pages but no day list counts or carries them (11.229ms)
+✖ B69: paused, attention, deadline and Upcoming paths exclude blank tasks including whitespace titles (1.333208ms)
+✔ B69: search and Markdown omit blank tasks; raw workspace backup retains their exact row identities (3.162083ms)
+✖ B69: typing a title activates the same checkbox task; clearing it removes it from lists without deleting its line (3.315291ms)
+✔ B69: a newly inserted blank checkbox is only an editor row until text is typed (0.549042ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 2
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 91.811958
+
+✖ failing tests:
+
+test at tests/v2-blank-tasks.test.ts:20:1
+✖ B69: stored blank and whitespace checkbox rows remain on their pages but no day list counts or carries them (11.229ms)
+  AssertionError [ERR_ASSERTION]: 2026-10-28 planned
+      at TestContext.<anonymous> (file:///Users/dogrod/Developer/daythread-ratchet-blank/tests/v2-blank-tasks.test.ts:24:116)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.start (node:internal/test_runner/test:1015:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:358:17) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests/v2-blank-tasks.test.ts:36:1
+✖ B69: paused, attention, deadline and Upcoming paths exclude blank tasks including whitespace titles (1.333208ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  5 !== 0
+  
+      at TestContext.<anonymous> (file:///Users/dogrod/Developer/daythread-ratchet-blank/tests/v2-blank-tasks.test.ts:38:44)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 5,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/v2-blank-tasks.test.ts:51:1
+✖ B69: typing a title activates the same checkbox task; clearing it removes it from lists without deleting its line (3.315291ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(!getDayView(h.ws,today).openPool.some(t=>t.id===id))
+  
+      at TestContext.<anonymous> (file:///Users/dogrod/Developer/daythread-ratchet-blank/tests/v2-blank-tasks.test.ts:54:28)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
