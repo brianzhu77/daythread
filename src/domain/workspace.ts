@@ -2,7 +2,7 @@
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
 import { broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
-import { draftOf, draftPageId, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
+import { draftOf, draftPageId, eligibleTask, isDraft, itemKey, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget } from "./day-template.ts";
 import { isTrashed, moveRefusal, subtreeIds } from "./page-tree.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
@@ -576,9 +576,12 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (day.type !== "daily" || isTrashed(day)) throw new DomainError("Not a day page");
       const allowed = new Set(action.allowedTaskIds);
       const old = draftOf(state, day.id);
+      // One draft per day; the first ready one wins (Lead 98cb503a). Only a failed one (fallback only) is replaced,
+      // and nothing he applied or skipped from it comes back.
+      if (old?.status === "ready") throw new DomainError("This day already has its draft");
       // A late answer never brings back what he already applied or skipped.
-      const done = new Set(old?.items.filter((i) => i.state !== "open").map((i) => i.taskId ?? i.id) ?? []);
-      const items = normalizeDraftItems(state, day, action.items, allowed).filter((i) => !done.has(i.taskId ?? i.id));
+      const done = new Set(old?.items.filter((i) => i.state !== "open").map(itemKey) ?? []);
+      const items = normalizeDraftItems(state, day, action.items, allowed).filter((i) => !done.has(itemKey(i)));
       const moreOpen = action.moreOpen.filter((id) => allowed.has(id));
       const draft: DayDraft = { status: action.status, items: [...(old?.items.filter((i) => i.state !== "open") ?? []), ...items], moreOpen };
       const existing = state.pages.find((p) => p.id === draftPageId(day.id));

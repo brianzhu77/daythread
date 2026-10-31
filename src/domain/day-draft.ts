@@ -28,6 +28,13 @@ export function draftOf(ws: Workspace, dayPageId: string): DayDraft | null {
   try { return JSON.parse(p.document) as DayDraft } catch { return null }
 }
 
+/**
+ * What an item is, across drafts of the same day: its task, or its kind and words. A later draft never brings back
+ * an item whose key he already applied or skipped (Ratchet c1de8d2f), whatever its new id.
+ */
+export const itemKey = (i: Pick<DraftItem, 'taskId' | 'block'>): string =>
+  i.taskId ? `task:${i.taskId}` : `${i.block?.type ?? ''}:${inlineText(i.block?.content).replace(/\s+/g, ' ').trim().toLowerCase()}`
+
 /** A carried to-do can still be applied: it exists, is open and wasn't set aside. A rename doesn't matter. */
 export const eligibleTask = (t: Task | undefined): t is Task => Boolean(t && t.status === 'open' && !t.paused)
 
@@ -127,11 +134,15 @@ export function normalizeDraftItems(ws: Workspace, page: Page, items: readonly D
     if (seenIds.has(item.id) || !item.id || item.id.length > 100) continue
     seenIds.add(item.id)
     const at = doc.findIndex(n => n.id === item.anchor)
-    if (at >= 0 && (at < range.start || at >= range.end)) continue
+    const outside = at >= 0 && (at < range.start || at >= range.end)
     if (item.taskId) {
       if (!allowedTasks.has(item.taskId) || seenTasks.has(item.taskId) || !eligibleTask(ws.tasks.find(t => t.id === item.taskId))) continue
       seenTasks.add(item.taskId)
-      out.push({ id: item.id, anchor: item.anchor, place: item.place, taskId: item.taskId, source: item.source, state: 'open' })
+      // An anchor that is outside the planning part now (he moved it while the draft was made) never drops the to-do:
+      // it goes to the planning end instead (Ratchet c1de8d2f).
+      out.push({ id: item.id, anchor: outside ? '' : item.anchor, place: outside ? 'after' : item.place, taskId: item.taskId, source: item.source, state: 'open' })
+    } else if (outside) {
+      continue
     } else if (item.block && ['paragraph', 'bulletListItem', 'task'].includes(item.block.type) && inlineText(item.block.content).trim() && inlineText(item.block.content).length <= 500) {
       const words = inlineText(item.block.content).trim()
       const block: EditorNode = { id: item.block.id, type: item.block.type, props: item.block.type === 'task' ? { taskId: '', role: 'plan', planDate: page.date ?? '' } : {}, content: [{ type: 'text', text: words, styles: {} }], children: [] }

@@ -118,10 +118,10 @@ test('draft: a fill whose slot he already wrote in goes after it; a gone anchor 
   assert.equal(after[after.indexOf('task:Write the intro') + 1], 'task:Book the flights')
 })
 
-test('draft: nothing anchored in the reflection is kept, and only allowed tasks are', () => {
+test('draft: no line anchored in the reflection is kept, and only allowed tasks are', () => {
   const { h, ids, book, draft } = setup()
   draft([{ taskId: book, anchor: ids[12]! }, { taskId: 'someone-else', anchor: ids[5]! }, { anchor: ids[5]!, place: 'after', block: { id: 'b', type: 'paragraph', props: {}, content: [text('Stretch')], children: [] } }])
-  assert.deepEqual(draftOf(h.ws, dayId(tomorrow))!.items.map(i => i.block ? inlineText(i.block.content) : i.taskId), ['Stretch'])
+  assert.deepEqual(draftOf(h.ws, dayId(tomorrow))!.items.map(i => i.block ? inlineText(i.block.content) : [i.taskId, i.anchor]), [[book, ''], 'Stretch'], 'the to-do moves to the planning end; the line in the reflection goes')
 })
 
 test('draft: a new to-do is a new task; a new line is a line; edits change their words', () => {
@@ -143,7 +143,7 @@ test('draft: Skip leaves the task alone, and a late answer never brings back wha
   h.run({ type: 'skip-draft', pageId: dayId(tomorrow), itemIds: ['i0'] })
   assert.equal(h.task('Book the flights').status, 'open')
   h.run({ type: 'apply-draft', pageId: dayId(tomorrow), itemIds: ['i1'], today: tomorrow })
-  draft([{ taskId: book, anchor: ids[5]! }, { taskId: dog, anchor: ids[6]! }])
+  assert.throws(() => draft([{ taskId: book, anchor: ids[5]! }, { taskId: dog, anchor: ids[6]! }]), /already has its draft/)
   assert.deepEqual(draftView(h.ws, page())!.items, [])
 })
 
@@ -171,4 +171,28 @@ test('draft: after a fill, the bands anchored on that slot stay right after the 
   h.run({ type: 'apply-draft', pageId: dayId(tomorrow), itemIds: ['i0'], today: tomorrow })
   const view = draftView(h.ws, page())!
   assert.deepEqual(view.items.map(i => [i.taskId, i.kind, i.anchorId]), [[dog, 'after', ids[5]]])
+})
+
+test('draft: the first ready draft wins; a late answer or a second tab never replaces it', () => {
+  const { h, book, dog, draft, page } = setup()
+  draft([{ taskId: book }])
+  assert.throws(() => draft([{ taskId: dog }]), /already has its draft/)
+  assert.deepEqual(draftView(h.ws, page())!.items.map(i => i.taskId), [book])
+})
+
+test('draft: a retry after a failed draft never brings back a line he skipped, whatever its new id', () => {
+  const { h, ids, page } = setup()
+  const line = (id: string): DraftItem => ({ id, anchor: ids[2]!, place: 'fill', source: 'model', state: 'open', block: { id: `b-${id}`, type: 'bulletListItem', props: {}, content: [text('Lunch with  Sam')], children: [] } })
+  const draft = (items: DraftItem[], status: 'ready' | 'failed') => h.run({ type: 'set-draft', pageId: dayId(tomorrow), status, items, moreOpen: [], allowedTaskIds: [] })
+  draft([line('a1')], 'failed')
+  h.run({ type: 'skip-draft', pageId: dayId(tomorrow), itemIds: ['a1'] })
+  draft([{ ...line('b1'), block: { id: 'b-b1', type: 'bulletListItem', props: {}, content: [text('lunch with Sam')], children: [] } }], 'ready')
+  assert.deepEqual(draftView(h.ws, page())!.items, [])
+})
+
+test('draft: a carried to-do whose anchor left the planning part goes to the planning end, never lost', () => {
+  const { h, ids, book, draft, page } = setup()
+  draft([{ taskId: book, anchor: ids[12]! }])
+  const view = draftView(h.ws, page())!
+  assert.deepEqual(view.items.map(i => [i.taskId, i.kind, i.anchorId]), [[book, 'after', ids[0]]])
 })
