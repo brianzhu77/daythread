@@ -66,8 +66,9 @@ Two parts, which can ship separately:
 6. **Works for any template and any user.** Invitees on the built-in template get the same interaction; whether the model
    runs for them is a separate opt-in.
 7. **Minimalist copy** (Brian 1ac6784b): no explanatory text in the draft.
-8. **One draft per day; the first ready draft wins** (Bumblebee 356c573c, Lead 98cb503a). Retry only after a failure that
-   showed nothing; a late answer or a second tab never replaces a ready draft, so a skipped suggestion never comes back.
+8. **One draft per day; the first ready draft wins** (Bumblebee 356c573c, Lead 98cb503a). Retry only after a failure, and only
+   until his first Apply or Skip on any band (Jazz 283476c5: a failure shows the fallback bands; once he acts on them they
+   are the day's draft). A late answer or a second tab never replaces a ready draft, so a choice he made is never undone.
 
 ## Settled (Lead 055b72c0)
 
