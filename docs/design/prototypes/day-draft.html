@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Daythread · prepared day (prototype)</title>
+<style>
+/* Tokens copied from src/styles.css (main 3c0154d). Prototype only. */
+:root {
+  --gray-1:#fff;--gray-2:#f9f9f9;--gray-3:#f0f0f0;--gray-4:#e8e8e8;--gray-5:#e0e0e0;--gray-6:#d9d9d9;--gray-7:#cecece;--gray-8:#bbb;--gray-9:#8d8d8d;--gray-11:#646464;--gray-12:#202020;
+  --blue-3:#e6f4fe;--blue-4:#d5efff;--blue-9:#0090ff;--blue-11:#0d74ce;
+  --warn:#a8551b;--warn-soft:#fdf2e7;
+  --font-ui:-apple-system,BlinkMacSystemFont,'SF Pro Text','PingFang SC','Segoe UI',system-ui,sans-serif;
+}
+:root[data-theme=dark] {
+  --gray-1:#111;--gray-2:#191919;--gray-3:#222;--gray-4:#2a2a2a;--gray-5:#313131;--gray-6:#3a3a3a;--gray-7:#484848;--gray-8:#606060;--gray-9:#6e6e6e;--gray-11:#b4b4b4;--gray-12:#eee;
+  --blue-3:#0d2847;--blue-4:#003362;--blue-9:#0090ff;--blue-11:#70b8ff;
+  --warn:#f1a865;--warn-soft:#2b1d10;
+}
+:root { --bg:var(--gray-1);--ink:var(--gray-12);--ink-2:var(--gray-11);--ink-3:var(--gray-9);--line:var(--gray-5);--check:var(--gray-7);--fill-soft:var(--gray-2);--fill:var(--gray-3);
+  --sug-bg:var(--blue-3);--sug-bar:var(--blue-9);--sug-ink:var(--blue-11); color-scheme: light dark; }
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font:400 17px/1.5 var(--font-ui); -webkit-font-smoothing:antialiased; }
+
+/* Prototype controls: not part of the design. */
+.proto { position:sticky; top:0; z-index:5; display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; padding:8px 16px; font-size:12px; color:var(--ink-3); background:var(--fill-soft); border-bottom:1px dashed var(--line); }
+.proto b { color:var(--ink-2); font-weight:600; }
+.proto button { font:inherit; color:var(--ink-2); background:none; border:1px solid var(--line); border-radius:6px; padding:2px 8px; cursor:pointer; }
+.proto button[aria-pressed=true] { background:var(--ink); color:var(--bg); border-color:var(--ink); }
+
+.page { max-width:700px; margin:0 auto; padding:40px 20px 120px; }
+@media (max-width:599px){ .page { padding:16px 20px 120px; } }
+.title { font-size:34px; font-weight:700; letter-spacing:-0.02em; margin:0; line-height:1.2; }
+@media (max-width:599px){ .title { font-size:28px; } }
+
+/* The one state line, in the facts strip's spot (morning-model-states §3 style). */
+.state { min-height:24px; margin:10px 0 18px; font-size:14px; color:var(--ink-2); display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+.state .sep { color:var(--ink-3); }
+.state button { font:inherit; color:var(--ink-2); background:none; border:0; padding:0; cursor:pointer; text-decoration:underline; text-decoration-color:var(--line); text-underline-offset:3px; }
+.state button.primary { color:var(--sug-ink); text-decoration:none; font-weight:600; }
+.state.warn { color:var(--warn); }
+.state.warn button { color:var(--warn); }
+.spin { width:14px; height:14px; border:2px solid var(--line); border-top-color:var(--ink-2); border-radius:50%; animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+@media (max-width:599px){ .state button { min-height:44px; } }
+
+h2 { font-size:20px; font-weight:600; margin:28px 0 6px; }
+h4 { font-size:16px; font-weight:700; margin:18px 0 2px; }
+p.line, .todo, .bullet { margin:0; padding:3px 0; min-height:30px; }
+.todo { display:flex; gap:10px; align-items:flex-start; }
+.box { flex:none; width:18px; height:18px; margin-top:4px; border:1.5px solid var(--check); border-radius:5px; }
+.bullet { padding-left:26px; position:relative; }
+.bullet::before { content:''; position:absolute; left:8px; top:14px; width:5px; height:5px; border-radius:50%; background:var(--ink); }
+.empty { color:var(--ink-3); }
+hr { border:0; border-top:1px solid var(--line); margin:22px 0; }
+.from { font-size:13px; color:var(--ink-3); margin-left:6px; white-space:nowrap; align-self:center; }
+.prompt { color:var(--ink-2); }
+
+/* A suggestion: not his text yet. Blue band + bar, his ink, editable in place. */
+.sug { position:relative; margin:2px -10px; padding:2px 10px 2px 10px; border-radius:8px; background:var(--sug-bg); box-shadow:inset 2px 0 0 var(--sug-bar); transition:background .2s, opacity .2s; }
+.sug [contenteditable] { outline:none; }
+.sug .acts { position:absolute; right:6px; top:4px; display:flex; gap:2px; }
+.sug .acts button { width:30px; height:28px; border:0; border-radius:7px; background:none; color:var(--ink-2); cursor:pointer; display:grid; place-items:center; padding:0; }
+.sug .acts svg { width:16px; height:16px; }
+.sug .acts button:hover { background:color-mix(in srgb, var(--sug-bar) 14%, transparent); color:var(--ink); }
+.sug .body { padding-right:70px; }
+@media (max-width:599px){ .sug .acts { right:0; top:0; } .sug .acts button { width:44px; height:36px; } .sug .body { padding-right:84px; } }
+.sug.gone { opacity:0; }
+
+.notice { position:fixed; left:50%; bottom:28px; transform:translateX(-50%); background:var(--ink); color:var(--bg); border-radius:12px; padding:10px 14px; font-size:15px; display:flex; gap:14px; align-items:center; box-shadow:0 6px 24px rgba(0,0,0,.18); }
+.notice button { font:inherit; font-weight:600; color:var(--bg); background:none; border:0; cursor:pointer; padding:0; }
+.notice[hidden] { display:none; }
+.caret-hint { outline:2px solid var(--sug-bar); outline-offset:2px; border-radius:4px; }
+
+blockquote.prompt { margin:2px 0 4px; padding:0 0 0 12px; border-left:3px solid var(--line); color:var(--ink-2); font-size:16px; }
+.event { display:flex; gap:16px; padding:3px 0 3px 45px; color:var(--ink); font-size:16px; }
+.event .time { color:var(--ink-2); min-width:72px; }
+.more { margin:6px 0 0; }
+.more-toggle { font:inherit; font-size:14px; color:var(--ink-3); background:none; border:0; padding:6px 0; cursor:pointer; }
+.more-toggle .chev { display:inline-block; transition:transform .15s; }
+.more-toggle[aria-expanded=true] .chev { transform:rotate(90deg); }
+.more-row { color:var(--ink-2); align-items:center; }
+.more-row .add { margin-left:auto; width:32px; height:28px; border:0; border-radius:7px; background:none; color:var(--ink-2); cursor:pointer; display:grid; place-items:center; padding:0; }
+.more-row .add:hover { background:var(--fill); color:var(--ink); }
+@media (max-width:599px){ .more-row .add { width:44px; height:40px; } .more-toggle { min-height:44px; } }
+.todo .from + .acts { margin-left:auto; }
+</style>
+</head>
+<body>
+<div class="proto" role="toolbar" aria-label="Prototype controls">
+  <b>Prototype · sample content</b>
+  <span>State:</span>
+  <button data-state="preparing">Preparing</button>
+  <button data-state="ready" aria-pressed="true">Ready</button>
+  <button data-state="typing">Arrived while typing</button>
+  <button data-state="failed">Model failed (fallback)</button>
+  <button data-state="offline">Offline</button>
+  <span>·</span>
+  <button id="theme">Dark</button>
+  <button id="reset">Reset</button>
+</div>
+
+<main class="page">
+  <h1 class="title">Today, Sun, Nov 1</h1>
+  <div class="state" id="state"></div>
+
+  <h2>Morning Planning</h2>
+  <h4>Events</h4>
+  <div class="event"><span class="time">10:00 AM</span>Dentist</div>
+
+  <h4>Top 3</h4>
+  <blockquote class="prompt">If only three things get done today, which three?</blockquote>
+  <div class="slot" data-slot="t1"><div class="todo"><span class="box"></span><span class="empty"></span></div></div>
+  <div class="sug" data-replaces="t1" data-model>
+    <div class="acts"><button aria-label="Apply" title="Apply"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"/></svg></button><button aria-label="Skip" title="Skip"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+    <div class="body"><div class="todo"><span class="box"></span><span contenteditable>填完 TRV 申请表第一页</span></div></div>
+  </div>
+  <div class="slot" data-slot="t2"><div class="todo"><span class="box"></span><span class="empty"></span></div></div>
+  <div class="sug" data-replaces="t2">
+    <div class="acts"><button aria-label="Apply" title="Apply"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"/></svg></button><button aria-label="Skip" title="Skip"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+    <div class="body"><div class="todo"><span class="box"></span><span>TRV for Lu and Kathy</span><span class="from">Oct 23</span></div></div>
+  </div>
+  <div class="slot" data-slot="t3"><div class="todo"><span class="box"></span><span class="empty"></span></div></div>
+  <div class="sug" data-replaces="t3">
+    <div class="acts"><button aria-label="Apply" title="Apply"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"/></svg></button><button aria-label="Skip" title="Skip"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+    <div class="body"><div class="todo"><span class="box"></span><span>买狗窝</span><span class="from">Sat</span></div></div>
+  </div>
+
+  <h4>Other - Outside the Tunnel</h4>
+  <div class="slot" data-slot="o1"><div class="todo"><span class="box"></span><span class="empty"></span></div></div>
+  <div class="sug" data-replaces="o1" data-model>
+    <div class="acts"><button aria-label="Apply" title="Apply"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"/></svg></button><button aria-label="Skip" title="Skip"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+    <div class="body"><div class="todo"><span class="box"></span><span contenteditable>读完《穷查理宝典》第 3 章</span></div></div>
+  </div>
+
+  <h4>Intentional Drop / Slack</h4>
+  <div class="slot" data-slot="d1"><div class="bullet"><span class="empty"></span></div></div>
+  <div class="sug" data-replaces="d1" data-model>
+    <div class="acts"><button aria-label="Apply" title="Apply"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5"/></svg></button><button aria-label="Skip" title="Skip"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>
+    <div class="body"><div class="bullet"><span contenteditable>不追新闻；午饭后不开 Slack</span></div></div>
+  </div>
+
+  <div class="more" id="more">
+    <button class="more-toggle" aria-expanded="false"><span id="more-n">2</span> more open <span class="chev">▸</span></button>
+    <div class="more-list" hidden>
+      <div class="todo more-row"><span class="box"></span><span>换护照照片</span><span class="from">Oct 20</span><button class="add" aria-label="Add to today" title="Add to today"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button></div>
+      <div class="todo more-row"><span class="box"></span><span>整理车库</span><span class="from">Oct 12</span><button class="add" aria-label="Add to today" title="Add to today"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button></div>
+    </div>
+  </div>
+
+  <hr>
+  <h2>Raw Notes</h2>
+  <div class="bullet"><span class="empty"></span></div>
+  <h4>💡 Inspiration</h4>
+  <div class="bullet"><span class="empty"></span></div>
+  <hr>
+  <h2>Daily Reflection</h2>
+  <h4>Progress</h4><blockquote class="prompt">今天有哪些值得肯定的进展？哪怕很小。</blockquote><div class="bullet"><span class="empty"></span></div>
+  <h4>Tunnel Check</h4><blockquote class="prompt">今天有什么事情占用了超出预期的注意力？是否值得？</blockquote><div class="bullet"><span class="empty"></span></div>
+  <h4>Borrowing Check</h4><blockquote class="prompt">今天有没有向未来的自己借时间、睡眠、精力或金钱？</blockquote><div class="bullet"><span class="empty"></span></div>
+  <h4>Tomorrow's Todo</h4><div class="todo"><span class="box"></span><span class="empty"></span></div>
+</main>
+
+<div class="notice" id="notice" hidden><span id="notice-text"></span><button id="undo">Undo</button></div>
+
+<script>
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)]
+const stateEl = $('#state'), notice = $('#notice')
+let mode = 'ready', undoStack = [], noticeTimer
+
+function pending() { return $$('.sug:not([hidden])').filter(s => mode === 'ready' || !('model' in s.dataset)) }
+function render() {
+  const left = pending().length
+  const shows = s => !s.hidden && (mode === 'ready' || (mode === 'failed' && !('model' in s.dataset)))
+  $$('.sug').forEach(s => s.style.display = shows(s) ? '' : 'none')
+  $$('.slot').forEach(sl => { const h = $(`.sug[data-replaces="${sl.dataset.slot}"]`); sl.style.display = (h && shows(h)) ? 'none' : '' })
+  $('#more').style.display = (mode === 'ready' || mode === 'failed') && $$('.more-row:not([hidden])').length ? '' : 'none'; $('#more-n').textContent = $$('.more-row:not([hidden])').length
+  stateEl.className = 'state'
+  if (mode === 'preparing') stateEl.innerHTML = '<span class="spin" aria-hidden="true"></span>Preparing…'
+  else if (mode === 'typing') stateEl.innerHTML = 'Suggestions ready <span class="sep">·</span> <button class="primary" data-go="ready">Show</button>'
+  else if (mode === 'failed') { const n = pending().length; stateEl.innerHTML = (n ? `${n} suggestion${n === 1 ? '' : 's'} <span class="sep">·</span> <button class="primary" data-act="all">Apply all</button> <span class="sep">·</span> <button data-act="dismiss">Dismiss</button> <span class="sep">·</span> ` : '') + '<span style="color:var(--warn)">Couldn’t draft</span> <span class="sep">·</span> <button data-go="preparing">Retry</button>' }
+  else if (mode === 'offline') stateEl.innerHTML = 'Offline'
+  else if (left === 0) stateEl.innerHTML = ''
+  else stateEl.innerHTML = `${left} suggestion${left === 1 ? '' : 's'} <span class="sep">·</span> <button class="primary" data-act="all">Apply all</button> <span class="sep">·</span> <button data-act="dismiss">Dismiss</button>`
+  $$('.proto [data-state]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.state === mode)))
+}
+function toast(text, undo) {
+  $('#notice-text').textContent = text; notice.hidden = false; undoStack.push(undo)
+  clearTimeout(noticeTimer); noticeTimer = setTimeout(() => { notice.hidden = true; undoStack = [] }, 5000)
+}
+function apply(s) {
+  const slot = s.dataset.replaces && $(`.slot[data-slot="${s.dataset.replaces}"]`)
+  const made = document.createElement('div'); made.className = 'applied'
+  made.innerHTML = s.querySelector('.body').innerHTML; made.querySelectorAll('[contenteditable]').forEach(e => e.setAttribute('contenteditable', ''))
+  s.after(made); s.hidden = true; if (slot) slot.hidden = true
+  return () => { made.remove(); s.hidden = false; if (slot) slot.hidden = false }
+}
+function skip(s) { s.hidden = true; return () => { s.hidden = false } }
+function act(fn, list, word) {
+  const undos = list.map(fn); render()
+  toast(list.length === 1 ? word : `${word} ${list.length}`, () => { undos.forEach(u => u()); render() })
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return
+  if (b.dataset.state) { mode = b.dataset.state; if (mode === 'preparing') setTimeout(() => { if (mode === 'preparing') { mode = 'ready'; render() } }, 2500); render(); return }
+  if (b.dataset.go) { mode = b.dataset.go; if (mode === 'preparing') setTimeout(() => { if (mode === 'preparing') { mode = 'ready'; render() } }, 2500); render(); return }
+  if (b.classList.contains('more-toggle')) { const open = b.getAttribute('aria-expanded') !== 'true'; b.setAttribute('aria-expanded', String(open)); $('.more-list').hidden = !open; return }
+  if (b.classList.contains('add')) { const row = b.closest('.more-row'); const made = document.createElement('div'); made.className = 'todo applied'; made.innerHTML = row.innerHTML; made.querySelector('.add').remove(); made.querySelector('.from')?.remove()
+    const anchor = $$('.sug[data-replaces^="o"], .slot[data-slot^="o"]').pop(); anchor.after(made); row.hidden = true; render()
+    return toast('Added', () => { made.remove(); row.hidden = false; render() }) }
+  if (b.dataset.act === 'all') return act(apply, pending(), 'Applied')
+  if (b.dataset.act === 'dismiss') return act(skip, pending(), 'Dismissed')
+  const s = b.closest('.sug')
+  if (s && b.getAttribute('aria-label') === 'Apply') return act(apply, [s], 'Applied')
+  if (s && b.getAttribute('aria-label') === 'Skip') return act(skip, [s], 'Skipped')
+})
+$('#undo').onclick = () => { const u = undoStack.pop(); if (u) u(); notice.hidden = true }
+$('#theme').onclick = () => { const r = document.documentElement; const dark = r.dataset.theme !== 'dark'; r.dataset.theme = dark ? 'dark' : ''; $('#theme').textContent = dark ? 'Light' : 'Dark' }
+$('#reset').onclick = () => location.reload()
+render()
+</script>
+</body>
+</html>
