@@ -25,7 +25,10 @@ async function open(br, width, height) {
 
 const tap = async (p, loc, touch) => (touch ? loc.tap() : loc.click())
 
-for (const [name, br, width, height] of [['webkit', webkit, 390, 844], ['chromium', chromium, 1280, 900]]) {
+// ONLY=webkit|chromium runs one pass. A production build has no Add sample data: seed a copy on a dev build first, then
+// run each pass with SKIP_SEED=1 against its own fresh copy.
+const passes = [['webkit', webkit, 390, 844], ['chromium', chromium, 1280, 900]].filter(([n]) => !process.env.ONLY || n === process.env.ONLY)
+for (const [name, br, width, height] of passes) {
   const touch = width === 390
   const { b, p, writes, setMode } = await open(br, width, height)
   await p.goto(`${base}/`)
