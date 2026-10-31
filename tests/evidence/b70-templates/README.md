@@ -25,5 +25,5 @@ template line into one; the copy keeps the template's types.
   0 failed, 0 missing (`results/alignment.txt`). It doesn't measure the template screen itself.
 - Mutation check: removing the template branch in `save-editor` fails 2 template tests.
 
-Not tested: WebKit, a real phone, Postgres round trip (the row mapping is unit-tested; `pages.type` is unconstrained
-text), dark mode screenshots.
+Not tested: WebKit, a real phone, the Cloudflare Worker path, dark mode screenshots.
+- `postgres-roundtrip.ts` on a local embedded Postgres (schema `daythread_b70_check`, dropped after): create Day, save with a titled to-do (no task), new day copies it with fresh ids, clear default, Undo, each step through a fresh repository load: PASS. Stored row: `type=template, parent_id=days`.
