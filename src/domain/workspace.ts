@@ -1,6 +1,6 @@
 // The domain: commands over the workspace (pure, one at a time, with receipts for replay and one Undo slot) and the
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
-import { dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
+import { broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget } from "./day-template.ts";
 import { isTrashed, moveRefusal, subtreeIds } from "./page-tree.ts";
@@ -270,12 +270,6 @@ function headingAbove(doc: EditorNode[], nodeId: string): EditorNode | undefined
 }
 const bringableTypes = new Set(["paragraph", "bulletListItem", "numberedListItem", "quote"]);
 const bringable = (n: EditorNode): boolean => bringableTypes.has(n.type) && Boolean(inlineText(n.content).trim());
-/** Where a line goes at the end of a page: before its trailing empty text lines, so the line ready for typing stays last. */
-function trailingStart(doc: readonly EditorNode[]): number {
-  let end = doc.length;
-  while (end > 0 && isEmptyLine(doc[end - 1]!) && doc[end - 1]!.type !== "task") end--;
-  return end;
-}
 const lineKey = (n: EditorNode, pageDate: string | null) => inlineText(n.content, pageDate).replace(/\s+/g, " ").trim();
 
 // ---------------------------------------------------------------- commands
@@ -404,14 +398,16 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const key = lineKey(node, textDate(source));
       if (flatNodes(pageNodes(p)).some((n) => lineKey(n, textDate(p)) === key)) throw new DomainError("Already brought");
       const freshRefs = (content: unknown): unknown => Array.isArray(content) ? content.map((c) => c?.type === "pageRef" ? { ...c, props: { ...c.props, refId: newId() } } : c) : content;
-      const copy: EditorNode = { id: newId(), type: node.type, props: {}, content: freshRefs(node.content), children: [] };
+      // `brought:` ids let the next brought line join this one's group without reading his words (B75).
+      const copy: EditorNode = { id: `${broughtPrefix}${newId()}`, type: node.type, props: {}, content: freshRefs(node.content), children: [] };
       const doc = docOf(p);
       const fromHeading = headingAbove(sourceDoc, node.id), fromTitle = fromHeading ? inlineText(fromHeading.content).trim().toLowerCase() : "";
       const sameName = (n: EditorNode) => n.type === "heading" && inlineText(n.content).trim().toLowerCase() === fromTitle;
       const target = (fromTitle ? doc.find(sameName) : undefined) ?? doc.find((n) => n.type === "heading" && inlineText(n.content).trim().toLowerCase() === "notes");
-      // A heading he removed from his day is never brought back (B70): with neither heading, the line goes at the end.
+      // A heading he removed from his day is never brought back (B70). With neither heading (B75, Bumblebee 13a9a7f6,
+      // Lead 9ded39e6): right after the carried to-dos, after the lines brought before it, never under a label of his.
       if (target) doc.splice(sectionInsertIndex(doc, target.id), 0, copy);
-      else doc.splice(trailingStart(doc), 0, copy);
+      else doc.splice(broughtInsertIndex(doc, new Set(state.tasks.map((x) => x.id))), 0, copy);
       setDocument(p, doc);
       return { message: target ? `Brought to ${inlineText(target.content).trim()}` : "Brought to today", entityId: copy.id };
     }

@@ -127,7 +127,7 @@ test('templates: one default per target; a second template takes day pages, None
   assert.deepEqual(words(nodesOf(h.day(tomorrow))).filter(([type]) => type === 'heading').map(([, w]) => w), ['TODO', 'Events', 'Good Stuffs', 'Notes'])
 })
 
-test('templates: Bring goes under the same-name heading, else Notes, else the end of the page; no heading comes back', () => {
+test('templates: Bring goes under the same-name heading, else Notes, else with the carried group (B75); no heading comes back', () => {
   const h = harness()
   h.day(yesterday)
   h.save(dayId(yesterday), d => under(d, 'Good Stuffs', bullet('line', text('A good thing'))))
@@ -138,7 +138,7 @@ test('templates: Bring goes under the same-name heading, else Notes, else the en
   const nodes = nodesOf(h.page(dayId(today)))
   assert.deepEqual(nodes.filter(n => n.type === 'heading').map(n => inlineText(n.content)), ['Plan'])
   const at = nodes.findIndex(n => inlineText(n.content) === 'A good thing')
-  assert.equal(at, nodes.length - 2, 'before the trailing empty line')
+  assert.equal(at, 1, 'right under the heading above the first to-do row, where carried to-dos go')
 })
 
 test('templates: never listed as a page, searched, tagged, linked from, counted as written, or moved', () => {
