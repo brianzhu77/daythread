@@ -1,0 +1,5 @@
+open [
+  '<div data-slot="alert-dialog-backdrop" class="alert-dialog__backdrop alert-dialog__backdrop--opaque" data-rac="" style="--visual-viewport-width: 390px; --visual-viewport-height: 844px; --page-width: 390px; --page-height: 876px;" data-entering="true"><div data-'
+]
+after cancel []
+PASS WebKit touch cancel/reopen/create

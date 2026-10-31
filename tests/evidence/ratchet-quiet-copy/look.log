@@ -1,0 +1,44 @@
+PASS chromium-1280-light today-blank: no explanatory line
+PASS chromium-1280-light pages-empty: no explanatory line
+PASS chromium-1280-light tags-empty: no explanatory line
+PASS chromium-1280-light future-day: no explanatory line
+PASS chromium-1280-light today-data: no explanatory line
+PASS chromium-1280-light trash: no explanatory line
+PASS chromium-1280-light search placeholder is "Search"
+PASS chromium-1280-light search, nothing typed: no hint
+PASS chromium-1280-light search, no match: just "Nothing matches"
+PASS chromium-1280-light slash menu: titles only
+PASS chromium-1280-light no page errors 
+PASS chromium-1280-dark today-blank: no explanatory line
+PASS chromium-1280-dark pages-empty: no explanatory line
+PASS chromium-1280-dark tags-empty: no explanatory line
+PASS chromium-1280-dark future-day: no explanatory line
+PASS chromium-1280-dark today-data: no explanatory line
+PASS chromium-1280-dark trash: no explanatory line
+PASS chromium-1280-dark search placeholder is "Search"
+PASS chromium-1280-dark search, nothing typed: no hint
+PASS chromium-1280-dark search, no match: just "Nothing matches"
+PASS chromium-1280-dark slash menu: titles only
+PASS chromium-1280-dark no page errors 
+PASS webkit-390-light today-blank: no explanatory line
+PASS webkit-390-light pages-empty: no explanatory line
+PASS webkit-390-light tags-empty: no explanatory line
+PASS webkit-390-light future-day: no explanatory line
+PASS webkit-390-light today-data: no explanatory line
+PASS webkit-390-light trash: no explanatory line
+PASS webkit-390-light search placeholder is "Search"
+PASS webkit-390-light search, nothing typed: no hint
+PASS webkit-390-light search, no match: just "Nothing matches"
+PASS webkit-390-light slash menu: titles only
+PASS webkit-390-light no page errors 
+PASS webkit-390-dark today-blank: no explanatory line
+PASS webkit-390-dark pages-empty: no explanatory line
+PASS webkit-390-dark tags-empty: no explanatory line
+PASS webkit-390-dark future-day: no explanatory line
+PASS webkit-390-dark today-data: no explanatory line
+PASS webkit-390-dark trash: no explanatory line
+PASS webkit-390-dark search placeholder is "Search"
+PASS webkit-390-dark search, nothing typed: no hint
+PASS webkit-390-dark search, no match: just "Nothing matches"
+PASS webkit-390-dark slash menu: titles only
+PASS webkit-390-dark no page errors 
