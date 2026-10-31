@@ -333,3 +333,14 @@ test('templates part 2: a one-row template (an empty to-do or bullet) keeps its 
   h.run({ type: 'apply-link-preview', pageId: 'lp', url: 'https://example.com/b', title: 'B', description: 'Plain.' })
   assert.deepEqual(words(nodesOf(h.page('lp'))), [['quote', 'Plain.'], ['paragraph', '']])
 })
+
+test('templates part 2: a template aimed at a link page does not stop that page\'s preview', () => {
+  const h = harness()
+  h.run({ type: 'create-document', title: 'Reading', body: '', pageId: 'reading' })
+  h.run({ type: 'make-link-pages', parentPageId: 'reading', items: [{ url: 'https://example.com/c', pageId: 'lp' }] })
+  h.run({ type: 'create-template', title: 'Notes on it', pageId: 'tpl' })
+  h.run({ type: 'set-template-target', pageId: 'tpl', target: 'lp' })
+  h.run({ type: 'apply-link-preview', pageId: 'lp', url: 'https://example.com/c', title: 'C post', description: 'Its excerpt.' })
+  assert.equal(h.page('lp').title, 'C post')
+  assert.equal(words(nodesOf(h.page('lp')))[0]![1], 'Its excerpt.')
+})

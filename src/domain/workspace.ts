@@ -474,7 +474,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const template = newPageTemplate(state, p.parentId ? state.pages.find((x) => x.id === p.parentId) : undefined);
       const fromTemplate = Boolean(template) && isUntouchedCopy(template!, nodes);
       const blank = !fromTemplate && nodes.length === 1 && isEmptyLine(nodes[0]!);
-      const untouched = (blank || fromTemplate) && !state.pages.some((c) => c.parentId === p.id && !isTrashed(c));
+      // A template aimed at this page isn't a page made inside it (Ratchet e9857f63).
+      const untouched = (blank || fromTemplate) && !state.pages.some((c) => c.parentId === p.id && !isTrashed(c) && !isTemplate(c));
       if (!untouched) return unchanged;
       const title = action.title?.replace(/\s+/g, " ").trim().slice(0, 200) || null;
       const description = action.description?.replace(/\s+/g, " ").trim().slice(0, 500) || null;
