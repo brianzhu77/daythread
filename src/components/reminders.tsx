@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { AccountItem } from './account-item'
 
 /**
  * Reminders over web push (docs/design/reminders.md), one control in the account row: "Turn on reminders" asks the
@@ -20,7 +21,7 @@ async function registration(): Promise<ServiceWorkerRegistration> {
   return (await navigator.serviceWorker.getRegistration('/')) ?? navigator.serviceWorker.register('/sw.js')
 }
 
-export function Reminders({ prefix = '' }: { prefix?: string }) {
+export function Reminders() {
   const [state, setState] = useState<State>('loading')
   const [publicKey, setPublicKey] = useState<string | null>(null)
   useEffect(() => {
@@ -74,14 +75,13 @@ export function Reminders({ prefix = '' }: { prefix?: string }) {
   if (state === 'loading' || state === 'hidden') return null
   const on = <button type="button" className="link" onClick={() => void turnOn()}>Turn on reminders</button>
   return (
-    <span className="reminders" data-state={state}>
-      {prefix}
-      {state === 'home-screen' && 'Reminders: add Daythread to the Home Screen first'}
+    <AccountItem><span className="reminders" data-state={state}>
+      {state === 'home-screen' && <span className="account-text">Reminders: add Daythread to the Home Screen first</span>}
       {state === 'off' && on}
       {state === 'busy' && 'Reminders…'}
-      {state === 'denied' && 'Reminders blocked in the browser’s settings'}
-      {state === 'failed' && <>Couldn’t turn on reminders · {on}</>}
-      {state === 'on' && <>Reminders on · <button type="button" className="link" onClick={() => void turnOff()}>Turn off</button></>}
-    </span>
+      {state === 'denied' && <span className="account-text">Reminders blocked in the browser’s settings</span>}
+      {state === 'failed' && <><span className="account-text">Couldn’t turn on reminders · </span>{on}</>}
+      {state === 'on' && <><span className="account-text">Reminders on · </span><button type="button" className="link" onClick={() => void turnOff()}>Turn off</button></>}
+    </span></AccountItem>
   )
 }
