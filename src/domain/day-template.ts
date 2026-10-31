@@ -1,16 +1,19 @@
 import type { LocalDate, Page, Workspace } from './types.ts'
-import { dayTemplate, emptyLine, emptyTaskRow, headingNode, pageNodes, type EditorNode } from './editor-document.ts'
+import { dayTemplate, emptyLine, emptyTaskRow, headingNode, inlineText, pageNodes, type EditorNode } from './editor-document.ts'
 import { readMention } from './date-chip.ts'
 
 // B70 (Brian 27f8c724, Lead 4f1dfc60): templates are pages of their own (`type: "template"`), edited with the normal
 // editor and listed under Templates. A template can be the default for one target, kept in its `parentId` so no
-// column is added: `"days"` = new day pages, `"day-subpages"` = pages made directly inside any day, a page id = pages
-// made directly inside that page. New pages start from their target's default, copied as written with fresh ids;
+// column is added: `"days"` = new day pages, `"top-level"` = new top-level pages, `"day-subpages"` = pages made
+// directly inside any day, a page id = pages made directly inside that page. New pages start from their target's default, copied as written with fresh ids;
 // to-dos come empty. Day pages with no default get the built-in four headings; other pages start blank.
 
 export const dayPagesTarget = 'days'
 export const daySubpagesTarget = 'day-subpages'
-/** `"days"`, `"day-subpages"`, or the id of the page whose new subpages start from the template. */
+export const topLevelTarget = 'top-level'
+/** Target names no page id may take. */
+export const reservedTargets: ReadonlySet<string> = new Set([dayPagesTarget, daySubpagesTarget, topLevelTarget])
+/** `"days"`, `"top-level"`, `"day-subpages"`, or the id of the page whose new subpages start from the template. */
 export type TemplateTarget = string
 
 export const isTemplate = (p: Pick<Page, 'type'>): boolean => p.type === 'template'
@@ -20,10 +23,11 @@ export const templates = (ws: Workspace): Page[] => ws.pages.filter(p => isTempl
 export const templateTarget = (p: Page): TemplateTarget | null => p.parentId ?? null
 export const defaultTemplate = (ws: Workspace, target: TemplateTarget): Page | undefined => templates(ws).find(p => templateTarget(p) === target)
 /**
- * The template a new empty page made directly inside `parent` starts from: the parent's own default, else, inside a
+ * The template a new empty page starts from: at the top level, the top-level default; directly inside `parent`, the parent's own default, else, inside a
  * day page, the default for pages inside days (the nearer target wins, states §3).
  */
-export function subpageTemplate(ws: Workspace, parent: Page): Page | undefined {
+export function newPageTemplate(ws: Workspace, parent: Page | undefined): Page | undefined {
+  if (!parent) return defaultTemplate(ws, topLevelTarget)
   return defaultTemplate(ws, parent.id) ?? (parent.type === 'daily' ? defaultTemplate(ws, daySubpagesTarget) : undefined)
 }
 
@@ -44,6 +48,12 @@ export function templateRows(nodes: EditorNode[]): EditorNode[] {
   }
   nodes.forEach(visit)
   return nodes
+}
+
+/** The page is still the template's copy as it was made: same types, words and nesting (ids aside). */
+export function isUntouchedCopy(template: Page, nodes: readonly EditorNode[]): boolean {
+  const shape = (list: readonly EditorNode[]): unknown[] => list.map(n => [n.type, inlineText(n.content).trim(), shape(n.children ?? [])])
+  return JSON.stringify(shape(nodes)) === JSON.stringify(shape(pageFromTemplate(template, null)))
 }
 
 const copiedTypes = new Set(['heading', 'paragraph', 'bulletListItem', 'numberedListItem', 'quote', 'task', 'checkListItem'])

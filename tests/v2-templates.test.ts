@@ -279,3 +279,39 @@ test('templates part 2: Undo of a delete brings the template back with its defau
   h.run({ type: 'undo', targetOperationId: del.receipt.operationId })
   assert.equal(defaultTemplate(h.ws, dayPagesTarget)?.id, 'tpl')
 })
+
+test('templates part 2: top-level pages have their own default', () => {
+  const h = harness()
+  h.run({ type: 'create-document', title: 'Recipes', body: '', pageId: 'recipes' })
+  h.ws = { ...h.ws, pages: [...h.ws.pages, { id: 'tpl-t', type: 'template', date: null, title: 'Note', document: JSON.stringify([heading('a', 'Context')]) }] }
+  const set = h.run({ type: 'set-template-target', pageId: 'tpl-t', target: 'top-level' })
+  assert.equal(set.receipt.message, 'Now the default for top-level pages')
+  h.run({ type: 'create-document', title: 'Trip', body: '', pageId: 'trip' })
+  assert.deepEqual(words(nodesOf(h.page('trip'))), [['heading', 'Context']])
+  assert.equal(h.page('trip').title, 'Trip')
+  // Not for subpages of a page with no default of its own.
+  h.run({ type: 'create-document', title: '', body: '', pageId: 'sub', parentId: 'recipes' })
+  assert.deepEqual(words(nodesOf(h.page('sub'))), [['paragraph', '']])
+  assert.throws(() => h.run({ type: 'create-document', title: '', body: '', pageId: 'top-level' }))
+})
+
+test('templates part 2: a link page starts from the default where it is saved, and its preview still fills in on top', () => {
+  const h = harness()
+  h.run({ type: 'create-document', title: 'Reading', body: '', pageId: 'reading' })
+  h.ws = { ...h.ws, pages: [...h.ws.pages, { id: 'tpl-r', type: 'template', date: null, title: 'Article', document: JSON.stringify([heading('a', 'Summary'), bullet('b'), heading('c', 'Notes'), bullet('d')]) }] }
+  h.run({ type: 'set-template-target', pageId: 'tpl-r', target: 'reading' })
+  h.run({ type: 'make-link-pages', parentPageId: 'reading', items: [{ url: 'https://example.com/post', pageId: 'lp' }] })
+  assert.deepEqual(words(nodesOf(h.page('lp'))), [['heading', 'Summary'], ['bulletListItem', ''], ['heading', 'Notes'], ['bulletListItem', '']])
+  h.run({ type: 'apply-link-preview', pageId: 'lp', url: 'https://example.com/post', title: 'A good post', description: 'Why it matters.' })
+  assert.equal(h.page('lp').title, 'A good post')
+  assert.deepEqual(words(nodesOf(h.page('lp'))), [['quote', 'Why it matters.'], ['heading', 'Summary'], ['bulletListItem', ''], ['heading', 'Notes'], ['bulletListItem', '']])
+  // A [[ link with a title gets it too: a title isn't body content.
+  h.run({ type: 'create-document', title: 'Another', body: '', pageId: 'linked', parentId: 'reading' })
+  assert.equal(words(nodesOf(h.page('linked')))[0]![1], 'Summary')
+  // Once he has written on it, a late preview leaves the page alone.
+  h.run({ type: 'make-link-pages', parentPageId: 'reading', items: [{ url: 'https://example.com/two', pageId: 'lp2' }] })
+  h.save('lp2', d => d.map((n, i) => (i === 1 ? { ...n, content: [text('My point')] } : n)))
+  const before = h.page('lp2').document
+  h.run({ type: 'apply-link-preview', pageId: 'lp2', url: 'https://example.com/two', title: 'Late', description: 'Late quote' })
+  assert.equal(h.page('lp2').document, before)
+})

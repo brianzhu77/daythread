@@ -10,7 +10,8 @@ import { ChevronRightIcon, PageKindIcon, PlusIcon } from './icons'
 import { LinkUrlRow } from './link-url-row'
 import { PagesTrashRow, TrashedPage, TrashScreen } from './trash'
 import { useWorkspace } from './use-day'
-import { dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, templates, templateTarget } from '../domain/day-template'
+import { RowMenu } from './row-menu'
+import { dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, templates, templateTarget, topLevelTarget } from '../domain/day-template'
 
 /** Asks for a title and creates a document page; resolves to its id, or null if cancelled. */
 export function useCreatePage() {
@@ -98,6 +99,7 @@ function targetLabel(workspace: Workspace, t: Page, today: string): string {
   const target = templateTarget(t)
   if (!target) return ''
   if (target === dayPagesTarget) return 'Default for day pages'
+  if (target === topLevelTarget) return 'Default for top-level pages'
   if (target === daySubpagesTarget) return 'Default for pages inside days'
   const on = workspace.pages.find(p => p.id === target)
   return on ? `Default for pages in ${pageLabel(on, today)}${isTrashed(on) ? ' · in Trash' : ''}` : ''
@@ -160,8 +162,10 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
   const target = templateTarget(page)
   // "Pages in…": documents, as Move to… offers them, plus the current target if it's a day or in the trash.
   const documents = visiblePages(workspace).filter(p => p.type === 'document')
-  const current = target && target !== dayPagesTarget && target !== daySubpagesTarget ? workspace.pages.find(p => p.id === target) : undefined
+  const current = target && ![dayPagesTarget, topLevelTarget, daySubpagesTarget].includes(target) ? workspace.pages.find(p => p.id === target) : undefined
   const pagesIn = current && !documents.includes(current) ? [current, ...documents] : documents
+  // Every document page, nested and link pages included (Brian 57deaed7); nested ones name their parent, as titles repeat.
+  const inLabel = (p: Page) => { const parent = parentOf(workspace, p); return parent ? ` · in ${pageLabel(parent, today)}` : '' }
   const holder = (value: string) => { const h = defaultTemplate(workspace, value); return h && h.id !== page.id ? ` · now ${displayPageTitle(h)}` : '' }
   const setTarget = (next: string) => {
     const value = next || null
@@ -176,6 +180,8 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
       {/* The way back to the list, set like a document page's "Pages" crumb: the Home Screen app has no Back button. */}
       <div className="crumbs">
         <nav className="crumbs-path folded" aria-label="Page location"><PageLink className="crumb" href="/pages?view=templates">Templates</PageLink></nav>
+        {/* Delete sits in the ⋯ where a document page has it (Jazz dbb8b038). */}
+        <RowMenu label="Template actions" triggerClass="page-more" groups={[{ items: [{ label: 'Delete', danger: true, onSelect: () => void remove() }] }]} />
       </div>
       <div className="page-head">
         <PageTitleField key={page.id} page={page} autoFocus={autoFocusTitle} />
@@ -184,15 +190,15 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
             <select className="template-target" value={target ?? ''} onChange={e => setTarget(e.target.value)}>
               <option value="">None</option>
               <option value={dayPagesTarget}>Day pages{holder(dayPagesTarget)}</option>
+              <option value={topLevelTarget}>Top-level pages{holder(topLevelTarget)}</option>
               <option value={daySubpagesTarget}>Pages inside any day{holder(daySubpagesTarget)}</option>
               {pagesIn.length > 0 && (
                 <optgroup label="Pages in…">
-                  {pagesIn.map(p => <option key={p.id} value={p.id}>{pageLabel(p, today)}{isTrashed(p) ? ' · in Trash' : ''}{holder(p.id)}</option>)}
+                  {pagesIn.map(p => <option key={p.id} value={p.id}>{pageLabel(p, today)}{inLabel(p)}{isTrashed(p) ? ' · in Trash' : ''}{holder(p.id)}</option>)}
                 </optgroup>
               )}
             </select>
           </label>
-          {' · '}<button type="button" className="link" onClick={() => void remove()}>Delete</button>
         </p>
         <p className="template-note">New pages start from this template. To-dos are copied empty.</p>
       </div>
