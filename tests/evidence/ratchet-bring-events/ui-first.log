@@ -1,0 +1,18 @@
+PASS event anchor/order/no overflow chromium light 2026-11-01
+PASS event anchor/order/no overflow chromium light 2026-11-02
+PASS event anchor/order/no overflow chromium light 2026-11-03
+PASS event anchor/order/no overflow chromium light 2026-11-04
+PASS event anchor/order/no overflow chromium dark 2026-11-01
+PASS event anchor/order/no overflow chromium dark 2026-11-02
+PASS event anchor/order/no overflow chromium dark 2026-11-03
+PASS event anchor/order/no overflow chromium dark 2026-11-04
+PASS event anchor/order/no overflow webkit light 2026-11-01
+PASS event anchor/order/no overflow webkit light 2026-11-02
+file:///Users/dogrod/Developer/daythread-ratchet-carry/tests/evidence/ratchet-bring-events/ui.mjs:14
+  if(date==='2026-11-03'){const heading=positions.blocks.find(n=>n.type==='heading'&&n.text==='Events');assert.ok(heading.bottom<=positions.eventTop);assert.ok(!positions.labelled&&!positions.inSection);}
+                                                                                                                          ^
+
+TypeError: Cannot read properties of undefined (reading 'bottom')
+    at file:///Users/dogrod/Developer/daythread-ratchet-carry/tests/evidence/ratchet-bring-events/ui.mjs:14:123
+
+Node.js v24.14.1
