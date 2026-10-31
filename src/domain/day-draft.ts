@@ -68,6 +68,22 @@ export function planningEndIndex(doc: readonly EditorNode[], tasks: ReadonlySet<
   return at
 }
 
+/**
+ * Where "N more open ▸" goes (Jazz states §1, Bumblebee 3b778b83): the end of the planning part, after his own rows and
+ * before a divider closing it, never between the heading and its rows. With no headings the whole page is the planning
+ * part, so it goes after the last to-do row instead of below his notes, or with the fallback bands if there are none.
+ */
+export function moreOpenAfterIndex(doc: readonly EditorNode[], planningEnd: number): number {
+  const { start, end } = planningRange(doc)
+  if (!doc.some(n => n.type === 'heading')) {
+    for (let i = doc.length - 1; i >= 0; i--) if (flatNodes([doc[i]!]).some(isTaskRow)) return i
+    return planningEnd - 1
+  }
+  let last = end - 1
+  while (last > start && doc[last]!.type === 'divider') last--
+  return last
+}
+
 const compatible = (anchor: EditorNode, item: Pick<DraftItem, 'taskId' | 'block'>): boolean => {
   const wantsTask = Boolean(item.taskId) || item.block?.type === 'task'
   return wantsTask ? anchor.type === 'task' : anchor.type === 'paragraph' || anchor.type === 'bulletListItem' || anchor.type === 'numberedListItem'
@@ -100,6 +116,8 @@ export interface DraftView {
   items: DraftItemView[]
   moreOpen: { taskId: string; title: string; since: LocalDate }[]
   planningEndId: string | null
+  /** The last block of the planning part: "N more open ▸" goes after his own rows, not between the heading and them. */
+  moreOpenAfterId: string | null
 }
 
 export function draftView(ws: Workspace, page: Page): DraftView | null {
@@ -120,7 +138,8 @@ export function draftView(ws: Workspace, page: Page): DraftView | null {
   }
   const end = planningEndIndex(doc, ids)
   const moreOpen = draft.moreOpen.map(task).filter(eligibleTask).filter(t => !onPage.has(t.id)).map(t => ({ taskId: t.id, title: t.title, since: t.createdOn }))
-  return { status: draftSettled(draft) ? 'ready' : draft.status, items, moreOpen, planningEndId: end > 0 ? doc[end - 1]!.id : null }
+  const last = moreOpenAfterIndex(doc, end)
+  return { status: draftSettled(draft) ? 'ready' : draft.status, items, moreOpen, planningEndId: end > 0 ? doc[end - 1]!.id : null, moreOpenAfterId: last >= 0 ? doc[last]!.id : null }
 }
 
 /** A draft as the server built it, checked before it is stored: ids it may use, kinds, lengths, no duplicates. */
