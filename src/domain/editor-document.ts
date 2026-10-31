@@ -133,7 +133,7 @@ export function rowInsertIndex(doc: readonly EditorNode[], tasks: ReadonlySet<st
 }
 /**
  * Where a new plan row goes on a DAY page (carried, planned or added). B74 (Bumblebee 8bb0f23d, Lead 3d87f348): as
- * their own group right under the heading above the page's first to-do row (with no to-do row, the first heading),
+ * their own group right under the outermost heading above the page's first to-do row (with no to-do row, the first heading),
  * above that section's first line, after the rows already in the group; with no such heading, at the top of the page.
  * The rule never reads his words, so a label he wrote ("Intentional Drop") never gives a carried to-do a meaning, and
  * his empty to-dos stay empty. On the built-in day that is under TODO, above its empty row, as before. Other pages keep
@@ -144,6 +144,10 @@ export function dayRowInsertIndex(doc: readonly EditorNode[], tasks: ReadonlySet
   let heading = firstRow
   if (firstRow < 0) heading = doc.findIndex(n => n.type === 'heading')
   else while (heading >= 0 && doc[heading]!.type !== 'heading') heading--
+  // Climb to the outermost heading whose section holds that row, so a sub-heading he wrote ("Top 3") never takes the
+  // group: on his template that is "Morning Planning", above "Events" (Bumblebee 98e0dcb9, Lead 5a15305c).
+  const levelOf = (n: EditorNode) => Number(n.props?.level ?? 1)
+  for (let i = heading - 1; i >= 0; i--) if (doc[i]!.type === 'heading' && levelOf(doc[i]!) < levelOf(doc[heading]!)) heading = i
   let end = heading + 1
   while (end < doc.length && isTaskRow(doc[end]!) && tasks.has(String(doc[end]!.props!.taskId))) end++
   return end

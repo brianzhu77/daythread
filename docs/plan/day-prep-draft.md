@@ -92,3 +92,17 @@ turn it on (rule 6).
 - No duplicate tasks from applying (task count grows only by new items).
 - Applied items still on the page at the end of the day (he did not delete most of what he applied).
 - Brian does not describe the morning as unnatural again.
+
+## Experiment score (Bumblebee 98e0dcb9, on Roadbuster d1f24561, `exp/day-draft` 2772d58)
+
+Five days on a copy of `before-b74`, OpenRouter `deepseek/deepseek-v4.1-flash-1017`, 3–4.4 s and about $0.0004 a day.
+
+- **Pass:** no invented items, every to-do by id, reflection left empty on all 5 days, slots filled in place. Oct 28
+  proposed PRD, Mazda and Credit Card for Top 3, and all three were done that day (planned dates may have leaked in).
+- **Fail, rule 1:** an open to-do dropped on 3 of 5 days (Oct 28 TRV and 买狗窝; Oct 29 买狗窝; Oct 31 买狗窝, which was
+  planned for that day). The app enforces it: a to-do planned for today that the model did not place is inserted by the
+  fallback rule in the same diff; other open ones show under Jazz's "N more open". Ratchet tests this on real model output.
+- **For the build:** no dated lines copied into Events (events come from events, else they show twice); no "why" text in
+  the UI (logs only); the prompt names the account, not "Brian".
+- Real quality ("did it guess his day") can only be judged from Nov 1 on, when he writes days on the new template.
+
