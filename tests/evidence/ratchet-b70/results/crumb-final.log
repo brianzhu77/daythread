@@ -1,0 +1,4 @@
+PASS crumb text left chromium 1280 {"crumb":420,"title":420}
+PASS crumb text left chromium 390 {"crumb":20,"title":20}
+PASS crumb text left webkit 1280 {"crumb":420,"title":420}
+PASS crumb text left webkit 390 {"crumb":20,"title":20}

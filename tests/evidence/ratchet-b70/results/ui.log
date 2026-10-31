@@ -1,0 +1,8 @@
+PASS chromium template edit/reload and Default for None/Day pages
+CUT CHECKBOX [
+  { label: 'New task', disabled: false },
+  { label: 'Complete Preserve real task', disabled: false },
+  { label: 'New task', disabled: false }
+]
+FINDING cut-pasted template row exposes live real-task checkbox
+PASS webkit template edit/reload and Default for None/Day pages

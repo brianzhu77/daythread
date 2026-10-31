@@ -647,6 +647,10 @@ details.banner > :not(summary) { display: inline-flex; align-items: center; marg
   font-size: var(--text-ui);
 }
 .sidebar .brand { padding: 4px 10px 16px; }
+/* The preview address marks itself (DAYTHREAD_PREVIEW): a caption by the wordmark, and on phones a line on top. */
+.brand-preview { font-size: var(--text-caption); font-weight: var(--weight-medium); color: var(--ink-2); letter-spacing: 0; }
+.preview-note { display: none; margin: 0; padding: 8px 20px 0; font-size: var(--text-meta); color: var(--ink-2); }
+@media (max-width: 599px) { .preview-note { display: block; } }
 .sidebar-nav, .side-group { display: grid; gap: 2px; }
 .side-row { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 0 10px; border-radius: var(--radius-row); color: var(--ink-2); text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 button.side-row { width: 100%; justify-content: flex-start; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
