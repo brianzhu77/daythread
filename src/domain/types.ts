@@ -5,7 +5,8 @@ export type LocalDate = string;
 
 export interface Page {
   id: string;
-  type: "daily" | "document";
+  /** `template`: the day template (B70), one per workspace, copied into each new day page; never listed as a page. */
+  type: "daily" | "document" | "template";
   /** Day pages: their date; one page per date, id `day:<date>`. */
   date: LocalDate | null;
   title: string;
@@ -103,6 +104,10 @@ export type Action =
   | { type: "restore-page"; pageId: string }
   | { type: "restore-batch"; trashId: string }
   /** The account's time zone (an IANA name), used for conversions and the export's date. */
+  /** A new template under Templates; `dayPage`: a copy of the built-in day headings, made the day pages' default. */
+  | { type: "create-template"; title: string; pageId?: string; dayPage?: true }
+  /** What a template is the default for (one template per target); null: nothing. */
+  | { type: "set-template-target"; pageId: string; target: "days" | null }
   | { type: "set-timezone"; timezone: string }
   | { type: "undo"; targetOperationId: string };
 

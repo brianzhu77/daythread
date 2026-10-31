@@ -1,7 +1,8 @@
 // The domain: commands over the workspace (pure, one at a time, with receipts for replay and one Undo slot) and the
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
-import { emptyLine, emptyTaskRow, flatNodes, headingNode, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
+import { emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
+import { builtInDayNodes, dayPagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, pageFromTemplate, templateRows } from "./day-template.ts";
 import { isTrashed, moveRefusal, subtreeIds } from "./page-tree.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
@@ -44,13 +45,20 @@ function page(state: Workspace, id: string): Page {
   if (!p) throw new DomainError("Page not found");
   return p;
 }
+/** A page the command may change as a page: never the day template, which only its own editor and Reset change. */
+function ordinaryPage(state: Workspace, id: string): Page {
+  const p = page(state, id);
+  if (isTemplate(p)) throw new DomainError("The day template can't be changed that way");
+  return p;
+}
 function task(state: Workspace, id: string): Task {
   const t = state.tasks.find((x) => x.id === id);
   if (!t) throw new DomainError("Task not found");
   return t;
 }
 const dayPage = (state: Workspace, day: string): Page | undefined => state.pages.find((p) => p.type === "daily" && p.date === day);
-const livePages = (state: Workspace): Page[] => state.pages.filter((p) => !isTrashed(p));
+// A template's rows are never a task's place (B70): only live, ordinary pages hold tasks.
+const livePages = (state: Workspace): Page[] => state.pages.filter((p) => !isTrashed(p) && !isTemplate(p));
 const docOf = (p: Page): EditorNode[] => structuredClone(pageNodes(p));
 const setDocument = (p: Page, nodes: EditorNode[]): void => { p.document = JSON.stringify(nodes); };
 
@@ -219,7 +227,8 @@ function ensureDay(state: Workspace, day: string): Page {
   if (!p) {
     const id = `day:${day}`;
     if (state.pages.some((x) => x.id === id)) throw new DomainError("Page id already in use");
-    p = { id, type: "daily", date: day, title: day, document: JSON.stringify(templateDocument(id, day)) };
+    const template = defaultTemplate(state, dayPagesTarget);
+    p = { id, type: "daily", date: day, title: day, document: JSON.stringify(template ? pageFromTemplate(template, day) : templateDocument(id, day)) };
     state.pages.push(p);
   }
   return p;
@@ -261,6 +270,12 @@ function headingAbove(doc: EditorNode[], nodeId: string): EditorNode | undefined
 }
 const bringableTypes = new Set(["paragraph", "bulletListItem", "numberedListItem", "quote"]);
 const bringable = (n: EditorNode): boolean => bringableTypes.has(n.type) && Boolean(inlineText(n.content).trim());
+/** Where a line goes at the end of a page: before its trailing empty text lines, so the line ready for typing stays last. */
+function trailingStart(doc: readonly EditorNode[]): number {
+  let end = doc.length;
+  while (end > 0 && isEmptyLine(doc[end - 1]!) && doc[end - 1]!.type !== "task") end--;
+  return end;
+}
 const lineKey = (n: EditorNode, pageDate: string | null) => inlineText(n.content, pageDate).replace(/\s+/g, " ").trim();
 
 // ---------------------------------------------------------------- commands
@@ -278,6 +293,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       cleanRuns(nodes);
       const ids = new Set<string>();
       for (const n of all) { if (!n || typeof n.id !== "string" || !n.id || typeof n.type !== "string" || ids.has(n.id)) throw new DomainError("Duplicate editor block identity"); ids.add(n.id); }
+      if (isTemplate(p)) { setDocument(p, templateRows(nodes)); return { message: "Template saved" }; }
       const before = flatNodes(pageNodes(p));
       const on = action.today ?? p.date ?? new Date().toISOString().slice(0, 10);
       const previousText = new Map(before.filter(isTaskRow).map((n) => [n.id, inlineText(n.content, textDate(p))]));
@@ -326,7 +342,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       return { message: "Day opened", entityId: p.id };
     }
     case "add-task": {
-      const p = page(state, action.pageId);
+      const p = ordinaryPage(state, action.pageId);
       const on = action.plannedOn ?? p.date ?? new Date().toISOString().slice(0, 10);
       const t = createTask(state, action.title, p, on);
       if (action.deadlineOn) t.deadlineOn = date(action.deadlineOn);
@@ -368,7 +384,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       return { message: t.paused ? "Not today" : "Removed from the day", entityId: t.id };
     }
     case "remove-task-row": {
-      const p = page(state, action.pageId), t = task(state, action.taskId);
+      const p = ordinaryPage(state, action.pageId), t = task(state, action.taskId);
       const ids = rowIdsOf(pageNodes(p), t.id);
       if (!ids.size) throw new DomainError("Row not found");
       const wasPlan = rowIdsOf(pageNodes(p), t.id, "plan").size > 0, plannedBefore = plannedOn(state, t.id);
@@ -379,7 +395,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     case "bring-line": {
       const p = dayPage(state, date(action.date));
       if (!p) throw new DomainError("Page not found");
-      const source = page(state, action.sourcePageId);
+      const source = ordinaryPage(state, action.sourcePageId);
       const sourceDoc = pageNodes(source);
       const node = flatNodes(sourceDoc).find((n) => n.id === action.sourceBlockId);
       if (!node) throw new DomainError("Line not found");
@@ -392,10 +408,11 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const fromHeading = headingAbove(sourceDoc, node.id), fromTitle = fromHeading ? inlineText(fromHeading.content).trim().toLowerCase() : "";
       const sameName = (n: EditorNode) => n.type === "heading" && inlineText(n.content).trim().toLowerCase() === fromTitle;
       const target = (fromTitle ? doc.find(sameName) : undefined) ?? doc.find((n) => n.type === "heading" && inlineText(n.content).trim().toLowerCase() === "notes");
+      // A heading he removed from his day is never brought back (B70): with neither heading, the line goes at the end.
       if (target) doc.splice(sectionInsertIndex(doc, target.id), 0, copy);
-      else doc.push(headingNode("Notes"), copy);
+      else doc.splice(trailingStart(doc), 0, copy);
       setDocument(p, doc);
-      return { message: `Brought to ${target ? inlineText(target.content).trim() : "Notes"}`, entityId: copy.id };
+      return { message: target ? `Brought to ${inlineText(target.content).trim()}` : "Brought to today", entityId: copy.id };
     }
     case "handoff-done": {
       ensureDay(state, action.date).handoffDone = true;
@@ -412,7 +429,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (existing.type !== "document" || (existing.parentId ?? null) !== (action.parentId ?? null)) throw new DomainError("Page id already in use");
         return { message: "Page saved", entityId: id };
       }
-      if (action.parentId) page(state, action.parentId);
+      if (action.parentId) ordinaryPage(state, action.parentId);
       const body = text(action.body);
       const line = emptyLine("paragraph");
       if (body) line.content = [textRun(body)];
@@ -420,7 +437,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       return { message: "Page saved", entityId: id };
     }
     case "make-link-pages": {
-      const parent = page(state, action.parentPageId);
+      const parent = ordinaryPage(state, action.parentPageId);
       let first: string | undefined;
       for (const item of action.items) {
         if (state.pages.some((p) => p.id === item.pageId)) { first ??= item.pageId; continue; }
@@ -456,7 +473,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     }
     case "rename-page": {
       const p = page(state, action.pageId);
-      if (p.type !== "document") throw new DomainError("Day pages are named by their date");
+      if (p.type === "daily") throw new DomainError("Day pages are named by their date");
       p.title = text(action.title, 1000).trim();
       return { message: "Page renamed", entityId: p.id };
     }
@@ -491,6 +508,28 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const { pages, toTopLevel } = restorePages(state, ids);
       const top = pages.find((x) => !x.parentId || !ids.has(x.parentId))!;
       return { message: toTopLevel.includes(top) ? "Restored to Pages" : "Restored", entityId: top.id };
+    }
+    case "create-template": {
+      const id = action.pageId ?? newId();
+      const existing = state.pages.find((p) => p.id === id);
+      if (existing) {
+        if (!isTemplate(existing)) throw new DomainError("Page id already in use");
+        return { message: "Template saved", entityId: id };
+      }
+      // "Day page" starts from the built-in headings and becomes the day pages' default (Templates list).
+      const nodes = action.dayPage ? builtInDayNodes() : [emptyLine("paragraph")];
+      const title = action.dayPage ? dayTemplateTitle : text(action.title, 1000).trim();
+      if (action.dayPage) for (const t of state.pages) if (isTemplate(t) && t.parentId === dayPagesTarget) delete t.parentId;
+      state.pages.push({ id, type: "template", date: null, title, ...(action.dayPage ? { parentId: dayPagesTarget } : {}), document: JSON.stringify(nodes) });
+      return { message: "Template saved", entityId: id };
+    }
+    case "set-template-target": {
+      const p = page(state, action.pageId);
+      if (!isTemplate(p)) throw new DomainError("Not a template");
+      // One default per target: setting it here takes it from any other template.
+      if (action.target) for (const t of state.pages) if (isTemplate(t) && t.id !== p.id && t.parentId === action.target) delete t.parentId;
+      if (action.target) p.parentId = action.target; else delete p.parentId;
+      return { message: action.target ? "Now the default for day pages" : "No longer a default", entityId: p.id };
     }
     case "set-timezone":
       state.timezone = validTimezone(action.timezone);

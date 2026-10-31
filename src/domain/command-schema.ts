@@ -23,6 +23,8 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("delete-page"), pageId: id, at: z.string().max(40) }),
   z.object({ type: z.literal("restore-page"), pageId: id }),
   z.object({ type: z.literal("restore-batch"), trashId: id }),
+  z.object({ type: z.literal("create-template"), title: z.string().max(1000), pageId: z.string().min(1).max(200).optional(), dayPage: z.literal(true).optional() }),
+  z.object({ type: z.literal("set-template-target"), pageId: z.string().min(1).max(200), target: z.literal("days").nullable() }),
   z.object({ type: z.literal("set-timezone"), timezone: z.string().min(1).max(100) }),
   z.object({ type: z.literal("undo"), targetOperationId: id }),
 ]);
