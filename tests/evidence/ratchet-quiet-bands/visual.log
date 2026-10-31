@@ -1,0 +1,12 @@
+(node:53434) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium light {"fill":"rgba(0, 0, 0, 0)","shadow":"none","ink":"rgb(141, 141, 141)","normal":"rgb(32, 32, 32)","box":"dashed","dot":"dashed","line":"dashed","opacity":"0"} all three applied types return to ordinary rows
+(node:53443) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium dark {"fill":"rgba(0, 0, 0, 0)","shadow":"none","ink":"rgb(110, 110, 110)","normal":"rgb(238, 238, 238)","box":"dashed","dot":"dashed","line":"dashed","opacity":"0"} all three applied types return to ordinary rows
+(node:53449) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS webkit light {"fill":"rgba(0, 0, 0, 0)","shadow":"none","ink":"rgb(141, 141, 141)","normal":"rgb(32, 32, 32)","box":"dashed","dot":"dashed","line":"dashed","opacity":"1"} all three applied types return to ordinary rows
+(node:53526) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS webkit dark {"fill":"rgba(0, 0, 0, 0)","shadow":"none","ink":"rgb(110, 110, 110)","normal":"rgb(238, 238, 238)","box":"dashed","dot":"dashed","line":"dashed","opacity":"1"} all three applied types return to ordinary rows
