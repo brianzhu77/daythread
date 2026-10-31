@@ -148,6 +148,14 @@ export function dayRowInsertIndex(doc: readonly EditorNode[], tasks: ReadonlySet
   while (end < doc.length && isTaskRow(doc[end]!) && tasks.has(String(doc[end]!.props!.taskId))) end++
   return end
 }
+/** Brought lines' block ids start with this, so their group can be found without reading words. */
+export const broughtPrefix = 'brought:'
+/** Where a brought line goes on a day page with no matching heading: after the carried to-dos and earlier brought lines. */
+export function broughtInsertIndex(doc: readonly EditorNode[], tasks: ReadonlySet<string>): number {
+  let at = dayRowInsertIndex(doc, tasks)
+  while (at < doc.length && doc[at]!.id.startsWith(broughtPrefix)) at++
+  return at
+}
 /** The same for a line brought under a heading: before that section's trailing empty lines. */
 export function sectionInsertIndex(doc: readonly EditorNode[], headingId: string): number {
   const heading = doc.findIndex(n => n.id === headingId)
