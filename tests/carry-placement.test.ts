@@ -4,8 +4,8 @@ import { harness, dayId, today, tomorrow, text, todo, bullet, para, heading, nod
 import { inlineText, type EditorNode } from '../src/domain/editor-document.ts'
 import { getDayView } from '../src/domain/workspace.ts'
 
-// B74 (Bumblebee 8bb0f23d, Lead 3d87f348): carried to-dos go as their own group right under the heading above the
-// page's first to-do row, above that section's first line; with no heading, at the top. His empty to-dos stay empty.
+// B74 (Bumblebee 8bb0f23d, Lead 3d87f348): carried to-dos go as their own group right under the outermost heading above
+// the page's first to-do row, above that section's first line; with no heading, at the top. His empty to-dos stay empty.
 
 const level = (n: EditorNode, l: number): EditorNode => ({ ...n, props: { level: l } })
 const divider = (id: string): EditorNode => ({ id, type: 'divider', props: {}, children: [] })
@@ -66,6 +66,29 @@ test('carry: a later carry joins the group, after the ones already there', () =>
   assert.ok(extra)
   const after = shape(nodesOf(h.page(dayId(tomorrow))))
   assert.deepEqual(after.slice(0, 5), ['heading2:Start of the day', 'task:Book the flights', 'task:Buy a dog bed', 'task:Call the vet', 'paragraph:One start'])
+})
+
+// The shape of his Day template since 10-31 18:09Z (361325a5): the first to-do slots sit under a sub-heading ("Top 3")
+// inside a top-level section. A sub-heading he wrote is a label too, so the group goes under the top-level heading.
+const nested = (): EditorNode[] => [
+  heading('m', 'Morning'), level(heading('ev', 'Events'), 3), bullet('b1'),
+  level(heading('t3', 'Top 3'), 3), todo('e1', '', 'reference', ''), todo('e2', '', 'reference', ''), todo('e3', '', 'reference', ''),
+  level(heading('ot', 'Other'), 3), todo('e4', '', 'reference', ''), divider('d1'),
+  heading('n', 'Notes'), bullet('b2'),
+]
+
+test('carry: with the first to-do slots under a sub-heading, they go under the top-level heading, not into its slots', () => {
+  const { made, after } = carry(nested())
+  assert.deepEqual(after.slice(0, 4), ['heading2:Morning', 'task:Book the flights', 'task:Buy a dog bed', 'heading3:Events'])
+  assert.deepEqual(after.slice(3), made.slice(1), 'everything else stays where he put it')
+  const top3 = after.indexOf('heading3:Top 3')
+  assert.deepEqual(after.slice(top3 + 1, top3 + 4), ['task:', 'task:', 'task:'], 'Top 3 keeps exactly its three empty slots')
+  assert.equal(after[top3 + 4], 'heading3:Other')
+})
+
+test('carry: a lower-level heading later on the page does not pull the group away from its section', () => {
+  const { after } = carry([heading('m', 'Morning'), level(heading('t3', 'Top 3'), 3), todo('e1', '', 'reference', ''), level(heading('ev', 'Evening'), 1), bullet('b1')])
+  assert.deepEqual(after.slice(0, 4), ['heading2:Morning', 'task:Book the flights', 'task:Buy a dog bed', 'heading3:Top 3'])
 })
 
 test('carry: with no heading above the first to-do row, they go at the top of the page', () => {
