@@ -666,6 +666,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     retryTimer.current = setTimeout(() => void flushRef.current(), delay)
   }
   const pendingSave = useRef<{ fingerprint: string; operationId: string } | null>(null)
+  /** A save refused only because the workspace moved on was sent again once; a second refusal is his to see. */
+  const resentForRevision = useRef(false)
   const flush = useCallback(async () => {
     // A2 §4: while a paste's Undo is out, nothing is sent; typing collects and goes once the reply is applied.
     if (left.current || !dirty.current || sending.current || undoingPaste.current) return
@@ -704,6 +706,18 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const result = await run(action,undefined,operationId,{ onFailure: m => { failure = m } })
       sending.current = false
       if (!result) {
+        // Refused only because the workspace moved on (a new day made on another device, a change to another page):
+        // run has already loaded the latest, and if this page is still what the save started from, nothing of his
+        // conflicts, so it goes again once, silently (Lead b5e55c49, Jazz 3e569f5c). A real change to this page
+        // still fails its expectedContent and shows here.
+        const now = latest()?.pages.find(p => p.id === page.id)
+        if (/saved elsewhere/i.test(failure) && !resentForRevision.current && now && pageContentKey(now) === action.expectedContent) {
+          debugClient('editor.save.finish',{operationId,pageId:page.id,result:'resend'})
+          resentForRevision.current = true
+          clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0)
+          return
+        }
+        resentForRevision.current = false
         debugClient('editor.save.finish',{operationId,pageId:page.id,result:'error'}); setFailed(true)
         offlineFailure.current = isNetworkFailure(failure); setUnsaved(offlineFailure.current ? 'network' : 'refused')
         // Jazz bebe67e3: what happened · what's kept, short enough for 390; Retry stays for an impatient moment.
@@ -711,7 +725,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         else setStatus("Couldn't save · draft kept")
         return
       }
-      clearTimeout(retryTimer.current); retries.current = 0; offlineFailure.current = false
+      clearTimeout(retryTimer.current); retries.current = 0; offlineFailure.current = false; resentForRevision.current = false
       announceSave(page.id)
       pendingSave.current=null; lastSaved.current = document
       debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
@@ -728,7 +742,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (dirty.current) { stash(); timer.current = setTimeout(() => void flushRef.current(), 300) }
       else clearOwn(page.id)
     } finally { settled() }
-  }, [editor, key, page.id, run])
+  }, [editor, key, latest, page.id, run])
   flushRef.current = flush
   // B35 part 2: keep this tab's slot marked alive, mark it closed when the tab goes, and on coming back check whether
   // another tab claimed it meanwhile.
