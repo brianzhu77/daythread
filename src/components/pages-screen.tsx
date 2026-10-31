@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AccountRow } from './account-row'
 import { ContinuousPage } from './continuous-page'
@@ -100,12 +100,15 @@ function TemplatesScreen({ workspace, onOpen }: { workspace: Workspace; onOpen: 
   // Single-flight (Ratchet f0e1b4fd): a second click while the first is on its way does nothing, and a retry after a
   // failure reuses the same page id, so Edit never makes two "Day" templates.
   const pending = useRef<{ pageId: string; busy: boolean } | null>(null)
+  const [opening, setOpening] = useState(false)
   const edit = async () => {
     if (pending.current?.busy) return
     pending.current = { pageId: pending.current?.pageId ?? crypto.randomUUID(), busy: true }
+    setOpening(true)
     const { pageId } = pending.current
     const receipt = await run({ type: 'create-template', title: dayTemplateTitle, pageId, dayPage: true })
     pending.current = { pageId, busy: false }
+    setOpening(false)
     if (receipt) onOpen(receipt.entityId ?? pageId)
   }
   return (
@@ -113,7 +116,7 @@ function TemplatesScreen({ workspace, onOpen }: { workspace: Workspace; onOpen: 
       <div className="title-row"><h1 className="large-title">Templates</h1></div>
       {/* Only before any template exists: with "Day" in the list (default or not), Edit would make a second one. */}
       {list.length === 0 && !defaultTemplate(workspace, dayPagesTarget) && (
-        <p className="quiet">Day pages start with TODO, Events, Good Stuffs and Notes. · <button type="button" className="link" onClick={() => void edit()}>Edit</button></p>
+        <p className="quiet">Day pages start with TODO, Events, Good Stuffs and Notes. · <button type="button" className="link" disabled={opening} onClick={() => void edit()}>{opening ? 'Opening…' : 'Edit'}</button></p>
       )}
       {list.length > 0 && (
         <ul className="plain card-list two-line">
