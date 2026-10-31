@@ -1,0 +1,24 @@
+example.com/target [ [ 'heading', 'Summary' ] ]
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: a default configuration is not a child page or body edit
++ actual - expected
+
++ 'example.com/target'
+- 'Preview title'
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-templates/tests/evidence/ratchet-b70-part2/preview-target.ts:14:8
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'example.com/target',
+  expected: 'Preview title',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

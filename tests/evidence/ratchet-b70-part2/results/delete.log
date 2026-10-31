@@ -1,0 +1,35 @@
+(node:15441) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+UNDO RESTORED {"id":"specific-tpl","type":"template","date":null,"title":"Specific","document":"[{\"id\":\"specific-tpl-h\",\"type\":\"heading\",\"props\":{\"backgroundColor\":\"default\",\"textColor\":\"default\",\"textAlignment\":\"left\",\"level\":2,\"isToggleable\":false},\"content\":[{\"type\":\"text\",\"text\":\"Specific layout\",\"styles\":{}}],\"children\":[]},{\"id\":\"specific-tpl-b\",\"type\":\"bulletListItem\",\"props\":{\"backgroundColor\":\"default\",\"textColor\":\"default\",\"textAlignment\":\"left\"},\"content\":[{\"type\":\"text\",\"text\":\"Latest words before delete\",\"styles\":{}}],\"children\":[]}]","parentId":"reading"}
+BODY AFTER UNDO Daythread
+Search
+⌘K
+Today
+Tasks
+Calendar
+Pages
+Tags
+
+DAYS
+
+Today
+
+PAGES
+
++
+Reading
+Nested notes
+
+Templates · Export
+
+Templates
+Daily
+Default for day pages
+Top
+Default for top-level pages
+Inside days
+Default for pages inside days
+Specific
+Default for pages in Reading
+Undone
+REOPEN RESTORED WORDS [ 'Specific layout', 'Latest words before delete' ]

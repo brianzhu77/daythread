@@ -1,0 +1,6 @@
+(node:22762) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS long nested option fits chromium 1280 {"overflow":false,"right":1120,"width":1280} Pages in Nested notes › Korean soup notes with a very long title that must fit in the target menu on a phone 中文标题需要换行
+PASS long nested option fits webkit 390 {"overflow":false,"right":370,"width":390} Pages in Nested notes › Korean soup notes with a very long title that must fit in the target menu on a phone 中文标题需要换行
+PASS trashed target named in menu; template stays live
+PASS forced missing target reads None, can assign a new default; stale id does not block

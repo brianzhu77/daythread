@@ -1,0 +1,35 @@
+(node:15850) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Save attempts refused 1
+Template exists despite save failure? false
+Screen Daythread
+Search
+⌘K
+Today
+Tasks
+Calendar
+Pages
+Tags
+
+DAYS
+
+Today
+
+PAGES
+
++
+Reading
+Nested notes
+
+Templates · Export
+
+Templates
+Daily
+Default for day pages
+Top
+Default for top-level pages
+Inside days
+Default for pages inside days
+Deleted 'Specific'
+Undo
+Restored document [{"id":"specific-tpl-h","type":"heading","props":{"backgroundColor":"default","textColor":"default","textAlignment":"left","level":2,"isToggleable":false},"content":[{"type":"text","text":"Specific layout","styles":{}}],"children":[]},{"id":"specific-tpl-b","type":"bulletListItem","props":{"backgroundColor":"default","textColor":"default","textAlignment":"left"},"content":[{"type":"text","text":"Latest words before delete","styles":{}}],"children":[]}]
