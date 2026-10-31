@@ -5,7 +5,6 @@ import { CalendarIcon, PagesIcon, TagsIcon, TasksIcon, TodayIcon } from './icons
 import { Mark } from './mark'
 import type { LocalDate } from '../domain/types'
 import { useWorkspace } from './use-day'
-import { useCreatePage } from './pages-screen'
 import { SidebarTrashRow } from './trash'
 import { AccountRow } from './account-row'
 import { useKeptDrafts } from './kept-drafts'
@@ -72,15 +71,6 @@ export function Navigation() {
   )
 }
 
-/**
- * An action, not a destination: a link to /pages would be marked current (and look selected) on the Pages screen.
- * The new page opens the same way the sidebar's page rows do.
- */
-function NewPageRow() {
-  const createPage = useCreatePage()
-  return <button type="button" className="side-row small" onClick={async () => { const id = await createPage(); if (id) window.location.assign(`/pages?page=${encodeURIComponent(id)}`) }}>＋ New page</button>
-}
-
 /** The page on screen: a day page by its date (`/` is today), or the page opened in Pages. */
 function PageGroups({ path, openPageId, trashView, today }: { path: string; openPageId?: string; trashView: boolean; today: LocalDate }) {
   const { workspace } = useWorkspace()
@@ -90,6 +80,6 @@ function PageGroups({ path, openPageId, trashView, today }: { path: string; open
   if (!workspace) return null
   // The Trash row is current on the Trash screen and on a trashed page, which has no row in the tree (layout T3/T4).
   const trashOpen = path.startsWith('/pages') && (trashView || Boolean(openPageId && workspace.pages.find(p => p.id === openPageId)?.trashedAt))
-  return <SidebarTree workspace={workspace} activeId={activeId} today={today} newPageRow={<><NewPageRow /><SidebarTrashRow current={trashOpen} /><AccountRow className="account-row-sidebar" /></>} />
+  return <SidebarTree workspace={workspace} activeId={activeId} today={today} footer={<><SidebarTrashRow current={trashOpen} /><AccountRow className="account-row-sidebar" /></>} />
 }
 

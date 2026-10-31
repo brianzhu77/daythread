@@ -12,14 +12,13 @@ import { PagesTrashRow, TrashedPage, TrashScreen } from './trash'
 import { useWorkspace } from './use-day'
 import { dayPagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, templates, templateTarget } from '../domain/day-template'
 
-/** Asks for a title and creates a document page; resolves to its id, or null if cancelled. */
+/** Creates an untitled top-level page, as the sidebar's + does; resolves to its id, or null if the save failed. */
 export function useCreatePage() {
   const { run } = useWorkspace()
   return async () => {
-    const title = window.prompt('Page title')?.trim()
-    if (!title) return null
-    const receipt = await run({ type: 'create-document', title, body: '' })
-    return receipt?.entityId ?? null
+    const pageId = crypto.randomUUID()
+    const receipt = await run({ type: 'create-document', title: '', body: '', pageId })
+    return receipt ? pageId : null
   }
 }
 
@@ -29,7 +28,7 @@ export function PagesScreen() {
   const search = useSearch({ from: '/pages' })
   const navigate = useNavigate()
   const today = useToday()
-  const setSelected = (page: string | null) => void navigate({ to: '/pages', search: page ? { page } : {} })
+  const setSelected = (page: string | null, focus?: 'title') => void navigate({ to: '/pages', search: page ? { page, ...(focus ? { focus } : {}) } : {} })
   const p = workspace?.pages.find(p => p.id === search.page)
   if (search.view === 'trash' && !p) return <TrashScreen />
   if (!workspace) return <p>Loading pages…</p>
@@ -52,7 +51,7 @@ export function PagesScreen() {
     <div className="list-screen">
       <div className="title-row">
         <h1 className="large-title">Pages</h1>
-        <button type="button" className="round-add" aria-label="New page" onClick={async () => { const id = await createPage(); if (id) setSelected(id) }}><PlusIcon /></button>
+        <button type="button" className="round-add" aria-label="New page" onClick={async () => { const id = await createPage(); if (id) setSelected(id, 'title') }}><PlusIcon /></button>
       </div>
       {/* Pages lists only pages (Brian 77423ea0); Tags is a navigation destination of its own. */}
       {documents.length === 0 && inDays.length === 0 && <p className="quiet">No pages yet. Use + to start one.</p>}
