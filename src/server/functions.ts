@@ -29,6 +29,12 @@ export const runCommand = createServerFn({ method: "POST" })
     return { ...result, workspace: forBrowser(result.workspace), owner: currentOwner() ?? "local" };
   });
 
+/**
+ * Whether this server is the preview Worker (`DAYTHREAD_PREVIEW=1`, set at run time so the preview runs production's
+ * own bundle, Lead c6fcc1da). Its data is separate, so the app marks itself: a note written there stays there.
+ */
+export const getAppInfo = createServerFn({ method: "GET" }).handler(async () => ({ preview: process.env.DAYTHREAD_PREVIEW === "1" }));
+
 /** The signed-in account for "{email} · Sign out" and its time zone; null when sign-in is off. */
 export const getAccount = createServerFn({ method: "GET" }).handler(async () => {
   const { currentAccount } = await import("./auth/server");
