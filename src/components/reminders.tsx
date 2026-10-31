@@ -75,13 +75,14 @@ export function Reminders() {
   if (state === 'loading' || state === 'hidden') return null
   const on = <button type="button" className="link" onClick={() => void turnOn()}>Turn on reminders</button>
   return (
-    <AccountItem><span className="reminders" data-state={state}>
-      {state === 'home-screen' && <span className="account-text">Reminders: add Daythread to the Home Screen first</span>}
-      {state === 'off' && on}
-      {state === 'busy' && 'Reminders…'}
-      {state === 'denied' && <span className="account-text">Reminders blocked in the browser’s settings</span>}
-      {state === 'failed' && <><span className="account-text">Couldn’t turn on reminders</span>{'\u00a0· '}{on}</>}
-      {state === 'on' && <><span className="account-text">Reminders on</span>{'\u00a0· '}<button type="button" className="link" onClick={() => void turnOff()}>Turn off</button></>}
-    </span></AccountItem>
+    // A message and its action are two items, so the row's own "·" sits between them and either can start a line.
+    <>
+      {state === 'home-screen' && <AccountItem><span className="account-text">Reminders: add Daythread to the Home Screen first</span></AccountItem>}
+      {state === 'off' && <AccountItem>{on}</AccountItem>}
+      {state === 'busy' && <AccountItem>Reminders…</AccountItem>}
+      {state === 'denied' && <AccountItem><span className="account-text">Reminders blocked in the browser’s settings</span></AccountItem>}
+      {state === 'failed' && <><AccountItem><span className="account-text">Couldn’t turn on reminders</span></AccountItem><AccountItem>{on}</AccountItem></>}
+      {state === 'on' && <><AccountItem><span className="account-text">Reminders on</span></AccountItem><AccountItem><button type="button" className="link" onClick={() => void turnOff()}>Turn off</button></AccountItem></>}
+    </>
   )
 }
