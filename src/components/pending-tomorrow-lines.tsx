@@ -1,22 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { DayView, LocalDate, Page, Receipt, Task, Workspace } from '../domain/types'
+import type { LocalDate, Page, Receipt } from '../domain/types'
 import { getDayView } from '../domain/workspace'
-import { addDays, longLabel, weekday } from './dates'
-import { RowMenu } from './row-menu'
-import { TagText } from './tag-text'
+import { addDays } from './dates'
 import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
 
 /**
- * The review on the page (docs/design/review-on-the-page.md): a Tomorrow block at the bottom of today's page. Lines he
- * types become to-dos on tomorrow's page at once; what is left open comes along in the morning, as the morning card
- * does. No screen, no Done. The line-saving rules are B31's: a plain input (Return while a pinyin candidate is open
- * confirms it, B49), one operation id per line, an unsaved line stays with Retry and survives a reload.
+ * B76 (Lead 718baab1): the Tomorrow block is gone; the day's draft reads his template's own "Tomorrow" section instead.
+ * What stays is B68's promise that nothing typed there vanishes: lines still unsaved on this device (and a half-typed
+ * input) are saved once, each as a to-do on the later of the day it was meant for and today (Bumblebee 0331a0c6), with
+ * the same operation ids and lost-reply recovery as before. Nothing is shown; once the list is empty, this does nothing.
  *
- * B68 (task #227): nothing typed here vanishes. Unsaved lines are kept under one key for every day, each with the date
- * it was meant for, so a line still unsaved at midnight shows in the next day's block and saves to the later of its
- * date and today. The input itself is kept as he types and becomes a line when he leaves it, never mid-pinyin.
+ * Kept from the block (B68, task #227): unsaved lines live under one key per account, each with its date; a retry
+ * after a lost response replays the same add, never a second task.
  */
-
 interface PendingLine {
   key: string
   title: string
@@ -121,42 +117,17 @@ function usePendingLines(owner: string | null): [PendingLine[] | null, (change: 
   return [value, update, current]
 }
 
-/** "From last night" for a line typed yesterday, else the weekday it was typed. */
-function carriedLabel(typedOn: LocalDate, today: LocalDate): string {
-  return typedOn === addDays(today, -1) ? 'From last night' : `From ${weekday(typedOn)}`
-}
-
 /**
  * The server's refusal of an add whose operation id already holds a different add: one sent on an earlier day landed
  * and its reply was lost. Only this refusal is recovered; any other stays on Retry.
  */
 const addedEarlier = /Operation identity reused with different input/
 
-export function TomorrowBlock({ today, view, workspace }: { today: LocalDate; view: DayView; workspace: Workspace }) {
+export function PendingTomorrowLines({ today }: { today: LocalDate }) {
   const { run, latest } = useWorkspace()
-  const next = addDays(today, 1)
-  const nextView = getDayView(workspace, next)
-  const nextPage = nextView.page ?? null
   // The account is known by the time the block shows: the workspace it renders came with it.
   const owner = workspaceOwner()
   const [lines, setLines, currentLines] = usePendingLines(owner)
-  const [draft, setDraftState] = useState('')
-  const draftRef = useRef('')
-  const setDraft = useCallback(
-    (text: string) => {
-      draftRef.current = text
-      if (owner && text) localStorage.setItem(draftKey(owner), text)
-      else if (owner) localStorage.removeItem(draftKey(owner))
-      setDraftState(text)
-    },
-    [owner],
-  )
-  // A draft left by a reload or a closed app goes back in the input, not into the list: he never confirmed it.
-  useEffect(() => {
-    const kept = owner ? localStorage.getItem(draftKey(owner)) : null
-    if (kept) setDraft(kept)
-  }, [owner, setDraft])
-  const composing = useRef(false)
 
   /** A day's page, made from the template the first time a line needs it; lines saved together share one call. */
   const creating = useRef(new Map<LocalDate, Promise<Page | null>>())
@@ -252,120 +223,27 @@ export function TomorrowBlock({ today, view, workspace }: { today: LocalDate; vi
     retryAll()
   }, [lines, retryAll])
 
-  const addLine = useCallback(
-    (title: string) => {
-      const line: PendingLine = { key: newOperationId(), title, operationId: newOperationId(), failed: false, date: next, typedOn: today }
-      setLines(all => [...all, line])
-      void saveLine(line)
-    },
-    [next, saveLine, setLines, today],
-  )
-  /** The input becomes a line: on Return, when he leaves it, and when the page is hidden. Never mid-pinyin. */
-  const commitDraft = useCallback(() => {
-    if (composing.current) return
-    const title = draftRef.current.trim()
-    if (!title) return
-    setDraft('')
-    addLine(title)
-  }, [addLine, setDraft])
+  // A half-typed input left by the old block becomes a line once, for today: its intended day isn't known.
+  useEffect(() => {
+    if (!owner) return
+    const kept = localStorage.getItem(draftKey(owner))?.trim()
+    if (!kept) return
+    localStorage.removeItem(draftKey(owner))
+    const line: PendingLine = { key: newOperationId(), title: kept, operationId: newOperationId(), failed: false, date: today, typedOn: today }
+    setLines(all => [...all, line])
+    void saveLine(line)
+  }, [owner, saveLine, setLines, today])
 
   useEffect(() => {
     const visible = () => document.visibilityState === 'visible' && retryAll()
     window.addEventListener('online', retryAll)
     document.addEventListener('visibilitychange', visible)
-    window.addEventListener('pagehide', commitDraft)
     return () => {
       window.removeEventListener('online', retryAll)
       document.removeEventListener('visibilitychange', visible)
-      window.removeEventListener('pagehide', commitDraft)
     }
-  }, [commitDraft, retryAll])
+  }, [retryAll])
 
-  if (lines === null) return null
-
-  const onNext = nextPage ? nextView.dayTasks.filter(t => t.status !== 'cancelled' && t.title.trim() !== '') : []
-
-  return (
-    <section className="tomorrow" aria-labelledby="tomorrow-title">
-      <h2 id="tomorrow-title" className="tomorrow-title">
-        Tomorrow <span>· {longLabel(next)}</span>
-      </h2>
-      <div className="tomorrow-list">
-        {onNext.map(task => (
-          <TomorrowRow key={task.id} task={task} pageId={nextPage!.id} today={today} />
-        ))}
-        {lines.map(line => {
-          // A carried line sits under tomorrow's header but saves to today, so its state says so (Jazz, PR #32).
-          const carried = line.typedOn < today ? `${carriedLabel(line.typedOn, today)} · ` : ''
-          return (
-            <div key={line.key} className="task-row plan tomorrow-pending">
-              <span className="check tomorrow-box" aria-hidden="true" />
-              {/* The state on its own line under the title, so the title keeps the full width at 390. */}
-              <span className="tomorrow-pending-text">
-                <span className="task-title">{line.title}</span>
-                {line.failed ? (
-                  <span className="tomorrow-line-state warn">
-                    {carried}
-                    {carried ? 'Not added to today' : 'Not added'} ·{' '}
-                    <button type="button" className="app-link" onClick={() => void saveLine(line)}>
-                      Retry
-                    </button>
-                  </span>
-                ) : (
-                  <span className="tomorrow-line-state quiet">{carried}Adding…</span>
-                )}
-              </span>
-            </div>
-          )
-        })}
-        <div className="task-row plan tomorrow-new">
-          <span className="check tomorrow-box tomorrow-new-box" aria-hidden="true" />
-          {/* A plain input, not the page editor: Return while a pinyin candidate is open confirms it (B49). */}
-          <input
-            className="task-title tomorrow-new-input"
-            value={draft}
-            placeholder="Add for tomorrow"
-            aria-label="Add a to-do for tomorrow"
-            enterKeyHint="enter"
-            onChange={e => setDraft(e.target.value)}
-            onCompositionStart={() => (composing.current = true)}
-            onCompositionEnd={() => {
-              // WebKit sends the Return that confirms a candidate after compositionend; let that one pass.
-              setTimeout(() => (composing.current = false), 0)
-            }}
-            onBlur={commitDraft}
-            onKeyDown={e => {
-              if (e.key !== 'Enter') return
-              if (e.nativeEvent.isComposing || e.keyCode === 229 || composing.current) return
-              e.preventDefault()
-              commitDraft()
-            }}
-          />
-        </div>
-      </div>
-    </section>
-  )
+  return null
 }
 
-function TomorrowRow({ task, pageId, today }: { task: Task; pageId: string; today: LocalDate }) {
-  const { run } = useWorkspace()
-  return (
-    <div className={`task-row plan tomorrow-row ${task.status === 'done' ? 'is-done' : ''}`} data-task-id={task.id}>
-      <span className="check tomorrow-box" aria-hidden="true" />
-      <span className="task-title">
-        <TagText text={task.title} />
-      </span>
-      <RowMenu
-        label={`Actions for ${task.title}`}
-        groups={[
-          {
-            items: [
-              // Removing the row deletes a task born there (with Undo); a task with history leaves the day.
-              { label: 'Remove from tomorrow', danger: true, onSelect: () => run({ type: 'remove-task-row', pageId, taskId: task.id, today }, r => ({ text: 'Removed', undoOperationId: r.operationId })) },
-            ],
-          },
-        ]}
-      />
-    </div>
-  )
-}
