@@ -6,6 +6,8 @@
   Ratchet `d2ee6b8c`; Bumblebee `cd47f7da`; Lead phasing `dd303f72`; Roadbuster storage `22aea1c7`.
 - **Phasing (Lead):** part 1, by 11:00Z: the list, templates, the "Day pages" target. Part 2, after part 1 is with
   Ratchet: "Pages in…" and "Pages inside any day". In part 1 the Default for menu shows only None and Day pages.
+  **"+" (New template) and Delete ship together** (Lead `8d435afb`; Roadbuster picks part 1 or 2): without "+", the
+  list is the built-in line (§1) and then the single row "Day · Default for day pages".
 - **Evidence:** read from main's code only. Nothing here has been run.
 
 ## 1. Templates list
@@ -33,8 +35,7 @@ New pages start from this template. To-dos are copied empty.   ← grey meta lin
   - If another template already holds that target, the item says so: "Day pages · now Day". Picking it moves the
     default, with the notice **"Now the default for day pages · Undo"**. The old template's line becomes empty.
   - Picking **None**: "No longer a default · Undo".
-- **⋯ menu:** Delete only, **in part 1** (+ makes templates, so without Delete a mistaken one can never go). A straight
-  delete, no Trash. Notice **"Deleted 'Recipe' · Undo"**. Its target goes back to today's behaviour (the
+- **⋯ menu:** Delete only, in the same release as "+". A straight delete, no Trash. Notice **"Deleted 'Recipe' · Undo"**. Its default is cleared, and the target goes back to today's behaviour (the
   built-in four headings for days, a blank page for subpages).
 - **Editor:** as on a document page, except **no `/` Page item and no "Turn into page"**, because a subpage inside a
   template would be copied every time. Page cards and link cards can sit on it but aren't copied (allowlist).
