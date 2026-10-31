@@ -610,9 +610,10 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
           const fresh = createTask(state, words || inlineText(item.block.content), day, day.date);
           row = planRow(fresh, day.date);
         } else row = { id: `${broughtPrefix}${newId()}`, type: item.block!.type, props: {}, content: words ? [textRun(words)] : structuredClone(item.block!.content), children: [] };
-        if (at.kind === "fill") doc[at.index] = row;
+        // A fill keeps the slot's block id, so the other bands anchored on that slot stay right after it.
+        if (at.kind === "fill") doc[at.index] = { ...row, id: doc[at.index]!.id };
         else doc.splice(at.index, 0, row);
-        after.set(item.anchor, row.id);
+        after.set(item.anchor, at.kind === "fill" ? doc[at.index]!.id : row.id);
         item.state = "applied";
         applied++;
       }

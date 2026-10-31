@@ -164,3 +164,11 @@ test('draft: no page command reaches it: rename, move, delete, save, or a page i
   assert.throws(() => h.run({ type: 'save-editor', pageId: id, expectedContent: '', document: '[]' }), /Not a page|not found/)
   assert.throws(() => h.run({ type: 'create-document', title: 'x', body: '', parentId: id }), /Not a page|not found/)
 })
+
+test('draft: after a fill, the bands anchored on that slot stay right after the filled row', () => {
+  const { h, ids, book, dog, draft, page } = setup()
+  draft([{ taskId: book, anchor: ids[5]! }, { taskId: dog, anchor: ids[5]!, place: 'after' }])
+  h.run({ type: 'apply-draft', pageId: dayId(tomorrow), itemIds: ['i0'], today: tomorrow })
+  const view = draftView(h.ws, page())!
+  assert.deepEqual(view.items.map(i => [i.taskId, i.kind, i.anchorId]), [[dog, 'after', ids[5]]])
+})

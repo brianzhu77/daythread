@@ -114,12 +114,21 @@ function keepView(change: () => void) {
 
 // ---------- The bands: one widget per anchor, React rendered into it through a portal ----------
 
+/**
+ * Typed edits per item (item ids are unique), shared by a band's own Apply and the line's Apply all, so his words
+ * are what gets applied either way (Ratchet 425687c4). Kept outside React so a re-render doesn't lose them.
+ */
+const bandEdits = new Map<string, string>()
+const editsFor = (ids: string[]) => Object.fromEntries(ids.filter(id => bandEdits.has(id)).map(id => [id, bandEdits.get(id)!]))
+
 const key = new PluginKey<DecorationSet>('daythread-draft-bands')
+/** `afterId`: the block the group follows; '' = the top of the page (Ratchet 11e83453). */
 export type BandGroup = { afterId: string; host: HTMLElement }
 
 function place(doc: PMNode, groups: BandGroup[]): DecorationSet {
   if (!groups.length) return DecorationSet.empty
-  const at = new Map<string, number>()
+  // '' = the top of the page (no heading above the planning part), inside its block group, as the Events rows do.
+  const at = new Map<string, number>([['', 1]])
   doc.descendants((node, pos) => {
     if (node.type.name === 'blockContainer' && node.attrs.id) at.set(String(node.attrs.id), pos + node.nodeSize)
     return true
@@ -158,8 +167,8 @@ export function bandGroups(draft: DayDraft, shown: boolean, host: (id: string) =
   const groups = new Map<string, DraftItem[]>()
   for (const item of draft.items) groups.set(item.anchorId, [...(groups.get(item.anchorId) ?? []), item])
   const out = [...groups].map(([afterId, items]) => ({ afterId, host: host(afterId), items, more: false }))
-  const end = draft.planningEndId
-  if (end && draft.moreOpen.length) {
+  const end = draft.planningEndId ?? ''
+  if (draft.moreOpen.length) {
     const g = out.find(o => o.afterId === end)
     if (g) g.more = true
     else out.push({ afterId: end, host: host(end), items: [], more: true })
@@ -218,9 +227,7 @@ function MoreOpen({ tasks, onAdd }: { tasks: OpenTask[]; onAdd: (taskId: string)
 
 /** Everything the page editor renders for the draft: the bands in their hosts, and the style hiding filled anchors. */
 export function DraftBands({ draft, workspace, groups, fills }: { draft: DayDraft; workspace: Workspace; groups: ReturnType<typeof bandGroups>; fills: string[] }): ReactNode {
-  // Typed edits per item, applied with the item; kept here so a re-render doesn't lose them.
-  const edits = useRef(new Map<string, string>()).current
-  const editsFor = (ids: string[]) => Object.fromEntries(ids.filter(id => edits.has(id)).map(id => [id, edits.get(id)!]))
+  const edits = bandEdits
   return <>
     {fills.length > 0 && <style>{fills.map(id => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"]`).join(',')}{'{display:none}'}</style>}
     {groups.map(g => createPortal(<>
@@ -238,7 +245,7 @@ export function DraftLine({ page }: { page: Page }) {
   const { shown, show } = useDraftReveal(page.id, ready && draft.items.length > 0)
   const n = draft.items.length
   const ids = draft.items.map(i => i.id)
-  const all = (fn: 'apply' | 'skip') => keepView(() => void draft[fn](ids))
+  const all = (fn: 'apply' | 'skip') => keepView(() => void (fn === 'apply' ? draft.apply(ids, editsFor(ids)) : draft.skip(ids)))
   if (draft.state === 'none') return null
   if (draft.state === 'preparing') return <p className="draft-line" role="status"><span className="draft-spin" aria-hidden="true" />Preparing…</p>
   if (n > 0 && !shown) return <p className="draft-line" role="status">Suggestions ready<span className="sep"> · </span><button type="button" className="draft-primary" onClick={show}>Show</button></p>

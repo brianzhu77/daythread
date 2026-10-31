@@ -123,15 +123,20 @@ export function itemsFromModel(req: DayDraftRequest, suggestions: readonly Model
 
 /**
  * What the app adds itself (Bumblebee 98e0dcb9): every to-do planned for today that the draft doesn't hold, as a
- * fallback item at the planning end; the other open to-dos go to "more open".
+ * fallback item at the planning end. "More open" lists only what the morning used to cover (Bumblebee 959b8a91):
+ * open on yesterday's page, planned for an earlier day and still open, or due by today. The rest stays on Tasks.
  */
 export function withFallback(ws: Workspace, page: Page, items: DraftItem[], newId: () => string): { items: DraftItem[]; moreOpen: string[] } {
+  const day = page.date ?? ''
   const held = new Set(items.flatMap(i => (i.taskId ? [i.taskId] : [])))
   const candidates = draftCandidates(ws, page)
-  const planned = candidates.filter(t => !held.has(t.id) && plannedOn(ws, t.id) === page.date)
+  const planned = candidates.filter(t => !held.has(t.id) && plannedOn(ws, t.id) === day)
   const fallback: DraftItem[] = planned.map(t => ({ id: newId(), anchor: '', place: 'after', taskId: t.id, source: 'fallback', state: 'open' }))
   const all = [...items, ...fallback], placed = new Set(all.flatMap(i => (i.taskId ? [i.taskId] : [])))
-  return { items: all, moreOpen: candidates.filter(t => !placed.has(t.id)).map(t => t.id) }
+  const yesterday = previousDayPage(ws, day)
+  const onYesterday = new Set(yesterday ? flatNodes(pageNodes(yesterday)).filter(isTaskRow).map(n => String(n.props!.taskId)) : [])
+  const morning = (t: Task) => { const p = plannedOn(ws, t.id); return onYesterday.has(t.id) || Boolean(p && p < day) || Boolean(t.deadlineOn && t.deadlineOn <= day) }
+  return { items: all, moreOpen: candidates.filter(t => !placed.has(t.id) && morning(t)).map(t => t.id) }
 }
 
 export interface DraftRun { items: DraftItem[]; moreOpen: string[]; allowedTaskIds: string[]; status: 'ready' | 'failed'; costUsd: number | null; ms: number }
