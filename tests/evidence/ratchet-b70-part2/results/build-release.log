@@ -1,0 +1,47 @@
+
+> daythread@0.0.0 build
+> vite build
+
+vite v8.3.4 building client environment for production...
+transforming...
+✓ 4088 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/client/assets/index-NY36ngLr.css    617.84 kB │ gzip:  70.54 kB
+dist/client/assets/module-mVd_cwoa.js     76.72 kB │ gzip:  27.52 kB
+dist/client/assets/native-Cqs-2kTC.js    429.05 kB │ gzip:  82.21 kB
+dist/client/assets/index-_CLBXM5q.js   1,974.59 kB │ gzip: 606.22 kB
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 873ms
+vite v8.3.4 building ssr environment for production...
+transforming...
+✓ 176 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/server/assets/timezones-BQLBGFX_.js                     0.21 kB │ gzip:   0.17 kB
+dist/server/assets/empty-plugin-adapters-BSc8nmGf.js         0.23 kB │ gzip:   0.17 kB
+dist/server/assets/rolldown-runtime-D7D4PA-g.js              0.36 kB │ gzip:   0.25 kB
+dist/server/assets/request-owner-Pn0NaxA3.js                 0.50 kB │ gzip:   0.29 kB
+dist/server/assets/browser-workspace-CZsHRNBO.js             0.65 kB │ gzip:   0.38 kB
+dist/server/assets/debug-eUF5deSG.js                         0.70 kB │ gzip:   0.40 kB
+dist/server/assets/_tanstack-start-manifest_v-CnNm0Fob.js    0.85 kB │ gzip:   0.43 kB
+dist/server/assets/debug-log-DiO1dR1s.js                     1.20 kB │ gzip:   0.57 kB
+dist/server/assets/start-RX4PdQK3.js                         2.16 kB │ gzip:   0.98 kB
+dist/server/assets/line-link-DrcfDlrw.js                     2.70 kB │ gzip:   1.22 kB
+dist/server/assets/command-schema-DuW5o9Wt.js                3.25 kB │ gzip:   0.88 kB
+dist/server/assets/functions-Dfan5jCw.js                     5.92 kB │ gzip:   1.90 kB
+dist/server/assets/export-CfG2UDZ7.js                        8.97 kB │ gzip:   3.44 kB
+dist/server/assets/link-preview-Die9d8Si.js                  9.44 kB │ gzip:   3.88 kB
+dist/server/assets/server-DFcP1vwr.js                       14.18 kB │ gzip:   4.97 kB
+dist/server/assets/server-D97JExmd.js                       37.43 kB │ gzip:  10.78 kB
+dist/server/assets/storage-BINQRIUb.js                      46.83 kB │ gzip:  13.49 kB
+dist/server/assets/page-refs-BlMqzpiz.js                    66.16 kB │ gzip:  19.48 kB
+dist/server/server.js                                      104.52 kB │ gzip:  26.65 kB
+dist/server/assets/router-D69HXFwQ.js                      452.81 kB │ gzip: 121.47 kB
+
+✓ built in 315ms

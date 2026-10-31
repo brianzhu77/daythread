@@ -1,0 +1,21 @@
+PASS chromium 1280 light New/focus/edit; four targets persist; Pages+ and /Page copy; Delete+Undo; no overflow/errors
+PASS chromium 1280 dark New/focus/edit; four targets persist; Pages+ and /Page copy; Delete+Undo; no overflow/errors
+PASS webkit 390 light New/focus/edit; four targets persist; Pages+ and /Page copy; Delete+Undo; no overflow/errors
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: ResizeObserver loop completed with undelivered notifications.
+
+1 !== 0
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-templates/tests/evidence/ratchet-b70-part2/ui.mjs:62:12 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 1,
+  expected: 0,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

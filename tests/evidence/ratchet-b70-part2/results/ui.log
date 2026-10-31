@@ -1,0 +1,10 @@
+PASS chromium 1280 light New/focus/edit; four targets persist; Pages+ and /Page copy; Delete+Undo; no overflow/errors
+PASS chromium 1280 dark New/focus/edit; four targets persist; Pages+ and /Page copy; Delete+Undo; no overflow/errors
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.waitForTimeout: Target page, context or browser has been closed
+    at /Users/dogrod/Developer/daythread-ratchet-templates/tests/evidence/ratchet-b70-part2/ui.mjs:20:16
+
+Node.js v24.14.1

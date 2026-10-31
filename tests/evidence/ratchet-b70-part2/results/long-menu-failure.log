@@ -1,0 +1,8 @@
+{
+  selectLeft: 20,
+  selectRight: 857.5625,
+  selectWidth: 837.5625,
+  viewport: 390,
+  documentWidth: 858,
+  cssMaxWidth: '100%'
+}

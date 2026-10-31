@@ -1,0 +1,21 @@
+(node:20137) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS long nested option fits chromium 1280 {"overflow":false,"right":1247.4375,"width":1280} Pages in Nested notes › Korean soup notes with a very long title that must fit in the target menu on a phone 中文标题需要换行
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+  assert.ok(!geometry.overflow&&geometry.right<=geometry.width)
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-templates/tests/evidence/ratchet-b70-part2/edge-ui.mjs:17:10 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

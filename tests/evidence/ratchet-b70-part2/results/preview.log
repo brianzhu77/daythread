@@ -1,0 +1,57 @@
+{"templateRowType":"task","before":[{"id":"4c64a433-2aa2-46a0-963d-7832fcdf36d9","type":"task","props":{"taskId":"editor-task:4c64a433-2aa2-46a0-963d-7832fcdf36d9","role":"reference","planDate":""},"content":[],"children":[]}],"after":[{"id":"79d7ca96-380b-4a99-8648-43e0f9f94aab","type":"quote","props":{},"content":[{"type":"text","text":"Excerpt","styles":{}}],"children":[]},{"id":"4c64a433-2aa2-46a0-963d-7832fcdf36d9","type":"paragraph","props":{},"content":[],"children":[]}]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: preview must preserve the template row below the quote
++ actual - expected
+
+  [
+    {
+      children: [],
+      content: [],
+      id: '4c64a433-2aa2-46a0-963d-7832fcdf36d9',
++     props: {},
++     type: 'paragraph'
+-     props: {
+-       planDate: '',
+-       role: 'reference',
+-       taskId: 'editor-task:4c64a433-2aa2-46a0-963d-7832fcdf36d9'
+-     },
+-     type: 'task'
+    }
+  ]
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-templates/tests/evidence/ratchet-b70-part2/preview.ts:16:10
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: [
+    {
+      id: '4c64a433-2aa2-46a0-963d-7832fcdf36d9',
+      type: 'paragraph',
+      props: {},
+      content: [],
+      children: []
+    }
+  ],
+  expected: [
+    {
+      id: '4c64a433-2aa2-46a0-963d-7832fcdf36d9',
+      type: 'task',
+      props: {
+        taskId: 'editor-task:4c64a433-2aa2-46a0-963d-7832fcdf36d9',
+        role: 'reference',
+        planDate: ''
+      },
+      content: [],
+      children: []
+    }
+  ],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
