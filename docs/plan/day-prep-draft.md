@@ -66,6 +66,8 @@ Two parts, which can ship separately:
 6. **Works for any template and any user.** Invitees on the built-in template get the same interaction; whether the model
    runs for them is a separate opt-in.
 7. **Minimalist copy** (Brian 1ac6784b): no explanatory text in the draft.
+8. **One draft per day; the first ready draft wins** (Bumblebee 356c573c, Lead 98cb503a). Retry only after a failure that
+   showed nothing; a late answer or a second tab never replaces a ready draft, so a skipped suggestion never comes back.
 
 ## Settled (Lead 055b72c0)
 
