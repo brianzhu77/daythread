@@ -1,5 +1,6 @@
 import { inlineText, pageNodes, rowTaskId, textDate, type EditorNode } from './editor-document.ts'
 import { isTrashed, pageAncestors } from './page-tree.ts'
+import { isTemplate } from './day-template.ts'
 import { tagIndex, tagKey, type TagEntry } from './tags.ts'
 import type { LocalDate, Page, Workspace } from './types.ts'
 
@@ -56,7 +57,7 @@ export function pagePath(ws: Workspace, p: Page, dayLabel: (date: LocalDate) => 
  */
 export function buildSearchIndex(ws: Workspace, dayLabel: (date: LocalDate) => string = date => date): SearchIndex {
   const tasks = new Map(ws.tasks.map(t => [t.id, t]))
-  const pages = ws.pages.map((page, created) => ({ page, created })).filter(p => !isTrashed(p.page))
+  const pages = ws.pages.map((page, created) => ({ page, created })).filter(p => !isTrashed(p.page) && !isTemplate(p.page))
     .sort((a, b) => (b.page.date ?? '').localeCompare(a.page.date ?? '') || b.created - a.created).map(p => p.page)
   const indexedPages: IndexedPage[] = [], lines: IndexedLine[] = []
   for (const page of pages) {

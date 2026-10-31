@@ -1,0 +1,38 @@
+[
+  {
+    "name": "chromium 1280: morning offers only named task; no blank count or unfinished hint",
+    "pass": true
+  },
+  {
+    "name": "chromium 1280: Tasks Open has one named row",
+    "pass": true
+  },
+  {
+    "name": "chromium 1280: original blank and whitespace checkbox lines remain",
+    "pass": true
+  },
+  {
+    "name": "webkit 390: morning offers only named task; no blank count or unfinished hint",
+    "pass": true
+  },
+  {
+    "name": "webkit 390: Tasks Open has one named row",
+    "pass": true
+  },
+  {
+    "name": "webkit 390: original blank and whitespace checkbox lines remain",
+    "pass": true
+  },
+  {
+    "name": "Morning Add carries named task only; blank source rows stay; Tomorrow count is one",
+    "pass": true
+  },
+  {
+    "name": "Typing into retained checkbox activates same identity and appears in Open",
+    "pass": true
+  },
+  {
+    "name": "Newly named prior-day checkbox is now offered in morning card",
+    "pass": true
+  }
+]

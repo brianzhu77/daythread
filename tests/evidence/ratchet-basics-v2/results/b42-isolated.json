@@ -1,0 +1,132 @@
+[
+  {
+    "i": 0,
+    "caret": {
+      "offset": 0,
+      "text": "B42 task 0"
+    },
+    "deleted": true,
+    "node": {
+      "id": "b42-isolated-0",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "B42 task 0",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    "undoSame": true
+  },
+  {
+    "i": 1,
+    "caret": {
+      "offset": 0,
+      "text": "B42 task 1"
+    },
+    "deleted": true,
+    "node": {
+      "id": "b42-isolated-1",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "B42 task 1",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    "undoSame": true
+  },
+  {
+    "i": 2,
+    "caret": {
+      "offset": 0,
+      "text": "B42 task 2"
+    },
+    "deleted": true,
+    "node": {
+      "id": "b42-isolated-2",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "B42 task 2",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    "undoSame": true
+  },
+  {
+    "i": 3,
+    "caret": {
+      "offset": 0,
+      "text": "B42 task 3"
+    },
+    "deleted": true,
+    "node": {
+      "id": "b42-isolated-3",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "B42 task 3",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    "undoSame": true
+  },
+  {
+    "i": 4,
+    "caret": {
+      "offset": 0,
+      "text": "B42 task 4"
+    },
+    "deleted": true,
+    "node": {
+      "id": "b42-isolated-4",
+      "type": "paragraph",
+      "props": {
+        "backgroundColor": "default",
+        "textColor": "default",
+        "textAlignment": "left"
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "B42 task 4",
+          "styles": {}
+        }
+      ],
+      "children": []
+    },
+    "undoSame": true
+  }
+]

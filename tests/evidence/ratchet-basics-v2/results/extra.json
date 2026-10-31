@@ -1,0 +1,14 @@
+[
+  {
+    "name": "A11 copy link to stable line, paste as inline reference, jump after reload",
+    "pass": true
+  },
+  {
+    "name": "cut and paste whole task preserves identity and done state",
+    "pass": true
+  },
+  {
+    "name": "rename heading persists without changing section contents",
+    "pass": true
+  }
+]

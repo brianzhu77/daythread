@@ -1,0 +1,86 @@
+{
+  "input": "",
+  "rows": [
+    "万⋯"
+  ],
+  "events": [
+    {
+      "t": "compositionstart",
+      "data": "",
+      "v": "",
+      "composing": null
+    },
+    {
+      "t": "compositionupdate",
+      "data": "w",
+      "v": "",
+      "composing": null
+    },
+    {
+      "t": "input",
+      "data": "w",
+      "v": "w",
+      "composing": true
+    },
+    {
+      "t": "compositionupdate",
+      "data": "wa",
+      "v": "w",
+      "composing": null
+    },
+    {
+      "t": "input",
+      "data": "wa",
+      "v": "wa",
+      "composing": true
+    },
+    {
+      "t": "compositionupdate",
+      "data": "wan",
+      "v": "wa",
+      "composing": null
+    },
+    {
+      "t": "input",
+      "data": "wan",
+      "v": "wan",
+      "composing": true
+    },
+    {
+      "t": "compositionupdate",
+      "data": "万",
+      "v": "wan",
+      "composing": null
+    },
+    {
+      "t": "input",
+      "data": "万",
+      "v": "万",
+      "composing": true
+    },
+    {
+      "t": "input",
+      "data": null,
+      "v": "",
+      "composing": true
+    },
+    {
+      "t": "input",
+      "data": "万",
+      "v": "万",
+      "composing": true
+    },
+    {
+      "t": "compositionend",
+      "data": "万",
+      "v": "万",
+      "composing": null
+    },
+    {
+      "t": "blur",
+      "data": null,
+      "v": "万",
+      "composing": null
+    }
+  ]
+}

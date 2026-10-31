@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { getAccount } from '../server/functions'
 import { saveKeptDrafts } from './draft-recovery'
 import { flushAllEditors, openEditorPages } from './editor-flush'
@@ -17,6 +18,7 @@ type Account = { email: string | null; timezone: string | null; timezones: strin
  */
 export function AccountRow({ className }: { className: string }) {
   const { refresh, run } = useWorkspace()
+  const navigate = useNavigate()
   const [account, setAccount] = useState<Account | null>(null)
   const [exporting, setExporting] = useState<'idle' | 'busy' | 'failed' | 'unsaved'>('idle')
   const [deleting, setDeleting] = useState(false)
@@ -72,6 +74,8 @@ export function AccountRow({ className }: { className: string }) {
             {' · '}
           </>
         )}
+        {/* B70: Templates, between the time zone and Export (templates-states §1). */}
+        <button type="button" className="link" onClick={() => void navigate({ to: '/pages', search: { view: 'templates' } })}>Templates</button>{' · '}
         {exportLink}
         <Reminders prefix=" · " />
         <HomeScreenHint prefix=" · " />

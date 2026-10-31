@@ -1,0 +1,104 @@
+{
+  "before": {
+    "value": "he",
+    "rows": 1,
+    "events": [
+      {
+        "t": "compositionstart",
+        "data": "",
+        "v": "",
+        "composing": null
+      },
+      {
+        "t": "compositionupdate",
+        "data": "h",
+        "v": "",
+        "composing": null
+      },
+      {
+        "t": "input",
+        "data": "h",
+        "v": "h",
+        "composing": true
+      },
+      {
+        "t": "compositionupdate",
+        "data": "he",
+        "v": "h",
+        "composing": null
+      },
+      {
+        "t": "input",
+        "data": "he",
+        "v": "he",
+        "composing": true
+      }
+    ]
+  },
+  "after": {
+    "value": "he",
+    "rows": [
+      "万⋯"
+    ],
+    "events": [
+      {
+        "t": "compositionstart",
+        "data": "",
+        "v": "",
+        "composing": null
+      },
+      {
+        "t": "compositionupdate",
+        "data": "h",
+        "v": "",
+        "composing": null
+      },
+      {
+        "t": "input",
+        "data": "h",
+        "v": "h",
+        "composing": true
+      },
+      {
+        "t": "compositionupdate",
+        "data": "he",
+        "v": "h",
+        "composing": null
+      },
+      {
+        "t": "input",
+        "data": "he",
+        "v": "he",
+        "composing": true
+      },
+      {
+        "t": "blur",
+        "data": null,
+        "v": "he",
+        "composing": null
+      },
+      {
+        "t": "input",
+        "data": null,
+        "v": "",
+        "composing": true
+      },
+      {
+        "t": "input",
+        "data": "he",
+        "v": "he",
+        "composing": true
+      },
+      {
+        "t": "compositionend",
+        "data": "he",
+        "v": "he",
+        "composing": null
+      }
+    ],
+    "storage": {
+      "daythread.tomorrow-lines.local": "[]",
+      "daythread.tomorrow-draft.local": "he"
+    }
+  }
+}

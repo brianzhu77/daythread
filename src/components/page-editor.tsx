@@ -18,6 +18,7 @@ import { applyCommand, plannedOn, taskRows as rowsOfTask, urlOwner } from '../do
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
 import { recentPages, visiblePages, parentOf } from '../domain/page-tree'
+import { isTemplate } from '../domain/day-template'
 import { lineRefView, pageRefView, whereLabel as placeLabel } from './line-text'
 import { lineClipboardType, lineLinkPath, parseLineClipboard, parseLineUrl } from '../domain/line-link'
 import type { LineTarget } from '../domain/page-refs'
@@ -128,7 +129,7 @@ const checklistIds = (nodes: readonly EditorNode[]): string[] => deepNodes(nodes
 function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: string; taskId: string; role: string; planDate: string; contentRef: (node: HTMLElement | null) => void }) {
   const { workspace, run } = useWorkspace()
   const rows = useRowActions()
-  const t = workspace?.tasks.find(t => t.id === taskId)
+  const t = rows?.rowsOnly ? undefined : workspace?.tasks.find(t => t.id === taskId)
   // A12: the row's actions, on a ⋯ at the end of the row (Jazz §2). Done and draft rows have none.
   const planned = t && workspace ? plannedOn(workspace, t.id) : null
   const model = t && rows ? rowMenu(t, role, planned, rows.pageDate, rows.today) : null
@@ -315,6 +316,8 @@ function firstLineCenter(block: HTMLElement): number {
 }
 
 export function PageEditor({ page, workspace }: { page: Page; workspace: Workspace }) {
+  // B70: a page made inside the day template would be copied into every day, so the template makes none (Jazz §2).
+  const onTemplate = isTemplate(page)
   const { run, refresh, latest } = useWorkspace()
   const runRef = useRef(run); runRef.current = run
   const navigate = useNavigate()
@@ -799,6 +802,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       editor.updateBlock(checklist.id, { type: 'task', props: { taskId: `editor-task:${checklist.id}`, role: insertionRole(checklist.id), planDate: insertionRole(checklist.id) === 'plan' ? page.date ?? '' : '' }, content: checklist.content } as never)
       tr.setMeta('addToHistory', false)
     })
+    // B70: on a template a to-do is only a row. A pasted or cut row drops its task id at once, so nothing on the page
+    // can tick or change the real task (Ratchet b0315979); suppressed, so it reads as no task removed.
+    const foreign = onTemplate ? deepNodes(editor.document as unknown as EditorNode[]).filter(b => b.type === 'task' && b.props?.taskId !== `editor-task:${b.id}`) : []
+    if (foreign.length && !composing.current) {
+      suppress.current = true
+      try { editor.transact(tr => { for (const b of foreign) editor.updateBlock(b.id, { props: { taskId: `editor-task:${b.id}`, role: 'reference', planDate: '' } } as never); tr.setMeta('addToHistory', false) }) } finally { suppress.current = false }
+    }
     dirty.current = true; setFailed(false); setStatus('Unsaved changes')
     queueMicrotask(maybeOpenLinkList)
     stash(); clearTimeout(timer.current)
@@ -969,7 +979,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       urls.slice(1).forEach((url, i) => { after = editor.insertBlocks([{ id: ids[i + 1], type: lineType, content: content(url, i + 1) } as never], after, 'after')[0]!.id })
       editor.setTextCursorPosition(after, 'end')
     })
-    setPasteMenu({ blockIds: ids, urls, lineType, ...(linkText ? { linkText } : {}), highlight: 0 })
+    if (!onTemplate) setPasteMenu({ blockIds: ids, urls, lineType, ...(linkText ? { linkText } : {}), highlight: 0 })
   }
   function bookmarkPasted() {
     const menu = pasteMenuRef.current
@@ -1190,7 +1200,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         .sort((a, b) => Number(!keys(a).some(k => k.startsWith(q))) - Number(!keys(b).some(k => k.startsWith(q))) || (rank.get(a.id) ?? 1e9) - (rank.get(b.id) ?? 1e9)).slice(0, 8)
       : recent.slice(0, 6)
     const items = pages.map(p => ({ title: pageLabel(p), subtext: whereLabel(p), icon: pageRefView(ws, p.id).icon, onItemClick: () => chooseLink(trigger, query, p.id) }))
-    if (q) items.push({ title: `New page "${query.trim()}"`, subtext: pages.length ? '' : `No page called ${query.trim()}`, icon: <PlusIcon />, onItemClick: () => chooseLink(trigger, query, crypto.randomUUID(), query.trim()) })
+    if (q && !onTemplate) items.push({ title: `New page "${query.trim()}"`, subtext: pages.length ? '' : `No page called ${query.trim()}`, icon: <PlusIcon />, onItemClick: () => chooseLink(trigger, query, crypto.randomUUID(), query.trim()) })
     return items
   }
   /** B27 (plan §3, Jazz b27-at-date-states §1): the `@` list. It reads against the page's date (today on a document page). */
@@ -1818,7 +1828,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return true
   }
   const rowActions: RowActions = {
-    pageDate: page.date ?? null, today: todayIso(), act: (id, t, intent) => void rowAct(id, t, intent),
+    pageDate: page.date ?? null, today: todayIso(), rowsOnly: onTemplate, act: (id, t, intent) => void rowAct(id, t, intent),
     copyLink: id => lineLinkTarget(id) ? () => copyLineLink(id) : null,
     focusRow: id => {
       if (!editor.getBlock(id)) return
@@ -2057,7 +2067,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           if (!linkableLines.has(editor.getTextCursorPosition().block.type)) return
           setTimeout(() => editor.getExtension(SuggestionMenu)?.openSuggestionMenu('[[', { deleteTriggerCharacter: true }), 0)
         } }
-        return filterSuggestionItems([taskItem, pageItem, linkItem, ...first, ...rest], query).slice(0, 9)
+        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, ...first, ...rest], query).slice(0, 9)
       }} />
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}

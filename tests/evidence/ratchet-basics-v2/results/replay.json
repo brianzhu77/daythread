@@ -1,0 +1,42 @@
+[
+  {
+    "name": "B34 morning carry parent and child once, preserve nesting/identity",
+    "pass": true
+  },
+  {
+    "name": "continuous typing including Chinese persists and reloads",
+    "pass": true
+  },
+  {
+    "name": "nest child under parent persists document tree",
+    "pass": true
+  },
+  {
+    "name": "tick fresh task status same identity",
+    "pass": true
+  },
+  {
+    "name": "delete selected prose, Undo restores text once",
+    "pass": true
+  },
+  {
+    "name": "cut/paste prose retains one copy after reload",
+    "pass": true
+  },
+  {
+    "name": "B42 remove checkbox deletes born-here task; Undo retains same id/status",
+    "pass": true
+  },
+  {
+    "name": "B33 delete cleared fresh task removes task; Undo same id",
+    "pass": true
+  },
+  {
+    "name": "failed editor save retains local words and reconnect retries",
+    "pass": true
+  },
+  {
+    "name": "no unhandled browser errors",
+    "pass": true
+  }
+]

@@ -1,0 +1,11 @@
+(node:82028) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium 1280: morning offers only named task; no blank count or unfinished hint
+PASS chromium 1280: Tasks Open has one named row
+PASS chromium 1280: original blank and whitespace checkbox lines remain
+PASS webkit 390: morning offers only named task; no blank count or unfinished hint
+PASS webkit 390: Tasks Open has one named row
+PASS webkit 390: original blank and whitespace checkbox lines remain
+PASS Morning Add carries named task only; blank source rows stay; Tomorrow count is one
+PASS Typing into retained checkbox activates same identity and appears in Open
+PASS Newly named prior-day checkbox is now offered in morning card

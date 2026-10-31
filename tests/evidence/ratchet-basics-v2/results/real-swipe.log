@@ -1,0 +1,5 @@
+state after swipe 3
+Traceback (most recent call last):
+  File "/tmp/ratchet229-real-swipe.py", line 9, in <module>
+    e=call('element',{'using':'-ios predicate string','value':'name BEGINSWITH "card:com.apple.mobilesafari:"'});eid=next(v for k,v in e.items() if k.startswith('element-'));call('execute/sync',{'script':'mobile: swipe','args':[{'direction':'up','elementId':eid,'velocity':1500}]});time.sleep(.5);state=call('execute/sync',{'script':'mobile: queryAppState','args':[{'bundleId':'com.apple.mobilesafari'}]});print('state after swipe',state);shot('real-swiped-away');assert state==1,state
+AssertionError: 3

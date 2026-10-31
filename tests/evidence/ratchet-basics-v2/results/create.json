@@ -1,0 +1,6 @@
+[
+  {
+    "name": "/page creates durable child page/card; reopen and reload same identity",
+    "pass": true
+  }
+]
