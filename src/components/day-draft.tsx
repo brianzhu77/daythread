@@ -183,23 +183,26 @@ const CheckIcon = () => <svg width="16" height="16" viewBox="0 0 16 16" fill="no
 const CrossIcon = () => <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg>
 const PlusIcon = () => <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10" /></svg>
 
-/** The text a band shows: a carried to-do's current title (Bumblebee 21e0ae02), else the block's own text. */
-function bandText(item: DraftItem, workspace: Workspace): string {
+/** A carried to-do's task, if the band is one: it shows that task's current title (Bumblebee 21e0ae02). */
+function carriedTask(item: DraftItem, workspace: Workspace) {
   const taskId = item.block.props?.taskId
-  const task = typeof taskId === 'string' ? workspace.tasks.find(t => t.id === taskId) : undefined
-  return task ? task.title : inlineText(item.block.content)
+  return typeof taskId === 'string' ? workspace.tasks.find(t => t.id === taskId) : undefined
 }
 
 function Band({ item, workspace, edits, onApply, onSkip }: { item: DraftItem; workspace: Workspace; edits: Map<string, string>; onApply: () => void; onSkip: () => void }) {
-  const text = bandText(item, workspace)
+  const task = carriedTask(item, workspace)
+  const text = task ? task.title : inlineText(item.block.content)
   const kind = item.block.type === 'task' ? 'task' : item.block.type === 'bulletListItem' ? 'bullet' : 'line'
   return (
     <div className={`draft-band is-${kind}`} data-draft-item={item.id}>
       {kind === 'task' && <span className="draft-box" aria-hidden="true" />}
       <span className="draft-main">
-        <span className="draft-text" contentEditable suppressContentEditableWarning spellCheck={false}
-          onInput={e => edits.set(item.id, (e.currentTarget.textContent ?? '').trim())}
-          onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); onApply() } }}>{text}</span>
+        {task
+          // Read-only (Lead, Ratchet, Bumblebee 22:12Z): applying plans the task as it is; he renames it on his own row.
+          ? <span className="draft-text is-readonly">{text}</span>
+          : <span className="draft-text" contentEditable suppressContentEditableWarning spellCheck={false}
+            onInput={e => edits.set(item.id, (e.currentTarget.textContent ?? '').trim())}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); onApply() } }}>{text}</span>}
         {item.since && <span className="draft-since">{shortLabel(item.since)}</span>}
       </span>
       <span className="draft-acts">
