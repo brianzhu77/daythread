@@ -1,6 +1,7 @@
 import { flatNodes, inlineText, pageNodes, rowTaskId, textDate, type EditorNode } from './editor-document.ts'
 import { isTrashed } from './page-tree.ts'
 import { isTemplate } from './day-template.ts'
+import { isDraft } from './day-draft.ts'
 import type { LocalDate, Workspace } from './types.ts'
 
 // Tags are plain text: `#` (or full-width `＃`) followed by the tag characters below, ending at the first other
@@ -42,7 +43,7 @@ const textTypes = new Set(['paragraph', 'bulletListItem', 'numberedListItem', 'q
 /** Every tag on every line, most recently used first; each line counts once per tag. */
 export function tagIndex(workspace: Workspace): TagEntry[] {
   const byKey = new Map<string, { tag: string; page: string; occurrences: TagOccurrence[] }>()
-  const pages = workspace.pages.map((page, created) => ({ page, created })).filter(p => !isTrashed(p.page) && !isTemplate(p.page))
+  const pages = workspace.pages.map((page, created) => ({ page, created })).filter(p => !isTrashed(p.page) && !isTemplate(p.page) && !isDraft(p.page))
     .sort((a, b) => (b.page.date ?? '').localeCompare(a.page.date ?? '') || b.created - a.created).map(p => p.page)
   for (const page of pages) {
     let section = ''

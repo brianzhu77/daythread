@@ -30,6 +30,39 @@ export const runCommand = createServerFn({ method: "POST" })
   });
 
 /**
+ * B77: a draft for a day page, from the model when this account has it on, else the app's fallback only. The model
+ * is on when the server has OPENROUTER_API_KEY and OPENROUTER_MODEL and, with sign-in on, the account's email is in
+ * DAYTHREAD_DRAFT_EMAILS (off by default for invited accounts, Bumblebee/Lead). Logs carry counts and timings only,
+ * never his words or the model's reasons.
+ *
+ * Nothing is stored here: the reply is the `set-draft` command, and the tab sends it through its own command queue.
+ * A write here would move the workspace on behind the tab's back, so a save he typed meanwhile, sent against the
+ * revision the tab knew, would be refused (Lead 1d5e2e28). `set-draft` checks it all again and refuses to replace a
+ * settled draft, so the first ready draft still wins. `setDraft` is that command as JSON (a block's content is open-ended,
+ * as in a page's stored document), or null when the day already has its draft. `owner` is whose workspace it was made from: the tab sends it only into
+ * that one (Ratchet 727b9e22).
+ */
+export const prepareDayDraft = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), operationId: z.string().min(1).max(200) }).parse(input))
+  .handler(async ({ data }) => {
+    const [{ getRepository }, { currentOwner }, { currentAccount }, { modelConfig }, { runDayDraft }, { draftOf, draftSettled }] = await Promise.all([
+      import("./storage"), import("./auth/request-owner"), import("./auth/server"), import("./model/openrouter"), import("./model/day-draft"), import("../domain/day-draft"),
+    ]);
+    const account = await currentAccount();
+    const allowed = (process.env.DAYTHREAD_DRAFT_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+    const config = modelConfig() && (!account || allowed.includes(account.email.toLowerCase())) ? modelConfig() : null;
+    const ws = await getRepository().load();
+    const page = ws.pages.find((p) => p.type === "daily" && p.date === data.date && !p.trashedAt);
+    if (!page) throw new Error("Day page not found");
+    // The first ready draft wins: a second tab or a reload never pays for, or replaces, another one.
+    { const d = draftOf(ws, page.id); if (d && draftSettled(d)) return { setDraft: null, owner: currentOwner() ?? "local", modelOn: Boolean(config) }; }
+    const run = await runDayDraft(ws, page, config, () => crypto.randomUUID());
+    console.info(JSON.stringify({ level: "info", event: "draft.prepare", operationId: data.operationId, model: Boolean(config), status: run.status, items: run.items.length, moreOpen: run.moreOpen.length, elapsedMs: run.ms, costUsd: run.costUsd }));
+    const action = { type: "set-draft" as const, pageId: page.id, status: run.status, items: run.items, moreOpen: run.moreOpen, allowedTaskIds: run.allowedTaskIds };
+    return { setDraft: JSON.stringify(action), owner: currentOwner() ?? "local", modelOn: Boolean(config) };
+  });
+
+/**
  * Whether this server is the preview Worker (`DAYTHREAD_PREVIEW=1`, set at run time so the preview runs production's
  * own bundle, Lead c6fcc1da). Its data is separate, so the app marks itself: a note written there stays there.
  */

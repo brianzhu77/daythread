@@ -1,22 +1,20 @@
 import type { LocalDate } from '../domain/types'
+import { DraftLine } from './day-draft'
 import { getCalendarTasks } from '../domain/workspace'
 import { longLabel } from './dates'
 import { ContinuousPage } from './continuous-page'
 import { LinkedFrom, Subpages } from './page-tree'
 import { FactsStrip } from './facts-strip'
-import { StartTheDay, cardLines, hasHandoffContent, taskSuggestions, useHandoffLater } from './start-the-day'
 import { useDay, useWorkspace } from './use-day'
 import { DayHeader } from './day-header'
 import { FutureDayState } from './future-day'
-import { useEffect, useRef, useState } from 'react'
-import { TomorrowBlock } from './tomorrow-block'
+import { useEffect, useState } from 'react'
+import { PendingTomorrowLines } from './pending-tomorrow-lines'
 
-/** Today (and any other date): header, facts strip, Start the day, the page. */
+/** Today (and any other date): header, facts strip, the page. Today's draft shows on the page itself (B76). */
 export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }) {
   const { run } = useWorkspace()
   const { view, workspace } = useDay(date)
-  const [later, setLater] = useHandoffLater(date)
-  const [handoffBusy, setHandoffBusy] = useState(false)
   const page = view?.page ?? null
 
   // Opening today or a past date creates its page from the template; no model call happens on open (01 §3.1).
@@ -48,29 +46,15 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
     )
 
   const isToday = date === today
-  // The card stays while an Undo strip shows, even after its last row was added (morning card §6).
-  const showHandoff = isToday && page && !page.handoffDone && !later && (hasHandoffContent(view, workspace, today) || handoffBusy)
-  const handoffSettled = !showHandoff
-  const suggestions = taskSuggestions(view, workspace, today)
 
   return (
     <div className="day-screen">
       <DayHeader date={date} today={today} />
       {page && <LinkedFrom page={page} workspace={workspace} />}
+      {page && isToday && <DraftLine page={page} />}
 
       <div className="day-body">
-        {showHandoff && <StartTheDay view={view} workspace={workspace} today={today} onLater={() => setLater(true)} onBusy={setHandoffBusy} />}
-        <FactsStrip
-          view={view}
-          workspace={workspace}
-          date={date}
-          today={today}
-          handoffCollapsed={isToday && Boolean(page && !page.handoffDone && later && hasHandoffContent(view, workspace, today))}
-          handoffCount={suggestions.length + cardLines(view).length}
-          cardTaskIds={showHandoff ? new Set(suggestions.map(s => s.task.id)) : undefined}
-          onReopenHandoff={() => setLater(false)}
-          handoffSettled={handoffSettled}
-        />
+        <FactsStrip view={view} workspace={workspace} date={date} today={today} />
         {page ? (
           <>
             <ContinuousPage key={page.id} page={page} workspace={workspace} />
@@ -84,8 +68,8 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
             </button>
           </div>
         )}
-        {/* The review on the page: lines for tomorrow, typed here; what is left open comes along in the morning. */}
-        {page && isToday && <TomorrowBlock today={today} view={view} workspace={workspace} />}
+        {/* B68: lines left unsaved in the old Tomorrow block are saved once as to-dos; nothing is shown. */}
+        {isToday && <PendingTomorrowLines today={today} />}
       </div>
 
 

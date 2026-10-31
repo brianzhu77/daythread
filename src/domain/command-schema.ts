@@ -26,6 +26,11 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("create-template"), title: z.string().max(1000), pageId: z.string().min(1).max(200).optional(), dayPage: z.literal(true).optional() }),
   z.object({ type: z.literal("set-template-target"), pageId: z.string().min(1).max(200), target: z.string().min(1).max(200).nullable() }),
   z.object({ type: z.literal("delete-template"), pageId: z.string().min(1).max(200) }),
+  z.object({ type: z.literal("set-draft"), pageId: id, status: z.enum(["preparing", "ready", "failed"]), moreOpen: z.array(id).max(200), allowedTaskIds: z.array(id).max(500),
+    items: z.array(z.object({ id: z.string().min(1).max(100), anchor: z.string().max(200), place: z.enum(["fill", "after"]), taskId: id.optional(), source: z.enum(["model", "fallback"]), state: z.literal("open"),
+      block: z.object({ id: z.string().min(1).max(200), type: z.enum(["paragraph", "bulletListItem", "task"]), props: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(), content: z.array(z.unknown()).max(50), children: z.array(z.never()).max(0).optional() }).optional() })).max(50) }),
+  z.object({ type: z.literal("apply-draft"), pageId: id, itemIds: z.array(z.string().min(1).max(100)).min(1).max(50), edits: z.record(z.string().max(100), z.string().max(500)).optional(), today: day.optional() }),
+  z.object({ type: z.literal("skip-draft"), pageId: id, itemIds: z.array(z.string().min(1).max(100)).min(1).max(50) }),
   z.object({ type: z.literal("set-timezone"), timezone: z.string().min(1).max(100) }),
   z.object({ type: z.literal("undo"), targetOperationId: id }),
 ]);

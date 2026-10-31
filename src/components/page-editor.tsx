@@ -42,6 +42,7 @@ import { RowMenu } from './row-menu'
 import { openedByTurnover } from './use-screen-today'
 import { fixedOffset, seenArea } from './fixed-coords'
 import { LineRefChip } from './line-ref-chip'
+import { DraftBands, bandGroups, draftBands, fillAnchors, refreshDraftBands, useBandHosts, useDayDraft, useDraftReveal } from './day-draft'
 import { ChipPageDate, DateChipInPage, DateMenu, dateChipPaste, type DateMenuItem, EventRows, eventRows, eventsAnchor, pickerLabel, refreshEventRows, relativeDay, rowTime, rowsFor, type RowsAnchor } from './event-rows'
 import { dayEvents } from '../domain/chip-events'
 import { mayRead, readDate, type Reading } from '../domain/date-reading'
@@ -353,8 +354,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const rowsHost = useMemo(() => Object.assign(document.createElement('div'), { className: 'event-rows', contentEditable: 'false' }), [])
   const rows = useMemo(() => page.type === 'daily' && page.date ? rowsFor(page, dayEvents(workspace, page.date)) : [], [page, workspace])
   const rowsAnchor = useRef<RowsAnchor>(undefined)
+  // B76 (Jazz day-draft-states): today's draft as bands on the page, held while he types.
+  const draft = useDayDraft(page)
+  const draftReady = page.type === 'daily' && (draft.state === 'ready' || draft.state === 'failed' || draft.state === 'offline')
+  const { shown: draftShown } = useDraftReveal(page.id, draftReady && draft.items.length > 0)
+  const bandHost = useBandHosts()
+  const groups = draftReady ? bandGroups(draft, draftShown, bandHost) : []
+  const groupsRef = useRef(groups); groupsRef.current = groups
   rowsAnchor.current = rows.length ? eventsAnchor(pageNodes(page), new Set(workspace.tasks.map(t => t.id))) : undefined
-  const editor = useCreateBlockNote({ schema, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  const editor = useCreateBlockNote({ schema, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), draftBands(() => groupsRef.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
     pastingNow.current = true; setTimeout(() => { pastingNow.current = false }, 0)
@@ -450,6 +458,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // B27: new rows (the workspace changed) redraw the widget; a document change already does.
   const rowsKey = JSON.stringify([rowsAnchor.current, rows])
   useEffect(() => { const view = editor.prosemirrorView; if (view) refreshEventRows(view) }, [rowsKey, editor])
+  const bandsKey = groups.map(g => `${g.afterId}:${g.items.map(i => i.id).join(',')}:${g.more}`).join('|')
+  useEffect(() => { const view = editor.prosemirrorView; if (view) refreshDraftBands(view) }, [bandsKey, editor])
   const dirty = useRef(initial.current.recovered)
   const sending = useRef(false)
   const historyPending = useRef(false)
@@ -852,6 +862,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     restoreBrowserSelection(selection)
     suppress.current = false
     base.current = pageContentKey(p); baseDoc.current = p.document
+    // The editor now shows the server's version: an earlier own save is no longer what's on screen, so a later page
+    // equal to it (an Undo that restores it) must replace this one (Ratchet 262889be: Apply all, then Undo).
+    lastSent.current = p.document
   }
   /**
    * B23 (save-conflict-states §2): the page changed elsewhere since he started. Load the latest page, then put his
@@ -1938,6 +1951,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       }
       // Keys inside a row's ⋯ menu belong to the menu (Enter chooses, arrows move), never to the editor's row rules.
       if ((e.target as Element).closest?.('.editor-row-menu')) return
+      // Keys typed in a draft band belong to the band. The rules below act on the editor's own caret row, so End
+      // there would move his caret into his own row and send his next words to it.
+      if ((e.target as Element).closest?.('.draft-host')) return
       // Line end/start in a task row: the browser's own move can step over the row's non-editable parts (⋯, tags)
       // into the next block, so typing would land in the next heading. Make the same line move here, synchronously,
       // and keep it in the row; ProseMirror reads the browser's selection back.
@@ -2041,6 +2057,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     <div ref={saveLine} className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? conflictText : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
     <ChipPageDate.Provider value={page.type === 'daily' ? page.date ?? null : null}>
+    <DraftBands draft={draft} workspace={workspace} groups={groups} fills={draftReady ? fillAnchors(draft, draftShown) : []} />
     {createPortal(<EventRows rows={rows} page={page} workspace={workspace} pageEnd={!rowsAnchor.current || rowsAnchor.current.labelled || (rowsAnchor.current.afterId !== null && !editor.getBlock(rowsAnchor.current.afterId))} />, rowsHost)}
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} shadCNComponents={doneInputs}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}

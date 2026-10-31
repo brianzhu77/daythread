@@ -333,14 +333,10 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
 .card-meta { font-size: .8rem; color: var(--ink-2); }
 ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
 
-/* ---------- Start the day ---------- */
-.start-the-day { background: var(--gray-1); box-shadow: inset 0 0 0 1px var(--line); border-radius: var(--radius-block); }
-.std-group { display: grid; gap: 4px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
-.std-group h3 { font-size: var(--text-meta); color: var(--ink-2); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: .03em; }
-.std-group > button { justify-self: start; }
-.std-row, .fact-row { display: flex; align-items: center; gap: 4px 8px; min-height: var(--tap); flex-wrap: wrap; }
-.std-row .secondary, .fact-row .secondary { min-height: 34px; padding: 0 14px; font-size: .88rem; }
-.std-row .ghost, .fact-row .ghost { min-height: 34px; padding: 0 10px; font-size: .88rem; }
+/* ---------- Rows shared by the facts strip ---------- */
+.fact-row { display: flex; align-items: center; gap: 4px 8px; min-height: var(--tap); flex-wrap: wrap; }
+.fact-row .secondary { min-height: 34px; padding: 0 14px; font-size: .88rem; }
+.fact-row .ghost { min-height: 34px; padding: 0 10px; font-size: .88rem; }
 .pick { display: flex; align-items: center; gap: 10px; min-height: var(--tap); cursor: pointer; }
 .pick input { width: 20px; height: 20px; accent-color: var(--app-accent); }
 .grow { flex: 1 1 10rem; min-width: 0; overflow-wrap: anywhere; }
@@ -370,7 +366,7 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
 
 /* ---------- Tags ---------- */
 .app-tag { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-meta); line-height: 20px; font-weight: 500; color: var(--ink-2); background: var(--tag-bg); border-radius: var(--radius-badge); padding: 1px 7px; white-space: nowrap; }
-.task-row .app-tag::before, .std-row .app-tag::before, .fact-row .app-tag::before {
+.task-row .app-tag::before, .fact-row .app-tag::before {
   content: '';
   width: 12px;
   height: 12px;
@@ -568,23 +564,6 @@ textarea.task-title:focus { outline: none; }
 .failed-line { display: grid; gap: 6px; color: var(--app-danger); }
 .original { margin: 0; padding: 8px 12px; border-left: 3px solid var(--line); color: var(--ink-soft); white-space: pre-wrap; }
 
-/* ---------- Tomorrow (the review on the page, docs/design/review-on-the-page.md) ---------- */
-.tomorrow { display: grid; gap: 2px; padding: 14px 0 0; border-top: 1px solid var(--line); }
-.tomorrow-title { margin: 0 0 4px; font-size: var(--text-section); line-height: 1.35; font-weight: var(--weight-semibold); color: var(--ink); }
-.tomorrow-title span { color: var(--ink-2); font-weight: var(--weight-regular); }
-.tomorrow-list { display: grid; }
-/* Rows sit on the page's to-do column: the box where the editor's checkbox is, the text where its text starts. */
-.tomorrow-list > .task-row { margin: 0 -8px; padding-left: 22px; column-gap: 13px; }
-/* A to-do marker, not a control: tomorrow's boxes are ticked tomorrow. Sized like the editor's checkbox. */
-.tomorrow-list .tomorrow-box { width: 18px; height: 18px; margin-top: 13px; cursor: default; }
-.tomorrow-new-box { border-style: dashed; }
-.tomorrow-pending-text { display: grid; flex: 1 1 0; min-width: 0; padding-bottom: 6px; }
-.tomorrow-pending-text .task-title { padding-bottom: 2px; }
-.tomorrow-line-state { font-size: var(--text-meta); line-height: 18px; color: var(--ink-2); }
-.tomorrow-line-state.warn { color: var(--warn); }
-.tomorrow-new-input { font: inherit; color: var(--ink); line-height: 1.45; }
-.tomorrow-new-input:focus { outline: none; }
-.tomorrow-new-input::placeholder { color: var(--ink-faint); }
 /* A section, not a date: no alarm icon. */
 .task-row .app-tag.section-tag::before { display: none; }
 .warn-line { color: var(--warn); background: var(--warn-soft); border-radius: var(--radius-row); padding: 10px 14px; }
@@ -598,7 +577,7 @@ textarea.task-title:focus { outline: none; }
 }
 
 @media (max-width: 599px) {
-  .std-row .actions, .fact-row .actions { margin-left: 0; }
+  .fact-row .actions { margin-left: 0; }
 }
 
 /* ---------- Laptop: capture floats under the title, page gets room ---------- */
@@ -1223,12 +1202,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .linked-from-more { padding: 0 4px; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); cursor: pointer; }
 
 /* The editor's bottom room moves below the list, so the list isn't pushed far down (layout §4). */
-.continuous-editor:has(+ .subpages), .continuous-editor:has(+ .tomorrow) { min-height: 0; padding-bottom: 0; }
+.continuous-editor:has(+ .subpages) { min-height: 0; padding-bottom: 0; }
 /* Above Tomorrow the editor keeps only a short tap room, so the block stays close to the last line. */
-.continuous-editor:has(+ .tomorrow) .bn-editor { padding-bottom: 24px; }
 .subpages { margin-top: 36px; padding: 14px 0 140px; border-top: 1px solid var(--line); }
-.subpages:has(+ .tomorrow) { padding-bottom: 0; }
-.tomorrow { padding-bottom: 140px; }
 .subpages-title { margin: 0 0 4px; font-size: var(--text-meta); font-weight: var(--weight-semibold); color: var(--ink-2); }
 .subpages-title span { color: var(--ink-3); font-weight: 500; }
 .subpages li, .tree li { min-width: 0; }
@@ -1323,25 +1299,8 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .tree-more-link { padding-left: 26px; }
 
 /* Morning card (Jazz docs/design/morning-card-build.md §2) */
-.mc-group { display: grid; gap: 0; padding-top: 4px; }
-.mc-label { margin: 0 0 6px; font-size: var(--text-caption); font-weight: var(--weight-semibold); color: var(--ink-2); text-transform: uppercase; letter-spacing: .05em; }
-.mc-list li + li { border-top: 1px solid var(--line); }
-.mc-row { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 4px 0; }
-.mc-add { display: grid; place-items: center; flex: none; width: 44px; height: 44px; min-height: 0; margin: 0 -6px; padding: 0; border: 0; background: none; cursor: pointer; }
-.mc-add span { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--fill); color: var(--ink); font-size: var(--text-heading); line-height: 1; }
-.mc-add:hover span { background: var(--line-strong); }
-.mc-text { display: grid; flex: 1; min-width: 0; }
-.mc-title-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-.mc-title { flex: 1; min-width: 0; font-size: var(--text-body); color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-.mc-reason { font-size: var(--text-meta); line-height: 18px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mc-strip { display: flex; align-items: center; gap: 10px; min-height: 52px; padding-left: 38px; color: var(--ink-2); font-size: var(--text-ui); animation: mc-in .18s ease-out; }
-.mc-strip.refused { color: var(--warn); }
 /* B34b: a sub-task sits under its parent on the card, one editor indent (24px) per level. */
-.mc-list li[style*='--mc-depth'] { margin-left: calc(var(--mc-depth) * 24px); }
 @keyframes mc-in { from { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .mc-strip { animation: none; } }
-.mc-add-all { justify-self: start; margin-top: 4px; }
-.mc-lines-toggle { justify-self: start; min-height: 44px; padding: 0; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
 
 /* ---------- A4 trash and restore (Jazz docs/design/pages-trash-layout.md, 2956eea) ---------- */
 /* The tree row's ⋯ is now a menu: its items are full rows, and the row keeps its actions shown while the menu is open. */
@@ -1389,16 +1348,6 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
   .pages-trash-row > svg:last-child { width: 13px; height: 13px; }
 }
 
-/* ---------- A6b Draft my day states (Jazz docs/design/morning-model-states.md, 9127710) ---------- */
-/* One status line, the card's normal .line in the same spot: Drafting, Nothing to suggest, failures, Draft my day. */
-.mc-status.warn { color: var(--warn); }
-.mc-spinner { display: inline-block; vertical-align: -2px; width: 14px; height: 14px; margin-right: 6px; border: 1.5px solid var(--ink-3); border-right-color: transparent; border-radius: 50%; animation: page-card-spin .8s linear infinite; }
-.mc-cost-unknown { margin-left: 6px; font-size: var(--text-meta); color: var(--ink-3); white-space: nowrap; }
-.mc-context { margin-top: 2px; font-size: var(--text-meta); color: var(--ink-3); }
-.mc-add.dashed span { background: none; border: 1.5px dashed var(--ink-3); }
-.mc-add.dashed:hover span { background: var(--fill); }
-/* 44 px targets for Draft my day and Retry on the phone, without moving the line. */
-@media (max-width: 599px) { .mc-group > .line .app-link { display: inline-block; padding: 12px 2px; margin: -12px -2px; } }
 
 /* A12 row actions (Jazz day-row-actions-states §2). Desktop: a ⋯ at the end of a task row, shown on hover and while
    the caret is in the row; it sits left of the date tag so the tag never jumps. */
@@ -1556,3 +1505,49 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 
 .today-events { gap: 0; }
 .today-events .page-ref-icon { margin-right: 6px; }
+
+/* ---------- B76 day draft (Jazz docs/design/day-draft-states.md) ---------- */
+/* The one line under the title: the facts strip's size and spacing. */
+.draft-line { margin: 6px 0 10px; min-height: 24px; font-size: var(--text-small); color: var(--ink-2); display: flex; flex-wrap: wrap; align-items: center; column-gap: 0; }
+.draft-line .sep { color: var(--ink-3); white-space: pre; }
+.draft-line button { font: inherit; color: var(--ink-2); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.draft-line .draft-primary { color: var(--blue-text); font-weight: var(--weight-semibold); text-decoration: none; }
+.draft-line .draft-warn { color: var(--warn); }
+.draft-spin { width: 14px; height: 14px; margin-right: 6px; border: 2px solid var(--line); border-top-color: var(--ink-2); border-radius: 50%; animation: draft-spin .8s linear infinite; }
+@keyframes draft-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .draft-spin { animation: none; } }
+@media (max-width: 599px) { .draft-line button { min-height: 44px; } }
+/* Groups stay whole; each starts with its "·" in its left padding, and the line clips the one that starts a line
+   (the account row's rule, Lead ebd5ee52): "Retry" never lands alone, and no "·" ends or starts a line. */
+.draft-line.is-segs { display: block; overflow: hidden; margin-left: -3px; padding-left: 3px; }
+.draft-segs { display: block; margin-left: -0.9em; }
+.draft-seg { display: inline-flex; flex-wrap: nowrap; align-items: center; white-space: nowrap; padding-left: 0.9em; }
+.draft-seg::before { content: '·'; content: '·' / ''; display: inline-block; width: 0.6em; margin: 0 0.3em 0 -0.9em; text-align: center; color: var(--ink-3); }
+
+/* A suggestion: not his text yet. Blue band and bar, his ink and size, its text where his row's text would be. */
+.draft-host { user-select: none; -webkit-user-select: none; }
+.draft-band { position: relative; display: flex; align-items: center; gap: var(--draft-gap, 13px); min-height: 32px; margin: 2px 0; padding: 3px 76px 3px var(--draft-pad, 14px); border-radius: 8px; background: var(--blue-soft); box-shadow: inset 2px 0 0 var(--blue); font-size: var(--text-body); color: var(--ink); }
+@media (hover: hover) { .draft-band { min-height: 44px; } }
+.draft-band.is-bullet { --draft-pad: 45px; }
+.draft-band.is-bullet::before { content: ''; position: absolute; left: 20px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--ink); }
+.draft-band.is-line { --draft-pad: 14px; }
+.draft-box { flex: none; width: 18px; height: 18px; border: 1.5px solid var(--check); border-radius: 4px; box-sizing: border-box; }
+.draft-main { flex: 1; min-width: 0; }
+.draft-text { outline: none; user-select: text; -webkit-user-select: text; overflow-wrap: anywhere; }
+.draft-text:focus { box-shadow: 0 1px 0 var(--blue); }
+.draft-text.is-readonly { cursor: default; }
+.draft-since { margin-left: 8px; font-size: var(--text-meta); color: var(--ink-3); white-space: nowrap; }
+.draft-acts { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; }
+.draft-acts button { display: grid; place-items: center; width: 32px; height: 30px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--ink-2); cursor: pointer; }
+.draft-acts button svg { width: 16px; height: 16px; flex: none; }
+@media (hover: hover) { .draft-acts button:hover { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--ink); } }
+.draft-acts button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+@media (max-width: 599px) { .draft-band { padding-right: 92px; } .draft-acts { right: 0; } .draft-acts button { width: 44px; height: 40px; } }
+
+/* "N more open": quiet, the strip's meta size; its rows are plain (not suggestions), with ＋. */
+.draft-more { margin: 4px 0 2px; }
+.draft-more-toggle { font: inherit; font-size: var(--text-small); color: var(--ink-3); background: none; border: 0; padding: 6px 0 6px 10px; cursor: pointer; }
+.draft-chev { display: inline-block; transition: transform .15s; }
+.draft-more-toggle[aria-expanded="true"] .draft-chev { transform: rotate(90deg); }
+.draft-band.is-open-row { background: none; box-shadow: none; color: var(--ink-2); }
+@media (max-width: 599px) { .draft-more-toggle { min-height: 44px; } }

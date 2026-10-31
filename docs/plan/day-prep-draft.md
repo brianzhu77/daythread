@@ -53,16 +53,24 @@ Two parts, which can ship separately:
 1. **Nothing open silently drops.** Every open to-do appears in the draft (placed, or listed as not proposed) or stays
    visibly open on Tasks. A model that leaves one out does not make it disappear.
 2. **To-dos stay the same tasks.** Applying a carried to-do moves the existing task (same id, history, done state); only
-   new items become new tasks (Roadbuster's constraint, unit-testable before any UI).
+   new items become new tasks (Roadbuster's constraint, unit-testable before any UI). A carried to-do's band is
+   read-only and applies with the task's current title; he renames it in the row after applying (Ratchet 64b1602e,
+   Lead 64287644). New-task and line bands stay editable.
 3. **His words are never overwritten.** If he has already written on the page, applying only inserts; a stale draft fails
    safely (`expectedContent`).
 4. **Nothing waits on the model.** The page is made from the template at midnight as today; the draft arrives when ready, or
    the deterministic one shows.
 5. **Reflection is his to write.** The draft fills planning sections only and leaves journal prompts empty (his Daily
-   Reflection, Raw Notes), unless he says otherwise.
+   Reflection, Raw Notes), unless he says otherwise. Enforced by structure (the outermost section holding the first to-do
+   row) plus the model's instruction, and nothing is written until he taps Apply. Known limit (Ratchet 11e83453,
+   accepted): if a template puts its first to-do inside a reflection section, the draft may suggest there; it still writes
+   only what he applies.
 6. **Works for any template and any user.** Invitees on the built-in template get the same interaction; whether the model
    runs for them is a separate opt-in.
 7. **Minimalist copy** (Brian 1ac6784b): no explanatory text in the draft.
+8. **One draft per day; the first ready draft wins** (Bumblebee 356c573c, Lead 98cb503a). Retry only after a failure, and only
+   until his first Apply or Skip on any band (Jazz 283476c5: a failure shows the fallback bands; once he acts on them they
+   are the day's draft). A late answer or a second tab never replaces a ready draft, so a choice he made is never undone.
 
 ## Settled (Lead 055b72c0)
 
