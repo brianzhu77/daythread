@@ -13,10 +13,13 @@ export type TickStatus = Extract<Task['status'], 'open' | 'done'>
 export interface Tick { to: TickStatus; phase: 'saving' | 'holding'; token: number }
 export type Ticks = ReadonlyMap<string, Tick>
 
-/** The tick a tap would start, or null when the tap must be ignored (a save is out, or the to-do is cancelled). */
-export function startTick(ticks: Ticks, task: Pick<Task, 'id' | 'status'>, token: number): Tick | null {
-  if (ticks.get(task.id)?.phase === 'saving' || task.status === 'cancelled') return null
-  return { to: task.status === 'done' ? 'open' : 'done', phase: 'saving', token }
+/** A save for this to-do's tick is out: any other tap or Retry on it waits. */
+export const isSaving = (ticks: Ticks, id: string): boolean => ticks.get(id)?.phase === 'saving'
+
+/** The state a tap would send, or null when the tap must be ignored (a save is out, or the to-do is cancelled). */
+export function tapTarget(ticks: Ticks, task: Pick<Task, 'id' | 'status'>): TickStatus | null {
+  if (isSaving(ticks, task.id) || task.status === 'cancelled') return null
+  return task.status === 'done' ? 'open' : 'done'
 }
 
 export const withTick = (ticks: Ticks, id: string, tick: Tick | null): Ticks => {

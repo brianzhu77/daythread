@@ -10,7 +10,7 @@ import { sampleActions } from './fixture'
 import { todayIso } from './dates'
 import { flushAllEditors } from './editor-flush'
 import { offlineCopy } from './offline-copy'
-import { HOLD_MS, heldWorkspace, settleTick, shownStatus, startTick, withTick, type Ticks } from './task-ticks'
+import { HOLD_MS, heldWorkspace, isSaving, settleTick, shownStatus, tapTarget, withTick, type Tick, type Ticks, type TickStatus } from './task-ticks'
 
 export interface Transport {
   load(operationId?: string, triggerOperationId?: string): Promise<Workspace>
@@ -251,33 +251,43 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   )
   runRef.current = run
 
-  const retry = useCallback(() => {
-    if (lastFailed) { debugClient('command.retry',{operationId:lastFailed.operationId,command:lastFailed.action.type}); void run(lastFailed.action, lastFailed.notice, lastFailed.operationId) }
-  }, [lastFailed, run])
-
-  const addSampleData = useCallback(async () => {
-    for (const action of sampleActions(todayIso())) if (!(await run(action))) return
-    push({ text: 'Sample data added' })
-  }, [run, push])
-
   const [ticks, setTicks] = useState<Ticks>(() => new Map())
   // The guard reads the ref, so a second tap before React re-renders is still ignored.
   const ticksRef = useRef<Ticks>(ticks)
   const tickToken = useRef(0)
   const updateTicks = useCallback((next: (ticks: Ticks) => Ticks) => { ticksRef.current = next(ticksRef.current); setTicks(ticksRef.current) }, [])
-  const toggleTask = useCallback((taskId: string, notice: (to: Task['status'], r: Receipt) => NoticeSpec) => {
-    const task = wsRef.current?.tasks.find(t => t.id === taskId)
-    const token = ++tickToken.current
-    const tick = task && startTick(ticksRef.current, task, token)
-    if (!tick) return
+  /** Sends a tick through the B72 lifecycle: shown at once, other taps ignored while it saves, then the row's hold. */
+  const runTick = useCallback((action: Extract<Action, { type: 'task-status' }> & { status: TickStatus }, notice?: NoticeArg, operationId?: string) => {
+    const { taskId } = action
+    if (isSaving(ticksRef.current, taskId)) return
+    const tick: Tick = { to: action.status, phase: 'saving', token: ++tickToken.current }
     updateTicks(t => withTick(t, taskId, tick))
-    void run({ type: 'task-status', taskId, status: tick.to, today: todayIso() }, r => notice(tick.to, r)).then(receipt => {
+    void run(action, notice, operationId).then(receipt => {
       // A failed save shows the stored state again, and the header's error says why.
-      if (!receipt) return updateTicks(t => settleTick(t, taskId, token, null))
-      updateTicks(t => settleTick(t, taskId, token, { ...tick, phase: 'holding' }))
-      setTimeout(() => updateTicks(t => settleTick(t, taskId, token, null)), HOLD_MS)
+      if (!receipt) return updateTicks(t => settleTick(t, taskId, tick.token, null))
+      updateTicks(t => settleTick(t, taskId, tick.token, { ...tick, phase: 'holding' }))
+      setTimeout(() => updateTicks(t => settleTick(t, taskId, tick.token, null)), HOLD_MS)
     })
   }, [run, updateTicks])
+  const toggleTask = useCallback((taskId: string, notice: (to: Task['status'], r: Receipt) => NoticeSpec) => {
+    const task = wsRef.current?.tasks.find(t => t.id === taskId)
+    const to = task && tapTarget(ticksRef.current, task)
+    if (to) runTick({ type: 'task-status', taskId, status: to, today: todayIso() }, r => notice(to, r))
+  }, [runTick])
+
+  const retry = useCallback(() => {
+    if (!lastFailed) return
+    const { action, notice, operationId } = lastFailed
+    debugClient('command.retry',{operationId,command:action.type})
+    // B72 (Ratchet 4bae2184): a retried tick is a tick too, same operation id, so it gets the same guard and hold.
+    if (action.type === 'task-status' && (action.status === 'done' || action.status === 'open')) runTick({ ...action, status: action.status }, notice, operationId)
+    else void run(action, notice, operationId)
+  }, [lastFailed, run, runTick])
+
+  const addSampleData = useCallback(async () => {
+    for (const action of sampleActions(todayIso())) if (!(await run(action))) return
+    push({ text: 'Sample data added' })
+  }, [run, push])
 
   const latest = useCallback(() => wsRef.current, [])
   const value = useMemo(

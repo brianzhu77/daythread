@@ -29,7 +29,7 @@ for (const [name, br, width, height] of [['webkit', webkit, 390, 844], ['chromiu
   const touch = width === 390
   const { b, p, writes, setMode } = await open(br, width, height)
   await p.goto(`${base}/`)
-  if (name === 'webkit') {
+  if (!process.env.SKIP_SEED) {
     setMode('fast')
     await p.locator('details.banner summary').click(); await p.getByRole('button', { name: 'Add sample data' }).click()
     await p.getByText('Sample data added').waitFor()
@@ -78,6 +78,24 @@ for (const [name, br, width, height] of [['webkit', webkit, 390, 844], ['chromiu
   const after = await rows.evaluateAll(rs => rs.map(r => r.dataset.taskId))
   ok(after.includes(before[1].id), `${name} ${width} tasks: the neighbour "${before[1].title}" is still open (writes ${JSON.stringify(writes)})`)
   ok(writes[0] === 'done' && writes.filter(w => w === 'done').length === 1, `${name} ${width} tasks: one Done write; a tap in the hold toggles as normal (writes ${JSON.stringify(writes)})`)
+  // 5. Retry (Ratchet 4bae2184): a retried tick gets the same at-once tick, guard and hold as a tap.
+  await p.goto(`${base}/tasks?view=today`); await p.waitForSelector('.task-row.list input.check'); await p.waitForLoadState('networkidle')
+  const start = await rows.evaluateAll(rs => rs.map(r => ({ id: r.dataset.taskId, title: r.querySelector('.task-title')?.textContent })))
+  const target = p.locator(`.task-row.list[data-task-id="${start[0].id}"] input.check`)
+  const tb = await target.boundingBox()
+  const atTarget = async () => (touch ? p.touchscreen.tap(tb.x + tb.width / 2, tb.y + tb.height / 2) : p.mouse.click(tb.x + tb.width / 2, tb.y + tb.height / 2))
+  setMode('fail'); writes.length = 0
+  await atTarget(); await p.waitForTimeout(SLOW + 1500)
+  ok(!(await target.isChecked()), `${name} ${width} retry: the failed tick reverted first`)
+  setMode('slow')
+  await p.getByRole('button', { name: 'Retry' }).first().click(); await p.waitForTimeout(150)
+  ok(await target.isChecked(), `${name} ${width} retry: ticked at once while the retry saves`)
+  await atTarget(); await p.waitForTimeout(SLOW + 300)
+  ok(await target.count() === 1 && await target.isChecked(), `${name} ${width} retry: the row holds, ticked, after the answer`)
+  await p.waitForTimeout(1500)
+  const end = await rows.evaluateAll(rs => rs.map(r => r.dataset.taskId))
+  ok(!end.includes(start[0].id) && end.includes(start[1].id), `${name} ${width} retry: the row leaves after the hold; the neighbour "${start[1].title}" stays`)
+  ok(JSON.stringify(writes) === '["done","done"]', `${name} ${width} retry: the failed write, then one retry; the tap during it is ignored (${JSON.stringify(writes)})`)
   await b.close()
 }
 process.exitCode = fail ? 1 : 0
