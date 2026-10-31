@@ -4,11 +4,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { EditorNode } from '../domain/editor-document'
 import { draftOf, draftView, type DraftItemView } from '../domain/day-draft'
-import type { LocalDate, Page, Task } from '../domain/types'
+import type { Action, LocalDate, Page, Task } from '../domain/types'
 import { prepareDayDraft } from '../server/functions'
 import { todayIso } from './dates'
 import { flushEditor } from './editor-flush'
-import { newOperationId, useWorkspace } from './use-day'
+import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
 
 export type DayDraftState = 'none' | 'preparing' | 'ready' | 'failed' | 'offline'
 export interface DayDraftHook {
@@ -36,10 +36,22 @@ export function useDayDraft(page: Page): DayDraftHook {
     if (!page.date) return
     setPreparing(true)
     try {
-      await prepareDayDraft({ data: { date: page.date, operationId: newOperationId() } })
-      await refresh()
+      // The server only computes the draft; storing it goes through this tab's queue, after any save he typed
+      // meanwhile, so neither is sent against a revision the other has moved on (Lead 1d5e2e28).
+      const { setDraft, owner } = await prepareDayDraft({ data: { date: page.date, operationId: newOperationId() } })
+      // Made from another account's workspace (the session changed meanwhile): its words never go into this one.
+      if (owner !== (workspaceOwner() ?? 'local')) return
+      if (!setDraft) { await refresh(); return }
+      const action = JSON.parse(setDraft) as Action
+      // A refusal is another tab's draft winning (shown after run's own refresh). A failure resyncs inside run, so
+      // one more try covers a change from another device; after that the state line shows none, as when offline.
+      for (let attempt = 0; attempt < 2; attempt++) {
+        let refused = false
+        if (await run(action, undefined, undefined, { quiet: true, inlineRefusal: /already has its draft/, onRefused: () => { refused = true } })) return
+        if (refused) return
+      }
     } catch { /* the state line shows Retry from the stored status, or none */ } finally { setPreparing(false) }
-  }, [page.date, refresh])
+  }, [page.date, refresh, run])
 
   const hasDraft = Boolean(workspace && draftOf(workspace, page.id))
   useEffect(() => {
