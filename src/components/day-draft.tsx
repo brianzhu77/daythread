@@ -11,6 +11,7 @@ import { createPortal } from 'react-dom'
 import { inlineText, type EditorNode } from '../domain/editor-document'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { shortLabel } from './dates'
+import { useDayDraft as useRealDayDraft } from './use-day-draft'
 
 export type DraftState = 'none' | 'preparing' | 'ready' | 'failed' | 'offline'
 export type DraftItem = {
@@ -38,7 +39,7 @@ export interface DayDraft {
   retry(): void
 }
 
-// ---------- The seam. Until Roadbuster's hook lands, a dev/test store (`window.__daythreadDraft`) stands in. ----------
+// ---------- The seam: Roadbuster's hook (use-day-draft.ts); a check script's store (`window.__daythreadDraft`) overrides it. ----------
 
 type MockDraft = Pick<DayDraft, 'state' | 'items' | 'moreOpen' | 'planningEndId'>
 type MockWindow = Window & { __daythreadDraft?: Record<string, MockDraft>; __daythreadDraftLog?: unknown[] }
@@ -51,7 +52,10 @@ const log = (entry: unknown) => { const w = window as MockWindow; (w.__daythread
 
 export function useDayDraft(page: Page): DayDraft {
   useSyncExternalStore(l => { listeners.add(l); return () => listeners.delete(l) }, () => version, () => 0)
+  const real = useRealDayDraft(page)
   const mock = mockOf(page.id)
+  // The real draft (use-day-draft.ts) unless a check script set a stand-in for this page.
+  if (!mock) return { ...real, items: real.items.map(i => ({ id: i.id, kind: i.kind, anchorId: i.anchorId ?? real.planningEndId ?? '', block: i.block, ...(i.since ? { since: i.since } : {}) })) }
   const edit = (ids: string[]) => { if (mock) { mock.items = mock.items.filter(i => !ids.includes(i.id)); bump() } }
   return {
     state: mock?.state ?? 'none',
