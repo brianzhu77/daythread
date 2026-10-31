@@ -30,6 +30,40 @@ export const runCommand = createServerFn({ method: "POST" })
   });
 
 /**
+ * B77: a draft for a day page, from the model when this account has it on, else the app's fallback only. The model
+ * is on when the server has OPENROUTER_API_KEY and OPENROUTER_MODEL and, with sign-in on, the account's email is in
+ * DAYTHREAD_DRAFT_EMAILS (off by default for invited accounts, Bumblebee/Lead). Stored with set-draft, checked again
+ * there. Logs carry counts and timings only, never his words or the model's reasons.
+ */
+export const prepareDayDraft = createServerFn({ method: "POST" })
+  .validator((input: unknown) => z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), operationId: z.string().min(1).max(200) }).parse(input))
+  .handler(async ({ data }) => {
+    const [{ getRepository }, { forBrowser }, { currentOwner }, { currentAccount }, { modelConfig }, { runDayDraft }] = await Promise.all([
+      import("./storage"), import("./browser-workspace"), import("./auth/request-owner"), import("./auth/server"), import("./model/openrouter"), import("./model/day-draft"),
+    ]);
+    const account = await currentAccount();
+    const allowed = (process.env.DAYTHREAD_DRAFT_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
+    const config = modelConfig() && (!account || allowed.includes(account.email.toLowerCase())) ? modelConfig() : null;
+    const repo = getRepository();
+    let ws = await repo.load();
+    const page = ws.pages.find((p) => p.type === "daily" && p.date === data.date && !p.trashedAt);
+    if (!page) throw new Error("Day page not found");
+    const run = await runDayDraft(ws, page, config, () => crypto.randomUUID());
+    console.info(JSON.stringify({ level: "info", event: "draft.prepare", operationId: data.operationId, model: Boolean(config), status: run.status, items: run.items.length, moreOpen: run.moreOpen.length, elapsedMs: run.ms, costUsd: run.costUsd }));
+    const action = { type: "set-draft" as const, pageId: page.id, status: run.status, items: run.items, moreOpen: run.moreOpen, allowedTaskIds: run.allowedTaskIds };
+    // The model takes seconds; if he saved meanwhile, store against the newer revision (set-draft re-checks it all).
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const result = await repo.execute({ operationId: `${data.operationId}:${attempt}`, expectedRevision: ws.revision, action });
+        return { ...result, workspace: forBrowser(result.workspace), owner: currentOwner() ?? "local", modelOn: Boolean(config) };
+      } catch (error) {
+        if (attempt >= 2) throw error;
+        ws = await repo.load();
+      }
+    }
+  });
+
+/**
  * Whether this server is the preview Worker (`DAYTHREAD_PREVIEW=1`, set at run time so the preview runs production's
  * own bundle, Lead c6fcc1da). Its data is separate, so the app marks itself: a note written there stays there.
  */
