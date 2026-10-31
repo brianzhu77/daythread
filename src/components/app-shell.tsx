@@ -1,4 +1,5 @@
 import { Toast } from '@heroui/react'
+import { usePreview } from './preview'
 import { useRouterState } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useState } from 'react'
 import { Navigation } from './navigation'
@@ -16,6 +17,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="app">
         <Navigation />
         <div className="app-content">
+          <PreviewNote />
           <SampleBanner />
           <SaveIndicator />
           <main className="app-main">{children}</main>
@@ -165,4 +167,9 @@ function useVisibleTop() {
       vv.removeEventListener('scroll', update)
     }
   }, [])
+}
+
+/** On the preview address, phones get one line above every screen (the sidebar's caption says it on a laptop). */
+function PreviewNote() {
+  return usePreview() ? <p className="preview-note">Preview · notes written here stay here</p> : null
 }
