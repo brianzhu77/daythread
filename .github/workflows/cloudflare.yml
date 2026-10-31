@@ -13,7 +13,7 @@ on:
     inputs:
       action:
         type: choice
-        options: [deploy, domain-to-worker, domain-to-vercel, check-token, timings]
+        options: [deploy, deploy-preview, domain-to-worker, domain-to-vercel, check-token, timings]
         required: true
       hours:
         type: string
@@ -34,10 +34,15 @@ env:
   VERCEL_TARGET: 50995c4cd509d12f.vercel-dns-017.com
 
 jobs:
+  # deploy-preview builds the dispatched ref as a second Worker, daythread-preview (Brian's preview address
+  # daythread.dogrod.ca, attached to it in the dashboard). Same database, but its own schema (DAYTHREAD_PG_SCHEMA),
+  # so it never reads or writes the production tables; only PREVIEW_INVITES may make an account there.
   deploy:
-    if: inputs.action == 'deploy'
+    if: inputs.action == 'deploy' || inputs.action == 'deploy-preview'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      NAME: ${{ inputs.action == 'deploy-preview' && 'daythread-preview' || 'daythread' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -82,15 +87,21 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           HYPERDRIVE_ID: ${{ vars.HYPERDRIVE_ID }}
       - name: Deploy
-        run: npx wrangler@4 deploy -c .output/server/wrangler.json
+        run: |
+          if [ "$NAME" = daythread-preview ]; then
+            npx wrangler@4 deploy -c .output/server/wrangler.json --name "$NAME" --var DAYTHREAD_PG_SCHEMA:daythread_preview
+          else
+            npx wrangler@4 deploy -c .output/server/wrangler.json
+          fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       # After the deploy, so the Worker exists the first time. Secrets carry over to later deploys; setting them again
       # keeps them equal to the repository's.
       - name: App secrets
         run: |
-          node -e 'const k=["DATABASE_URL","SUPABASE_URL","SUPABASE_PUBLISHABLE_KEY","OPENROUTER_API_KEY","OPENROUTER_MODEL"];process.stdout.write(JSON.stringify(Object.fromEntries(k.filter(n=>process.env[n]).map(n=>[n,process.env[n]]))))' > "$RUNNER_TEMP/secrets.json"
-          npx wrangler@4 secret bulk "$RUNNER_TEMP/secrets.json" -c .output/server/wrangler.json
+          [ "$NAME" = daythread-preview ] || unset DAYTHREAD_INVITES
+          node -e 'const k=["DATABASE_URL","SUPABASE_URL","SUPABASE_PUBLISHABLE_KEY","OPENROUTER_API_KEY","OPENROUTER_MODEL","DAYTHREAD_INVITES"];process.stdout.write(JSON.stringify(Object.fromEntries(k.filter(n=>process.env[n]).map(n=>[n,process.env[n]]))))' > "$RUNNER_TEMP/secrets.json"
+          npx wrangler@4 secret bulk "$RUNNER_TEMP/secrets.json" -c .output/server/wrangler.json --name "$NAME"
           rm "$RUNNER_TEMP/secrets.json"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -99,6 +110,7 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
+          DAYTHREAD_INVITES: ${{ secrets.PREVIEW_INVITES }}
 
   domain:
     if: inputs.action == 'domain-to-worker' || inputs.action == 'domain-to-vercel'
