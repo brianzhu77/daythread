@@ -315,3 +315,21 @@ test('templates part 2: a link page starts from the default where it is saved, a
   h.run({ type: 'apply-link-preview', pageId: 'lp2', url: 'https://example.com/two', title: 'Late', description: 'Late quote' })
   assert.equal(h.page('lp2').document, before)
 })
+
+test('templates part 2: a one-row template (an empty to-do or bullet) keeps its row below the link preview', () => {
+  for (const row of [todo('only', '', 'reference', ''), bullet('only')]) {
+    const h = harness()
+    h.run({ type: 'create-document', title: 'Reading', body: '', pageId: 'reading' })
+    h.ws = { ...h.ws, pages: [...h.ws.pages, { id: 'tpl', type: 'template', date: null, title: 'One row', document: JSON.stringify([row]) }] }
+    h.run({ type: 'set-template-target', pageId: 'tpl', target: 'reading' })
+    h.run({ type: 'make-link-pages', parentPageId: 'reading', items: [{ url: 'https://example.com/a', pageId: 'lp' }] })
+    h.run({ type: 'apply-link-preview', pageId: 'lp', url: 'https://example.com/a', title: 'A', description: 'Quote here.' })
+    assert.deepEqual(words(nodesOf(h.page('lp'))), [['quote', 'Quote here.'], [row.type, '']], row.type)
+  }
+  // With no template, a link page's one blank line still becomes the quote and a fresh line, as before.
+  const h = harness()
+  h.run({ type: 'create-document', title: 'Reading', body: '', pageId: 'reading' })
+  h.run({ type: 'make-link-pages', parentPageId: 'reading', items: [{ url: 'https://example.com/b', pageId: 'lp' }] })
+  h.run({ type: 'apply-link-preview', pageId: 'lp', url: 'https://example.com/b', title: 'B', description: 'Plain.' })
+  assert.deepEqual(words(nodesOf(h.page('lp'))), [['quote', 'Plain.'], ['paragraph', '']])
+})

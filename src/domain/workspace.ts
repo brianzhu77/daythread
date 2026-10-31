@@ -469,9 +469,11 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (!p || isTrashed(p) || p.url !== action.url) return unchanged;
       const nodes = pageNodes(p);
       // Untouched: still the blank line it was made with, or still the template's copy (B70); nothing made inside it.
-      const blank = nodes.length === 1 && isEmptyLine(nodes[0]!);
+      // The template copy is checked first: a template of one empty to-do or bullet is also "one empty line", and its
+      // row must stay below the quote (Ratchet a8ecb37a).
       const template = newPageTemplate(state, p.parentId ? state.pages.find((x) => x.id === p.parentId) : undefined);
-      const fromTemplate = !blank && Boolean(template) && isUntouchedCopy(template!, nodes);
+      const fromTemplate = Boolean(template) && isUntouchedCopy(template!, nodes);
+      const blank = !fromTemplate && nodes.length === 1 && isEmptyLine(nodes[0]!);
       const untouched = (blank || fromTemplate) && !state.pages.some((c) => c.parentId === p.id && !isTrashed(c));
       if (!untouched) return unchanged;
       const title = action.title?.replace(/\s+/g, " ").trim().slice(0, 200) || null;
