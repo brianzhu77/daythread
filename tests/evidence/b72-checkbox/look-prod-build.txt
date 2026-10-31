@@ -1,0 +1,12 @@
+webkit-390-light day: pending == saved pixels: true
+webkit-390-light tasks: pending == holding pixels: true
+webkit-390-light tasks: row gone after hold: true
+webkit-390-dark day: pending == saved pixels: true
+webkit-390-dark tasks: pending == holding pixels: true
+webkit-390-dark tasks: row gone after hold: true
+chromium-1280-light day: pending == saved pixels: true
+chromium-1280-light tasks: pending == holding pixels: true
+chromium-1280-light tasks: row gone after hold: true
+chromium-1280-dark day: pending == saved pixels: true
+chromium-1280-dark tasks: pending == holding pixels: true
+chromium-1280-dark tasks: row gone after hold: true

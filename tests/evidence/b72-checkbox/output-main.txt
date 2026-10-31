@@ -1,0 +1,31 @@
+FAIL [main] webkit 390 day page: ticked at once, before the save answers
+FAIL [main] webkit 390 day page: struck through at once
+FAIL [main] webkit 390 day page double tap: one Done write (["done","done"])
+PASS [main] webkit 390 day page double tap: box ticked after the save
+PASS [main] webkit 390 day page: a tap after the answer reopens on purpose (["open"])
+FAIL [main] webkit 390 failed save: ticked at once, then reverted (["done"])
+PASS [main] webkit 390 failed save: the usual error with Retry shows
+PASS [main] webkit 390 tasks: 2 rows to start
+FAIL [main] webkit 390 tasks: first row ticked and greyed at once
+FAIL [main] webkit 390 tasks: the neighbour "Tax return" is still open (writes ["done","done","done"])
+FAIL [main] webkit 390 tasks: one Done write; a tap in the hold toggles as normal (writes ["done","done","done"])
+FAIL [main] chromium 1280 day page: ticked at once, before the save answers
+FAIL [main] chromium 1280 day page: struck through at once
+FAIL [main] chromium 1280 day page double tap: one Done write (["done","done"])
+PASS [main] chromium 1280 day page double tap: box ticked after the save
+PASS [main] chromium 1280 day page: a tap after the answer reopens on purpose (["open"])
+FAIL [main] chromium 1280 failed save: ticked at once, then reverted (["done"])
+PASS [main] chromium 1280 failed save: the usual error with Retry shows
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.waitForSelector: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('.task-row.list input.check') to be visible
+
+    at /Users/dogrod/Developer/daythread-checkbox/tests/evidence/b72-checkbox/b72.mjs:65:53 {
+  name: 'TimeoutError'
+}
+
+Node.js v24.14.1

@@ -1,0 +1,32 @@
+PASS [prod-build] webkit 390 day page: ticked at once, before the save answers
+PASS [prod-build] webkit 390 day page: struck through at once
+PASS [prod-build] webkit 390 day page double tap: one Done write (["done"])
+PASS [prod-build] webkit 390 day page double tap: box ticked after the save
+PASS [prod-build] webkit 390 day page: a tap after the answer reopens on purpose (["open"])
+PASS [prod-build] webkit 390 failed save: ticked at once, then reverted (["done"])
+PASS [prod-build] webkit 390 failed save: the usual error with Retry shows
+PASS [prod-build] webkit 390 tasks: 2 rows to start
+PASS [prod-build] webkit 390 tasks: first row ticked and greyed at once
+PASS [prod-build] webkit 390 tasks: the neighbour "Tax return" is still open (writes ["done","open"])
+PASS [prod-build] webkit 390 tasks: one Done write; a tap in the hold toggles as normal (writes ["done","open"])
+PASS [prod-build] webkit 390 retry: the failed tick reverted first
+PASS [prod-build] webkit 390 retry: ticked at once while the retry saves
+PASS [prod-build] webkit 390 retry: the row holds, ticked, after the answer
+PASS [prod-build] webkit 390 retry: the row leaves after the hold; the neighbour "Tax return" stays
+PASS [prod-build] webkit 390 retry: the failed write, then one retry; the tap during it is ignored (["done","done"])
+PASS [prod-build] chromium 1280 day page: ticked at once, before the save answers
+PASS [prod-build] chromium 1280 day page: struck through at once
+PASS [prod-build] chromium 1280 day page double tap: one Done write (["done"])
+PASS [prod-build] chromium 1280 day page double tap: box ticked after the save
+PASS [prod-build] chromium 1280 day page: a tap after the answer reopens on purpose (["open"])
+PASS [prod-build] chromium 1280 failed save: ticked at once, then reverted (["done"])
+PASS [prod-build] chromium 1280 failed save: the usual error with Retry shows
+PASS [prod-build] chromium 1280 tasks: 2 rows to start
+PASS [prod-build] chromium 1280 tasks: first row ticked and greyed at once
+PASS [prod-build] chromium 1280 tasks: the neighbour "Tax return" is still open (writes ["done","open"])
+PASS [prod-build] chromium 1280 tasks: one Done write; a tap in the hold toggles as normal (writes ["done","open"])
+PASS [prod-build] chromium 1280 retry: the failed tick reverted first
+PASS [prod-build] chromium 1280 retry: ticked at once while the retry saves
+PASS [prod-build] chromium 1280 retry: the row holds, ticked, after the answer
+PASS [prod-build] chromium 1280 retry: the row leaves after the hold; the neighbour "Tax return" stays
+PASS [prod-build] chromium 1280 retry: the failed write, then one retry; the tap during it is ignored (["done","done"])
