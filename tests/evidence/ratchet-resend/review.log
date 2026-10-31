@@ -1,0 +1,16 @@
+(node:40960) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium new day elsewhere: exactly one silent retry, same identity
+PASS chromium other page revision: one retry and words persist after reload
+PASS chromium same-page conflict: no resend, local words retained
+(node:41085) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium second refusal stops automatic attempts; manual Retry succeeds
+(node:41205) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS webkit new day elsewhere: exactly one silent retry, same identity
+PASS webkit other page revision: one retry and words persist after reload
+PASS webkit same-page conflict: no resend, local words retained
+(node:41378) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS webkit second refusal stops automatic attempts; manual Retry succeeds
