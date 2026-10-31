@@ -180,19 +180,21 @@ test('draft: the first ready draft wins; a late answer or a second tab never rep
   assert.deepEqual(draftView(h.ws, page())!.items.map(i => i.taskId), [book])
 })
 
-test('draft: a retry after a failed draft never brings back a line he skipped, whatever its new id', () => {
-  const { h, ids, page } = setup()
-  const line = (id: string): DraftItem => ({ id, anchor: ids[2]!, place: 'fill', source: 'model', state: 'open', block: { id: `b-${id}`, type: 'bulletListItem', props: {}, content: [text('Lunch with  Sam')], children: [] } })
-  const draft = (items: DraftItem[], status: 'ready' | 'failed') => h.run({ type: 'set-draft', pageId: dayId(tomorrow), status, items, moreOpen: [], allowedTaskIds: [] })
-  draft([line('a1')], 'failed')
-  h.run({ type: 'skip-draft', pageId: dayId(tomorrow), itemIds: ['a1'] })
-  draft([{ ...line('b1'), block: { id: 'b-b1', type: 'bulletListItem', props: {}, content: [text('lunch with Sam')], children: [] } }], 'ready')
-  assert.deepEqual(draftView(h.ws, page())!.items, [])
-})
-
 test('draft: a carried to-do whose anchor left the planning part goes to the planning end, never lost', () => {
   const { h, ids, book, draft, page } = setup()
   draft([{ taskId: book, anchor: ids[12]! }])
   const view = draftView(h.ws, page())!
   assert.deepEqual(view.items.map(i => [i.taskId, i.kind, i.anchorId]), [[book, 'after', ids[0]]])
+})
+
+test('draft: a failed draft can be retried until his first Apply or Skip, then it is the day\'s draft', () => {
+  const { h, book, dog, page } = setup()
+  const set = (taskId: string, status: 'ready' | 'failed') => h.run({ type: 'set-draft', pageId: dayId(tomorrow), status, items: [{ id: `x-${taskId}-${status}`, anchor: '', place: 'after', taskId, source: 'fallback', state: 'open' }], moreOpen: [], allowedTaskIds: [book, dog] })
+  set(book, 'failed')
+  assert.equal(draftView(h.ws, page())!.status, 'failed')
+  set(dog, 'failed')
+  assert.deepEqual(draftView(h.ws, page())!.items.map(i => i.taskId), [dog], 'a retry before any choice replaces the fallback bands')
+  h.run({ type: 'skip-draft', pageId: dayId(tomorrow), itemIds: [`x-${dog}-failed`] })
+  assert.equal(draftView(h.ws, page())!.status, 'ready', 'after a choice, no more Retry')
+  assert.throws(() => set(book, 'ready'), /already has its draft/)
 })

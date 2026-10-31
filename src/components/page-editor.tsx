@@ -862,6 +862,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     restoreBrowserSelection(selection)
     suppress.current = false
     base.current = pageContentKey(p); baseDoc.current = p.document
+    // The editor now shows the server's version: an earlier own save is no longer what's on screen, so a later page
+    // equal to it (an Undo that restores it) must replace this one (Ratchet 262889be: Apply all, then Undo).
+    lastSent.current = p.document
   }
   /**
    * B23 (save-conflict-states §2): the page changed elsewhere since he started. Load the latest page, then put his

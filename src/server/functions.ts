@@ -48,9 +48,9 @@ export const prepareDayDraft = createServerFn({ method: "POST" })
     let ws = await repo.load();
     const page = ws.pages.find((p) => p.type === "daily" && p.date === data.date && !p.trashedAt);
     if (!page) throw new Error("Day page not found");
-    const { draftOf } = await import("../domain/day-draft");
+    const { draftOf, draftSettled } = await import("../domain/day-draft");
     // The first ready draft wins: a second tab or a reload never pays for, or replaces, another one.
-    if (draftOf(ws, page.id)?.status === "ready") return { workspace: forBrowser(ws), owner: currentOwner() ?? "local", modelOn: Boolean(config) };
+    { const d = draftOf(ws, page.id); if (d && draftSettled(d)) return { workspace: forBrowser(ws), owner: currentOwner() ?? "local", modelOn: Boolean(config) }; }
     const run = await runDayDraft(ws, page, config, () => crypto.randomUUID());
     console.info(JSON.stringify({ level: "info", event: "draft.prepare", operationId: data.operationId, model: Boolean(config), status: run.status, items: run.items.length, moreOpen: run.moreOpen.length, elapsedMs: run.ms, costUsd: run.costUsd }));
     const action = { type: "set-draft" as const, pageId: page.id, status: run.status, items: run.items, moreOpen: run.moreOpen, allowedTaskIds: run.allowedTaskIds };
@@ -61,7 +61,8 @@ export const prepareDayDraft = createServerFn({ method: "POST" })
         return { ...result, workspace: forBrowser(result.workspace), owner: currentOwner() ?? "local", modelOn: Boolean(config) };
       } catch (error) {
         ws = await repo.load();
-        if (draftOf(ws, page.id)?.status === "ready") return { workspace: forBrowser(ws), owner: currentOwner() ?? "local", modelOn: Boolean(config) };
+        const settled = draftOf(ws, page.id);
+        if (settled && draftSettled(settled)) return { workspace: forBrowser(ws), owner: currentOwner() ?? "local", modelOn: Boolean(config) };
         if (attempt >= 2) throw error;
       }
     }

@@ -22,18 +22,14 @@ export interface DraftItem {
 }
 export interface DayDraft { status: DraftStatus; items: DraftItem[]; moreOpen: string[] }
 
+/** The day's draft for good: a ready one, or a failed one he already applied or skipped something from. */
+export const draftSettled = (d: DayDraft): boolean => d.status === 'ready' || d.items.some(i => i.state !== 'open')
+
 export function draftOf(ws: Workspace, dayPageId: string): DayDraft | null {
   const p = ws.pages.find(x => x.id === draftPageId(dayPageId) && isDraft(x) && !x.trashedAt)
   if (!p) return null
   try { return JSON.parse(p.document) as DayDraft } catch { return null }
 }
-
-/**
- * What an item is, across drafts of the same day: its task, or its kind and words. A later draft never brings back
- * an item whose key he already applied or skipped (Ratchet c1de8d2f), whatever its new id.
- */
-export const itemKey = (i: Pick<DraftItem, 'taskId' | 'block'>): string =>
-  i.taskId ? `task:${i.taskId}` : `${i.block?.type ?? ''}:${inlineText(i.block?.content).replace(/\s+/g, ' ').trim().toLowerCase()}`
 
 /** A carried to-do can still be applied: it exists, is open and wasn't set aside. A rename doesn't matter. */
 export const eligibleTask = (t: Task | undefined): t is Task => Boolean(t && t.status === 'open' && !t.paused)
@@ -124,7 +120,7 @@ export function draftView(ws: Workspace, page: Page): DraftView | null {
   }
   const end = planningEndIndex(doc, ids)
   const moreOpen = draft.moreOpen.map(task).filter(eligibleTask).filter(t => !onPage.has(t.id)).map(t => ({ taskId: t.id, title: t.title, since: t.createdOn }))
-  return { status: draft.status, items, moreOpen, planningEndId: end > 0 ? doc[end - 1]!.id : null }
+  return { status: draftSettled(draft) ? 'ready' : draft.status, items, moreOpen, planningEndId: end > 0 ? doc[end - 1]!.id : null }
 }
 
 /** A draft as the server built it, checked before it is stored: ids it may use, kinds, lengths, no duplicates. */
