@@ -37,6 +37,8 @@ jobs:
   # deploy-preview builds the dispatched ref as a second Worker, daythread-preview (Brian's preview address
   # daythread.dogrod.ca, attached to it in the dashboard). Same database, but its own schema (DAYTHREAD_PG_SCHEMA),
   # so it never reads or writes the production tables; only PREVIEW_INVITES may make an account there.
+  # Dispatch it from a throwaway branch made of infra/cloudflare merged with the PR head (e.g. preview/pr-35): a PR
+  # branch alone has neither this action nor the Worker build.
   deploy:
     if: inputs.action == 'deploy' || inputs.action == 'deploy-preview'
     runs-on: ubuntu-latest
