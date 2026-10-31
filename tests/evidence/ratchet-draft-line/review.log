@@ -1,0 +1,12 @@
+(node:55910) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium light plain Dismiss/Retry, dashed suggestion, visible keyboard focus, Enter Dismiss real action, Retry seam action
+(node:55940) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium dark plain Dismiss/Retry, dashed suggestion, visible keyboard focus, Enter Dismiss real action, Retry seam action
+(node:55946) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS webkit light plain Dismiss/Retry, dashed suggestion, visible keyboard focus, Enter Dismiss real action, Retry seam action
+(node:55973) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS webkit dark plain Dismiss/Retry, dashed suggestion, visible keyboard focus, Enter Dismiss real action, Retry seam action
