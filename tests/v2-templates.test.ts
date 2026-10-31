@@ -224,3 +224,123 @@ test('templates: a second Edit (double click, another tab) opens the existing da
   assert.equal(again.receipt.entityId, 'tpl')
   assert.equal(templates(h.ws).length, 1)
 })
+
+test('templates part 2: a new empty page inside X starts from X\'s default; inside a day, from the default for pages inside days', () => {
+  const h = harness()
+  h.day(today)
+  h.run({ type: 'create-document', title: 'Recipes', body: '', pageId: 'recipes' })
+  h.ws = { ...h.ws, pages: [...h.ws.pages,
+    { id: 'tpl-r', type: 'template', date: null, title: 'Recipe', document: JSON.stringify([heading('a', 'Ingredients'), bullet('b'), todo('c', 'Buy', 'reference', '')]) },
+    { id: 'tpl-l', type: 'template', date: null, title: 'Link notes', document: JSON.stringify([heading('d', 'Why it matters'), para('e', text('Summary: '))]) }] }
+  h.run({ type: 'set-template-target', pageId: 'tpl-r', target: 'recipes' })
+  h.run({ type: 'set-template-target', pageId: 'tpl-l', target: 'day-subpages' })
+  h.run({ type: 'create-document', title: '', body: '', pageId: 'soup', parentId: 'recipes' })
+  assert.deepEqual(words(nodesOf(h.page('soup'))), [['heading', 'Ingredients'], ['bulletListItem', ''], ['task', '']])
+  assert.equal(h.page('soup').title, '', 'the template title is not copied')
+  const row = flat(nodesOf(h.page('soup'))).find(n => n.type === 'task')!
+  assert.equal(row.props?.role, 'reference')
+  h.run({ type: 'create-document', title: 'Read later', body: '', pageId: 'in-day', parentId: dayId(today) })
+  assert.deepEqual(words(nodesOf(h.page('in-day'))), [['heading', 'Why it matters'], ['paragraph', 'Summary:']])
+  // A page in a page that sits inside a day uses only its parent's own default: none here, so blank.
+  h.run({ type: 'create-document', title: '', body: '', pageId: 'deeper', parentId: 'in-day' })
+  assert.deepEqual(words(nodesOf(h.page('deeper'))), [['paragraph', '']])
+  // Top level and a page with words never start from a template.
+  h.run({ type: 'create-document', title: 'Top', body: '' , pageId: 'top' })
+  assert.deepEqual(words(nodesOf(h.page('top'))), [['paragraph', '']])
+  h.run({ type: 'create-document', title: 'Typed', body: 'Already words', pageId: 'typed', parentId: 'recipes' })
+  assert.deepEqual(words(nodesOf(h.page('typed'))), [['paragraph', 'Already words']])
+  assert.equal(h.ws.tasks.length, 0)
+})
+
+test('templates part 2: targets are one per template and one template per target; trashed targets refuse; delete clears and Undo restores', () => {
+  const h = withDayTemplate()
+  h.run({ type: 'create-document', title: 'Recipes', body: '', pageId: 'recipes' })
+  h.run({ type: 'create-template', title: '', pageId: 'tpl-2' })
+  assert.equal(templates(h.ws).length, 2)
+  assert.equal(h.page('tpl-2').parentId, undefined)
+  h.run({ type: 'set-template-target', pageId: 'tpl-2', target: 'recipes' })
+  assert.equal(defaultTemplate(h.ws, 'recipes')?.id, 'tpl-2')
+  assert.equal(defaultTemplate(h.ws, dayPagesTarget)?.id, 'tpl', 'other targets keep theirs')
+  assert.throws(() => h.run({ type: 'set-template-target', pageId: 'tpl-2', target: 'tpl' }), /day template|changed that way/)
+  assert.throws(() => h.run({ type: 'create-document', title: '', body: '', pageId: 'days' }))
+  h.run({ type: 'delete-page', pageId: 'recipes', at: '2026-10-22T10:00:00Z' })
+  assert.ok(!h.page('tpl-2').trashedAt, 'the template stays when its target goes to the trash')
+  h.run({ type: 'restore-page', pageId: 'recipes' })
+  assert.throws(() => h.run({ type: 'delete-template', pageId: 'recipes' }))
+  const del = h.run({ type: 'delete-template', pageId: 'tpl' })
+  assert.equal(del.receipt.message, "Deleted 'Day'")
+  assert.equal(defaultTemplate(h.ws, dayPagesTarget), undefined)
+  assert.deepEqual(words(nodesOf(h.day(tomorrow))).filter(([type]) => type === 'heading').map(([, w]) => w), ['TODO', 'Events', 'Good Stuffs', 'Notes'])
+})
+
+test('templates part 2: Undo of a delete brings the template back with its default', () => {
+  const h = withDayTemplate()
+  const del = h.run({ type: 'delete-template', pageId: 'tpl' })
+  h.run({ type: 'undo', targetOperationId: del.receipt.operationId })
+  assert.equal(defaultTemplate(h.ws, dayPagesTarget)?.id, 'tpl')
+})
+
+test('templates part 2: top-level pages have their own default', () => {
+  const h = harness()
+  h.run({ type: 'create-document', title: 'Recipes', body: '', pageId: 'recipes' })
+  h.ws = { ...h.ws, pages: [...h.ws.pages, { id: 'tpl-t', type: 'template', date: null, title: 'Note', document: JSON.stringify([heading('a', 'Context')]) }] }
+  const set = h.run({ type: 'set-template-target', pageId: 'tpl-t', target: 'top-level' })
+  assert.equal(set.receipt.message, 'Now the default for top-level pages')
+  h.run({ type: 'create-document', title: 'Trip', body: '', pageId: 'trip' })
+  assert.deepEqual(words(nodesOf(h.page('trip'))), [['heading', 'Context']])
+  assert.equal(h.page('trip').title, 'Trip')
+  // Not for subpages of a page with no default of its own.
+  h.run({ type: 'create-document', title: '', body: '', pageId: 'sub', parentId: 'recipes' })
+  assert.deepEqual(words(nodesOf(h.page('sub'))), [['paragraph', '']])
+  assert.throws(() => h.run({ type: 'create-document', title: '', body: '', pageId: 'top-level' }))
+})
+
+test('templates part 2: a link page starts from the default where it is saved, and its preview still fills in on top', () => {
+  const h = harness()
+  h.run({ type: 'create-document', title: 'Reading', body: '', pageId: 'reading' })
+  h.ws = { ...h.ws, pages: [...h.ws.pages, { id: 'tpl-r', type: 'template', date: null, title: 'Article', document: JSON.stringify([heading('a', 'Summary'), bullet('b'), heading('c', 'Notes'), bullet('d')]) }] }
+  h.run({ type: 'set-template-target', pageId: 'tpl-r', target: 'reading' })
+  h.run({ type: 'make-link-pages', parentPageId: 'reading', items: [{ url: 'https://example.com/post', pageId: 'lp' }] })
+  assert.deepEqual(words(nodesOf(h.page('lp'))), [['heading', 'Summary'], ['bulletListItem', ''], ['heading', 'Notes'], ['bulletListItem', '']])
+  h.run({ type: 'apply-link-preview', pageId: 'lp', url: 'https://example.com/post', title: 'A good post', description: 'Why it matters.' })
+  assert.equal(h.page('lp').title, 'A good post')
+  assert.deepEqual(words(nodesOf(h.page('lp'))), [['quote', 'Why it matters.'], ['heading', 'Summary'], ['bulletListItem', ''], ['heading', 'Notes'], ['bulletListItem', '']])
+  // A [[ link with a title gets it too: a title isn't body content.
+  h.run({ type: 'create-document', title: 'Another', body: '', pageId: 'linked', parentId: 'reading' })
+  assert.equal(words(nodesOf(h.page('linked')))[0]![1], 'Summary')
+  // Once he has written on it, a late preview leaves the page alone.
+  h.run({ type: 'make-link-pages', parentPageId: 'reading', items: [{ url: 'https://example.com/two', pageId: 'lp2' }] })
+  h.save('lp2', d => d.map((n, i) => (i === 1 ? { ...n, content: [text('My point')] } : n)))
+  const before = h.page('lp2').document
+  h.run({ type: 'apply-link-preview', pageId: 'lp2', url: 'https://example.com/two', title: 'Late', description: 'Late quote' })
+  assert.equal(h.page('lp2').document, before)
+})
+
+test('templates part 2: a one-row template (an empty to-do or bullet) keeps its row below the link preview', () => {
+  for (const row of [todo('only', '', 'reference', ''), bullet('only')]) {
+    const h = harness()
+    h.run({ type: 'create-document', title: 'Reading', body: '', pageId: 'reading' })
+    h.ws = { ...h.ws, pages: [...h.ws.pages, { id: 'tpl', type: 'template', date: null, title: 'One row', document: JSON.stringify([row]) }] }
+    h.run({ type: 'set-template-target', pageId: 'tpl', target: 'reading' })
+    h.run({ type: 'make-link-pages', parentPageId: 'reading', items: [{ url: 'https://example.com/a', pageId: 'lp' }] })
+    h.run({ type: 'apply-link-preview', pageId: 'lp', url: 'https://example.com/a', title: 'A', description: 'Quote here.' })
+    assert.deepEqual(words(nodesOf(h.page('lp'))), [['quote', 'Quote here.'], [row.type, '']], row.type)
+  }
+  // With no template, a link page's one blank line still becomes the quote and a fresh line, as before.
+  const h = harness()
+  h.run({ type: 'create-document', title: 'Reading', body: '', pageId: 'reading' })
+  h.run({ type: 'make-link-pages', parentPageId: 'reading', items: [{ url: 'https://example.com/b', pageId: 'lp' }] })
+  h.run({ type: 'apply-link-preview', pageId: 'lp', url: 'https://example.com/b', title: 'B', description: 'Plain.' })
+  assert.deepEqual(words(nodesOf(h.page('lp'))), [['quote', 'Plain.'], ['paragraph', '']])
+})
+
+test('templates part 2: a template aimed at a link page does not stop that page\'s preview', () => {
+  const h = harness()
+  h.run({ type: 'create-document', title: 'Reading', body: '', pageId: 'reading' })
+  h.run({ type: 'make-link-pages', parentPageId: 'reading', items: [{ url: 'https://example.com/c', pageId: 'lp' }] })
+  h.run({ type: 'create-template', title: 'Notes on it', pageId: 'tpl' })
+  h.run({ type: 'set-template-target', pageId: 'tpl', target: 'lp' })
+  h.run({ type: 'apply-link-preview', pageId: 'lp', url: 'https://example.com/c', title: 'C post', description: 'Its excerpt.' })
+  assert.equal(h.page('lp').title, 'C post')
+  assert.equal(words(nodesOf(h.page('lp')))[0]![1], 'Its excerpt.')
+})

@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { AccountItem } from './account-item'
 import { useNavigate } from '@tanstack/react-router'
 import { getAccount } from '../server/functions'
 import { saveKeptDrafts } from './draft-recovery'
@@ -59,28 +60,27 @@ export function AccountRow({ className }: { className: string }) {
     }
   }
   const retry = <button type="button" className="link retry" onClick={() => void exportAll()}>Try again</button>
-  const exportLink = exporting === 'failed' ? <>Couldn’t export · {retry}</>
-    : exporting === 'unsaved' ? <>Not exported · latest text not saved yet · {retry}</>
+  const exportLink = exporting === 'failed' ? <><span className="account-text">Couldn’t export · </span>{retry}</>
+    : exporting === 'unsaved' ? <><span className="account-text">Not exported · latest text not saved yet · </span>{retry}</>
     : <button type="button" className="link" disabled={exporting === 'busy'} onClick={() => void exportAll()}>{exporting === 'busy' ? 'Exporting…' : 'Export'}</button>
   return (
     <div className={`account-row ${className}`}>
       <p>
-        {email && <>{email} · </>}
+        {email && <AccountItem><span className="account-text account-email">{email}</span></AccountItem>}
         {email && account.timezone && (
-          <>
+          <AccountItem>
             <select className="account-zone" aria-label="Time zone" value={account.timezone} onChange={e => void pickZone(e.target.value)}>
               {(account.timezones.includes(account.timezone) ? account.timezones : [account.timezone, ...account.timezones]).map(z => <option key={z} value={z}>{z.replace(/_/g, ' ')}</option>)}
             </select>
-            {' · '}
-          </>
+          </AccountItem>
         )}
         {/* B70: Templates, between the time zone and Export (templates-states §1). */}
-        <button type="button" className="link" onClick={() => void navigate({ to: '/pages', search: { view: 'templates' } })}>Templates</button>{' · '}
-        {exportLink}
-        <Reminders prefix=" · " />
-        <HomeScreenHint prefix=" · " />
-        {email && <> · <button type="button" className="link" onClick={() => void signOut()}>Sign out</button></>}
-        {email && !deleting && <> · <button type="button" className="link" onClick={() => setDeleting(true)}>Delete account</button></>}
+        <AccountItem><button type="button" className="link" onClick={() => void navigate({ to: '/pages', search: { view: 'templates' } })}>Templates</button></AccountItem>
+        <AccountItem>{exportLink}</AccountItem>
+        <Reminders />
+        <HomeScreenHint />
+        {email && <AccountItem><button type="button" className="link" onClick={() => void signOut()}>Sign out</button></AccountItem>}
+        {email && !deleting && <AccountItem><button type="button" className="link" onClick={() => setDeleting(true)}>Delete account</button></AccountItem>}
       </p>
       {email && deleting && <DeleteAccount onCancel={() => setDeleting(false)} />}
     </div>

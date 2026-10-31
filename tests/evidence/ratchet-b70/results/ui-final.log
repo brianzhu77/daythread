@@ -1,0 +1,10 @@
+PASS chromium template edit/reload and Default for None/Day pages
+CUT CHECKBOX [
+  { label: 'New task', disabled: false },
+  { label: 'New task', disabled: false },
+  { label: 'New task', disabled: false },
+  { label: 'New task', disabled: false },
+  { label: 'New task', disabled: false },
+  { label: 'New task', disabled: false }
+]
+PASS webkit template edit/reload and Default for None/Day pages

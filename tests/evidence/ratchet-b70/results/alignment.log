@@ -1,0 +1,243 @@
+ok      1280 /day/2026-10-29   picker dot under day 29 · +0.0px from centre, below the digits, 3.0px
+ok      1280 /day/2026-10-29   picker dot under day 30 · +0.0px from centre, below the digits, 3.0px
+ok      1280 /day/2026-10-29   picker dot contrast on day 29 (selected) · 16.3:1 against its cell
+ok      1280 /day/2026-10-29   picker dot contrast on day 30 (today) · 12.1:1 against its cell
+ok      1280 /day/2026-10-29   heading text x: "TODO" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-29   heading text x: "Events" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-29   heading text x: "Good Stuffs" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-29   heading text x: "Notes" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-29   bullet text x: "Review cReview chromiumh" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-29   heading handle on first line: "TODO" · +1.0px
+ok      1280 /day/2026-10-29   bullet dot on first line: "Review cReview chromiumh" · +0.4px
+ok      1280 /day/2026-10-29   bullet handle on first line: "Review cReview chromiumh" · +0.4px
+ok      1280 /day/2026-10-30   picker dot under day 29 · +0.0px from centre, below the digits, 3.0px
+ok      1280 /day/2026-10-30   picker dot under day 30 · +0.0px from centre, below the digits, 3.0px
+ok      1280 /day/2026-10-30   picker dot contrast on day 29 (plain) · 3.3:1 against its cell
+ok      1280 /day/2026-10-30   picker dot contrast on day 30 (selected) · 16.3:1 against its cell
+ok      1280 /day/2026-10-30   heading text x: "TODO" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-30   draft task text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-30   heading text x: "Events" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-30   bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-30   heading text x: "Good Stuffs" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-30   bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-30   heading text x: "Notes" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-10-30   bullet text x: "Fixture line today" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-30   bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-10-30   heading handle on first line: "TODO" · +1.0px
+ok      1280 /day/2026-10-30   draft task checkbox on first line: "(empty)" · +0.0px
+ok      1280 /day/2026-10-30   draft task handle on first line: "(empty)" · +0.4px
+ok      1280 /day/2026-10-30   bullet dot on first line: "(empty)" · +0.4px
+ok      1280 /day/2026-10-30   bullet handle on first line: "(empty)" · -0.3px
+ok      1280 /day/2026-10-30   bullet dot on first line: "(empty)" · -0.3px
+ok      1280 /day/2026-10-30   bullet dot on first line: "Fixture line today" · +0.1px
+ok      1280 /day/2026-10-30   bullet dot on first line: "(empty)" · +0.1px
+ok      1280 /day/2026-12-31   picker dot under day 31 · +0.0px from centre, below the digits, 3.0px
+ok      1280 /day/2026-12-31   picker dot contrast on day 31 (selected) · 16.3:1 against its cell
+ok      1280 /day/2026-12-31   line link height within the line box: "Fixture parent · Dec 31" · 20.0px in a 24.0px line
+ok      1280 /day/2026-12-31   line link text baseline on the line's: "Fixture parent · Dec 31" · +0.0px
+ok      1280 /day/2026-12-31   heading text x: "TODO" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-12-31   open task text x: "Fixture open to-do" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   done task text x: "Fixture done to-do" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   cancelled task text x: "Fixture cancelled to-do" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   open task text x: "Fixture parent to-do" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   open task checkbox x: "Fixture child to-do" · x=465.0, expected 465.0 (parent's text), off +0.0
+ok      1280 /day/2026-12-31   open task checkbox x: "Fixture grandchild to-do" · x=496.0, expected 496.0 (parent's text), off +0.0
+ok      1280 /day/2026-12-31   nested bullet text x: "Fixture note under a to-" · x=489.0, expected 489.0 (parent 465.0 + 24), off +0.0
+ok      1280 /day/2026-12-31   heading text x: "Events" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-12-31   bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   heading text x: "Good Stuffs" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-12-31   link card text x: "example.com/fixture-link" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   heading text x: "Notes" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /day/2026-12-31   bullet text x: "Fixture parent" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   nested bullet text x: "Fixture nested child" · x=489.0, expected 489.0 (parent 465.0 + 24), off +0.0
+ok      1280 /day/2026-12-31   nested bullet text x: "Fixture level 3" · x=513.0, expected 513.0 (parent 489.0 + 24), off +0.0
+ok      1280 /day/2026-12-31   nested bullet text x: "(empty)" · x=489.0, expected 489.0 (parent 465.0 + 24), off +0.0
+ok      1280 /day/2026-12-31   bullet text x: "Fixture list with a to-d" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   open task checkbox x: "Fixture to-do under a bu" · x=465.0, expected 465.0 (parent's text), off +0.0
+ok      1280 /day/2026-12-31   page card with preview text x: "Fixture page with words" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   page card without preview text x: "Fixture empty page" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   page card without preview text x: "Fixture page with a very" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   bullet text x: "See " · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /day/2026-12-31   page card with preview title not clipped: "Fixture page with words" · wraps
+ok      1280 /day/2026-12-31   page card without preview title not clipped: "Fixture empty page" · wraps
+ok      1280 /day/2026-12-31   page card without preview title not clipped: "Fixture page with a very" · wraps
+ok      1280 /day/2026-12-31   heading handle on first line: "TODO" · +1.0px
+ok      1280 /day/2026-12-31   open task checkbox on first line: "Fixture open to-do" · +0.0px
+ok      1280 /day/2026-12-31   open task ⋯ button on first line: "Fixture open to-do" · +0.0px
+ok      1280 /day/2026-12-31   open task handle on first line: "Fixture open to-do" · +0.4px
+ok      1280 /day/2026-12-31   done task checkbox on first line: "Fixture done to-do" · +0.0px
+ok      1280 /day/2026-12-31   done task handle on first line: "Fixture done to-do" · +0.4px
+ok      1280 /day/2026-12-31   cancelled task checkbox on first line: "Fixture cancelled to-do" · +0.0px
+ok      1280 /day/2026-12-31   cancelled task ⋯ button on first line: "Fixture cancelled to-do" · +0.0px
+ok      1280 /day/2026-12-31   cancelled task Cancelled label on first line: "Fixture cancelled to-do" · +0.0px
+ok      1280 /day/2026-12-31   cancelled task handle on first line: "Fixture cancelled to-do" · +0.4px
+ok      1280 /day/2026-12-31   open task checkbox on first line: "Fixture parent to-do" · +0.0px
+ok      1280 /day/2026-12-31   open task ⋯ button on first line: "Fixture parent to-do" · +0.0px
+ok      1280 /day/2026-12-31   open task checkbox on first line: "Fixture child to-do" · +0.0px
+ok      1280 /day/2026-12-31   open task ⋯ button on first line: "Fixture child to-do" · +0.0px
+ok      1280 /day/2026-12-31   open task checkbox on first line: "Fixture grandchild to-do" · +0.0px
+ok      1280 /day/2026-12-31   open task ⋯ button on first line: "Fixture grandchild to-do" · +0.0px
+ok      1280 /day/2026-12-31   nested bullet dot on first line: "Fixture note under a to-" · +0.4px
+ok      1280 /day/2026-12-31   nested bullet handle on first line: "Fixture note under a to-" · +0.4px
+ok      1280 /day/2026-12-31   bullet dot on first line: "(empty)" · -0.3px
+ok      1280 /day/2026-12-31   bullet handle on first line: "(empty)" · -0.3px
+ok      1280 /day/2026-12-31   link card icon on first line: "example.com/fixture-link" · +0.0px
+ok      1280 /day/2026-12-31   link card handle on first line: "example.com/fixture-link" · +0.1px
+ok      1280 /day/2026-12-31   bullet dot on first line: "Fixture parent" · +0.4px
+ok      1280 /day/2026-12-31   nested bullet dot on first line: "Fixture nested child" · +0.4px
+ok      1280 /day/2026-12-31   nested bullet dot on first line: "Fixture level 3" · -0.1px
+ok      1280 /day/2026-12-31   nested bullet dot on first line: "(empty)" · +0.4px
+ok      1280 /day/2026-12-31   bullet dot on first line: "Fixture list with a to-d" · +0.4px
+ok      1280 /day/2026-12-31   open task checkbox on first line: "Fixture to-do under a bu" · +0.0px
+ok      1280 /day/2026-12-31   open task ⋯ button on first line: "Fixture to-do under a bu" · +0.0px
+ok      1280 /day/2026-12-31   page card with preview icon on first line: "Fixture page with words" · +0.0px
+ok      1280 /day/2026-12-31   page card with preview chevron on first line: "Fixture page with words" · +0.0px
+ok      1280 /day/2026-12-31   page card with preview handle on first line: "Fixture page with words" · +0.4px
+ok      1280 /day/2026-12-31   page card without preview icon on first line: "Fixture empty page" · +0.0px
+ok      1280 /day/2026-12-31   page card without preview chevron on first line: "Fixture empty page" · +0.0px
+ok      1280 /day/2026-12-31   page card without preview handle on first line: "Fixture empty page" · +0.4px
+ok      1280 /day/2026-12-31   page card without preview icon on first line: "Fixture page with a very" · +0.0px
+ok      1280 /day/2026-12-31   page card without preview chevron on first line: "Fixture page with a very" · +0.0px
+ok      1280 /day/2026-12-31   bullet dot on first line: "See " · +0.4px
+ok      1280 /day/2026-12-31   level 2 bullet marker size vs top level: "Fixture note under a to-" · 6.0px vs 6.0px
+ok      1280 /day/2026-12-31   level 2 bullet marker gap to text vs top level: "Fixture note under a to-" · 19.0px vs 19.0px
+ok      1280 /day/2026-12-31   level 2 bullet marker size vs top level: "Fixture nested child" · 6.0px vs 6.0px
+ok      1280 /day/2026-12-31   level 2 bullet marker gap to text vs top level: "Fixture nested child" · 19.0px vs 19.0px
+ok      1280 /day/2026-12-31   level 3 bullet marker size vs top level: "Fixture level 3" · 5.0px vs 6.0px
+ok      1280 /day/2026-12-31   level 3 bullet marker gap to text vs top level: "Fixture level 3" · 19.0px vs 19.0px
+ok      1280 /day/2026-12-31   level 2 bullet marker size vs top level: "(empty)" · 6.0px vs 6.0px
+ok      1280 /day/2026-12-31   level 2 bullet marker gap to text vs top level: "(empty)" · 19.0px vs 19.0px
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 heading text x: "TODO" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 heading text x: "Events" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 heading text x: "Good Stuffs" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 bullet text x: "(empty)" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 heading text x: "Notes" · x=420.0, expected 420.0 (editor edge), off +0.0
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 bullet text x: "Review cReview cReview w" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task text x: "Preserve real task" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task text x: "Preserve real task" · x=465.0, expected 465.0 (row column), off +0.0
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 heading handle on first line: "TODO" · +1.0px
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task checkbox on first line: "(empty)" · +0.0px
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task handle on first line: "(empty)" · +0.4px
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 bullet dot on first line: "(empty)" · -0.3px
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 bullet handle on first line: "(empty)" · -0.3px
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 bullet dot on first line: "(empty)" · +0.1px
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 bullet dot on first line: "Review cReview cReview w" · +0.4px
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task checkbox on first line: "Preserve real task" · +0.0px
+ok      1280 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task checkbox on first line: "Preserve real task" · +0.0px
+ok      390 /day/2026-10-29    picker dot under day 29 · +0.0px from centre, below the digits, 3.0px
+ok      390 /day/2026-10-29    picker dot under day 30 · +0.0px from centre, below the digits, 3.0px
+ok      390 /day/2026-10-29    picker dot contrast on day 29 (selected) · 16.3:1 against its cell
+ok      390 /day/2026-10-29    picker dot contrast on day 30 (today) · 12.1:1 against its cell
+ok      390 /day/2026-10-29    heading text x: "TODO" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-29    heading text x: "Events" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-29    heading text x: "Good Stuffs" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-29    heading text x: "Notes" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-29    bullet text x: "Review cReview chromiumh" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-29    bullet dot on first line: "Review cReview chromiumh" · +0.4px
+ok      390 /day/2026-10-30    picker dot under day 29 · +0.0px from centre, below the digits, 3.0px
+ok      390 /day/2026-10-30    picker dot under day 30 · +0.0px from centre, below the digits, 3.0px
+ok      390 /day/2026-10-30    picker dot contrast on day 29 (plain) · 3.3:1 against its cell
+ok      390 /day/2026-10-30    picker dot contrast on day 30 (selected) · 16.3:1 against its cell
+ok      390 /day/2026-10-30    heading text x: "TODO" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-30    draft task text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-30    heading text x: "Events" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-30    bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-30    heading text x: "Good Stuffs" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-30    bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-30    heading text x: "Notes" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-10-30    bullet text x: "Fixture line today" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-30    bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-10-30    draft task checkbox on first line: "(empty)" · +0.0px
+ok      390 /day/2026-10-30    bullet dot on first line: "(empty)" · +0.4px
+ok      390 /day/2026-10-30    bullet dot on first line: "(empty)" · -0.3px
+ok      390 /day/2026-10-30    bullet dot on first line: "Fixture line today" · +0.1px
+ok      390 /day/2026-10-30    bullet dot on first line: "(empty)" · +0.1px
+ok      390 /day/2026-12-31    picker dot under day 31 · +0.0px from centre, below the digits, 3.0px
+ok      390 /day/2026-12-31    picker dot contrast on day 31 (selected) · 16.3:1 against its cell
+ok      390 /day/2026-12-31    line link height within the line box: "Fixture parent · Dec 31" · 20.0px in a 24.0px line
+ok      390 /day/2026-12-31    line link text baseline on the line's: "Fixture parent · Dec 31" · +0.0px
+ok      390 /day/2026-12-31    heading text x: "TODO" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-12-31    open task text x: "Fixture open to-do" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    done task text x: "Fixture done to-do" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    cancelled task text x: "Fixture cancelled to-do" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    open task text x: "Fixture parent to-do" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    open task checkbox x: "Fixture child to-do" · x=65.0, expected 65.0 (parent's text), off +0.0
+ok      390 /day/2026-12-31    open task checkbox x: "Fixture grandchild to-do" · x=96.0, expected 96.0 (parent's text), off +0.0
+ok      390 /day/2026-12-31    nested bullet text x: "Fixture note under a to-" · x=89.0, expected 89.0 (parent 65.0 + 24), off +0.0
+ok      390 /day/2026-12-31    heading text x: "Events" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-12-31    bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    heading text x: "Good Stuffs" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-12-31    link card text x: "example.com/fixture-link" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    heading text x: "Notes" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /day/2026-12-31    bullet text x: "Fixture parent" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    nested bullet text x: "Fixture nested child" · x=89.0, expected 89.0 (parent 65.0 + 24), off +0.0
+ok      390 /day/2026-12-31    nested bullet text x: "Fixture level 3" · x=113.0, expected 113.0 (parent 89.0 + 24), off +0.0
+ok      390 /day/2026-12-31    nested bullet text x: "(empty)" · x=89.0, expected 89.0 (parent 65.0 + 24), off +0.0
+ok      390 /day/2026-12-31    bullet text x: "Fixture list with a to-d" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    open task checkbox x: "Fixture to-do under a bu" · x=65.0, expected 65.0 (parent's text), off +0.0
+ok      390 /day/2026-12-31    page card with preview text x: "Fixture page with words" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    page card without preview text x: "Fixture empty page" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    page card without preview text x: "Fixture page with a very" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    bullet text x: "See " · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /day/2026-12-31    page card with preview title not clipped: "Fixture page with words" · wraps
+ok      390 /day/2026-12-31    page card without preview title not clipped: "Fixture empty page" · wraps
+ok      390 /day/2026-12-31    page card without preview title not clipped: "Fixture page with a very" · wraps
+ok      390 /day/2026-12-31    open task checkbox on first line: "Fixture open to-do" · +0.0px
+ok      390 /day/2026-12-31    open task ⋯ button on first line: "Fixture open to-do" · +0.0px
+ok      390 /day/2026-12-31    done task checkbox on first line: "Fixture done to-do" · +0.0px
+ok      390 /day/2026-12-31    cancelled task checkbox on first line: "Fixture cancelled to-do" · +0.0px
+ok      390 /day/2026-12-31    cancelled task ⋯ button on first line: "Fixture cancelled to-do" · +0.0px
+ok      390 /day/2026-12-31    cancelled task Cancelled label on first line: "Fixture cancelled to-do" · +0.0px
+ok      390 /day/2026-12-31    open task checkbox on first line: "Fixture parent to-do" · +0.0px
+ok      390 /day/2026-12-31    open task ⋯ button on first line: "Fixture parent to-do" · +0.0px
+ok      390 /day/2026-12-31    open task checkbox on first line: "Fixture child to-do" · +0.0px
+ok      390 /day/2026-12-31    open task ⋯ button on first line: "Fixture child to-do" · +0.0px
+ok      390 /day/2026-12-31    open task checkbox on first line: "Fixture grandchild to-do" · +0.0px
+ok      390 /day/2026-12-31    open task ⋯ button on first line: "Fixture grandchild to-do" · +0.0px
+ok      390 /day/2026-12-31    nested bullet dot on first line: "Fixture note under a to-" · +0.4px
+ok      390 /day/2026-12-31    bullet dot on first line: "(empty)" · -0.3px
+ok      390 /day/2026-12-31    link card icon on first line: "example.com/fixture-link" · +0.0px
+ok      390 /day/2026-12-31    bullet dot on first line: "Fixture parent" · +0.4px
+ok      390 /day/2026-12-31    nested bullet dot on first line: "Fixture nested child" · +0.4px
+ok      390 /day/2026-12-31    nested bullet dot on first line: "Fixture level 3" · -0.1px
+ok      390 /day/2026-12-31    nested bullet dot on first line: "(empty)" · +0.4px
+ok      390 /day/2026-12-31    bullet dot on first line: "Fixture list with a to-d" · +0.4px
+ok      390 /day/2026-12-31    open task checkbox on first line: "Fixture to-do under a bu" · +0.0px
+ok      390 /day/2026-12-31    open task ⋯ button on first line: "Fixture to-do under a bu" · +0.0px
+ok      390 /day/2026-12-31    page card with preview icon on first line: "Fixture page with words" · +0.0px
+ok      390 /day/2026-12-31    page card with preview chevron on first line: "Fixture page with words" · +0.0px
+ok      390 /day/2026-12-31    page card without preview icon on first line: "Fixture empty page" · +0.0px
+ok      390 /day/2026-12-31    page card without preview chevron on first line: "Fixture empty page" · +0.0px
+ok      390 /day/2026-12-31    page card without preview icon on first line: "Fixture page with a very" · +0.0px
+ok      390 /day/2026-12-31    page card without preview chevron on first line: "Fixture page with a very" · +0.0px
+ok      390 /day/2026-12-31    bullet dot on first line: "See " · +0.4px
+ok      390 /day/2026-12-31    level 2 bullet marker size vs top level: "Fixture note under a to-" · 6.0px vs 6.0px
+ok      390 /day/2026-12-31    level 2 bullet marker gap to text vs top level: "Fixture note under a to-" · 19.0px vs 19.0px
+ok      390 /day/2026-12-31    level 2 bullet marker size vs top level: "Fixture nested child" · 6.0px vs 6.0px
+ok      390 /day/2026-12-31    level 2 bullet marker gap to text vs top level: "Fixture nested child" · 19.0px vs 19.0px
+ok      390 /day/2026-12-31    level 3 bullet marker size vs top level: "Fixture level 3" · 5.0px vs 6.0px
+ok      390 /day/2026-12-31    level 3 bullet marker gap to text vs top level: "Fixture level 3" · 19.0px vs 19.0px
+ok      390 /day/2026-12-31    level 2 bullet marker size vs top level: "(empty)" · 6.0px vs 6.0px
+ok      390 /day/2026-12-31    level 2 bullet marker gap to text vs top level: "(empty)" · 19.0px vs 19.0px
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 heading text x: "TODO" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 heading text x: "Events" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 heading text x: "Good Stuffs" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 bullet text x: "(empty)" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 heading text x: "Notes" · x=20.0, expected 20.0 (editor edge), off +0.0
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 bullet text x: "Review cReview cReview w" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task text x: "Preserve real task" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task text x: "Preserve real task" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task text x: "Preserve real task" · x=65.0, expected 65.0 (row column), off +0.0
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task checkbox on first line: "(empty)" · +0.0px
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 bullet dot on first line: "(empty)" · -0.3px
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 bullet dot on first line: "(empty)" · +0.1px
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 bullet dot on first line: "Review cReview cReview w" · +0.4px
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task checkbox on first line: "Preserve real task" · +0.0px
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task checkbox on first line: "Preserve real task" · +0.0px
+ok      390 /pages?page=8f5f0f4e-70df-4370-97d0-5006dc4518d3 draft task checkbox on first line: "Preserve real task" · +0.0px
+
+241 passed, 0 failed, 0 missing

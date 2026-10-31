@@ -1,0 +1,12 @@
+PASS account row chromium 1280 [{"text":"Templates","left":20,"right":82.28125,"cy":528.75},{"text":"Export","left":93.234375,"right":132.765625,"cy":528.75}]
+PASS chromium 1280 template title/meta left column, no clipping, account links present {"title":{"left":420,"right":1120,"top":54,"bottom":88},"notes":[{"left":420,"right":1120,"top":102,"bottom":122},{"left":420,"right":1120,"top":136,"bottom":156}],"account":{"left":10,"right":249,"top":506.75,"bottom":550.75},"links":[{"text":"Templates","left":20,"right":82.28125,"top":506.75,"bottom":550.75},{"text":"Export","left":93.234375,"right":132.765625,"top":506.75,"bottom":550.75}],"overflow":false,"viewport":1280}
+PASS chromium 1280 New page opens untitled with title focus
+PASS account row chromium 390 [{"text":"Templates","left":20,"right":82.28125,"cy":209.484375},{"text":"Export","left":93.234375,"right":132.765625,"cy":209.484375}]
+PASS chromium 390 template title/meta left column, no clipping, account links present {"title":{"left":20,"right":370,"top":54,"bottom":88},"notes":[{"left":20,"right":370,"top":102,"bottom":122},{"left":20,"right":370,"top":136,"bottom":176}],"account":null,"links":[],"overflow":false,"viewport":390}
+PASS chromium 390 New page opens untitled with title focus
+PASS account row webkit 1280 [{"text":"Templates","left":20,"right":82.28125,"cy":557},{"text":"Export","left":93.21875,"right":132.75,"cy":557}]
+PASS webkit 1280 template title/meta left column, no clipping, account links present {"title":{"left":420,"right":1120,"top":54,"bottom":88},"notes":[{"left":420,"right":1120,"top":102,"bottom":122},{"left":420,"right":1120,"top":136,"bottom":156}],"account":{"left":10,"right":249,"top":535,"bottom":579},"links":[{"text":"Templates","left":20,"right":82.28125,"top":535,"bottom":579},{"text":"Export","left":93.21875,"right":132.75,"top":535,"bottom":579}],"overflow":false,"viewport":1280}
+PASS webkit 1280 New page opens untitled with title focus
+PASS account row webkit 390 [{"text":"Templates","left":20,"right":82.28125,"cy":209},{"text":"Export","left":93.21875,"right":132.75,"cy":209}]
+PASS webkit 390 template title/meta left column, no clipping, account links present {"title":{"left":20,"right":370,"top":54,"bottom":88},"notes":[{"left":20,"right":370,"top":102,"bottom":122},{"left":20,"right":370,"top":136,"bottom":176}],"account":null,"links":[],"overflow":false,"viewport":390}
+PASS webkit 390 New page opens untitled with title focus
