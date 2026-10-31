@@ -1,0 +1,4 @@
+{
+  before: { scrollWidth: 452, width: 239, height: 64.140625 },
+  after: { scrollWidth: 325, width: 239, height: 64.140625 }
+}
