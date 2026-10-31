@@ -1,4 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router'
+import { usePreview } from './preview'
 import { rememberOpened, SidebarTree, useToday } from './page-tree'
 import { useEffect } from 'react'
 import { CalendarIcon, PagesIcon, TagsIcon, TasksIcon, TodayIcon } from './icons'
@@ -28,6 +29,7 @@ export function Navigation() {
   const keyboardUp = useKeyboardTop() !== null
   const openPageId = useRouterState({ select: s => (s.location.search as { page?: string }).page })
   const trashView = useRouterState({ select: s => (s.location.search as { view?: string }).view === 'trash' })
+  const preview = usePreview()
   const today = useToday()
   // B40: the tab where he'd find a page whose text isn't saved yet carries a dot (Today, Calendar for an earlier day, Pages).
   const unsavedTabs = new Set(useKeptDrafts().pages.map(p => p.tab))
@@ -38,6 +40,7 @@ export function Navigation() {
         <Link to="/" className="brand">
           <Mark size={18} />
           Daythread
+          {preview && <span className="brand-preview">Preview</span>}
         </Link>
         <nav className="sidebar-nav" aria-label="Main">
           {/* Search heads the sidebar (craft-v1 §3.2; docs/design/search-states.md): one row, the shortcut as a hint. */}

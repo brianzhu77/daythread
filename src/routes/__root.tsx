@@ -2,10 +2,21 @@ import { createRootRoute, HeadContent, Outlet, Scripts, useRouterState } from '@
 import { Analytics } from '@vercel/analytics/react'
 import { AppShell } from '../components/app-shell'
 import { splashLinks } from '../components/splash'
+import { getAppInfo } from '../server/functions'
+import { previewStorageKey } from '../components/preview'
 import '../styles.css'
 
+/** The last answer this browser saw (`usePreview` keeps it), for a boot whose call fails. */
+function recallPreview() {
+  try { return { preview: typeof window !== 'undefined' && localStorage.getItem(previewStorageKey) === '1' } } catch { return { preview: false } }
+}
+
 export const Route = createRootRoute({
-  head: () => ({
+  // Read once, on the server for the first page. The browser remembers the answer, so an app that boots offline or
+  // whose call fails keeps the frame it last had: a preview never passes for production (Ratchet 247d661c).
+  loader: async () => getAppInfo().catch(recallPreview),
+  staleTime: Infinity,
+  head: ({ loaderData }) => ({
     meta: [
       { charSet: 'utf-8' },
       // viewport-fit=cover lets the capture bar sit above the iPhone home indicator.
@@ -14,16 +25,16 @@ export const Route = createRootRoute({
       { name: 'theme-color', content: '#ffffff', media: '(prefers-color-scheme: light)' },
       { name: 'theme-color', content: '#111111', media: '(prefers-color-scheme: dark)' },
       { name: 'apple-mobile-web-app-capable', content: 'yes' },
-      { name: 'apple-mobile-web-app-title', content: 'Daythread' },
+      { name: 'apple-mobile-web-app-title', content: loaderData?.preview ? 'DT Preview' : 'Daythread' },
       // B52b: in the Home Screen app the page reaches under the status bar and env(safe-area-inset-top) is its height,
       // so B52's strip covers what scrolls there. iOS 26 keeps the clock dark over our white (Roadbuster 3ddfd8f4).
       { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
-      { title: 'Daythread' },
+      { title: loaderData?.preview ? 'Daythread Preview' : 'Daythread' },
     ],
     // B52b: the Home Screen app is the whole site, wherever its icon was added from (without this, an icon added on a
     // day page showed a browser bar on Tasks and the review).
     links: [
-      { rel: 'manifest', href: '/manifest.webmanifest' },
+      { rel: 'manifest', href: loaderData?.preview ? '/manifest-preview.webmanifest' : '/manifest.webmanifest' },
       // The mark (docs/design/system-v2.md §6): the SVG favicon follows the tab's colour scheme; iOS takes the PNG tile.
       { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
       { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
