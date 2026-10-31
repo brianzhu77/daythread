@@ -351,10 +351,11 @@ const monthName = (ym: string, today: LocalDate) => {
 }
 
 /**
- * Layout §1: Days (Today, this month's days with content, earlier months collapsed), then the Pages tree, then
- * "＋ New page". Chevron opens and closes; the title opens the page. `+` and `⋯` show on hover or keyboard focus.
+ * Layout §1: Days (Today, this month's days with content, earlier months collapsed), then the Pages tree under a "Pages"
+ * label with its own + (Notion's section +, always shown: Brian never found the old "＋ New page" row at the bottom).
+ * Chevron opens and closes; the title opens the page. A row's `+` and `⋯` show on hover or keyboard focus.
  */
-export function SidebarTree({ workspace, activeId, today, newPageRow }: { workspace: Workspace; activeId: string | null; today: LocalDate; newPageRow: ReactNode }) {
+export function SidebarTree({ workspace, activeId, today, footer }: { workspace: Workspace; activeId: string | null; today: LocalDate; footer: ReactNode }) {
   const activeChain = activeId ? [...pageAncestors(workspace, activeId).map(p => p.id)] : []
   const activeMonth = workspace.pages.find(p => p.id === activeId)?.date?.slice(0, 7)
   const { expanded, toggle } = useExpanded(activeMonth ? [...activeChain, `month:${activeMonth}`] : activeChain)
@@ -367,9 +368,10 @@ export function SidebarTree({ workspace, activeId, today, newPageRow }: { worksp
     listRef.current?.querySelector('.tree-row[aria-current="page"]')?.scrollIntoView({ block: 'nearest' })
   }, [activeId, expanded])
 
-  const newSubpage = async (parent: Page) => {
+  // Both +s make an untitled page and open it with the caret in its title (Notion's way), at the top level or inside one.
+  const newPage = async (parent: Page | null) => {
     const pageId = crypto.randomUUID()
-    const receipt = await run({ type: 'create-document', title: '', body: '', pageId, parentId: parent.id })
+    const receipt = await run({ type: 'create-document', title: '', body: '', pageId, ...(parent ? { parentId: parent.id } : {}) })
     if (receipt) open(`/pages?page=${encodeURIComponent(pageId)}&focus=title`)
   }
 
@@ -387,7 +389,7 @@ export function SidebarTree({ workspace, activeId, today, newPageRow }: { worksp
             : <span className="disclose none" aria-hidden="true" />}
           <PageLink className="tree-title" href={pageHref(p)} title={pageLabel(p, today)}>{!day && <PageKindIcon url={p.url} />}<span>{pageLabel(p, today)}</span></PageLink>
           <span className="tree-acts">
-            <button type="button" aria-label={`New subpage in ${pageLabel(p, today)}`} onClick={() => void newSubpage(p)}>+</button>
+            <button type="button" aria-label={`New subpage in ${pageLabel(p, today)}`} onClick={() => void newPage(p)}>+</button>
             {!day && <RowMenu label={`Actions for ${pageLabel(p, today)}`} triggerClass="tree-more"
               groups={[{ items: [{ label: 'Move to…', onSelect: () => setMoving(p) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void deletePage(p, activeId) }] }]} />}
           </span>
@@ -416,38 +418,15 @@ export function SidebarTree({ workspace, activeId, today, newPageRow }: { worksp
           )
         })}
       </ul>
-      <p className="side-label">Pages</p>
-      <ul className="plain tree" role="tree" aria-label="Pages">{roots.map(p => row(p, 0))}</ul>
-      {/* Pages made in day pages sit under their day above; with no top-level pages, say where they are. */}
-      {roots.length === 0 && <DayPagesHint workspace={workspace} />}
-      {newPageRow}
+      <div className="side-label-row">
+        <p className="side-label">Pages</p>
+        <button type="button" className="side-label-add" aria-label="New page" title="New page" onClick={() => void newPage(null)}>+</button>
+      </div>
+      {/* Only top-level pages (Brian 992f14f8, Notion's model): pages made in a day stay under that day above. */}
+      {roots.length > 0 ? <ul className="plain tree" role="tree" aria-label="Pages">{roots.map(p => row(p, 0))}</ul> : <p className="side-row small side-hint">No pages yet</p>}
+      {footer}
       {moving && <MovePageDialog page={moving} onClose={() => setMoving(null)} />}
     </div>
   )
 }
 
-/** B20 (Jazz): name the pages that live under days, newest day first, each with its day; the rest go to Pages. */
-const DAY_PAGES_SHOWN = 3
-
-function DayPagesHint({ workspace }: { workspace: Workspace }) {
-  const today = useToday()
-  const all = pagesInDays(workspace).flatMap(g => g.pages.map(page => ({ page, day: g.day })))
-  if (all.length === 0) return null
-  const shown = all.slice(0, DAY_PAGES_SHOWN), more = all.length - shown.length
-  return (
-    <ul className="plain tree" aria-label="Pages in your days">
-      {shown.map(({ page, day }) => (
-        <li key={page.id}>
-          <div className="tree-row">
-            <span className="disclose none" aria-hidden="true" />
-            <PageLink className="tree-title" href={pageHref(page)} title={`${pageLabel(page, today)} · ${pageLabel(day, today)}`}>
-              <PageKindIcon url={page.url} /><span>{pageLabel(page, today)}</span>
-            </PageLink>
-            <span className="tree-day">{day.date === today ? 'Today' : fromIso(day.date!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
-          </div>
-        </li>
-      ))}
-      {more > 0 && <li><PageLink className="side-row small side-hint tree-more-link" href="/pages">{more} more in your days</PageLink></li>}
-    </ul>
-  )
-}
