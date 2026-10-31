@@ -1,0 +1,30 @@
+(node:35211) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:35219) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium compute typing retained; commands save→draft
+(node:35293) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium commit typing retained; commands draft→save
+(node:35342) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+node:internal/process/promises:394
+    triggerUncaughtException(err, true /* fromPromise */);
+    ^
+
+AssertionError [ERR_ASSERTION]: owner replacement must affect response
+    at file:///Users/dogrod/Developer/daythread-ratchet-draft/tests/evidence/ratchet-draft-queue/race.mjs:61:16
+    at async Promise.all (index 1)
+    at async RouteHandler._handleInternal (/Users/dogrod/Developer/daythread/node_modules/playwright-core/lib/client/network.js:693:23)
+    at async RouteHandler._handleImpl (/Users/dogrod/Developer/daythread/node_modules/playwright-core/lib/client/network.js:662:14)
+    at async RouteHandler.handle (/Users/dogrod/Developer/daythread/node_modules/playwright-core/lib/client/network.js:656:12)
+    at async Page._onRoute (/Users/dogrod/Developer/daythread/node_modules/playwright-core/lib/client/page.js:146:23) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: '{"t":10,"i":0,"p":{"k":["result"],"v":[{"t":10,"i":1,"p":{"k":["setDraft","owner","modelOn"],"v":[{"t":1,"s":"{\\\\\\"type\\\\\\":\\\\\\"set-draft\\\\\\",\\\\\\"pageId\\\\\\":\\\\\\"day:2026-10-31\\\\\\",\\\\\\"status\\\\\\":\\\\\\"failed\\\\\\",\\\\\\"items\\\\\\":[],\\\\\\"moreOpen\\\\\\":[\\\\\\"editor-task:old-task\\\\\\"],\\\\\\"allowedTaskIds\\\\\\":[\\\\\\"editor-task:old-task\\\\\\"]}"},{"t":1,"s":"local"},{"t":2,"s":3}]},"o":0}]},"o":0}',
+  expected: '{"t":10,"i":0,"p":{"k":["result"],"v":[{"t":10,"i":1,"p":{"k":["setDraft","owner","modelOn"],"v":[{"t":1,"s":"{\\\\\\"type\\\\\\":\\\\\\"set-draft\\\\\\",\\\\\\"pageId\\\\\\":\\\\\\"day:2026-10-31\\\\\\",\\\\\\"status\\\\\\":\\\\\\"failed\\\\\\",\\\\\\"items\\\\\\":[],\\\\\\"moreOpen\\\\\\":[\\\\\\"editor-task:old-task\\\\\\"],\\\\\\"allowedTaskIds\\\\\\":[\\\\\\"editor-task:old-task\\\\\\"]}"},{"t":1,"s":"local"},{"t":2,"s":3}]},"o":0}]},"o":0}',
+  operator: 'notStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

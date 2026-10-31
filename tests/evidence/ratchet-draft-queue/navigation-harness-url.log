@@ -1,0 +1,17 @@
+(node:36145) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:36163) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.waitForURL: Timeout 30000ms exceeded.
+=========================== logs ===========================
+waiting for navigation to "**/tasks" until "load"
+============================================================
+    at /Users/dogrod/Developer/daythread-ratchet-draft/tests/evidence/ratchet-draft-queue/race.mjs:99:15 {
+  name: 'TimeoutError'
+}
+
+Node.js v24.14.1
