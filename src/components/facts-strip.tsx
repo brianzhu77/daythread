@@ -21,8 +21,6 @@ export function FactsStrip({ view, workspace, date, today }: Props) {
   const isToday = date === today
   const pageTaskIds = new Set(view.page ? flatNodes(pageNodes(view.page)).map(rowTaskId).filter(Boolean) : [])
   const dueSoon = view.attention.filter(t => !pageTaskIds.has(t.id))
-  // Tasks already placed on this day are on the page; the pool lists the rest.
-  const stillOpen = view.openPool.filter(t => plannedOn(workspace, t.id) !== date)
 
   return (
     <div className="facts" aria-label="Facts for this day">
@@ -40,23 +38,15 @@ export function FactsStrip({ view, workspace, date, today }: Props) {
         </div>
       )}
 
-      {/* Shown only when there is something to open: a link announcing nothing is noise. */}
-      {isToday && (stillOpen.length > 0 || view.paused.length > 0) && (
+      {/* B76 (Lead e1158869, Bumblebee efb90b83): no "N other open tasks" line. This morning's open to-dos are in the
+          day's draft (bands or "N more open"); the rest is the Tasks tab. Shown only when there is something to open. */}
+      {isToday && view.paused.length > 0 && (
         <div className="fact-pair">
-          {stillOpen.length > 0 && (
-            <Disclosure summary={`${stillOpen.length} other open task${stillOpen.length === 1 ? '' : 's'}`}>
-              {stillOpen.map(t => (
-                <PoolRow key={t.id} task={t} today={today} />
-              ))}
-            </Disclosure>
-          )}
-          {view.paused.length > 0 && (
-            <Disclosure summary={`Not today · ${view.paused.length}`}>
-              {view.paused.map(t => (
-                <PoolRow key={t.id} task={t} today={today} paused />
-              ))}
-            </Disclosure>
-          )}
+          <Disclosure summary={`Not today · ${view.paused.length}`}>
+            {view.paused.map(t => (
+              <PoolRow key={t.id} task={t} today={today} paused />
+            ))}
+          </Disclosure>
         </div>
       )}
     </div>
