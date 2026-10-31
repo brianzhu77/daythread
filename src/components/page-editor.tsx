@@ -42,7 +42,7 @@ import { RowMenu } from './row-menu'
 import { openedByTurnover } from './use-screen-today'
 import { fixedOffset, seenArea } from './fixed-coords'
 import { LineRefChip } from './line-ref-chip'
-import { ChipPageDate, DateChipInPage, DateMenu, dateChipPaste, type DateMenuItem, EventRows, eventRows, eventsHeading, pickerLabel, refreshEventRows, relativeDay, rowTime, rowsFor, type RowsAnchor } from './event-rows'
+import { ChipPageDate, DateChipInPage, DateMenu, dateChipPaste, type DateMenuItem, EventRows, eventRows, eventsAnchor, pickerLabel, refreshEventRows, relativeDay, rowTime, rowsFor, type RowsAnchor } from './event-rows'
 import { dayEvents } from '../domain/chip-events'
 import { mayRead, readDate, type Reading } from '../domain/date-reading'
 import { mentionText } from '../domain/date-chip'
@@ -353,7 +353,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const rowsHost = useMemo(() => Object.assign(document.createElement('div'), { className: 'event-rows', contentEditable: 'false' }), [])
   const rows = useMemo(() => page.type === 'daily' && page.date ? rowsFor(page, dayEvents(workspace, page.date)) : [], [page, workspace])
   const rowsAnchor = useRef<RowsAnchor>(undefined)
-  rowsAnchor.current = rows.length ? { headingId: eventsHeading(pageNodes(page))?.id ?? null } : undefined
+  rowsAnchor.current = rows.length ? eventsAnchor(pageNodes(page), new Set(workspace.tasks.map(t => t.id))) : undefined
   const editor = useCreateBlockNote({ schema, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
@@ -2041,7 +2041,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     <div ref={saveLine} className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? conflictText : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
     <ChipPageDate.Provider value={page.type === 'daily' ? page.date ?? null : null}>
-    {createPortal(<EventRows rows={rows} page={page} workspace={workspace} pageEnd={!rowsAnchor.current?.headingId || !editor.getBlock(rowsAnchor.current.headingId)} />, rowsHost)}
+    {createPortal(<EventRows rows={rows} page={page} workspace={workspace} pageEnd={!rowsAnchor.current || rowsAnchor.current.labelled || (rowsAnchor.current.afterId !== null && !editor.getBlock(rowsAnchor.current.afterId))} />, rowsHost)}
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} shadCNComponents={doneInputs}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
       {!compact && !selectionLabel && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
