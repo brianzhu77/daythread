@@ -49,8 +49,14 @@ for (const [name, br, w, h] of [['chromium', chromium, 1280, 900], ['webkit', we
   await p.locator('.draft-band[data-draft-item=i1] button[aria-label^=Apply]').click(); await p.waitForTimeout(200)
   ok(await p.locator('.draft-band').count() === 2 + 1 && (await p.locator(`.continuous-editor .bn-block-outer[data-id="${ids.todo}"]`).isVisible()), `${tag} apply one: band gone, its anchor back (mock inserts nothing)`)
   await p.evaluate(() => { window.__daythreadDraft['*'].state = 'failed'; window.__daythreadDraftBump() }); await p.waitForTimeout(150)
-  ok((await p.locator('.draft-line').innerText()).replace(/\s+/g, ' ').includes('2 suggestions · Apply all · Dismiss · Couldn’t draft · Retry'), `${tag} failed line keeps the fallback bands`)
+  const segs = await p.locator('.draft-seg').evaluateAll(ss => ss.map(x => x.innerText.replace(/\s+/g, ' ').trim()))
+  ok(JSON.stringify(segs) === JSON.stringify(['2 suggestions · Apply all · Dismiss', 'Couldn’t draft · Retry']), `${tag} failed line keeps the fallback bands ${JSON.stringify(segs)}`)
+  const retryRow = await p.evaluate(() => { const seg = [...document.querySelectorAll('.draft-seg')].find(s => s.textContent.includes('Retry')); const w = seg.querySelector('.draft-warn').getBoundingClientRect(), r = [...seg.querySelectorAll('button')].at(-1).getBoundingClientRect(); return Math.abs((w.top + w.bottom) / 2 - (r.top + r.bottom) / 2) < 4 })
+  ok(retryRow, `${tag} "Couldn't draft · Retry" stays on one line`)
   await p.screenshot({ path: `${out}/${tag}-4failed.png` })
+  // No headings to anchor to (Ratchet 11e83453): bands and "more open" go to the top of the page, not nowhere.
+  await set({ state: 'ready', planningEndId: null, moreOpen: [{ taskId: 't9', title: '换护照照片', since }], items: [{ id: 'top1', kind: 'after', anchorId: '', block: { id: 'bt', type: 'task', props: {}, content: [{ type: 'text', text: 'At the top', styles: {} }] } }] }); await p.waitForTimeout(300)
+  ok(await p.locator('.draft-band[data-draft-item=top1]').isVisible() && await p.locator('.draft-more-toggle').isVisible(), `${tag} no anchor: band and "1 more open" show at the top`)
   // Arrived while typing: type, then the draft arrives; held until Show, and Show keeps the view.
   await set({ state: 'none', items: [], moreOpen: [], planningEndId: null }); await p.waitForTimeout(150)
   await p.locator(`.continuous-editor .bn-block-outer[data-id="${ids.firstBullet}"] .bn-inline-content`).click(); await p.keyboard.type('typing', { delay: 30 })
@@ -63,6 +69,12 @@ for (const [name, br, w, h] of [['chromium', chromium, 1280, 900], ['webkit', we
   const before = await caretTop(); await p.locator('.draft-line button', { hasText: 'Show' }).click(); await p.waitForTimeout(300)
   const after = await caretTop()
   ok(await p.locator('.draft-band').count() > 0 && Math.abs(after - before) <= 1, `${tag} Show reveals and keeps the line in view (moved ${Math.round(after - before)}px)`)
+  // An edit typed into a band goes with Apply all too, not only with its own Apply (Ratchet 425687c4).
+  await set(draft); await p.waitForTimeout(300); if (await p.locator('.draft-line button', { hasText: 'Show' }).count()) await p.locator('.draft-line button', { hasText: 'Show' }).click()
+  const t = p.locator('.draft-band[data-draft-item=i3] .draft-text'); await t.click(); await p.keyboard.press('End'); await p.keyboard.type(' edited')
+  await p.evaluate(() => { window.__daythreadDraftLog = [] }); await p.locator('.draft-line .draft-primary', { hasText: 'Apply all' }).click(); await p.waitForTimeout(200)
+  const logged = await p.evaluate(() => window.__daythreadDraftLog)
+  ok(logged.length === 1 && logged[0].apply.length === 3 && /edited/.test(logged[0].edits?.i3 ?? ''), `${tag} Apply all carries the band edit ${JSON.stringify(logged)}`)
   ok(!errs.length, `${tag} no page errors ${errs.join(' | ')}`)
   await b.close()
 }

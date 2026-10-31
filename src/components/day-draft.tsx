@@ -196,10 +196,12 @@ function Band({ item, workspace, edits, onApply, onSkip }: { item: DraftItem; wo
   return (
     <div className={`draft-band is-${kind}`} data-draft-item={item.id}>
       {kind === 'task' && <span className="draft-box" aria-hidden="true" />}
-      <span className="draft-text" contentEditable suppressContentEditableWarning spellCheck={false}
-        onInput={e => edits.set(item.id, (e.currentTarget.textContent ?? '').trim())}
-        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); onApply() } }}>{text}</span>
-      {item.since && <span className="draft-since">{shortLabel(item.since)}</span>}
+      <span className="draft-main">
+        <span className="draft-text" contentEditable suppressContentEditableWarning spellCheck={false}
+          onInput={e => edits.set(item.id, (e.currentTarget.textContent ?? '').trim())}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing && e.keyCode !== 229) { e.preventDefault(); onApply() } }}>{text}</span>
+        {item.since && <span className="draft-since">{shortLabel(item.since)}</span>}
+      </span>
       <span className="draft-acts">
         <button type="button" aria-label={`Apply ${text}`} title="Apply" onClick={onApply}><CheckIcon /></button>
         <button type="button" aria-label={`Skip ${text}`} title="Skip" onClick={onSkip}><CrossIcon /></button>
@@ -216,8 +218,7 @@ function MoreOpen({ tasks, onAdd }: { tasks: OpenTask[]; onAdd: (taskId: string)
       {open && tasks.map(t => (
         <div key={t.taskId} className="draft-band is-task is-open-row">
           <span className="draft-box" aria-hidden="true" />
-          <span className="draft-text">{t.title}</span>
-          <span className="draft-since">{shortLabel(t.since)}</span>
+          <span className="draft-main"><span className="draft-text">{t.title}</span><span className="draft-since">{shortLabel(t.since)}</span></span>
           <span className="draft-acts"><button type="button" aria-label={`Add ${t.title} to today`} title="Add to today" onClick={() => onAdd(t.taskId)}><PlusIcon /></button></span>
         </div>
       ))}
@@ -249,9 +250,9 @@ export function DraftLine({ page }: { page: Page }) {
   if (draft.state === 'none') return null
   if (draft.state === 'preparing') return <p className="draft-line" role="status"><span className="draft-spin" aria-hidden="true" />Preparing…</p>
   if (n > 0 && !shown) return <p className="draft-line" role="status">Suggestions ready<span className="sep"> · </span><button type="button" className="draft-primary" onClick={show}>Show</button></p>
-  const counts = n > 0 && <>{n} suggestion{n === 1 ? '' : 's'}<span className="sep"> · </span><button type="button" className="draft-primary" onClick={() => all('apply')}>Apply all</button><span className="sep"> · </span><button type="button" onClick={() => all('skip')}>Dismiss</button></>
-  const tail = draft.state === 'failed' ? <><span className="draft-warn">Couldn’t draft</span><span className="sep"> · </span><button type="button" onClick={() => draft.retry()}>Retry</button></>
-    : draft.state === 'offline' ? <>Offline</> : null
+  const counts = n > 0 && <span className="draft-seg">{n} suggestion{n === 1 ? '' : 's'}<span className="sep"> · </span><button type="button" className="draft-primary" onClick={() => all('apply')}>Apply all</button><span className="sep"> · </span><button type="button" onClick={() => all('skip')}>Dismiss</button></span>
+  const tail = draft.state === 'failed' ? <span className="draft-seg"><span className="draft-warn">Couldn’t draft</span><span className="sep"> · </span><button type="button" onClick={() => draft.retry()}>Retry</button></span>
+    : draft.state === 'offline' ? <span className="draft-seg">Offline</span> : null
   if (!counts && !tail) return null
-  return <p className="draft-line" role="status">{counts}{counts && tail && <span className="sep"> · </span>}{tail}</p>
+  return <p className="draft-line is-segs" role="status"><span className="draft-segs">{counts}{tail}</span></p>
 }

@@ -1568,6 +1568,12 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 @keyframes draft-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .draft-spin { animation: none; } }
 @media (max-width: 599px) { .draft-line button { min-height: 44px; } }
+/* Groups stay whole; each starts with its "·" in its left padding, and the line clips the one that starts a line
+   (the account row's rule, Lead ebd5ee52): "Retry" never lands alone, and no "·" ends or starts a line. */
+.draft-line.is-segs { display: block; overflow: hidden; margin-left: -3px; padding-left: 3px; }
+.draft-segs { display: block; margin-left: -0.9em; }
+.draft-seg { display: inline-flex; flex-wrap: nowrap; align-items: center; white-space: nowrap; padding-left: 0.9em; }
+.draft-seg::before { content: '·'; content: '·' / ''; display: inline-block; width: 0.6em; margin: 0 0.3em 0 -0.9em; text-align: center; color: var(--ink-3); }
 
 /* A suggestion: not his text yet. Blue band and bar, his ink and size, its text where his row's text would be. */
 .draft-host { user-select: none; -webkit-user-select: none; }
@@ -1577,9 +1583,10 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 .draft-band.is-bullet::before { content: ''; position: absolute; left: 20px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--ink); }
 .draft-band.is-line { --draft-pad: 14px; }
 .draft-box { flex: none; width: 18px; height: 18px; border: 1.5px solid var(--check); border-radius: 4px; box-sizing: border-box; }
-.draft-text { min-width: 0; outline: none; user-select: text; -webkit-user-select: text; overflow-wrap: anywhere; }
+.draft-main { flex: 1; min-width: 0; }
+.draft-text { outline: none; user-select: text; -webkit-user-select: text; overflow-wrap: anywhere; }
 .draft-text:focus { box-shadow: 0 1px 0 var(--blue); }
-.draft-since { flex: none; font-size: var(--text-meta); color: var(--ink-3); white-space: nowrap; }
+.draft-since { margin-left: 8px; font-size: var(--text-meta); color: var(--ink-3); white-space: nowrap; }
 .draft-acts { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; }
 .draft-acts button { display: grid; place-items: center; width: 32px; height: 30px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--ink-2); cursor: pointer; }
 .draft-acts button svg { width: 16px; height: 16px; flex: none; }
