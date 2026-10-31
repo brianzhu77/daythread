@@ -1,22 +1,18 @@
 import { useState } from 'react'
 import type { LocalDate, Task } from '../domain/types'
-import { anotherDayOptions, shortLabel, todayIso, weekday } from './dates'
+import { anotherDayOptions, shortLabel, weekday } from './dates'
 import { DateTag } from './date-tag'
 import { RowMenu, type MenuItem } from './row-menu'
-import { useWorkspace } from './use-day'
+import { useTaskTick, useWorkspace } from './use-day'
 import { TagText } from './tag-text'
 
 /** The task actions shared by plan rows, the strip, Start the day and review step 1 (01 §2). */
 export function useTaskActions(today: LocalDate) {
-  const { run } = useWorkspace()
+  const { run, toggleTask } = useWorkspace()
 
-  const markDone = (task: Task) => {
-    const done = task.status !== 'done'
-    return run({ type: 'task-status', taskId: task.id, status: done ? 'done' : 'open', today: todayIso() }, r => ({
-      text: done ? 'Done' : 'Reopened',
-      undoOperationId: r.operationId,
-    }))
-  }
+  // B72: through the shared tick, so a second tap while it saves is ignored. Show the box with `useTaskTick`.
+  const markDone = (task: Task) =>
+    toggleTask(task.id, (to, r) => ({ text: to === 'done' ? 'Done' : 'Reopened', undoOperationId: r.operationId }))
 
   /** `from`: the day page the move is made from; its row leaves it unless that day is past. */
   const planOn = (task: Task, date: LocalDate, from?: LocalDate) =>
@@ -80,7 +76,7 @@ interface TaskRowProps {
 export function TaskRow({ task, pageDate, today, variant, onEditTitle, onDeleteRow }: TaskRowProps) {
   const { markDone, planOn, notToday, cancel } = useTaskActions(today)
   const [title, setTitle] = useState(task.title)
-  const done = task.status === 'done'
+  const done = useTaskTick(task.id).status === 'done'
   const cancelled = task.status === 'cancelled'
 
   const groups =

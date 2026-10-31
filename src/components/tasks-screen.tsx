@@ -5,8 +5,9 @@ import { DateTag } from './date-tag'
 import { addDays, daysBetween, longLabel } from './dates'
 import { RowMenu } from './row-menu'
 import { anotherDayItems, useTaskActions } from './task-row'
-import { useDay, useWorkspace } from './use-day'
-import { plannedOn } from '../domain/workspace'
+import { useHeldWorkspace, useTaskTick, useWorkspace } from './use-day'
+import { getDayView, plannedOn } from '../domain/workspace'
+import { useMemo } from 'react'
 import { TagText } from './tag-text'
 import { ParentLine, treeIndent, useTaskTree } from './task-tree'
 
@@ -29,8 +30,10 @@ function upcomingLabel(task: Readonly<Task>, kinds: readonly UpcomingKind[], tod
  * domain's day view, so the hand-off, Placement and Not today rules stay where they are.
  */
 export function TasksScreen({ view, today }: { view: TaskView; today: LocalDate }) {
-  const { workspace } = useWorkspace()
-  const { view: day } = useDay(today)
+  // B72: a to-do ticked here keeps its row until a second after its save answers, so a fast second tap can't land on
+  // the row that slides up into its place.
+  const workspace = useHeldWorkspace()
+  const day = useMemo(() => (workspace ? getDayView(workspace, today) : null), [workspace, today])
   if (!workspace || !day) return <p className="loading">Loading tasks…</p>
 
   return (
@@ -55,7 +58,7 @@ export function TasksScreen({ view, today }: { view: TaskView; today: LocalDate 
 
 /** Upcoming per 01 §76: every date fact after today, one row per task per date, labelled by what falls due. */
 function UpcomingList({ today }: { today: LocalDate }) {
-  const { workspace } = useWorkspace()
+  const workspace = useHeldWorkspace()
   if (!workspace) return null
   const days = getUpcomingByDate(workspace, addDays(today, 1))
   if (!days.length) return <Empty text="Nothing planned, starting or due after today." />
@@ -100,9 +103,11 @@ function ListTaskRow({ task, today, paused, label, parentId = null }: { task: Ta
   const { markDone, planOn, notToday } = useTaskActions(today)
   const { workspace } = useWorkspace()
   const plannedToday = Boolean(workspace) && plannedOn(workspace!, task.id) === today
+  // Ticked, the row stays a moment (B72) and reads as done, like a done row elsewhere.
+  const done = useTaskTick(task.id).status === 'done'
   return (
-    <div className={`task-row list ${paused ? 'is-paused' : ''}`} data-task-id={task.id}>
-      <input type="checkbox" className="check" checked={task.status === 'done'} aria-label={`Mark ${task.title} done`} onChange={() => markDone(task)} />
+    <div className={`task-row list ${paused ? 'is-paused' : ''} ${done ? 'is-done' : ''}`} data-task-id={task.id}>
+      <input type="checkbox" className="check" checked={done} aria-label={`Mark ${task.title} done`} onChange={() => markDone(task)} />
       <span className="task-title"><ParentLine parentId={parentId} /><TagText text={task.title} /></span>
       <DateTag task={task} today={today} label={label} />
       {/* Upcoming keeps set-aside rows' dates (02 Not today) but they must not read as commitments; the Not today tab needs no marker. */}
