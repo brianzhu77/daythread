@@ -131,8 +131,9 @@ function TemplatesScreen({ workspace, today, onOpen }: { workspace: Workspace; t
         <h1 className="large-title">Templates</h1>
         <button type="button" className="round-add" aria-label="New template" onClick={() => void make(false)}><PlusIcon /></button>
       </div>
-      {/* Only before any template exists: with "Day" in the list (default or not), Edit would make a second one. */}
-      {list.length === 0 && !defaultTemplate(workspace, dayPagesTarget) && (
+      {/* Whenever day pages have no default, say what they start with, even after "+" made another template. A second
+          "Day" from Edit is no longer stuck now that templates can be deleted. */}
+      {!defaultTemplate(workspace, dayPagesTarget) && (
         <p className="quiet">Day pages start with TODO, Events, Good Stuffs and Notes. · <button type="button" className="link" disabled={opening} onClick={() => void make(true)}>{opening ? 'Opening…' : 'Edit'}</button></p>
       )}
       {list.length > 0 && (
@@ -165,7 +166,8 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
   const current = target && ![dayPagesTarget, topLevelTarget, daySubpagesTarget].includes(target) ? workspace.pages.find(p => p.id === target) : undefined
   const pagesIn = current && !documents.includes(current) ? [current, ...documents] : documents
   // Every document page, nested and link pages included (Brian 57deaed7); nested ones name their parent, as titles repeat.
-  const inLabel = (p: Page) => { const parent = parentOf(workspace, p); return parent ? ` · in ${pageLabel(parent, today)}` : '' }
+  // The closed menu shows only the option's text, so each one says "Pages in …" itself; a nested page reads as its path.
+  const inLabel = (p: Page) => { const parent = parentOf(workspace, p); return `Pages in ${parent ? `${pageLabel(parent, today)} › ` : ''}${pageLabel(p, today)}` }
   const holder = (value: string) => { const h = defaultTemplate(workspace, value); return h && h.id !== page.id ? ` · now ${displayPageTitle(h)}` : '' }
   const setTarget = (next: string) => {
     const value = next || null
@@ -194,7 +196,7 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
               <option value={daySubpagesTarget}>Pages inside any day{holder(daySubpagesTarget)}</option>
               {pagesIn.length > 0 && (
                 <optgroup label="Pages in…">
-                  {pagesIn.map(p => <option key={p.id} value={p.id}>{pageLabel(p, today)}{inLabel(p)}{isTrashed(p) ? ' · in Trash' : ''}{holder(p.id)}</option>)}
+                  {pagesIn.map(p => <option key={p.id} value={p.id}>{inLabel(p)}{isTrashed(p) ? ' · in Trash' : ''}{holder(p.id)}</option>)}
                 </optgroup>
               )}
             </select>

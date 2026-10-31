@@ -1,0 +1,27 @@
+import { chromium, webkit } from '/Users/dogrod/Developer/daythread/node_modules/playwright/index.mjs'
+const base = 'http://127.0.0.1:3655', out = '/tmp/jazz-p2-run/shots'
+let fail = 0; const ok = (v, s) => { console.log(v ? 'PASS' : 'FAIL', s); if (!v) fail++ }
+const c = await chromium.launch(); const p = await c.newPage({ viewport: { width: 1280, height: 900 } })
+await p.goto(base + '/pages?view=templates'); await p.getByRole('heading', { name: 'Templates' }).waitFor(); await p.waitForTimeout(500)
+await p.getByRole('button', { name: 'New template' }).click(); await p.locator('.template-target').waitFor(); await p.waitForTimeout(800)
+await p.keyboard.type('Recipe'); await p.waitForTimeout(1000)
+const opts = await p.locator('.template-target option').allInnerTexts(); console.log(JSON.stringify(opts))
+ok(opts.includes('Pages in Korean soup') && opts.includes('Pages in Korean soup › Sub of soup'), 'options say "Pages in …", nested as a path')
+await p.locator('.template-target').selectOption({ label: 'Pages in Korean soup' }); await p.waitForTimeout(800)
+ok((await p.locator('.template-target').evaluate(s => s.options[s.selectedIndex].text)) === 'Pages in Korean soup', 'closed menu reads "Pages in Korean soup"')
+await p.locator('.template-note').first().screenshot({ path: `${out}/fix-closed-select.png` })
+await p.getByRole('link', { name: 'Templates' }).click(); await p.getByRole('heading', { name: 'Templates' }).waitFor(); await p.waitForTimeout(600)
+ok(await p.getByRole('button', { name: 'Edit' }).count() === 1, 'after + first: the built-in line with Edit still shows')
+await p.getByRole('button', { name: 'Edit' }).click(); await p.locator('.template-target').waitFor(); await p.waitForTimeout(800)
+ok((await p.locator('.template-target').inputValue()) !== '', 'Edit makes Day as the day default')
+await p.getByRole('link', { name: 'Templates' }).click(); await p.getByRole('heading', { name: 'Templates' }).waitFor(); await p.waitForTimeout(600)
+const t = await p.locator('.list-screen').innerText(); console.log(JSON.stringify(t.slice(0, 200)))
+ok(!t.includes('Day pages start with') && t.includes('Default for day pages'), 'with a day default, the line goes and the row says so')
+await p.screenshot({ path: `${out}/fix-list.png` })
+await c.close()
+const w = await webkit.launch(); const q = await w.newPage({ viewport: { width: 390, height: 844 }, colorScheme: 'dark', isMobile: true, hasTouch: true })
+await q.goto(base + '/pages?view=templates'); await q.locator('.card-row', { hasText: 'Recipe' }).tap(); await q.locator('.template-target').waitFor(); await q.waitForTimeout(900)
+const r = await q.evaluate(() => document.querySelector('.template-target').getBoundingClientRect().right)
+ok(r <= 374, `390 dark: closed menu fits (${r})`)
+await q.screenshot({ path: `${out}/fix-390-dark.png` })
+await w.close(); process.exitCode = fail ? 1 : 0
