@@ -1586,6 +1586,7 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 .draft-main { flex: 1; min-width: 0; }
 .draft-text { outline: none; user-select: text; -webkit-user-select: text; overflow-wrap: anywhere; }
 .draft-text:focus { box-shadow: 0 1px 0 var(--blue); }
+.draft-text.is-readonly { cursor: default; }
 .draft-since { margin-left: 8px; font-size: var(--text-meta); color: var(--ink-3); white-space: nowrap; }
 .draft-acts { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; }
 .draft-acts button { display: grid; place-items: center; width: 32px; height: 30px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--ink-2); cursor: pointer; }
