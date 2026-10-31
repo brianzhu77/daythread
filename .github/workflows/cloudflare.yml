@@ -102,7 +102,7 @@ jobs:
       - name: App secrets
         run: |
           [ "$NAME" = daythread-preview ] || unset DAYTHREAD_INVITES
-          node -e 'const k=["DATABASE_URL","SUPABASE_URL","SUPABASE_PUBLISHABLE_KEY","OPENROUTER_API_KEY","OPENROUTER_MODEL","DAYTHREAD_INVITES"];process.stdout.write(JSON.stringify(Object.fromEntries(k.filter(n=>process.env[n]).map(n=>[n,process.env[n]]))))' > "$RUNNER_TEMP/secrets.json"
+          node -e 'const k=["DATABASE_URL","SUPABASE_URL","SUPABASE_PUBLISHABLE_KEY","OPENROUTER_API_KEY","OPENROUTER_MODEL","DAYTHREAD_INVITES","DAYTHREAD_DRAFT_EMAILS"];process.stdout.write(JSON.stringify(Object.fromEntries(k.filter(n=>process.env[n]).map(n=>[n,process.env[n]]))))' > "$RUNNER_TEMP/secrets.json"
           npx wrangler@4 secret bulk "$RUNNER_TEMP/secrets.json" -c .output/server/wrangler.json --name "$NAME"
           rm "$RUNNER_TEMP/secrets.json"
         env:
@@ -113,6 +113,8 @@ jobs:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           OPENROUTER_MODEL: ${{ secrets.OPENROUTER_MODEL }}
           DAYTHREAD_INVITES: ${{ secrets.PREVIEW_INVITES }}
+          # B76 day draft: only these accounts get the model; everyone else gets the fallback draft.
+          DAYTHREAD_DRAFT_EMAILS: ${{ secrets.DRAFT_EMAILS }}
 
   domain:
     if: inputs.action == 'domain-to-worker' || inputs.action == 'domain-to-vercel'
