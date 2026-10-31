@@ -29,6 +29,10 @@ no explanatory text; every line states data or a state.
   (`--ink-3`). Open, it lists them with their age and a **＋** each; ＋ adds that task to today in the first to-do
   section (B74 rule). No date choice, no "today or another day" (that stays in the row ⋯ and on Tasks). This is Bumblebee's
   rule 1: nothing open drops silently.
+- **A to-do he already planned for today is always in the draft** (Bumblebee `scoring`, Oct 31 run dropped 买狗窝). If the
+  model leaves one out, the app adds it as a band by the fallback rule, in the same draft, never behind "more open".
+- **No reason text** on bands; the model's "why" stays in logs (Bumblebee; Brian `1ac6784b`).
+- **No dated line copied into Events**: today's events already show from the event system.
 
 ## 2. States
 
