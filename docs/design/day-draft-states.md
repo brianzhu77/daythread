@@ -23,8 +23,8 @@ no explanatory text; every line states data or a state.
   the page, and it never fills his reflection prompts (Raw Notes, Daily Reflection), per Bumblebee's rule 5.
 - **One state line** under the title, in the facts strip's place: `{n} suggestions · Apply all · Dismiss`. "Apply all" in
   `--blue-text`, semibold; the rest `--ink-2`. It goes away when nothing is left.
-- **Carried to-dos** show their age as data: a muted `--ink-3` date after the title ("Oct 23", "Sat"), the day the task was
-  first planned. After applying, the date goes; the row is his normal task row (same task, Roadbuster's id rule).
+- **Carried to-dos** show their age as data: a muted `--ink-3` date after the title in the app's `shortLabel` form ("Fri 10/30", as in "Moved to
+  Fri 10/30"), the day the task was first planned. After applying, the date goes; the row is his normal task row (same task, Roadbuster's id rule).
 - **Open to-dos the draft didn't place** stay visible: a quiet row at the end of the planning part, `{n} more open ▸`
   (`--ink-3`). Open, it lists them with their age and a **＋** each; ＋ adds that task to today in the first to-do
   section (B74 rule). No date choice, no "today or another day" (that stays in the row ⋯ and on Tasks). This is Bumblebee's
@@ -49,7 +49,7 @@ no explanatory text; every line states data or a state.
 | **Dismiss** | Every band goes | line goes | Notice: `Dismissed · Undo` |
 | **Leave and come back** | Remaining bands still there (stored with the day, not in the browser) | as Ready | Same on another device |
 | **Day ends with bands left** | Bands vanish at his midnight; nothing applied | | Their carried to-dos are still open, so tomorrow's draft sees them again |
-| **Model fails / times out / offline** | **The fallback draft**: open to-dos placed by today's rules (B74, #44), same bands | `3 suggestions · Apply all · Dismiss · Couldn't draft · Retry` ("Couldn't draft" in `--warn`) | Bumblebee: the interaction never depends on the model. Offline: `Offline` instead of "Couldn't draft · Retry"; it retries when back online |
+| **Model fails / times out / offline** | **The fallback draft**: open to-dos placed by today's rules (B74, #44), same bands | `3 suggestions · Apply all · Dismiss · Couldn't draft · Retry` ("Couldn't draft" in `--warn`) | Bumblebee: the interaction never depends on the model. Retry stays only until his first Apply or Skip; after that the fallback is the day's draft (Lead `98cb503a`: one draft per day, first ready wins). Offline: `Offline` instead of "Couldn't draft · Retry" |
 | **Model returns nothing to add** | No bands | none | The fallback still shows open to-dos if any |
 | **Model off** (invitees until they turn it on) | The fallback draft | as Ready | No mention of a model |
 | **No open to-dos and nothing to suggest** | The template page | none | |
