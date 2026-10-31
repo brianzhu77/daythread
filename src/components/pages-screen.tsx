@@ -4,7 +4,7 @@ import { ContinuousPage } from './continuous-page'
 import { displayPageTitle, PageTitleField } from './page-title'
 import { childPages, isTrashed, pagesInDays, parentOf } from '../domain/page-tree'
 import type { Page, Workspace } from '../domain/types'
-import { LinkedFrom, PageHeaderRow, pageLabel, Subpages, useToday } from './page-tree'
+import { LinkedFrom, PageHeaderRow, PageLink, pageLabel, Subpages, useToday } from './page-tree'
 import { ChevronRightIcon, PageKindIcon, PlusIcon } from './icons'
 import { LinkUrlRow } from './link-url-row'
 import { PagesTrashRow, TrashedPage, TrashScreen } from './trash'
@@ -103,7 +103,8 @@ function TemplatesScreen({ workspace, onOpen }: { workspace: Workspace; onOpen: 
   return (
     <div className="list-screen">
       <div className="title-row"><h1 className="large-title">Templates</h1></div>
-      {!defaultTemplate(workspace, dayPagesTarget) && (
+      {/* Only before any template exists: with "Day" in the list (default or not), Edit would make a second one. */}
+      {list.length === 0 && !defaultTemplate(workspace, dayPagesTarget) && (
         <p className="quiet">Day pages start with TODO, Events, Good Stuffs and Notes. · <button type="button" className="link" onClick={() => void edit()}>Edit</button></p>
       )}
       {list.length > 0 && (
@@ -139,6 +140,10 @@ function TemplateScreen({ page, workspace }: { page: Page; workspace: Workspace 
   }
   return (
     <div className="doc-screen template-screen">
+      {/* The way back to the list, set like a document page's "Pages" crumb: the Home Screen app has no Back button. */}
+      <div className="crumbs">
+        <nav className="crumbs-path folded" aria-label="Page location"><PageLink className="crumb" href="/pages?view=templates">Templates</PageLink></nav>
+      </div>
       <div className="page-head">
         <PageTitleField key={page.id} page={page} />
         <p className="template-note">
