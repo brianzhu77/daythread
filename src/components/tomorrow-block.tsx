@@ -284,7 +284,6 @@ export function TomorrowBlock({ today, view, workspace }: { today: LocalDate; vi
   if (lines === null) return null
 
   const onNext = nextPage ? nextView.dayTasks.filter(t => t.status !== 'cancelled' && t.title.trim() !== '') : []
-  const openToday = view.dayTasks.filter(t => t.status === 'open' && t.title.trim() !== '' && !t.paused).length
 
   return (
     <section className="tomorrow" aria-labelledby="tomorrow-title">
@@ -344,11 +343,6 @@ export function TomorrowBlock({ today, view, workspace }: { today: LocalDate; vi
           />
         </div>
       </div>
-      {openToday > 0 && (
-        <p className="tomorrow-hint">
-          {openToday} unfinished to-do{openToday === 1 ? '' : 's'} come{openToday === 1 ? 's' : ''} along in the morning.
-        </p>
-      )}
     </section>
   )
 }
