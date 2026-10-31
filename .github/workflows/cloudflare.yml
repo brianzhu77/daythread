@@ -89,7 +89,7 @@ jobs:
       - name: Deploy
         run: |
           if [ "$NAME" = daythread-preview ]; then
-            npx wrangler@4 deploy -c .output/server/wrangler.json --name "$NAME" --var DAYTHREAD_PG_SCHEMA:daythread_preview
+            npx wrangler@4 deploy -c .output/server/wrangler.json --name "$NAME" --var DAYTHREAD_PG_SCHEMA:daythread_preview --var DAYTHREAD_PREVIEW:1
           else
             npx wrangler@4 deploy -c .output/server/wrangler.json
           fi
