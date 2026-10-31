@@ -16,7 +16,7 @@
 | --- | --- |
 | **Entry** | Account row (sidebar foot at 1280, foot of Pages at 390): a text link **Templates**, after the time zone and before Export. |
 | **Screen** | Like Pages: title row "Templates" with the round **+** ("New template"). One row per template: its title, and a quiet second line naming its default: "Default for day pages", "Default for pages in Recipes", or nothing. |
-| **No day template saved** (every new account) | One quiet line above the list: "Day pages start with TODO, Events, Good Stuffs and Notes. · Edit". **Edit** makes a template titled "Day" with those four headings, sets it as the default for day pages, and opens it. The line then goes away, since the row is in the list. |
+| **No day template saved** (every new account) | The first row is **Day**, "Default for day pages", like a saved one. Tapping it makes a template titled "Day" with the four built-in headings, sets it as the default for day pages, and opens it; while that's on its way the second line reads "Opening…". No explanatory sentence (Brian `1ac6784b`: minimalist, no descriptions). |
 | **Never listed elsewhere** | Templates aren't in Pages, recent pages, the `[[` picker, the sidebar tree, search, Move to…, Tags, Calendar or Linked from. |
 
 ## 2. A template page
@@ -24,7 +24,6 @@
 ```
 Recipe                                         ← title, editable like a document's
 Default for: Pages in Recipes ▾                ← one row, meta size
-New pages start from this template. To-dos are copied empty.   ← grey meta line
 ## Ingredients
 •
 ```
