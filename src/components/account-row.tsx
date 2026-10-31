@@ -60,9 +60,10 @@ export function AccountRow({ className }: { className: string }) {
     }
   }
   const retry = <button type="button" className="link retry" onClick={() => void exportAll()}>Try again</button>
-  const exportLink = exporting === 'failed' ? <><span className="account-text">Couldn’t export</span>{'\u00a0· '}{retry}</>
-    : exporting === 'unsaved' ? <><span className="account-text">Not exported · latest text not saved yet</span>{'\u00a0· '}{retry}</>
-    : <button type="button" className="link" disabled={exporting === 'busy'} onClick={() => void exportAll()}>{exporting === 'busy' ? 'Exporting…' : 'Export'}</button>
+  // A failure and its retry are two items, so the row's own "·" sits between them and either can start a line.
+  const exportItems = exporting === 'failed' ? <><AccountItem><span className="account-text">Couldn’t export</span></AccountItem><AccountItem>{retry}</AccountItem></>
+    : exporting === 'unsaved' ? <><AccountItem><span className="account-text">Not exported · latest text not saved yet</span></AccountItem><AccountItem>{retry}</AccountItem></>
+    : <AccountItem><button type="button" className="link" disabled={exporting === 'busy'} onClick={() => void exportAll()}>{exporting === 'busy' ? 'Exporting…' : 'Export'}</button></AccountItem>
   return (
     <div className={`account-row ${className}`}>
       <p><span className="account-items">
@@ -76,7 +77,7 @@ export function AccountRow({ className }: { className: string }) {
         )}
         {/* B70: Templates, between the time zone and Export (templates-states §1). */}
         <AccountItem><button type="button" className="link" onClick={() => void navigate({ to: '/pages', search: { view: 'templates' } })}>Templates</button></AccountItem>
-        <AccountItem>{exportLink}</AccountItem>
+        {exportItems}
         <Reminders />
         <HomeScreenHint />
         {email && <AccountItem><button type="button" className="link" onClick={() => void signOut()}>Sign out</button></AccountItem>}

@@ -1,18 +1,26 @@
 // A "·" only between two items on one line: never at a line's start or end. Usage: node montage.mjs <base>.
 // Renders the full signed-in row (every item at once) in the real sidebar styles at 150-300px.
 import { chromium, webkit } from '/Users/dogrod/Developer/daythread/node_modules/playwright/index.mjs'
-const base = process.argv[2], out = new URL('.', import.meta.url).pathname, widths = [150, 194, 239, 260, 300]
+const base = process.argv[2], out = new URL('.', import.meta.url).pathname, widths = [150, 194, 239, 260, 300, 350]
 let fail = 0; const ok = (v, s) => { console.log(v ? 'PASS' : 'FAIL', s); if (!v) fail++ }
-for (const [name, br] of [['chromium', chromium], ['webkit', webkit]]) for (const scheme of ['light', 'dark']) {
+for (const [name, br] of [['chromium', chromium], ['webkit', webkit]]) for (const scheme of ['light', 'dark']) for (const set of ['normal', 'failure']) {
   const b = await br.launch(); const p = await b.newPage({ viewport: { width: 1800, height: 900 }, colorScheme: scheme })
   await p.goto(`${base}/`); await p.waitForSelector('.account-row-sidebar .account-items'); await p.waitForTimeout(500)
-  const res = await p.evaluate(widths => {
+  const res = await p.evaluate(([widths, set]) => {
     const src = document.querySelector('.account-row-sidebar')
     const item = h => `<span class="account-item">${h}</span> `
-    const html = ['<span class="account-text account-email">reviewer@a-long-but-valid-company-domain.example</span>', '<select class="account-zone"><option>America/Vancouver</option></select>', '<button type="button" class="link">Templates</button>', '<button type="button" class="link">Export</button>',
-      '<span class="reminders"><span class="account-text">Reminders on</span> · <button type="button" class="link">Turn off</button></span>',
-      '<span class="home-screen-hint"><span class="account-text">Add to Home Screen for the full-screen app: Share, then “Add to Home Screen”</span> · <button type="button" class="link">Got it</button></span>',
-      '<button type="button" class="link">Sign out</button>', '<button type="button" class="link">Delete account</button>'].map(item).join('')
+    // The real markup: a message and its action are two items (account-row.tsx, reminders.tsx, home-screen-hint.tsx).
+    const normal = ['<span class="account-text account-email">reviewer@a-long-but-valid-company-domain.example</span>', '<select class="account-zone"><option>America/Vancouver</option></select>', '<button type="button" class="link">Templates</button>', '<button type="button" class="link">Export</button>',
+      '<span class="account-text">Reminders on</span>', '<button type="button" class="link">Turn off</button>',
+      '<span class="account-text">Add to Home Screen for the full-screen app: Share, then “Add to Home Screen”</span>', '<button type="button" class="link">Got it</button>',
+      '<button type="button" class="link">Sign out</button>', '<button type="button" class="link">Delete account</button>']
+    // Ratchet 9bc0e0c8: the failure states.
+    const failure = ['<span class="account-text account-email">reviewer@a-long-but-valid-company-domain.example</span>', '<select class="account-zone"><option>America/Vancouver</option></select>', '<button type="button" class="link">Templates</button>',
+      '<span class="account-text">Not exported\u00a0·\u00a0latest text not saved yet</span>', '<button type="button" class="link retry">Try again</button>',
+      '<span class="account-text">Couldn’t turn on reminders</span>', '<button type="button" class="link">Turn on reminders</button>',
+      '<span class="account-text">Add to Home Screen for the full-screen app: Share, then “Add to Home Screen”</span>', '<button type="button" class="link">Got it</button>',
+      '<button type="button" class="link">Sign out</button>', '<button type="button" class="link">Delete account</button>']
+    const html = (set === 'normal' ? normal : failure).map(item).join('')
     const box = document.createElement('div'); box.id = 'montage'; box.style.cssText = 'position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;gap:16px;align-items:flex-start;padding:16px'
     for (const w of widths) { const c = src.cloneNode(true); c.style.cssText = `width:${w}px;flex:none;outline:1px dashed #c33;padding:0`; c.querySelector('.account-items').innerHTML = html; const l = document.createElement('div'); l.textContent = w + 'px'; l.style.cssText = 'font-size:11px;color:#c33'; const wrap = document.createElement('div'); wrap.append(l, c); box.append(wrap) }
     document.body.append(box)
@@ -32,9 +40,9 @@ for (const [name, br] of [['chromium', chromium], ['webkit', webkit]]) for (cons
       const overflow = Math.max(...[...row.querySelectorAll('.account-item, .account-item *')].map(e => e.getBoundingClientRect().right)) - row.getBoundingClientRect().right
       return { lonely, cut, w: row.getBoundingClientRect().width, lines: new Set(items.map(i => Math.round(i.top))).size, bad: bad.length, firstAtEdge: Math.abs(items[0].textLeft - text) < 1.5, overflow: Math.round(overflow * 100) / 100 }
     })
-  }, widths)
-  for (const r of res) ok(r.bad === 0 && r.lonely === 0 && r.cut === 0 && r.firstAtEdge && r.overflow <= 0.5, `${name} ${scheme} ${r.w}px: ${r.lines} lines (bad ${r.bad}, cut ${r.cut}, lonely ${r.lonely}), no dot at a line start, text on the column edge, overflow ${r.overflow}px`)
-  await p.locator('#montage').screenshot({ path: `${out}/montage-${name}-${scheme}.png` })
+  }, [widths, set])
+  for (const r of res) ok(r.bad === 0 && r.lonely === 0 && r.cut === 0 && r.firstAtEdge && r.overflow <= 0.5, `${name} ${scheme} ${set} ${r.w}px: ${r.lines} lines (bad ${r.bad}, cut ${r.cut}, lonely ${r.lonely}), no dot at a line start, text on the column edge, overflow ${r.overflow}px`)
+  await p.locator('#montage').screenshot({ path: `${out}/montage-${name}-${scheme}-${set}.png` })
   await b.close()
 }
 process.exitCode = fail ? 1 : 0

@@ -38,6 +38,7 @@ quoted lines in older states docs and specs.
 ## Account row "·" (Lead ebd5ee52)
 
 A "·" now only sits between two items on the same line; none ends or starts a line. Each item is a small box with its
-"·" in its left padding, and the row clips the one that lands at a line's start. The "·" inside an item ("Reminders on ·
-Turn off", "… · Got it", "Couldn't export · Try again") is glued to the words on both sides. A long item (an address,
-the Home Screen hint) wraps inside its own box. Check: `tests/evidence/account-dots/montage.mjs`.
+"·" in its left padding, and the row clips the one that lands at a line's start. A message and its action ("Reminders on" and "Turn off", the Home Screen hint and "Got it", "Couldn't
+export" and "Try again") are two items, so the same rule covers them (Ratchet 9bc0e0c8: a glued "· Turn on reminders"
+overflowed at 150px). A long item (an address,
+the Home Screen hint) wraps inside its own box. Check: `tests/evidence/account-dots/montage.mjs`, normal and failure states.
