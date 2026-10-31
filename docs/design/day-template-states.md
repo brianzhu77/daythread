@@ -34,8 +34,6 @@ New pages start from this template. To-dos are copied empty.   ← grey meta lin
   "Notes · in Recipes"; a day or trashed target stays listed, marked; Jazz `dbb8b038`). The list's second line reads
   "Default for top-level pages" / "Default for pages inside days" / "Default for pages in Recipes". **Top-level pages**
   (Bumblebee `3e77b442`): pages made with the sidebar's + next to Pages and the Pages tab's +.
-- **Second grey line**, in part 2, under the first: "Pages made from a link or from text start as they are." (link
-  pages, "Turn into page", `[[` with a title).
   - If another template already holds that target, the item says so: "Day pages · now Day". Picking it moves the
     default, with the notice **"Now the default for day pages · Undo"**. The old template's line becomes empty.
   - Picking **None**: "No longer a default · Undo".
@@ -59,6 +57,11 @@ New pages start from this template. To-dos are copied empty.   ← grey meta lin
 - **Day pages:** every day page created after the save (`ensure-day`). Days that already exist stay as they are.
 - **Pages in X:** a new empty page made directly inside X (the `/` Page item, the + on X's Subpages). **Not** "Turn into
   page" (it already has words) and not a page moved into X.
+- **One creation rule (Lead `80555761`): a new page whose body is empty starts from the nearest default, however it was
+  made.** A title isn't body content, and neither is a link page's URL, so `[[` New page with a title and link pages
+  saved from a paste get the template too. Only "Turn into page" from a line with words keeps its words and gets no
+  template. No extra grey line. If a link page is created with an excerpt line from the link's preview, the template's
+  lines go below that excerpt.
 - **Top-level pages:** a new empty page made with the sidebar's + or the Pages tab's + (no parent).
 - **Pages inside any day:** the same, for a new empty page made directly inside a day page. A page in X when X is
   inside a day uses X's default, not this one (the nearer target wins).
