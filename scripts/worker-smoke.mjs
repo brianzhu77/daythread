@@ -5,7 +5,7 @@
 //   npx wrangler dev -c .output/server/wrangler.json --port 8787 --var DATABASE_URL:$DB \
 //     --var SUPABASE_URL:http://127.0.0.1:54330 --var SUPABASE_PUBLISHABLE_KEY:pk --var DAYTHREAD_INVITES:new@test.com,old@test.com &
 //   DB=$DB node scripts/worker-smoke.mjs http://127.0.0.1:8787 /tmp/worker-smoke
-// Checks: signed-out redirects; an invited sign-up lands on Today with the first-day line; a typed line is saved to
+// Checks: signed-out redirects; an invited sign-up lands on Today with its to-do row; a typed line is saved to
 // Postgres and survives a reload, a sign-out and a sign-in; Pages and Tasks render; an address not on the list is
 // refused; the Home Screen worker serves Today offline after one open.
 import assert from 'node:assert/strict'
@@ -51,7 +51,8 @@ await run('invited-sign-up-types-and-saves', async page => {
   await page.getByLabel('Password').fill('right-pw-2')
   await page.getByRole('button', { name: 'Create account' }).click()
   await page.waitForURL(u => new URL(u).pathname === '/', { timeout: 20000 })
-  await page.locator('.day-first').waitFor({ timeout: 30000 })
+  // PR #42 removed the first-day line (Brian 1ac6784b), so wait for Today's empty to-do row instead.
+  await page.locator('.editor-task-title').first().waitFor({ timeout: 30000 })
   await page.screenshot({ path: `${out}/01-first-day.png`, fullPage: true })
   await page.locator('.editor-task-title').filter({ hasText: /^$/ }).first().click()
   await page.keyboard.type(line)
