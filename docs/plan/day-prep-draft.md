@@ -53,7 +53,9 @@ Two parts, which can ship separately:
 1. **Nothing open silently drops.** Every open to-do appears in the draft (placed, or listed as not proposed) or stays
    visibly open on Tasks. A model that leaves one out does not make it disappear.
 2. **To-dos stay the same tasks.** Applying a carried to-do moves the existing task (same id, history, done state); only
-   new items become new tasks (Roadbuster's constraint, unit-testable before any UI).
+   new items become new tasks (Roadbuster's constraint, unit-testable before any UI). A carried to-do's band is
+   read-only and applies with the task's current title; he renames it in the row after applying (Ratchet 64b1602e,
+   Lead 64287644). New-task and line bands stay editable.
 3. **His words are never overwritten.** If he has already written on the page, applying only inserts; a stale draft fails
    safely (`expectedContent`).
 4. **Nothing waits on the model.** The page is made from the template at midnight as today; the draft arrives when ready, or
