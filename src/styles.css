@@ -299,6 +299,8 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
 .day-first { grid-column: 1 / -1; margin: 6px 0 0; font-size: var(--text-small); line-height: 20px; color: var(--ink-2); text-wrap: pretty; }
 /* B70: the day template's one grey line, set like the first-day line (day-template-states §2). */
 .template-note { margin: 6px 0 0; font-size: var(--text-small); line-height: 20px; color: var(--ink-2); text-wrap: pretty; }
+/* The Default for menu reads as text in the meta line, sized to its choice, like the time zone menu. */
+.template-target { background: none; border: 0; padding: 0; font: inherit; color: var(--ink); cursor: pointer; field-sizing: content; max-width: 100%; }
 /* A template's to-dos are only rows: no task, so no "Reference" tag (templates-states §2). */
 .template-screen .editor-reference-tag { display: none; }
 .day-nav { display: flex; align-items: center; gap: 6px; color: var(--ink-faint); }

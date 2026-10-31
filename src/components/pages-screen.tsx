@@ -3,14 +3,14 @@ import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AccountRow } from './account-row'
 import { ContinuousPage } from './continuous-page'
 import { displayPageTitle, PageTitleField } from './page-title'
-import { childPages, isTrashed, pagesInDays, parentOf } from '../domain/page-tree'
+import { childPages, isTrashed, pagesInDays, parentOf, visiblePages } from '../domain/page-tree'
 import type { Page, Workspace } from '../domain/types'
 import { LinkedFrom, PageHeaderRow, PageLink, pageLabel, Subpages, useToday } from './page-tree'
 import { ChevronRightIcon, PageKindIcon, PlusIcon } from './icons'
 import { LinkUrlRow } from './link-url-row'
 import { PagesTrashRow, TrashedPage, TrashScreen } from './trash'
 import { useWorkspace } from './use-day'
-import { dayPagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, templates, templateTarget } from '../domain/day-template'
+import { dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, templates, templateTarget } from '../domain/day-template'
 
 /** Asks for a title and creates a document page; resolves to its id, or null if cancelled. */
 export function useCreatePage() {
@@ -33,8 +33,8 @@ export function PagesScreen() {
   const p = workspace?.pages.find(p => p.id === search.page)
   if (search.view === 'trash' && !p) return <TrashScreen />
   if (!workspace) return <p>Loading pages…</p>
-  if (p && isTemplate(p)) return <TemplateScreen key={p.id} page={p} workspace={workspace} />
-  if (search.view === 'templates' && !p) return <TemplatesScreen workspace={workspace} onOpen={setSelected} />
+  if (p && isTemplate(p)) return <TemplateScreen key={p.id} page={p} workspace={workspace} today={today} autoFocusTitle={search.focus === 'title'} onDeleted={() => void navigate({ to: '/pages', search: { view: 'templates' } })} />
+  if (search.view === 'templates' && !p) return <TemplatesScreen workspace={workspace} today={today} onOpen={(page, focus) => void navigate({ to: '/pages', search: { page, ...(focus ? { focus } : {}) } })} />
   if (p && isTrashed(p)) return <TrashedPage key={p.id} page={p} workspace={workspace} />
   if (p) return <div className="doc-screen"><PageHeaderRow page={p} workspace={workspace} />
     <div className="page-head">
@@ -93,30 +93,45 @@ function PageRows({ pages, workspace, onOpen, detail }: { pages: Page[]; workspa
   )
 }
 
-/** B70 (states §1): the Templates list. Part 1 has one target, day pages; "+" and Delete come with subpage defaults. */
-function TemplatesScreen({ workspace, onOpen }: { workspace: Workspace; onOpen: (id: string) => void }) {
+/** "Default for day pages", "Default for pages in Recipes · in Trash", or nothing (states §1, §4). */
+function targetLabel(workspace: Workspace, t: Page, today: string): string {
+  const target = templateTarget(t)
+  if (!target) return ''
+  if (target === dayPagesTarget) return 'Default for day pages'
+  if (target === daySubpagesTarget) return 'Default for pages inside days'
+  const on = workspace.pages.find(p => p.id === target)
+  return on ? `Default for pages in ${pageLabel(on, today)}${isTrashed(on) ? ' · in Trash' : ''}` : ''
+}
+
+/** B70 (states §1): the Templates list, with "+" for a new, blank template. */
+function TemplatesScreen({ workspace, today, onOpen }: { workspace: Workspace; today: string; onOpen: (id: string, focus?: 'title') => void }) {
   const { run } = useWorkspace()
   const list = templates(workspace)
   // Single-flight (Ratchet f0e1b4fd): a second click while the first is on its way does nothing, and a retry after a
-  // failure reuses the same page id, so Edit never makes two "Day" templates.
-  const pending = useRef<{ pageId: string; busy: boolean } | null>(null)
+  // failure reuses the same page id, so Edit never makes two "Day" templates and "+" never two blank ones.
+  const pending = useRef<Record<'day' | 'blank', { pageId: string; busy: boolean } | undefined>>({ day: undefined, blank: undefined })
   const [opening, setOpening] = useState(false)
-  const edit = async () => {
-    if (pending.current?.busy) return
-    pending.current = { pageId: pending.current?.pageId ?? crypto.randomUUID(), busy: true }
-    setOpening(true)
-    const { pageId } = pending.current
-    const receipt = await run({ type: 'create-template', title: dayTemplateTitle, pageId, dayPage: true })
-    pending.current = { pageId, busy: false }
-    setOpening(false)
-    if (receipt) onOpen(receipt.entityId ?? pageId)
+  const make = async (dayPage: boolean) => {
+    const kind = dayPage ? 'day' : 'blank'
+    if (pending.current[kind]?.busy) return
+    const pageId = pending.current[kind]?.pageId ?? crypto.randomUUID()
+    pending.current[kind] = { pageId, busy: true }
+    if (dayPage) setOpening(true)
+    const receipt = await run({ type: 'create-template', title: dayPage ? dayTemplateTitle : '', pageId, ...(dayPage ? { dayPage: true as const } : {}) })
+    // A made template frees the slot for the next one; a failed one keeps its id for the retry.
+    pending.current[kind] = receipt ? undefined : { pageId, busy: false }
+    if (dayPage) setOpening(false)
+    if (receipt) onOpen(receipt.entityId ?? pageId, dayPage ? undefined : 'title')
   }
   return (
     <div className="list-screen">
-      <div className="title-row"><h1 className="large-title">Templates</h1></div>
+      <div className="title-row">
+        <h1 className="large-title">Templates</h1>
+        <button type="button" className="round-add" aria-label="New template" onClick={() => void make(false)}><PlusIcon /></button>
+      </div>
       {/* Only before any template exists: with "Day" in the list (default or not), Edit would make a second one. */}
       {list.length === 0 && !defaultTemplate(workspace, dayPagesTarget) && (
-        <p className="quiet">Day pages start with TODO, Events, Good Stuffs and Notes. · <button type="button" className="link" disabled={opening} onClick={() => void edit()}>{opening ? 'Opening…' : 'Edit'}</button></p>
+        <p className="quiet">Day pages start with TODO, Events, Good Stuffs and Notes. · <button type="button" className="link" disabled={opening} onClick={() => void make(true)}>{opening ? 'Opening…' : 'Edit'}</button></p>
       )}
       {list.length > 0 && (
         <ul className="plain card-list two-line">
@@ -126,7 +141,7 @@ function TemplatesScreen({ workspace, onOpen }: { workspace: Workspace; onOpen: 
                 <span className="card-row-icon"><PageKindIcon url={null} /></span>
                 <span className="card-row-text">
                   <span className={`card-row-title ${t.title ? '' : 'untitled'}`}>{displayPageTitle(t)}</span>
-                  {templateTarget(t) === dayPagesTarget && <span className="card-row-detail">Default for day pages</span>}
+                  {targetLabel(workspace, t, today) && <span className="card-row-detail">{targetLabel(workspace, t, today)}</span>}
                 </span>
                 <ChevronRightIcon />
               </button>
@@ -139,15 +154,22 @@ function TemplatesScreen({ workspace, onOpen }: { workspace: Workspace; onOpen: 
   )
 }
 
-/** B70 (states §2): a template, edited like a document page, with what it is the default for. */
-function TemplateScreen({ page, workspace }: { page: Page; workspace: Workspace }) {
+/** B70 (states §2): a template, edited like a document page, with what it is the default for and Delete. */
+function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: { page: Page; workspace: Workspace; today: string; autoFocusTitle: boolean; onDeleted: () => void }) {
   const { run } = useWorkspace()
   const target = templateTarget(page)
-  const holder = defaultTemplate(workspace, dayPagesTarget)
+  // "Pages in…": documents, as Move to… offers them, plus the current target if it's a day or in the trash.
+  const documents = visiblePages(workspace).filter(p => p.type === 'document')
+  const current = target && target !== dayPagesTarget && target !== daySubpagesTarget ? workspace.pages.find(p => p.id === target) : undefined
+  const pagesIn = current && !documents.includes(current) ? [current, ...documents] : documents
+  const holder = (value: string) => { const h = defaultTemplate(workspace, value); return h && h.id !== page.id ? ` · now ${displayPageTitle(h)}` : '' }
   const setTarget = (next: string) => {
-    const value = next === dayPagesTarget ? dayPagesTarget : null
+    const value = next || null
     if (value === target) return
-    void run({ type: 'set-template-target', pageId: page.id, target: value }, r => ({ text: value ? 'Now the default for day pages' : 'No longer a default', undoOperationId: r.operationId }))
+    void run({ type: 'set-template-target', pageId: page.id, target: value }, r => ({ text: r.message, undoOperationId: r.operationId }))
+  }
+  const remove = async () => {
+    if (await run({ type: 'delete-template', pageId: page.id }, r => ({ text: r.message, undoOperationId: r.operationId }))) onDeleted()
   }
   return (
     <div className="doc-screen template-screen">
@@ -156,14 +178,21 @@ function TemplateScreen({ page, workspace }: { page: Page; workspace: Workspace 
         <nav className="crumbs-path folded" aria-label="Page location"><PageLink className="crumb" href="/pages?view=templates">Templates</PageLink></nav>
       </div>
       <div className="page-head">
-        <PageTitleField key={page.id} page={page} />
+        <PageTitleField key={page.id} page={page} autoFocus={autoFocusTitle} />
         <p className="template-note">
           <label>Default for:{' '}
             <select className="template-target" value={target ?? ''} onChange={e => setTarget(e.target.value)}>
               <option value="">None</option>
-              <option value={dayPagesTarget}>Day pages{holder && holder.id !== page.id ? ` · now ${displayPageTitle(holder)}` : ''}</option>
+              <option value={dayPagesTarget}>Day pages{holder(dayPagesTarget)}</option>
+              <option value={daySubpagesTarget}>Pages inside any day{holder(daySubpagesTarget)}</option>
+              {pagesIn.length > 0 && (
+                <optgroup label="Pages in…">
+                  {pagesIn.map(p => <option key={p.id} value={p.id}>{pageLabel(p, today)}{isTrashed(p) ? ' · in Trash' : ''}{holder(p.id)}</option>)}
+                </optgroup>
+              )}
             </select>
           </label>
+          {' · '}<button type="button" className="link" onClick={() => void remove()}>Delete</button>
         </p>
         <p className="template-note">New pages start from this template. To-dos are copied empty.</p>
       </div>

@@ -2,7 +2,7 @@
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
 import { emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
-import { builtInDayNodes, dayPagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, pageFromTemplate, templateRows } from "./day-template.ts";
+import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, pageFromTemplate, subpageTemplate, templateRows } from "./day-template.ts";
 import { isTrashed, moveRefusal, subtreeIds } from "./page-tree.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
@@ -424,16 +424,20 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     }
     case "create-document": {
       const id = action.pageId ?? newId();
+      if (id === dayPagesTarget || id === daySubpagesTarget) throw new DomainError("Page id already in use");
       const existing = state.pages.find((p) => p.id === id);
       if (existing) {
         if (existing.type !== "document" || (existing.parentId ?? null) !== (action.parentId ?? null)) throw new DomainError("Page id already in use");
         return { message: "Page saved", entityId: id };
       }
-      if (action.parentId) ordinaryPage(state, action.parentId);
+      const parent = action.parentId ? ordinaryPage(state, action.parentId) : undefined;
       const body = text(action.body);
       const line = emptyLine("paragraph");
       if (body) line.content = [textRun(body)];
-      state.pages.push({ id, type: "document", date: null, title: text(action.title, 1000), ...(action.parentId ? { parentId: action.parentId } : {}), document: JSON.stringify([line]) });
+      // B70: a new empty page made inside a page starts from that target's default template; its title isn't copied.
+      const template = parent && !body ? subpageTemplate(state, parent) : undefined;
+      const nodes = template ? pageFromTemplate(template, null) : [line];
+      state.pages.push({ id, type: "document", date: null, title: text(action.title, 1000), ...(action.parentId ? { parentId: action.parentId } : {}), document: JSON.stringify(nodes) });
       return { message: "Page saved", entityId: id };
     }
     case "make-link-pages": {
@@ -529,10 +533,26 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     case "set-template-target": {
       const p = page(state, action.pageId);
       if (!isTemplate(p)) throw new DomainError("Not a template");
+      const target = action.target;
+      let where = "";
+      if (target === dayPagesTarget) where = "day pages";
+      else if (target === daySubpagesTarget) where = "pages inside days";
+      else if (target) {
+        const on = ordinaryPage(state, target);
+        if (isTrashed(on)) throw new DomainError("Page is in trash");
+        where = `pages in ${on.type === "daily" ? on.date : on.title.trim() || "Untitled"}`;
+      }
       // One default per target: setting it here takes it from any other template.
-      if (action.target) for (const t of state.pages) if (isTemplate(t) && t.id !== p.id && t.parentId === action.target) delete t.parentId;
-      if (action.target) p.parentId = action.target; else delete p.parentId;
-      return { message: action.target ? "Now the default for day pages" : "No longer a default", entityId: p.id };
+      if (target) for (const t of state.pages) if (isTemplate(t) && t.id !== p.id && t.parentId === target) delete t.parentId;
+      if (target) p.parentId = target; else delete p.parentId;
+      return { message: target ? `Now the default for ${where}` : "No longer a default", entityId: p.id };
+    }
+    case "delete-template": {
+      // A straight delete, no Trash (states §2); its default goes with it, and Undo brings both back.
+      const p = page(state, action.pageId);
+      if (!isTemplate(p)) throw new DomainError("Not a template");
+      state.pages = state.pages.filter((x) => x.id !== p.id);
+      return { message: `Deleted '${p.title.trim() || "Untitled"}'`, entityId: p.id };
     }
     case "set-timezone":
       state.timezone = validTimezone(action.timezone);

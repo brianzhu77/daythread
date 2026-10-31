@@ -41,3 +41,16 @@ Not tested: WebKit, a real phone, the Cloudflare Worker path, dark mode screensh
   and `create-template` with `dayPage` returns the existing day default instead of a copy. `dblclick.mjs`: a double
   click with 600 ms POST latency makes 1 template (PASS); unit test for the server side.
 - Jazz adf1462 (Edit line only before any template exists; "Templates" crumb) cherry-picked as is.
+
+## Part 2 (`feat/template-subpages`, on ac4dfba)
+
+- "+" New template (blank, title focused, single-flight), Delete (straight delete, notice with Undo, clears its
+  default), Default for: None, Day pages, Pages inside any day, Pages in… (documents; a current target that is a day
+  or in the trash is kept in the list, marked "in Trash").
+- A new empty page made directly inside X starts from X's default; directly inside a day page, from the default for
+  pages inside days (the nearer target wins). Top-level pages and pages made with words stay as they are. The template's
+  title isn't copied. Targets `days` / `day-subpages` are reserved page ids.
+- Checks: `tests/v2-templates.test.ts` 18 pass; `npm test` 169 / 0 / 3; typecheck clean; `flow.mjs` 13 pass and
+  `flow2.mjs` 7 pass (Chromium 1280: + New template, Pages in Recipes, a `/` Page in Recipes starts from it, Delete,
+  Undo), on a throwaway SQLite.
+- Not tested: WebKit, 390, dark, alignment of the list with two rows, Postgres for part 2's targets.

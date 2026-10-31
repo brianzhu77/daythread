@@ -106,8 +106,10 @@ export type Action =
   /** The account's time zone (an IANA name), used for conversions and the export's date. */
   /** A new template under Templates; `dayPage`: a copy of the built-in day headings, made the day pages' default. */
   | { type: "create-template"; title: string; pageId?: string; dayPage?: true }
-  /** What a template is the default for (one template per target); null: nothing. */
-  | { type: "set-template-target"; pageId: string; target: "days" | null }
+  /** What a template is the default for (one template per target): "days", "day-subpages", a page id; null: nothing. */
+  | { type: "set-template-target"; pageId: string; target: string | null }
+  /** The template goes for good (no Trash); Undo brings it back. */
+  | { type: "delete-template"; pageId: string }
   | { type: "set-timezone"; timezone: string }
   | { type: "undo"; targetOperationId: string };
 
