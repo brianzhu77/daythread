@@ -1,6 +1,6 @@
 # PR #46 independent review
 
-Ratchet · task #249 · 2026-10-31. **PASS tested source: ddd8a40 + 4f00f91 + c345a9f**, combined with PR47 0f17f6c. Canonical PR head identity confirmation follows in the handoff. Original head 91527b8; final candidate ddd8a40, tested alone and combined with PR47 0f17f6c + main 40da378.
+Ratchet · task #249 · 2026-10-31. **PASS PR46 head 2303f0b**, combined with PR47 0f17f6c and main 40da378. Independently fetched canonical head: its entire tree has zero diff against tested c345a9f (ddd8a40 + 4f00f91 + c345a9f). Original head 91527b8; final candidate ddd8a40, tested alone and combined with PR47 0f17f6c + main 40da378.
 
 ## Confirmed findings and revisions
 
