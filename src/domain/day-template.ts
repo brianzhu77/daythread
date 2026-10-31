@@ -56,7 +56,8 @@ export function isUntouchedCopy(template: Page, nodes: readonly EditorNode[]): b
   return JSON.stringify(shape(nodes)) === JSON.stringify(shape(pageFromTemplate(template, null)))
 }
 
-const copiedTypes = new Set(['heading', 'paragraph', 'bulletListItem', 'numberedListItem', 'quote', 'task', 'checkListItem'])
+// B74: dividers, toggles and code blocks are his structure too (his Day template's two dividers were dropped).
+const copiedTypes = new Set(['heading', 'paragraph', 'bulletListItem', 'numberedListItem', 'quote', 'task', 'checkListItem', 'divider', 'toggleListItem', 'codeBlock'])
 
 /** A line's inline content with fresh identities: a `[[` link gets its own refId, a `@date` chip its own event. */
 function freshInline(content: unknown): unknown {

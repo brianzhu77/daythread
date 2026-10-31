@@ -1,6 +1,6 @@
 // The domain: commands over the workspace (pure, one at a time, with receipts for replay and one Undo slot) and the
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
-import { emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
+import { dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget } from "./day-template.ts";
 import { isTrashed, moveRefusal, subtreeIds } from "./page-tree.ts";
@@ -201,7 +201,7 @@ function planOn(state: Workspace, t: Task, day: string, options: { from?: string
   const doc = docOf(target);
   let changed = false;
   if (rowIdsOf(doc, t.id).size) changed = setRole(doc, t.id, "plan", day);
-  else { doc.splice(rowInsertIndex(doc, new Set(state.tasks.map((x) => x.id))), 0, planRow(t, day)); changed = true; }
+  else { doc.splice(dayRowInsertIndex(doc, new Set(state.tasks.map((x) => x.id))), 0, planRow(t, day)); changed = true; }
   if (nestCarried(state, target, doc, t.id)) changed = true;
   if (changed) setDocument(target, doc);
   if (t.paused) { t.paused = false; t.version++; }
@@ -350,7 +350,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const plannedHere = Boolean(action.plannedOn && p.type === "daily" && p.date === action.plannedOn);
       const doc = docOf(p);
       const row = plannedHere ? planRow(t, p.date!) : { ...planRow(t, ""), props: { taskId: t.id, role: "reference", planDate: "" } };
-      doc.splice(rowInsertIndex(doc, new Set(state.tasks.map((x) => x.id))), 0, row);
+      const insertAt = p.type === "daily" ? dayRowInsertIndex : rowInsertIndex;
+      doc.splice(insertAt(doc, new Set(state.tasks.map((x) => x.id))), 0, row);
       setDocument(p, doc);
       if (action.plannedOn && !plannedHere) planOn(state, t, date(action.plannedOn));
       return { message: "Task added", entityId: t.id };
