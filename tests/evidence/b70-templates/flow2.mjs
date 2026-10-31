@@ -26,7 +26,7 @@ await page.keyboard.type('Ingredients')
 await page.waitForTimeout(1500)
 // Default for: Pages in Recipes.
 const options = await page.locator('.template-target option').allInnerTexts()
-check('menu offers day pages, top-level pages, pages inside days and Recipes', ['Day pages', 'Top-level pages', 'Pages inside any day', 'Recipes'].every(w => options.some(o => o.startsWith(w))), JSON.stringify(options))
+check('menu offers day pages, top-level pages, pages inside days and Recipes', ['Day pages', 'Top-level pages', 'Pages inside any day', 'Pages in Recipes'].every(w => options.some(o => o.startsWith(w))), JSON.stringify(options))
 const recipesValue = await page.locator('.template-target option', { hasText: 'Recipes' }).getAttribute('value')
 await page.locator('.template-target').selectOption(recipesValue)
 await page.waitForTimeout(800)
