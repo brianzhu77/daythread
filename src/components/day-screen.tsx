@@ -1,4 +1,5 @@
 import type { LocalDate } from '../domain/types'
+import { DraftLine } from './day-draft'
 import { getCalendarTasks } from '../domain/workspace'
 import { longLabel } from './dates'
 import { ContinuousPage } from './continuous-page'
@@ -57,6 +58,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
     <div className="day-screen">
       <DayHeader date={date} today={today} />
       {page && <LinkedFrom page={page} workspace={workspace} />}
+      {page && isToday && <DraftLine page={page} />}
 
       <div className="day-body">
         {showHandoff && <StartTheDay view={view} workspace={workspace} today={today} onLater={() => setLater(true)} onBusy={setHandoffBusy} />}

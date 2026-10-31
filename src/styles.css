@@ -1556,3 +1556,41 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 
 .today-events { gap: 0; }
 .today-events .page-ref-icon { margin-right: 6px; }
+
+/* ---------- B76 day draft (Jazz docs/design/day-draft-states.md) ---------- */
+/* The one line under the title: the facts strip's size and spacing. */
+.draft-line { margin: 6px 0 10px; min-height: 24px; font-size: var(--text-small); color: var(--ink-2); display: flex; flex-wrap: wrap; align-items: center; column-gap: 0; }
+.draft-line .sep { color: var(--ink-3); white-space: pre; }
+.draft-line button { font: inherit; color: var(--ink-2); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+.draft-line .draft-primary { color: var(--blue-text); font-weight: var(--weight-semibold); text-decoration: none; }
+.draft-line .draft-warn { color: var(--warn); }
+.draft-spin { width: 14px; height: 14px; margin-right: 6px; border: 2px solid var(--line); border-top-color: var(--ink-2); border-radius: 50%; animation: draft-spin .8s linear infinite; }
+@keyframes draft-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .draft-spin { animation: none; } }
+@media (max-width: 599px) { .draft-line button { min-height: 44px; } }
+
+/* A suggestion: not his text yet. Blue band and bar, his ink and size, its text where his row's text would be. */
+.draft-host { user-select: none; -webkit-user-select: none; }
+.draft-band { position: relative; display: flex; align-items: center; gap: var(--draft-gap, 13px); min-height: 32px; margin: 2px 0; padding: 3px 76px 3px var(--draft-pad, 14px); border-radius: 8px; background: var(--blue-soft); box-shadow: inset 2px 0 0 var(--blue); font-size: var(--text-body); color: var(--ink); }
+@media (hover: hover) { .draft-band { min-height: 44px; } }
+.draft-band.is-bullet { --draft-pad: 45px; }
+.draft-band.is-bullet::before { content: ''; position: absolute; left: 20px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--ink); }
+.draft-band.is-line { --draft-pad: 14px; }
+.draft-box { flex: none; width: 18px; height: 18px; border: 1.5px solid var(--check); border-radius: 4px; box-sizing: border-box; }
+.draft-text { min-width: 0; outline: none; user-select: text; -webkit-user-select: text; overflow-wrap: anywhere; }
+.draft-text:focus { box-shadow: 0 1px 0 var(--blue); }
+.draft-since { flex: none; font-size: var(--text-meta); color: var(--ink-3); white-space: nowrap; }
+.draft-acts { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; }
+.draft-acts button { display: grid; place-items: center; width: 32px; height: 30px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--ink-2); cursor: pointer; }
+.draft-acts button svg { width: 16px; height: 16px; flex: none; }
+@media (hover: hover) { .draft-acts button:hover { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--ink); } }
+.draft-acts button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+@media (max-width: 599px) { .draft-band { padding-right: 92px; } .draft-acts { right: 0; } .draft-acts button { width: 44px; height: 40px; } }
+
+/* "N more open": quiet, the strip's meta size; its rows are plain (not suggestions), with ＋. */
+.draft-more { margin: 4px 0 2px; }
+.draft-more-toggle { font: inherit; font-size: var(--text-small); color: var(--ink-3); background: none; border: 0; padding: 6px 0 6px 10px; cursor: pointer; }
+.draft-chev { display: inline-block; transition: transform .15s; }
+.draft-more-toggle[aria-expanded="true"] .draft-chev { transform: rotate(90deg); }
+.draft-band.is-open-row { background: none; box-shadow: none; color: var(--ink-2); }
+@media (max-width: 599px) { .draft-more-toggle { min-height: 44px; } }
