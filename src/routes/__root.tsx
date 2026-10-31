@@ -3,11 +3,18 @@ import { Analytics } from '@vercel/analytics/react'
 import { AppShell } from '../components/app-shell'
 import { splashLinks } from '../components/splash'
 import { getAppInfo } from '../server/functions'
+import { previewStorageKey } from '../components/preview'
 import '../styles.css'
 
+/** The last answer this browser saw (`usePreview` keeps it), for a boot whose call fails. */
+function recallPreview() {
+  try { return { preview: typeof window !== 'undefined' && localStorage.getItem(previewStorageKey) === '1' } } catch { return { preview: false } }
+}
+
 export const Route = createRootRoute({
-  // Read once, on the server for the first page; offline or failed, it's production's frame (no preview marks).
-  loader: async () => getAppInfo().catch(() => ({ preview: false })),
+  // Read once, on the server for the first page. The browser remembers the answer, so an app that boots offline or
+  // whose call fails keeps the frame it last had: a preview never passes for production (Ratchet 247d661c).
+  loader: async () => getAppInfo().catch(recallPreview),
   staleTime: Infinity,
   head: ({ loaderData }) => ({
     meta: [
