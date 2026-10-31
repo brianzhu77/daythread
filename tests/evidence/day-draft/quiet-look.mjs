@@ -40,6 +40,8 @@ for (const [name, br, w, h] of [['webkit', webkit, 390, 844], ['chromium', chrom
   ok(st.ink !== st.hisInk, `${tag}: muted ink, not his ${JSON.stringify([st.ink, st.hisInk])}`)
   ok(st.box === 'dashed' && st.dot === 'dashed' && st.line === 'dashed', `${tag}: to-do box, bullet dot and line underline dashed ${JSON.stringify([st.box, st.dot, st.line])}`)
   ok(w > 600 ? st.acts === '0' : st.acts === '1', `${tag}: ✓/✕ ${w > 600 ? 'hidden until hover' : 'visible on the phone'} (opacity ${st.acts})`)
+  const lineDeco = await p.locator('.draft-line button').evaluateAll(bs => bs.map(b => getComputedStyle(b).textDecorationLine))
+  ok(lineDeco.length > 0 && lineDeco.every(d => d === 'none'), `${tag}: the top line's buttons have no underline (only a line suggestion does) ${JSON.stringify(lineDeco)}`)
   if (w > 600) { await p.locator('.draft-band[data-draft-item=t1]').hover(); await p.waitForTimeout(250); ok(await p.locator('.draft-band[data-draft-item=t1] .draft-acts').evaluate(e => getComputedStyle(e).opacity) === '1', `${tag}: ✓/✕ show on hover`); await p.mouse.move(5, 5); await p.waitForTimeout(250) }
   await p.screenshot({ path: `${out}/quiet-${name}-${scheme}.png` })
   await b.close()

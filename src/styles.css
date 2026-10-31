@@ -1510,7 +1510,9 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 /* The one line under the title: the facts strip's size and spacing. */
 .draft-line { margin: 6px 0 10px; min-height: 24px; font-size: var(--text-small); color: var(--ink-2); display: flex; flex-wrap: wrap; align-items: center; column-gap: 0; }
 .draft-line .sep { color: var(--ink-3); white-space: pre; }
-.draft-line button { font: inherit; color: var(--ink-2); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+/* Plain muted text, no underline: on this page an underline belongs to a line suggestion (Bumblebee, #50). */
+.draft-line button { font: inherit; color: var(--ink-2); background: none; border: 0; padding: 0; cursor: pointer; }
+@media (hover: hover) { .draft-line button:not(.draft-primary):hover { color: var(--ink); } }
 .draft-line .draft-primary { color: var(--blue-text); font-weight: var(--weight-semibold); text-decoration: none; }
 .draft-line .draft-warn { color: var(--warn); }
 .draft-spin { width: 14px; height: 14px; margin-right: 6px; border: 2px solid var(--line); border-top-color: var(--ink-2); border-radius: 50%; animation: draft-spin .8s linear infinite; }
