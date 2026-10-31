@@ -53,6 +53,15 @@ no explanatory text; every line states data or a state.
 | **Past days, future days** | No draft | none | |
 | **Template without headings / no template** | Bands go where the fallback rules put them | as Ready | Same interaction on the built-in day |
 
+## 2a. Engineering notes taken in (Roadbuster `dc2f04a4`)
+
+- **Anchors are the day page's own block ids**, not the template's. A **fill** applies only if that block is still empty at
+  the moment of applying; otherwise it becomes an **after**. A deleted anchor sends the band to the end of the planning
+  part. This is what makes "He wrote in a slot first", "Stale draft" and "another device" work.
+- **Stored as a hidden page** of `type: "draft"` under the day page (like templates); Apply, Skip and Dismiss are commands
+  on it; Undo comes from the operation log.
+- **Show keeps the scroll anchored** on the line he's looking at, so bands appearing above don't move what he sees.
+
 ## 3. What he no longer sees
 
 - The Start the day card (Add all, Not today, Another day, Done, Later), the "Continue?" line, and the Tomorrow block.
