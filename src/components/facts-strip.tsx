@@ -14,42 +14,19 @@ interface Props {
   workspace: Workspace
   date: LocalDate
   today: LocalDate
-  /** Shown as a collapsed line when Start the day was set aside with Later. */
-  handoffCollapsed: boolean
-  /** Rows waiting in the collapsed morning card. */
-  handoffCount: number
-  onReopenHandoff: () => void
-  handoffSettled: boolean
-  /** Tasks that are rows in the open morning card; "N other open tasks" leaves them out. */
-  cardTaskIds?: ReadonlySet<string>
 }
 
 /** Computed facts above the page, never page text. No counts to clear. */
-export function FactsStrip({ view, workspace, date, today, handoffCollapsed, handoffCount, onReopenHandoff, handoffSettled, cardTaskIds }: Props) {
+export function FactsStrip({ view, workspace, date, today }: Props) {
   const isToday = date === today
   const pageTaskIds = new Set(view.page ? flatNodes(pageNodes(view.page)).map(rowTaskId).filter(Boolean) : [])
   const dueSoon = view.attention.filter(t => !pageTaskIds.has(t.id))
-  // Tasks already placed on this day are on the page, and rows of the open morning card are on the card; the pool lists
-  // the rest. Done, Later or hiding the card counts its tasks again.
-  const stillOpen = view.openPool.filter(t => plannedOn(workspace, t.id) !== date && !cardTaskIds?.has(t.id))
+  // Tasks already placed on this day are on the page; the pool lists the rest.
+  const stillOpen = view.openPool.filter(t => plannedOn(workspace, t.id) !== date)
 
   return (
     <div className="facts" aria-label="Facts for this day">
       {isToday && view.events.length > 0 && <TodayEvents events={view.events} headingId={view.page ? eventsHeading(pageNodes(view.page))?.id : undefined} />}
-      {isToday && handoffCollapsed && (
-        <button type="button" className="fact-line link-line" onClick={onReopenHandoff}>
-          Suggestions · {handoffCount} ▸
-        </button>
-      )}
-
-      {isToday && handoffSettled && view.carry.length > 0 && (
-        <div className="fact-block">
-          <p className="fact-label">Continue?</p>
-          {view.carry.slice(0, 3).map(t => (
-            <PoolRow key={t.id} task={t} today={today} />
-          ))}
-        </div>
-      )}
 
       {dueSoon.length > 0 && (
         <div className="fact-block">
