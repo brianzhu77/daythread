@@ -6,7 +6,7 @@ export type LocalDate = string;
 export interface Page {
   id: string;
   /** `template`: the day template (B70), one per workspace, copied into each new day page; never listed as a page. */
-  type: "daily" | "document" | "template";
+  type: "daily" | "document" | "template" | "draft";
   /** Day pages: their date; one page per date, id `day:<date>`. */
   date: LocalDate | null;
   title: string;
@@ -110,6 +110,9 @@ export type Action =
   | { type: "set-template-target"; pageId: string; target: string | null }
   /** The template goes for good (no Trash); Undo brings it back. */
   | { type: "delete-template"; pageId: string }
+  | { type: "set-draft"; pageId: string; status: import("./day-draft.ts").DraftStatus; items: import("./day-draft.ts").DraftItem[]; moreOpen: string[]; allowedTaskIds: string[] }
+  | { type: "apply-draft"; pageId: string; itemIds: string[]; edits?: Record<string, string>; today?: LocalDate }
+  | { type: "skip-draft"; pageId: string; itemIds: string[] }
   | { type: "set-timezone"; timezone: string }
   | { type: "undo"; targetOperationId: string };
 
