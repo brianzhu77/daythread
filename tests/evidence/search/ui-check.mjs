@@ -34,7 +34,7 @@ await run('laptop-shortcut-and-results', 1280, async page => {
   await page.waitForFunction(() => document.activeElement?.getAttribute('type') === 'search')
   const empty = await dialog(page).innerText()
   assert(empty.includes('Today'), 'the empty field lists Today')
-  assert(empty.includes('Type to search everything'), 'the hint')
+  assert(!empty.includes('Type to search'), 'no hint (Brian 1ac6784b)')
   await settled(page)
   await page.screenshot({ path: `${out}/laptop-empty.png` })
   await field(page).fill('soup')

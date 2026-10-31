@@ -10,7 +10,7 @@ for (const [port, preview] of [[3658, false], [3661, true]]) {
     const g = await p.evaluate(() => ({ title: document.title, cap: !!document.querySelector('.brand-preview'), capVisible: (() => { const e = document.querySelector('.brand-preview'); return !!e && e.getBoundingClientRect().width > 0 })(), note: (() => { const e = document.querySelector('.preview-note'); return e && e.getBoundingClientRect().height > 0 ? e.textContent : null })() }))
     if (!preview) ok(g.title === 'Daythread' && !g.cap && !g.note, `${tag}: production shows no preview marks (title "${g.title}")`)
     else if (width === 1280) ok(g.title === 'Daythread Preview' && g.capVisible && !g.note, `${tag}: caption by the wordmark, no phone line`)
-    else ok(g.title === 'Daythread Preview' && g.note === 'Preview · notes written here stay here', `${tag}: phone line on top`)
+    else ok(g.title === 'Daythread Preview' && g.note === 'Preview', `${tag}: phone line on top`)
     ok(errs.length === 0, `${tag}: no page errors ${errs.join(' | ')}`)
     await p.screenshot({ path: `${out}/${tag}.png`, clip: { x: 0, y: 0, width, height: width === 390 ? 260 : 200 } })
     await b.close()

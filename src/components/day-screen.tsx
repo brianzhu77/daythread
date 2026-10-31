@@ -1,6 +1,5 @@
 import type { LocalDate } from '../domain/types'
 import { getCalendarTasks } from '../domain/workspace'
-import { isBlankWorkspace } from '../domain/page-tree'
 import { longLabel } from './dates'
 import { ContinuousPage } from './continuous-page'
 import { LinkedFrom, Subpages } from './page-tree'
@@ -19,10 +18,6 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
   const [later, setLater] = useHandoffLater(date)
   const [handoffBusy, setHandoffBusy] = useState(false)
   const page = view?.page ?? null
-  // The first-day line is decided once per visit, so it never vanishes under the caret mid-sentence; it is gone on the
-  // next visit after anything is written (empty-start-states §2a).
-  const blankAt = useRef<{ date: LocalDate; blank: boolean } | null>(null)
-  if (workspace && blankAt.current?.date !== date) blankAt.current = { date, blank: isBlankWorkspace(workspace) }
 
   // Opening today or a past date creates its page from the template; no model call happens on open (01 §3.1).
   // A future day is never created by looking at it (date navigation rules R7); past days wait on R10.
@@ -53,7 +48,6 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
     )
 
   const isToday = date === today
-  const firstDay = isToday && blankAt.current?.blank === true
   // The card stays while an Undo strip shows, even after its last row was added (morning card §6).
   const showHandoff = isToday && page && !page.handoffDone && !later && (hasHandoffContent(view, workspace, today) || handoffBusy)
   const handoffSettled = !showHandoff
@@ -61,7 +55,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
 
   return (
     <div className="day-screen">
-      <DayHeader date={date} today={today} firstDay={firstDay} />
+      <DayHeader date={date} today={today} />
       {page && <LinkedFrom page={page} workspace={workspace} />}
 
       <div className="day-body">

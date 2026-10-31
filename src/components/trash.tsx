@@ -102,7 +102,6 @@ export function TrashScreen() {
       <PageLink className="trash-back" href="/pages"><ChevronRightIcon />Pages</PageLink>
       <div className="title-row"><h1 className="large-title">Trash</h1></div>
       {batches.length === 0 ? <p className="quiet">Trash is empty</p> : <>
-        <p className="trash-intro">Deleted pages stay here until you restore them. Tasks inside them keep working.</p>
         <ul className="plain card-list two-line">
           {batches.map(b => {
             const n = b.members.length - 1
