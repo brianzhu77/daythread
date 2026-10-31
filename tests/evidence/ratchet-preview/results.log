@@ -1,0 +1,10 @@
+PASS visual/runtime/fallback chromium true light
+PASS visual/runtime/fallback chromium true dark
+PASS visual/runtime/fallback chromium false light
+PASS visual/runtime/fallback chromium false dark
+PASS visual/runtime/fallback webkit true light
+PASS visual/runtime/fallback webkit true dark
+PASS visual/runtime/fallback webkit false light
+PASS visual/runtime/fallback webkit false dark
+PASS cold new-tab offline cached SSR 390
+PASS cold new-tab offline cached SSR 1280
