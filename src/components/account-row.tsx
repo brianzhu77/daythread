@@ -60,12 +60,12 @@ export function AccountRow({ className }: { className: string }) {
     }
   }
   const retry = <button type="button" className="link retry" onClick={() => void exportAll()}>Try again</button>
-  const exportLink = exporting === 'failed' ? <><span className="account-text">Couldn’t export · </span>{retry}</>
-    : exporting === 'unsaved' ? <><span className="account-text">Not exported · latest text not saved yet · </span>{retry}</>
+  const exportLink = exporting === 'failed' ? <><span className="account-text">Couldn’t export</span>{'\u00a0· '}{retry}</>
+    : exporting === 'unsaved' ? <><span className="account-text">Not exported · latest text not saved yet</span>{'\u00a0· '}{retry}</>
     : <button type="button" className="link" disabled={exporting === 'busy'} onClick={() => void exportAll()}>{exporting === 'busy' ? 'Exporting…' : 'Export'}</button>
   return (
     <div className={`account-row ${className}`}>
-      <p>
+      <p><span className="account-items">
         {email && <AccountItem><span className="account-text account-email">{email}</span></AccountItem>}
         {email && account.timezone && (
           <AccountItem>
@@ -81,7 +81,7 @@ export function AccountRow({ className }: { className: string }) {
         <HomeScreenHint />
         {email && <AccountItem><button type="button" className="link" onClick={() => void signOut()}>Sign out</button></AccountItem>}
         {email && !deleting && <AccountItem><button type="button" className="link" onClick={() => setDeleting(true)}>Delete account</button></AccountItem>}
-      </p>
+      </span></p>
       {email && deleting && <DeleteAccount onCancel={() => setDeleting(false)} />}
     </div>
   )
