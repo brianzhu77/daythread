@@ -34,6 +34,8 @@ function place(doc: PMNode, anchor: RowsAnchor, host: HTMLElement): DecorationSe
   })
   if (at < 0) at = doc.content.size - 1
   host.classList.toggle('is-page-end', anchor.labelled || at === doc.content.size - 1)
+  // B75 (Jazz 31f5b493): mid-section, before one of his lines, the rows keep the gap his own rows have.
+  host.classList.toggle('is-in-section', anchor.labelled && at < doc.content.size - 1)
   return DecorationSet.create(doc, [Decoration.widget(at, host, { key: 'event-rows', side: -1, ignoreSelection: true, stopEvent: () => true })])
 }
 
