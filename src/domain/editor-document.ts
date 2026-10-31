@@ -131,6 +131,23 @@ export function rowInsertIndex(doc: readonly EditorNode[], tasks: ReadonlySet<st
   while (end > floor && isEmptyLine(doc[end - 1]!)) end--
   return end
 }
+/**
+ * Where a new plan row goes on a DAY page (carried, planned or added). B74 (Bumblebee 8bb0f23d, Lead 3d87f348): as
+ * their own group right under the heading above the page's first to-do row (with no to-do row, the first heading),
+ * above that section's first line, after the rows already in the group; with no such heading, at the top of the page.
+ * The rule never reads his words, so a label he wrote ("Intentional Drop") never gives a carried to-do a meaning, and
+ * his empty to-dos stay empty. On the built-in day that is under TODO, above its empty row, as before. Other pages keep
+ * `rowInsertIndex`: on a link page that is below the quote.
+ */
+export function dayRowInsertIndex(doc: readonly EditorNode[], tasks: ReadonlySet<string>): number {
+  const firstRow = doc.findIndex(n => flatNodes([n]).some(isTaskRow))
+  let heading = firstRow
+  if (firstRow < 0) heading = doc.findIndex(n => n.type === 'heading')
+  else while (heading >= 0 && doc[heading]!.type !== 'heading') heading--
+  let end = heading + 1
+  while (end < doc.length && isTaskRow(doc[end]!) && tasks.has(String(doc[end]!.props!.taskId))) end++
+  return end
+}
 /** The same for a line brought under a heading: before that section's trailing empty lines. */
 export function sectionInsertIndex(doc: readonly EditorNode[], headingId: string): number {
   const heading = doc.findIndex(n => n.id === headingId)
