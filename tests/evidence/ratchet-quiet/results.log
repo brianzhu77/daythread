@@ -1,0 +1,6 @@
+PASS opening guard and same-page-ID retry chromium 1
+PASS quiet template list/editor chromium light
+PASS quiet template list/editor chromium dark
+PASS opening guard and same-page-ID retry webkit 2
+PASS quiet template list/editor webkit light
+PASS quiet template list/editor webkit dark
