@@ -116,13 +116,15 @@ export function sectionRange(nodes: readonly EditorNode[], id: string): EditorNo
 
 /**
  * Where a new row goes on a page: after the last top-level to-do row that holds a task, else at the end of the first
- * heading's section, else at the end of the page; in each case above the trailing empty lines, so the empty row ready
+ * section with a to-do row in it (B70: his template may not start with its to-dos), else of the first heading's section,
+ * else at the end of the page; in each case above the trailing empty lines, so the empty row ready
  * for typing stays last.
  */
 export function rowInsertIndex(doc: readonly EditorNode[], tasks: ReadonlySet<string>): number {
   const lastTask = doc.map((n, i) => (isTaskRow(n) && tasks.has(String(n.props!.taskId)) ? i : -1)).filter(i => i >= 0).at(-1)
   if (lastTask !== undefined) return lastTask + 1
-  const heading = doc.findIndex(n => n.type === 'heading')
+  const headings = doc.flatMap((n, i) => (n.type === 'heading' ? [i] : []))
+  const heading = headings.find(i => flatNodes(sectionRange(doc, doc[i]!.id).slice(1)).some(n => n.type === 'task')) ?? headings[0] ?? -1
   let end: number
   if (heading >= 0) { const range = sectionRange(doc, doc[heading]!.id); end = heading + range.length } else end = doc.length
   const floor = heading >= 0 ? heading + 1 : 0

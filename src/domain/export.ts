@@ -1,5 +1,6 @@
 import { editorSeed, inlineText, pageNodes, type EditorNode } from './editor-document.ts'
 import type { Page, Workspace } from './types.ts'
+import { isTemplate } from './day-template.ts'
 
 /**
  * Export: his words out of the app, readable without its code. A folder of Markdown (a day page per date, a document
@@ -15,11 +16,14 @@ export function exportFiles(ws: Workspace, now: Date): ExportFile[] {
   const names = fileNames(ws)
   const live = ws.pages.filter(p => !p.trashedAt)
   const days = live.filter(p => p.type === 'daily' && p.date).sort((a, b) => (a.date! < b.date! ? -1 : 1))
-  const documents = live.filter(p => !(p.type === 'daily' && p.date)).sort((a, b) => names.get(a.id)!.localeCompare(names.get(b.id)!))
+  const templates = live.filter(isTemplate)
+  const documents = live.filter(p => !(p.type === 'daily' && p.date) && !isTemplate(p)).sort((a, b) => names.get(a.id)!.localeCompare(names.get(b.id)!))
   return [
     { path: `${root}/README.md`, text: readme(day, ws.timezone) },
     ...days.map(p => ({ path: `${root}/days/${names.get(p.id)}.md`, text: pageMarkdown(p, ws, names) })),
     ...documents.map(p => ({ path: `${root}/pages/${names.get(p.id)}.md`, text: pageMarkdown(p, ws, names) })),
+    // His templates are his setup, kept with the rest (Bumblebee 981cfd3f), in their own folder rather than as pages.
+    ...templates.map(p => ({ path: `${root}/templates/${names.get(p.id)}.md`, text: pageMarkdown(p, ws, names) })),
     { path: `${root}/workspace.json`, text: JSON.stringify(exportJson(ws, now, names), null, 2) },
   ]
 }
@@ -45,8 +49,10 @@ export function safeName(title: string): string {
 
 /** One page as Markdown: its title, then its document as he sees it, nesting kept, to-dos as `- [ ]` / `- [x]`. */
 export function pageMarkdown(p: Page, ws: Workspace, names: Map<string, string>): string {
-  const parent = p.parentId ? names.get(p.parentId) : undefined
-  const front = ['---', `daythread-id: ${yamlString(p.id)}`, ...(p.date ? [`date: ${p.date}`] : []), ...(p.url ? [`url: ${yamlString(p.url)}`] : []), ...(parent ? [`parent: ${yamlString(`[[${parent}]]`)}`] : []), '---']
+  // A template's parentId is its target ("days"), not a page it sits in.
+  const template = isTemplate(p)
+  const parent = p.parentId && !template ? names.get(p.parentId) : undefined
+  const front = ['---', `daythread-id: ${yamlString(p.id)}`, ...(p.date ? [`date: ${p.date}`] : []), ...(p.url ? [`url: ${yamlString(p.url)}`] : []), ...(parent ? [`parent: ${yamlString(`[[${parent}]]`)}`] : []), ...(template && p.parentId ? [`template-for: ${yamlString(p.parentId)}`] : []), '---']
   const title = p.type === 'daily' && p.date ? p.date : p.title || 'Untitled'
   const body = [p.url ? `<${p.url}>` : '', blocksMarkdown(editorSeed(p, ws), ws, names)].filter(Boolean).join('\n\n')
   return `${front.join('\n')}\n\n# ${title}\n${body ? `\n${body}\n` : ''}`
@@ -163,7 +169,7 @@ function yamlString(value: string): string {
 export function exportJson(ws: Workspace, now: Date, names = fileNames(ws)) {
   const pages = ws.pages.map(p => {
     const { document: _document, ...rest } = p
-    const folder = p.type === 'daily' && p.date ? 'days' : 'pages'
+    const folder = p.type === 'daily' && p.date ? 'days' : isTemplate(p) ? 'templates' : 'pages'
     return { ...rest, document: pageNodes(p), markdownFile: p.trashedAt ? null : `${folder}/${names.get(p.id)}.md` }
   })
   return { format: 'daythread-export', formatVersion: exportFormatVersion, exportedAt: now.toISOString(), schemaVersion: ws.schemaVersion, revision: ws.revision, timezone: ws.timezone, pages, tasks: ws.tasks }
@@ -174,6 +180,7 @@ function readme(day: string, timezone: string): string {
 
 - \`days/\`: one Markdown file per day page, named by its date (${timezone}).
 - \`pages/\`: one Markdown file per page that isn't a day. \`[[links]]\` point at these files by name, so the folder opens as an Obsidian vault.
+- \`templates/\`: one Markdown file per template; \`template-for: days\` marks the one new day pages start from.
 - \`workspace.json\`: every fact behind the pages (pages with their documents, tasks, trashed pages), format \`daythread-export\` version ${exportFormatVersion}. A page's \`document\` is BlockNote JSON; \`markdownFile\` names its Markdown file.
 
 To-dos are \`- [ ]\` open, \`- [x]\` done, \`- [-]\` cancelled. Nested lines are indented one tab per level.

@@ -19,6 +19,8 @@ export interface RowActions {
   /** The page's day; null on a page that isn't a day. */
   pageDate: LocalDate | null
   today: LocalDate
+  /** B70: a template's to-dos are rows only: no task is read, ticked or changed from them (Ratchet b0315979). */
+  rowsOnly?: boolean
   act(blockId: string, task: Task, intent: RowIntent): void
   /** A11: copies a link to the line, or null where Copy link to line isn't offered. */
   copyLink(blockId: string): (() => void) | null

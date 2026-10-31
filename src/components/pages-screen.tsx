@@ -1,14 +1,16 @@
+import { useRef, useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AccountRow } from './account-row'
 import { ContinuousPage } from './continuous-page'
 import { displayPageTitle, PageTitleField } from './page-title'
 import { childPages, isTrashed, pagesInDays, parentOf } from '../domain/page-tree'
 import type { Page, Workspace } from '../domain/types'
-import { LinkedFrom, PageHeaderRow, pageLabel, Subpages, useToday } from './page-tree'
+import { LinkedFrom, PageHeaderRow, PageLink, pageLabel, Subpages, useToday } from './page-tree'
 import { ChevronRightIcon, PageKindIcon, PlusIcon } from './icons'
 import { LinkUrlRow } from './link-url-row'
 import { PagesTrashRow, TrashedPage, TrashScreen } from './trash'
 import { useWorkspace } from './use-day'
+import { dayPagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, templates, templateTarget } from '../domain/day-template'
 
 /** Asks for a title and creates a document page; resolves to its id, or null if cancelled. */
 export function useCreatePage() {
@@ -31,6 +33,8 @@ export function PagesScreen() {
   const p = workspace?.pages.find(p => p.id === search.page)
   if (search.view === 'trash' && !p) return <TrashScreen />
   if (!workspace) return <p>Loading pages…</p>
+  if (p && isTemplate(p)) return <TemplateScreen key={p.id} page={p} workspace={workspace} />
+  if (search.view === 'templates' && !p) return <TemplatesScreen workspace={workspace} onOpen={setSelected} />
   if (p && isTrashed(p)) return <TrashedPage key={p.id} page={p} workspace={workspace} />
   if (p) return <div className="doc-screen"><PageHeaderRow page={p} workspace={workspace} />
     <div className="page-head">
@@ -86,5 +90,84 @@ function PageRows({ pages, workspace, onOpen, detail }: { pages: Page[]; workspa
         )
       })}
     </ul>
+  )
+}
+
+/** B70 (states §1): the Templates list. Part 1 has one target, day pages; "+" and Delete come with subpage defaults. */
+function TemplatesScreen({ workspace, onOpen }: { workspace: Workspace; onOpen: (id: string) => void }) {
+  const { run } = useWorkspace()
+  const list = templates(workspace)
+  // Single-flight (Ratchet f0e1b4fd): a second click while the first is on its way does nothing, and a retry after a
+  // failure reuses the same page id, so Edit never makes two "Day" templates.
+  const pending = useRef<{ pageId: string; busy: boolean } | null>(null)
+  const [opening, setOpening] = useState(false)
+  const edit = async () => {
+    if (pending.current?.busy) return
+    pending.current = { pageId: pending.current?.pageId ?? crypto.randomUUID(), busy: true }
+    setOpening(true)
+    const { pageId } = pending.current
+    const receipt = await run({ type: 'create-template', title: dayTemplateTitle, pageId, dayPage: true })
+    pending.current = { pageId, busy: false }
+    setOpening(false)
+    if (receipt) onOpen(receipt.entityId ?? pageId)
+  }
+  return (
+    <div className="list-screen">
+      <div className="title-row"><h1 className="large-title">Templates</h1></div>
+      {/* Only before any template exists: with "Day" in the list (default or not), Edit would make a second one. */}
+      {list.length === 0 && !defaultTemplate(workspace, dayPagesTarget) && (
+        <p className="quiet">Day pages start with TODO, Events, Good Stuffs and Notes. · <button type="button" className="link" disabled={opening} onClick={() => void edit()}>{opening ? 'Opening…' : 'Edit'}</button></p>
+      )}
+      {list.length > 0 && (
+        <ul className="plain card-list two-line">
+          {list.map(t => (
+            <li key={t.id}>
+              <button type="button" className="card-row" onClick={() => onOpen(t.id)}>
+                <span className="card-row-icon"><PageKindIcon url={null} /></span>
+                <span className="card-row-text">
+                  <span className={`card-row-title ${t.title ? '' : 'untitled'}`}>{displayPageTitle(t)}</span>
+                  {templateTarget(t) === dayPagesTarget && <span className="card-row-detail">Default for day pages</span>}
+                </span>
+                <ChevronRightIcon />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <AccountRow className="account-row-phone" />
+    </div>
+  )
+}
+
+/** B70 (states §2): a template, edited like a document page, with what it is the default for. */
+function TemplateScreen({ page, workspace }: { page: Page; workspace: Workspace }) {
+  const { run } = useWorkspace()
+  const target = templateTarget(page)
+  const holder = defaultTemplate(workspace, dayPagesTarget)
+  const setTarget = (next: string) => {
+    const value = next === dayPagesTarget ? dayPagesTarget : null
+    if (value === target) return
+    void run({ type: 'set-template-target', pageId: page.id, target: value }, r => ({ text: value ? 'Now the default for day pages' : 'No longer a default', undoOperationId: r.operationId }))
+  }
+  return (
+    <div className="doc-screen template-screen">
+      {/* The way back to the list, set like a document page's "Pages" crumb: the Home Screen app has no Back button. */}
+      <div className="crumbs">
+        <nav className="crumbs-path folded" aria-label="Page location"><PageLink className="crumb" href="/pages?view=templates">Templates</PageLink></nav>
+      </div>
+      <div className="page-head">
+        <PageTitleField key={page.id} page={page} />
+        <p className="template-note">
+          <label>Default for:{' '}
+            <select className="template-target" value={target ?? ''} onChange={e => setTarget(e.target.value)}>
+              <option value="">None</option>
+              <option value={dayPagesTarget}>Day pages{holder && holder.id !== page.id ? ` · now ${displayPageTitle(holder)}` : ''}</option>
+            </select>
+          </label>
+        </p>
+        <p className="template-note">New pages start from this template. To-dos are copied empty.</p>
+      </div>
+      <ContinuousPage page={page} workspace={workspace} />
+    </div>
   )
 }

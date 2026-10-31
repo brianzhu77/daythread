@@ -1,0 +1,67 @@
+import type { LocalDate, Page, Workspace } from './types.ts'
+import { dayTemplate, emptyLine, emptyTaskRow, headingNode, pageNodes, type EditorNode } from './editor-document.ts'
+import { readMention } from './date-chip.ts'
+
+// B70 (Brian 27f8c724, Lead 4f1dfc60): templates are pages of their own (`type: "template"`), edited with the normal
+// editor and listed under Templates. A template can be the default for one target, kept in its `parentId` so no
+// column is added: `"days"` = new day pages. New pages start from their target's default, copied as written with fresh
+// ids; to-dos come empty. Day pages with no default get the built-in four headings.
+
+export const dayPagesTarget = 'days'
+export type TemplateTarget = typeof dayPagesTarget
+
+export const isTemplate = (p: Pick<Page, 'type'>): boolean => p.type === 'template'
+/** The templates in the Templates list, in the workspace's order. */
+export const templates = (ws: Workspace): Page[] => ws.pages.filter(p => isTemplate(p) && !p.trashedAt)
+/** What the template is the default for, if anything. */
+export const templateTarget = (p: Page): TemplateTarget | null => (p.parentId === dayPagesTarget ? dayPagesTarget : null)
+export const defaultTemplate = (ws: Workspace, target: TemplateTarget): Page | undefined => templates(ws).find(p => templateTarget(p) === target)
+
+/** The template Edit makes from the built-in headings (states §1). */
+export const dayTemplateTitle = 'Day'
+export function builtInDayNodes(): EditorNode[] {
+  return dayTemplate.flatMap(t => [headingNode(t.title), t.row === 'task' ? emptyTaskRow(null) : emptyLine('bulletListItem')])
+}
+
+/**
+ * A template save stores rows only: every to-do row gets its own row identity as its task id, so no Task is ever made,
+ * renamed or settled from a template, and a real to-do pasted in leaves its task alone (Ratchet c2ec12b5).
+ */
+export function templateRows(nodes: EditorNode[]): EditorNode[] {
+  const visit = (n: EditorNode) => {
+    if (n.type === 'task') n.props = { ...n.props, taskId: `editor-task:${n.id}`, role: 'reference', planDate: '' }
+    n.children?.forEach(visit)
+  }
+  nodes.forEach(visit)
+  return nodes
+}
+
+const copiedTypes = new Set(['heading', 'paragraph', 'bulletListItem', 'numberedListItem', 'quote', 'task', 'checkListItem'])
+
+/** A line's inline content with fresh identities: a `[[` link gets its own refId, a `@date` chip its own event. */
+function freshInline(content: unknown): unknown {
+  if (!Array.isArray(content)) return content
+  return content.map(item => {
+    if (!item || typeof item !== 'object') return item
+    const c = item as { type?: string; props?: Record<string, unknown> }
+    if (c.type === 'pageRef' && c.props) { const { at: _at, ...props } = c.props; return { ...c, props: { ...props, refId: crypto.randomUUID() } } }
+    if (readMention(c) && c.props) return { ...c, props: { ...c.props, eventId: crypto.randomUUID() } }
+    return c
+  })
+}
+
+/**
+ * A new page's document from a template: what he wrote, with fresh ids everywhere; to-dos become empty, unticked rows
+ * (planned on `date` for a day page) with fresh task ids. Page cards and other blocks aren't copied: a card would point
+ * every new page at the same page.
+ */
+export function pageFromTemplate(template: Page, date: LocalDate | null): EditorNode[] {
+  const copy = (n: EditorNode): EditorNode[] => {
+    const children = (n.children ?? []).flatMap(copy)
+    if (!copiedTypes.has(n.type)) return children
+    if (n.type === 'task' || n.type === 'checkListItem') return [{ ...emptyTaskRow(date), children }]
+    return [{ id: crypto.randomUUID(), type: n.type, props: { ...n.props }, content: freshInline(structuredClone(n.content)), children }]
+  }
+  const out = pageNodes(template).flatMap(copy)
+  return out.length ? out : [emptyLine('paragraph')]
+}
