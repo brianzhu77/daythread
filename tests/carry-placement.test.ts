@@ -127,3 +127,45 @@ test('carry: a to-do added to an ordinary page still goes where it did (below a 
   h.run({ type: 'add-task', pageId: 'doc', title: 'Read it' })
   assert.deepEqual(shape(nodesOf(h.page('doc'))).slice(0, 2), ['quote:A quote', 'task:Read it'])
 })
+
+// B75 (Bumblebee 13a9a7f6, Lead 9ded39e6): with no matching heading, brought lines join the carried group too.
+test('bring: with no matching heading, a brought line goes right after the carried to-dos, in the order brought', () => {
+  const h = harness()
+  h.day(today)
+  h.save(dayId(today), d => under(under(d, 'TODO', todo('r1', 'Book the flights')), 'Notes', bullet('n1', text('Mood: tired')), bullet('n2', text('Gym at 6'))))
+  h.run({ type: 'create-template', title: 'Day', pageId: 'tpl', dayPage: true })
+  h.save('tpl', () => labelled())
+  h.day(tomorrow)
+  const view = getDayView(h.ws, tomorrow)
+  h.run({ type: 'plan-tasks', date: tomorrow, items: view.handoffTasks.map(t => ({ taskId: t.id })) })
+  const r1 = h.run({ type: 'bring-line', date: tomorrow, sourcePageId: dayId(today), sourceBlockId: 'n1' })
+  h.run({ type: 'bring-line', date: tomorrow, sourcePageId: dayId(today), sourceBlockId: 'n2' })
+  assert.equal(r1.receipt.message, 'Brought to today')
+  const after = shape(nodesOf(h.page(dayId(tomorrow))))
+  assert.deepEqual(after.slice(0, 5), ['heading2:Start of the day', 'task:Book the flights', 'bulletListItem:Mood: tired', 'bulletListItem:Gym at 6', 'paragraph:One start'])
+  assert.ok(!after.slice(-3).some(s => s.includes('Mood')), 'nothing lands under his last prompt')
+})
+
+test('bring: a brought line before the carry still leaves the to-dos first', () => {
+  const h = harness()
+  h.day(today)
+  h.save(dayId(today), d => under(under(d, 'TODO', todo('r1', 'Book the flights')), 'Notes', bullet('n1', text('Mood: tired'))))
+  h.run({ type: 'create-template', title: 'Day', pageId: 'tpl', dayPage: true })
+  h.save('tpl', () => labelled())
+  h.day(tomorrow)
+  h.run({ type: 'bring-line', date: tomorrow, sourcePageId: dayId(today), sourceBlockId: 'n1' })
+  const t = getDayView(h.ws, tomorrow).handoffTasks[0]!
+  h.run({ type: 'plan-task', taskId: t.id, date: tomorrow, today: tomorrow })
+  assert.deepEqual(shape(nodesOf(h.page(dayId(tomorrow)))).slice(0, 4), ['heading2:Start of the day', 'task:Book the flights', 'bulletListItem:Mood: tired', 'paragraph:One start'])
+})
+
+test('bring: the built-in day is unchanged: a line from Notes goes under Notes', () => {
+  const h = harness()
+  h.day(today)
+  h.save(dayId(today), d => under(d, 'Notes', bullet('n1', text('Mood: tired'))))
+  h.day(tomorrow)
+  const r = h.run({ type: 'bring-line', date: tomorrow, sourcePageId: dayId(today), sourceBlockId: 'n1' })
+  assert.equal(r.receipt.message, 'Brought to Notes')
+  const after = shape(nodesOf(h.page(dayId(tomorrow))))
+  assert.equal(after[after.indexOf('heading2:Notes') + 1], 'bulletListItem:Mood: tired')
+})

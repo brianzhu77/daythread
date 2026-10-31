@@ -8,7 +8,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { useNavigate } from '@tanstack/react-router'
 import type { DayEvent } from '../domain/chip-events'
 import type { LocalDate, Page, Workspace } from '../domain/types'
-import { flatNodes, inlineText, pageNodes, sectionRange, type EditorNode } from '../domain/editor-document'
+import { broughtInsertIndex, flatNodes, inlineText, pageNodes, sectionRange, type EditorNode } from '../domain/editor-document'
 import { displayPageTitle } from './page-title'
 import { createContext, useContext } from 'react'
 import { useComponentsContext, type DefaultReactSuggestionItem, type SuggestionMenuProps } from '@blocknote/react'
@@ -17,20 +17,25 @@ import { CalendarIcon } from './icons'
 import { LineRefChip } from './line-ref-chip'
 
 const key = new PluginKey<DecorationSet>('daythread-event-rows')
-/** Where the rows go: after this heading's block, at the page's end (`null`: no Events heading), or nowhere. */
-export type RowsAnchor = { headingId: string | null } | undefined
+/**
+ * Where the rows go: after the block `afterId` (`null`: the top of the page), or nowhere. `labelled`: not under an
+ * Events heading, so the rows carry their own "Events" label. A block that isn't there (yet) means the page's end.
+ */
+export type RowsAnchor = { afterId: string | null; labelled: boolean } | undefined
 
 function place(doc: PMNode, anchor: RowsAnchor, host: HTMLElement): DecorationSet {
   if (!anchor) return DecorationSet.empty
-  let at = -1
-  if (anchor.headingId) doc.descendants((node, pos) => {
+  // Inside the page's block group: 1 is its start, `size - 1` its end.
+  let at = anchor.afterId === null ? 1 : -1
+  if (anchor.afterId) doc.descendants((node, pos) => {
     if (at >= 0) return false
-    if (node.type.name === 'blockContainer' && node.attrs.id === anchor.headingId) { at = pos + node.nodeSize; return false }
+    if (node.type.name === 'blockContainer' && node.attrs.id === anchor.afterId) { at = pos + node.nodeSize; return false }
     return true
   })
-  // No Events heading in the document (removed, or not there yet): the end of the page, inside its block group.
   if (at < 0) at = doc.content.size - 1
-  host.classList.toggle('is-page-end', !anchor.headingId || at === doc.content.size - 1)
+  host.classList.toggle('is-page-end', anchor.labelled || at === doc.content.size - 1)
+  // B75 (Jazz 31f5b493): mid-section, before one of his lines, the rows keep the gap his own rows have.
+  host.classList.toggle('is-in-section', anchor.labelled && at < doc.content.size - 1)
   return DecorationSet.create(doc, [Decoration.widget(at, host, { key: 'event-rows', side: -1, ignoreSelection: true, stopEvent: () => true })])
 }
 
@@ -94,6 +99,16 @@ export const refreshEventRows = (view: { state: { tr: import('@tiptap/pm/state')
 export function rowsFor(page: Page, events: DayEvent[]): DayEvent[] {
   const own = new Set(eventsSection(pageNodes(page)).map(n => n.id))
   return events.filter(e => !(e.line && e.line.pageId === page.id && own.has(e.line.lineId)))
+}
+/**
+ * Where a day page shows its events: under its Events heading; with none (B75, his own template), right after the
+ * carried to-dos and brought lines, under their heading, never under a label of his; labelled "Events".
+ */
+export function eventsAnchor(doc: readonly EditorNode[], tasks: ReadonlySet<string>): NonNullable<RowsAnchor> {
+  const heading = eventsHeading(doc)
+  if (heading) return { afterId: heading.id, labelled: false }
+  const at = broughtInsertIndex(doc, tasks)
+  return { afterId: at > 0 ? doc[at - 1]!.id : null, labelled: true }
 }
 /** The heading titled "Events" on a page, by its text: a display anchor, never a stored role. */
 export function eventsHeading(doc: readonly EditorNode[]): EditorNode | undefined {
