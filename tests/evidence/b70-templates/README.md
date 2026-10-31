@@ -65,3 +65,4 @@ Not tested: WebKit, a real phone, the Cloudflare Worker path, dark mode screensh
 - **Delete** moved to a ⋯ on the crumb row (`RowMenu`), same notice. **Pages in…** lists every document page, nested
   and link pages included; nested ones read "Title · in Parent".
 - Checks: template tests 20 pass; `npm test` 171 / 0 / 3; typecheck clean; `flow.mjs` 13 and `flow2.mjs` 7 pass.
+- `delete-flush.mjs`: with every save-editor answering 503, choosing Delete after typing leaves the template in place (PASS on this head; FAIL on 137c4a2, Ratchet's finding).

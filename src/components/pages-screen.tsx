@@ -11,6 +11,7 @@ import { LinkUrlRow } from './link-url-row'
 import { PagesTrashRow, TrashedPage, TrashScreen } from './trash'
 import { useWorkspace } from './use-day'
 import { RowMenu } from './row-menu'
+import { flushEditor } from './editor-flush'
 import { dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, templates, templateTarget, topLevelTarget } from '../domain/day-template'
 
 /** Asks for a title and creates a document page; resolves to its id, or null if cancelled. */
@@ -175,6 +176,8 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
     void run({ type: 'set-template-target', pageId: page.id, target: value }, r => ({ text: r.message, undoOperationId: r.operationId }))
   }
   const remove = async () => {
+    // His latest words go first, as on a document page's Delete: a save that fails stops the delete (Ratchet).
+    if (!(await flushEditor(page.id))) return
     if (await run({ type: 'delete-template', pageId: page.id }, r => ({ text: r.message, undoOperationId: r.operationId }))) onDeleted()
   }
   return (
