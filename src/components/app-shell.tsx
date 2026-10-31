@@ -171,5 +171,5 @@ function useVisibleTop() {
 
 /** On the preview address, phones get one line above every screen (the sidebar's caption says it on a laptop). */
 function PreviewNote() {
-  return usePreview() ? <p className="preview-note">Preview · notes written here stay here</p> : null
+  return usePreview() ? <p className="preview-note">Preview</p> : null
 }

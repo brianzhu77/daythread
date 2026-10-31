@@ -56,7 +56,7 @@ export function PagesScreen() {
         <button type="button" className="round-add" aria-label="New page" onClick={async () => { const id = await createPage(); if (id) setSelected(id, 'title') }}><PlusIcon /></button>
       </div>
       {/* Pages lists only pages (Brian 77423ea0); Tags is a navigation destination of its own. */}
-      {documents.length === 0 && inDays.length === 0 && <p className="quiet">No pages yet. Use + to start one.</p>}
+      {documents.length === 0 && inDays.length === 0 && <p className="quiet">No pages yet</p>}
       {documents.length > 0 && <PageRows pages={documents} workspace={workspace} onOpen={setSelected} />}
       {inDays.length > 0 && (
         <section className="pages-in-days" aria-label="In your days">

@@ -127,7 +127,6 @@ export function TaskRow({ task, pageDate, today, variant, onEditTitle, onDeleteR
         <span className="task-title"><TagText text={task.title} /></span>
       )}
       <DateTag task={task} today={today} pageDate={pageDate} label={cancelled ? 'Cancelled' : undefined} />
-      {variant === 'past' && <span className="app-tag quiet">Shown at current status</span>}
       {!cancelled && <RowMenu label={`Actions for ${task.title}`} groups={groups} />}
     </div>
   )

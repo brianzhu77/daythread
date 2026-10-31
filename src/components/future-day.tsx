@@ -37,8 +37,6 @@ function usePhone() {
   return phone
 }
 
-const promptBody = 'Create its page now to plan ahead? It starts from your day template.'
-
 /**
  * Calendar trigger for a future day without a page (R4): a Popover on desktop, an AlertDialog on phone.
  * Cancel writes nothing (R6); Create page creates it and opens it (R5).
@@ -81,9 +79,6 @@ export function FutureDayPrompt({ date, children }: { date: LocalDate; children:
               <AlertDialog.Header>
                 <AlertDialog.Heading>{heading}</AlertDialog.Heading>
               </AlertDialog.Header>
-              <AlertDialog.Body>
-                <p>{promptBody}</p>
-              </AlertDialog.Body>
               <AlertDialog.Footer>{actions}</AlertDialog.Footer>
             </AlertDialog.Dialog>
           </AlertDialog.Container>
@@ -97,7 +92,6 @@ export function FutureDayPrompt({ date, children }: { date: LocalDate; children:
       <Popover.Content placement="bottom start" className="future-day-popover">
         <Popover.Dialog aria-label={heading}>
           <Popover.Heading>{heading}</Popover.Heading>
-          <p>{promptBody}</p>
           <div className="future-day-actions">{actions}</div>
         </Popover.Dialog>
       </Popover.Content>
@@ -111,7 +105,6 @@ export function FutureDayState({ date, today, tasks, events, workspace }: { date
   return (<>
     <section className="future-day-state" aria-labelledby="future-day-heading">
       <h2 id="future-day-heading">{longLabel(date)} hasn't happened yet</h2>
-      <p>There's no page for this day. You can start one now if you want to plan ahead.</p>
       <Button variant="primary" isPending={pending} onPress={() => void create()}>
         Create page
       </Button>

@@ -19,7 +19,7 @@ export function HomeScreenHint() {
   const dismiss = () => { try { localStorage.setItem(dismissedKey, '1') } catch { /* fine */ } setShown(false) }
   return (
     <AccountItem><span className="home-screen-hint">
-      <span className="account-text">Add to Home Screen for the full-screen app: Share, then “Add to Home Screen” · </span><button type="button" className="link" onClick={dismiss}>Got it</button>
+      <span className="account-text">Add to Home Screen for the full-screen app: Share, then “Add to Home Screen”</span>{'\u00a0· '}<button type="button" className="link" onClick={dismiss}>Got it</button>
     </span></AccountItem>
   )
 }

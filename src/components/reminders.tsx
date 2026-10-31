@@ -80,8 +80,8 @@ export function Reminders() {
       {state === 'off' && on}
       {state === 'busy' && 'Reminders…'}
       {state === 'denied' && <span className="account-text">Reminders blocked in the browser’s settings</span>}
-      {state === 'failed' && <><span className="account-text">Couldn’t turn on reminders · </span>{on}</>}
-      {state === 'on' && <><span className="account-text">Reminders on · </span><button type="button" className="link" onClick={() => void turnOff()}>Turn off</button></>}
+      {state === 'failed' && <><span className="account-text">Couldn’t turn on reminders</span>{'\u00a0· '}{on}</>}
+      {state === 'on' && <><span className="account-text">Reminders on</span>{'\u00a0· '}<button type="button" className="link" onClick={() => void turnOff()}>Turn off</button></>}
     </span></AccountItem>
   )
 }

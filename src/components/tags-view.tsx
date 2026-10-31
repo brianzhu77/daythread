@@ -9,10 +9,6 @@ import { ChevronRightIcon } from './icons'
 import { TagText } from './tag-text'
 import { useWorkspace } from './use-day'
 
-function TagName({ tag }: { tag: string }) {
-  return <><span className="tag-mark">#</span><span className="tag-ink">{tag}</span></>
-}
-
 /** "Today" / "Yesterday" / "Thu, Oct 16": when a tag was last used. */
 function dayWord(date: LocalDate, today: LocalDate) {
   return date === today ? 'Today' : date === addDays(today, -1) ? 'Yesterday' : longLabel(date)
@@ -29,7 +25,7 @@ export function TagsScreen() {
       <h1 className="large-title">Tags</h1>
       {tags.length === 0 ? (
         // The only place the app explains tags and where one ends.
-        <div className="empty-box tags-empty"><span className="tags-empty-mark" aria-hidden="true">#</span><strong>No tags yet</strong><p>Type # and a word anywhere in a note, like <TagName tag="work" />. A tag ends at a space or punctuation.</p></div>
+        <div className="empty-box tags-empty"><span className="tags-empty-mark" aria-hidden="true">#</span><strong>No tags yet</strong></div>
       ) : (
         <ul className="plain card-list">
           {tags.map(t => {
