@@ -835,6 +835,16 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .page-title-field { outline: none; cursor: text; }
 .page-title-field:empty::before { content: attr(data-placeholder); color: var(--ink-3); }
 .editor-task input { width:18px;height:18px; flex:none; accent-color:var(--blue); }
+/* #235: in dark mode desktop browsers fill an empty native checkbox grey; draw it as the Tasks screen's .check does, an
+   outline on the page with the blue tick, same 18px box so no row moves. Light mode keeps the native box. */
+@media (prefers-color-scheme: dark) {
+  .editor-task input, .editor-source-checklist > input { appearance:none; -webkit-appearance:none; display:inline-grid; place-content:center; box-sizing:border-box; border:1.5px solid var(--check); border-radius:4px; background:transparent; cursor:pointer; transition:background-color .12s ease, border-color .12s ease; }
+  .editor-task input::after, .editor-source-checklist > input::after { content:''; width:9px; height:5px; border:2px solid var(--ink-on-blue); border-top:0; border-right:0; transform:translateY(-1px) rotate(-45deg) scale(0); transition:transform .12s ease; }
+  .editor-task input:checked, .editor-source-checklist > input:checked { background:var(--blue); border-color:var(--blue); }
+  .editor-task input:checked::after, .editor-source-checklist > input:checked::after { transform:translateY(-1px) rotate(-45deg) scale(1); }
+  .editor-task input:hover:not(:disabled) { border-color:var(--blue); }
+  .editor-task input:focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
+}
 .editor-task small { margin-left:auto; font-size:var(--text-caption); color:var(--ink-2); }
 .editor-drop-line { position:fixed; left:max(40px,calc((100vw - 760px)/2)); right:max(24px,calc((100vw - 760px)/2)); height:2px;background:var(--drop-line);pointer-events:none; z-index:100; }
 .continuous-editor .bn-block-outer { transition:background-color 150ms; }
