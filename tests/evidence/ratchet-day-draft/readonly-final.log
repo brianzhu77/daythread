@@ -1,0 +1,12 @@
+(node:28067) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium real carried Task read-only/default cursor/no focus line; tapping+typing changes neither band nor page
+EDITED chromium "?prefix Original suggestion suffix!"
+PASS chromium Meta left/right + End/Home keep edits inside proposal; own document untouched
+PASS chromium real Apply all + reload keeps edited new task and unchanged same carried Task
+(node:28082) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS webkit real carried Task read-only/default cursor/no focus line; tapping+typing changes neither band nor page
+EDITED webkit "Original suggestion prefix !?suffix"
+PASS webkit Meta left/right + End/Home keep edits inside proposal; own document untouched
+PASS webkit real Apply all + reload keeps edited new task and unchanged same carried Task

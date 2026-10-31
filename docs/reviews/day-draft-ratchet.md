@@ -1,6 +1,6 @@
-# PR #46 review in progress
+# PR #46 independent review
 
-Ratchet · task #249 · 2026-10-31. **Not passed yet.** Original head 91527b8; final candidate ddd8a40, tested alone and combined with PR47 0f17f6c + main 40da378.
+Ratchet · task #249 · 2026-10-31. **PASS tested source: ddd8a40 + 4f00f91 + c345a9f**, combined with PR47 0f17f6c. Canonical PR head identity confirmation follows in the handoff. Original head 91527b8; final candidate ddd8a40, tested alone and combined with PR47 0f17f6c + main 40da378.
 
 ## Confirmed findings and revisions
 
@@ -49,3 +49,15 @@ All five earlier findings are fixed on ddd8a40. The one-line editor reconciliati
 **One remaining finding:** carried existing-task bands are editable, but explicit edits are ignored in `apply-draft`'s existing-task branch. Built reproduction in both engines: type “My renamed carry” over “Existing carry” in the band; per-item Apply saves “Existing carry”. Make these bands read-only for this release if renaming is not intended, or explicitly rename the same Task. Finding 64b1602e; `carried-edit.mjs` / log.
 
 Not independently exercised here: actual provider/Worker transport (Lead ran a throwaway Postgres/Worker with model), native Pinyin/physical iPhone/Home Screen, true multi-account authenticated browser switching or two-device model-request races. Domain current-state/ready-disposition checks and existing account repository tests provide narrower evidence, not those unrun scenarios. Reflection-only template semantics remain an explicitly accepted limitation. No app code changed by reviewer.
+
+## Carried read-only and keyboard patch verification (22:21Z)
+
+The remaining finding is fixed by 4f00f91; c345a9f also excludes draft-host key events from the page editor's task-row capture rules. Independently rebuilt the combined tree and used the real stored draft/hook, not the mock:
+
+- Chromium 1280 and mobile WebKit 390: carried Task text is not contentEditable, cursor is default, tapping and typing changes neither band nor the underlying page, no focus underline.
+- New-task band remains editable. Meta-left/right, End and Home plus typed markers stay inside the band; underlying page block text is byte-for-byte unchanged.
+- Apply all stores exactly the edited proposed text and the carried Task's current title; reload matches. Six groups pass.
+
+Mobile WebKit does not give Mac line-start semantics for the Meta key sequence: its markers land at different positions inside the proposal than desktop Chromium. The initial harness incorrectly required the identical desktop string. Final assertions require all typed markers retained, the page untouched, and saved text identical to the actual edited proposal. The failed placement expectation is retained in `readonly-harness-placement.log`; it is not an application failure.
+
+Typecheck and production build pass after these patches. The changes add a read-only CSS cursor and a key-event guard without changing placement or document commands; prior combined alignment, transaction, Retry, migration and coverage results remain valid. No new app changes by reviewer. All own preview servers stopped after checks.
