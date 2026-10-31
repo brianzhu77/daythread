@@ -1,0 +1,3 @@
+PASS backup WebKit390 at Nov1: heading/carry/carry/prompt/empty slot; 2dividers/2empty slots; no page errors
+PASS built-in page before/after pixels identical chromium 1280
+PASS built-in page before/after pixels identical webkit 390

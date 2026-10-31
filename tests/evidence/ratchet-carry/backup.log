@@ -1,0 +1,5 @@
+(node:65135) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS backup25blocks/Vancouver; exact copied structure/fresh IDs/2dividers/unchanged Tasks; AddAll group below heading; 2 empty slots preserved
+Nov1 midnight Vancouver: 2026-11-01, 12:00:00 a.m.
