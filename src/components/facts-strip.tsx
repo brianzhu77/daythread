@@ -14,42 +14,17 @@ interface Props {
   workspace: Workspace
   date: LocalDate
   today: LocalDate
-  /** Shown as a collapsed line when Start the day was set aside with Later. */
-  handoffCollapsed: boolean
-  /** Rows waiting in the collapsed morning card. */
-  handoffCount: number
-  onReopenHandoff: () => void
-  handoffSettled: boolean
-  /** Tasks that are rows in the open morning card; "N other open tasks" leaves them out. */
-  cardTaskIds?: ReadonlySet<string>
 }
 
 /** Computed facts above the page, never page text. No counts to clear. */
-export function FactsStrip({ view, workspace, date, today, handoffCollapsed, handoffCount, onReopenHandoff, handoffSettled, cardTaskIds }: Props) {
+export function FactsStrip({ view, workspace, date, today }: Props) {
   const isToday = date === today
   const pageTaskIds = new Set(view.page ? flatNodes(pageNodes(view.page)).map(rowTaskId).filter(Boolean) : [])
   const dueSoon = view.attention.filter(t => !pageTaskIds.has(t.id))
-  // Tasks already placed on this day are on the page, and rows of the open morning card are on the card; the pool lists
-  // the rest. Done, Later or hiding the card counts its tasks again.
-  const stillOpen = view.openPool.filter(t => plannedOn(workspace, t.id) !== date && !cardTaskIds?.has(t.id))
 
   return (
     <div className="facts" aria-label="Facts for this day">
       {isToday && view.events.length > 0 && <TodayEvents events={view.events} headingId={view.page ? eventsHeading(pageNodes(view.page))?.id : undefined} />}
-      {isToday && handoffCollapsed && (
-        <button type="button" className="fact-line link-line" onClick={onReopenHandoff}>
-          Suggestions · {handoffCount} ▸
-        </button>
-      )}
-
-      {isToday && handoffSettled && view.carry.length > 0 && (
-        <div className="fact-block">
-          <p className="fact-label">Continue?</p>
-          {view.carry.slice(0, 3).map(t => (
-            <PoolRow key={t.id} task={t} today={today} />
-          ))}
-        </div>
-      )}
 
       {dueSoon.length > 0 && (
         <div className="fact-block">
@@ -63,23 +38,15 @@ export function FactsStrip({ view, workspace, date, today, handoffCollapsed, han
         </div>
       )}
 
-      {/* Shown only when there is something to open: a link announcing nothing is noise. */}
-      {isToday && (stillOpen.length > 0 || view.paused.length > 0) && (
+      {/* B76 (Lead e1158869, Bumblebee efb90b83): no "N other open tasks" line. This morning's open to-dos are in the
+          day's draft (bands or "N more open"); the rest is the Tasks tab. Shown only when there is something to open. */}
+      {isToday && view.paused.length > 0 && (
         <div className="fact-pair">
-          {stillOpen.length > 0 && (
-            <Disclosure summary={`${stillOpen.length} other open task${stillOpen.length === 1 ? '' : 's'}`}>
-              {stillOpen.map(t => (
-                <PoolRow key={t.id} task={t} today={today} />
-              ))}
-            </Disclosure>
-          )}
-          {view.paused.length > 0 && (
-            <Disclosure summary={`Not today · ${view.paused.length}`}>
-              {view.paused.map(t => (
-                <PoolRow key={t.id} task={t} today={today} paused />
-              ))}
-            </Disclosure>
-          )}
+          <Disclosure summary={`Not today · ${view.paused.length}`}>
+            {view.paused.map(t => (
+              <PoolRow key={t.id} task={t} today={today} paused />
+            ))}
+          </Disclosure>
         </div>
       )}
     </div>
