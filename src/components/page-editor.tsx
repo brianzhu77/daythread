@@ -2053,13 +2053,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         <CreateLinkButton key="createLink" />
       </FormattingToolbar>} />}
       <SuggestionMenuController triggerCharacter="/" shouldOpen={() => !composing.current && editor.getTextCursorPosition().block.type !== 'task'} getItems={async query => {
-        // Editor spec F13: heading hints in day-page terms; the items Brian uses most come first.
-        const headingHints: Record<string, string> = { 'Heading 1': 'Larger than day sections', 'Heading 2': 'Section', 'Heading 3': 'Inside a section' }
+        // The items Brian uses most come first. Titles only, no second line (Brian 1ac6784b: no descriptions).
         const suggested = ['Bullet List', 'Heading 2']
-        const library = getDefaultReactSlashMenuItems(editor).filter(item => ['Heading 1', 'Heading 2', 'Heading 3', 'Paragraph', 'Bullet List', 'Numbered List', 'Quote'].includes(item.title)).map(item => headingHints[item.title] ? { ...item, subtext: headingHints[item.title] } : item)
+        const library = getDefaultReactSlashMenuItems(editor).filter(item => ['Heading 1', 'Heading 2', 'Heading 3', 'Paragraph', 'Bullet List', 'Numbered List', 'Quote'].includes(item.title)).map(item => ({ ...item, subtext: undefined }))
         const first = suggested.map(title => library.find(item => item.title === title)!).map(item => ({ ...item, group: 'Suggested' }))
         const rest = library.filter(item => !suggested.includes(item.title))
-        const taskItem = { title: 'Task', subtext: 'Checkbox that becomes a task', icon: <CheckboxIcon />, aliases: ['todo', 'task', '任务'], group: 'Suggested', onItemClick: () => {
+        const taskItem = { title: 'Task', icon: <CheckboxIcon />, aliases: ['todo', 'task', '任务'], group: 'Suggested', onItemClick: () => {
           const currentBlock = editor.getTextCursorPosition().block
           const currentId = currentBlock.id
           const replaceCurrent = !inlineText(currentBlock.content) || inlineText(currentBlock.content) === '/'
@@ -2067,9 +2066,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           const role = insertionRole(currentId)
           insertOrUpdateBlockForSlashMenu(editor, { ...(replaceCurrent ? {} : { id }), type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? page.date ?? '' : '' }, content: '' })
         } }
-        const pageItem = { title: 'Page', subtext: 'New page inside this one', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
+        const pageItem = { title: 'Page', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
         // A9a §3: the phone's way to `[[` (v0.3's toolbar button), through the same + menu.
-        const linkItem = { title: 'Link to page', subtext: 'A link to a page, inside this line', icon: <PagesIcon />, aliases: ['link', '[[', '链接', '引用'], group: 'Suggested', onItemClick: () => {
+        const linkItem = { title: 'Link to page', icon: <PagesIcon />, aliases: ['link', '[[', '链接', '引用'], group: 'Suggested', onItemClick: () => {
           if (!linkableLines.has(editor.getTextCursorPosition().block.type)) return
           setTimeout(() => editor.getExtension(SuggestionMenu)?.openSuggestionMenu('[[', { deleteTriggerCharacter: true }), 0)
         } }

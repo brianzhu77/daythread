@@ -120,7 +120,7 @@ export function SearchDialog({ onClose }: { onClose: () => void }) {
             <SearchField aria-label="Search" value={query} onChange={v => { setQuery(v); setActive(0) }} autoFocus fullWidth onKeyDown={onKeyDown}>
               <SearchField.Group>
                 <SearchField.SearchIcon />
-                <SearchField.Input placeholder="Search pages, days, lines and tags" autoCapitalize="off" autoCorrect="off" enterKeyHint="go" />
+                <SearchField.Input placeholder="Search" autoCapitalize="off" autoCorrect="off" enterKeyHint="go" />
                 <SearchField.ClearButton />
               </SearchField.Group>
             </SearchField>
@@ -140,14 +140,12 @@ export function SearchDialog({ onClose }: { onClose: () => void }) {
                 ))}
               </Fragment>
             ))}
-            {results && results.moreLines > 0 && <p className="search-note">{results.moreLines} more line{results.moreLines === 1 ? '' : 's'} match · keep typing to narrow it down</p>}
+            {results && results.moreLines > 0 && <p className="search-note">{results.moreLines} more line{results.moreLines === 1 ? '' : 's'} match</p>}
             {results && total === 0 && (
               <div className="search-empty">
                 <p>Nothing matches “{trimmed}”</p>
-                <small>Search looks at page titles, days, every line and every #tag. Each word typed has to be on the line.</small>
               </div>
             )}
-            {workspace && !trimmed && <p className="search-note search-hint">Type to search everything you’ve written{phone ? '' : ' · ↑↓ to move · Enter to open · Esc to close'}</p>}
           </div>
         </Modal.Dialog>
       </Modal.Container>

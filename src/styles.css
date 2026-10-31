@@ -296,7 +296,6 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
 /* ---------- Day header: the page title ---------- */
 .day-head { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 2px 12px; padding: 24px 0 12px; }
 .day-head h1 { font-size: var(--text-title); line-height: 34px; letter-spacing: -.02em; font-weight: var(--weight-bold); }
-.day-first { grid-column: 1 / -1; margin: 6px 0 0; font-size: var(--text-small); line-height: 20px; color: var(--ink-2); text-wrap: pretty; }
 /* B70: the day template's one grey line, set like the first-day line (day-template-states §2). */
 .template-note { margin: 6px 0 0; font-size: var(--text-small); line-height: 20px; color: var(--ink-2); text-wrap: pretty; }
 /* The Default for menu reads as text in the meta line, sized to its choice, like the time zone menu. */
@@ -586,7 +585,6 @@ textarea.task-title:focus { outline: none; }
 .tomorrow-new-input { font: inherit; color: var(--ink); line-height: 1.45; }
 .tomorrow-new-input:focus { outline: none; }
 .tomorrow-new-input::placeholder { color: var(--ink-faint); }
-.tomorrow-hint { margin: 6px 0 0; font-size: var(--text-meta); color: var(--ink-2); }
 /* A section, not a date: no alarm icon. */
 .task-row .app-tag.section-tag::before { display: none; }
 .warn-line { color: var(--warn); background: var(--warn-soft); border-radius: var(--radius-row); padding: 10px 14px; }
@@ -1107,7 +1105,6 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* In lists and titles a tag is a name, not the tinted word in a note: ink text with a grey mark. */
 .tag-plain-mark { color: var(--ink-3); }
 .tags-empty strong { color: var(--ink); font-weight: var(--weight-semibold); }
-.tags-empty p { margin: 0; max-width: 32ch; line-height: 1.45; }
 .tags-empty-mark { font-size: 30px; line-height: 1; color: var(--ink-3); }
 .tag-screen .large-title { margin: 0; }
 .tag-summary { margin: 0; color: var(--ink-2); }
@@ -1303,7 +1300,6 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .search-row mark { background: none; color: var(--ink); font-weight: 650; }
 .search-row-line.is-done mark { color: var(--ink-2); }
 .search-note { margin: 0; padding: 12px 10px; font-size: var(--text-small); color: var(--ink-2); }
-.search-hint { font-size: var(--text-meta); color: var(--ink-3); }
 .search-empty { display: grid; gap: 4px; padding: 20px 10px 12px; }
 .search-empty p { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
 .search-empty small { font-size: var(--text-meta); line-height: 1.45; color: var(--ink-3); max-width: 40ch; }
@@ -1361,7 +1357,6 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .in-trash-tag { flex: none; padding: 0 6px; border: 1px solid var(--line); border-radius: var(--radius-control); font-size: var(--text-caption); line-height: 18px; color: var(--ink-3); }
 .linked-from-removed { padding: 0 8px; font-size: var(--text-meta); color: var(--ink-3); }
 .restore-button { flex: none; display: inline-flex; align-items: center; min-height: 32px; padding: 0 12px; border: 0; border-radius: var(--radius-control); background: var(--gray-1); box-shadow: inset 0 0 0 1px var(--gray-7); color: var(--gray-12); font: inherit; font-size: var(--text-small); font-weight: var(--weight-medium); cursor: pointer; }
-.trash-intro { margin: -4px 0 2px; font-size: var(--text-small); color: var(--ink-2); }
 .trash-row { display: flex; align-items: center; padding-right: 14px; }
 .trash-row > .card-row { flex: 1; min-width: 0; min-height: 64px; }
 .trash-row .card-row-detail { color: var(--ink-3); }
@@ -1473,13 +1468,19 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .account-row-sidebar { padding: 0 10px; } /* the same left edge as .side-label */
 /* Only the failure's Try again is underlined: in the same grey as the words around it, nothing else says it's a link (Jazz). */
 .account-row .link.retry { text-decoration: underline; }
+/* The "·" before each item, inside its nowrap box. The items start 0.9em left of the text column, so the "·" of an item
+   that starts a line falls left of the clip edge and isn't drawn; mid-line it reads "Templates · Export". The 3px of
+   padding (taken back by the margin) keeps focus rings inside the clip and the text on the same left edge. */
 .account-row p { margin: 0; }
-/* Each item keeps its "·" (account-item.tsx): no break between the two, text inside an item still wraps. */
-.account-item { white-space: nowrap; }
+.account-row > p { margin: -3px; padding: 3px; overflow: hidden; }
+.account-items { display: block; margin-left: -0.9em; }
+/* An item is a box with its "·" in its left padding, so every line of a long item (an address, the Home Screen hint)
+   starts after the "·", and an item that doesn't fit moves to the next line whole. */
+.account-item { display: inline-block; padding-left: 0.9em; white-space: nowrap; }
+.account-item::before { content: '·'; content: '·' / ''; display: inline-block; width: 0.6em; margin: 0 0.3em 0 -0.9em; text-align: center; }
 .account-text { white-space: normal; }
 /* An address has no spaces: let a long one break anywhere rather than run out of the sidebar (Ratchet fa0252c0). */
 .account-email { overflow-wrap: anywhere; }
-.account-item:last-child > .account-sep { display: none; }
 .account-zone { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; max-width: 11em; text-overflow: ellipsis; }
 .account-delete { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .account-delete input { height: 36px; padding: 0 8px; border: 1px solid var(--line, #ddd); border-radius: 6px; font: inherit; background: var(--bg-doc, #fff); color: var(--ink); }
