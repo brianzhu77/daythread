@@ -25,7 +25,7 @@ import type { LineTarget } from '../domain/page-refs'
 import { pageHref, pageLabel } from './page-tree'
 import { jumpInPage, jumpToBlock, lookupFailed, registerEditor, visibleArea } from './line-jump'
 import { previewLinkPage, resolveLineLink } from '../server/functions'
-import { newOperationId, useWorkspace } from './use-day'
+import { newOperationId, useTaskTick, useWorkspace } from './use-day'
 import { useKeyboardTop } from './keyboard'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
@@ -130,6 +130,9 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
   const { workspace, run } = useWorkspace()
   const rows = useRowActions()
   const t = rows?.rowsOnly ? undefined : workspace?.tasks.find(t => t.id === taskId)
+  // B72: the box and the strike show a tap at once; `t.status` stays the stored state for everything else.
+  const tick = useTaskTick(t?.id)
+  const shown = tick.status
   // A12: the row's actions, on a ⋯ at the end of the row (Jazz §2). Done and draft rows have none.
   const planned = t && workspace ? plannedOn(workspace, t.id) : null
   const model = t && rows ? rowMenu(t, role, planned, rows.pageDate, rows.today) : null
@@ -137,8 +140,8 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
   const copy = model ? rows!.copyLink(blockId) : null
   // data-status: the task's real state, for checks such as scripts/check-alignment.mjs (Lead a2428bb1). Display only.
   return <div className="editor-task" data-role={role} data-draft={t ? undefined : true} data-status={t?.status ?? 'draft'}>
-    <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={t?.status === 'done'} disabled={(!t && !taskId.startsWith('editor-task:')) || t?.status === 'cancelled'} onChange={() => t && void run({ type: 'task-status', taskId, status: t.status === 'done' ? 'open' : 'done', today: todayIso() }, r => ({ text: t.status === 'done' ? 'Task reopened' : 'Task completed', undoOperationId: r.operationId }))} />
-    <span ref={contentRef} className={`editor-task-title ${t?.status === 'done' ? 'task-done' : t?.status === 'cancelled' ? 'task-cancelled' : ''}`} data-placeholder="To do" />
+    <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={shown === 'done'} disabled={(!t && !taskId.startsWith('editor-task:')) || t?.status === 'cancelled'} onChange={() => t && tick.toggle((to, r) => ({ text: to === 'done' ? 'Task completed' : 'Task reopened', undoOperationId: r.operationId }))} />
+    <span ref={contentRef} className={`editor-task-title ${shown === 'done' ? 'task-done' : t?.status === 'cancelled' ? 'task-cancelled' : ''}`} data-placeholder="To do" />
     {/* Jazz f58abeaf: done rows are grey and struck through too, so the label is what says Cancelled. */}
     {t?.status === 'cancelled' && <span contentEditable={false} className="editor-cancelled-tag">Cancelled</span>}
     {role === 'reference' && <span contentEditable={false} className="editor-reference-tag">Reference</span>}

@@ -2,7 +2,7 @@
 // (src/server/functions.ts). getDayView is a pure read of the loaded workspace.
 import { Button, toast } from '@heroui/react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import type { Action, DayView, LocalDate, Receipt, Workspace } from '../domain/types'
+import type { Action, DayView, LocalDate, Receipt, Task, Workspace } from '../domain/types'
 import { getDayView } from '../domain/workspace'
 import { loadWorkspace, runCommand } from '../server/functions'
 import { configureDebug, debugClient } from '../lib/debug'
@@ -10,6 +10,7 @@ import { sampleActions } from './fixture'
 import { todayIso } from './dates'
 import { flushAllEditors } from './editor-flush'
 import { offlineCopy } from './offline-copy'
+import { HOLD_MS, heldWorkspace, settleTick, shownStatus, startTick, withTick, type Ticks } from './task-ticks'
 
 export interface Transport {
   load(operationId?: string, triggerOperationId?: string): Promise<Workspace>
@@ -82,6 +83,10 @@ interface WorkspaceContextValue {
   reload(): void
   refresh(triggerOperationId?: string): Promise<Workspace>
   addSampleData(): Promise<void>
+  /** B72: to-dos whose tick is saving or holding its row (task-ticks.ts). */
+  ticks: Ticks
+  /** Ticks or unticks a to-do; ignored while that to-do's last tap is still saving. `notice` gets the new status. */
+  toggleTask(taskId: string, notice: (to: Task['status'], r: Receipt) => NoticeSpec): void
 }
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
@@ -255,6 +260,25 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
     push({ text: 'Sample data added' })
   }, [run, push])
 
+  const [ticks, setTicks] = useState<Ticks>(() => new Map())
+  // The guard reads the ref, so a second tap before React re-renders is still ignored.
+  const ticksRef = useRef<Ticks>(ticks)
+  const tickToken = useRef(0)
+  const updateTicks = useCallback((next: (ticks: Ticks) => Ticks) => { ticksRef.current = next(ticksRef.current); setTicks(ticksRef.current) }, [])
+  const toggleTask = useCallback((taskId: string, notice: (to: Task['status'], r: Receipt) => NoticeSpec) => {
+    const task = wsRef.current?.tasks.find(t => t.id === taskId)
+    const token = ++tickToken.current
+    const tick = task && startTick(ticksRef.current, task, token)
+    if (!tick) return
+    updateTicks(t => withTick(t, taskId, tick))
+    void run({ type: 'task-status', taskId, status: tick.to, today: todayIso() }, r => notice(tick.to, r)).then(receipt => {
+      // A failed save shows the stored state again, and the header's error says why.
+      if (!receipt) return updateTicks(t => settleTick(t, taskId, token, null))
+      updateTicks(t => settleTick(t, taskId, token, { ...tick, phase: 'holding' }))
+      setTimeout(() => updateTicks(t => settleTick(t, taskId, token, null)), HOLD_MS)
+    })
+  }, [run, updateTicks])
+
   const latest = useCallback(() => wsRef.current, [])
   const value = useMemo(
     () => ({
@@ -270,8 +294,10 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       reload,
       refresh,
       addSampleData,
+      ticks,
+      toggleTask,
     }),
-    [workspace, latest, loadError, offline, saveState, saveError, lastFailed, run, retry, reload, refresh, addSampleData],
+    [workspace, latest, loadError, offline, saveState, saveError, lastFailed, run, retry, reload, refresh, addSampleData, ticks, toggleTask],
   )
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>
 }
@@ -280,6 +306,19 @@ export function useWorkspace(): WorkspaceContextValue {
   const ctx = useContext(WorkspaceContext)
   if (!ctx) throw new Error('useWorkspace must be used inside WorkspaceProvider')
   return ctx
+}
+
+/** A to-do's box: what it shows (the tap at once, while it saves) and the tap. Reads the stored to-do, not a held copy. */
+export function useTaskTick(taskId: string | undefined): { status: Task['status'] | undefined; toggle(notice: (to: Task['status'], r: Receipt) => NoticeSpec): void } {
+  const { workspace, ticks, toggleTask } = useWorkspace()
+  const task = taskId ? workspace?.tasks.find(t => t.id === taskId) : undefined
+  return { status: task && shownStatus(ticks, task), toggle: notice => taskId && toggleTask(taskId, notice) }
+}
+
+/** The workspace for lists a to-do leaves on Done: a ticked one keeps its place until its hold ends (task-ticks.ts). */
+export function useHeldWorkspace(): Workspace | null {
+  const { workspace, ticks } = useWorkspace()
+  return useMemo(() => (workspace ? heldWorkspace(workspace, ticks) : null), [workspace, ticks])
 }
 
 export function useDay(date: LocalDate): { view: DayView | null; workspace: Workspace | null } {

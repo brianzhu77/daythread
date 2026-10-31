@@ -1,0 +1,22 @@
+PASS [fix] webkit 390 day page: ticked at once, before the save answers
+PASS [fix] webkit 390 day page: struck through at once
+PASS [fix] webkit 390 day page double tap: one Done write (["done"])
+PASS [fix] webkit 390 day page double tap: box ticked after the save
+PASS [fix] webkit 390 day page: a tap after the answer reopens on purpose (["open"])
+PASS [fix] webkit 390 failed save: ticked at once, then reverted (["done"])
+PASS [fix] webkit 390 failed save: the usual error with Retry shows
+PASS [fix] webkit 390 tasks: 2 rows to start
+PASS [fix] webkit 390 tasks: first row ticked and greyed at once
+PASS [fix] webkit 390 tasks: the neighbour "Tax return" is still open (writes ["done","open"])
+PASS [fix] webkit 390 tasks: one Done write; a tap in the hold toggles as normal (writes ["done","open"])
+PASS [fix] chromium 1280 day page: ticked at once, before the save answers
+PASS [fix] chromium 1280 day page: struck through at once
+PASS [fix] chromium 1280 day page double tap: one Done write (["done"])
+PASS [fix] chromium 1280 day page double tap: box ticked after the save
+PASS [fix] chromium 1280 day page: a tap after the answer reopens on purpose (["open"])
+PASS [fix] chromium 1280 failed save: ticked at once, then reverted (["done"])
+PASS [fix] chromium 1280 failed save: the usual error with Retry shows
+PASS [fix] chromium 1280 tasks: 2 rows to start
+PASS [fix] chromium 1280 tasks: first row ticked and greyed at once
+PASS [fix] chromium 1280 tasks: the neighbour "Tax return" is still open (writes ["done","open"])
+PASS [fix] chromium 1280 tasks: one Done write; a tap in the hold toggles as normal (writes ["done","open"])
