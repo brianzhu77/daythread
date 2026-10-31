@@ -27,3 +27,17 @@ template line into one; the copy keeps the template's types.
 
 Not tested: WebKit, a real phone, the Cloudflare Worker path, dark mode screenshots.
 - `postgres-roundtrip.ts` on a local embedded Postgres (schema `daythread_b70_check`, dropped after): create Day, save with a titled to-do (no task), new day copies it with fresh ids, clear default, Undo, each step through a fresh repository load: PASS. Stored row: `type=template, parent_id=days`.
+
+## Revision after Ratchet b0315979 and f0e1b4fd (plus Jazz adf1462)
+
+- **Task isolation:** on a template, `EditorTask` reads no task (`rowsOnly`), so no checkbox, row menu or Plan action
+  can change a real task; and a pasted or cut row has its task id replaced with `editor-task:<row id>` as soon as it
+  lands (suppressed, outside history), not only on save.
+  `isolation.mjs <base> <sqlite>` (Chromium 1280, real keyboard cut from today and paste into the template, then a
+  click on every template checkbox): on this head 5/5 pass, twice; the real task stays open, same version. **Control:**
+  the same script on 745f2f2 fails: the pasted checkbox reads "Complete Preserve real task" and ticking it marks the
+  real task done (version 2), Ratchet's finding.
+- **Single-flight Edit:** a second click while the first create is on its way does nothing, a retry reuses the page id,
+  and `create-template` with `dayPage` returns the existing day default instead of a copy. `dblclick.mjs`: a double
+  click with 600 ms POST latency makes 1 template (PASS); unit test for the server side.
+- Jazz adf1462 (Edit line only before any template exists; "Templates" crumb) cherry-picked as is.

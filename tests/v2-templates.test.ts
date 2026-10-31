@@ -217,3 +217,10 @@ test('templates: a template row is never a place of a real task, even if it carr
   h.ws = { ...h.ws, pages: h.ws.pages.map(p => (p.id === 'tpl' ? { ...p, document: JSON.stringify([{ ...todo('x', 'Call the bank'), props: { taskId: real.id, role: 'plan', planDate: today } }]) } : p)) }
   assert.deepEqual(taskRows(h.ws, real.id).map(r => r.page.id), [dayId(today)])
 })
+
+test('templates: a second Edit (double click, another tab) opens the existing day default instead of making another', () => {
+  const h = withDayTemplate()
+  const again = h.run({ type: 'create-template', title: 'Day', pageId: 'tpl-again', dayPage: true })
+  assert.equal(again.receipt.entityId, 'tpl')
+  assert.equal(templates(h.ws).length, 1)
+})

@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AccountRow } from './account-row'
 import { ContinuousPage } from './continuous-page'
@@ -96,9 +97,16 @@ function PageRows({ pages, workspace, onOpen, detail }: { pages: Page[]; workspa
 function TemplatesScreen({ workspace, onOpen }: { workspace: Workspace; onOpen: (id: string) => void }) {
   const { run } = useWorkspace()
   const list = templates(workspace)
+  // Single-flight (Ratchet f0e1b4fd): a second click while the first is on its way does nothing, and a retry after a
+  // failure reuses the same page id, so Edit never makes two "Day" templates.
+  const pending = useRef<{ pageId: string; busy: boolean } | null>(null)
   const edit = async () => {
-    const pageId = crypto.randomUUID()
-    if (await run({ type: 'create-template', title: dayTemplateTitle, pageId, dayPage: true })) onOpen(pageId)
+    if (pending.current?.busy) return
+    pending.current = { pageId: pending.current?.pageId ?? crypto.randomUUID(), busy: true }
+    const { pageId } = pending.current
+    const receipt = await run({ type: 'create-template', title: dayTemplateTitle, pageId, dayPage: true })
+    pending.current = { pageId, busy: false }
+    if (receipt) onOpen(receipt.entityId ?? pageId)
   }
   return (
     <div className="list-screen">

@@ -129,7 +129,7 @@ const checklistIds = (nodes: readonly EditorNode[]): string[] => deepNodes(nodes
 function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: string; taskId: string; role: string; planDate: string; contentRef: (node: HTMLElement | null) => void }) {
   const { workspace, run } = useWorkspace()
   const rows = useRowActions()
-  const t = workspace?.tasks.find(t => t.id === taskId)
+  const t = rows?.rowsOnly ? undefined : workspace?.tasks.find(t => t.id === taskId)
   // A12: the row's actions, on a ⋯ at the end of the row (Jazz §2). Done and draft rows have none.
   const planned = t && workspace ? plannedOn(workspace, t.id) : null
   const model = t && rows ? rowMenu(t, role, planned, rows.pageDate, rows.today) : null
@@ -802,6 +802,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       editor.updateBlock(checklist.id, { type: 'task', props: { taskId: `editor-task:${checklist.id}`, role: insertionRole(checklist.id), planDate: insertionRole(checklist.id) === 'plan' ? page.date ?? '' : '' }, content: checklist.content } as never)
       tr.setMeta('addToHistory', false)
     })
+    // B70: on a template a to-do is only a row. A pasted or cut row drops its task id at once, so nothing on the page
+    // can tick or change the real task (Ratchet b0315979); suppressed, so it reads as no task removed.
+    const foreign = onTemplate ? deepNodes(editor.document as unknown as EditorNode[]).filter(b => b.type === 'task' && b.props?.taskId !== `editor-task:${b.id}`) : []
+    if (foreign.length && !composing.current) {
+      suppress.current = true
+      try { editor.transact(tr => { for (const b of foreign) editor.updateBlock(b.id, { props: { taskId: `editor-task:${b.id}`, role: 'reference', planDate: '' } } as never); tr.setMeta('addToHistory', false) }) } finally { suppress.current = false }
+    }
     dirty.current = true; setFailed(false); setStatus('Unsaved changes')
     queueMicrotask(maybeOpenLinkList)
     stash(); clearTimeout(timer.current)
@@ -1821,7 +1828,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return true
   }
   const rowActions: RowActions = {
-    pageDate: page.date ?? null, today: todayIso(), act: (id, t, intent) => void rowAct(id, t, intent),
+    pageDate: page.date ?? null, today: todayIso(), rowsOnly: onTemplate, act: (id, t, intent) => void rowAct(id, t, intent),
     copyLink: id => lineLinkTarget(id) ? () => copyLineLink(id) : null,
     focusRow: id => {
       if (!editor.getBlock(id)) return

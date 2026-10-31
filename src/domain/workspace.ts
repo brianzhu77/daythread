@@ -516,7 +516,10 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (!isTemplate(existing)) throw new DomainError("Page id already in use");
         return { message: "Template saved", entityId: id };
       }
-      // "Day page" starts from the built-in headings and becomes the day pages' default (Templates list).
+      // "Day page" starts from the built-in headings and becomes the day pages' default (Templates list). If day pages
+      // already have one (a second Edit from another tab or a double click), that one is opened instead of a copy.
+      const existingDay = action.dayPage ? defaultTemplate(state, dayPagesTarget) : undefined;
+      if (existingDay) return { message: "Template saved", entityId: existingDay.id };
       const nodes = action.dayPage ? builtInDayNodes() : [emptyLine("paragraph")];
       const title = action.dayPage ? dayTemplateTitle : text(action.title, 1000).trim();
       if (action.dayPage) for (const t of state.pages) if (isTemplate(t) && t.parentId === dayPagesTarget) delete t.parentId;
