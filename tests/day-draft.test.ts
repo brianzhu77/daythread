@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { harness, dayId, today, tomorrow, text, todo, bullet, para, heading, nodesOf, under } from './v2-helpers.ts'
 import { inlineText, type EditorNode } from '../src/domain/editor-document.ts'
-import { draftOf, draftPageId, draftView, planningRange, type DraftItem } from '../src/domain/day-draft.ts'
+import { draftOf, draftPageId, draftView, moreOpenAfterIndex, planningEndIndex, planningRange, type DraftItem } from '../src/domain/day-draft.ts'
 import { plannedOn } from '../src/domain/workspace.ts'
 import { childPages, visiblePages } from '../src/domain/page-tree.ts'
 import { buildSearchIndex } from '../src/domain/search.ts'
@@ -43,6 +43,20 @@ test('draft: the planning part is the outermost section holding the first to-do 
   const { start, end } = planningRange(doc)
   assert.equal(inlineText(doc[start]!.content), 'Morning')
   assert.equal(inlineText(doc[end]!.content), 'Reflection')
+})
+
+test('draft: "more open" goes at the end of the planning part, before a closing divider, never under the heading', () => {
+  const at = (doc: EditorNode[]) => { const i = moreOpenAfterIndex(doc, planningEndIndex(doc, new Set())); return i < 0 ? null : doc[i]!.id }
+  const divider = (id: string): EditorNode => ({ id, type: 'divider', props: {}, children: [] })
+  // His layout: planning sub-sections, an empty line, then `---` above the reflection.
+  assert.equal(at([...template().slice(0, 10), level(heading('d', 'Drop'), 3), para('dl'), divider('hr'), ...template().slice(10)]), 'dl')
+  // The built-in day: after the TODO slot, not between the heading and it.
+  assert.equal(at([heading('t', 'TODO'), todo('slot', '', 'reference', ''), heading('e', 'Events'), bullet('b')]), 'slot')
+  // A planning part that is only its heading.
+  assert.equal(at([heading('p', 'Plan'), heading('n', 'Notes'), para('x', text('words'))]), 'p')
+  // No headings: after the last to-do row, not below his notes; with no rows, where the fallback bands go (the top).
+  assert.equal(at([todo('a', 'One', 'plan'), bullet('b', text('note')), todo('c', 'Two', 'plan'), para('n', text('long notes'))]), 'c')
+  assert.equal(at([para('n', text('notes')), bullet('b', text('more'))]), null)
 })
 
 test('draft: stored as a hidden page under the day; never a page, a subpage, a search hit or an export file', () => {

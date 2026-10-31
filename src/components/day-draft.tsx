@@ -31,8 +31,10 @@ export interface DayDraft {
   /** Pending and still eligible, in page order. */
   items: DraftItem[]
   moreOpen: OpenTask[]
-  /** "N more open" sits after this block: the end of the planning part. */
+  /** Where a band whose anchor is gone goes: under the planning heading, after his planned rows. */
   planningEndId: string | null
+  /** "N more open" sits after this block: the end of the planning part. Optional for check-script stand-ins. */
+  moreOpenAfterId?: string | null
   apply(itemIds: string[], edits?: Record<string, string>): Promise<{ applied: string[]; dropped: string[] }>
   skip(itemIds: string[]): Promise<boolean>
   addOpen(taskId: string): Promise<boolean>
@@ -41,7 +43,7 @@ export interface DayDraft {
 
 // ---------- The seam: Roadbuster's hook (use-day-draft.ts); a check script's store (`window.__daythreadDraft`) overrides it. ----------
 
-type MockDraft = Pick<DayDraft, 'state' | 'items' | 'moreOpen' | 'planningEndId'>
+type MockDraft = Pick<DayDraft, 'state' | 'items' | 'moreOpen' | 'planningEndId' | 'moreOpenAfterId'>
 type MockWindow = Window & { __daythreadDraft?: Record<string, MockDraft>; __daythreadDraftLog?: unknown[] }
 const listeners = new Set<() => void>()
 let version = 0
@@ -62,6 +64,7 @@ export function useDayDraft(page: Page): DayDraft {
     items: mock?.items ?? [],
     moreOpen: mock?.moreOpen ?? [],
     planningEndId: mock?.planningEndId ?? null,
+    moreOpenAfterId: mock?.moreOpenAfterId ?? null,
     apply: async (ids, edits) => { log({ apply: ids, edits }); edit(ids); return { applied: ids, dropped: [] } },
     skip: async ids => { log({ skip: ids }); edit(ids); return true },
     addOpen: async taskId => { log({ addOpen: taskId }); if (mock) { mock.moreOpen = mock.moreOpen.filter(t => t.taskId !== taskId); bump() } return true },
@@ -156,7 +159,13 @@ export function useBandHosts() {
   const hosts = useRef(new Map<string, HTMLElement>())
   return useMemo(() => (id: string) => {
     let h = hosts.current.get(id)
-    if (!h) { h = Object.assign(document.createElement('div'), { className: 'draft-host', contentEditable: 'false' }); hosts.current.set(id, h) }
+    if (!h) {
+      h = Object.assign(document.createElement('div'), { className: 'draft-host', contentEditable: 'false' })
+      // The host sits inside the editor, so a tap on ✓, ✕, ＋ or "more open" would focus the editor and bring up his
+      // phone's keyboard. Buttons never take focus from a press; a new to-do's editable text still does.
+      h.addEventListener('mousedown', e => { if ((e.target as Element).closest('button')) e.preventDefault() })
+      hosts.current.set(id, h)
+    }
     return h
   }, [])
 }
@@ -167,7 +176,7 @@ export function bandGroups(draft: DayDraft, shown: boolean, host: (id: string) =
   const groups = new Map<string, DraftItem[]>()
   for (const item of draft.items) groups.set(item.anchorId, [...(groups.get(item.anchorId) ?? []), item])
   const out = [...groups].map(([afterId, items]) => ({ afterId, host: host(afterId), items, more: false }))
-  const end = draft.planningEndId ?? ''
+  const end = draft.moreOpenAfterId ?? draft.planningEndId ?? ''
   if (draft.moreOpen.length) {
     const g = out.find(o => o.afterId === end)
     if (g) g.more = true

@@ -15,8 +15,10 @@ export interface DayDraftHook {
   state: DayDraftState
   items: DraftItemView[]
   moreOpen: { taskId: string; title: string; since: LocalDate }[]
-  /** The block "N more open ▸" sits after; also where a band whose anchor is gone goes. */
+  /** Where a band whose anchor is gone goes: under the planning heading, after his planned rows. */
   planningEndId: string | null
+  /** The block "N more open ▸" sits after: the end of the planning part. */
+  moreOpenAfterId: string | null
   apply(itemIds: string[], edits?: Record<string, string>): Promise<{ applied: string[]; dropped: string[] }>
   skip(itemIds: string[]): Promise<boolean>
   addOpen(taskId: string): Promise<boolean>
@@ -84,5 +86,5 @@ export function useDayDraft(page: Page): DayDraftHook {
   const retry = useCallback(() => { void prepare() }, [prepare])
 
   const state: DayDraftState = offline && !view ? 'offline' : preparing && !view?.items.length ? 'preparing' : !view ? 'none' : view.status === 'failed' ? 'failed' : 'ready'
-  return { state, items: view?.items ?? [], moreOpen: view?.moreOpen ?? [], planningEndId: view?.planningEndId ?? null, apply, skip, addOpen, retry }
+  return { state, items: view?.items ?? [], moreOpen: view?.moreOpen ?? [], planningEndId: view?.planningEndId ?? null, moreOpenAfterId: view?.moreOpenAfterId ?? null, apply, skip, addOpen, retry }
 }
