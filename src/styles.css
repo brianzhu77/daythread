@@ -1526,28 +1526,39 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 
 /* A suggestion: not his text yet. Blue band and bar, his ink and size, its text where his row's text would be. */
 .draft-host { user-select: none; -webkit-user-select: none; }
-.draft-band { position: relative; display: flex; align-items: center; gap: var(--draft-gap, 13px); min-height: 32px; margin: 2px 0; padding: 3px 76px 3px var(--draft-pad, 14px); border-radius: 8px; background: var(--blue-soft); box-shadow: inset 2px 0 0 var(--blue); font-size: var(--text-body); color: var(--ink); }
+/* Quiet (Brian 94c74a77, Lead 2f4bbcb7 look A): his row layout in muted ink, a dashed box, dot or underline as the only
+   "not yours yet" mark (no row he types has one), so a suggestion never reads as his words; after Apply it is his row. */
+.draft-band { position: relative; display: flex; align-items: center; gap: var(--draft-gap, 13px); min-height: 32px; margin: 2px 0; padding: 3px 76px 3px var(--draft-pad, 14px); font-size: var(--text-body); color: var(--ink-3); }
 @media (hover: hover) { .draft-band { min-height: 44px; } }
 .draft-band.is-bullet { --draft-pad: 45px; }
-.draft-band.is-bullet::before { content: ''; position: absolute; left: 20px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--ink); }
+.draft-band.is-bullet::before { content: ''; position: absolute; left: 19px; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; box-sizing: border-box; border: 1.25px dashed var(--ink-3); }
+/* Anything dashed isn't his yet (Bumblebee a14528a6, Lead dab64dbe): a line has no box or dot, so a dashed underline. */
+.draft-band.is-line .draft-text { text-decoration: underline dashed var(--ink-3); text-decoration-thickness: 1px; text-underline-offset: 5px; }
 .draft-band.is-line { --draft-pad: 14px; }
-.draft-box { flex: none; width: 18px; height: 18px; border: 1.5px solid var(--check); border-radius: 4px; box-sizing: border-box; }
+.draft-box { flex: none; width: 18px; height: 18px; border: 1.5px dashed var(--ink-3); border-radius: 4px; box-sizing: border-box; }
 .draft-main { flex: 1; min-width: 0; }
 .draft-text { outline: none; user-select: text; -webkit-user-select: text; overflow-wrap: anywhere; }
 .draft-text:focus { box-shadow: 0 1px 0 var(--blue); }
 .draft-text.is-readonly { cursor: default; }
-.draft-since { margin-left: 8px; font-size: var(--text-meta); color: var(--ink-3); white-space: nowrap; }
+.draft-since { margin-left: 8px; font-size: var(--text-meta); color: var(--ink-3); opacity: .8; white-space: nowrap; }
 .draft-acts { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; gap: 2px; }
-.draft-acts button { display: grid; place-items: center; width: 32px; height: 30px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--ink-2); cursor: pointer; }
-.draft-acts button svg { width: 16px; height: 16px; flex: none; }
-@media (hover: hover) { .draft-acts button:hover { background: color-mix(in srgb, var(--blue) 14%, transparent); color: var(--ink); } }
+.draft-acts button { display: grid; place-items: center; width: 32px; height: 30px; padding: 0; border: 0; border-radius: 7px; background: none; color: var(--ink-3); cursor: pointer; }
+.draft-acts button svg { width: 14px; height: 14px; flex: none; }
+/* Laptop: ✓/✕ show on hover or keyboard focus only; the phone keeps them visible but light. */
+@media (hover: hover) {
+  .draft-acts { opacity: 0; transition: opacity .12s; }
+  .draft-band:hover .draft-acts, .draft-band:focus-within .draft-acts { opacity: 1; }
+  .draft-acts button { width: 26px; height: 26px; }
+  .draft-acts button:hover { background: var(--hover-dim); color: var(--ink); }
+}
 .draft-acts button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
-@media (max-width: 599px) { .draft-band { padding-right: 92px; } .draft-acts { right: 0; } .draft-acts button { width: 44px; height: 40px; } }
+@media (max-width: 599px) { .draft-band { padding-right: 80px; } .draft-acts { right: 0; } .draft-acts button { width: 40px; height: 40px; } }
 
 /* "N more open": quiet, the strip's meta size; its rows are plain (not suggestions), with ＋. */
 .draft-more { margin: 4px 0 2px; }
 .draft-more-toggle { font: inherit; font-size: var(--text-small); color: var(--ink-3); background: none; border: 0; padding: 6px 0 6px 10px; cursor: pointer; }
 .draft-chev { display: inline-block; transition: transform .15s; }
 .draft-more-toggle[aria-expanded="true"] .draft-chev { transform: rotate(90deg); }
-.draft-band.is-open-row { background: none; box-shadow: none; color: var(--ink-2); }
+.draft-band.is-open-row { color: var(--ink-2); }
 @media (max-width: 599px) { .draft-more-toggle { min-height: 44px; } }
+
