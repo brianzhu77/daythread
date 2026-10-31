@@ -2,6 +2,7 @@ import type { LocalDate, Page, Workspace } from "./types.ts";
 import { flatNodes, inlineText, isTaskRow, pageNodes, textDate, type EditorNode } from "./editor-document.ts";
 import { refHolders, refTargetPage } from "./page-refs.ts";
 import { isTemplate } from "./day-template.ts";
+import { isDraft } from "./day-draft.ts";
 
 // The page tree is each page's own parentId; sibling order is the workspace's page order. "Linked from" reads the
 // documents: cards (pageLink blocks) and `[[` links, each stamped with the revision of the save that first held it.
@@ -11,7 +12,7 @@ export function isTrashed(p: Page): boolean {
 }
 /** The pages a list, picker or search may show: not in the trash, and never the day template (B70). */
 export function visiblePages(ws: Workspace): Page[] {
-  return ws.pages.filter((p) => !isTrashed(p) && !isTemplate(p));
+  return ws.pages.filter((p) => !isTrashed(p) && !isTemplate(p) && !isDraft(p));
 }
 export function parentOf(ws: Workspace, p: Page): Page | null {
   if (p.type === "daily" || !p.parentId) return null;
@@ -51,7 +52,7 @@ export function subtreeIds(ws: Workspace, pageId: string): Set<string> {
     grew = false;
     for (const p of ws.pages) {
       // A template's parentId is what it is the default for: it never goes to the trash with that page.
-      if (isTemplate(p)) continue;
+      if (isTemplate(p) || isDraft(p)) continue;
       const parent = parentOf(ws, p);
       if (parent && ids.has(parent.id) && !ids.has(p.id)) { ids.add(p.id); grew = true; }
     }
@@ -60,12 +61,12 @@ export function subtreeIds(ws: Workspace, pageId: string): Set<string> {
 }
 export function moveRefusal(ws: Workspace, pageId: string, parentId: string | null): string | null {
   const p = ws.pages.find((x) => x.id === pageId);
-  if (!p) return "Page not found";
+  if (!p || isDraft(p)) return "Page not found";
   if (p.type === "daily") return "Day pages stay in Days";
   if (isTemplate(p)) return "The day template stays where it is";
   if (isTrashed(p)) return "Page is in trash";
   const target = parentId === null ? null : ws.pages.find((x) => x.id === parentId);
-  if (parentId !== null && !target) return "Page not found";
+  if (parentId !== null && (!target || isDraft(target))) return "Page not found";
   if (target && isTrashed(target)) return "Page is in trash";
   if (target && isTemplate(target)) return "Pages can't go inside the day template";
   if (parentId !== null && subtreeIds(ws, pageId).has(parentId)) return "Can't move a page into itself or its subpages";
@@ -81,7 +82,7 @@ export interface PageReference { sourceId: string; key: string; at: number | und
 /** Every reference to `pageId` from other pages: cards and `[[` links, on live and trashed pages. */
 export function referencesTo(ws: Workspace, pageId: string): PageReference[] {
   if (!ws.pages.some((p) => p.id === pageId)) return [];
-  return ws.pages.flatMap((p) => p.id === pageId || isTemplate(p) ? [] : [
+  return ws.pages.flatMap((p) => p.id === pageId || isTemplate(p) || isDraft(p) ? [] : [
     ...flatNodes(pageNodes(p)).filter((n) => n.type === "pageLink" && n.props?.pageId === pageId).map((n): PageReference => ({ sourceId: p.id, key: `${p.id}/${n.id}`, at: typeof n.props?.at === "number" ? n.props.at : undefined })),
     ...refHolders(p).flatMap((h) => h.refs.filter((r) => refTargetPage(ws, r) === pageId).map((r): PageReference => ({ sourceId: p.id, key: `${p.id}/${h.id}/${r.refId}`, at: r.at }))),
   ]);
@@ -106,7 +107,7 @@ export function linkedFrom(ws: Workspace, pageId: string): LinkedFromEntry[] {
 export function recentPages(ws: Workspace, currentId: string | null): Page[] {
   const newest = new Map<string, number>();
   for (const p of ws.pages) {
-    if (isTemplate(p)) continue;
+    if (isTemplate(p) || isDraft(p)) continue;
     const hits: [string, number | undefined][] = [
       ...flatNodes(pageNodes(p)).filter((n) => n.type === "pageLink" && typeof n.props?.pageId === "string").map((n) => [String(n.props!.pageId), typeof n.props?.at === "number" ? n.props.at : undefined] as [string, number | undefined]),
       ...refHolders(p).flatMap((h) => h.refs.map((r) => [refTargetPage(ws, r), r.at] as [string, number | undefined])),
@@ -137,7 +138,7 @@ export function writtenDays(ws: Workspace): Set<string> {
 }
 /** Nothing written on any day and no other page: a new account, before its first word (empty-start-states §2a). */
 export function isBlankWorkspace(ws: Workspace): boolean {
-  return writtenDays(ws).size === 0 && !ws.pages.some((p) => p.type !== "daily" && !isTemplate(p) && !p.trashedAt);
+  return writtenDays(ws).size === 0 && !ws.pages.some((p) => p.type !== "daily" && !isTemplate(p) && !isDraft(p) && !p.trashedAt);
 }
 /**
  * The sidebar's Days group, newest first: this month's days (today always) plus future days, then earlier months by

@@ -2,6 +2,7 @@
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
 import { broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
+import { draftOf, draftPageId, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget } from "./day-template.ts";
 import { isTrashed, moveRefusal, subtreeIds } from "./page-tree.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
@@ -43,6 +44,8 @@ export function addDays(value: string, days: number): string {
 function page(state: Workspace, id: string): Page {
   const p = state.pages.find((x) => x.id === id);
   if (!p) throw new DomainError("Page not found");
+  // A day's draft is reached only through its own commands (B77): no page command can rename, move or open it.
+  if (isDraft(p)) throw new DomainError("Not a page");
   return p;
 }
 /** A page the command may change as a page: never the day template, which only its own editor and Reset change. */
@@ -58,7 +61,7 @@ function task(state: Workspace, id: string): Task {
 }
 const dayPage = (state: Workspace, day: string): Page | undefined => state.pages.find((p) => p.type === "daily" && p.date === day);
 // A template's rows are never a task's place (B70): only live, ordinary pages hold tasks.
-const livePages = (state: Workspace): Page[] => state.pages.filter((p) => !isTrashed(p) && !isTemplate(p));
+const livePages = (state: Workspace): Page[] => state.pages.filter((p) => !isTrashed(p) && !isTemplate(p) && !isDraft(p));
 const docOf = (p: Page): EditorNode[] => structuredClone(pageNodes(p));
 const setDocument = (p: Page, nodes: EditorNode[]): void => { p.document = JSON.stringify(nodes); };
 
@@ -211,6 +214,10 @@ function settleAfterRowsLeft(state: Workspace, p: Page, t: Task, options: { sing
   const elsewhere = taskRows(state, t.id).some((r) => r.page.id !== p.id);
   if (!elsewhere && !t.paused) { tombstone(state, t); return; }
   if (options.single && options.wasPlan && p.type === "daily" && p.date && p.date === options.today && options.plannedBefore === p.date) { t.paused = true; t.version++; }
+}
+function setDraft(state: Workspace, dayPageId: string, draft: DayDraft): void {
+  const p = state.pages.find((x) => x.id === draftPageId(dayPageId));
+  if (p) p.document = JSON.stringify(draft);
 }
 function tombstone(state: Workspace, t: Task): void {
   state.tasks = state.tasks.filter((x) => x.id !== t.id);
@@ -472,7 +479,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const fromTemplate = Boolean(template) && isUntouchedCopy(template!, nodes);
       const blank = !fromTemplate && nodes.length === 1 && isEmptyLine(nodes[0]!);
       // A template aimed at this page isn't a page made inside it (Ratchet e9857f63).
-      const untouched = (blank || fromTemplate) && !state.pages.some((c) => c.parentId === p.id && !isTrashed(c) && !isTemplate(c));
+      const untouched = (blank || fromTemplate) && !state.pages.some((c) => c.parentId === p.id && !isTrashed(c) && !isTemplate(c) && !isDraft(c));
       if (!untouched) return unchanged;
       const title = action.title?.replace(/\s+/g, " ").trim().slice(0, 200) || null;
       const description = action.description?.replace(/\s+/g, " ").trim().slice(0, 500) || null;
@@ -562,6 +569,69 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (!isTemplate(p)) throw new DomainError("Not a template");
       state.pages = state.pages.filter((x) => x.id !== p.id);
       return { message: `Deleted '${p.title.trim() || "Untitled"}'`, entityId: p.id };
+    }
+    case "set-draft": {
+      // B77: the server's draft for a day page, checked here (ids it may use, planning part only) before it is kept.
+      const day = page(state, action.pageId);
+      if (day.type !== "daily" || isTrashed(day)) throw new DomainError("Not a day page");
+      const allowed = new Set(action.allowedTaskIds);
+      const old = draftOf(state, day.id);
+      // A late answer never brings back what he already applied or skipped.
+      const done = new Set(old?.items.filter((i) => i.state !== "open").map((i) => i.taskId ?? i.id) ?? []);
+      const items = normalizeDraftItems(state, day, action.items, allowed).filter((i) => !done.has(i.taskId ?? i.id));
+      const moreOpen = action.moreOpen.filter((id) => allowed.has(id));
+      const draft: DayDraft = { status: action.status, items: [...(old?.items.filter((i) => i.state !== "open") ?? []), ...items], moreOpen };
+      const existing = state.pages.find((p) => p.id === draftPageId(day.id));
+      if (existing) existing.document = JSON.stringify(draft);
+      else state.pages.push({ id: draftPageId(day.id), type: "draft", date: null, title: "", parentId: day.id, document: JSON.stringify(draft) });
+      return { message: "Draft ready", entityId: draftPageId(day.id) };
+    }
+    case "apply-draft": {
+      // B77 (Ratchet 971bbb1): one operation, one Undo, for the rows, the tasks' plans and the bands' state. Each item
+      // is checked against the page and the tasks as they are now; one that can't be placed safely stays open.
+      const day = page(state, action.pageId);
+      if (day.type !== "daily" || !day.date || isTrashed(day)) throw new DomainError("Not a day page");
+      const draft = draftOf(state, day.id);
+      if (!draft) throw new DomainError("No draft for this day");
+      const wanted = new Set(action.itemIds);
+      let doc = docOf(day), applied = 0;
+      const after = new Map<string, string>();
+      const plan: Task[] = [];
+      for (const item of draft.items) {
+        if (!wanted.has(item.id) || item.state !== "open") continue;
+        const t = item.taskId ? state.tasks.find((x) => x.id === item.taskId) : undefined;
+        if (item.taskId && (!eligibleTask(t) || rowIdsOf(doc, t.id).size)) continue;
+        const at = placeItem(doc, { ...item, anchor: after.get(item.anchor) ?? item.anchor, place: after.has(item.anchor) ? "after" : item.place }, new Set(state.tasks.map((x) => x.id)));
+        if (!at) continue;
+        const words = action.edits?.[item.id]?.trim();
+        let row: EditorNode;
+        if (t) { row = planRow(t, day.date); plan.push(t); }
+        else if (item.block?.type === "task") {
+          const fresh = createTask(state, words || inlineText(item.block.content), day, day.date);
+          row = planRow(fresh, day.date);
+        } else row = { id: `${broughtPrefix}${newId()}`, type: item.block!.type, props: {}, content: words ? [textRun(words)] : structuredClone(item.block!.content), children: [] };
+        if (at.kind === "fill") doc[at.index] = row;
+        else doc.splice(at.index, 0, row);
+        after.set(item.anchor, row.id);
+        item.state = "applied";
+        applied++;
+      }
+      if (!applied) throw new DomainError("Nothing to apply");
+      setDocument(day, doc);
+      for (const t of plan) planOn(state, t, day.date, { today: action.today });
+      setDraft(state, day.id, draft);
+      return { message: applied === 1 ? "Applied" : `Applied ${applied}`, entityId: draftPageId(day.id) };
+    }
+    case "skip-draft": {
+      const day = page(state, action.pageId);
+      const draft = draftOf(state, day.id);
+      if (!draft) throw new DomainError("No draft for this day");
+      const wanted = new Set(action.itemIds);
+      let skipped = 0;
+      for (const item of draft.items) if (wanted.has(item.id) && item.state === "open") { item.state = "skipped"; skipped++; }
+      if (!skipped) throw new DomainError("Nothing to skip");
+      setDraft(state, day.id, draft);
+      return { message: skipped === 1 ? "Skipped" : `Skipped ${skipped}`, entityId: draftPageId(day.id) };
     }
     case "set-timezone":
       state.timezone = validTimezone(action.timezone);

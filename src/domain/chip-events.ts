@@ -4,6 +4,7 @@ import { readMention, type DateMention } from './date-chip.ts'
 import { liveTitle, type InlineRef } from './page-refs.ts'
 import { isTrashed } from './page-tree.ts'
 import { isTemplate } from './day-template.ts'
+import { isDraft } from './day-draft.ts'
 import type { DayEvent, EventLine, LocalDate, Workspace } from './types.ts'
 
 export type { DayEvent, EventLine }
@@ -33,7 +34,7 @@ export function chipEvents(ws: Workspace): Map<string, DayEvent> {
   let order = 0
   for (const page of ws.pages) {
     // A `@date` on the day template is a line to copy, not an event.
-    if (isTrashed(page) || isTemplate(page)) continue
+    if (isTrashed(page) || isTemplate(page) || isDraft(page)) continue
     const pageDate = page.type === 'daily' && page.date ? page.date : null
     const walk = (list: EditorNode[]) => list.forEach((n) => {
       if (Array.isArray(n.content)) for (const item of n.content) {

@@ -1,6 +1,7 @@
 import { editorSeed, inlineText, pageNodes, type EditorNode } from './editor-document.ts'
 import type { Page, Workspace } from './types.ts'
 import { isTemplate } from './day-template.ts'
+import { isDraft } from './day-draft.ts'
 
 /**
  * Export: his words out of the app, readable without its code. A folder of Markdown (a day page per date, a document
@@ -14,10 +15,10 @@ export function exportFiles(ws: Workspace, now: Date): ExportFile[] {
   const day = now.toLocaleDateString('en-CA', { timeZone: ws.timezone })
   const root = `daythread-export-${day}`
   const names = fileNames(ws)
-  const live = ws.pages.filter(p => !p.trashedAt)
+  const live = ws.pages.filter(p => !p.trashedAt && !isDraft(p))
   const days = live.filter(p => p.type === 'daily' && p.date).sort((a, b) => (a.date! < b.date! ? -1 : 1))
   const templates = live.filter(isTemplate)
-  const documents = live.filter(p => !(p.type === 'daily' && p.date) && !isTemplate(p)).sort((a, b) => names.get(a.id)!.localeCompare(names.get(b.id)!))
+  const documents = live.filter(p => !(p.type === 'daily' && p.date) && !isTemplate(p) && !isDraft(p)).sort((a, b) => names.get(a.id)!.localeCompare(names.get(b.id)!))
   return [
     { path: `${root}/README.md`, text: readme(day, ws.timezone) },
     ...days.map(p => ({ path: `${root}/days/${names.get(p.id)}.md`, text: pageMarkdown(p, ws, names) })),
