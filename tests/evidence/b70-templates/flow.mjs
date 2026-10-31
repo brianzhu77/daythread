@@ -14,15 +14,13 @@ for (const [w, h] of [[1280, 900], [390, 844]]) {
   await page.goto(`${base}/pages?view=templates`)
   await page.getByRole('heading', { name: 'Templates' }).waitFor()
   if (w === 1280) {
-    check('built-in line shows with Edit', await page.getByText('Day pages start with TODO, Events, Good Stuffs and Notes.').isVisible())
+    check('built-in Day row shows as the first row', (await page.locator('.card-row').first().innerText()).includes('Default for day pages'))
     await page.screenshot({ path: `${out}/${w}-list-empty.png` })
-    await page.getByRole('button', { name: 'Edit' }).click()
-  } else {
-    await page.getByRole('button', { name: /Day/ }).first().click()
   }
+  await page.locator('.card-row', { hasText: 'Default for day pages' }).first().click()
   await page.locator('.template-target').waitFor()
   check(`${w}: Default for shows Day pages`, (await page.locator('.template-target').inputValue()) === 'days')
-  check(`${w}: grey line`, await page.getByText('New pages start from this template. To-dos are copied empty.').isVisible())
+  check(`${w}: no explanatory line`, !(await page.getByText('New pages start from this template').count()))
   if (w === 1280) {
     // Type a line under Notes and a to-do title under TODO.
     const notes = page.locator('.bn-block-outer', { has: page.locator('h2', { hasText: 'Notes' }) }).first()

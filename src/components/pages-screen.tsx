@@ -131,27 +131,35 @@ function TemplatesScreen({ workspace, today, onOpen }: { workspace: Workspace; t
         <h1 className="large-title">Templates</h1>
         <button type="button" className="round-add" aria-label="New template" onClick={() => void make(false)}><PlusIcon /></button>
       </div>
-      {/* Whenever day pages have no default, say what they start with, even after "+" made another template. A second
-          "Day" from Edit is no longer stuck now that templates can be deleted. */}
-      {!defaultTemplate(workspace, dayPagesTarget) && (
-        <p className="quiet">Day pages start with TODO, Events, Good Stuffs and Notes. · <button type="button" className="link" disabled={opening} onClick={() => void make(true)}>{opening ? 'Opening…' : 'Edit'}</button></p>
-      )}
-      {list.length > 0 && (
-        <ul className="plain card-list two-line">
-          {list.map(t => (
-            <li key={t.id}>
-              <button type="button" className="card-row" onClick={() => onOpen(t.id)}>
-                <span className="card-row-icon"><PageKindIcon url={null} /></span>
-                <span className="card-row-text">
-                  <span className={`card-row-title ${t.title ? '' : 'untitled'}`}>{displayPageTitle(t)}</span>
-                  {targetLabel(workspace, t, today) && <span className="card-row-detail">{targetLabel(workspace, t, today)}</span>}
-                </span>
-                <ChevronRightIcon />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* Brian 1ac6784b: no explanatory sentences. While day pages have no default, the built-in one is simply the first
+          row; tapping it makes "Day" from the built-in headings and opens it. A second "Day" from here, when a "Day"
+          exists but isn't the default, is visible below it and can be deleted. */}
+      <ul className="plain card-list two-line">
+        {!defaultTemplate(workspace, dayPagesTarget) && (
+          <li>
+            <button type="button" className="card-row" disabled={opening} onClick={() => void make(true)}>
+              <span className="card-row-icon"><PageKindIcon url={null} /></span>
+              <span className="card-row-text">
+                <span className="card-row-title">{dayTemplateTitle}</span>
+                <span className="card-row-detail">{opening ? 'Opening…' : 'Default for day pages'}</span>
+              </span>
+              <ChevronRightIcon />
+            </button>
+          </li>
+        )}
+        {list.map(t => (
+          <li key={t.id}>
+            <button type="button" className="card-row" onClick={() => onOpen(t.id)}>
+              <span className="card-row-icon"><PageKindIcon url={null} /></span>
+              <span className="card-row-text">
+                <span className={`card-row-title ${t.title ? '' : 'untitled'}`}>{displayPageTitle(t)}</span>
+                {targetLabel(workspace, t, today) && <span className="card-row-detail">{targetLabel(workspace, t, today)}</span>}
+              </span>
+              <ChevronRightIcon />
+            </button>
+          </li>
+        ))}
+      </ul>
       <AccountRow className="account-row-phone" />
     </div>
   )
@@ -204,7 +212,6 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
             </select>
           </label>
         </p>
-        <p className="template-note">New pages start from this template. To-dos are copied empty.</p>
       </div>
       <ContinuousPage page={page} workspace={workspace} />
     </div>
