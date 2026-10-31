@@ -300,7 +300,11 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
 /* B70: the day template's one grey line, set like the first-day line (day-template-states §2). */
 .template-note { margin: 6px 0 0; font-size: var(--text-small); line-height: 20px; color: var(--ink-2); text-wrap: pretty; }
 /* The Default for menu reads as text in the meta line, sized to its choice, like the time zone menu. */
-.template-target { background: none; border: 0; padding: 0; font: inherit; color: var(--ink); cursor: pointer; field-sizing: content; max-width: 100%; }
+/* A long "Pages in A › B" target must not widen the page (Ratchet 1220a8df): the head's track and the "Default for" row
+   can shrink, and the closed menu ends in an ellipsis; the open menu still shows the full name. */
+.template-screen .page-head { grid-template-columns: minmax(0, 1fr); }
+.template-note label { display: flex; align-items: baseline; gap: 0.3em; min-width: 0; white-space: nowrap; }
+.template-target { flex: 0 1 auto; min-width: 0; background: none; border: 0; padding: 0; font: inherit; color: var(--ink); cursor: pointer; field-sizing: content; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* A template's to-dos are only rows: no task, so no "Reference" tag (templates-states §2). */
 .template-screen .editor-reference-tag { display: none; }
 .day-nav { display: flex; align-items: center; gap: 6px; color: var(--ink-faint); }
