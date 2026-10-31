@@ -64,20 +64,23 @@ Two parts, which can ship separately:
    runs for them is a separate opt-in.
 7. **Minimalist copy** (Brian 1ac6784b): no explanatory text in the draft.
 
-## Questions for Brian (through Lead)
+## Settled (Lead 055b72c0)
 
-1. **Is it OK that the previous day's page and open to-dos go to a model provider each morning?** Recommended: Claude via the
-   Anthropic API, called from the Worker. About one call a day, a few thousand tokens: cents a month. Off by default for
-   invitees.
-2. **When does it run?** Recommended: when he first opens the new day (no scheduled job needed, 5–20 s). The alternative,
-   ready at midnight, needs a Cron Trigger.
+1. **Provider:** OpenRouter, which Brian said yes to on 2026-10-19 ("Draft my day", 15c94de, 903f3a7). `OPENROUTER_API_KEY`
+   and `OPENROUTER_MODEL` are already set. Cost is ours, cents a month.
+2. **When:** when he first opens the new day. No cron job. The page is made from the template as today, and the draft
+   arrives on top.
+3. **Failure:** the template page stays as it is, and the draft comes later or not at all.
+
+Open before inviting others: invitees' notes would go to the same provider. Model drafting stays off for them until they
+turn it on (rule 6).
 
 ## Suggested order
 
-1. **Now, no decision needed:** Jazz's states doc and prototype for the draft on the page (all states incl. model failure,
-   no yesterday page, empty template). Roadbuster's to-do identity tests (apply moves the same task).
-2. **After Brian's yes on question 1:** Roadbuster's experiment on a copy of his backup: one server function, 3–5 of his
-   real days, outputs judged against the bar above before any diff UI is wired to it.
+1. **Now, in parallel (Lead 055b72c0):** Roadbuster's experiment on the `before-b74` copy through OpenRouter (yesterday's
+   page, open to-dos with ids, today's events and the template in; a block list anchored to template block ids out),
+   raw outputs by 19:30Z. Bumblebee scores them against what he actually did on the next day. Jazz does states and the
+   prototype. Ratchet does the risk list and test plan for applying a draft.
 3. **Then:** build the draft UI with the deterministic fill, cut the card, the Continue line and the Tomorrow block in the
    same release; switch the fill to the model once the experiment passes.
 
