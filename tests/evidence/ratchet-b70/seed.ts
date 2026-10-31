@@ -14,7 +14,7 @@ await repo.executeOnLatest('review234-paste-source', {
 })
 ws = await repo.load()
 const source = ws.pages.find((p) => p.id === 'review234-source')!
-await repo.executeOnLatest('review234-source-task', {
+await repo.executeOnLatest('review234-source-task-' + crypto.randomUUID(), {
   type: 'save-editor',
   pageId: source.id,
   expectedContent: pageContentKey(source),

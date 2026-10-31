@@ -1,0 +1,6 @@
+(node:11040) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+source remaining tasks 0
+actual keyboard cut/paste checkboxes [ 'New task', 'New task', 'New task', 'New task', 'New task' ]
+real task control count 0
+PASS actual keyboard cut: no live task controls; clicking all template checkboxes leaves all Tasks unchanged
