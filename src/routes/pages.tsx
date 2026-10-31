@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { PagesScreen } from '../components/pages-screen'
 
-export interface PagesSearch { page?: string; focus?: 'title'; block?: string; from?: 'tags' | 'search'; view?: 'trash' }
+export interface PagesSearch { page?: string; focus?: 'title'; block?: string; from?: 'tags' | 'search'; view?: 'trash' | 'templates' }
 
 export const Route = createFileRoute('/pages')({
   // The open page lives in the URL so the browser's Back returns to where it was opened from (a `/page` card).
@@ -14,6 +14,8 @@ export const Route = createFileRoute('/pages')({
     ...(search.from === 'tags' || search.from === 'search' ? { from: search.from } : {}),
     // A4: the Trash screen (pages-trash-layout §3).
     ...(search.view === 'trash' ? { view: 'trash' as const } : {}),
+    // B70: the Templates list (templates-states §1).
+    ...(search.view === 'templates' ? { view: 'templates' as const } : {}),
   }),
   component: PagesScreen,
 })

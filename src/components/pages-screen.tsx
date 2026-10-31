@@ -9,6 +9,7 @@ import { ChevronRightIcon, PageKindIcon, PlusIcon } from './icons'
 import { LinkUrlRow } from './link-url-row'
 import { PagesTrashRow, TrashedPage, TrashScreen } from './trash'
 import { useWorkspace } from './use-day'
+import { dayPagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, templates, templateTarget } from '../domain/day-template'
 
 /** Asks for a title and creates a document page; resolves to its id, or null if cancelled. */
 export function useCreatePage() {
@@ -31,6 +32,8 @@ export function PagesScreen() {
   const p = workspace?.pages.find(p => p.id === search.page)
   if (search.view === 'trash' && !p) return <TrashScreen />
   if (!workspace) return <p>Loading pages…</p>
+  if (p && isTemplate(p)) return <TemplateScreen key={p.id} page={p} workspace={workspace} />
+  if (search.view === 'templates' && !p) return <TemplatesScreen workspace={workspace} onOpen={setSelected} />
   if (p && isTrashed(p)) return <TrashedPage key={p.id} page={p} workspace={workspace} />
   if (p) return <div className="doc-screen"><PageHeaderRow page={p} workspace={workspace} />
     <div className="page-head">
@@ -86,5 +89,69 @@ function PageRows({ pages, workspace, onOpen, detail }: { pages: Page[]; workspa
         )
       })}
     </ul>
+  )
+}
+
+/** B70 (states §1): the Templates list. Part 1 has one target, day pages; "+" and Delete come with subpage defaults. */
+function TemplatesScreen({ workspace, onOpen }: { workspace: Workspace; onOpen: (id: string) => void }) {
+  const { run } = useWorkspace()
+  const list = templates(workspace)
+  const edit = async () => {
+    const pageId = crypto.randomUUID()
+    if (await run({ type: 'create-template', title: dayTemplateTitle, pageId, dayPage: true })) onOpen(pageId)
+  }
+  return (
+    <div className="list-screen">
+      <div className="title-row"><h1 className="large-title">Templates</h1></div>
+      {!defaultTemplate(workspace, dayPagesTarget) && (
+        <p className="quiet">Day pages start with TODO, Events, Good Stuffs and Notes. · <button type="button" className="link" onClick={() => void edit()}>Edit</button></p>
+      )}
+      {list.length > 0 && (
+        <ul className="plain card-list two-line">
+          {list.map(t => (
+            <li key={t.id}>
+              <button type="button" className="card-row" onClick={() => onOpen(t.id)}>
+                <span className="card-row-icon"><PageKindIcon url={null} /></span>
+                <span className="card-row-text">
+                  <span className={`card-row-title ${t.title ? '' : 'untitled'}`}>{displayPageTitle(t)}</span>
+                  {templateTarget(t) === dayPagesTarget && <span className="card-row-detail">Default for day pages</span>}
+                </span>
+                <ChevronRightIcon />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <AccountRow className="account-row-phone" />
+    </div>
+  )
+}
+
+/** B70 (states §2): a template, edited like a document page, with what it is the default for. */
+function TemplateScreen({ page, workspace }: { page: Page; workspace: Workspace }) {
+  const { run } = useWorkspace()
+  const target = templateTarget(page)
+  const holder = defaultTemplate(workspace, dayPagesTarget)
+  const setTarget = (next: string) => {
+    const value = next === dayPagesTarget ? dayPagesTarget : null
+    if (value === target) return
+    void run({ type: 'set-template-target', pageId: page.id, target: value }, r => ({ text: value ? 'Now the default for day pages' : 'No longer a default', undoOperationId: r.operationId }))
+  }
+  return (
+    <div className="doc-screen template-screen">
+      <div className="page-head">
+        <PageTitleField key={page.id} page={page} />
+        <p className="template-note">
+          <label>Default for:{' '}
+            <select className="template-target" value={target ?? ''} onChange={e => setTarget(e.target.value)}>
+              <option value="">None</option>
+              <option value={dayPagesTarget}>Day pages{holder && holder.id !== page.id ? ` · now ${displayPageTitle(holder)}` : ''}</option>
+            </select>
+          </label>
+        </p>
+        <p className="template-note">New pages start from this template. To-dos are copied empty.</p>
+      </div>
+      <ContinuousPage page={page} workspace={workspace} />
+    </div>
   )
 }

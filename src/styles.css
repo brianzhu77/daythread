@@ -297,6 +297,10 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
 .day-head { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 2px 12px; padding: 24px 0 12px; }
 .day-head h1 { font-size: var(--text-title); line-height: 34px; letter-spacing: -.02em; font-weight: var(--weight-bold); }
 .day-first { grid-column: 1 / -1; margin: 6px 0 0; font-size: var(--text-small); line-height: 20px; color: var(--ink-2); text-wrap: pretty; }
+/* B70: the day template's one grey line, set like the first-day line (day-template-states §2). */
+.template-note { margin: 6px 0 0; font-size: var(--text-small); line-height: 20px; color: var(--ink-2); text-wrap: pretty; }
+/* A template's to-dos are only rows: no task, so no "Reference" tag (templates-states §2). */
+.template-screen .editor-reference-tag { display: none; }
 .day-nav { display: flex; align-items: center; gap: 6px; color: var(--ink-faint); }
 /* Brian 116a40ab (option A): the day buttons keep their grey shape but use the page's ink, not the accent blue;
    blue is left to the checkboxes. Disabled keeps HeroUI's 50% opacity over a lighter ink. */
