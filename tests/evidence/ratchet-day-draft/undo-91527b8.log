@@ -1,0 +1,74 @@
+(node:80829) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+AFTER SHOW Daythread
+Search
+⌘K
+Today
+Tasks
+Calendar
+Pages
+Tags
+
+DAYS
+
+Today
+Fri, Oct 30
+
+PAGES
+
++
+
+No pages yet
+
+Templates Export
+
+Today,
+Sat, Oct 31
+
+2 suggestions
+ · 
+Apply all
+ · 
+Dismiss
+
+Start the day
+TASKS
++
+Existing carry
+Unfinished · from Fri
+⋯
+Done
+Later
+Saved
+Planning
+Original suggestion
+Existing carry
+Moved to Fri 10/30
+⋯
+
+Own KEEP_TYPED note
+
+Reflection
+
+Private words
+
+Tomorrow · Sun, Nov 1
+Undone
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+0 !== 2
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-draft/tests/evidence/ratchet-day-draft/lifecycle.mjs:31:10 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 0,
+  expected: 2,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

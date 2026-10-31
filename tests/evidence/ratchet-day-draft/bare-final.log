@@ -1,0 +1,6 @@
+(node:84226) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium 1280 top-of-document band + moreOpen host visible and Apply works
+(node:84246) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS webkit 390 top-of-document band + moreOpen host visible and Apply works

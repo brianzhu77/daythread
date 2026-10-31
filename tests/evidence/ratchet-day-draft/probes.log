@@ -1,0 +1,4 @@
+CONFIRMED reflection-only template: model receives reflection anchors and apply writes under reflection
+CONFIRMED no-heading page: moreOpen exists but planningEndId is null; UI bandGroups requires truthy end and omits its host
+CONFIRMED regenerating new-line suggestion under new id resurrects a dismissed identical suggestion
+CONFIRMED generation-time anchor moved outside planning: set-draft removes the item without returning its Task to moreOpen

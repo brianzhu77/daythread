@@ -1,0 +1,14 @@
+PASS chromium 1280: no card, no Continue?, no Tomorrow block
+PASS chromium 1280: storage emptied after saving ({"daythread.tomorrow-lines.local":"[]"})
+PASS chromium 1280: the overdue line and the half-typed input are to-dos on today's page
+PASS chromium 1280: as to-do rows, not plain lines (2)
+PASS chromium 1280: the line meant for tomorrow is planned for tomorrow
+PASS chromium 1280: a reload adds nothing again
+PASS chromium 1280: no page errors 
+PASS webkit 390: no card, no Continue?, no Tomorrow block
+PASS webkit 390: storage emptied after saving ({"daythread.tomorrow-lines.local":"[]"})
+PASS webkit 390: the overdue line and the half-typed input are to-dos on today's page
+PASS webkit 390: as to-do rows, not plain lines (2)
+PASS webkit 390: the line meant for tomorrow is planned for tomorrow
+PASS webkit 390: a reload adds nothing again
+PASS webkit 390: no page errors 

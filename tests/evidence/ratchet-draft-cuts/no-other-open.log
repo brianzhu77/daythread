@@ -1,0 +1,2 @@
+PASS chromium 1280: no "other open tasks" line (strip: "")
+PASS webkit 390: no "other open tasks" line (strip: "")

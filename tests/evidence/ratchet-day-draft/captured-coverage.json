@@ -1,0 +1,153 @@
+[
+  {
+    "date": "2026-10-27",
+    "tasks": [
+      {
+        "id": "K1",
+        "planned": "2026-10-28",
+        "yesterdayOpen": false
+      },
+      {
+        "id": "K2",
+        "planned": "2026-10-31",
+        "yesterdayOpen": true
+      },
+      {
+        "id": "K3",
+        "planned": "2026-10-28",
+        "yesterdayOpen": false
+      }
+    ],
+    "suggestions": [
+      {
+        "task": "K2",
+        "slot": "T6"
+      }
+    ]
+  },
+  {
+    "date": "2026-10-28",
+    "tasks": [
+      {
+        "id": "K1",
+        "planned": "2026-10-28",
+        "yesterdayOpen": false
+      },
+      {
+        "id": "K2",
+        "planned": "2026-10-31",
+        "yesterdayOpen": true
+      },
+      {
+        "id": "K3",
+        "planned": "2026-10-28",
+        "yesterdayOpen": false
+      },
+      {
+        "id": "K4",
+        "planned": "2026-10-27",
+        "yesterdayOpen": false
+      },
+      {
+        "id": "K5",
+        "planned": "2026-10-31",
+        "yesterdayOpen": true
+      }
+    ],
+    "suggestions": [
+      {
+        "task": "K1",
+        "slot": "T6"
+      },
+      {
+        "task": "K3",
+        "slot": "T7"
+      },
+      {
+        "task": "K4",
+        "slot": "T8"
+      }
+    ]
+  },
+  {
+    "date": "2026-10-29",
+    "tasks": [
+      {
+        "id": "K1",
+        "planned": "2026-10-31",
+        "yesterdayOpen": true
+      },
+      {
+        "id": "K2",
+        "planned": "2026-10-31",
+        "yesterdayOpen": true
+      },
+      {
+        "id": "K3",
+        "planned": "2026-10-29",
+        "yesterdayOpen": false
+      }
+    ],
+    "suggestions": [
+      {
+        "task": "K3",
+        "slot": "T6"
+      },
+      {
+        "task": "K1",
+        "slot": "T11"
+      }
+    ]
+  },
+  {
+    "date": "2026-10-31",
+    "tasks": [
+      {
+        "id": "K1",
+        "planned": "2026-10-31",
+        "yesterdayOpen": false
+      },
+      {
+        "id": "K2",
+        "planned": "2026-10-31",
+        "yesterdayOpen": false
+      },
+      {
+        "id": "K3",
+        "planned": "2026-10-29",
+        "yesterdayOpen": false
+      }
+    ],
+    "suggestions": [
+      {
+        "task": "K1",
+        "slot": "T6"
+      }
+    ]
+  },
+  {
+    "date": "2026-11-01",
+    "tasks": [
+      {
+        "id": "K1",
+        "planned": "2026-10-31",
+        "yesterdayOpen": true
+      },
+      {
+        "id": "K2",
+        "planned": "2026-10-31",
+        "yesterdayOpen": true
+      }
+    ],
+    "suggestions": [
+      {
+        "task": "K1",
+        "slot": "T6"
+      },
+      {
+        "task": "K2",
+        "slot": "T7"
+      }
+    ]
+  }
+]

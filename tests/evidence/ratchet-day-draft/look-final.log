@@ -1,0 +1,68 @@
+PASS chromium-1280-light found anchors {"todo":"day:2026-10-31:r0","notes":"day:2026-10-31:h3","lastBullet":"day:2026-10-31:r3","firstBullet":"day:2026-10-31:r1"}
+PASS chromium-1280-light preparing line
+PASS chromium-1280-light 3 bands
+PASS chromium-1280-light ready line
+PASS chromium-1280-light the filled empty to-do is hidden
+PASS chromium-1280-light band box and text line up with his to-do row {"boxDx":0,"textDx":0}
+PASS chromium-1280-light bullet band text lines up with his bullet text (dx 0)
+PASS chromium-1280-light no sideways scroll
+PASS chromium-1280-light Apply and Skip icons are 16x16 ["16x16","16x16","16x16","16x16","16x16","16x16"]
+PASS chromium-1280-light apply one: band gone, its anchor back (mock inserts nothing)
+PASS chromium-1280-light failed line keeps the fallback bands ["2 suggestions · Apply all · Dismiss","Couldn’t draft · Retry"]
+PASS chromium-1280-light "Couldn't draft · Retry" stays on one line
+PASS chromium-1280-light no anchor: band and "1 more open" show at the top
+PASS chromium-1280-light held while typing: "Suggestions ready · Show"
+PASS chromium-1280-light Show reveals and keeps the line in view (moved 0px)
+PASS chromium-1280-light Apply all carries the band edit [{"apply":["i1","i2","i3"],"edits":{"i3":"不追新闻；午 edited饭后不开 Slack"}}]
+PASS chromium-1280-light no page errors 
+PASS chromium-1280-dark found anchors {"todo":"day:2026-10-31:r0","notes":"day:2026-10-31:h3","lastBullet":"day:2026-10-31:r3","firstBullet":"day:2026-10-31:r1"}
+PASS chromium-1280-dark preparing line
+PASS chromium-1280-dark 3 bands
+PASS chromium-1280-dark ready line
+PASS chromium-1280-dark the filled empty to-do is hidden
+PASS chromium-1280-dark band box and text line up with his to-do row {"boxDx":0,"textDx":0}
+PASS chromium-1280-dark bullet band text lines up with his bullet text (dx 0)
+PASS chromium-1280-dark no sideways scroll
+PASS chromium-1280-dark Apply and Skip icons are 16x16 ["16x16","16x16","16x16","16x16","16x16","16x16"]
+PASS chromium-1280-dark apply one: band gone, its anchor back (mock inserts nothing)
+PASS chromium-1280-dark failed line keeps the fallback bands ["2 suggestions · Apply all · Dismiss","Couldn’t draft · Retry"]
+PASS chromium-1280-dark "Couldn't draft · Retry" stays on one line
+PASS chromium-1280-dark no anchor: band and "1 more open" show at the top
+PASS chromium-1280-dark held while typing: "Suggestions ready · Show"
+PASS chromium-1280-dark Show reveals and keeps the line in view (moved 0px)
+PASS chromium-1280-dark Apply all carries the band edit [{"apply":["i1","i2","i3"],"edits":{"i3":"不追新闻；午 edited饭后不开 Slack"}}]
+PASS chromium-1280-dark no page errors 
+PASS webkit-390-light found anchors {"todo":"day:2026-10-31:r0","notes":"day:2026-10-31:h3","lastBullet":"day:2026-10-31:r3","firstBullet":"day:2026-10-31:r1"}
+PASS webkit-390-light preparing line
+PASS webkit-390-light 3 bands
+PASS webkit-390-light ready line
+PASS webkit-390-light the filled empty to-do is hidden
+PASS webkit-390-light band box and text line up with his to-do row {"boxDx":0,"textDx":0}
+PASS webkit-390-light bullet band text lines up with his bullet text (dx 0)
+PASS webkit-390-light no sideways scroll
+PASS webkit-390-light Apply and Skip icons are 16x16 ["16x16","16x16","16x16","16x16","16x16","16x16"]
+PASS webkit-390-light apply one: band gone, its anchor back (mock inserts nothing)
+PASS webkit-390-light failed line keeps the fallback bands ["2 suggestions · Apply all · Dismiss","Couldn’t draft · Retry"]
+PASS webkit-390-light "Couldn't draft · Retry" stays on one line
+PASS webkit-390-light no anchor: band and "1 more open" show at the top
+PASS webkit-390-light held while typing: "Suggestions ready · Show "
+PASS webkit-390-light Show reveals and keeps the line in view (moved 0px)
+PASS webkit-390-light Apply all carries the band edit [{"apply":["i1","i2","i3"],"edits":{"i3":"不追新闻； edited午饭后不开 Slack"}}]
+PASS webkit-390-light no page errors 
+PASS webkit-390-dark found anchors {"todo":"day:2026-10-31:r0","notes":"day:2026-10-31:h3","lastBullet":"day:2026-10-31:r3","firstBullet":"day:2026-10-31:r1"}
+PASS webkit-390-dark preparing line
+PASS webkit-390-dark 3 bands
+PASS webkit-390-dark ready line
+PASS webkit-390-dark the filled empty to-do is hidden
+PASS webkit-390-dark band box and text line up with his to-do row {"boxDx":0,"textDx":0}
+PASS webkit-390-dark bullet band text lines up with his bullet text (dx 0)
+PASS webkit-390-dark no sideways scroll
+PASS webkit-390-dark Apply and Skip icons are 16x16 ["16x16","16x16","16x16","16x16","16x16","16x16"]
+PASS webkit-390-dark apply one: band gone, its anchor back (mock inserts nothing)
+PASS webkit-390-dark failed line keeps the fallback bands ["2 suggestions · Apply all · Dismiss","Couldn’t draft · Retry"]
+PASS webkit-390-dark "Couldn't draft · Retry" stays on one line
+PASS webkit-390-dark no anchor: band and "1 more open" show at the top
+PASS webkit-390-dark held while typing: "Suggestions ready · Show "
+PASS webkit-390-dark Show reveals and keeps the line in view (moved 0px)
+PASS webkit-390-dark Apply all carries the band edit [{"apply":["i1","i2","i3"],"edits":{"i3":"不追新闻； edited午饭后不开 Slack"}}]
+PASS webkit-390-dark no page errors 

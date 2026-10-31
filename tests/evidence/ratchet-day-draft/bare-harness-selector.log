@@ -1,0 +1,16 @@
+(node:81894) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.isVisible: Error: strict mode violation: getByRole('button', { name: 'Add Existing carry to today' }) resolved to 2 elements:
+    1) <button type="button" class="mc-add " aria-label="Add Existing carry to today">…</button> aka getByRole('region', { name: 'Start the day' }).getByLabel('Add Existing carry to today')
+    2) <button type="button" title="Add to today" aria-label="Add Existing carry to today">…</button> aka getByTitle('Add to today')
+
+Call log:
+    - checking visibility of getByRole('button', { name: 'Add Existing carry to today' })
+
+    at /Users/dogrod/Developer/daythread-ratchet-draft/tests/evidence/ratchet-day-draft/bare.mjs:5:525
+
+Node.js v24.14.1

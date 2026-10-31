@@ -1,0 +1,4 @@
+CONFIRMED reflection-only template: model receives reflection anchors and apply writes under reflection
+CONFIRMED no-heading page: moreOpen exists but planningEndId is null; UI bandGroups requires truthy end and omits its host
+PASS first ready draft rejects later generation and preserves the skipped new line disposition
+PASS moved outside anchor retains the Task as a safely relocated band
