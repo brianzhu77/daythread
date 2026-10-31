@@ -66,7 +66,7 @@ export function AccountRow({ className }: { className: string }) {
   return (
     <div className={`account-row ${className}`}>
       <p>
-        {email && <AccountItem>{email}</AccountItem>}
+        {email && <AccountItem><span className="account-text account-email">{email}</span></AccountItem>}
         {email && account.timezone && (
           <AccountItem>
             <select className="account-zone" aria-label="Time zone" value={account.timezone} onChange={e => void pickZone(e.target.value)}>

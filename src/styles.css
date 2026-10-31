@@ -1457,6 +1457,8 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* Each item keeps its "·" (account-item.tsx): no break between the two, text inside an item still wraps. */
 .account-item { white-space: nowrap; }
 .account-text { white-space: normal; }
+/* An address has no spaces: let a long one break anywhere rather than run out of the sidebar (Ratchet fa0252c0). */
+.account-email { overflow-wrap: anywhere; }
 .account-item:last-child > .account-sep { display: none; }
 .account-zone { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; max-width: 11em; text-overflow: ellipsis; }
 .account-delete { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
