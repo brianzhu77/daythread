@@ -2,7 +2,7 @@
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
 import { emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
-import { builtInDayNodes, dayPagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, pageFromTemplate, templateRows } from "./day-template.ts";
+import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget } from "./day-template.ts";
 import { isTrashed, moveRefusal, subtreeIds } from "./page-tree.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
@@ -424,16 +424,21 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     }
     case "create-document": {
       const id = action.pageId ?? newId();
+      if (reservedTargets.has(id)) throw new DomainError("Page id already in use");
       const existing = state.pages.find((p) => p.id === id);
       if (existing) {
         if (existing.type !== "document" || (existing.parentId ?? null) !== (action.parentId ?? null)) throw new DomainError("Page id already in use");
         return { message: "Page saved", entityId: id };
       }
-      if (action.parentId) ordinaryPage(state, action.parentId);
+      const parent = action.parentId ? ordinaryPage(state, action.parentId) : undefined;
       const body = text(action.body);
       const line = emptyLine("paragraph");
       if (body) line.content = [textRun(body)];
-      state.pages.push({ id, type: "document", date: null, title: text(action.title, 1000), ...(action.parentId ? { parentId: action.parentId } : {}), document: JSON.stringify([line]) });
+      // B70 (Lead 80555761): a new page with an empty body starts from the nearest default, however it was made; its
+      // title isn't copied. Only a page made with words keeps them and gets no template.
+      const template = !body ? newPageTemplate(state, parent) : undefined;
+      const nodes = template ? pageFromTemplate(template, null) : [line];
+      state.pages.push({ id, type: "document", date: null, title: text(action.title, 1000), ...(action.parentId ? { parentId: action.parentId } : {}), document: JSON.stringify(nodes) });
       return { message: "Page saved", entityId: id };
     }
     case "make-link-pages": {
@@ -447,7 +452,9 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (!owner.page) {
           const linkText = item.title?.trim();
           const title = linkText && linkText !== url ? text(linkText, 1000) : defaultLinkTitle(url);
-          state.pages.push({ id: item.pageId, type: "document", date: null, title, url, parentId: parent.id, document: JSON.stringify([emptyLine("paragraph")]) });
+          // A link page has no words of its own either, so it starts from the default for pages made there (Lead 80555761).
+          const template = newPageTemplate(state, parent);
+          state.pages.push({ id: item.pageId, type: "document", date: null, title, url, parentId: parent.id, document: JSON.stringify(template ? pageFromTemplate(template, null) : [emptyLine("paragraph")]) });
           first ??= item.pageId;
         } else {
           if (isTrashed(owner.page)) restorePages(state, restoreSetOf(state, owner.page));
@@ -461,14 +468,22 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const p = state.pages.find((x) => x.id === action.pageId);
       if (!p || isTrashed(p) || p.url !== action.url) return unchanged;
       const nodes = pageNodes(p);
-      const untouched = nodes.length === 1 && isEmptyLine(nodes[0]!) && !state.pages.some((c) => c.parentId === p.id && !isTrashed(c));
+      // Untouched: still the blank line it was made with, or still the template's copy (B70); nothing made inside it.
+      // The template copy is checked first: a template of one empty to-do or bullet is also "one empty line", and its
+      // row must stay below the quote (Ratchet a8ecb37a).
+      const template = newPageTemplate(state, p.parentId ? state.pages.find((x) => x.id === p.parentId) : undefined);
+      const fromTemplate = Boolean(template) && isUntouchedCopy(template!, nodes);
+      const blank = !fromTemplate && nodes.length === 1 && isEmptyLine(nodes[0]!);
+      // A template aimed at this page isn't a page made inside it (Ratchet e9857f63).
+      const untouched = (blank || fromTemplate) && !state.pages.some((c) => c.parentId === p.id && !isTrashed(c) && !isTemplate(c));
       if (!untouched) return unchanged;
       const title = action.title?.replace(/\s+/g, " ").trim().slice(0, 200) || null;
       const description = action.description?.replace(/\s+/g, " ").trim().slice(0, 500) || null;
       const quote = description && description.toLocaleLowerCase() !== (title ?? p.title).toLocaleLowerCase() ? description : null;
       if (!title && !quote) return unchanged;
       if (title) p.title = title;
-      if (quote) setDocument(p, [{ id: newId(), type: "quote", props: {}, content: [textRun(quote)], children: [] }, emptyLine("paragraph", nodes[0]!.id)]);
+      const quoteNode: EditorNode = { id: newId(), type: "quote", props: {}, content: [textRun(quote ?? "")], children: [] };
+      if (quote) setDocument(p, fromTemplate ? [quoteNode, ...nodes] : [quoteNode, emptyLine("paragraph", nodes[0]!.id)]);
       return { message: title ? `Named '${p.title}'` : "Link page filled in", entityId: p.id };
     }
     case "rename-page": {
@@ -529,10 +544,27 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     case "set-template-target": {
       const p = page(state, action.pageId);
       if (!isTemplate(p)) throw new DomainError("Not a template");
+      const target = action.target;
+      let where = "";
+      if (target === dayPagesTarget) where = "day pages";
+      else if (target === daySubpagesTarget) where = "pages inside days";
+      else if (target === topLevelTarget) where = "top-level pages";
+      else if (target) {
+        const on = ordinaryPage(state, target);
+        if (isTrashed(on)) throw new DomainError("Page is in trash");
+        where = `pages in ${on.type === "daily" ? on.date : on.title.trim() || "Untitled"}`;
+      }
       // One default per target: setting it here takes it from any other template.
-      if (action.target) for (const t of state.pages) if (isTemplate(t) && t.id !== p.id && t.parentId === action.target) delete t.parentId;
-      if (action.target) p.parentId = action.target; else delete p.parentId;
-      return { message: action.target ? "Now the default for day pages" : "No longer a default", entityId: p.id };
+      if (target) for (const t of state.pages) if (isTemplate(t) && t.id !== p.id && t.parentId === target) delete t.parentId;
+      if (target) p.parentId = target; else delete p.parentId;
+      return { message: target ? `Now the default for ${where}` : "No longer a default", entityId: p.id };
+    }
+    case "delete-template": {
+      // A straight delete, no Trash (states §2); its default goes with it, and Undo brings both back.
+      const p = page(state, action.pageId);
+      if (!isTemplate(p)) throw new DomainError("Not a template");
+      state.pages = state.pages.filter((x) => x.id !== p.id);
+      return { message: `Deleted '${p.title.trim() || "Untitled"}'`, entityId: p.id };
     }
     case "set-timezone":
       state.timezone = validTimezone(action.timezone);
