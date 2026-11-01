@@ -45,6 +45,10 @@ const serverTransport: Transport = {
   },
 }
 
+/** Commands queued or being sent in this tab, across providers: a reload waits for none (new-build.ts). */
+let commandsOut = 0
+export const commandsPending = (): boolean => commandsOut > 0
+
 export function newOperationId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `op-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
@@ -197,6 +201,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
 
   const run = useCallback(
     (action: Action, notice?: NoticeArg, operationId = newOperationId(), options: RunOptions = {}) => {
+      commandsOut++
       const job = queue.current.then(async (): Promise<Receipt | null> => {
         const current = wsRef.current
         if (!current) return null
@@ -245,6 +250,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
         }
       })
       queue.current = job.catch(() => undefined)
+      void job.finally(() => { commandsOut-- }).catch(() => undefined)
       return job
     },
     [transport, adopt, push, refresh, retireStaleUndo],
