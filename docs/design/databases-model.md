@@ -140,17 +140,15 @@ All of these run inside existing commands, on the page that changed, in one oper
 1. **Making an inline database** (`/` Database): the editor inserts the block with a fresh block id and a fresh page
    id, then sends `create-database { pageId, parentId: host, homeBlockId: block.id }`, with the same retry and
    "kept, tap to retry" path `/` Page has (`confirmSubpage`). Until it lands, the block shows "Creating…".
-2. **Making a full-page database** (Pages screen, sidebar `+`): `create-database { pageId, parentId, homeBlockId: null }`.
+2. **Making a full-page database** (Pages `+` and the sidebar `+` offer Page or Database, Jazz 85cf631a):
+   `create-database { pageId, parentId, homeBlockId: null }` at that level. `/` Database always makes an inline one.
 3. **Deleting the home block** in a save of the host page: the database and all its rows go to Trash as one batch
    (`trashId` = the save's operation id), so ⌘Z or Trash's Restore brings them back together. The save's receipt says
    so ("Reading list moved to trash · 12 rows").
-   - **A move inside the page is never a delete.** From reading the code, our drop handler and ⌥⇧↑↓ re-insert the
-     blocks themselves and the IME repair keeps the line's id (`page-editor.tsx` ~1520, ~1961, ~1711), so the home block
-     id should survive them. Not yet tested; the tests in section 9 must show it. As a second guard, if the home block id is gone but
-     the same save still holds a `database` block for that database in that page, that block becomes the home
-     (`homeBlockId` updated; its own view is appended to `database.views` and shown, so he keeps the filter he was
-     looking at) and nothing is trashed. Notice per Jazz §9.3: "Reading list now lives in the view below · Undo". A database is trashed only when no block of
-     it is left in its page.
+   - **A move inside the page is never a delete:** our drop handler and ⌥⇧↑↓ re-insert the blocks themselves and
+     the IME repair keeps the line's id (`page-editor.tsx` ~1520, ~1961, ~1711), so the home block id should survive
+     them. Not tested yet; the tests in section 9 must show it. There is no second guard (Lead 1b31574e/ac1ed435): a
+     changed id would be a bug to fix.
 4. **Deleting any other `database` block** removes only that view.
 5. **Pasting or duplicating a block** gives it a new block id, so it is a linked view (rule 4 applies to it).
 6. **Turn into page** (block menu): the editor removes the home block and the save carries
@@ -244,6 +242,10 @@ values on rows deleted and undone in that build. Acceptable, and the backup befo
   task commands (`task-status`, start and deadline changes), so carry-over, ticks and the day draft are untouched. It
   can be a full page ("To-dos") or a linked view in any page, including a day page. About 1 day on top of the table
   view.
+  **`+ New` in To-dos** is today's `add-task { pageId: today's day page, plannedOn: today }` (after `ensure-day`). It
+  lands where a carried or planned to-do lands on a day page (`dayRowInsertIndex`): in the group of to-do rows under
+  the outermost heading above the page's first to-do row (on his template, Morning Planning), after the rows already
+  there. With no to-do row yet, under the first heading; with no heading, at the top. Never under "Other" by name.
 - **Option 2** adds `values` to `Task` and a schema on one "To-dos" database page: custom fields on to-dos. One more
   column on `tasks`. About 2 days on top of option 1.
 - **Option 3** (tasks become rows) is not in this model. It would replace `Task`, and needs its own plan.
@@ -270,8 +272,7 @@ values on rows deleted and undone in that build. Acceptable, and the backup befo
 ## 9. Tests (planned, none written yet)
 
 - Domain, `node --test`: every command's happy path and refusal; `readValue` for each type and each type change, and
-  back; placement rules 3 to 7 including cut-and-paste, a never-pasted cut, and the re-home guard (home id gone, another
-  block of it still in the page); Undo of each command restores exactly
+  back; placement rules 3 to 7 including cut-and-paste and a never-pasted cut; Undo of each command restores exactly
   (including a trashed database with rows); `viewRows` filters, sorts, groups, relative dates; `isRow` exclusions;
   revision-only refusal then resend for `set-values`; export.
 - Storage: the column migration on a fresh schema and on one that already has them, on embedded Postgres in a
@@ -284,16 +285,14 @@ values on rows deleted and undone in that build. Acceptable, and the backup befo
 
 ## 10. Settled by Jazz's design (`design/databases` de899807), and what it adds to the model
 
-Answered: default schema is Name only, no empty rows (§3.1); R1 is Table with Text, Number, Select, Multi-select,
+Answered (design head 85cf631a): default schema is Name only, no empty rows (§3.1); R1 is Table with Text, Number, Select, Multi-select,
 Status, Date, Checkbox, URL (§14); linked views and To-dos in R2; a full-page database has no body (§4.3); a row can't
 be dragged out (§12). Views show as a `Table ⌄` dropdown, not tabs; the open view stays a local preference.
 
 What the design adds:
 
-1. **The empty-page rule** (§3.1): `/` Database on an ordinary page with an otherwise empty body turns that page into
-   the database: `make-database { pageId }` sets `database` on it and empties its document. Refused (and the item
-   makes an inline database instead) for day pages, templates, rows, **and pages that already have subpages**, since
-   those would silently become rows.
+1. **No empty-page rule** (dropped, Lead ac1ed435): a full page is made from Pages' `+` → Database, or by Turn into
+   page. So no `make-database` command and no refusal for pages with subpages.
 2. **Turn into page / inline** (§3.2) swaps the home block for our `pageLink` card and back. In the model: the save
    that swaps them carries `detachDatabaseIds` (to the card) or `adoptDatabaseBlocks` (back to the table).
 3. **Deleting an option** "clears it from every row" (§6.2): with lazy reads the rows keep the id and read as empty,
