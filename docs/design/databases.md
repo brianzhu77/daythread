@@ -298,15 +298,11 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
   composition. It never saves or picks.
 - **Value edits get no notice.** The cell shows the result, and ⌘Z undoes it at 1280 (§10). Creating an option
   gets no notice either.
-- **The one exception: losing text on the phone** (Bumblebee 94ba9595). The phone has no ⌘Z, and an old value for
-  Select, Status, Date or Checkbox is one tap away, but a long Text or URL value isn't. So **below 900 px, a Text or
-  URL commit that removes old text** shows our usual Undo notice. Undo puts back the whole old value.
-  - "Removes old text" means the field was cleared, or at least 10 characters of the old value are gone. That's
-    counted as the old length minus the shared start and the shared end, so typing over a whole long value counts too.
-    Adding text, or fixing a typo, shows nothing.
-  - The words: **"Notes cleared · Undo"** when the field is now empty, otherwise **"Notes changed · Undo"**, with the
-    property's name.
-  - At 900 px and up there's no notice, since ⌘Z covers it.
+- **The one exception: Text and URL on the phone** (Bumblebee 94ba9595, Lead f1e56ab4). The phone has no ⌘Z, and an
+  old Select, Status, Date or Checkbox value is one tap away, but a long Text or URL value isn't. So **below 900 px,
+  any Text or URL commit that changes the value** shows our usual Undo notice, **"Notes changed · Undo"**, with the
+  property's name. Undo puts back the whole old value. There's no threshold and no second wording. At 900 px and up
+  there's no notice, since ⌘Z covers it.
 
 #### 6.3.2 The cell
 
@@ -338,6 +334,10 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
   (`enterkeyhint="done"`) and saves. A new line on the phone only comes from pasting; a value that already has lines
   keeps them.
 - **Empty:** clearing the field and saving stores empty (`undefined`).
+- **Too long** (over 10,000 characters, which the model refuses; Bumblebee 7e2a2c77): like Number, the field stays
+  open with **"Too long · 10,000 characters max"** under it in `--text-meta` `--red`, so his text is still there to
+  cut down or move into the row's body. Enter, Done and the scrim don't close it. Esc at 1280 puts back the old
+  value. The same applies to URL.
 
 #### 6.3.4 Number
 
@@ -351,8 +351,8 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
   when the format is percent, and the currency symbol is allowed when the format is currency. Full-width digits (１２)
   are read as digits.
 - **Not a number:** "Numbers only" shows under the field in `--text-meta` `--red`. Enter doesn't save, and the field
-  stays open. **Esc, Done, the scrim and a blur put back the old value.** This is the one editor that can discard
-  input, because the input can't be stored.
+  stays open. **Esc, Done, the scrim and a blur put back the old value.** A number can't be stored as typed, and it's
+  short to type again.
 - **Empty** saves as empty, not 0.
 
 #### 6.3.5 Select
@@ -409,7 +409,7 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
 #### 6.3.9 Date
 
 - **Cell:** `Oct 12`, or `Oct 12, 2025` in another year, or `Oct 12 → Oct 20` for a range. With a time it's
-  `Oct 12, 9:14`, in the app's time format (`rowTime`). There are no relative words in the table, so a column scans
+  `Oct 12, 9:14`, in the `@` chips' time style (`Oct 12, 3 PM`). There are no relative words in the table, so a column scans
   the same way every day.
 - **Editor, top to bottom:**
   1. **A field, "Type a date"**, read with the same reader as `@` (`readDate`): `tomorrow`, `fri`, `nov 20`, `明天`,
