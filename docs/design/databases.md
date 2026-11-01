@@ -298,6 +298,15 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
   composition. It never saves or picks.
 - **Value edits get no notice.** The cell shows the result, and ⌘Z undoes it at 1280 (§10). Creating an option
   gets no notice either.
+- **The one exception: losing text on the phone** (Bumblebee 94ba9595). The phone has no ⌘Z, and an old value for
+  Select, Status, Date or Checkbox is one tap away, but a long Text or URL value isn't. So **below 900 px, a Text or
+  URL commit that removes old text** shows our usual Undo notice. Undo puts back the whole old value.
+  - "Removes old text" means the field was cleared, or at least 10 characters of the old value are gone. That's
+    counted as the old length minus the shared start and the shared end, so typing over a whole long value counts too.
+    Adding text, or fixing a typo, shows nothing.
+  - The words: **"Notes cleared · Undo"** when the field is now empty, otherwise **"Notes changed · Undo"**, with the
+    property's name.
+  - At 900 px and up there's no notice, since ⌘Z covers it.
 
 #### 6.3.2 The cell
 
