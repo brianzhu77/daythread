@@ -297,7 +297,7 @@ opens a small sheet (390) or popover (1280).
   - checkbox: is checked, isn't;
   - relation: contains, is empty.
 - **Combining rules:** one line at the top switches between **all rules match** (the default) and **any rule
-  matches**. Nested groups aren't offered. One person's databases rarely need them, and a nested filter is the hardest
+  matches**. R1 ships "all" only, and the switch comes in R3 (§14). Nested groups aren't offered. One person's databases rarely need them, and a nested filter is the hardest
   thing to read back from a chip line.
 - **"Only for me" vs "for everyone" doesn't exist.** A workspace is one person (Lead: Q5 drops).
 
@@ -482,7 +482,7 @@ The estimates are Roadbuster's (`database-fit.md` §7) unless marked as mine.
 | --- | --- | --- |
 | **R1** | **Database itself:** `/` Database (new only), the empty-page rule, inline and full page, Turn into page/inline, cut and paste, **Table** view, properties **Text, Number, Select, Multi-select, Status, Date, Checkbox, URL**, a row opening as a page, filter/sort (§7.3), properties shown and reordered, everything in §10, §12 and §13 except relation and formula. Roadbuster's "send only what changed" PR goes first, once Brian says yes (Lead 7b3b9664). | about 5.5–6 days (Roadbuster). It's the smallest version that's a real Notion-like database at both widths. |
 | **R2** | **Linked views** (`/` picker, copy/paste, "this page's day", templates) plus **To-dos as a source** (§11, option 1) plus **Board** and **Group** | This is where databases meet days and to-dos. Linked views are about 1 day and To-dos about 1 day (Roadbuster). Board with Group is about 1 day (Roadbuster's "later" list). |
-| **R3** | **Calendar, List, Gallery**; **Relation, Rollup**; Created/Edited time, ID, Email, Phone, Files; row **templates** (`+ New ⌄`); **wrap** per property; several rows selected on the phone | Ordered by his use after R2 |
+| **R3** | **Calendar, List, Gallery**; the filter's **"any rule matches"** switch; **Relation, Rollup**; Created/Edited time, ID, Email, Phone, Files; row **templates** (`+ New ⌄`); **wrap** per property; several rows selected on the phone | Ordered by his use after R2 |
 | **R4** | **Timeline, Formula**, repeating row templates, CSV export/import, pasting TSV, moving a row to another database, **side peek** at 1280 (only if he's seen opening many rows one after another) | the largest and least certain |
 | **Not planned** | Person, Created by, Edited by, permissions, "only for me" filters, Forms, Automations, Buttons, several data sources in one database | A workspace is one person, or the work has no evidence of value yet (Lead frame 1). |
 
