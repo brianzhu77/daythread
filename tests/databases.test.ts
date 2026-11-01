@@ -293,6 +293,12 @@ test('Duplicate row copies the values and the body; its to-dos are new tasks, so
   assert.notEqual(copied.props.taskId, original.id)
   assert.equal(h.ws.tasks.filter(t => t.title === 'Buy a copy').length, 2)
   assert.equal(h.ws.tasks.find(t => t.id === copied.props.taskId)!.sourcePageId, 'dune2')
+  // A done to-do is done in the copy too; ticking the copy's never touches the original.
+  h.run({ type: 'task-status', taskId: original.id, status: 'done', today })
+  const again = h.run({ type: 'add-row', databaseId: 'list', pageId: 'dune3', title: '', copyOf: 'dune', at })
+  const copiedTask = h.ws.tasks.find(t => t.id === JSON.parse(h.page(again.receipt.entityId!).document)[0].props.taskId)!
+  assert.equal(copiedTask.status, 'done')
+  assert.equal(copiedTask.doneOn, today)
 })
 
 test('the stored form is what readValue reads back; the schema accepts every new command', () => {

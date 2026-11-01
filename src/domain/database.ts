@@ -355,7 +355,8 @@ function compareValues(property: Property, a: CellValue, b: CellValue): number {
       return x.length - y.length;
     }
     case "date":
-      return (a as DateValue).start.localeCompare((b as DateValue).start);
+      // ISO days and wall times compare exactly as strings.
+      return (a as DateValue).start < (b as DateValue).start ? -1 : (a as DateValue).start > (b as DateValue).start ? 1 : 0;
     case "checkbox":
       return Number(a) - Number(b);
   }

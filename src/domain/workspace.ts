@@ -355,12 +355,17 @@ function placeDatabases(state: Workspace, p: Page, before: EditorNode[], after: 
   }
   return trashed;
 }
-/** A duplicated row's body: fresh block ids, and its to-dos as new tasks of the copy, so ticking one never ticks the other. */
+/** A duplicated row's body: fresh block ids, and its to-dos as new tasks of the copy (same state), so ticking one never ticks the other. */
 function copiedBody(state: Workspace, from: Page, to: Page, on: string): EditorNode[] {
   const visit = (n: EditorNode): EditorNode => {
     const copy: EditorNode = { ...structuredClone(n), id: newId(), children: (n.children ?? []).map(visit) };
     const taskId = rowTaskId(n), t = taskId ? state.tasks.find((x) => x.id === taskId) : undefined;
-    if (t) { const fresh = createTask(state, t.title, to, on); copy.props = { ...copy.props, taskId: fresh.id, role: "reference", planDate: "" }; }
+    if (t) {
+      // The copy keeps each to-do's state, as Notion's Duplicate does: a done to-do is done in the copy too.
+      const fresh = createTask(state, t.title, to, on);
+      fresh.status = t.status; fresh.doneOn = t.doneOn ?? null;
+      copy.props = { ...copy.props, taskId: fresh.id, role: "reference", planDate: "" };
+    }
     else if (taskId) copy.props = { ...copy.props, taskId: `editor-task:${copy.id}` };
     if (Array.isArray(copy.content)) copy.content = (copy.content as { type?: string; props?: Record<string, unknown> }[]).map((c) => c?.type === "pageRef" ? { ...c, props: { ...c.props, refId: newId() } } : c);
     return copy;
