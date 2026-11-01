@@ -538,7 +538,6 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       const old = property(change.propertyId);
       const type = change.type ?? old.type;
       const next = cleanProperty({ id: old.id, name: change.name ?? old.name, type, options: change.options ?? old.options, format: change.format ?? old.format, withTime: change.withTime ?? old.withTime }, db, old.id);
-      if (!hasOptions(type) && !change.options && old.options) next.options = old.options;
       const notes: string[] = [];
       if (type !== old.type) {
         const lost = lostOnTypeChange(ws, page.id, old, type);
