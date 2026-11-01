@@ -36,6 +36,47 @@ test('pages: create (top level and under a day), rename, move, a cycle refused, 
   assert.throws(() => h.run({ type: 'delete-page', pageId: dayId(today), at: '2026-10-22T12:00:00.000Z' }), /can't be deleted/)
 })
 
+test('B14 drag: before a sibling, at the end, inside another page or a day; the spot it holds and a stale sibling', () => {
+  const h = harness()
+  h.day(today)
+  for (const id of ['A', 'B', 'C']) h.run({ type: 'create-document', title: id, body: '', pageId: id })
+  h.run({ type: 'create-document', title: 'Kid', body: '', pageId: 'K', parentId: 'A' })
+  const top = () => childPages(h.ws, null).map(p => p.id)
+  h.run({ type: 'move-page', pageId: 'C', parentId: null, beforeId: 'A' })
+  assert.deepEqual(top(), ['C', 'A', 'B'])
+  const r = h.run({ type: 'move-page', pageId: 'C', parentId: null, beforeId: null })
+  assert.deepEqual(top(), ['A', 'B', 'C'])
+  assert.equal(r.receipt.message, 'Page moved', 'a reorder at the top level is not "Moved to top level"')
+  // Where it already is: just before its own next sibling, before itself, or the end when it is last.
+  assert.throws(() => h.run({ type: 'move-page', pageId: 'A', parentId: null, beforeId: 'B' }), /Already there/)
+  assert.throws(() => h.run({ type: 'move-page', pageId: 'A', parentId: null, beforeId: 'A' }), /Already there/)
+  assert.throws(() => h.run({ type: 'move-page', pageId: 'C', parentId: null, beforeId: null }), /Already there/)
+  assert.throws(() => h.run({ type: 'move-page', pageId: 'A', parentId: null }), /Already there/, 'Move to… still refuses its own parent')
+  // Inside another page, first among its children.
+  h.run({ type: 'move-page', pageId: 'B', parentId: 'A', beforeId: 'K' })
+  assert.deepEqual(childPages(h.ws, 'A').map(p => p.id), ['B', 'K'])
+  assert.throws(() => h.run({ type: 'move-page', pageId: 'A', parentId: 'B', beforeId: null }), /into itself/)
+  // A sibling that is no longer under that parent (another tab moved it): the end of the parent it was dropped in.
+  h.run({ type: 'move-page', pageId: 'C', parentId: 'A', beforeId: 'C-gone' })
+  assert.deepEqual(childPages(h.ws, 'A').map(p => p.id), ['B', 'K', 'C'])
+  h.run({ type: 'move-page', pageId: 'K', parentId: null, beforeId: 'B' })
+  assert.deepEqual(top(), ['A', 'K'], 'B sits under A, so it is no sibling at the top level: K goes to the end')
+  // Under a day, and back out between two top-level pages.
+  h.run({ type: 'move-page', pageId: 'K', parentId: dayId(today), beforeId: null })
+  assert.equal(h.page('K').parentId, dayId(today))
+  h.run({ type: 'move-page', pageId: 'K', parentId: null, beforeId: 'A' })
+  assert.deepEqual(top(), ['K', 'A'])
+  assert.throws(() => h.run({ type: 'move-page', pageId: dayId(today), parentId: null, beforeId: 'A' }), /stay in Days/)
+})
+
+test('B14: the phone Pages list and the sidebar read one order, so a drag on the laptop shows the same on the phone', () => {
+  const h = harness()
+  for (const id of ['A', 'B', 'C']) h.run({ type: 'create-document', title: id, body: '', pageId: id })
+  h.run({ type: 'move-page', pageId: 'C', parentId: null, beforeId: 'A' })
+  // pages-screen.tsx and SidebarTree both list childPages(workspace, null); the rows come back from storage by position.
+  assert.deepEqual(childPages(h.ws, null).map(p => p.title), ['C', 'A', 'B'])
+})
+
 test('a new account is blank until a word is written on a day or a page exists; a trashed page does not count', () => {
   const h = harness()
   h.day(today)

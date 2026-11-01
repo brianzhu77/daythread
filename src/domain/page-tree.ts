@@ -59,7 +59,15 @@ export function subtreeIds(ws: Workspace, pageId: string): Set<string> {
   }
   return ids;
 }
-export function moveRefusal(ws: Workspace, pageId: string, parentId: string | null): string | null {
+/** The sibling a drag's page goes just before: `beforeId` while it is still a page under `parentId`, else none (the end). */
+export function moveBefore(ws: Workspace, pageId: string, parentId: string | null, beforeId: string | null | undefined): Page | null {
+  return (beforeId && beforeId !== pageId && childPages(ws, parentId).find((p) => p.id === beforeId)) || null;
+}
+/**
+ * Why a page can't go under `parentId`, or null. Without `beforeId` (Move to…) its own parent is refused; with one (a
+ * drag, B14) only the spot it already holds is.
+ */
+export function moveRefusal(ws: Workspace, pageId: string, parentId: string | null, beforeId?: string | null): string | null {
   const p = ws.pages.find((x) => x.id === pageId);
   if (!p || isDraft(p)) return "Page not found";
   if (p.type === "daily") return "Day pages stay in Days";
@@ -70,7 +78,11 @@ export function moveRefusal(ws: Workspace, pageId: string, parentId: string | nu
   if (target && isTrashed(target)) return "Page is in trash";
   if (target && isTemplate(target)) return "Pages can't go inside the day template";
   if (parentId !== null && subtreeIds(ws, pageId).has(parentId)) return "Can't move a page into itself or its subpages";
-  if ((parentOf(ws, p)?.id ?? null) === parentId) return "Already there";
+  if ((parentOf(ws, p)?.id ?? null) === parentId) {
+    if (beforeId === undefined || beforeId === pageId) return "Already there";
+    const siblings = childPages(ws, parentId);
+    if ((siblings[siblings.indexOf(p) + 1] ?? null) === moveBefore(ws, pageId, parentId, beforeId)) return "Already there";
+  }
   return null;
 }
 export function moveTargets(ws: Workspace, pageId: string): Page[] {

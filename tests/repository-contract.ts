@@ -43,4 +43,23 @@ export function repositoryContract(name: string, fixture: () => Promise<{ create
     }finally{await f.cleanup()}
   })
 
+  test(`${name}: a dragged page keeps its new place after reopening, and Undo puts the old order back (B14)`,async()=>{
+    const f=await fixture()
+    try {
+      const r=f.create();let rev=0
+      const run=async(operationId:string,action:Parameters<WorkspaceRepository['execute']>[0]['action'])=>{const out=await r.execute({operationId,expectedRevision:rev,action});rev=out.workspace.revision;return out}
+      for (const id of ['A','B','C','D']) await run(`make-${id}`,{type:'create-document',title:id,body:'',pageId:id})
+      const order=async()=>(await f.create().load()).pages.filter(p=>!p.parentId).map(p=>p.id)
+      await run('drag',{type:'move-page',pageId:'D',parentId:null,beforeId:'B'})
+      assert.deepEqual(await order(),['A','D','B','C'])
+      await run('undo-drag',{type:'undo',targetOperationId:'drag'})
+      assert.deepEqual(await order(),['A','B','C','D'])
+      await run('drag-again',{type:'move-page',pageId:'D',parentId:null,beforeId:'B'})
+      await run('nest',{type:'move-page',pageId:'A',parentId:'C',beforeId:null})
+      assert.deepEqual(await order(),['D','B','C'])
+      assert.equal((await f.create().load()).pages.find(p=>p.id==='A')!.parentId,'C')
+      await run('undo-nest',{type:'undo',targetOperationId:'nest'})
+      assert.deepEqual(await order(),['A','D','B','C'])
+    }finally{await f.cleanup()}
+  })
 }

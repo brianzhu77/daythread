@@ -1,12 +1,13 @@
 import { Modal, SearchField } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { cardTo, childPages, linkedFrom, moveTargets, pageAncestors, pagesInDays, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
+import { cardTo, childPages, linkedFrom, moveRefusal, moveTargets, pageAncestors, pagesInDays, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { fromIso, longLabel, todayIso } from './dates'
 import { ChevronRightIcon, PageKindIcon, PagesIcon } from './icons'
 import { displayPageTitle } from './page-title'
 import { RowMenu } from './row-menu'
+import { useTreeDrag, type Drop } from './tree-drag'
 import { useDeletePage } from './trash'
 import { useWorkspace } from './use-day'
 
@@ -208,6 +209,9 @@ function Highlight({ text, query }: { text: string; query: string }) {
 
 const moveRefusals = /Page not found|Can't move a page into itself or its subpages|Already there|Day pages stay in Days/
 const moveOrStale = new RegExp(`${moveRefusals.source}|Saved elsewhere`)
+// A drop is checked on the pages on screen; one the server refuses anyway (changed meanwhile) needs no red bar.
+const dropRefusals = new RegExp(`${moveRefusals.source}|Page is in trash`)
+const dropOrStale = new RegExp(`${dropRefusals.source}|Saved elsewhere`)
 const refusalCopy = (m: string) => m === 'Page not found' ? 'That page is gone' : m.startsWith("Can't move") ? "Can't move into its own subpage" : m === 'Already there' ? 'Already here' : m
 
 type Option = { key: string; parentId: string | null; label: string; path: string; current: boolean; icon: 'page' | 'day' | 'top' }
@@ -342,7 +346,8 @@ function useExpanded(activeChain: string[]) {
     try { localStorage.setItem(expandedKey, JSON.stringify([...next])) } catch { /* view state only */ }
     return next
   })
-  return { expanded, toggle }
+  const expand = (id: string) => { if (!expanded.has(id)) toggle(id) }
+  return { expanded, toggle, expand }
 }
 
 const monthName = (ym: string, today: LocalDate) => {
@@ -358,10 +363,10 @@ const monthName = (ym: string, today: LocalDate) => {
 export function SidebarTree({ workspace, activeId, today, footer }: { workspace: Workspace; activeId: string | null; today: LocalDate; footer: ReactNode }) {
   const activeChain = activeId ? [...pageAncestors(workspace, activeId).map(p => p.id)] : []
   const activeMonth = workspace.pages.find(p => p.id === activeId)?.date?.slice(0, 7)
-  const { expanded, toggle } = useExpanded(activeMonth ? [...activeChain, `month:${activeMonth}`] : activeChain)
+  const { expanded, toggle, expand } = useExpanded(activeMonth ? [...activeChain, `month:${activeMonth}`] : activeChain)
   const [moving, setMoving] = useState<Page | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  const { run } = useWorkspace()
+  const { run, latest } = useWorkspace()
   const open = useOpen()
   const deletePage = useDeletePage()
   useEffect(() => {
@@ -375,15 +380,41 @@ export function SidebarTree({ workspace, activeId, today, footer }: { workspace:
     if (receipt) open(`/pages?page=${encodeURIComponent(pageId)}&focus=title`)
   }
 
-  const row = (p: Page, depth: number): ReactNode => {
+  // B14: every drop says where the page went, with Undo, as Move to… does. A drop refused on the latest pages (the
+  // target went meanwhile) changes nothing and the tree shows where things are now.
+  const dropPage = async (pageId: string, drop: Drop, retried = false): Promise<void> => {
+    const ws = latest() ?? workspace
+    const page = ws.pages.find(p => p.id === pageId), parent = drop.parentId ? ws.pages.find(p => p.id === drop.parentId) : null
+    if (!page) return
+    const reorder = (parentOf(ws, page)?.id ?? null) === drop.parentId
+    const text = reorder ? 'Moved' : parent ? `Moved to ${pageLabel(parent, today)}` : 'Moved to top level'
+    let stale = false
+    const receipt = await run({ type: 'move-page', pageId, parentId: drop.parentId, beforeId: drop.beforeId }, r => ({ text, undoOperationId: r.operationId }), undefined,
+      { inlineRefusal: retried ? dropRefusals : dropOrStale, onRefused: m => { stale = m === 'Saved elsewhere' } })
+    if (stale) return dropPage(pageId, drop, true)
+    if (receipt && drop.zone === 'inside' && drop.parentId) expand(drop.parentId)
+  }
+  const drag = useTreeDrag({
+    refuse: (pageId, parentId, beforeId) => moveRefusal(latest() ?? workspace, pageId, parentId, beforeId) !== null,
+    onDrop: (pageId, drop) => void dropPage(pageId, drop),
+    scroller: () => listRef.current?.closest<HTMLElement>('.sidebar') ?? null,
+  })
+
+  const row = (p: Page, depth: number, nextId = ''): ReactNode => {
     const children = childPages(workspace, p.id)
     const isOpen = expanded.has(p.id)
     const day = p.type === 'daily'
     // Today's nav row is already selected when today is open; no second highlight here.
     const current = p.id === activeId && !(day && p.date === today)
+    const dropHere = drag.drop?.rowKey === p.id ? drag.drop : null
+    const dragged = drag.dragging?.pageId === p.id ? (drag.dragging.touch ? 'touch' : 'mouse') : undefined
     return (
       <li key={p.id} role="treeitem" aria-expanded={children.length ? isOpen : undefined} aria-selected={current}>
-        <div className="tree-row" aria-current={current ? 'page' : undefined} style={{ '--depth': Math.min(depth, 6) } as React.CSSProperties}>
+        <div className="tree-row" aria-current={current ? 'page' : undefined}
+          style={{ '--depth': Math.min(depth, 6), ...(dropHere ? { '--drop-depth': Math.min(dropHere.depth, 6) } : {}) } as React.CSSProperties}
+          data-page={p.id} data-kind={day ? 'day' : 'page'} data-depth={depth} data-parent={parentOf(workspace, p)?.id ?? ''} data-next={nextId}
+          data-first-child={isOpen ? children[0]?.id ?? '' : ''} data-drop-zone={dropHere?.zone} data-dragging={dragged}
+          onPointerDown={day ? undefined : e => drag.onPointerDown(e, pageLabel(p, today))} onDragStart={e => e.preventDefault()}>
           {children.length > 0
             ? <button type="button" className="disclose" aria-expanded={isOpen} aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${pageLabel(p, today)}`} onClick={() => toggle(p.id)}><ChevronRightIcon /></button>
             : <span className="disclose none" aria-hidden="true" />}
@@ -394,7 +425,7 @@ export function SidebarTree({ workspace, activeId, today, footer }: { workspace:
               groups={[{ items: [{ label: 'Move to…', onSelect: () => setMoving(p) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void deletePage(p, activeId) }] }]} />}
           </span>
         </div>
-        {isOpen && children.length > 0 && <ul className="plain" role="group">{children.map(c => row(c, depth + 1))}</ul>}
+        {isOpen && children.length > 0 && <ul className="plain" role="group">{children.map((c, i) => row(c, depth + 1, children[i + 1]?.id))}</ul>}
       </li>
     )
   }
@@ -418,12 +449,12 @@ export function SidebarTree({ workspace, activeId, today, footer }: { workspace:
           )
         })}
       </ul>
-      <div className="side-label-row">
+      <div className="side-label-row" data-drop-top data-first={roots[0]?.id ?? ''} data-drop-zone={drag.drop?.rowKey === 'top' ? 'after' : undefined}>
         <p className="side-label">Pages</p>
         <button type="button" className="side-label-add" aria-label="New page" title="New page" onClick={() => void newPage(null)}>+</button>
       </div>
       {/* Only top-level pages (Brian 992f14f8, Notion's model): pages made in a day stay under that day above. */}
-      {roots.length > 0 ? <ul className="plain tree" role="tree" aria-label="Pages">{roots.map(p => row(p, 0))}</ul> : <p className="side-row small side-hint">No pages yet</p>}
+      {roots.length > 0 ? <ul className="plain tree" role="tree" aria-label="Pages">{roots.map((p, i) => row(p, 0, roots[i + 1]?.id))}</ul> : <p className="side-row small side-hint">No pages yet</p>}
       {footer}
       {moving && <MovePageDialog page={moving} onClose={() => setMoving(null)} />}
     </div>
