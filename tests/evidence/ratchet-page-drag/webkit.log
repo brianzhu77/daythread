@@ -1,0 +1,29 @@
+PASS four pages in order Alpha,Bravo,Charlie,Delta
+PASS while dragging: Bravo shows the line before it
+PASS while dragging: Delta is dimmed in place
+PASS reorder applied Alpha,Delta,Bravo,Charlie
+PASS reorder notice "Moved" (MovedUndo)
+PASS the release did not open the dragged page
+PASS reorder kept after a reload
+PASS after Charlie Delta,Bravo,Charlie,Alpha
+PASS Undo restored the order Alpha,Delta,Bravo,Charlie
+PASS nested out of the top level Delta,Bravo,Charlie
+PASS Charlie opened with Alpha inside Alpha
+PASS nest notice (Moved to CharlieUndo)
+PASS below open Charlie = first child Delta,Alpha
+PASS into Today (Moved to TodayUndo)
+PASS Bravo listed under Today in Days
+PASS Pages label = first at the top level Bravo,Charlie
+PASS top-level notice (Moved to top levelUndo)
+PASS no line left behind
+PASS no move-page sent for the four (0)
+PASS no notice ()
+PASS nothing moved
+PASS dragging Today sends nothing
+PASS tab B moved Delta out Bravo,Delta,Charlie
+PASS tab A has not seen tab B's move
+PASS stale drop notice (Moved to CharlieUndo)
+PASS stale sibling: end of Charlie. Charlie ["Alpha","Bravo"] top ["Delta","Charlie"]
+PASS no save-failed bar
+PASS no page errors []
+all pass (mouse, WebKit)
