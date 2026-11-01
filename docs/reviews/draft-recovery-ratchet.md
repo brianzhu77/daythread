@@ -1,10 +1,12 @@
-# PR54 independent review — expiry change required
+# PR54 independent review — final pass
 
-Reviewed `591f08e` on `4e640db`. Own build/typecheck and full suite pass: 219 pass, 0 fail, 3 skipped. Application changes are confined to the shared request hook.
+PASS revised head `9f0dea3` on `4e640db`. Initial `591f08e` needed the visible expiry fix below. Own final build/typecheck pass; the full suite on the initial head passed 219/0/3. Application changes are confined to the shared request hook.
 
-## Confirmed finding
+## Confirmed finding, now fixed
 
-A held request still displays Preparing after 61 seconds in a visible tab without a focus/visibility event. There is no timeout callback notifying the shared request store. The expiry check only runs during a render or event. Consequently the visible user cannot use Retry after the stated lost-request deadline. Focus does correctly start the second ask. Reported as d0d52b75; Lead requested an expiry notification in 147cc291.
+A held request still displays Preparing after 61 seconds in a visible tab without a focus/visibility event. There is no timeout callback notifying the shared request store. The expiry check only runs during a render or event. Consequently the visible user cannot use Retry after the stated lost-request deadline. Focus did correctly start the second ask. Reported as d0d52b75; Lead requested an expiry notification in 147cc291.
+
+`9f0dea3` adds a per-ask timeout that marks only the still-current ask failed and notifies subscribers; completion clears its timeout. On the final built tree both Chromium and WebKit now show Retry after 61 seconds without any focus/visibility event, then recover with exactly one wake ask. The other six late/ownership/navigation probes were rerun on the final head and pass. A separate final probe stores a ready status (using the same provider-free status substitution) and confirms repeated focus/visibility and reload never ask again in both engines. Final logs: expiry-final.log, extra-final.log, ready-final.log.
 
 ## Independent browser evidence
 
@@ -30,3 +32,5 @@ Ownership injection is not an actual authenticated account switch. The Seroval r
 ## Reproduction and scope
 
 Evidence under `tests/evidence/ratchet-draft-recovery/`: seed.ts, recovery.mjs/run.mjs, recovery.log, extra.mjs/extra.log. Start a built preview on 3693 with SQLite `/tmp/ratchet257.sqlite`, auth off, then run scripts sequentially. Each case resets only that invented database. No production data, production writes, real provider calls, native phone or Worker tests by this reviewer. Lead owns the real-model Worker gate.
+
+Own preview stopped after final review. No active follow-up reminder.

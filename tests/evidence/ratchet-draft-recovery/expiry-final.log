@@ -1,0 +1,16 @@
+(node:43776) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE chromium lost
+PASS [lost] a hanging ask shows Preparing (Preparing…)
+PASS [lost] within a minute it is still in flight: no second ask (1)
+PASS [lost] after 61 seconds without focus: Retry shows (Couldn’t draft · Retry)
+PASS [lost] after a minute it is taken as lost: one more ask, then the band (2, Couldn’t draft · Retry)
+PASS [lost] no page errors []
+(node:43918) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE webkit lost
+PASS [lost] a hanging ask shows Preparing (Preparing…)
+PASS [lost] within a minute it is still in flight: no second ask (1)
+PASS [lost] after 61 seconds without focus: Retry shows (Couldn’t draft · Retry)
+PASS [lost] after a minute it is taken as lost: one more ask, then the band (2, Couldn’t draft · Retry)
+PASS [lost] no page errors []

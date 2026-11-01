@@ -83,7 +83,7 @@ if (scenario === 'seed') {
     await hide(); await show(); await settle()
     ok(asks === 1, `within a minute it is still in flight: no second ask (${asks})`)
     await p.clock.runFor(61_000)
-    console.log('OBSERVED after 61 seconds without focus:', await line())
+    ok(/Couldn.t draft.*Retry/.test(await line()), `after 61 seconds without focus: Retry shows (${await line()})`)
     await hide(); await show(); await settle()
     ok(asks === 2 && await hasBand(), `after a minute it is taken as lost: one more ask, then the band (${asks}, ${await line()})`)
   } else if (scenario === 'ready') {

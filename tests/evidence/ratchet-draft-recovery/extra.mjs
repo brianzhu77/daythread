@@ -6,7 +6,7 @@ import {chromium,webkit} from '@playwright/test';
 const source=readdirSync('dist/server/assets').filter(n=>n.startsWith('functions-')).map(n=>readFileSync('dist/server/assets/'+n,'utf8')).join('\n');
 const id=source.match(/prepareDayDraft_createServerFn_handler = createServerRpc\(\{\s*id: "([^"]+)/)[1];
 const state=()=>{const db=new DatabaseSync('/tmp/ratchet257.sqlite');const s=JSON.parse(db.prepare('select data from workspace where id=1').get().data);db.close();return s;};
-for(const [name,engine,width] of [['chromium',chromium,1280],['webkit',webkit,390]])for(const mode of ['late','owner','nav']){
+for(const [name,engine,width] of [['chromium',chromium,1280],['webkit',webkit,390]])for(const mode of (process.argv.includes('--ready-only')?['ready']:['late','owner','nav'])){
  execFileSync(process.execPath,['tests/evidence/ratchet-draft-recovery/seed.ts']);
  const b=await engine.launch();const p=await b.newPage({viewport:{width,height:900},serviceWorkers:'block',timezoneId:'America/Vancouver'});
  await p.clock.install({time:new Date('2026-11-01T15:00:00Z')});
@@ -16,7 +16,7 @@ for(const [name,engine,width] of [['chromium',chromium,1280],['webkit',webkit,39
   if(!route.request().url().includes('/_serverFn/'+id))return route.continue();
   const n=++asks,res=await route.fetch();let raw=await res.text();
   if(n===1){seen();await held;if(mode==='owner'){const changed=raw.replace('"s":"local"','"s":"different-owner"');assert.notEqual(changed,raw);raw=changed;}}
-  if(mode==='late'&&n===2){
+  if((mode==='late'&&n===2)||(mode==='ready'&&n===1)){
    // Exercise first-ready-wins without paying for a provider call: only the computed status is changed.
    const graph=JSON.parse(raw);let changed=false;
    const walk=v=>{if(!v||typeof v!=='object')return;if(typeof v.s==='string'&&v.s.includes('set-draft')){const next=v.s.replaceAll(String.raw`\"status\":\"failed\"`,String.raw`\"status\":\"ready\"`);if(next!==v.s){v.s=next;changed=true;}}for(const c of Object.values(v))walk(c);};walk(graph);assert.ok(changed);raw=JSON.stringify(graph);
@@ -24,7 +24,11 @@ for(const [name,engine,width] of [['chromium',chromium,1280],['webkit',webkit,39
   return route.fulfill({response:res,body:raw});
  });
  await p.goto('http://127.0.0.1:3693/');await fetched;await p.locator('.continuous-editor').waitFor();
- if(mode==='late'){
+ if(mode==='ready'){
+  release();await p.locator('.draft-more-toggle').waitFor();
+  await p.evaluate(()=>{for(let i=0;i<3;i++){window.dispatchEvent(new Event('focus'));document.dispatchEvent(new Event('visibilitychange'));}});
+  await p.waitForTimeout(300);await p.reload();await p.locator('.draft-more-toggle').waitFor();assert.equal(asks,1);
+ }else if(mode==='late'){
   await p.clock.runFor(61_000);await p.evaluate(()=>window.dispatchEvent(new Event('focus')));
   await p.locator('.draft-more-toggle').waitFor();await p.waitForTimeout(400);
   const before=state().pages.find(x=>x.type==='draft');assert.ok(before);
