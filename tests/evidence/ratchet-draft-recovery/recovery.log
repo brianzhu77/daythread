@@ -1,0 +1,82 @@
+(node:41122) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE chromium thrown
+PASS [thrown] a thrown ask shows Retry, not nothing (Couldn’t draft · Retry)
+PASS [thrown] back on the page: asks again by itself and the band comes (2, Couldn’t draft · Retry)
+PASS [thrown] no page errors []
+(node:41237) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE chromium thrown-twice
+PASS [thrown-twice] second ask failed too: Retry stays (2, Couldn’t draft · Retry)
+PASS [thrown-twice] no third ask by itself (2)
+PASS [thrown-twice] Retry asks and the band comes (3, Couldn’t draft · Retry)
+PASS [thrown-twice] no page errors []
+(node:41441) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE chromium set-draft
+PASS [set-draft] set-draft failed twice: Retry (1/2, Couldn’t draft · Retry)
+PASS [set-draft] back on the page: asks again and the band comes (2, Couldn’t draft · Retry)
+PASS [set-draft] no page errors []
+(node:41547) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE chromium lost
+PASS [lost] a hanging ask shows Preparing (Preparing…)
+PASS [lost] within a minute it is still in flight: no second ask (1)
+OBSERVED after 61 seconds without focus: Preparing…
+PASS [lost] after a minute it is taken as lost: one more ask, then the band (2, Couldn’t draft · Retry)
+PASS [lost] no page errors []
+(node:41602) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE chromium midnight
+PASS [midnight] hidden at midnight: the new page asked once (1)
+PASS [midnight] nothing stored yet (Couldn’t draft · Retry)
+PASS [midnight] shown again: one more ask (2)
+PASS [midnight] then the band (Couldn’t draft · Retry)
+PASS [midnight] no page errors []
+(node:41689) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE chromium ready
+PASS [ready] first open asks once (1, Couldn’t draft · Retry)
+PASS [ready] a stored draft never asks again: focus, visibility and a reload (1)
+PASS [ready] no page errors []
+(node:41843) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE webkit thrown
+PASS [thrown] a thrown ask shows Retry, not nothing (Couldn’t draft · Retry)
+PASS [thrown] back on the page: asks again by itself and the band comes (2, Couldn’t draft · Retry)
+PASS [thrown] no page errors []
+(node:41892) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE webkit thrown-twice
+PASS [thrown-twice] second ask failed too: Retry stays (2, Couldn’t draft · Retry)
+PASS [thrown-twice] no third ask by itself (2)
+PASS [thrown-twice] Retry asks and the band comes (3, Couldn’t draft · Retry)
+PASS [thrown-twice] no page errors []
+(node:41922) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE webkit set-draft
+PASS [set-draft] set-draft failed twice: Retry (1/2, Couldn’t draft · Retry)
+PASS [set-draft] back on the page: asks again and the band comes (2, Couldn’t draft · Retry)
+PASS [set-draft] no page errors []
+(node:41948) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE webkit lost
+PASS [lost] a hanging ask shows Preparing (Preparing…)
+PASS [lost] within a minute it is still in flight: no second ask (1)
+OBSERVED after 61 seconds without focus: Preparing…
+PASS [lost] after a minute it is taken as lost: one more ask, then the band (2, Couldn’t draft · Retry)
+PASS [lost] no page errors []
+(node:42076) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE webkit midnight
+PASS [midnight] hidden at midnight: the new page asked once (1)
+PASS [midnight] nothing stored yet (Couldn’t draft · Retry)
+PASS [midnight] shown again: one more ask (2)
+PASS [midnight] then the band (Couldn’t draft · Retry)
+PASS [midnight] no page errors []
+(node:42152) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE webkit ready
+PASS [ready] first open asks once (1, Couldn’t draft · Retry)
+PASS [ready] a stored draft never asks again: focus, visibility and a reload (1)
+PASS [ready] no page errors []

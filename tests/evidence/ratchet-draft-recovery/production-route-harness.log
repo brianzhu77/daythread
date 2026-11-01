@@ -1,0 +1,33 @@
+(node:40022) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+CASE chromium thrown
+node:internal/errors:985
+  const err = new Error(message);
+              ^
+
+Error: Command failed: /Users/dogrod/.nvm/versions/node/v24.14.1/bin/node tests/evidence/ratchet-draft-recovery/recovery.mjs http://127.0.0.1:3693 thrown chromium
+    at genericNodeError (node:internal/errors:985:15)
+    at wrappedFn (node:internal/errors:539:14)
+    at checkExecSyncError (node:child_process:925:11)
+    at execFileSync (node:child_process:961:15)
+    at file:///Users/dogrod/Developer/daythread-ratchet-draft-recovery/tests/evidence/ratchet-draft-recovery/run.mjs:5:23
+    at ModuleJob.run (node:internal/modules/esm/module_job:430:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:661:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  status: 1,
+  signal: null,
+  output: [
+    null,
+    'FAIL [thrown] a thrown ask shows Retry, not nothing (Couldn’t draft · Retry)\n' +
+      'FAIL [thrown] back on the page: asks again by itself and the band comes (0, Couldn’t draft · Retry)\n' +
+      'PASS [thrown] no page errors []\n',
+    ''
+  ],
+  pid: 40023,
+  stdout: 'FAIL [thrown] a thrown ask shows Retry, not nothing (Couldn’t draft · Retry)\n' +
+    'FAIL [thrown] back on the page: asks again by itself and the band comes (0, Couldn’t draft · Retry)\n' +
+    'PASS [thrown] no page errors []\n',
+  stderr: ''
+}
+
+Node.js v24.14.1
