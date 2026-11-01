@@ -1,0 +1,3 @@
+0 {'menu': {'x': 20, 'y': 10, 'width': 264, 'height': 243, 'top': 10, 'right': 284, 'bottom': 253, 'left': 20}, 'last': {'x': 24, 'y': 658, 'width': 256, 'height': 54, 'top': 658, 'right': 280, 'bottom': 712, 'left': 24}, 'scroll': 0, 'max': 463}
+1 {'menu': {'x': 20, 'y': 10, 'width': 264, 'height': 243, 'top': 10, 'right': 284, 'bottom': 253, 'left': 20}, 'last': {'x': 24, 'y': 357, 'width': 256, 'height': 54, 'top': 357, 'right': 280, 'bottom': 411, 'left': 24}, 'scroll': 301, 'max': 463}
+2 {'menu': {'x': 20, 'y': 10, 'width': 264, 'height': 243, 'top': 10, 'right': 284, 'bottom': 253, 'left': 20}, 'last': {'x': 24, 'y': 195, 'width': 256, 'height': 54, 'top': 195, 'right': 280, 'bottom': 249, 'left': 24}, 'scroll': 463, 'max': 463}

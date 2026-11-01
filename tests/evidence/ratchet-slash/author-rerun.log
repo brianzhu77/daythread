@@ -1,0 +1,27 @@
+PASS chromium 1280: every item, in order, Body and Separator, no Paragraph (Task, Page, Link to page, Bullet List, Heading 2, Heading 1, Heading 3, Quote, Numbered List, Body, Separator)
+PASS chromium 1280: about 8 rows high and scrolls for the rest (460px)
+PASS chromium 1280: ↓ past the 8th row scrolls the highlighted item into view (Separator, in view true)
+PASS chromium 1280: ↑ back to the top scrolls Task into view (Task)
+PASS chromium 1280: Separator inserts a divider
+PASS chromium 1280: no "/" left behind
+PASS chromium 1280: the menu closes
+PASS chromium 1280: "/hr" finds Separator (Separator)
+PASS chromium 1280: "/---" finds Separator (Separator)
+PASS chromium 1280: "/text" finds Body (Body)
+PASS chromium 1280: "/body" finds Body (Body)
+PASS chromium 1280: "/p" finds Body (Page, Link to page, Body, Separator)
+PASS chromium 1280: "/quo" finds Quote (Quote)
+PASS chromium 1280: "/分隔" finds Separator (Separator)
+PASS chromium 1280: the toolbar's line-type menu says Body (Body)
+PASS chromium 1280: no page errors
+PASS webkit 390: every item, in order, Body and Separator, no Paragraph (Task, Page, Link to page, Bullet List, Heading 2, Heading 1, Heading 3, Quote, Numbered List, Body, Separator)
+PASS webkit 390: about 8 rows high and scrolls for the rest (171px)
+PASS webkit 390: with the keyboard up the + menu sits above the toolbar and keyboard (menu 269-440, toolbar top 450)
+PASS webkit 390: scrolled to the end, Separator shows inside the menu
+PASS webkit 390: Separator inserts a divider
+PASS webkit 390: no "/" left behind
+PASS webkit 390: the menu closes
+PASS webkit 390: the Aa panel says Body (Body, Heading 1, Heading 2, Heading 3, Bullet, Numbered, To-do, Quote)
+PASS webkit 390: from a low line, the + menu opens above it, taller (menu 56-338, caret 354, toolbar 450)
+PASS webkit 390: no page errors
+ALL PASS
