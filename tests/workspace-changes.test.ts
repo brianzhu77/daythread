@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PGlite } from '@electric-sql/pglite'
 import { applyChanges, changesBetween } from '../src/domain/workspace-changes.ts'
+import { replyWorkspace } from '../src/components/command-reply.ts'
 import { editorSeed, pageContentKey } from '../src/domain/editor-document.ts'
 import { forBrowser } from '../src/server/browser-workspace.ts'
 import { PostgresWorkspaceRepository } from '../src/server/postgres-repository.ts'
@@ -104,3 +105,19 @@ for (const [name, open] of stores) {
     } finally { await cleanup() }
   })
 }
+
+test('browser: a reply from another account is never applied, even at the same revision (Lead 6f528f6e)', () => {
+  const mine = harness(), theirs = harness()
+  mine.run({ type: 'create-document', title: 'My page', body: '', pageId: 'mine' })
+  theirs.run({ type: 'create-document', title: 'Their page', body: '', pageId: 'theirs' })
+  const copy = forBrowser(mine.ws)
+  const before = forBrowser(theirs.ws)
+  const changes = changesBetween(before, theirs.run({ type: 'rename-page', pageId: 'theirs', title: 'Theirs' }).workspace)
+  assert.equal(copy.revision, changes.from, 'the revisions match, so only the owner tells them apart')
+  assert.equal(replyWorkspace(copy, { owner: 'b', changes }, 'a'), null)
+  assert.equal(replyWorkspace(copy, { owner: 'a', changes }, null), null, 'owner not known yet: load')
+  const own = changesBetween(copy, mine.run({ type: 'rename-page', pageId: 'mine', title: 'Mine' }).workspace)
+  assert.ok(replyWorkspace(copy, { owner: 'a', changes: own }, 'a'))
+  // A whole workspace (an older server) replaces the copy, whoever it belongs to, as before.
+  assert.deepEqual(replyWorkspace(copy, { owner: 'b', workspace: before }, 'a'), before)
+})
