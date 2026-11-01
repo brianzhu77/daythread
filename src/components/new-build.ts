@@ -23,8 +23,15 @@ interface Resume { href: string; scroll: { window: number; sidebar: number }; ca
 
 let lastKey = 0
 let composing = false
+/**
+ * Only a key that types or moves the caret counts. Leaving a tab by keyboard sends one keydown first (the ⌘ or Ctrl of
+ * ⌘T, ⌘-Tab, Ctrl-Tab, ⌘1-9, ⌘L), so a lone modifier or anything with ⌘ or Ctrl held would block every such leave
+ * (Lead 842f7f62).
+ */
+const modifierKeys = new Set(['Meta', 'Control', 'Alt', 'Shift', 'CapsLock', 'Fn', 'FnLock', 'OS', 'Hyper', 'Super', 'Symbol', 'SymbolLock', 'AltGraph'])
+const types = (e: KeyboardEvent) => !e.metaKey && !e.ctrlKey && !modifierKeys.has(e.key)
 if (typeof document !== 'undefined') {
-  document.addEventListener('keydown', () => { lastKey = Date.now() }, { capture: true, passive: true })
+  document.addEventListener('keydown', e => { if (types(e)) lastKey = Date.now() }, { capture: true, passive: true })
   document.addEventListener('compositionstart', () => { composing = true }, true)
   document.addEventListener('compositionend', () => { composing = false }, true)
 }

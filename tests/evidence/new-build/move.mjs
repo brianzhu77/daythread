@@ -4,6 +4,8 @@
 // Usage: node move.mjs <worktree> <dirA> <dirB> [port]
 //   dirA/dirB: `vite build` outputs made with VITE_DAYTHREAD_BUILD=build-A / build-B. <worktree>/dist is replaced on
 //   each switch, so use a worktree no one else is serving from.
+// Chromium only as written. The cases that hold or fail saves use page.route, which in WebKit doesn't see requests
+// made under the service worker (Lead 842f7f62).
 import { chromium } from '/Users/dogrod/Developer/daythread/node_modules/playwright/index.mjs'
 import { spawn } from 'node:child_process'
 import { mkdtempSync, readdirSync, rmSync, cpSync } from 'node:fs'
@@ -83,9 +85,9 @@ await p.keyboard.press('Meta+k'); await p.locator('[role="dialog"]').first().wai
 await staysOnLeave('a dialog open')
 await p.keyboard.press('Escape'); await p.keyboard.press('Escape'); await blur(); await settle(500)
 
-// 3. A key in the last 2 s.
-await line(3).click(); await p.keyboard.press('ArrowLeft')
-await staysOnLeave('a key pressed just before leaving')
+// 3. A letter typed in the last 2 s.
+await line(3).click(); await p.keyboard.press('ArrowLeft'); await settle(2200); await p.keyboard.type('x')
+await staysOnLeave('a letter typed just before leaving')
 // 4. An IME composition still open.
 await settle(2200); await p.evaluate(() => document.dispatchEvent(new CompositionEvent('compositionstart')))
 await staysOnLeave('a composition still open')
@@ -141,6 +143,21 @@ await serve(dirA); await p.reload(); await p.locator('.continuous-editor').first
 await serve(dirB); await back(); await blur(); await settle(2200)
 await staysOnLeave('moved for B once already (an old page came back)')
 ok(!p.errors.length, `no page errors ${JSON.stringify(p.errors)}`)
+
+// 9b. Leaving by keyboard: the shortcut's own keydown doesn't hold the move (Lead 842f7f62). A fresh tab on B; the
+//     server swaps between A and B, so each case is a new build and moves once.
+const k = await device()
+await k.goto(base + '/'); await k.locator('.continuous-editor').first().waitFor(); await k.evaluate(() => navigator.serviceWorker.ready); await settle(2200, k)
+let on = 'B'
+for (const keys of ['Meta', 'Control', 'Meta+t', 'Control+Tab']) {
+  on = on === 'A' ? 'B' : 'A'; await serve(on === 'A' ? dirA : dirB)
+  await back(k); await k.keyboard.press(keys)
+  const km = await mark(k); await leave(k)
+  ok(await reloadedWithin(km, 15_000, k), `${keys} just before leaving: moves`)
+  await k.waitForFunction(() => document.querySelector('.continuous-editor'), null, { timeout: 15000 }); await back(k); await settle(1500, k)
+  ok(await loadedEntry(k) === entryOf(on === 'A' ? dirA : dirB), `${keys}: runs build ${on}`)
+}
+ok(!k.errors.length, `keyboard leaves: no page errors ${JSON.stringify(k.errors)}`)
 
 // 10. A touch screen: no caret is put back, so no keyboard comes up.
 await serve(dirA)
