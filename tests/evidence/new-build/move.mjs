@@ -8,13 +8,16 @@
 // made under the service worker (Lead 842f7f62).
 import { chromium } from '/Users/dogrod/Developer/daythread/node_modules/playwright/index.mjs'
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readdirSync, rmSync, cpSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, cpSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 const [worktree, dirA, dirB, portArg] = process.argv.slice(2), port = Number(portArg ?? 3660), base = `http://127.0.0.1:${port}`
 const store = join(mkdtempSync(join(tmpdir(), 'rb-build-')), 'ws.sqlite')
 let fail = 0; const ok = (v, s) => { console.log(v ? 'PASS' : 'FAIL', s); if (!v) fail++ }
 const entryOf = dir => readdirSync(join(dir, 'client/assets')).find(f => /^index-.*\.js$/.test(f))
+// A built server calls getAppInfo by a hashed id, read from each build's function manifest (Lead 5b9353da).
+const appInfoIds = [...new Set([dirA, dirB].map(dir => readFileSync(join(dir, 'server/server.js'), 'utf8').match(/"(\w+)": \{\s*functionName: "getAppInfo_createServerFn_handler"/)?.[1]))]
+if (appInfoIds.some(id => !id)) throw new Error('getAppInfo id not found in a build')
 let server
 // The server runs in its own process group (npx starts vite under it), killed whole however this script ends.
 process.on('exit', () => { try { process.kill(-server.pid) } catch { /* gone */ } })
@@ -37,7 +40,7 @@ const device = async extra => {
     window.__setVisibility = v => { window.name = v === 'hidden' ? 'hidden' : ''; set(v); document.dispatchEvent(new Event('visibilitychange')) }
   })
   const p = await c.newPage(); p.errors = []; p.on('pageerror', e => p.errors.push(e.message))
-  p.checks = 0; p.on('request', r => { if (r.url().includes('_serverFn') && Buffer.from(decodeURIComponent(r.url().split('_serverFn/')[1].split('?')[0]), 'base64url').toString().includes('getAppInfo')) p.checks++ })
+  p.checks = 0; p.on('request', r => { if (appInfoIds.some(id => r.url().includes(`_serverFn/${id}`))) p.checks++ })
   return p
 }
 const p = await device()
@@ -79,6 +82,7 @@ await staysOnLeave('offline')
 await p.context().setOffline(false)
 // Returns from here on are online, so each one marks the move.
 await back()
+ok(p.checks === checks + 1, `online: one check (${p.checks - checks})`)
 
 // 2. A dialog open (search).
 await p.keyboard.press('Meta+k'); await p.locator('[role="dialog"]').first().waitFor({ timeout: 5000 }); await settle(2200)
