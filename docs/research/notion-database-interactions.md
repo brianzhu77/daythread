@@ -17,7 +17,7 @@ What I could not observe, and why:
 - **Editing flows live.** I have no Notion account. Signing up is an outside action I did not take, so all editing steps come from Notion's help.
 - **A public page at 390.** `notion.notion.site/code-with-notion-board` loaded at 1280 but never finished loading at 390, in either headless WebKit or Chromium.
 - **Opening a row on the public page.** Notion answered with a Cloudflare "Verify you are human" check. I stopped there and did not try to get past it.
-- **Notion's iPhone app.** The Simulator has no App Store. Section 10 is therefore mostly [M]. If Brian uses Notion on his iPhone, three screenshots would settle it: a table, an open row, and a property being edited. The Lead decides whether to ask him.
+- **Notion's iPhone app.** The Simulator has no App Store, so section 10 is mostly [M]. **Section 10b fills that gap** with real iPhone screens of Craft's Collections, taken from Brian's own reference set. If Notion's iPhone behaviour still matters, three screenshots from Brian would settle it: a table, an open row, and a property being edited.
 
 Screenshots are in `notion-database-interactions/`:
 
@@ -145,6 +145,34 @@ Details:
 - The view tabs turn into one view name with a dropdown, and filter, sort and settings sit behind icons or `•••`.
 - An inline database in a page renders the same way, with its own sideways scroll, and `New` stays available.
 - Editing a cell straight in the table is awkward on a phone. Most editing happens on the opened row's page.
+
+## 10b. Craft's Collections on iPhone (observed in Brian's reference set)
+
+Brian's v1 look follows Craft. Its database, called a Collection, is in his reference screenshots
+(`refs/Craft ios Dec 2025/`, #109 to #167; contact sheets `refs/craft-contact-sheets/sheet-04` to `sheet-06`). These are
+**real iPhone screens**, so they fill most of the gap in section 10. The tag below is **[C]**. This is not Notion, but it's
+the phone pattern closest to the app Brian already uses.
+
+- **Creating one:** the insert sheet has **Collection** under "Rich blocks" (#109, #115). It lands **inline** in the
+  page, as a "Collection" title, a `Table ⌄` view picker, `⋮`, and a blue `Add`. Below that is a table with a `#`
+  column, `Aa Title`, one more property column, three empty numbered rows, and a `+` (#116). [C]
+- **The table on a phone:** rows are numbered. It shows two to three columns, and the rest scroll sideways. Group
+  headers can be collapsed, and each group has its own `+` (#154, #155). [C]
+- **Opening a row:** tapping a row opens it as a **full page**. The title comes first, then a list of fields (icon,
+  name, value, with "Empty" in grey), then `+ Add Field`, then the body (#119, #120, #123). There's no peek. [C]
+- **Editing a value:** tapping a field opens a **bottom sheet**. "Set Category" offers the options as one tap each,
+  or a list of checkboxes for multi-select (#121, #143). [C]
+- **Editing a field:** a bottom sheet titled "Edit Field" has the name, a `Type` dropdown, "Possible Values" with `+ Add
+  Value`, and `Cancel` / `Apply` (#126 to #131). Changing the type asks first: "Field type changing … will convert
+  the current values if possible" (#129). A new option gets a name and one of nine colour dots (#133 to #135). [C]
+- **View controls:** `⋮` opens a sheet with three tiles, **Filter · Sort · Group**, then Show/Hide Fields, Edit View
+  Name, Duplicate view, Delete view, Download as CSV, and Configure Collection (#137, #145). Filter, Sort and Group
+  are each a small sheet built as *field → condition → value*, with `+ Add Filter` or `+ Add another sort` (#138 to
+  #152). "Display Fields" is a list of fields, each with a drag handle and a switch (#158, #159). [C]
+- **Views:** `Table ⌄` opens a small menu listing the views, plus `Add View` (#136). A new view is named in a sheet
+  that sits over the keyboard (#164, #165). [C]
+- **What Craft does *not* show:** hover controls, side peek, editing a value inside the table, and drag on the table
+  itself. On the phone, every edit happens in a sheet or on the row's page.
 
 ## 11. What this means for our design (questions, not decisions)
 
