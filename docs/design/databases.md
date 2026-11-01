@@ -372,6 +372,7 @@ Remove this view                    linked view only (§9)
 | --- | --- | --- |
 | a **linked view** block | Only that view goes, and the database is untouched. | "View removed · Reading list is still in Books · Undo" |
 | the **home** block | The database and its rows go to Trash, as one entry. | "Reading list and its 42 rows moved to Trash · Undo" |
+| the **home** block, while the same page still has a **linked view** of it | Nothing goes to Trash. That linked view becomes the home (Roadbuster's guard, model e0d29661), and keeps its own filter. | "Reading list now lives in the view below · Undo" |
 | the **host page** of the home block | As today, the page goes to Trash with its subtree, which includes the database. | the existing notice |
 
 **A linked view whose database is in Trash** shows its title and one line: **"Reading list is in Trash · Restore"**.
