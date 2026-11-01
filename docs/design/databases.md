@@ -61,7 +61,10 @@ database meets Daythread's days.
 
   Enter in the title moves the caret to a new first row's Name cell. Esc leaves the block selected (§10).
 - **The empty-page rule:** if he chooses `/` Database on an **ordinary page whose body is otherwise empty**, the page
-  **becomes** the database (full page). Notice: **"This page is now a database · Undo"**. This is how a full-page
+  **becomes** the database (full page). Notice: **"This page is now a database · Keep it inline"**. Keep it inline
+  turns it back into his page, with the database inline on its first line and the caret on a new line under it.
+  That's one tap to what he meant if he wanted to write on the page too (Bumblebee 3b04290d). ⌘Z still undoes the
+  whole thing. This is how a full-page
   database is made from Pages: `+`, then a title, then `/` Database. Notion does the same with "Get started with →
   Table". Day pages, templates and row pages never turn into a database, so there the item always makes an inline one.
 - **Where it's not offered:** inside a synced block, and inside a draft band.
@@ -210,7 +213,7 @@ Editor = a popover under the cell at 1280, or a bottom sheet at 390. Both have t
 | **Multi-select** | chips, then "+2" | the same list with checkmarks. It stays open, and Done closes it. | — |
 | **Status** | a dot `○ ◐ ●` and the name | the same as Select, grouped **To do / In progress / Done**. The dot comes from the group, never from a colour. | always has a value (the first To-do option) |
 | **Date** | `Oct 12`, or `Oct 12 → Oct 20` | **our existing date picker** (the `@` date picker). It gets an **End date** toggle and an **Include time** toggle. | Clear |
-| **Checkbox** | **our task checkbox**, ticked in place at both widths (the B72 tick rule: the tick doesn't move the caret or raise the keyboard) | none | — |
+| **Checkbox** | **a plain square, not the task tick**: 16 px, `--radius-tight`, a 1.5 px `--check` border, and when ticked an `--ink` check mark with no blue fill. It ticks in place at both widths, and the tick doesn't move the caret or raise the keyboard (the B72 rule). | none | — |
 | **URL / Email / Phone** | the text, as a link | like Text. A tap on the link opens it, and the pencil next to it edits. | The value is kept as typed, and a non-link stays plain text. Nothing is refused. |
 | **Files** | the file name, or "2 files" | a list with Add, Remove, and Open | — |
 | **Relation** | titles of linked rows as page refs (`▢ Title`, our `[[` look) | the `[[`-style pick list, limited to the target database's rows, with checkmarks. The top line is "New row in Books…". | — |
@@ -219,9 +222,11 @@ Editor = a popover under the cell at 1280, or a bottom sheet at 390. Both have t
 | **Created time / Edited time** | `Oct 12, 9:14` | none | — |
 | **ID** | `12`, or `BK-12` with a prefix | none | — |
 
-- **Not offered:**
-  - **Person, Created by, Edited by** (a workspace is one person, the same reason the Lead dropped Q5);
-  - **Button, Place.**
+- **Not offered:** **Person, Created by, Edited by** (a workspace is one person, the same reason the Lead dropped
+  Q5). **Button** and **Place** are in the "Later" row (§14).
+- **Why the checkbox isn't the task tick:** in Daythread, the blue task tick means "a to-do that carries over and
+  shows in Tasks". An "Owned" box on a Reading list must not look like a promise to carry over, especially once real
+  to-dos sit in database tables (R2, §11), where they keep the real task tick (Bumblebee 3b04290d).
 - **No colour** on select, multi-select or status options. The page stays black, white and grey. Status reads from
   its dot. If Brian later wants colour, it's a per-option setting that defaults to grey, and nothing else changes.
 
@@ -485,7 +490,8 @@ The estimates are Roadbuster's (`database-fit.md` §7) unless marked as mine.
 | **R2** | **Linked views** (`/` picker, copy/paste, "this page's day", templates) plus **To-dos as a source** (§11, option 1) plus **Board** and **Group** | This is where databases meet days and to-dos. Linked views are about 1 day and To-dos about 1 day (Roadbuster). Board with Group is about 1 day (Roadbuster's "later" list). |
 | **R3** | **Calendar, List, Gallery**; the filter's **"any rule matches"** switch; **Relation, Rollup**; Created/Edited time, ID, Email, Phone, Files; row **templates** (`+ New ⌄`); **wrap** per property; several rows selected on the phone | Ordered by his use after R2 |
 | **R4** | **Timeline, Formula**, repeating row templates, CSV export/import, pasting TSV, moving a row to another database, **side peek** at 1280 (only if he's seen opening many rows one after another) | the largest and least certain |
-| **Not planned** | Person, Created by, Edited by, permissions, "only for me" filters, Forms, Automations, Buttons, several data sources in one database | A workspace is one person, or the work has no evidence of value yet (Lead frame 1). |
+| **Later, not yet ordered** | **Forms, Automations, Buttons, Place**, and **Chart** | These are in scope. They wait for a design pass of their own, and his use orders them, with nothing cut for lack of evidence (Brian 57deaed7, Bumblebee 3b04290d). |
+| **Not planned** | Person, Created by, Edited by, permissions, "only for me" filters, several data sources in one database | Each needs more than one person in a workspace, or the Lead's frame dropped it (several data sources). |
 
 ## 15. How I'll check it (each release, before it goes live)
 
