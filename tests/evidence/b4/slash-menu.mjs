@@ -64,6 +64,32 @@ for (const [name, br, w, h, phone] of [['chromium 1280', chromium, 1280, 900, fa
   ok(await blocks(p) === dividers + 1, `${name}: Separator inserts a divider`)
   ok(!(await p.evaluate(() => [...document.querySelectorAll('.continuous-editor .bn-inline-content')].some(e => e.textContent === '/'))), `${name}: no "/" left behind`)
   ok(!(await menu(p)), `${name}: the menu closes`)
+  if (!phone) {
+    // The caret is on an empty line right under the new divider, so his next words don't land in the next heading.
+    const under = await p.evaluate(() => { const sel = getSelection().anchorNode; const here = (sel?.nodeType === 1 ? sel : sel?.parentElement)?.closest('[data-node-type="blockContainer"]'); const prev = here?.closest('.bn-block-outer')?.previousElementSibling; return { type: here?.querySelector('[data-content-type]')?.dataset.contentType, text: here?.textContent, prev: prev?.querySelector('[data-content-type]')?.dataset.contentType } })
+    ok(under.type === 'paragraph' && under.text === '' && under.prev === 'divider', `${name}: after Separator the caret is on an empty line under it`, JSON.stringify(under))
+    // On the page's last line (PR #52 review): one ⌘Z takes the divider out, for / Separator and for typed ---.
+    for (const how of ['/', '---']) {
+      const last = p.locator('.continuous-editor .bn-block-outer .bn-inline-content').last()
+      await last.click(); await p.waitForTimeout(200); await p.keyboard.press('Meta+ArrowRight'); await p.keyboard.press('Enter'); await p.waitForTimeout(500)
+      const n = await blocks(p), errs = errors.length
+      if (how === '/') { await p.keyboard.type('/hr'); await p.waitForTimeout(400); await p.keyboard.press('Enter') } else await p.keyboard.type('---')
+      await p.waitForTimeout(700)
+      const lastIsDivider = await p.evaluate(() => { const all = [...document.querySelectorAll('.continuous-editor [data-content-type]')]; return all.at(-2)?.dataset.contentType === 'divider' && all.at(-1)?.dataset.contentType === 'paragraph' })
+      ok(await blocks(p) === n + 1 && lastIsDivider, `${name}: ${how === '/' ? '/ Separator' : 'typed ---'} on the last line inserts a divider and an empty line`)
+      await p.keyboard.press('Meta+z'); await p.waitForTimeout(800)
+      const back = await p.evaluate(() => [...document.querySelectorAll('.continuous-editor .bn-inline-content')].at(-1)?.textContent)
+      ok(await blocks(p) === n && errors.length === errs, `${name}: one ⌘Z takes it out again, with no error`, `dividers ${await blocks(p)} vs ${n}, last line "${back}"${errors.length > errs ? ', ' + errors.at(-1) : ''}`)
+      if (how === '---') ok(back === '---', `${name}: ⌘Z gives back the typed ---`, back)
+      await p.keyboard.press('Meta+z'); await p.waitForTimeout(500)
+    }
+    // A to-do row keeps typed dashes: turning it into a divider would delete the task.
+    const todo = p.locator('.continuous-editor [data-content-type=task] .bn-inline-content').first()
+    await todo.click(); await p.waitForTimeout(200); await p.keyboard.press('Meta+ArrowRight')
+    const n = await blocks(p); await p.keyboard.type('---'); await p.waitForTimeout(500)
+    ok(await blocks(p) === n && /---$/.test(await todo.textContent()), `${name}: --- in a to-do row stays text`)
+    for (let i = 0; i < 3; i++) await p.keyboard.press('Backspace')
+  }
   // Aliases (typed after a /), on a new line.
   if (!phone) {
     for (const [q, want] of [['hr', 'Separator'], ['---', 'Separator'], ['text', 'Body'], ['body', 'Body'], ['p', 'Body'], ['quo', 'Quote']]) {
@@ -92,7 +118,8 @@ for (const [name, br, w, h, phone] of [['chromium 1280', chromium, 1280, 900, fa
     await low.evaluate(e => { const r = e.getBoundingClientRect(); window.scrollBy(0, r.top - 380) }); await p.waitForTimeout(200)
     await low.tap(); await p.waitForTimeout(400)
     await p.getByRole('button', { name: 'Insert block' }).tap(); await p.waitForTimeout(500)
-    const caret = await p.evaluate(() => getSelection().getRangeAt(0).getBoundingClientRect().top)
+    // The tapped line's top (an empty line's caret box reads 0 in WebKit).
+    const caret = (await low.boundingBox()).y
     m = await menu(p)
     const bar = await p.evaluate(() => document.querySelector('.editor-phone-toolbar')?.getBoundingClientRect().top)
     ok(m && m.bottom <= caret && m.top >= 0 && m.bottom <= bar && m.height >= 250, `${name}: from a low line, the + menu opens above it, taller`, m && `menu ${Math.round(m.top)}-${Math.round(m.bottom)}, caret ${Math.round(caret)}, toolbar ${Math.round(bar)}`)

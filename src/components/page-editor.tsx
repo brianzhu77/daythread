@@ -3,7 +3,7 @@ import { NodeSelection, Selection, TextSelection, type Transaction } from '@tipt
 import { type ComponentProps, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
-import { BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, editorHasBlockWithType, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
+import { type BlockNoteEditor, BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, editorHasBlockWithType, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
 import { en } from '@blocknote/core/locales'
 import { toast } from '@heroui/react'
@@ -11,6 +11,7 @@ import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, createRea
 import { BlockNoteView, ShadCNDefaultComponents } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
 import { suggestionMenuMiddleware } from './suggestion-menu-placement'
+import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, sectionRange, type EditorNode } from '../domain/editor-document'
@@ -369,7 +370,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const groups = draftReady ? bandGroups(draft, draftShown, bandHost) : []
   const groupsRef = useRef(groups); groupsRef.current = groups
   rowsAnchor.current = rows.length ? eventsAnchor(pageNodes(page), new Set(workspace.tasks.map(t => t.id))) : undefined
-  const editor = useCreateBlockNote({ schema, dictionary, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), draftBands(() => groupsRef.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  // separatorShortcut needs the editor it is part of; a ref breaks the type cycle of passing `editor` itself.
+  const editorRef = useRef<BlockNoteEditor<any, any, any> | null>(null)
+  const editor = useCreateBlockNote({ schema, dictionary, disableExtensions: ['gapCursor', 'divider-block-shortcuts'], extensions: [separatorShortcut(() => editorRef.current!), tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), draftBands(() => groupsRef.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
     pastingNow.current = true; setTimeout(() => { pastingNow.current = false }, 0)
@@ -456,6 +459,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     return defaultPasteHandler()
   }, initialContent: (initial.current.nodes.length ? initial.current.nodes : [{ type: 'paragraph' }]) as never })
+  editorRef.current = editor
   const base = useRef(initial.current.base)
   // The document the editor started from, for merging a draft into a page that moved on (Load latest).
   const baseDoc = useRef(initial.current.baseDocument)
@@ -2098,7 +2102,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const suggested = ['Bullet List', 'Heading 2']
         const library = getDefaultReactSlashMenuItems(editor).filter(item => ['Heading 1', 'Heading 2', 'Heading 3', 'Body', 'Bullet List', 'Numbered List', 'Quote', 'Separator'].includes(item.title)).map(item => ({ ...item, subtext: undefined }))
         const first = suggested.map(title => library.find(item => item.title === title)!).map(item => ({ ...item, group: 'Suggested' }))
-        const rest = library.filter(item => !suggested.includes(item.title))
+        const rest = library.filter(item => !suggested.includes(item.title)).map(item => item.title === 'Separator' ? { ...item, onItemClick: () => { const line = editor.getTextCursorPosition().block; insertSeparator(editor, line, !inlineText(line.content) || inlineText(line.content) === '/') } } : item)
         const taskItem = { title: 'Task', icon: <CheckboxIcon />, aliases: ['todo', 'task', '任务'], group: 'Suggested', onItemClick: () => {
           const currentBlock = editor.getTextCursorPosition().block
           const currentId = currentBlock.id
