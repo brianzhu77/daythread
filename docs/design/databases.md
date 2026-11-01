@@ -284,7 +284,8 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
     in `--text-meta` `--ink-3` ("Status · Thinking in Systems"), because the sheet covers the table. **Done** is on the
     right, as `.app-link`.
   - Rows are 44 px.
-  - It closes with Done, a tap on the scrim, or a swipe down. **All three keep what he did.** A sheet never throws
+  - It closes with Done or a tap on the scrim. **Both keep what he did.** (A swipe down would too, but our sheets
+    don't swipe today, the Move dialog included. That's a change for every sheet, not just these.) A sheet never throws
     away an edit. To go back, he picks the old value again. A text field still being composed (IME) is committed
     first.
   - **The keyboard comes up only when he taps a text field,** with one exception: Text, Number and URL focus their
@@ -328,7 +329,8 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
   `--shadow-float` and the 2 px `--blue` outline. It grows downward as lines are added.
   - **Enter** saves and keeps the cursor on the cell. **Shift-Enter** adds a line.
   - **Esc** saves as well. Losing text by pressing Esc is worse than one ⌘Z.
-  - A blur saves, and so does 1 s without typing (§10).
+  - A blur saves. So does the page being hidden (a tab closed, the app sent away), so typing is never lost. That
+    replaces the 1 s idle save in §10: saving while he's still typing would make one Undo step per pause.
   - **Tab / Shift-Tab** save and move the cursor along the row.
 - **Phone sheet:** one field, focused on open, 3 lines tall and growing to 8. The return key reads **Done**
   (`enterkeyhint="done"`) and saves. A new line on the phone only comes from pasting; a value that already has lines
@@ -418,8 +420,8 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
      is focused on open at ≥ 900 and not on the phone.
   2. **Quick days:** Today, Tomorrow, then two more days, with the same labels as the empty `@` list
      (`relativeDay`). A tap saves and closes.
-  3. **Pick on calendar…** opens the system date picker (the same hidden native date input that `row-actions` uses,
-     but with no `min`).
+  3. **Pick on calendar…** opens our own month calendar inside the editor, the same one as the day title's picker.
+     (Built that way instead of the system picker, which can't be opened reliably from a sheet.)
   4. **End date** and **Include time**, as switches. End date adds a second field, "End", with its own Pick on
      calendar…. Include time adds a time to each date (native `type="time"`).
   5. **Clear**, in `--ink-2`, only when there's a value.
