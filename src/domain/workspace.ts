@@ -5,6 +5,7 @@ import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget } from "./day-template.ts";
 import { isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
+import { changeDatabase, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
 
@@ -247,10 +248,54 @@ function restorePages(state: Workspace, ids: Set<string>): { pages: Page[]; toTo
   for (const p of pages) {
     if (!p.parentId || ids.has(p.parentId)) continue;
     const parent = state.pages.find((x) => x.id === p.parentId);
-    if (!parent || isTrashed(parent)) { delete p.parentId; toTopLevel.push(p); }
+    if (!parent || isTrashed(parent)) {
+      delete p.parentId; toTopLevel.push(p);
+      // Its home block stays in the trashed page: at the top level it is a full page.
+      if (p.database) p.database.homeBlockId = null;
+    }
   }
   return { pages, toTopLevel };
 }
+/** The pages to trash with `p`, as one batch: it and its live descendants (a database's rows with it). */
+function trashSubtree(state: Workspace, p: Page, at: string, operationId: string): Page[] {
+  const ids = subtreeIds(state, p.id);
+  const members = state.pages.filter((x) => ids.has(x.id) && !isTrashed(x));
+  for (const x of members) { x.trashedAt = at; x.trashId = operationId; }
+  return members;
+}
+function isoTime(value: string | undefined): string {
+  if (value === undefined) return new Date().toISOString();
+  if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) throw new DomainError("Invalid time");
+  return value;
+}
+/** A live database the command may change. */
+function databasePage(state: Workspace, id: string): Page & { database: NonNullable<Page["database"]> } {
+  const p = page(state, id);
+  if (!isDatabase(p)) throw new DomainError("Not a database");
+  if (isTrashed(p)) throw new DomainError("Page is in trash");
+  return p;
+}
+/** A live row of a live database. */
+function rowPage(state: Workspace, id: string): { row: Page; db: Page & { database: NonNullable<Page["database"]> } } {
+  const row = page(state, id), db = databaseOfRow(state, row);
+  if (!db) throw new DomainError("Not a row");
+  if (isTrashed(row) || isTrashed(db)) throw new DomainError("Page is in trash");
+  return { row, db };
+}
+/** Pages are made in a page, never in a database (its children are its rows) or a template. */
+function pageParent(state: Workspace, id: string): Page {
+  const parent = ordinaryPage(state, id);
+  if (isDatabase(parent)) throw new DomainError("Pages can't go into a database");
+  if (isTrashed(parent)) throw new DomainError("Page is in trash");
+  return parent;
+}
+function rowEdit(state: Workspace, edit: RowEdit, at: string): void {
+  if (!edit || typeof edit.pageId !== "string") throw new DomainError("Invalid row");
+  const { row, db } = rowPage(state, edit.pageId);
+  try { editRow(db.database, row, edit, at); } catch (error) { throw new DomainError((error as Error).message); }
+}
+/** The local day of an ISO time in the workspace's zone. */
+const localDay = (state: Workspace, at: string): string => new Date(at).toLocaleDateString("en-CA", { timeZone: state.timezone });
 /** A4: what Restore on a page brings back: the page plus its descendants trashed in the same delete. */
 function restoreSetOf(state: Workspace, p: Page): Set<string> {
   const ids = new Set([p.id]);
@@ -278,6 +323,50 @@ function headingAbove(doc: EditorNode[], nodeId: string): EditorNode | undefined
 const bringableTypes = new Set(["paragraph", "bulletListItem", "numberedListItem", "quote"]);
 const bringable = (n: EditorNode): boolean => bringableTypes.has(n.type) && Boolean(inlineText(n.content).trim());
 const lineKey = (n: EditorNode, pageDate: string | null) => inlineText(n.content, pageDate).replace(/\s+/g, " ").trim();
+
+/**
+ * The databases whose place is in `p`, after a save of it (model §3): a home block gone from the page trashes its
+ * database and rows as one batch (one Undo), unless the save turns it into a full page (`detachDatabaseIds`); a block
+ * the save adopts becomes the home of a database that has none. Every other `database` block is a view and needs nothing.
+ */
+function placeDatabases(state: Workspace, p: Page, before: EditorNode[], after: EditorNode[], action: Extract<Action, { type: "save-editor" }>, operationId: string): { id: string; title: string; rows: number } | null {
+  const had = new Set(before.map((n) => n.id));
+  const blocks = new Map(after.filter((n) => n.type === databaseBlockType).map((n) => [n.id, n]));
+  const detach = new Set(action.detachDatabaseIds ?? []);
+  let trashed: { id: string; title: string; rows: number } | null = null;
+  for (const db of state.pages) {
+    if (!isDatabase(db) || db.parentId !== p.id || isTrashed(db) || db.database.homeBlockId === null) continue;
+    const home = db.database.homeBlockId;
+    if (blocks.get(home)?.props?.pageId === db.id) continue;
+    if (detach.has(db.id)) { db.database.homeBlockId = null; continue; }
+    if (!had.has(home)) continue;
+    const rows = databaseRows(state, db.id).length;
+    trashSubtree(state, db, isoTime(action.at), operationId);
+    trashed ??= { id: db.id, title: db.title, rows };
+  }
+  for (const { blockId, pageId } of action.adoptDatabaseBlocks ?? []) {
+    const block = blocks.get(blockId), db = state.pages.find((x) => x.id === pageId);
+    // One that can't be adopted stays what it is: a view of that database.
+    if (!block || block.props?.pageId !== pageId || !isDatabase(db) || isTrashed(db) || db.database.homeBlockId !== null) continue;
+    // Never into itself or one of its rows.
+    if (subtreeIds(state, db.id).has(p.id)) continue;
+    db.parentId = p.id;
+    db.database.homeBlockId = blockId;
+  }
+  return trashed;
+}
+/** A duplicated row's body: fresh block ids, and its to-dos as new tasks of the copy, so ticking one never ticks the other. */
+function copiedBody(state: Workspace, from: Page, to: Page, on: string): EditorNode[] {
+  const visit = (n: EditorNode): EditorNode => {
+    const copy: EditorNode = { ...structuredClone(n), id: newId(), children: (n.children ?? []).map(visit) };
+    const taskId = rowTaskId(n), t = taskId ? state.tasks.find((x) => x.id === taskId) : undefined;
+    if (t) { const fresh = createTask(state, t.title, to, on); copy.props = { ...copy.props, taskId: fresh.id, role: "reference", planDate: "" }; }
+    else if (taskId) copy.props = { ...copy.props, taskId: `editor-task:${copy.id}` };
+    if (Array.isArray(copy.content)) copy.content = (copy.content as { type?: string; props?: Record<string, unknown> }[]).map((c) => c?.type === "pageRef" ? { ...c, props: { ...c.props, refId: newId() } } : c);
+    return copy;
+  };
+  return pageNodes(from).map(visit);
+}
 
 // ---------------------------------------------------------------- commands
 
@@ -336,6 +425,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (!t) continue;
         settleAfterRowsLeft(state, p, t, { single: rows.some((r) => single.has(r.id)), wasPlan: rows.some((r) => rowRole(r) === "plan"), today: action.today, plannedBefore: plannedBefore.get(id) ?? null });
       }
+      const trashed = placeDatabases(state, p, before, all, action, operationId);
+      if (trashed) return { message: `${trashed.title.trim() || "Untitled"} moved to trash${trashed.rows ? ` · ${trashed.rows} row${trashed.rows === 1 ? "" : "s"}` : ""}`, entityId: trashed.id };
       return { message: "Page saved" };
     }
     case "ensure-day": {
@@ -434,7 +525,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (existing.type !== "document" || (existing.parentId ?? null) !== (action.parentId ?? null)) throw new DomainError("Page id already in use");
         return { message: "Page saved", entityId: id };
       }
-      const parent = action.parentId ? ordinaryPage(state, action.parentId) : undefined;
+      const parent = action.parentId ? pageParent(state, action.parentId) : undefined;
       const body = text(action.body);
       const line = emptyLine("paragraph");
       if (body) line.content = [textRun(body)];
@@ -447,6 +538,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     }
     case "make-link-pages": {
       const parent = ordinaryPage(state, action.parentPageId);
+      if (isDatabase(parent)) throw new DomainError("Pages can't go into a database");
       let first: string | undefined;
       for (const item of action.items) {
         if (state.pages.some((p) => p.id === item.pageId)) { first ??= item.pageId; continue; }
@@ -504,6 +596,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const [moved] = state.pages.splice(index, 1);
       const reordered = (moved!.parentId ?? null) === action.parentId;
       if (action.parentId) moved!.parentId = action.parentId; else delete moved!.parentId;
+      // Its home block stays in the old parent as a view of it; here it is a full page until he turns it into inline.
+      if (moved!.database && !reordered) moved!.database.homeBlockId = null;
       // Sibling order is page-list order, so the page goes just before its new next sibling, or at the end.
       state.pages.splice(before ? state.pages.indexOf(before) : state.pages.length, 0, moved!);
       return { message: action.parentId || reordered ? "Page moved" : "Moved to top level", entityId: moved!.id };
@@ -512,16 +606,21 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const p = page(state, action.pageId);
       if (p.type !== "document") throw new DomainError("Day pages can't be deleted");
       if (!Number.isFinite(Date.parse(action.at))) throw new DomainError("Invalid time");
-      const ids = subtreeIds(state, p.id);
-      const members = state.pages.filter((x) => ids.has(x.id) && !isTrashed(x));
-      for (const x of members) { x.trashedAt = action.at; x.trashId = operationId; }
-      const n = members.length - 1;
+      const rows = isDatabase(p) ? databaseRows(state, p.id).length : 0;
+      const n = trashSubtree(state, p, action.at, operationId).length - 1;
+      if (isDatabase(p)) return { message: rows ? `Moved to trash · ${rows} row${rows === 1 ? "" : "s"}` : "Moved to trash", entityId: p.id };
       return { message: n ? `Moved to trash · ${n} subpage${n === 1 ? "" : "s"}` : "Moved to trash", entityId: p.id };
     }
     case "restore-page": {
       const p = page(state, action.pageId);
       if (!isTrashed(p)) throw new DomainError("Page is not in trash");
-      const { toTopLevel } = restorePages(state, restoreSetOf(state, p));
+      const ids = restoreSetOf(state, p);
+      // A row whose database is in the trash restores the database too (design §12), never a row on its own.
+      const db = databaseOfRow(state, p);
+      const withDatabase = Boolean(db && isTrashed(db));
+      if (db && withDatabase) for (const id of restoreSetOf(state, db)) ids.add(id);
+      const { toTopLevel } = restorePages(state, ids);
+      if (withDatabase) return { message: `Restored with ${db!.title.trim() || "Untitled"}`, entityId: p.id };
       return { message: toTopLevel.length ? "Restored to Pages" : "Restored", entityId: p.id };
     }
     case "restore-batch": {
@@ -637,6 +736,68 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (!skipped) throw new DomainError("Nothing to skip");
       setDraft(state, day.id, draft);
       return { message: skipped === 1 ? "Skipped" : `Skipped ${skipped}`, entityId: draftPageId(day.id) };
+    }
+    case "create-database": {
+      const id = action.pageId;
+      if (reservedTargets.has(id)) throw new DomainError("Page id already in use");
+      const parentId = action.parentId ?? null;
+      const existing = state.pages.find((p) => p.id === id);
+      if (existing) {
+        if (!isDatabase(existing) || (existing.parentId ?? null) !== parentId) throw new DomainError("Page id already in use");
+        return { message: "Database made", entityId: id };
+      }
+      if (parentId !== null) pageParent(state, parentId);
+      if (action.homeBlockId !== null && (typeof action.homeBlockId !== "string" || !action.homeBlockId || parentId === null)) throw new DomainError("Invalid database block");
+      state.pages.push({ id, type: "document", date: null, title: text(action.title, 1000).trim(), ...(parentId ? { parentId } : {}), document: "[]", database: newDatabase(action.homeBlockId) });
+      return { message: "Database made", entityId: id };
+    }
+    case "change-database": {
+      const p = databasePage(state, action.pageId);
+      try { return { message: changeDatabase(state, p, action.change), entityId: p.id }; } catch (error) { throw new DomainError((error as Error).message); }
+    }
+    case "add-row": {
+      const db = databasePage(state, action.databaseId);
+      const at = isoTime(action.at);
+      const existing = state.pages.find((p) => p.id === action.pageId);
+      if (existing) {
+        if (existing.parentId !== db.id) throw new DomainError("Page id already in use");
+        return { message: "Row added", entityId: existing.id };
+      }
+      if (reservedTargets.has(action.pageId)) throw new DomainError("Page id already in use");
+      if (databaseRows(state, db.id).length >= 10_000) throw new DomainError("Too many rows");
+      const source = action.copyOf ? rowPage(state, action.copyOf) : undefined;
+      if (source && source.db.id !== db.id) throw new DomainError("Not a row");
+      let values: Page["values"];
+      try { values = source ? structuredClone(source.row.values) : newRowStored(db.database, action.values); } catch (error) { throw new DomainError((error as Error).message); }
+      const row: Page = { id: action.pageId, type: "document", date: null, title: source ? `${source.row.title} (copy)`.trim() : text(action.title, 1000).trim(), parentId: db.id, document: JSON.stringify([emptyLine("paragraph")]), ...(values ? { values } : {}), createdAt: at, editedAt: at };
+      if (source) row.document = JSON.stringify(copiedBody(state, source.row, row, localDay(state, at)));
+      // Rows keep page order: before `beforeId`, after the row it copies, or at the end.
+      const rows = databaseRows(state, db.id);
+      const before = action.beforeId ? rows.find((r) => r.id === action.beforeId) : source ? rows[rows.indexOf(source.row) + 1] : undefined;
+      if (action.beforeId && !before) throw new DomainError("Row not found");
+      state.pages.splice(before ? state.pages.indexOf(before) : state.pages.length, 0, row);
+      return { message: source ? "Row duplicated" : "Row added", entityId: row.id };
+    }
+    case "set-values": {
+      rowEdit(state, action, isoTime(action.at));
+      return { message: "Saved", entityId: action.pageId };
+    }
+    case "set-values-many": {
+      const at = isoTime(action.at);
+      if (!Array.isArray(action.items) || !action.items.length || action.items.length > databaseLimits.rowsAtOnce) throw new DomainError("Invalid rows");
+      if (new Set(action.items.map((i) => i.pageId)).size !== action.items.length) throw new DomainError("Invalid rows");
+      for (const item of action.items) rowEdit(state, item, at);
+      return { message: `Saved ${action.items.length} rows` };
+    }
+    case "delete-pages": {
+      const at = isoTime(action.at);
+      const pages = action.pageIds.map((id) => page(state, id));
+      if (!pages.length || new Set(action.pageIds).size !== pages.length) throw new DomainError("Invalid pages");
+      for (const p of pages) { if (p.type !== "document") throw new DomainError("Day pages can't be deleted"); if (isTrashed(p)) throw new DomainError("Page is in trash"); }
+      const rows = pages.every((p) => databaseOfRow(state, p));
+      for (const p of pages) if (!isTrashed(p)) trashSubtree(state, p, at, operationId);
+      const n = pages.length;
+      return { message: `${n} ${rows ? (n === 1 ? "row" : "rows") : n === 1 ? "page" : "pages"} moved to trash` };
     }
     case "set-timezone":
       state.timezone = validTimezone(action.timezone);

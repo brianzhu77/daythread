@@ -6,6 +6,8 @@ import type { Page, Task, Workspace } from '../domain/types.ts'
 export interface PageRow {
   id: string; position: number; type: Page['type']; date: string | null; title: string; url: string | null; parent_id: string | null
   trashed_at: string | null; trash_id: string | null; document: string; handoff_done: boolean; review_saved: boolean
+  /** Databases (JSON text, like `document`): a database page's schema and views; a row's values (`values` is an SQL keyword). */
+  database_json: string | null; row_values: string | null; created_at: string | null; edited_at: string | null
 }
 export interface TaskRow {
   id: string; position: number; title: string; status: Task['status']; version: number; paused: boolean; deadline_on: string | null
@@ -24,6 +26,7 @@ const clean = (s: string): string => s.includes('\u0000') ? s.replace(/\u0000/g,
 export const pageRow = (p: Page, position: number): PageRow => ({
   id: p.id, position, type: p.type, date: p.date ?? null, title: clean(p.title), url: p.url ?? null, parent_id: p.parentId ?? null,
   trashed_at: p.trashedAt ?? null, trash_id: p.trashId ?? null, document: p.document, handoff_done: Boolean(p.handoffDone), review_saved: Boolean(p.reviewSaved),
+  database_json: p.database ? JSON.stringify(p.database) : null, row_values: p.values ? JSON.stringify(p.values) : null, created_at: p.createdAt ?? null, edited_at: p.editedAt ?? null,
 })
 /** The canonical page: optional facts present only when set, as the domain and the converter write them. */
 export const pageOf = (r: PageRow): Page => ({
@@ -31,6 +34,9 @@ export const pageOf = (r: PageRow): Page => ({
   ...(r.url !== null ? { url: r.url } : {}), ...(r.parent_id !== null ? { parentId: r.parent_id } : {}),
   ...(r.trashed_at !== null ? { trashedAt: r.trashed_at, trashId: r.trash_id } : {}),
   document: r.document, ...(r.handoff_done ? { handoffDone: true } : {}), ...(r.review_saved ? { reviewSaved: true } : {}),
+  // A row written before these columns existed reads them as null (`?? null`): the fields are simply absent.
+  ...(r.database_json != null ? { database: JSON.parse(r.database_json) } : {}), ...(r.row_values != null ? { values: JSON.parse(r.row_values) } : {}),
+  ...(r.created_at != null ? { createdAt: r.created_at } : {}), ...(r.edited_at != null ? { editedAt: r.edited_at } : {}),
 })
 export const taskRow = (t: Task, position: number): TaskRow => ({
   id: t.id, position, title: clean(t.title), status: t.status, version: t.version, paused: t.paused, deadline_on: t.deadlineOn ?? null,

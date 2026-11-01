@@ -3,7 +3,7 @@ import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AccountRow } from './account-row'
 import { ContinuousPage } from './continuous-page'
 import { displayPageTitle, PageTitleField } from './page-title'
-import { childPages, isTrashed, pagesInDays, parentOf, visiblePages } from '../domain/page-tree'
+import { childPages, isTrashed, listedPages, pagesInDays, parentOf } from '../domain/page-tree'
 import type { Page, Workspace } from '../domain/types'
 import { LinkedFrom, PageHeaderRow, PageLink, pageLabel, Subpages, useToday } from './page-tree'
 import { ChevronRightIcon, PageKindIcon, PlusIcon } from './icons'
@@ -170,7 +170,7 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
   const { run } = useWorkspace()
   const target = templateTarget(page)
   // "Pages in…": documents, as Move to… offers them, plus the current target if it's a day or in the trash.
-  const documents = visiblePages(workspace).filter(p => p.type === 'document')
+  const documents = listedPages(workspace).filter(p => p.type === 'document')
   const current = target && ![dayPagesTarget, topLevelTarget, daySubpagesTarget].includes(target) ? workspace.pages.find(p => p.id === target) : undefined
   const pagesIn = current && !documents.includes(current) ? [current, ...documents] : documents
   // Every document page, nested and link pages included (Brian 57deaed7); nested ones name their parent, as titles repeat.

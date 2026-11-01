@@ -25,7 +25,9 @@ export const operationKeepMs = 30 * 24 * 3600_000
 export const pruneEvery = 25
 interface Scope extends WorkspaceInfo { userId: string | null }
 
-const pageColumns = ['id', 'position', 'type', 'date', 'title', 'url', 'parent_id', 'trashed_at', 'trash_id', 'document', 'handoff_done', 'review_saved'] as const
+const pageColumns = ['id', 'position', 'type', 'date', 'title', 'url', 'parent_id', 'trashed_at', 'trash_id', 'document', 'handoff_done', 'review_saved', 'database_json', 'row_values', 'created_at', 'edited_at'] as const
+/** Columns added to `pages` after its first release (databases): added on start when missing, before any build writes them. */
+const addedPageColumns = ['database_json', 'row_values', 'created_at', 'edited_at'] as const
 const taskColumns = ['id', 'position', 'title', 'status', 'version', 'paused', 'deadline_on', 'attention_on', 'created_on', 'source_page_id', 'done_on'] as const
 const deletedColumns = ['id', 'position', 'data'] as const
 
@@ -50,7 +52,15 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     const tables = async (sql: SqlClient) => (await sql.query<{ relname: string }>(
       `select c.relname from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
         where n.nspname = $1 and c.relkind = 'r' and c.relrowsecurity`, [this.schema])).map(r => r.relname)
-    const complete = async (sql: SqlClient) => { const have = await tables(sql); return ['workspaces', 'pages', 'tasks', 'deleted_tasks', 'operations'].every(t => have.includes(t)) && !have.includes('workspace') }
+    const pageColumnsHave = async (sql: SqlClient) => (await sql.query<{ attname: string }>(
+      `select a.attname from pg_catalog.pg_attribute a join pg_catalog.pg_class c on c.oid = a.attrelid join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = $1 and c.relname = 'pages' and a.attnum > 0 and not a.attisdropped`, [this.schema])).map(r => r.attname)
+    const complete = async (sql: SqlClient) => {
+      const have = await tables(sql)
+      if (!['workspaces', 'pages', 'tasks', 'deleted_tasks', 'operations'].every(t => have.includes(t)) || have.includes('workspace')) return false
+      const columns = await pageColumnsHave(sql)
+      return addedPageColumns.every(c => columns.includes(c))
+    }
     this.ready ??= complete(this.sql).then(async ok => {
       if (ok) return
       await this.sql.transaction(async tx => {
@@ -96,7 +106,8 @@ export class PostgresWorkspaceRepository implements ServerRepository {
           );
           create index if not exists operations_revision on ${s}.operations (workspace_id, revision desc);
           create index if not exists operations_created on ${s}.operations (workspace_id, created_at);
-          alter table ${s}.operations enable row level security;`)
+          alter table ${s}.operations enable row level security;
+          ${addedPageColumns.map(c => `alter table ${s}.pages add column if not exists ${c} text;`).join('\n          ')}`)
         if ((await tables(tx)).includes('workspace')) await this.migrateShot1(tx)
       })
     }).catch(error => { this.ready = undefined; throw error })

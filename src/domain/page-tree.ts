@@ -3,6 +3,7 @@ import { flatNodes, inlineText, isTaskRow, pageNodes, textDate, type EditorNode 
 import { refHolders, refTargetPage } from "./page-refs.ts";
 import { isTemplate } from "./day-template.ts";
 import { isDraft } from "./day-draft.ts";
+import { databaseOfRow, databaseRows, isDatabase } from "./database.ts";
 
 // The page tree is each page's own parentId; sibling order is the workspace's page order. "Linked from" reads the
 // documents: cards (pageLink blocks) and `[[` links, each stamped with the revision of the save that first held it.
@@ -18,8 +19,19 @@ export function parentOf(ws: Workspace, p: Page): Page | null {
   if (p.type === "daily" || !p.parentId) return null;
   return ws.pages.find((x) => x.id === p.parentId) ?? null;
 }
+/** A page's subpages, in order: never a database's rows, which are listed only by the database (model §2.2). */
 export function childPages(ws: Workspace, parentId: string | null): Page[] {
-  return visiblePages(ws).filter((p) => p.type === "document" && (parentOf(ws, p)?.id ?? null) === parentId);
+  const databases = new Set(ws.pages.filter(isDatabase).map((p) => p.id));
+  return visiblePages(ws).filter((p) => p.type === "document" && (parentOf(ws, p)?.id ?? null) === parentId && !(p.parentId && databases.has(p.parentId)));
+}
+/** The pages listed as pages (Pages, pickers of pages): every visible page but a database's rows. */
+export function listedPages(ws: Workspace): Page[] {
+  const databases = new Set(ws.pages.filter(isDatabase).map((p) => p.id));
+  return visiblePages(ws).filter((p) => !(p.parentId && databases.has(p.parentId)));
+}
+/** The pages in order under a parent: a database's rows, or a page's subpages. */
+function siblingPages(ws: Workspace, parentId: string | null): Page[] {
+  return parentId !== null && isDatabase(ws.pages.find((p) => p.id === parentId)) ? databaseRows(ws, parentId) : childPages(ws, parentId);
 }
 export function trashedChildPages(ws: Workspace, page: Page): Page[] {
   return ws.pages.filter((p) => isTrashed(p) && p.trashId === page.trashId && p.parentId === page.id);
@@ -61,7 +73,7 @@ export function subtreeIds(ws: Workspace, pageId: string): Set<string> {
 }
 /** The sibling a drag's page goes just before: `beforeId` while it is still a page under `parentId`, else none (the end). */
 export function moveBefore(ws: Workspace, pageId: string, parentId: string | null, beforeId: string | null | undefined): Page | null {
-  return (beforeId && beforeId !== pageId && childPages(ws, parentId).find((p) => p.id === beforeId)) || null;
+  return (beforeId && beforeId !== pageId && siblingPages(ws, parentId).find((p) => p.id === beforeId)) || null;
 }
 /**
  * Why a page can't go under `parentId`, or null. Without `beforeId` (Move to…) its own parent is refused; with one (a
@@ -78,9 +90,13 @@ export function moveRefusal(ws: Workspace, pageId: string, parentId: string | nu
   if (target && isTrashed(target)) return "Page is in trash";
   if (target && isTemplate(target)) return "Pages can't go inside the day template";
   if (parentId !== null && subtreeIds(ws, pageId).has(parentId)) return "Can't move a page into itself or its subpages";
+  // A row moves only within its database; nothing else goes into one (design §12).
+  const database = databaseOfRow(ws, p);
+  if (database && parentId !== database.id) return "A row stays in its database";
+  if (!database && isDatabase(target)) return "Pages can't go into a database";
   if ((parentOf(ws, p)?.id ?? null) === parentId) {
     if (beforeId === undefined || beforeId === pageId) return "Already there";
-    const siblings = childPages(ws, parentId);
+    const siblings = siblingPages(ws, parentId);
     if ((siblings[siblings.indexOf(p) + 1] ?? null) === moveBefore(ws, pageId, parentId, beforeId)) return "Already there";
   }
   return null;

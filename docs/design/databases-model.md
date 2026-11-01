@@ -9,6 +9,24 @@ Bumblebee's `docs/research/notion-database-model.md` (`bb/notion-db-research`), 
 This supersedes one point of the fit research: a database's home block is **stored on the database page**
 (`homeBlockId`), not inferred as "the first such block".
 
+## 0. As built in R1 (`feat/databases-domain`)
+
+The domain and storage of R1 follow this model, with these differences, all from the design:
+
+- `Option` has no `color` (design §6.1: no colour on options). `PropertyType` is the 8 R1 types; `relation`,
+  `createdTime` and `editedTime` come later, and a type the build doesn't know reads as empty.
+- `View` is `{ id, name, layout: 'table', columns, sort, filter }`. `groupBy`, `dateBy` and `source` come with R2.
+- Filter operators are one list for every type (`filterOpList` in `src/domain/database.ts`); a rule the property's
+  type doesn't offer, or one with no value, is ignored rather than hiding rows. Select and status use `isAnyOf` /
+  `isNoneOf` with a list of option ids; date values are `{ date }` or `{ relative: 'today' | 'pageDate', offset }`,
+  and `within` takes `thisWeek` (Monday to Sunday), `past7` or `next7`.
+- `set-values` checks only the columns named in `expected`; the title is the column `title` in `values` and
+  `expected`, so a title cell has the same per-cell check.
+- `add-row` takes `copyOf` for Duplicate row: values copied, body copied with fresh ids, and its to-dos made new tasks
+  of the copy, so ticking one never ticks the other.
+- `delete-page` on a database reports its rows; `restore-page` on a row whose database is in the trash restores the
+  database's batch with it ("Restored with Reading list").
+
 ## 1. Records
 
 No new record type. A database and its rows are pages; two optional fields carry what's new.

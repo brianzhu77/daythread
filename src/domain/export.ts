@@ -2,6 +2,7 @@ import { editorSeed, inlineText, pageNodes, type EditorNode } from './editor-doc
 import type { Page, Workspace } from './types.ts'
 import { isTemplate } from './day-template.ts'
 import { isDraft } from './day-draft.ts'
+import { cellValue, databaseOfRow, databaseRows, isDatabase, isEmptyValue, propertyOf, type CellValue, type Database } from './database.ts'
 
 /**
  * Export: his words out of the app, readable without its code. A folder of Markdown (a day page per date, a document
@@ -53,9 +54,12 @@ export function pageMarkdown(p: Page, ws: Workspace, names: Map<string, string>)
   // A template's parentId is its target ("days"), not a page it sits in.
   const template = isTemplate(p)
   const parent = p.parentId && !template ? names.get(p.parentId) : undefined
-  const front = ['---', `daythread-id: ${yamlString(p.id)}`, ...(p.date ? [`date: ${p.date}`] : []), ...(p.url ? [`url: ${yamlString(p.url)}`] : []), ...(parent ? [`parent: ${yamlString(`[[${parent}]]`)}`] : []), ...(template && p.parentId ? [`template-for: ${yamlString(p.parentId)}`] : []), '---']
+  // A row's values are its properties, written as front matter so Obsidian reads them as such.
+  const db = databaseOfRow(ws, p)
+  const values = db ? db.database.properties.flatMap(property => { const v = cellValue(db.database, p, property.id); return isEmptyValue(v) ? [] : [`${yamlString(property.name)}: ${yamlString(valueText(db.database, property.id, v))}`] }) : []
+  const front = ['---', `daythread-id: ${yamlString(p.id)}`, ...(p.date ? [`date: ${p.date}`] : []), ...(p.url ? [`url: ${yamlString(p.url)}`] : []), ...(parent ? [`parent: ${yamlString(`[[${parent}]]`)}`] : []), ...(template && p.parentId ? [`template-for: ${yamlString(p.parentId)}`] : []), ...values, '---']
   const title = p.type === 'daily' && p.date ? p.date : p.title || 'Untitled'
-  const body = [p.url ? `<${p.url}>` : '', blocksMarkdown(editorSeed(p, ws), ws, names)].filter(Boolean).join('\n\n')
+  const body = [p.url ? `<${p.url}>` : '', isDatabase(p) ? databaseMarkdown(ws, p, names) : '', blocksMarkdown(editorSeed(p, ws), ws, names)].filter(Boolean).join('\n\n')
   return `${front.join('\n')}\n\n# ${title}\n${body ? `\n${body}\n` : ''}`
 }
 
@@ -108,6 +112,10 @@ function blockLines(n: EditorNode, ws: Workspace, names: Map<string, string>, as
     }
     case 'divider':
       return asItem ? [] : ['---']
+    case 'database': {
+      const target = typeof props.pageId === 'string' && props.pageId ? names.get(props.pageId) : undefined
+      return target ? [`${asItem ? '- ' : ''}[[${target}]]`] : []
+    }
     case 'pageLink': {
       const target = typeof props.pageId === 'string' && props.pageId ? names.get(props.pageId) : undefined
       if (target) return [`${asItem ? '- ' : ''}[[${target}]]`]
@@ -131,6 +139,26 @@ function blockLines(n: EditorNode, ws: Workspace, names: Map<string, string>, as
     default:
       return text ? [asItem ? `- ${text}` : text] : []
   }
+}
+
+/** A cell as text: option names, a date range with an arrow, a ticked box as "Yes". */
+export function valueText(db: Database, columnId: string, value: CellValue): string {
+  const property = propertyOf(db, columnId)
+  const name = (id: string) => property?.options?.find(o => o.id === id)?.name ?? ''
+  if (value === null || value === false) return ''
+  if (value === true) return 'Yes'
+  if (Array.isArray(value)) return value.map(name).filter(Boolean).join(', ')
+  if (typeof value === 'object') return value.end ? `${value.start} → ${value.end}` : value.start
+  if (property && (property.type === 'select' || property.type === 'status')) return name(String(value))
+  return String(value)
+}
+/** A database page: its rows as a table in page order (title linked to the row's file), one column per property. */
+function databaseMarkdown(ws: Workspace, p: Page & { database: Database }, names: Map<string, string>): string {
+  const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim()
+  const columns = p.database.properties
+  const header = `| Name |${columns.map(c => ` ${cell(c.name)} |`).join('')}`
+  const rows = databaseRows(ws, p.id).map(r => `| ${names.has(r.id) ? `[[${names.get(r.id)}]]` : cell(r.title || 'Untitled')} |${columns.map(c => ` ${cell(valueText(p.database, c.id, cellValue(p.database, r, c.id)))} |`).join('')}`)
+  return [header, `|${' --- |'.repeat(columns.length + 1)}`, ...rows].join('\n')
 }
 
 type Inline = { type?: string; text?: string; styles?: Record<string, unknown>; href?: string; content?: unknown; props?: Record<string, unknown> }
