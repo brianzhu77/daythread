@@ -405,6 +405,49 @@ Success checks: after C6, the screens are unchanged and day open and save meet t
 the first 7 days after cutover he opens Daythread on his phone away from home at least 3 times and no text is lost
 (Bumblebee 24f1324a). C7's scope is re-checked against real phone use after the switch (Lead 0dde676a).
 
+## D. Databases R1 (tracked, not counted)
+
+**Source:** Brian 4b92568d (the request) and a39504f0 ("agreed" to design `docs/design/databases.md` and model
+`docs/design/databases-model.md`, to-dos option 1). Built as task #260 (Roadbuster), target live by Nov 7 (Lead 22c49049).
+Acceptance list from design §13 and §15, plus the R1 contents in §14. Relation, formula, linked views, Board, Group and
+To-dos as a source are R2 or later and are not checked here.
+
+**Two PRs (Roadbuster 8e4999d0).** PR 1 (storage and domain) may go live alone because he can't see it. PR 2 (everything
+he sees) goes live as one piece, and `/` Database is not offered before then. A row is `built` only when it's live and
+the reviewer's evidence is linked. Status values as above.
+
+| ID | Check | PR | Status |
+| --- | --- | --- | --- |
+| R1-1 | **Invisible and safe.** After PR 1 is live, nothing he sees changes: no `/` Database, no Page/Database menu, his day opens and saves as before, and carry-over, the day draft and Tasks are untouched. The four columns are added by `init` (a second start does nothing), and a build without them leaves them alone when it saves. Backup before release (model §6). | 1 | missing |
+| R1-2 | **`/` Database** (also `database`, `table`, `db`, `数据库`, `表格`) makes an inline database at once, with no picker until linked views ship: "Untitled database" with the caret in it, one Table view, one Name property, no rows, and `+ New`. Enter in the title goes to a first row's Name cell. Not offered inside a synced block or a draft band (§3.1). | 2 | missing |
+| R1-3 | **Full page from Pages.** The `+` on Pages and in the desktop sidebar offers Page (Enter takes it) and Database. Database makes a database page at that level and opens it with the caret in its title (§3.1). | 2 | missing |
+| R1-4 | **Inline ↔ full page.** Turn into page replaces the table in place with a page card reading "Database · N rows". Turn into inline brings the table back. Each takes one Undo. A database made from Pages has no Turn into inline. Open as page (⤢ or the title) and Back return to the same scroll (§3.2). | 2 | missing |
+| R1-5 | **Moving keeps the database.** Dragging the block, ⌥⇧↑↓, and an IME repair next to it keep it the home block, with nothing sent to Trash. Cutting the home block shows "Reading list is now its own page · paste to put it back", and pasting makes it home again. A cut he never pastes loses nothing (§9.1, Lead 7b3b9664). | 2 | missing |
+| R1-6 | **The table at 1280** (§4.1): title, `Table ⌄` and `⋯` always shown; the filter line only when the view filters or sorts, with editable chips and `×`; Name pinned, sideways scroll inside the block with a fade; column widths draggable; 25 rows inline and 100 on a full page, then "Show 25 more · Open as page". | 2 | missing |
+| R1-7 | **The table at 390** (§4.2): 44 px rows, Name pinned, `›` hint. A tap on Name opens the row, and a tap on any other cell opens that property's sheet. Nothing is edited in the table itself. `+ New` makes a row and opens it with the caret in its title. | 2 | missing |
+| R1-8 | **Full page** (§4.3): the database title as the page title, breadcrumb as on any page, no body above the table, up to 1100 px wide at 1280. | 2 | missing |
+| R1-9 | **Elsewhere** (§4.4): sidebar, Pages, Subpages and Move show the database with the grid icon and never its rows. Search and `[[` find rows by title and text values, shown as "Title · Reading list". | 2 | missing |
+| R1-10 | **A row is a page** (§5): it opens full page at both widths; Back tints the row for 1 s; the property list on top (more than 4 empty fold into one line); the body is an ordinary page. **A to-do in a row body carries over and shows in Tasks and the day draft like any to-do.** The row's `⋯` has Copy link, Duplicate row and Delete row, and no Move to…. | 2 | missing |
+| R1-11 | **Rows** (§12): drag to reorder only in an unsorted view; can't be dragged out of the database; Duplicate copies values and body with " (copy)"; Delete acts at once with "Row deleted · Undo"; Trash shows "· from Reading list"; restoring a row whose database is in Trash restores the database too; several rows at 1280 get the "3 rows · Edit property ▾ · Delete" bar. | 2 | missing |
+| R1-12 | **The 8 types** (§6.1): Text; Number ("Numbers only", Esc puts the old value back); Select (Create "x"); Multi-select (Done closes); Status (dot from its group, always a value); Date (our picker, End date and Include time); Checkbox (**a plain square, not the task tick**, ticks in place with no caret, keyboard or scroll); URL (a link, the pencil edits, nothing refused). No colour on options. | 2 | missing |
+| R1-13 | **Changing properties** (§6.2): add from the header `+`, `+ Add property` or `⋯`; Delete acts at once with Undo and the values return; a type change says how many values didn't convert, with Undo, and changing back restores them even after Undo is gone; deleting an option says how many rows lost it, with Undo; Name can't be deleted, hidden or retyped. | 2 | missing |
+| R1-14 | **Views, filter, sort** (§7, Table only): `Table ⌄` lists views with Rename, Duplicate, Delete, and the last view has no Delete. Filter with "all rules match" and the conditions for the 8 types; several sorts in drag order; properties shown and reordered. Which view a block shows is per device and never saves or takes Undo. A new row in a filtered view gets the values that keep it visible, otherwise "Added · hidden by this view's filter · Show" (§7.4). | 2 | missing |
+| R1-15 | **Keys** (§10, §15): ↓/↑ selects the whole block as one stop; Enter goes to the first cell; Backspace on the selected home block moves the database and its rows to Trash with "… and its N rows moved to Trash · Undo"; arrows, Tab, Esc twice inside; **no key reaches the page editor, including Pinyin composition**; ⌘Z undoes the last thing where his focus is; a text cell saves on Enter, blur or 1 s idle, never per key; pasting several lines puts in the first, with "Pasted the first line only". | 2 | missing |
+| R1-16 | **Every R1 state in §13:** no rows; no match ("No rows match this view · Clear filter"); filter on a deleted property struck through, sort on one dropped; no loading state of its own; offline reading; **offline cell edit keeps his value in `--warn` with "1 change not saved · Retry", Undo restores, never a silent revert**; offline row body uses kept drafts; same cell changed elsewhere ("… changed in another tab · yours was 4 · Use mine"); different cells both kept; open row or database page deleted elsewhere shows "This page is in Trash · Restore"; long cell ellipsis; "Untitled" title; many columns on the phone; the row caps; a table inside a row page. Not in R1: relation target in Trash, formula error. | 2 | missing |
+| R1-17 | **Gates before release** (§15): on a copy of his real data at 390 and 1280 with the built app; the alignment gate at 0 fail / 0 missing, with the title on the text column and `+ New` on the Name column; on the native Simulator in the Home Screen app, every sheet, the keyboard only in sheets with a text field, a checkbox tick without the keyboard (B72, B77), and sideways scroll that doesn't drag the page. | 2 | missing |
+| R1-18 | **His days don't change.** With no database on a page, day open, save, carry-over, the day draft, `ensure-day` and Tasks behave and perform as before. A 25-row inline table on a day page renders at 390 within the budget Roadbuster measures (§16, point 3). Export includes each database's rows and values (model §6). | 2 | missing |
+
+**Open before PR 2 (Bumblebee):** in R1, copying a database block or choosing Duplicate is meant to make a linked view
+(§9.1), and linked views come in R2. PR 2 should state what copy and Duplicate do until then. Whatever it is, it must
+not quietly make a second database or drop the block. A page card to the same database would be enough.
+
+**Success check after release (Bumblebee's usage read, his workspace only, read-only):** within 7 days of PR 2 going
+live: did he make a database, inline or full page, and from `/` or `+`? How many rows and properties after a week? Did
+he edit it on two or more different days? Did "not saved · Retry", "Show 25 more", "hidden by this view's filter", or a
+type-change Undo show up? Was a database deleted soon after he made it (a sign it was made by mistake)? Any lost value
+is a regression. If he makes none in 7 days, I'll report that as evidence for releasing R2 (to-dos and linked views on
+day pages) sooner, not as a scope cut (Brian 57deaed7).
+
 ## C. Open questions for Brian
 
 Asked 2026-10-19 02:18Z (9e538364 572b3c3a); Brian answered 02:20Z (a4fd5686). Re-ask any future question within 24 h if unanswered.
