@@ -437,9 +437,9 @@ the reviewer's evidence is linked. Status values as above.
 | R1-17 | **Gates before release** (§15): on a copy of his real data at 390 and 1280 with the built app; the alignment gate at 0 fail / 0 missing, with the title on the text column and `+ New` on the Name column; on the native Simulator in the Home Screen app, every sheet, the keyboard only in sheets with a text field, a checkbox tick without the keyboard (B72, B77), and sideways scroll that doesn't drag the page. | 2 | missing |
 | R1-18 | **His days don't change.** With no database on a page, day open, save, carry-over, the day draft, `ensure-day` and Tasks behave and perform as before. A 25-row inline table on a day page renders at 390 within the budget Roadbuster measures (§16, point 3). Export includes each database's rows and values (model §6). | 2 | missing |
 
-**Open before PR 2 (Bumblebee):** in R1, copying a database block or choosing Duplicate is meant to make a linked view
-(§9.1), and linked views come in R2. PR 2 should state what copy and Duplicate do until then. Whatever it is, it must
-not quietly make a second database or drop the block. A page card to the same database would be enough.
+**Copy and Duplicate in R1 (Jazz f9468d22, Bumblebee yes):** copying a database block and pasting it makes a page card
+to the same database, not a second database. Cut and paste still moves it. Duplicate isn't in the block's menu until R2
+brings linked views. Checked under R1-5.
 
 **Success check after release (Bumblebee's usage read, his workspace only, read-only):** within 7 days of PR 2 going
 live: did he make a database, inline or full page, and from `/` or `+`? How many rows and properties after a week? Did
