@@ -434,7 +434,9 @@ The Lead recommends **option 1**, so this is option 1's design, with the differe
     line.
 - **Opening a to-do row goes to its line on its page**, with the line highlighted the same way a line link does today.
   A to-do has no body of its own, so there's no row page.
-- **+ New** in a To-dos view makes a task **wherever `add-task` puts a to-do today** (Roadbuster confirms where). The
+- **+ New** in a To-dos view makes a task on **today's page, planned for today, where carried and planned to-dos already go** (Roadbuster
+  e1e7bffd: with the other to-dos under the outermost heading above the first to-do, which is Morning Planning on his
+  template; under the first heading if there are no to-dos yet; at the top if there's no heading). The
   row appears at once, and the notice says **"Added · Open"**, where Open goes to its line.
 - **Option 2** (custom properties on to-dos): the same, but `+` is shown, and extra properties appear on the to-do's row
   in the table. They're edited in the table or popover only, since there's still no row page.
