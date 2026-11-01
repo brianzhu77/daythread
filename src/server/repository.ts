@@ -1,4 +1,5 @@
 import type { Command, CommandResult, Workspace } from "../domain/types";
+import type { WorkspaceChanges } from "../domain/workspace-changes";
 
 /** Adapter boundary: atomic revision check + domain mutation + receipt persistence.
  * Replays with the same operationId and action return the original receipt even at an old revision.
@@ -10,6 +11,8 @@ export interface WorkspaceRepository {
 
 /** What the server needs from a store. Implemented by SQLite and Postgres. */
 export interface ServerRepository extends WorkspaceRepository {
+  /** Also what the command changed, for a browser that applies changes instead of taking the whole workspace. */
+  execute(command: Command): Promise<CommandResult & { changes: WorkspaceChanges }>;
   /** A server-only command applied to the workspace as it is now (the link preview): not refused because he typed meanwhile. */
   executeOnLatest(operationId: string, action: Command["action"]): Promise<CommandResult>;
 }
