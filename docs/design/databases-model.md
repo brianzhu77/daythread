@@ -144,8 +144,9 @@ All of these run inside existing commands, on the page that changed, in one oper
 3. **Deleting the home block** in a save of the host page: the database and all its rows go to Trash as one batch
    (`trashId` = the save's operation id), so ⌘Z or Trash's Restore brings them back together. The save's receipt says
    so ("Reading list moved to trash · 12 rows").
-   - **A move inside the page is never a delete.** Our drop handler, ⌥⇧↑↓ and the IME repair keep block ids, so the
-     home block id survives them; tests cover each (section 9). As a second guard, if the home block id is gone but
+   - **A move inside the page is never a delete.** From reading the code, our drop handler and ⌥⇧↑↓ re-insert the
+     blocks themselves and the IME repair keeps the line's id (`page-editor.tsx` ~1520, ~1961, ~1711), so the home block
+     id should survive them. Not yet tested; the tests in section 9 must show it. As a second guard, if the home block id is gone but
      the same save still holds a `database` block for that database in that page, that block becomes the home
      (`homeBlockId` updated, its own view dropped) and nothing is trashed. A database is trashed only when no block of
      it is left in its page.
