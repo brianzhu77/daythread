@@ -148,7 +148,8 @@ All of these run inside existing commands, on the page that changed, in one oper
      blocks themselves and the IME repair keeps the line's id (`page-editor.tsx` ~1520, ~1961, ~1711), so the home block
      id should survive them. Not yet tested; the tests in section 9 must show it. As a second guard, if the home block id is gone but
      the same save still holds a `database` block for that database in that page, that block becomes the home
-     (`homeBlockId` updated, its own view dropped) and nothing is trashed. A database is trashed only when no block of
+     (`homeBlockId` updated; its own view is appended to `database.views` and shown, so he keeps the filter he was
+     looking at) and nothing is trashed. Notice per Jazz §9.3: "Reading list now lives in the view below · Undo". A database is trashed only when no block of
      it is left in its page.
 4. **Deleting any other `database` block** removes only that view.
 5. **Pasting or duplicating a block** gives it a new block id, so it is a linked view (rule 4 applies to it).
