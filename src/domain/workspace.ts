@@ -4,7 +4,7 @@ import { broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyT
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget } from "./day-template.ts";
-import { isTrashed, moveRefusal, subtreeIds } from "./page-tree.ts";
+import { isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
 
@@ -497,13 +497,16 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       return { message: "Page renamed", entityId: p.id };
     }
     case "move-page": {
-      const refusal = moveRefusal(state, action.pageId, action.parentId);
+      const refusal = moveRefusal(state, action.pageId, action.parentId, action.beforeId);
       if (refusal) throw new DomainError(refusal);
+      const before = moveBefore(state, action.pageId, action.parentId, action.beforeId);
       const index = state.pages.findIndex((p) => p.id === action.pageId);
       const [moved] = state.pages.splice(index, 1);
+      const reordered = (moved!.parentId ?? null) === action.parentId;
       if (action.parentId) moved!.parentId = action.parentId; else delete moved!.parentId;
-      state.pages.push(moved!);
-      return { message: action.parentId ? "Page moved" : "Moved to top level", entityId: moved!.id };
+      // Sibling order is page-list order, so the page goes just before its new next sibling, or at the end.
+      state.pages.splice(before ? state.pages.indexOf(before) : state.pages.length, 0, moved!);
+      return { message: action.parentId || reordered ? "Page moved" : "Moved to top level", entityId: moved!.id };
     }
     case "delete-page": {
       const p = page(state, action.pageId);
