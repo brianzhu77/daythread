@@ -95,6 +95,11 @@ Status: research, not a decision. Facts are from `main` at d0861c3f and from the
 - A **linked view** (the same data shown in another page) is the same block pointing at a database whose `parentId` is
   elsewhere. Deleting a linked view's block must not trash the database. The block needs to know whether it is the
   database's home: `pageId`'s parent is this page, and this is the first such block.
+- Bumblebee's research (`bb/notion-db-research` c09a4810) confirms Notion keeps a linked view's filters, sorts and
+  groups local while edits go to the original. Here that means a linked view's settings live with its block (a view
+  object in the block's props, or a view list on the host page), not in the database's `views`, so a filtered view on
+  a day page never changes the database's own views. Notion's extra layer, several data sources in one database, is
+  not needed for this: one database page holds one schema. It can be added later as more than one schema per page.
 
 ### 3.4 Where it is stored
 
