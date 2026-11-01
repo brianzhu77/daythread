@@ -24,6 +24,13 @@ export interface Page {
   handoffDone?: boolean;
   /** Day pages: the evening review was saved. */
   reviewSaved?: boolean;
+  /** A database page: its properties and views (docs/design/databases-model.md). Absent on every other page. */
+  database?: import("./database.ts").Database;
+  /** A row (a page whose parent has `database`): its stored values, by property id; read through `readValue`. */
+  values?: import("./database.ts").RawValues;
+  /** Rows: when it was made, and when its title or a value last changed (ISO time, from the command's `at`). */
+  createdAt?: string;
+  editedAt?: string;
 }
 
 export interface Task {
@@ -77,7 +84,13 @@ export type Action =
       singleDeleteIds?: string[];
       /** Tasks whose rows were cut (a move): never deleted or paused by this save. */
       cutTaskIds?: string[];
+      /** Inline databases this save turns into full pages (Turn into page, a cut): kept, never trashed with their home block. */
+      detachDatabaseIds?: string[];
+      /** Database blocks this save makes the home of a database with none (Turn into inline, a paste after a cut). */
+      adoptDatabaseBlocks?: { blockId: string; pageId: string }[];
       today?: LocalDate;
+      /** ISO time: when a deleted home block trashes its database. */
+      at?: string;
     }
   | { type: "ensure-day"; date: LocalDate }
   | { type: "add-task"; pageId: string; title: string; plannedOn?: LocalDate | null; attentionOn?: LocalDate | null; deadlineOn?: LocalDate | null }
@@ -114,6 +127,15 @@ export type Action =
   | { type: "set-draft"; pageId: string; status: import("./day-draft.ts").DraftStatus; items: import("./day-draft.ts").DraftItem[]; moreOpen: string[]; allowedTaskIds: string[] }
   | { type: "apply-draft"; pageId: string; itemIds: string[]; edits?: Record<string, string>; today?: LocalDate }
   | { type: "skip-draft"; pageId: string; itemIds: string[] }
+  /** A database page with the default schema; `homeBlockId`: its `database` block in the parent page, null for a full page. */
+  | { type: "create-database"; pageId: string; parentId?: string | null; homeBlockId: string | null; title: string }
+  | { type: "change-database"; pageId: string; change: import("./database.ts").DatabaseChange }
+  /** A row, at the end or before `beforeId`; `copyOf`: Duplicate row, copying that row's values and body. */
+  | { type: "add-row"; databaseId: string; pageId: string; title: string; values?: Record<string, import("./database.ts").Json>; beforeId?: string | null; copyOf?: string; at: string }
+  | ({ type: "set-values"; at: string } & import("./database.ts").RowEdit)
+  | { type: "set-values-many"; items: import("./database.ts").RowEdit[]; at: string }
+  /** Several pages to the trash as one batch and one Undo (rows selected together). */
+  | { type: "delete-pages"; pageIds: string[]; at: string }
   | { type: "set-timezone"; timezone: string }
   | { type: "undo"; targetOperationId: string };
 
