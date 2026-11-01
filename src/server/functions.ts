@@ -20,13 +20,19 @@ export const loadWorkspace = createServerFn({ method: "GET" })
       throw error;
     }
   });
+/**
+ * `changes: true` (this build's tabs): the reply carries what the command changed, not the whole workspace, which made
+ * every reply as big as the workspace. A tab from an older build doesn't send it and gets the workspace as before.
+ */
 export const runCommand = createServerFn({ method: "POST" })
-  .validator((input: unknown) => commandSchema.parse(input))
+  .validator((input: unknown) => commandSchema.extend({ changes: z.literal(true).optional() }).parse(input))
   .handler(async ({ data }) => {
     const { getRepository } = await import("./storage");
     const [{ forBrowser }, { currentOwner }] = await Promise.all([import("./browser-workspace"), import("./auth/request-owner")]);
-    const result = await getRepository().execute(data);
-    return { ...result, workspace: forBrowser(result.workspace), owner: currentOwner() ?? "local" };
+    const { changes: wantsChanges, ...command } = data;
+    const { changes, receipt, workspace } = await getRepository().execute(command);
+    const owner = currentOwner() ?? "local";
+    return wantsChanges ? { receipt, changes, owner } : { receipt, workspace: forBrowser(workspace), owner };
   });
 
 /**

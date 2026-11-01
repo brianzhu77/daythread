@@ -4,6 +4,7 @@ import { Button, toast } from '@heroui/react'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { Action, DayView, LocalDate, Receipt, Task, Workspace } from '../domain/types'
 import { getDayView } from '../domain/workspace'
+import { applyChanges } from '../domain/workspace-changes'
 import { loadWorkspace, runCommand } from '../server/functions'
 import { configureDebug, debugClient } from '../lib/debug'
 import { sampleActions } from './fixture'
@@ -36,12 +37,16 @@ const serverTransport: Transport = {
     void offlineCopy.remember(response.workspace, { owner: response.owner, startedAt })
     return response.workspace
   },
+  // The reply carries what the command changed (workspace-changes.ts), applied to the copy it was sent from. When that
+  // copy isn't the one the changes start from (a replay, a reply from an older build), the workspace is loaded whole.
   run: async (workspace, action, operationId = newOperationId()) => {
     const startedAt = Date.now()
-    const { owner, ...result } = await runCommand({ data: { operationId, expectedRevision: workspace.revision, action } })
-    knownOwner = owner
-    void offlineCopy.remember(result.workspace, { owner, startedAt })
-    return result
+    const response = await runCommand({ data: { operationId, expectedRevision: workspace.revision, action, changes: true } })
+    knownOwner = response.owner
+    const next = response.changes ? applyChanges(workspace, response.changes) : response.workspace ?? null
+    if (!next) return { workspace: await serverTransport.load(), receipt: response.receipt }
+    void offlineCopy.remember(next, { owner: response.owner, startedAt })
+    return { workspace: next, receipt: response.receipt }
   },
 }
 
