@@ -11,6 +11,13 @@ if(process.argv.includes('--page')) {
   run({type:'create-document',pageId:'review',title:'Review page',body:'Own text'});
   run({type:'create-document',pageId:'target',title:'Target page',body:'Destination'});
 }
+if(process.argv.includes('--mid') || process.argv.includes('--task')) {
+ const page=ws.pages.find(p=>p.id==='review');
+ const line={id:'slot',type:process.argv.includes('--task')?'task':'paragraph',props:process.argv.includes('--task')?{taskId:'editor-task:guard',role:'reference',planDate:''}:{},content:[],children:[]};
+ const doc=[{id:'own',type:'paragraph',props:{},content:[{type:'text',text:'Own text',styles:{}}],children:[]},line];
+ if(process.argv.includes('--mid'))doc.push({id:'next',type:'heading',props:{level:2},content:[{type:'text',text:'Untouched heading',styles:{}}],children:[]});
+ run({type:'save-editor',pageId:'review',expectedContent:pageContentKey(page),document:JSON.stringify(doc),today:'2026-11-01'});
+}
 if(process.argv.includes('--native')) {
   const page=ws.pages.find(p=>p.id==='review');
   const doc=Array.from({length:24},(_,i)=>({id:`native-${i}`,type:'paragraph',props:{},content:[{type:'text',text:i===20?'':`Test line ${i}`,styles:{}}],children:[]}));

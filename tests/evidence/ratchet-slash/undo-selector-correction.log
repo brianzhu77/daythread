@@ -1,0 +1,44 @@
+(node:29289) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium slash
+(node:29341) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium typed
+(node:29348) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium mid
+(node:29444) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium task
+(node:29451) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS chromium page
+(node:29462) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS webkit slash
+(node:29479) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS webkit typed
+(node:29516) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
++ actual - expected
+
++ 'Untouched heading\n'
+- 'Untouched heading'
+                    ^
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-slash/tests/evidence/ratchet-slash/undo-final.mjs:28:25 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 'Untouched heading\n',
+  expected: 'Untouched heading',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
