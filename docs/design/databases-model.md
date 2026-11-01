@@ -281,10 +281,34 @@ values on rows deleted and undone in that build. Acceptable, and the backup befo
   cell, offline cell edit.
 - Scale: `tests/evidence/database-fit/scale.ts` again with step 0, to show the per-command bytes no longer grow.
 
-## 10. Open, waiting on the design
+## 10. Settled by Jazz's design (`design/databases` de899807), and what it adds to the model
 
-1. Default schema and whether a new database starts with empty rows.
-2. Which views and property types are in the first version (the model has room for the rest).
-3. Whether linked views ship in the first version (cost above).
-4. Whether a database's full page shows a body above its views.
-5. Whether a row can be dragged out of its database (refused for now).
+Answered: default schema is Name only, no empty rows (§3.1); R1 is Table with Text, Number, Select, Multi-select,
+Status, Date, Checkbox, URL (§14); linked views and To-dos in R2; a full-page database has no body (§4.3); a row can't
+be dragged out (§12). Views show as a `Table ⌄` dropdown, not tabs; the open view stays a local preference.
+
+What the design adds:
+
+1. **The empty-page rule** (§3.1): `/` Database on an ordinary page with an otherwise empty body turns that page into
+   the database: `make-database { pageId }` sets `database` on it and empties its document. Refused (and the item
+   makes an inline database instead) for day pages, templates, rows, **and pages that already have subpages**, since
+   those would silently become rows.
+2. **Turn into page / inline** (§3.2) swaps the home block for our `pageLink` card and back. In the model: the save
+   that swaps them carries `detachDatabaseIds` (to the card) or `adoptDatabaseBlocks` (back to the table).
+3. **Deleting an option** "clears it from every row" (§6.2): with lazy reads the rows keep the id and read as empty,
+   which looks the same. The notice's count is the number of rows holding it. Undo restores the option, and the rows
+   never changed.
+4. **Status always has a value** (§6.1): `readValue` returns the first To-do option for an empty status.
+5. **Restoring a row whose database is in Trash restores the database too** (§12). Today `restorePages` sends a page
+   with a trashed parent to the top level. For a row it must instead restore the database page (which itself goes to
+   the top level if its own parent is still in Trash). Tested.
+6. **Duplicate row** (§12): `add-row` takes an optional `document` and `values`, so duplicating is one command.
+7. **A new row in a filtered or grouped view** (§7.4): values that count as "one value" and are prefilled: select or
+   status `is`, checkbox `is`, multi-select or relation `contains` (that one option or row), text `is`, number `=`,
+   date `is` (fixed or relative), and the group's value. Anything else creates the row unfilled, with the "hidden by
+   this view's filter · Show" notice.
+8. **A database in a template** (§3.1): its parent is the template page, so its rows sit under a template. Fine for the
+   model, because only the template's own document is copied, and the copy's block is a linked view.
+9. **Later types, flagged:** **Files** (R3) needs file storage, which we don't have (no uploads anywhere today). That is
+   new infrastructure (Cloudflare R2 or Supabase Storage, sizes, deletes), more than a property type. **ID** (R3) needs
+   a counter on the database (`nextId`), so IDs never repeat after deletes.
