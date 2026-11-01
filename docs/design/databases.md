@@ -66,7 +66,8 @@ database meets Daythread's days.
   That's one tap to what he meant if he wanted to write on the page too (Bumblebee 3b04290d). ⌘Z still undoes the
   whole thing. This is how a full-page
   database is made from Pages: `+`, then a title, then `/` Database. Notion does the same with "Get started with →
-  Table". Day pages, templates and row pages never turn into a database, so there the item always makes an inline one.
+  Table". Day pages, templates, row pages, and **pages that already have subpages** (they'd silently become rows, Roadbuster
+  13301ca1) never turn into a database, so there the item always makes an inline one, with no notice.
 - **Where it's not offered:** inside a synced block, and inside a draft band.
 - **In a template:** the database is made there, and the template is its home. Each new page made from the template
   gets a **linked view** of it, never a fresh database (Roadbuster's model). The template shows one line under the
@@ -488,7 +489,8 @@ The estimates are Roadbuster's (`database-fit.md` §7) unless marked as mine.
 | --- | --- | --- |
 | **R1** | **Database itself:** `/` Database (new only), the empty-page rule, inline and full page, Turn into page/inline, cut and paste, **Table** view, properties **Text, Number, Select, Multi-select, Status, Date, Checkbox, URL**, a row opening as a page, filter/sort (§7.3), properties shown and reordered, everything in §10, §12 and §13 except relation and formula. Roadbuster's "send only what changed" PR goes first, once Brian says yes (Lead 7b3b9664). | about 5.5–6 days (Roadbuster). It's the smallest version that's a real Notion-like database at both widths. |
 | **R2** | **Linked views** (`/` picker, copy/paste, "this page's day", templates) plus **To-dos as a source** (§11, option 1) plus **Board** and **Group** | This is where databases meet days and to-dos. Linked views are about 1 day and To-dos about 1 day (Roadbuster). Board with Group is about 1 day (Roadbuster's "later" list). |
-| **R3** | **Calendar, List, Gallery**; the filter's **"any rule matches"** switch; **Relation, Rollup**; Created/Edited time, ID, Email, Phone, Files; row **templates** (`+ New ⌄`); **wrap** per property; several rows selected on the phone | Ordered by his use after R2 |
+| **R3** | **Calendar, List, Gallery**; the filter's **"any rule matches"** switch; **Relation, Rollup**; Created/Edited time, ID, Email, Phone, Files (**needs file uploads, which don't exist anywhere yet: new
+  infrastructure**, Roadbuster 13301ca1); row **templates** (`+ New ⌄`); **wrap** per property; several rows selected on the phone | Ordered by his use after R2 |
 | **R4** | **Timeline, Formula**, repeating row templates, CSV export/import, pasting TSV, moving a row to another database, **side peek** at 1280 (only if he's seen opening many rows one after another) | the largest and least certain |
 | **Later, not yet ordered** | **Forms, Automations, Buttons, Place**, and **Chart** | These are in scope. They wait for a design pass of their own, and his use orders them, with nothing cut for lack of evidence (Brian 57deaed7, Bumblebee 3b04290d). |
 | **Not planned** | Person, Created by, Edited by, permissions, "only for me" filters, several data sources in one database | Each needs more than one person in a workspace, or the Lead's frame dropped it (several data sources). |
@@ -510,6 +512,15 @@ The estimates are Roadbuster's (`database-fit.md` §7) unless marked as mine.
   - ⌘Z goes where §10 says.
 
 ## 16. Open, for Lead and Roadbuster (not for Brian)
+
+Roadbuster answered 1–3 in 13301ca1:
+- ⌘Z routing is buildable. With a single Undo slot, ⌘Z in a cell after he has typed in the page says "Can't undo ·
+  edited since", which is today's rule.
+- "One value" for prefill: select/status *is*, checkbox *is*, multi-select/relation *contains*, text *is*, number *=*,
+  date *is* (fixed or relative), and the group's value.
+- The caps stay as a start, and he'll measure render at 390 in R1's tests.
+
+The original questions:
 
 1. ⌘Z routing between cell edits and the editor (§10): is "the last thing where the focus is" buildable?
 2. Prefilling values for a new row in a filtered view (§7.4): which filter conditions count as "one value"?
