@@ -116,11 +116,12 @@ one property would be 500 round trips to Supabase inside one command. With lazy 
 
 ```ts
 // BlockNote block, content 'none'
-{ type: 'database', props: { pageId: string, view: string /* JSON View, linked views only */, viewId: string /* the tab shown, home block */ } }
+{ type: 'database', props: { pageId: string, view: string /* JSON View, linked views only */ } }
 ```
 
 - **Home block:** `block.id === db.database.homeBlockId` and the block is in the database's parent page. It shows the
-  database's own views (`viewId` remembers the open tab, a per-block preference, saved with the page).
+  database's own views as tabs. The open tab is a local preference per block on this device (like Notion), never a
+  page save, so switching tabs doesn't write or take the Undo slot (Lead 7b3b9664).
 - **Linked view:** every other block with that `pageId`. Its `view` is a JSON string (BlockNote props are scalars) with
   one `View`. Changing its filter or sort is an edit of the host page, saved with the host page, so it gets the host
   page's save, Undo and offline drafts for free and never changes the database's own views.
@@ -143,6 +144,11 @@ All of these run inside existing commands, on the page that changed, in one oper
 3. **Deleting the home block** in a save of the host page: the database and all its rows go to Trash as one batch
    (`trashId` = the save's operation id), so ⌘Z or Trash's Restore brings them back together. The save's receipt says
    so ("Reading list moved to trash · 12 rows").
+   - **A move inside the page is never a delete.** Our drop handler, ⌥⇧↑↓ and the IME repair keep block ids, so the
+     home block id survives them; tests cover each (section 9). As a second guard, if the home block id is gone but
+     the same save still holds a `database` block for that database in that page, that block becomes the home
+     (`homeBlockId` updated, its own view dropped) and nothing is trashed. A database is trashed only when no block of
+     it is left in its page.
 4. **Deleting any other `database` block** removes only that view.
 5. **Pasting or duplicating a block** gives it a new block id, so it is a linked view (rule 4 applies to it).
 6. **Turn into page** (block menu): the editor removes the home block and the save carries
@@ -262,13 +268,15 @@ values on rows deleted and undone in that build. Acceptable, and the backup befo
 ## 9. Tests (planned, none written yet)
 
 - Domain, `node --test`: every command's happy path and refusal; `readValue` for each type and each type change, and
-  back; placement rules 3 to 7 including cut-and-paste and a never-pasted cut; Undo of each command restores exactly
+  back; placement rules 3 to 7 including cut-and-paste, a never-pasted cut, and the re-home guard (home id gone, another
+  block of it still in the page); Undo of each command restores exactly
   (including a trashed database with rows); `viewRows` filters, sorts, groups, relative dates; `isRow` exclusions;
   revision-only refusal then resend for `set-values`; export.
 - Storage: the column migration on a fresh schema and on one that already has them, on embedded Postgres in a
   throwaway `daythread_check*` schema; a page saved by a build without the columns keeps its values.
 - Browser (Playwright, Chromium and WebKit at 1280 and 390): create from `/`, type in cells, IME in a cell, Undo, open
-  a row, delete the home block and ⌘Z, cut and paste to another page, two tabs editing different cells and the same
+  a row, delete the home block and ⌘Z; **the home block keeps its id and nothing is trashed after a side-menu drag,
+  ⌥⇧↑↓, and an IME composition repair next to it** (Lead 7b3b9664); switching tabs writes nothing; cut and paste to another page, two tabs editing different cells and the same
   cell, offline cell edit.
 - Scale: `tests/evidence/database-fit/scale.ts` again with step 0, to show the per-command bytes no longer grow.
 
