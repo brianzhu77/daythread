@@ -79,7 +79,8 @@ if (scenario === 'seed') {
     ok(/Preparing/.test(await line()), `a hanging ask shows Preparing (${await line()})`)
     await hide(); await show(); await settle()
     ok(asks === 1, `within a minute it is still in flight: no second ask (${asks})`)
-    await p.clock.runFor(61_000)
+    await p.clock.runFor(61_000); await p.waitForTimeout(500)
+    ok(asks === 1 && /Couldn.t draft.*Retry/.test(await line()), `a minute with no reply and no return: Retry shows on its own (Ratchet) (${asks}, ${await line()})`)
     await hide(); await show(); await settle()
     ok(asks === 2 && await hasBand(), `after a minute it is taken as lost: one more ask, then the band (${asks}, ${await line()})`)
   } else if (scenario === 'ready') {

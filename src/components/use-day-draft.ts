@@ -57,6 +57,9 @@ export function useDayDraft(page: Page): DayDraftHook {
     const mine: Ask = { state: 'asking', at: Date.now(), failures }
     setAsk(page.id, mine)
     let outcome: Ask = { state: 'failed', failures: failures + 1 }
+    // A tab he's looking at gets Retry when the reply never comes, without waiting for him to leave and come back
+    // (Ratchet). A reply after that still stores its draft; it just doesn't overwrite this state.
+    const lost = setTimeout(() => { if (asks.get(page.id) === mine) setAsk(page.id, { state: 'failed', failures: failures + 1 }) }, LOST_MS)
     try {
       // The server only computes the draft; storing it goes through this tab's queue, after any save he typed
       // meanwhile, so neither is sent against a revision the other has moved on (Lead 1d5e2e28).
@@ -75,6 +78,7 @@ export function useDayDraft(page: Page): DayDraftHook {
         if (refused) { outcome = { state: 'done' }; return }
       }
     } catch { /* nothing stored: the state line shows Retry, and the next look at the page asks again */ } finally {
+      clearTimeout(lost)
       // A late reply to an ask taken as lost doesn't overwrite the newer one.
       if (asks.get(page.id) === mine) setAsk(page.id, outcome)
     }
