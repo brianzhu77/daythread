@@ -1536,7 +1536,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const past = page.type === 'daily' && !!page.date && page.date < todayIso()
     // A day the screen moved to on its own after midnight waits for him to click in (B46, Jazz).
     const moved = page.type === 'daily' && openedByTurnover(page.date)
-    // Reopened by moving onto a new build: as he left it, with no cursor (new-build.ts).
+    // Reopened by moving onto a new build: the caret goes back where he left it, or stays out on touch (new-build.ts).
     if (target && !jumpTo && !naming && !past && !moved && window.matchMedia('(pointer: fine)').matches && !openedByMove()) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
   }, [editor, jumpTo])
   useEffect(() => {
