@@ -41,6 +41,8 @@ const subscribeAsks = (l: () => void) => { askListeners.add(l); return () => { a
 /** No reply this long after asking (a tab frozen mid-request, Nov 1 07:00Z): the ask is taken as lost and may go again. */
 const LOST_MS = 60_000
 const inFlight = (ask: Ask | undefined): boolean => ask?.state === 'asking' && Date.now() - ask.at < LOST_MS
+/** A draft ask still waiting for its reply in this tab, on any page: a reload waits for it (new-build.ts). */
+export const draftAskPending = (): boolean => [...asks.values()].some(inFlight)
 const failuresOf = (ask: Ask | undefined): number => !ask || ask.state === 'done' ? 0 : ask.state === 'failed' ? ask.failures : ask.failures + 1
 const AUTO_ASKS = 2
 

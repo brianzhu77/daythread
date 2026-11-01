@@ -30,6 +30,10 @@ const hosting = target === 'cloudflare'
     ? [nitro({ preset: 'vercel', vercel: { functions: { regions: ['iad1'], maxDuration: 120 } } })]
     : []
 
+// One id per build, read by the client and the server bundles alike: an open tab whose id differs from the server's
+// moves onto the new build when he comes back to it (new-build.ts). Set before Vite reads its VITE_ variables.
+process.env.VITE_DAYTHREAD_BUILD ??= new Date().toISOString()
+
 // B41: screens aren't split into separate downloads. A split screen fetched its code on first visit, and offline that
 // fetch failed and the router reloaded the whole document: a blank app. The editor isn't split off either
 // (continuous-page.tsx), for the same reason.

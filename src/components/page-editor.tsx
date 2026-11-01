@@ -43,6 +43,7 @@ import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorF
 import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
 import { openedByTurnover } from './use-screen-today'
+import { openedByMove } from './new-build'
 import { fixedOffset, seenArea } from './fixed-coords'
 import { LineRefChip } from './line-ref-chip'
 import { DraftBands, bandGroups, draftBands, fillAnchors, refreshDraftBands, useBandHosts, useDayDraft, useDraftReveal } from './day-draft'
@@ -1540,7 +1541,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const past = page.type === 'daily' && !!page.date && page.date < todayIso()
     // A day the screen moved to on its own after midnight waits for him to click in (B46, Jazz).
     const moved = page.type === 'daily' && openedByTurnover(page.date)
-    if (target && !jumpTo && !naming && !past && !moved && window.matchMedia('(pointer: fine)').matches) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
+    // Reopened by moving onto a new build: the caret goes back where he left it, or stays out on touch (new-build.ts).
+    if (target && !jumpTo && !naming && !past && !moved && window.matchMedia('(pointer: fine)').matches && !openedByMove()) { editor.setTextCursorPosition(target.id, 'end'); editor.focus() }
   }, [editor, jumpTo])
   useEffect(() => {
     const update = () => {
