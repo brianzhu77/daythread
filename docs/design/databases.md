@@ -60,18 +60,12 @@ database meets Daythread's days.
   - no rows, and the line **+ New** under the header row.
 
   Enter in the title moves the caret to a new first row's Name cell. Esc leaves the block selected (§10).
-- **The empty-page rule:** if he chooses `/` Database on an **ordinary page whose body is otherwise empty**, the page
-  **becomes** the database (full page). Notice: **"This page is now a database · Keep it inline"**. Keep it inline
-  turns it back into his page, with the database inline on its first line and the caret on a new line under it.
-  That's one tap to what he meant if he wanted to write on the page too (Bumblebee 3b04290d). ⌘Z still undoes the
-  whole thing. This is how a full-page
-  database is made from Pages: `+`, then a title, then `/` Database. Notion does the same with "Get started with →
-  Table". Day pages, templates, row pages, and **pages that already have subpages** (they'd silently become rows, Roadbuster
-  13301ca1) never turn into a database, so there the item always makes an inline one, with no notice.
+- **`/` Database always makes an inline database.** There's no hidden condition (Lead ac1ed435). A full page is always
+  an explicit choice: **Turn into page** (§3.2).
 - **Where it's not offered:** inside a synced block, and inside a draft band.
 - **In a template:** the database is made there, and the template is its home. Each new page made from the template
-  gets a **linked view** of it, never a fresh database (Roadbuster's model). The template shows one line under the
-  title: **"New days show a linked view of this database"**. This comes with linked views (§9.4).
+  gets a **linked view** of it, never a fresh database (Roadbuster's model). No explanatory line. This comes with
+  linked views (§9.4).
 
 ### 3.2 Inline ↔ full page
 
@@ -80,8 +74,9 @@ database meets Daythread's days.
 - **Turn into page** (`⋯`): the inline table is replaced, in place, by a **page card**: our existing `pageLink` block,
   showing the title and "Database · 12 rows". It's the same as a subpage made with `/` Page. One Undo.
 - **Turn into inline** (on that card's `⋯`): the card becomes the table again. One Undo.
-- A full-page database at the root of Pages (made by the empty-page rule) has no host page, so it has nothing to turn
-  into inline. To show it inside a page, he inserts a linked view.
+- **This is the one way to get a full-page database.** It's made inline, then Turn into page. To put it at the top
+  level of Pages, he uses the page's existing **Move to…**. A database with no host page has nothing to turn back into
+  inline, so its `⋯` doesn't show Turn into inline. To show it inside a page, he inserts a linked view.
 
 ## 4. How a database looks
 
@@ -378,7 +373,6 @@ Remove this view                    linked view only (§9)
 | --- | --- | --- |
 | a **linked view** block | Only that view goes, and the database is untouched. | "View removed · Reading list is still in Books · Undo" |
 | the **home** block | The database and its rows go to Trash, as one entry. | "Reading list and its 42 rows moved to Trash · Undo" |
-| the **home** block, while the same page still has a **linked view** of it | Nothing goes to Trash. That linked view becomes the home (Roadbuster's guard, model e0d29661), and keeps its own filter. | "Reading list now lives in the view below · Undo" |
 | the **host page** of the home block | As today, the page goes to Trash with its subtree, which includes the database. | the existing notice |
 
 **A linked view whose database is in Trash** shows its title and one line: **"Reading list is in Trash · Restore"**.
@@ -432,12 +426,12 @@ The Lead recommends **option 1**, so this is option 1's design, with the differe
 - **Edits go through the task commands he already uses:**
   - the checkbox ticks exactly as on a day page, including its notice;
   - a date is set with the same picker;
-  - **a to-do can't get extra properties.** `+` isn't shown, and **+ Add property** reads "To-dos have fixed
-    properties" in `--ink-3`.
+  - **a to-do can't get extra properties.** Neither `+` nor `+ Add property` is shown, and there's no explanatory
+    line.
 - **Opening a to-do row goes to its line on its page**, with the line highlighted the same way a line link does today.
   A to-do has no body of its own, so there's no row page.
-- **+ New** in a To-dos view makes a task on **today's page, under Other**, the same as typing it there. The row
-  appears at once, and the notice says **"Added to Today · Open"**.
+- **+ New** in a To-dos view makes a task **wherever `add-task` puts a to-do today** (Roadbuster confirms where). The
+  row appears at once, and the notice says **"Added · Open"**, where Open goes to its line.
 - **Option 2** (custom properties on to-dos): the same, but `+` is shown, and extra properties appear on the to-do's row
   in the table. They're edited in the table or popover only, since there's still no row page.
 - **Option 3** (to-dos become rows): opening a to-do opens a row page, and its body exists. On day pages, the task line
@@ -487,7 +481,7 @@ The estimates are Roadbuster's (`database-fit.md` §7) unless marked as mine.
 
 | Release | Contents | Why this order |
 | --- | --- | --- |
-| **R1** | **Database itself:** `/` Database (new only), the empty-page rule, inline and full page, Turn into page/inline, cut and paste, **Table** view, properties **Text, Number, Select, Multi-select, Status, Date, Checkbox, URL**, a row opening as a page, filter/sort (§7.3), properties shown and reordered, everything in §10, §12 and §13 except relation and formula. Roadbuster's "send only what changed" PR goes first, once Brian says yes (Lead 7b3b9664). | about 5.5–6 days (Roadbuster). It's the smallest version that's a real Notion-like database at both widths. |
+| **R1** | **Database itself:** `/` Database (new only), inline and full page, Turn into page/inline, cut and paste, **Table** view, properties **Text, Number, Select, Multi-select, Status, Date, Checkbox, URL**, a row opening as a page, filter/sort (§7.3), properties shown and reordered, everything in §10, §12 and §13 except relation and formula. Roadbuster's "send only what changed" PR goes first, once Brian says yes (Lead 7b3b9664). | about 5.5–6 days (Roadbuster). It's the smallest version that's a real Notion-like database at both widths. |
 | **R2** | **Linked views** (`/` picker, copy/paste, "this page's day", templates) plus **To-dos as a source** (§11, option 1) plus **Board** and **Group** | This is where databases meet days and to-dos. Linked views are about 1 day and To-dos about 1 day (Roadbuster). Board with Group is about 1 day (Roadbuster's "later" list). |
 | **R3** | **Calendar, List, Gallery**; the filter's **"any rule matches"** switch; **Relation, Rollup**; Created/Edited time, ID, Email, Phone, Files (**needs file uploads, which don't exist anywhere yet: new
   infrastructure**, Roadbuster 13301ca1); row **templates** (`+ New ⌄`); **wrap** per property; several rows selected on the phone | Ordered by his use after R2 |
