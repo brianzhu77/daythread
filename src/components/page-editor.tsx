@@ -69,6 +69,17 @@ const pageLink = createReactBlockSpec({ type: 'pageLink', propSchema: { pageId: 
   render: ({ block }) => <PageCard pageId={block.props.pageId} cardId={block.id} url={block.props.url} line={block.props.line} />,
   toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Page</a></p>,
 })()
+// Databases R1 part 1: a `database` block is known to the editor, so a save keeps it whole (dropping its home block
+// would trash the database). Until the table ships it shows as a quiet label; it is also the floor a rollback lands on.
+const database = createReactBlockSpec({ type: 'database', propSchema: { pageId: { default: '' }, view: { default: '' } }, content: 'none' }, {
+  render: ({ block }) => <DatabaseLabel pageId={block.props.pageId} />,
+  toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Database</a></p>,
+})()
+function DatabaseLabel({ pageId }: { pageId: string }) {
+  const { workspace } = useWorkspace()
+  const target = workspace?.pages.find(p => p.id === pageId)
+  return <div className="editor-database-label" contentEditable={false}>{target ? displayPageTitle(target) : 'Database'}</div>
+}
 // A9a (Jazz page-links-states §1): a `[[` link is one inline unit, icon + the page's current title on a quiet chip.
 // Backspace removes it whole (it has no content of its own). It reads its title live, so nothing is stored as text.
 // A11: with `lineId` it's a link to one line on that page (`taskId` when the line is a task row), drawn as a line chip.
@@ -86,7 +97,7 @@ const dateMention = createReactInlineContentSpec({ type: 'dateMention', propSche
   render: ({ inlineContent: { props } }) => <DateChipInPage date={props.date} time={props.time || null} />,
   toExternalHTML: ({ inlineContent: { props } }) => <span>{mentionText({ date: props.date, time: props.time || null }, null)}</span>,
 })
-const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef, dateMention } })
+const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink, database }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef, dateMention } })
 // B4 (F13): a plain line is "Body" and the divider is "Separator", in the / menu and the toolbar's line-type menu alike.
 const dictionary = { ...en, slash_menu: { ...en.slash_menu,
   paragraph: { ...en.slash_menu.paragraph, title: 'Body', aliases: [...en.slash_menu.paragraph.aliases, 'body', 'text', '正文'] },
