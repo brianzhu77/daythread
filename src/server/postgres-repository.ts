@@ -3,6 +3,7 @@
 // the domain command and writes only the rows that changed, in one transaction; the operation's receipt (for replay)
 // and the rows as they were (its inverse, for Undo) go to `operations`. Shot 1's single row is migrated on first start.
 import { applyCommand, createEmptyWorkspace } from '../domain/workspace.ts'
+import { changesBetween, type WorkspaceChanges } from '../domain/workspace-changes.ts'
 import { upgradeWorkspace } from '../domain/convert-v1.ts'
 import type { Command, CommandResult, Receipt, Workspace } from '../domain/types.ts'
 import { todayIn, type ServerRepository } from './repository.ts'
@@ -253,7 +254,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
    * the changed rows, the revision and the operation written. `expected`: the command's own revision check, or the
    * current one for background work.
    */
-  private async apply(command: Command, expected?: 'latest'): Promise<{ result: CommandResult; before: number }> {
+  private async apply(command: Command, expected?: 'latest'): Promise<{ result: CommandResult & { changes: WorkspaceChanges }; before: number }> {
     await this.init()
     return this.sql.transaction(async tx => {
       const { scope, rows, workspace } = await this.read(tx, true)
@@ -274,7 +275,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
       }
       // The browser and the caller get the Undo marker, never the copy, and no receipts: replay lookups are the store's.
       const { undo, ...rest } = after
-      return { result: { ...result, workspace: { ...rest, receipts: {}, ...(undo ? { undo: { operationId: undo.operationId, revision: undo.revision } } : {}) } }, before: workspace.revision }
+      return { result: { ...result, workspace: { ...rest, receipts: {}, ...(undo ? { undo: { operationId: undo.operationId, revision: undo.revision } } : {}) }, changes: changesBetween(workspace, after) }, before: workspace.revision }
     })
   }
 
@@ -282,7 +283,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     await this.init()
     return (await this.read(this.sql, false)).workspace
   }
-  async execute(command: Command): Promise<CommandResult> {
+  async execute(command: Command): Promise<CommandResult & { changes: WorkspaceChanges }> {
     const started = performance.now(), fields = commandLogFields(command)
     debugLog('command.start', fields)
     try {

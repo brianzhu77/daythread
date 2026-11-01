@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { mkdirSync, openSync, closeSync, readFileSync, existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { applyCommand, createEmptyWorkspace } from '../domain/workspace.ts'
+import { changesBetween, type WorkspaceChanges } from '../domain/workspace-changes.ts'
 import { upgradeWorkspace } from '../domain/convert-v1.ts'
 import type { Command, CommandResult, Workspace } from '../domain/types.ts'
 import { todayIn, type ServerRepository } from './repository.ts'
@@ -113,7 +114,7 @@ export class SqliteWorkspaceRepository implements ServerRepository {
       return result
     })
   }
-  async execute(command: Command): Promise<CommandResult> {
+  async execute(command: Command): Promise<CommandResult & { changes: WorkspaceChanges }> {
     const started = performance.now(), fields = commandLogFields(command)
     debugLog('command.start', fields)
     try {
@@ -121,7 +122,7 @@ export class SqliteWorkspaceRepository implements ServerRepository {
         const current = this.read(db)
         const result = applyCommand(current, command)
         if (result.workspace.revision !== current.revision) this.write(db, result.workspace)
-        return { result, before: current.revision }
+        return { result: { ...result, changes: changesBetween(current, result.workspace) }, before: current.revision }
       })
       debugLog('command.finish', { ...fields, beforeRevision: before, afterRevision: result.workspace.revision, elapsedMs: performance.now() - started, result: result.workspace.revision === before ? 'replay' : 'committed' })
       return result
