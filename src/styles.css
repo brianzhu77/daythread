@@ -1581,3 +1581,84 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 .draft-band.is-open-row { color: var(--ink-2); }
 @media (max-width: 599px) { .draft-more-toggle { min-height: 44px; } }
 
+
+/* ---------- Database property editors and cell contents (databases design §6.3) ---------- */
+/* One shell: a popover under the cell at ≥ 900 px (the .app-menu surface), our bottom sheet below that. */
+.property-popover { z-index: 40; display: grid; gap: 4px; padding: 6px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-block); box-shadow: var(--shadow-float); max-height: min(420px, calc(100vh - 16px)); overflow-y: auto; }
+/* An in-cell field lies over its cell and the rows below, outlined like the cell cursor. */
+.property-popover.is-over-cell { padding: 0; border: 0; border-radius: var(--radius-tight); box-shadow: var(--shadow-float), 0 0 0 2px var(--blue); overflow: visible; }
+.property-popover.is-over-cell .property-field { min-height: 36px; padding: 6px 8px; border: 0; border-radius: var(--radius-tight); background: var(--paper); box-shadow: none; }
+.property-popover > div { display: grid; gap: 4px; }
+.property-sheet { margin: 0; }
+.property-sheet-body { display: grid; gap: 8px; }
+.property-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+.property-sheet-title { display: grid; min-width: 0; }
+.property-sheet-title h2 { font-size: var(--text-body); font-weight: var(--weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.property-sheet-title small { font-size: var(--text-meta); color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.property-field { display: block; box-sizing: border-box; width: 100%; min-height: 44px; padding: 8px 10px; font: inherit; font-size: var(--text-row); line-height: 24px; color: var(--ink); background: var(--fill-soft); border: 1px solid var(--line); border-radius: var(--radius-control); resize: none; outline: none; }
+.property-field:focus, .property-field:focus-visible { border-color: var(--blue); outline: none; box-shadow: none; }
+.property-field[aria-invalid=true] { border-color: var(--red); }
+textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); overflow-y: auto; }
+@media (min-width: 900px) {
+  .property-popover:not(.is-over-cell) .property-field { min-height: 36px; padding: 5px 8px; }
+}
+.property-field.is-number { text-align: right; font-variant-numeric: tabular-nums; }
+.property-field-error { margin: 0; padding: 0 8px 4px; font-size: var(--text-meta); color: var(--red); }
+.property-popover.is-over-cell .property-field-error { padding: 4px 8px 6px; background: var(--paper); border-radius: 0 0 var(--radius-tight) var(--radius-tight); }
+.property-number { display: flex; gap: 8px; }
+/* iOS's decimal keypad has no minus sign (§6.3.4). */
+.property-sign { flex: none; width: 44px; height: 44px; border: 0; border-radius: var(--radius-control); background: var(--fill-soft); color: var(--ink); font-size: 20px; }
+
+.property-search { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.property-search .property-field { flex: 1 1 120px; width: auto; }
+.property-options { display: grid; gap: 2px; max-height: calc(8 * 36px); overflow-y: auto; }
+.property-sheet .property-options { max-height: none; }
+.property-row { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; min-height: 44px; padding: 4px 10px; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink); font: inherit; font-size: var(--text-ui); text-align: left; text-decoration: none; cursor: pointer; }
+@media (min-width: 900px) { .property-row { min-height: 36px; } }
+.property-row.active { background: var(--fill); }
+@media (hover: hover) { .property-row:hover { background: var(--fill); } }
+.property-row.checked::after { content: '✓'; margin-left: auto; padding-left: 12px; color: var(--ink); }
+.property-row.is-quiet { color: var(--ink-2); }
+.property-row-hint { margin-left: auto; color: var(--ink-3); font-size: var(--text-meta); }
+.property-empty { margin: 0; padding: 8px 10px; color: var(--ink-3); font-size: var(--text-ui); }
+.property-create { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+.property-options .menu-title { padding: 8px 10px 2px; }
+
+/* Select and Multi-select chips: grey, never coloured (§6.1). */
+.property-chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; height: 22px; padding: 0 6px; border-radius: var(--radius-badge); background: var(--tag-bg); color: var(--tag-ink); font-size: var(--text-small); line-height: 22px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.property-chip.is-removable button { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: -4px; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font-size: 14px; }
+.property-status { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--ink); }
+.property-dot { flex: none; color: var(--ink-2); font-size: 12px; }
+
+.property-reading { margin: 0; padding: 0 10px; font-size: var(--text-meta); color: var(--ink-2); }
+.property-reading.is-not { color: var(--ink-3); }
+.property-calendar { justify-self: center; }
+.property-date-ends { display: grid; gap: 2px; }
+.property-date-end { display: flex; align-items: center; gap: 8px; border-radius: var(--radius-row); }
+.property-date-end.active { background: var(--fill-soft); box-shadow: inset 0 0 0 1px var(--line); }
+.property-date-end > button { flex: 1; display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 10px; border: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-ui); text-align: left; }
+.property-date-end-name { width: 3em; color: var(--ink-2); }
+.property-switches { display: grid; gap: 2px; border-top: 1px solid var(--line); padding-top: 4px; }
+.property-toggle { display: flex; align-items: center; justify-content: space-between; min-height: 44px; padding: 4px 10px; font-size: var(--text-ui); color: var(--ink); }
+@media (min-width: 900px) { .property-toggle, .property-date-end > button { min-height: 36px; } }
+.property-toggle input { appearance: none; position: relative; width: 36px; height: 22px; margin: 0; border-radius: var(--radius-pill); background: var(--gray-6); transition: background var(--dur-fast); }
+.property-toggle input::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--gray-1); box-shadow: var(--shadow-row); transition: transform var(--dur-fast); }
+.property-toggle input:checked { background: var(--ink); }
+.property-toggle input:checked::after { transform: translateX(14px); }
+.property-toggle input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.property-time { min-height: 32px; margin-right: 8px; font: inherit; font-size: var(--text-ui); color: var(--ink); background: none; border: 1px solid var(--line); border-radius: var(--radius-control); padding: 0 6px; }
+
+/* Cell contents (§6.3.2): one line, ellipsis; the cell's own size, cursor and states are the table's. */
+.cell-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell-url { color: var(--blue-text); }
+.cell-number { display: block; text-align: right; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell-chips { display: flex; gap: 4px; min-width: 0; overflow: hidden; }
+.cell-chips .property-chip { flex: none; }
+
+/* The checkbox property: a plain square, not the blue task tick (§6.1, Bumblebee 3b04290d). */
+.property-checkbox { flex: none; display: inline-grid; place-items: center; box-sizing: border-box; width: 16px; height: 16px; min-width: 0; min-height: 0; padding: 0; border: 1.5px solid var(--check); border-radius: var(--radius-tight); background: none; color: var(--ink); cursor: pointer; }
+.property-checkbox svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.property-checkbox.is-checked { border-color: var(--ink-2); }
+.property-checkbox.is-checked svg { opacity: 1; }
+.property-checkbox:disabled { cursor: default; opacity: .6; }
