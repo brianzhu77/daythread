@@ -60,8 +60,12 @@ database meets Daythread's days.
   - no rows, and the line **+ New** under the header row.
 
   Enter in the title moves the caret to a new first row's Name cell. Esc leaves the block selected (§10).
-- **`/` Database always makes an inline database.** There's no hidden condition (Lead ac1ed435). A full page is always
-  an explicit choice: **Turn into page** (§3.2).
+- **`/` Database always makes an inline database.** There's no hidden condition (Lead ac1ed435).
+- **A full-page database is made where pages are made.** The `+` on Pages (and the desktop sidebar's `+`) opens a
+  two-line menu: **Page** (first, and Enter takes it) and **Database**. Database makes a database page at that level
+  and opens it, with the caret in its title. This is one entry point, with no condition and no notice. It costs one
+  extra tap on every new page, which is acceptable at his rate of about one new page a day (13 documents in about two
+  weeks). It answers the case he's most likely to try first, a standalone "Reading list" (Bumblebee 7d888f86).
 - **Where it's not offered:** inside a synced block, and inside a draft band.
 - **In a template:** the database is made there, and the template is its home. Each new page made from the template
   gets a **linked view** of it, never a fresh database (Roadbuster's model). No explanatory line. This comes with
@@ -74,9 +78,9 @@ database meets Daythread's days.
 - **Turn into page** (`⋯`): the inline table is replaced, in place, by a **page card**: our existing `pageLink` block,
   showing the title and "Database · 12 rows". It's the same as a subpage made with `/` Page. One Undo.
 - **Turn into inline** (on that card's `⋯`): the card becomes the table again. One Undo.
-- **This is the one way to get a full-page database.** It's made inline, then Turn into page. To put it at the top
-  level of Pages, he uses the page's existing **Move to…**. A database with no host page has nothing to turn back into
-  inline, so its `⋯` doesn't show Turn into inline. To show it inside a page, he inserts a linked view.
+- **Turn into page and Turn into inline switch between the two.** They don't create anything. A database made from
+  Pages' `+` has no host page, so its `⋯` doesn't show Turn into inline. To show it inside a page, he inserts a linked
+  view.
 
 ## 4. How a database looks
 
@@ -481,7 +485,7 @@ The estimates are Roadbuster's (`database-fit.md` §7) unless marked as mine.
 
 | Release | Contents | Why this order |
 | --- | --- | --- |
-| **R1** | **Database itself:** `/` Database (new only), inline and full page, Turn into page/inline, cut and paste, **Table** view, properties **Text, Number, Select, Multi-select, Status, Date, Checkbox, URL**, a row opening as a page, filter/sort (§7.3), properties shown and reordered, everything in §10, §12 and §13 except relation and formula. Roadbuster's "send only what changed" PR goes first, once Brian says yes (Lead 7b3b9664). | about 5.5–6 days (Roadbuster). It's the smallest version that's a real Notion-like database at both widths. |
+| **R1** | **Database itself:** `/` Database (new only), Pages' `+` → Database, inline and full page, Turn into page/inline, cut and paste, **Table** view, properties **Text, Number, Select, Multi-select, Status, Date, Checkbox, URL**, a row opening as a page, filter/sort (§7.3), properties shown and reordered, everything in §10, §12 and §13 except relation and formula. Roadbuster's "send only what changed" PR goes first, once Brian says yes (Lead 7b3b9664). | about 5.5–6 days (Roadbuster). It's the smallest version that's a real Notion-like database at both widths. |
 | **R2** | **Linked views** (`/` picker, copy/paste, "this page's day", templates) plus **To-dos as a source** (§11, option 1) plus **Board** and **Group** | This is where databases meet days and to-dos. Linked views are about 1 day and To-dos about 1 day (Roadbuster). Board with Group is about 1 day (Roadbuster's "later" list). |
 | **R3** | **Calendar, List, Gallery**; the filter's **"any rule matches"** switch; **Relation, Rollup**; Created/Edited time, ID, Email, Phone, Files (**needs file uploads, which don't exist anywhere yet: new
   infrastructure**, Roadbuster 13301ca1); row **templates** (`+ New ⌄`); **wrap** per property; several rows selected on the phone | Ordered by his use after R2 |
