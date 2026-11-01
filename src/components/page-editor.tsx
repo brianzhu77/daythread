@@ -5,10 +5,12 @@ import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
 import { BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, editorHasBlockWithType, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
+import { en } from '@blocknote/core/locales'
 import { toast } from '@heroui/react'
 import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, LinkToolbarController, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useEditorState, useExtensionState, usePortalElement, useUIMode } from '@blocknote/react'
 import { BlockNoteView, ShadCNDefaultComponents } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
+import { suggestionMenuMiddleware } from './suggestion-menu-placement'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, sectionRange, type EditorNode } from '../domain/editor-document'
@@ -83,12 +85,17 @@ const dateMention = createReactInlineContentSpec({ type: 'dateMention', propSche
   toExternalHTML: ({ inlineContent: { props } }) => <span>{mentionText({ date: props.date, time: props.time || null }, null)}</span>,
 })
 const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef, dateMention } })
+// B4 (F13): a plain line is "Body" and the divider is "Separator", in the / menu and the toolbar's line-type menu alike.
+const dictionary = { ...en, slash_menu: { ...en.slash_menu,
+  paragraph: { ...en.slash_menu.paragraph, title: 'Body', aliases: [...en.slash_menu.paragraph.aliases, 'body', 'text', '正文'] },
+  divider: { ...en.slash_menu.divider, title: 'Separator', aliases: [...en.slash_menu.divider.aliases, 'separator', '---', '分隔线'] },
+} }
 /** Lines a `[[` link can live in (plan §1): never a task row. */
 const linkableLines = new Set(['paragraph', 'bulletListItem', 'numberedListItem', 'heading', 'quote'])
 // B5 Aa (F16): the styles a line can take from the phone toolbar, in the order the panel shows them.
 type LineStyle = 'text' | 'h1' | 'h2' | 'h3' | 'bullet' | 'numbered' | 'todo' | 'quote'
 const lineStyles: { key: LineStyle; label: string; type: string; level?: number }[] = [
-  { key: 'text', label: 'Text', type: 'paragraph' }, { key: 'h1', label: 'Heading 1', type: 'heading', level: 1 },
+  { key: 'text', label: 'Body', type: 'paragraph' }, { key: 'h1', label: 'Heading 1', type: 'heading', level: 1 },
   { key: 'h2', label: 'Heading 2', type: 'heading', level: 2 }, { key: 'h3', label: 'Heading 3', type: 'heading', level: 3 },
   { key: 'bullet', label: 'Bullet', type: 'bulletListItem' }, { key: 'numbered', label: 'Numbered', type: 'numberedListItem' },
   { key: 'todo', label: 'To-do', type: 'task' }, { key: 'quote', label: 'Quote', type: 'quote' },
@@ -362,7 +369,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const groups = draftReady ? bandGroups(draft, draftShown, bandHost) : []
   const groupsRef = useRef(groups); groupsRef.current = groups
   rowsAnchor.current = rows.length ? eventsAnchor(pageNodes(page), new Set(workspace.tasks.map(t => t.id))) : undefined
-  const editor = useCreateBlockNote({ schema, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), draftBands(() => groupsRef.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  const editor = useCreateBlockNote({ schema, dictionary, disableExtensions: ['gapCursor'], extensions: [tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), draftBands(() => groupsRef.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
     pastingNow.current = true; setTimeout(() => { pastingNow.current = false }, 0)
@@ -1579,6 +1586,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const [styleOpen, setStyleOpen] = useState(false)
   const keyboardTop = useKeyboardTop()
   const phoneToolbar = useRef<HTMLDivElement>(null)
+  // B4: with the keyboard up, the / [[ and @ menus stay clear of the toolbar above it (it sits 8px over the keyboard).
+  const keyboardUp = useRef(false); keyboardUp.current = keyboardTop !== null
+  const menuOptions = useMemo(() => ({ useFloatingOptions: { middleware: suggestionMenuMiddleware(() => keyboardUp.current && phoneToolbar.current ? phoneToolbar.current.offsetHeight + 8 : 0) } }), [])
   // B48: iOS scrolls the caret to just above the keyboard, which is where the toolbar now sits, so keep the caret's line
   // clear of the toolbar while the keyboard is up.
   useEffect(() => {
@@ -2083,10 +2093,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         <BasicTextStyleButton key="strike" basicTextStyle="strike" />
         <CreateLinkButton key="createLink" />
       </FormattingToolbar>} />}
-      <SuggestionMenuController triggerCharacter="/" shouldOpen={() => !composing.current && editor.getTextCursorPosition().block.type !== 'task'} getItems={async query => {
+      <SuggestionMenuController triggerCharacter="/" floatingUIOptions={menuOptions} shouldOpen={() => !composing.current && editor.getTextCursorPosition().block.type !== 'task'} getItems={async query => {
         // The items Brian uses most come first. Titles only, no second line (Brian 1ac6784b: no descriptions).
         const suggested = ['Bullet List', 'Heading 2']
-        const library = getDefaultReactSlashMenuItems(editor).filter(item => ['Heading 1', 'Heading 2', 'Heading 3', 'Paragraph', 'Bullet List', 'Numbered List', 'Quote'].includes(item.title)).map(item => ({ ...item, subtext: undefined }))
+        const library = getDefaultReactSlashMenuItems(editor).filter(item => ['Heading 1', 'Heading 2', 'Heading 3', 'Body', 'Bullet List', 'Numbered List', 'Quote', 'Separator'].includes(item.title)).map(item => ({ ...item, subtext: undefined }))
         const first = suggested.map(title => library.find(item => item.title === title)!).map(item => ({ ...item, group: 'Suggested' }))
         const rest = library.filter(item => !suggested.includes(item.title))
         const taskItem = { title: 'Task', icon: <CheckboxIcon />, aliases: ['todo', 'task', '任务'], group: 'Suggested', onItemClick: () => {
@@ -2103,12 +2113,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           if (!linkableLines.has(editor.getTextCursorPosition().block.type)) return
           setTimeout(() => editor.getExtension(SuggestionMenu)?.openSuggestionMenu('[[', { deleteTriggerCharacter: true }), 0)
         } }
-        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, ...first, ...rest], query).slice(0, 9)
+        // Every item stays in the list; the menu scrolls past about 8 rows (F13). A cut hid Quote until its name was typed.
+        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, ...first, ...rest], query)
       }} />
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}
-      {['[[', '【【'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} shouldOpen={() => false} getItems={async query => linkItems(query, trigger)} onItemClick={item => item.onItemClick()} />)}
-      {['@', '＠'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} shouldOpen={() => false} getItems={async query => dateItems(query, trigger)} onItemClick={item => item.onItemClick()} suggestionMenuComponent={DateMenu} />)}
+      {['[[', '【【'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} floatingUIOptions={menuOptions} shouldOpen={() => false} getItems={async query => linkItems(query, trigger)} onItemClick={item => item.onItemClick()} />)}
+      {['@', '＠'].map(trigger => <SuggestionMenuController key={trigger} triggerCharacter={trigger} floatingUIOptions={menuOptions} shouldOpen={() => false} getItems={async query => dateItems(query, trigger)} onItemClick={item => item.onItemClick()} suggestionMenuComponent={DateMenu} />)}
       {hoverPointer && <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />}
       {(hoverPointer || linkTapped) && <LinkToolbarController />}
     </BlockNoteView>

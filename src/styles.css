@@ -193,6 +193,9 @@
   --disabled-opacity: .4;
 }
 .bn-container { color-scheme: inherit; }
+/* B4 (F13): the / menu shows about 8 items and scrolls for the rest; the half row at the bottom says there is more.
+   BlockNote's own cap (the room on screen, at most 600px) still applies inside it. */
+.bn-suggestion-menu { max-height: 460px; }
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
