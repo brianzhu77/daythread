@@ -258,6 +258,210 @@ Editor = a popover under the cell at 1280, or a bottom sheet at 390. Both have t
   removed from 4 rows · Undo"**.
 - **Name** can't be deleted, hidden or retyped. It can be renamed and moved.
 
+### 6.3 Cells and editors: build spec (R1)
+
+Added 2026-11-01 for R1 (task #260). Jazz builds the editors and Roadbuster wires them into the cells (Roadbuster
+03d86c21). Each type gets one editor component, `{ property, value, onCommit(raw | undefined), onCancel() }`, where
+`value` is what `readValue` returns, `undefined` means clear, and `onCreateOption(name) → optionId` creates an option.
+The per-cell check, Undo and the save states (§13) stay with Roadbuster. This section covers the 8 R1 types only.
+
+#### 6.3.1 One shell for every editor
+
+- **Which one:** the **popover** when the window is ≥ 900 px wide and the **sheet** below that. That's the same
+  breakpoint as the editor's compact layout. The content and order are the same in both.
+- **Popover (≥ 900):**
+  - It's the `.app-menu` surface: `--paper`, a 1 px `--line` border, `--radius-block`, `--shadow-float`, and 6 px
+    padding.
+  - It opens under the cell, with its left edge on the cell's left edge. It flips above the cell when there's less
+    than 280 px below. Its width is the cell's width, between 240 and 320 px (Text: up to 360).
+  - Rows are 36 px. The hover and keyboard highlight is `--fill`, the same as the Move dialog's rows.
+  - It closes on Esc, on a click outside, and after a single pick. Focus then goes back to the cell, with the cell
+    cursor on it.
+- **Sheet (< 900):**
+  - It's our existing sheet, the same as the Move dialog's phone sheet: `Modal` at the bottom, the handle,
+    `--radius-sheet`, at most 85vh tall, and the safe-area padding.
+  - **Header:** the type icon and the property name on the left, in `--text-body` 600. The row's title sits under it
+    in `--text-meta` `--ink-3` ("Status · Thinking in Systems"), because the sheet covers the table. **Done** is on the
+    right, as `.app-link`.
+  - Rows are 44 px.
+  - It closes with Done, a tap on the scrim, or a swipe down. **All three keep what he did.** A sheet never throws
+    away an edit. To go back, he picks the old value again. A text field still being composed (IME) is committed
+    first.
+  - **The keyboard comes up only when he taps a text field,** with one exception: Text, Number and URL focus their
+    field on open, because typing is the only thing those sheets do. Select, Multi-select, Status and Date open with
+    the keyboard down, so changing a status is one tap with no keyboard. (Select with no options yet is the other
+    exception, below.)
+  - With the keyboard up, the sheet stays above it, as the Move dialog's search field does now. I'll check this
+    natively on every type.
+- **What isn't a sheet or popover:** Checkbox ticks in place (6.3.8). On the phone, Name opens the row (§5).
+- **Keys inside any editor never reach the page editor** (§10). Enter during IME composition only commits the
+  composition. It never saves or picks.
+- **Value edits get no notice.** The cell shows the result, and ⌘Z undoes it at 1280 (§10). Creating an option
+  gets no notice either.
+
+#### 6.3.2 The cell
+
+- **Size:** 36 px rows at ≥ 900 and 44 px below, with 8 px side padding, `--text-row` (16/24), and one line with an
+  ellipsis. A newline inside a Text value shows as a space.
+- **An empty cell is blank** in the table. ("Empty" in `--placeholder` is only on the row page, §5.)
+- **Hover (≥ 900, `@media (hover: hover)`):** `--hover-dim` on the cell.
+- **Cell cursor (keys, ≥ 900):** a 2 px `--blue` outline inset by 1 px, with `--radius-tight`. Only one cell has it.
+- **Press (phone):** `--fill` while the finger is down. The tap area is the whole cell and stays inside it (our
+  hit-area lesson).
+- **Name:** on hover or with the cursor on it, an **Open** chip shows at its right end: `--text-caption`, `--ink-2` on
+  `--fill-soft`, `--radius-badge`, 22 px tall. A click on Name, or on Open, opens the row (§5). **Enter** with the
+  cursor on Name renames it in the cell, the same as the in-cell Text editor below. Typing a character replaces it.
+- **Being saved, failed, or changed elsewhere:** the cell follows §13 (a failed value stays shown, in `--warn`).
+- **A database page in Trash** is read-only, like any page in Trash: cells don't open editors and checkboxes don't
+  tick. Name still opens the row.
+
+#### 6.3.3 Text
+
+- **Cell:** the text, on one line.
+- **≥ 900, edited in the cell:** Enter (or a typed character, or a double-click) turns the cell into a field. The field
+  lies over the cell and the rows below it. It's at least as wide as the cell and at most 360 px, on `--paper` with
+  `--shadow-float` and the 2 px `--blue` outline. It grows downward as lines are added.
+  - **Enter** saves and keeps the cursor on the cell. **Shift-Enter** adds a line.
+  - **Esc** saves as well. Losing text by pressing Esc is worse than one ⌘Z.
+  - A blur saves, and so does 1 s without typing (§10).
+  - **Tab / Shift-Tab** save and move the cursor along the row.
+- **Phone sheet:** one field, focused on open, 3 lines tall and growing to 8. The return key reads **Done**
+  (`enterkeyhint="done"`) and saves. A new line on the phone only comes from pasting; a value that already has lines
+  keeps them.
+- **Empty:** clearing the field and saving stores empty (`undefined`).
+
+#### 6.3.4 Number
+
+- **Cell:** right-aligned with `font-variant-numeric: tabular-nums`, in the property's format (plain, 1,000, %, or
+  currency).
+- **Editor:** the same field as Text, on one line, showing the **plain number** (`1234.5`), not the formatted one. The
+  phone sheet uses `inputmode="decimal"`.
+- **iOS's decimal keypad has no minus sign.** So the phone sheet has a **±** button (44 px, `--fill-soft`) to the right
+  of the field. It flips the sign.
+- **Read as a number:** spaces and grouping commas are removed, one `.` is the decimal point, a trailing `%` is allowed
+  when the format is percent, and the currency symbol is allowed when the format is currency. Full-width digits (１２)
+  are read as digits.
+- **Not a number:** "Numbers only" shows under the field in `--text-meta` `--red`. Enter doesn't save, and the field
+  stays open. **Esc, Done, the scrim and a blur put back the old value.** This is the one editor that can discard
+  input, because the input can't be stored.
+- **Empty** saves as empty, not 0.
+
+#### 6.3.5 Select
+
+- **Cell:** one chip, `--tag-bg` and `--tag-ink`, `--text-small` (14), 22 px tall, 6 px side padding,
+  `--radius-badge`, with an ellipsis inside the cell.
+- **Editor, top to bottom:**
+  1. **A search field.** It's focused on open at ≥ 900. On the phone it isn't, so the keyboard stays down, **except
+     when the property has no options yet**, where typing is the only thing to do.
+  2. **The options**, in their set order, each as its chip. The current one has the `.checked` ✓. The list scrolls
+     inside after 8 rows.
+  3. **Clear**, in `--ink-2`, only when there's a value.
+- **Typing** filters the options (case-insensitive, by substring). When nothing matches exactly, the last row is
+  **Create “Paused”**. A name that matches an existing option ignoring case picks that option and doesn't create a
+  second one. Names are trimmed. An empty name can't be created.
+- **Keys (≥ 900):** ↑↓ move the highlight, which starts on the first match, or on Create when nothing matches. Enter
+  picks.
+- **A pick closes the editor**, both popover and sheet. Create also picks the new option and closes.
+- **No options and no typing:** the list area reads "No options yet" in `--ink-3`. The field's placeholder reads
+  "Type to create an option".
+- Renaming, reordering and deleting options isn't in the picker. It's in the property menu (§6.2).
+
+#### 6.3.6 Multi-select
+
+- **Cell:** the chips in the order he picked them, with a 4 px gap. When they don't fit, the last visible chip is
+  followed by **+2** in `--ink-3`.
+- **Editor:** the same as Select, with two differences.
+  - **Picked options sit at the top as chips** inside the field area, each with a `×`. The list below shows a ✓ on
+    each picked option, and a tap toggles it.
+  - **It stays open.** It closes with Esc or a click outside at ≥ 900, and with Done, the scrim or a swipe on the
+    phone.
+- **Backspace** in an empty field removes the last chip (≥ 900).
+- **Create “x”** adds and picks the option, clears the field, and stays open.
+- No Clear row: removing every chip clears it.
+
+#### 6.3.7 Status
+
+- **Cell:** the dot and the name, with no chip: `○` To do, `◐` In progress, `●` Done, in `--ink-2`, then the name in
+  `--ink`.
+- **Editor:** the same as Select, with the options under three group headings (the `.menu-title` style): **To do · In
+  progress · Done**. Each option has its dot.
+- **No Clear row.** Status always has a value (the model's `readValue` default).
+- **Create “x”** puts the new option at the end of **To do**. The property menu moves it to another group.
+- A pick closes the editor.
+
+#### 6.3.8 Checkbox
+
+- **Cell:** the plain square from §6.1, centred in the column. A tap or click anywhere in the cell ticks it, and so
+  does **Space** with the cell cursor on it.
+- **No editor, no keyboard, no caret move**, and the scroll doesn't change (the B72 rule). With the keyboard already
+  up in the page, a tick leaves it and the caret where they were (Jazz on #56).
+- **Row page:** the same square in the value spot. A tap on the square or the value area ticks it.
+
+#### 6.3.9 Date
+
+- **Cell:** `Oct 12`, or `Oct 12, 2025` in another year, or `Oct 12 → Oct 20` for a range. With a time it's
+  `Oct 12, 9:14`, in the app's time format (`rowTime`). There are no relative words in the table, so a column scans
+  the same way every day.
+- **Editor, top to bottom:**
+  1. **A field, "Type a date"**, read with the same reader as `@` (`readDate`): `tomorrow`, `fri`, `nov 20`, `明天`,
+     `周五`, `3pm`. While it can be read, a line under it shows what it will save ("Fri, Nov 20, 15:00"). Enter
+     saves. Something that can't be read shows "Not a date" in `--text-meta` `--ink-3` and saves nothing. The field
+     is focused on open at ≥ 900 and not on the phone.
+  2. **Quick days:** Today, Tomorrow, then two more days, with the same labels as the empty `@` list
+     (`relativeDay`). A tap saves and closes.
+  3. **Pick on calendar…** opens the system date picker (the same hidden native date input that `row-actions` uses,
+     but with no `min`).
+  4. **End date** and **Include time**, as switches. End date adds a second field, "End", with its own Pick on
+     calendar…. Include time adds a time to each date (native `type="time"`).
+  5. **Clear**, in `--ink-2`, only when there's a value.
+- A date typed with a time turns Include time on by itself.
+- **An end before the start:** the two are swapped quietly when saved.
+- A pick from the quick days or the calendar saves and closes, unless End date is on. Then it stays open so he can
+  set the end.
+- Dates are local dates, and a time is the local wall-clock time, the same as `@` date chips. Roadbuster to confirm
+  that the model stores it the same way.
+
+#### 6.3.10 URL
+
+- **Cell:** the text without `https://` or `www.` (`example.com/path`), in `--blue-text`, with an ellipsis. A value
+  that isn't a link (no dot, or spaces) shows plain, in `--ink`.
+- **≥ 900:** a click on the link opens it in a new tab. A **pencil** (✎, `--ink-3`) shows at the right end on hover or
+  with the cursor on the cell, and a click on it, or Enter, edits in the cell like Text.
+- **Phone sheet:** a tap on the cell **opens the sheet, never the link.** That keeps a slip of the finger from leaving
+  the app. The sheet has the field (focused, `type="url"`, no autocapitalise or autocorrect) and under it
+  **Open link ↗**, only when the value is a link. This refines §6.1 for 390.
+- **The value is kept exactly as typed.** Opening adds `https://` when there's no scheme.
+
+#### 6.3.11 While an editor is open
+
+- **The row is deleted elsewhere:** the editor closes, and the notice says "This row was deleted · Restore", the same
+  as our page-in-Trash state.
+- **The property is deleted elsewhere:** the editor closes with "Rating was deleted".
+- **An option is removed elsewhere:** it leaves the list at once. If it was the value, the value goes too.
+- **The same value changes elsewhere:** the editor keeps what he's doing. His commit then follows §13 ("yours was 4 ·
+  Use mine").
+- **Offline:** every editor works. A commit that fails follows §13: his value stays shown in `--warn`, with "1 change
+  not saved · Retry".
+- **The window crosses 900 px** (a rotation or a resize): the editor closes, keeping what was typed, and the cursor
+  stays on the cell.
+
+#### 6.3.12 Copy and Duplicate in R1 (before linked views)
+
+Linked views come in R2, so in R1 (Bumblebee 120fdcd6):
+
+- **Copy, then paste**, of a database block pastes **a page card to that database**: our existing card, with the grid
+  icon. It's a real link, and it never makes a second database.
+- **Cut, then paste** moves the block, as in §9.1.
+- **Duplicate isn't in a database block's menu** in R1. It comes back in R2 as "make a linked view".
+
+#### 6.3.13 Accessibility
+
+- The table is a `grid`: cells are `gridcell`s, and the header cells are `columnheader`s. A cell's label reads
+  "Status, Reading, Thinking in Systems".
+- A popover is a `dialog` holding a `listbox` (Select, Multi-select, Status) or a form (Text, Number, Date, URL). A
+  sheet traps focus, as the Move dialog does.
+- A checkbox cell is a `checkbox` with `aria-checked`.
+
 ## 7. Views
 
 ### 7.1 Switching and adding
@@ -351,7 +555,8 @@ Remove this view                    linked view only (§9)
 
 - **From `/` Database**, by picking an existing database (§3.1). The new block shows the source's **first view**,
   copied, and its settings are its own from then on.
-- **By copying and pasting** a database block, or Duplicate: that makes a **linked view**.
+- **By copying and pasting** a database block, or Duplicate: that makes a **linked view**. (In R1, before linked views,
+  see §6.3.12.)
 - **Cut and paste moves the database.** Cutting the home block leaves the database as a full-page database, with the
   notice **"Reading list is now its own page · paste to put it back"**. Pasting it makes that block the home again
   (Roadbuster's detach/adopt). A cut that's never pasted loses nothing. The database is in Pages, under the page it was
@@ -506,6 +711,8 @@ The estimates are Roadbuster's (`database-fit.md` §7) unless marked as mine.
   - the keyboard comes up only in sheets with a text field (§4.2);
   - a checkbox tick doesn't raise the keyboard (the B72 rule);
   - sideways scroll doesn't drag the page.
+  - for each R1 editor (§6.3): which open with the keyboard down, Done/scrim/swipe keep the edit, Number's ± and
+    "Numbers only", Pinyin in Select's field and Date's field, and the sheet staying above the keyboard.
 - **Keys at 1280:**
   - reaching and leaving the block (§10);
   - no key leaks into the page editor, including IME composition with Pinyin;
