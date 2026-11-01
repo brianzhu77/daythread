@@ -57,7 +57,7 @@ const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { defaul
   render: ({ block, contentRef }) => <EditorTask blockId={block.id} taskId={block.props.taskId} role={block.props.role} planDate={block.props.planDate} contentRef={contentRef} />,
 })()
 const sourceChecklist = createReactBlockSpec({ type: 'sourceChecklist', propSchema: { checked: { default: false } }, content: 'inline' }, {
-  render: ({ block, contentRef, editor }) => <div className="editor-source-checklist"><input contentEditable={false} type="checkbox" aria-label="Check imported item" checked={block.props.checked} onChange={() => editor.updateBlock(block, { props: { checked: !block.props.checked } })} /><span ref={contentRef} /></div>,
+  render: ({ block, contentRef, editor }) => <div className="editor-source-checklist"><input contentEditable={false} type="checkbox" {...tickOnly} aria-label="Check imported item" checked={block.props.checked} onChange={() => editor.updateBlock(block, { props: { checked: !block.props.checked } })} /><span ref={contentRef} /></div>,
   toExternalHTML: ({ block, contentRef }) => <p><span>{block.props.checked ? '☑ ' : '☐ '}</span><span ref={contentRef} /></p>,
 })()
 // pages-delta N-2 / Jazz f69dd341-era spec: a page card is one quiet row (icon, title, ›) that drags, deletes and
@@ -135,6 +135,11 @@ const clipboardType = 'application/x-daythread-blocks'
 const cutTokens = new Set<string>()
 const deepNodes = (nodes: readonly EditorNode[]): EditorNode[] => nodes.flatMap(n => [n, ...deepNodes(n.children ?? [])])
 const checklistIds = (nodes: readonly EditorNode[]): string[] => deepNodes(nodes).filter(n => n.type === 'sourceChecklist' && n.props?.checked !== true).map(n => n.id)
+// A tick is only a tick (Jazz 5612c295, Bumblebee 8f23bd5e): the press's default would focus the editor around the box
+// and put the caret in the ticked line, which on a phone raises the keyboard and scrolls. Cancelling it keeps the caret
+// and keyboard where they were; the click still toggles, and a tap on the text still edits.
+const tickOnly = { onMouseDown: (e: React.MouseEvent) => e.preventDefault() }
+
 function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: string; taskId: string; role: string; planDate: string; contentRef: (node: HTMLElement | null) => void }) {
   const { workspace, run } = useWorkspace()
   const rows = useRowActions()
@@ -152,7 +157,7 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
   const copy = model ? rows!.copyLink(blockId) : null
   // data-status: the task's real state, for checks such as scripts/check-alignment.mjs (Lead a2428bb1). Display only.
   return <div className="editor-task" data-role={role} data-draft={t ? undefined : true} data-status={t?.status ?? 'draft'}>
-    <input contentEditable={false} type="checkbox" aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={shown === 'done'} disabled={(!t && !taskId.startsWith('editor-task:')) || t?.status === 'cancelled'} onChange={() => t && tick.toggle((to, r) => ({ text: to === 'done' ? 'Task completed' : 'Task reopened', undoOperationId: r.operationId }))} />
+    <input contentEditable={false} type="checkbox" {...tickOnly} aria-label={t ? `Complete ${t.title}` : taskId.startsWith('editor-task:') ? 'New task' : 'Missing task'} checked={shown === 'done'} disabled={(!t && !taskId.startsWith('editor-task:')) || t?.status === 'cancelled'} onChange={() => t && tick.toggle((to, r) => ({ text: to === 'done' ? 'Task completed' : 'Task reopened', undoOperationId: r.operationId }))} />
     <span ref={contentRef} className={`editor-task-title ${shown === 'done' ? 'task-done' : t?.status === 'cancelled' ? 'task-cancelled' : ''}`} data-placeholder="To do" />
     {/* Jazz f58abeaf: done rows are grey and struck through too, so the label is what says Cancelled. */}
     {t?.status === 'cancelled' && <span contentEditable={false} className="editor-cancelled-tag">Cancelled</span>}
