@@ -449,8 +449,8 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
   as our page-in-Trash state.
 - **The property is deleted elsewhere:** the editor closes with "Rating was deleted".
 - **An option is removed elsewhere:** it leaves the list at once. If it was the value, the value goes too.
-- **The same value changes elsewhere:** the editor keeps what he's doing. His commit then follows §13 ("yours was 4 ·
-  Use mine").
+- **The same value changes elsewhere:** the editor keeps what he's doing. His commit then follows §13 ("…changed elsewhere ·
+  yours was 4 · Use mine").
 - **Offline:** every editor works. A commit that fails follows §13: his value stays shown in `--warn`, with "1 change
   not saved · Retry".
 - **The window crosses 900 px** (a rotation or a resize): the editor closes, keeping what was typed, and the cursor
@@ -685,8 +685,7 @@ The Lead recommends **option 1**, so this is option 1's design, with the differe
 | **Offline, reading** | works from the offline copy, the same as pages |
 | **Offline, editing a value** | His value **stays shown** in the cell, in `--warn`, and the strip says **"1 change not saved · Retry"**. Retry sends it again. Undo puts back the old value. **Never a silent revert.** It's the same rule as a failed tick, and kept drafts for cells come later (Roadbuster §4). |
 | **Offline, a row body** | the editor's kept drafts, as on any page |
-| **The same cell changed on another device** | The other value loads, and the notice says **"Rating changed in another tab · yours was 4 · Use mine"**. Use mine sends his value again. |
-| **A kept cell value sent after the app was closed, and the cell changed elsewhere meanwhile** (Roadbuster 6aa746aa) | He may be on another page, so the notice names the row: **"Notes in Thinking in Systems changed elsewhere · yours was “A primer on systems thi…” · Use mine"**. A text value is quoted to its first 40 characters on one line, and Use mine sends the whole value. With no conflict, the kept value is sent with no notice. If the row was deleted in between, the kept value is dropped quietly. |
+| **The same cell changed on another device, or a kept cell value sent after the app was closed** (Roadbuster 6aa746aa) | The other value loads, and **one notice, everywhere** (Lead 0b05067c) names the row: **"Notes in Thinking in Systems changed elsewhere · yours was “A primer on systems thi…” · Use mine"**. A text value is quoted to its first 40 characters on one line, and Use mine sends the whole value. With no conflict, a kept value is sent with no notice. If the row was deleted in between, the kept value is dropped quietly. |
 | **A different cell or row changed elsewhere** | Both edits stay. No notice (Roadbuster §4: the per-cell check). |
 | **The row he has open is deleted elsewhere** | our existing "This page is in Trash · Restore" state |
 | **The database page is open and deleted elsewhere** | the same |
