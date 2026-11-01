@@ -1153,6 +1153,20 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .tree-row { display: flex; align-items: center; width: 100%; min-height: 30px; height: auto; padding: 0 4px 0 calc(var(--depth, 0) * 16px); border: 0; border-radius: var(--radius-row); background: none; color: var(--ink-2); font: inherit; font-size: var(--text-small); text-align: left; }
 .tree-row:hover, .tree-row:focus-within { background: var(--fill); }
 .tree-row[aria-current='page'] { background: var(--card); color: var(--ink); font-weight: var(--weight-medium); box-shadow: var(--shadow-row); }
+/* B14: dragging a page. The line starts at the indent of the level the page lands on (Jazz dc9927a5). */
+.tree-row[data-page] { position: relative; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.tree-row[data-page] a { -webkit-touch-callout: none; }
+.tree-row[data-dragging='mouse'] { opacity: .45; }
+.tree-row[data-dragging='touch'] { background: var(--card); color: var(--ink); box-shadow: var(--shadow-row); }
+.tree-row[data-drop-zone='inside'] { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.tree-row[data-drop-zone='before']::after, .tree-row[data-drop-zone='after']::after, .side-label-row[data-drop-zone]::after {
+  content: ''; position: absolute; left: calc(var(--drop-depth, 0) * 16px + 22px); right: 4px; height: 2px; border-radius: 1px; background: var(--accent); pointer-events: none;
+}
+.tree-row[data-drop-zone='before']::after { top: -1.5px; }
+.tree-row[data-drop-zone='after']::after { bottom: -1.5px; }
+.side-label-row[data-drop-top] { position: relative; }
+.side-label-row[data-drop-zone]::after { bottom: -1.5px; }
+.tree-drag-chip { position: fixed; left: 0; top: 0; z-index: 1000; max-width: 220px; padding: 4px 10px; border-radius: var(--radius-row); background: var(--card); color: var(--ink); box-shadow: var(--shadow-row), 0 4px 14px rgb(0 0 0 / .14); font-size: var(--text-small); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
 .disclose { display: grid; place-items: center; width: 22px; height: 30px; min-height: 0; flex: none; padding: 0; border: 0; border-radius: var(--radius-control); background: none; color: var(--ink-3); cursor: pointer; }
 .disclose:hover { color: var(--ink); }
 .disclose svg { width: 12px; height: 12px; transition: transform .15s; }
