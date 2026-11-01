@@ -66,7 +66,8 @@ export const prepareDayDraft = createServerFn({ method: "POST" })
  * Whether this server is the preview Worker (`DAYTHREAD_PREVIEW=1`, set at run time so the preview runs production's
  * own bundle, Lead c6fcc1da). Its data is separate, so the app marks itself: a note written there stays there.
  */
-export const getAppInfo = createServerFn({ method: "GET" }).handler(async () => ({ preview: process.env.DAYTHREAD_PREVIEW === "1" }));
+/** `build`: the id stamped into this build (vite.config.ts); a tab on another build moves onto this one (new-build.ts). */
+export const getAppInfo = createServerFn({ method: "GET" }).handler(async () => ({ preview: process.env.DAYTHREAD_PREVIEW === "1", build: import.meta.env.VITE_DAYTHREAD_BUILD ?? "" }));
 
 /** The signed-in account for "{email} · Sign out" and its time zone; null when sign-in is off. */
 export const getAccount = createServerFn({ method: "GET" }).handler(async () => {

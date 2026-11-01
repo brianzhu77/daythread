@@ -7,11 +7,13 @@ import { KeptDrafts } from './kept-drafts'
 import { GlobalSearch } from './search-dialog'
 import { WorkspaceProvider, isConflict, useWorkspace } from './use-day'
 import { flushAllEditors } from './editor-flush'
+import { useMoveToNewBuild } from './new-build'
 
 /** App frame (craft-v1 §3): sidebar on laptop, bottom tabs and + on phone, dev banner, undo notices. */
 export function AppShell({ children }: { children: ReactNode }) {
   useVisibleTop()
   useServiceWorker()
+  useMoveToNewBuild()
   return (
     <WorkspaceProvider>
       <div className="app">
