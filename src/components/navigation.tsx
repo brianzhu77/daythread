@@ -78,7 +78,7 @@ export function Navigation() {
 function PageGroups({ path, openPageId, trashView, today }: { path: string; openPageId?: string; trashView: boolean; today: LocalDate }) {
   const { workspace } = useWorkspace()
   const date = path === '/' ? today : path.match(/^\/day\/(\d{4}-\d{2}-\d{2})$/)?.[1]
-  const activeId = (date ? workspace?.pages.find(p => p.type === 'daily' && p.date === date)?.id : path.startsWith('/pages') ? openPageId : undefined) ?? null
+  const activeId = (date ? workspace?.pages.find(p => p.type === 'daily' && p.date === date && !p.trashedAt)?.id : path.startsWith('/pages') ? openPageId : undefined) ?? null
   useEffect(() => { if (activeId) rememberOpened(activeId) }, [activeId])
   if (!workspace) return null
   // The Trash row is current on the Trash screen and on a trashed page, which has no row in the tree (layout T3/T4).

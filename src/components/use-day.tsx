@@ -73,7 +73,7 @@ export interface Notice {
 }
 
 type NoticeSpec = Notice | null
-type NoticeArg = NoticeSpec | ((r: Receipt) => NoticeSpec)
+export type NoticeArg = NoticeSpec | ((r: Receipt) => NoticeSpec)
 /** A domain refusal matching `inlineRefusal` is handed to `onRefused` instead of the save-failed bar. */
 type RunOptions = { inlineRefusal?: RegExp; onRefused?: (message: string) => void; /** The failure's message, for a caller that retries by itself (B35). */ onFailure?: (message: string) => void; /** B40: a background save; its failure says so in its own line, never the header's bar and Retry. */ quiet?: boolean }
 
