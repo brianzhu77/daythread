@@ -2,8 +2,9 @@
 // document is untouched (keys stay in the table). Usage: node tests/evidence/databases/table-edit.mjs <base-url> [chromium|webkit]
 import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
-const base = process.argv[2], engine = process.argv[3] ?? 'chromium'
-const store = () => JSON.parse(execSync(`sqlite3 /tmp/rb-dbui/ws.sqlite "select data from workspace"`).toString())
+if (!process.argv[2] || !process.argv[3]) { console.error('Usage: node tests/evidence/databases/table-edit.mjs <base-url> <store-path> [chromium|webkit]'); process.exit(2) }
+const [base, storePath] = process.argv.slice(2), engine = process.argv[4] ?? 'chromium'
+const store = () => JSON.parse(execSync(`sqlite3 ${storePath} "select data from workspace"`).toString())
 const browser = await pw[engine].launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
 const errors = []
@@ -29,6 +30,6 @@ const emma = ws.pages.find(p => p.id === 'emma')
 const rows = ws.pages.filter(p => p.parentId === 'list').map(p => p.title)
 console.log('emma', JSON.stringify(emma.values), 'rows', JSON.stringify(rows))
 console.log('page doc unchanged', ws.pages.find(p => p.id === 'books').document === docBefore)
-await page.screenshot({ path: `/tmp/rb-dbui/edit-${engine}.png` })
+await page.screenshot({ path: `${storePath}.edit-${engine}.png` })
 console.log('errors', JSON.stringify(errors))
 await browser.close()

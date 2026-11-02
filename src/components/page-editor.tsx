@@ -526,7 +526,20 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // Databases this page's next save turns into full pages (Turn into page) or makes at home here (Turn into inline),
   // by database page id; each goes with the save that carries it (model §3, rules 6 and 7).
   const databaseFlags = useRef({ detach: new Set<string>(), adopt: new Map<string, string>() })
-  const databaseFields = () => ({
+  // Home blocks this editor turned into cards, by database: ⌘Z puts the same block back, and the next save makes it the
+  // home again rather than leave a card where the table was (Bumblebee).
+  const formerHomes = useRef(new Map<string, string>())
+  const databaseFields = () => {
+    for (const [pageId, blockId] of formerHomes.current) {
+      if (editor.getBlock(blockId)?.type !== 'database') continue
+      formerHomes.current.delete(pageId)
+      // Back before the detach was even sent: the save simply keeps it home.
+      if (databaseFlags.current.detach.delete(pageId)) continue
+      databaseFlags.current.adopt.set(pageId, blockId)
+    }
+    return databaseFieldsNow()
+  }
+  const databaseFieldsNow = () => ({
     ...(databaseFlags.current.detach.size ? { detachDatabaseIds: [...databaseFlags.current.detach] } : {}),
     ...(databaseFlags.current.adopt.size ? { adoptDatabaseBlocks: [...databaseFlags.current.adopt].map(([pageId, blockId]) => ({ blockId, pageId })) } : {}),
   })
@@ -1596,6 +1609,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // Turn into page (design §3.2): the table becomes our page card in place; the save says it's a full page now.
     turnIntoPage: (blockId, pageId) => {
       databaseFlags.current.adopt.delete(pageId); databaseFlags.current.detach.add(pageId)
+      formerHomes.current.set(pageId, blockId)
       editor.replaceBlocks([blockId], [{ type: 'pageLink', props: { pageId } } as never])
     },
     // Turn into inline: the card becomes the table again, and the save makes this block its home.

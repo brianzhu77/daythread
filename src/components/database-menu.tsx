@@ -16,6 +16,9 @@ function setOpenMenu(next: OpenMenu | null) { openMenu = next; for (const l of l
 function useOpenMenu() { return useSyncExternalStore(l => { listeners.add(l); return () => listeners.delete(l) }, () => openMenu, () => null) }
 const newId = (): string => crypto.randomUUID()
 
+/** Opens a table's menu on one of its panels (a filter chip opens Filter). */
+export function openDatabaseMenu(blockId: string, databaseId: string, panel: 'filter' | 'sort' = 'filter') { setOpenMenu({ blockId, databaseId, panel }) }
+
 /** The `⋯` on a table (inline or full page): opens its menu under it. */
 export function DatabaseMenuButton({ blockId, databaseId }: { blockId: string; databaseId: string }) {
   const open = useOpenMenu()
@@ -231,14 +234,16 @@ function PropertiesPanel({ db, view, go }: { db: DatabasePage; view: View; go: (
   const ordered = [...view.columns.map(c => db.database.properties.find(p => p.id === c.id)).filter((p): p is Property => Boolean(p)), ...db.database.properties.filter(p => !shown.has(p.id))]
   const setColumns = (columns: View['columns']) => change({ kind: 'updateView', viewId: view.id, columns })
   const toggle = (p: Property) => setColumns(shown.has(p.id) ? view.columns.filter(c => c.id !== p.id) : [...view.columns, { id: p.id }])
-  const up = (p: Property) => { const i = view.columns.findIndex(c => c.id === p.id); if (i <= 0) return; const next = [...view.columns]; [next[i - 1], next[i]] = [next[i]!, next[i - 1]!]; setColumns(next) }
+  // Left and right, one place at a time (R1-14); dragging comes later.
+  const shift = (p: Property, by: -1 | 1) => { const i = view.columns.findIndex(c => c.id === p.id), j = i + by; if (i < 0 || j < 0 || j >= view.columns.length) return; const next = [...view.columns]; [next[i], next[j]] = [next[j]!, next[i]!]; setColumns(next) }
   return <>
     <Head title="Properties" back={() => go('root')} />
     <div className="database-property-line is-title"><span>Name</span><span className="database-menu-quiet">always shown</span></div>
     {ordered.map(p => <div key={p.id} className="database-property-line">
       <label className="database-property-switch"><input type="checkbox" checked={shown.has(p.id)} onChange={() => toggle(p)} aria-label={`Show ${p.name}`} /></label>
       <button type="button" className="database-property-name" onClick={() => go({ property: p.id })}>{p.name}<span className="database-menu-quiet"> · {typeLabels[p.type]}</span></button>
-      {shown.has(p.id) && view.columns[0]?.id !== p.id && <button type="button" aria-label={`Move ${p.name} left`} onClick={() => up(p)}>↑</button>}
+      {shown.has(p.id) && view.columns[0]?.id !== p.id && <button type="button" aria-label={`Move ${p.name} left`} onClick={() => shift(p, -1)}>↑</button>}
+      {shown.has(p.id) && view.columns.at(-1)?.id !== p.id && <button type="button" aria-label={`Move ${p.name} right`} onClick={() => shift(p, 1)}>↓</button>}
     </div>)}
     <button type="button" role="menuitem" onClick={() => go('new-property')}>+ Add property</button>
   </>

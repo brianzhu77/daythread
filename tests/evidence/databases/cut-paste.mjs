@@ -1,12 +1,13 @@
 // R1 copy and cut of a database block (Jazz §6.3.12, model §3 rules 6-7), fresh store (reseeded):
 // copy + paste makes a page card to the same database (no second database); cut on Books + paste on today's page
 // moves the database there (its home is the pasted block, nothing trashed, parent today's page), straight away.
-// Usage: node tests/evidence/databases/cut-paste.mjs <base-url> [chromium|webkit], dev server on /tmp/rb-dbui/ws.sqlite.
+// Usage: node tests/evidence/databases/cut-paste.mjs <base-url> <store-path> [chromium|webkit]  (the store is a throwaway SQLite file the dev server at <base-url> uses; both are required)
 import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
-execSync('rm -f /tmp/rb-dbui/ws.sqlite && node tests/evidence/databases/seed-table.ts /tmp/rb-dbui/ws.sqlite', { stdio: 'ignore' })
-const store = () => JSON.parse(execSync(`sqlite3 /tmp/rb-dbui/ws.sqlite "select data from workspace"`).toString())
-const base = process.argv[2], engine = process.argv[3] ?? 'chromium'
+if (!process.argv[2] || !process.argv[3]) { console.error('Usage: node tests/evidence/databases/cut-paste.mjs <base-url> <store-path> [chromium|webkit]'); process.exit(2) }
+const [base, storePath] = process.argv.slice(2), engine = process.argv[4] ?? 'chromium'
+execSync(`rm -f ${storePath} && node tests/evidence/databases/seed-table.ts ${storePath}`, { stdio: 'ignore' })
+const store = () => JSON.parse(execSync(`sqlite3 ${storePath} "select data from workspace"`).toString())
 const browser = await pw[engine].launch({ headless: true })
 const context = await browser.newContext({ viewport: { width: 1280, height: 900 } })
 if (engine === 'chromium') await context.grantPermissions(['clipboard-read', 'clipboard-write'])

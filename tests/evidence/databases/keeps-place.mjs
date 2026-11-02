@@ -1,7 +1,8 @@
 // R1-7: at 390 (touch) or 1280 (third argument `wide`), scroll the table sideways, open a cell's sheet and pick a value: the table keeps its sideways
 // place through the sheet and the save. Usage: node tests/evidence/databases/keeps-place.mjs <base-url> [chromium|webkit]
 import * as pw from '@playwright/test'
-const base = process.argv[2], engine = process.argv[3] ?? 'chromium', wide = process.argv[4] === 'wide'
+if (!process.argv[2] || !process.argv[3]) { console.error('Usage: node tests/evidence/databases/keeps-place.mjs <base-url> <store-path> [chromium|webkit] [wide]'); process.exit(2) }
+const [base, storePath] = process.argv.slice(2), engine = process.argv[4] ?? 'chromium', wide = process.argv[5] === 'wide'
 const browser = await pw[engine].launch({ headless: true })
 const page = await browser.newPage(wide ? { viewport: { width: 1280, height: 900 } } : { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: engine === 'chromium' })
 const press = (l) => wide ? l.click() : l.tap()

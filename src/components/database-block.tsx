@@ -12,7 +12,7 @@ import { displayPageTitle } from './page-title'
 import { ChevronDownIcon } from './icons'
 import { PropertyCell, PropertyCheckbox, PropertyEditor } from './property-editors'
 import { useWorkspace } from './use-day'
-import { DatabaseMenuButton } from './database-menu'
+import { DatabaseMenuButton, openDatabaseMenu } from './database-menu'
 
 const newId = (): string => crypto.randomUUID()
 /** Rows drawn before "Show 25 more" (design §13): inline, and on the full page. */
@@ -256,7 +256,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
       <span className="database-view-name">{view.name}<ChevronDownIcon /></span>
       <DatabaseMenuButton blockId={blockId} databaseId={db.id} />
     </div>}
-    {view.filter.length > 0 && <FilterLine db={db.database} view={view} onClear={() => void run({ type: 'change-database', pageId: db.id, change: { kind: 'updateView', viewId: view.id, filter: [] } })} />}
+    {(view.filter.length > 0 || view.sort.length > 0) && <RulesLine db={db.database} view={view} blockId={blockId} databaseId={db.id} onChange={change => void run({ type: 'change-database', pageId: db.id, change: { kind: 'updateView', viewId: view.id, ...change } })} />}
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
       <table className="database-table">
         <thead>
@@ -351,25 +351,39 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
   </div>
 }
 
-/** The filter line under the title (design §4.1, §13): each rule in words; a rule on a deleted property struck through. */
-function FilterLine({ db, view, onClear }: { db: Database; view: View; onClear: () => void }) {
+/**
+ * The line under the title (design §4.1, §13) whenever the view filters or sorts: each rule in words, opening its sheet
+ * when tapped, each with its own ×; a rule on a deleted property struck through; one with no value yet reads "…".
+ */
+function RulesLine({ db, view, blockId, databaseId, onChange }: { db: Database; view: View; blockId: string; databaseId: string; onChange: (change: { filter?: Condition[]; sort?: View['sort'] }) => void }) {
   return <div className="database-filter-line">
     {view.filter.map((c, i) => {
       const property = propertyOf(db, c.by)
-      return <span key={i} className={`database-filter-chip ${property ? '' : 'is-deleted'}`}>{property ? property.name : '(deleted)'} {filterWords(c, property)}</span>
+      return <span key={`f${i}`} className={`database-filter-chip ${property ? '' : 'is-deleted'}`}>
+        <button type="button" className="database-chip-open" onClick={() => openDatabaseMenu(blockId, databaseId, 'filter')}>{property ? property.name : '(deleted)'} {filterWords(c, property)}</button>
+        <button type="button" className="database-chip-remove" aria-label="Remove filter" onClick={() => onChange({ filter: view.filter.filter((_, j) => j !== i) })}>×</button>
+      </span>
     })}
-    <button type="button" className="app-link" onClick={onClear}>Clear</button>
+    {view.sort.map((s, i) => {
+      const property = propertyOf(db, s.by)
+      if (!property) return null
+      return <span key={`s${i}`} className="database-filter-chip is-sort">
+        <button type="button" className="database-chip-open" onClick={() => openDatabaseMenu(blockId, databaseId, 'sort')}>{property.name} {s.direction === 'asc' ? '↑' : '↓'}</button>
+        <button type="button" className="database-chip-remove" aria-label="Remove sort" onClick={() => onChange({ sort: view.sort.filter((_, j) => j !== i) })}>×</button>
+      </span>
+    })}
   </div>
 }
 function filterWords(c: Condition, property: Property | null): string {
   const op = { contains: 'contains', doesNotContain: "doesn't contain", is: 'is', isNot: 'is not', isEmpty: 'is empty', isNotEmpty: 'is not empty', eq: '=', ne: '≠', gt: '>', lt: '<', gte: '≥', lte: '≤', isAnyOf: 'is', isNoneOf: 'is not', before: 'before', after: 'after', onOrBefore: 'on or before', onOrAfter: 'on or after', within: 'within' }[c.op]
+  if (c.op === 'isEmpty' || c.op === 'isNotEmpty') return op
   const v = c.value
-  if (v === undefined) return op
   const name = (id: unknown) => property?.options?.find(o => o.id === id)?.name ?? ''
-  const text = Array.isArray(v) ? v.map(name).filter(Boolean).join(' or ')
+  const text = v === undefined ? '' : Array.isArray(v) ? v.map(name).filter(Boolean).join(' or ')
     : v && typeof v === 'object' ? ('relative' in v ? (v.relative === 'today' ? 'today' : "this page's day") : String((v as { date?: string }).date ?? ''))
     : v === true ? 'checked' : v === false ? 'unchecked'
     : c.op === 'within' ? ({ thisWeek: 'this week', past7: 'the past 7 days', next7: 'the next 7 days' } as Record<string, string>)[String(v)] ?? ''
     : String(v)
-  return `${op} ${text}`
+  // A rule still waiting for its value reads as unfinished, not broken (Jazz 72ba456b).
+  return `${op} ${text || '…'}`
 }

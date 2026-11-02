@@ -1,13 +1,14 @@
 // R1 table menu (design §7.3, §8, §6.2), on a fresh store from seed-table.ts: a filter (rows and the filter line), a
 // sort, hiding a property, a new Number property, Turn into page (the table becomes a card, nothing trashed), then
 // Delete database from its full page (to Trash, with its rows).
-// Usage: node tests/evidence/databases/menu.mjs <base-url> [chromium|webkit], with the dev server on /tmp/rb-dbui/ws.sqlite (it reseeds it).
+// Usage: node tests/evidence/databases/menu.mjs <base-url> <store-path> [chromium|webkit]  (the store is a throwaway SQLite file the dev server at <base-url> uses; both are required)
 import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
-const base = process.argv[2], engine = process.argv[3] ?? 'chromium'
+if (!process.argv[2] || !process.argv[3]) { console.error('Usage: node tests/evidence/databases/menu.mjs <base-url> <store-path> [chromium|webkit]'); process.exit(2) }
+const [base, storePath] = process.argv.slice(2), engine = process.argv[4] ?? 'chromium'
 // A fresh store each run (the dev server opens the file per request).
-execSync('rm -f /tmp/rb-dbui/ws.sqlite && node tests/evidence/databases/seed-table.ts /tmp/rb-dbui/ws.sqlite', { stdio: 'ignore' })
-const store = () => JSON.parse(execSync(`sqlite3 /tmp/rb-dbui/ws.sqlite "select data from workspace"`).toString())
+execSync(`rm -f ${storePath} && node tests/evidence/databases/seed-table.ts ${storePath}`, { stdio: 'ignore' })
+const store = () => JSON.parse(execSync(`sqlite3 ${storePath} "select data from workspace"`).toString())
 const browser = await pw[engine].launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
 const errors = []; page.on('pageerror', e => errors.push(e.message))

@@ -1873,3 +1873,5 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
   .database-more-button { width: 44px; height: 44px; margin-right: -8px; }
 }
 @media (max-width: 899px) and (prefers-reduced-motion: reduce) { .database-menu { animation: none; } }
+.database-chip-open, .database-chip-remove { padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.database-chip-remove { margin-left: 4px; color: var(--ink-3); }

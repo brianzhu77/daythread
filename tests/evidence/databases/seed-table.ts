@@ -4,6 +4,7 @@
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
 import { pageContentKey } from '../../../src/domain/editor-document.ts'
 import type { Action } from '../../../src/domain/types.ts'
+if (!process.argv[2]) { console.error('Usage: node tests/evidence/databases/seed-table.ts <store-path> (a throwaway SQLite file, never his data)'); process.exit(2) }
 const repo = new SqliteWorkspaceRepository(process.argv[2]!, undefined, { allowMissingLegacy: true })
 let ws = await repo.load()
 const run = async (action: Action) => { ws = (await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: ws.revision, action })).workspace }

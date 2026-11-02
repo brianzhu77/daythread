@@ -1,11 +1,12 @@
 // R1 (model §9, Lead 7b3b9664): the home block keeps its id, and nothing is trashed, after a side-menu drag, the move shortcut ⌘⇧↑/↓ on
 // the line next to it and on the block itself, and an IME composition on the line next to it. Fresh store (reseeded).
-// Usage: node tests/evidence/databases/home-id.mjs <base-url> [chromium|webkit], dev server on /tmp/rb-dbui/ws.sqlite.
+// Usage: node tests/evidence/databases/home-id.mjs <base-url> <store-path> [chromium|webkit]  (the store is a throwaway SQLite file the dev server at <base-url> uses; both are required)
 import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
-execSync('rm -f /tmp/rb-dbui/ws.sqlite && node tests/evidence/databases/seed-table.ts /tmp/rb-dbui/ws.sqlite', { stdio: 'ignore' })
-const store = () => JSON.parse(execSync(`sqlite3 /tmp/rb-dbui/ws.sqlite "select data from workspace"`).toString())
-const base = process.argv[2], engine = process.argv[3] ?? 'chromium'
+if (!process.argv[2] || !process.argv[3]) { console.error('Usage: node tests/evidence/databases/home-id.mjs <base-url> <store-path> [chromium|webkit]'); process.exit(2) }
+const [base, storePath] = process.argv.slice(2), engine = process.argv[4] ?? 'chromium'
+execSync(`rm -f ${storePath} && node tests/evidence/databases/seed-table.ts ${storePath}`, { stdio: 'ignore' })
+const store = () => JSON.parse(execSync(`sqlite3 ${storePath} "select data from workspace"`).toString())
 const browser = await pw[engine].launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
 const errors = []; page.on('pageerror', e => errors.push(e.message))

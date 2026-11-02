@@ -1,9 +1,10 @@
 // R1: `/` Database on a page makes an inline database: block in, title focused, Enter goes to a first row's Name.
-// Usage: node tests/evidence/databases/slash-database.mjs <base-url> [chromium|webkit], on a store from seed-table.ts.
+// Usage: node tests/evidence/databases/slash-database.mjs <base-url> <store-path> [chromium|webkit]  (the store is a throwaway SQLite file the dev server at <base-url> uses; both are required)
 import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
-const base = process.argv[2], engine = process.argv[3] ?? 'chromium'
-const store = () => JSON.parse(execSync(`sqlite3 /tmp/rb-dbui/ws.sqlite "select data from workspace"`).toString())
+if (!process.argv[2] || !process.argv[3]) { console.error('Usage: node tests/evidence/databases/slash-database.mjs <base-url> <store-path> [chromium|webkit]'); process.exit(2) }
+const [base, storePath] = process.argv.slice(2), engine = process.argv[4] ?? 'chromium'
+const store = () => JSON.parse(execSync(`sqlite3 ${storePath} "select data from workspace"`).toString())
 const browser = await pw[engine].launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
 const errors = []
