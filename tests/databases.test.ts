@@ -8,6 +8,7 @@ import { childPages, listedPages, moveRefusal, subtreeIds } from '../src/domain/
 import { exportFiles } from '../src/domain/export.ts'
 import { buildSearchIndex, search } from '../src/domain/search.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
+import { blockPlace, withBlockBack, type EditorNode } from '../src/domain/editor-document.ts'
 import { PostgresWorkspaceRepository } from '../src/server/postgres-repository.ts'
 import { pgliteClient } from '../src/server/db/sql.ts'
 import type { Action, Page } from '../src/domain/types.ts'
@@ -384,4 +385,20 @@ test('search: a row is labelled by its database and found by its values', () => 
   const hit = (q: string) => search(index, q, today).pages.map(p => `${p.page.title} · ${p.path}`)
   assert.deepEqual(hit('dune'), ['Dune · Reading list'])
   assert.deepEqual(hit('history').sort(), ['Emma · Reading list', 'Ubik · Reading list'])
+})
+
+test('a home block goes back where it sat, by its neighbours, wherever the page has changed', () => {
+  const line = (id: string, children: EditorNode[] = []): EditorNode => ({ id, type: 'paragraph', props: {}, content: [], children })
+  const home: EditorNode = { id: 'home', type: 'database', props: { pageId: 'list' }, children: [] }
+  const ids = (nodes: EditorNode[]): string[] => nodes.flatMap(n => [n.id, ...ids(n.children ?? [])])
+  const place = blockPlace([line('a'), home, line('b')], 'home')!
+  assert.deepEqual({ after: place.afterId, before: place.beforeId }, { after: 'a', before: 'b' })
+  assert.deepEqual(ids(withBlockBack([line('a'), line('new'), line('b')], place)), ['a', 'home', 'new', 'b'])
+  // Its neighbour above is gone: before the one below. Both gone: at the end of the page.
+  assert.deepEqual(ids(withBlockBack([line('new'), line('b')], place)), ['new', 'home', 'b'])
+  assert.deepEqual(ids(withBlockBack([line('new')], place)), ['new', 'home'])
+  // A neighbour now nested: beside it, inside its parent.
+  assert.deepEqual(ids(withBlockBack([line('p', [line('a')])], place)), ['p', 'a', 'home'])
+  assert.equal(withBlockBack([line('p', [line('a')])], place)[0]!.children!.length, 2)
+  assert.equal(blockPlace([line('a')], 'home'), null)
 })
