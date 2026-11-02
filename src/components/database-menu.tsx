@@ -2,10 +2,10 @@
 // property's own menu (§6.2). Like the cell editors it lives outside the page editor's block (one host in the app
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { isDatabase, propertyOf, titleId, typeLabels, propertyTypes, type Condition, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { blockActions, setShownView, shownView, useViewChange } from './database-block'
+import { blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange } from './database-block'
 import { ChevronDownIcon } from './icons'
 import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
@@ -83,6 +83,7 @@ export function DatabaseMenuHost() {
     if (focused instanceof HTMLElement) focused.blur()
     window.getSelection()?.removeAllRanges()
   }, [opened, wide])
+  useShownViews()
   const db = open ? workspace?.pages.find(p => p.id === open.databaseId) : undefined
   if (!open || !at || !isDatabase(db) || db.trashedAt) return null
   const view = shownView(db.database, open.blockId)
@@ -93,6 +94,7 @@ export function DatabaseMenuHost() {
     <div className="database-menu-scrim" aria-hidden="true" onClick={() => setOpenMenu(null)} />
     <div ref={ref} className="app-menu database-menu" role="dialog" aria-label="Database options" style={{ position: 'fixed', top: at.top, ...(at.left !== undefined ? { left: at.left } : { right: at.right }) }}
     onKeyDown={e => e.stopPropagation()}>
+    <MenuBlock.Provider value={open.blockId}>
     {open.panel === 'views' && <ViewsPanel db={db} blockId={open.blockId} />}
     {open.panel === 'root' && <RootPanel db={db} blockId={open.blockId} go={go} />}
     {open.panel === 'filter' && <FilterPanel db={db} view={view} back={() => go('root')} />}
@@ -100,6 +102,7 @@ export function DatabaseMenuHost() {
     {open.panel === 'properties' && <PropertiesPanel db={db} view={view} go={go} />}
     {open.panel === 'new-property' && <NewPropertyPanel db={db} view={view} go={go} />}
     {typeof open.panel === 'object' && <PropertyPanel db={db} view={view} propertyId={open.panel.property} go={go} />}
+    </MenuBlock.Provider>
   </div>
   </>
 }
@@ -123,6 +126,7 @@ function RootPanel({ db, blockId, go }: { db: DatabasePage; blockId: string; go:
   const { run } = useWorkspace()
   const navigate = useNavigate()
   const inline = !blockId.startsWith('page:') && db.database.homeBlockId === blockId
+  const linked = isLinkedBlock(blockId)
   const actions = blockActions.get(blockId)
   const close = () => setOpenMenu(null)
   const remove = () => {
@@ -138,11 +142,14 @@ function RootPanel({ db, blockId, go }: { db: DatabasePage; blockId: string; go:
     </div>
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
     <hr />
-    {inline && <button type="button" role="menuitem" onClick={() => { close(); void navigate({ to: '/pages', search: { page: db.id } }) }}>Open as page</button>}
+    {(inline || linked) && <button type="button" role="menuitem" onClick={() => { close(); void navigate({ to: '/pages', search: { page: db.id } }) }}>Open as page</button>}
+    {(inline || linked) && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.duplicate(blockId) }}>Duplicate</button>}
     {inline && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.turnIntoPage(blockId, db.id) }}>Turn into page</button>}
     <button type="button" role="menuitem" onClick={copyLink}>Copy link</button>
     <hr />
-    <button type="button" role="menuitem" className="is-danger" onClick={remove}>Delete database</button>
+    {linked
+      ? <button type="button" role="menuitem" className="is-danger" onClick={() => { close(); actions?.remove(blockId) }}>Remove this view</button>
+      : <button type="button" role="menuitem" className="is-danger" onClick={remove}>Delete database</button>}
   </>
 }
 
@@ -293,10 +300,14 @@ function PropertiesPanel({ db, view, go }: { db: DatabasePage; view: View; go: (
 /** Add (design §6.2): a name, then a type; Enter makes a Text property. */
 function NewPropertyPanel({ db, view, go }: { db: DatabasePage; view: View; go: (p: Panel) => void }) {
   const change = useChange(db)
+  const changeView = useViewChange(db.id, view.id)
+  const blockId = useContext(MenuBlock) ?? ''
   const [name, setName] = useState('')
   const make = (type: PropertyType) => {
     const id = newId()
-    change({ kind: 'addProperty', property: { id, name: name.trim() || typeLabels[type], type }, viewId: view.id })
+    const linked = isLinkedBlock(blockId)
+    change({ kind: 'addProperty', property: { id, name: name.trim() || typeLabels[type], type }, ...(linked ? {} : { viewId: view.id }) })
+    if (linked) changeView(current => ({ columns: [...current.columns, { id }] }))
     go({ property: id })
   }
   return <>

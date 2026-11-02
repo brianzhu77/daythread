@@ -4,7 +4,7 @@
 // commit is one `set-values` with its per-cell check (model §5.2).
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
 import { cellValue, databaseRows, isDatabase, isEmptyValue, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewRows, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
@@ -14,6 +14,7 @@ import { holdKeyboard } from './keyboard'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide } from './property-editors'
 import { urlHref } from './property-values'
 import { useWorkspace } from './use-day'
+import { LinkedDatabase } from './database-linked'
 import { DatabaseMenuButton, DatabaseViewsButton, openDatabaseMenu } from './database-menu'
 
 const newId = (): string => crypto.randomUUID()
@@ -47,8 +48,21 @@ export function setShownView(blockId: string, viewId: string) {
   viewVersion++
   for (const l of viewListeners) l()
 }
-function useShownViews() { return useSyncExternalStore(l => { viewListeners.add(l); return () => viewListeners.delete(l) }, () => viewVersion, () => 0) }
+export function useShownViews() { return useSyncExternalStore(l => { viewListeners.add(l); return () => viewListeners.delete(l) }, () => viewVersion, () => 0) }
+/** The linked views on screen, by block: the menu lives outside the editor and finds a block's view and its change here. */
+interface LinkedBlock { view: View; json: string; change: ChangeView }
+const linkedBlocks = new Map<string, LinkedBlock>()
+export function setLinkedBlock(blockId: string, entry: LinkedBlock | null) {
+  const changed = linkedBlocks.get(blockId)?.json !== entry?.json
+  if (entry) linkedBlocks.set(blockId, entry); else linkedBlocks.delete(blockId)
+  if (!changed || !entry) return
+  viewVersion++
+  for (const l of viewListeners) l()
+}
+export const isLinkedBlock = (blockId: string) => linkedBlocks.has(blockId)
 export function shownView(db: Database, blockId: string): View {
+  const linked = linkedBlocks.get(blockId)
+  if (linked) return linked.view
   let id: string | null = null
   try { id = localStorage.getItem(viewKey(blockId)) } catch { /* private mode */ }
   return db.views.find(v => v.id === id) ?? db.views[0]!
@@ -56,8 +70,13 @@ export function shownView(db: Database, blockId: string): View {
 export type ViewFields = Omit<Extract<DatabaseChange, { kind: 'updateView' }>, 'kind' | 'viewId'>
 /** A change to a view's own settings: everything that edits one goes through here, built from its latest copy. */
 export type ChangeView = (build: (current: View) => ViewFields) => void
+/** Which block the menu is open on: a linked view's changes go to its block, not its database. */
+export const MenuBlock = createContext<string | null>(null)
 export function useViewChange(databaseId: string, viewId: string): ChangeView {
   const { run } = useWorkspace()
+  const blockId = useContext(MenuBlock)
+  const linked = blockId ? linkedBlocks.get(blockId) : undefined
+  if (linked) return linked.change
   return build => void run(ws => {
     const now = ws.pages.find(p => p.id === databaseId), current = isDatabase(now) ? now.database.views.find(v => v.id === viewId) : undefined
     return current ? { type: 'change-database', pageId: databaseId, change: { kind: 'updateView', viewId, ...build(current) } } : null
@@ -86,11 +105,15 @@ export interface BlockActions {
   turnIntoInline(cardId: string, pageId: string): void
   remove(blockId: string): void
   select(blockId: string): void
+  /** A linked view's settings live in its block: this changes them, from what the block holds now. */
+  updateLinkedView(blockId: string, build: (json: string) => string): void
+  /** Another block of the same database, right after this one: a linked view (design §9.1). */
+  duplicate(blockId: string): void
 }
 /** The actions of each block on screen, by block id: the menu lives outside the editor (app shell) and finds them here. */
 export const blockActions = new Map<string, BlockActions>()
 
-export function DatabaseBlock({ blockId, pageId, hostDate, actions }: { blockId: string; pageId: string; hostDate: string | null; actions?: BlockActions | null }) {
+export function DatabaseBlock({ blockId, pageId, viewJson, hostDate, actions }: { blockId: string; pageId: string; viewJson: string; hostDate: string | null; actions?: BlockActions | null }) {
   useLayoutEffect(() => { if (!actions) return; blockActions.set(blockId, actions); return () => { if (blockActions.get(blockId) === actions) blockActions.delete(blockId) } }, [blockId, actions])
   const { workspace } = useWorkspace()
   usePendingDatabases()
@@ -101,7 +124,11 @@ export function DatabaseBlock({ blockId, pageId, hostDate, actions }: { blockId:
     {pending.state === 'creating' ? <p className="database-empty">Creating…</p>
       : <button type="button" className="database-new" onClick={pending.retry}>Not created · Retry</button>}
   </div>
-  if (!workspace || !isDatabase(db) || db.database.homeBlockId !== blockId || db.trashedAt) return <DatabaseCard pageId={pageId} />
+  if (!workspace || !isDatabase(db)) return <DatabaseCard pageId={pageId} />
+  if (db.database.homeBlockId !== blockId) return <div className="database-block" contentEditable={false} {...isolate}>
+    <LinkedDatabase workspace={workspace} db={db} blockId={blockId} json={viewJson} pageDate={hostDate} actions={actions} />
+  </div>
+  if (db.trashedAt) return <DatabaseCard pageId={pageId} />
   return <div className="database-block" contentEditable={false} {...isolate}>
     <DatabaseView workspace={workspace} db={db} blockId={blockId} pageDate={hostDate} cap={rowCaps.inline} />
   </div>
@@ -346,6 +373,8 @@ function createOption(run: ReturnType<typeof useWorkspace>['run'], db: Page & { 
 
 /** The table view (design §4.1, §4.2): Name first, then the view's shown properties; `+ New` under the rows. */
 interface DatabaseViewProps { workspace: Workspace; db: Page & { database: Database }; blockId: string; pageDate: string | null; cap: number; showTitle?: boolean }
+/** A linked view's own title and the line under it (design §9.2). */
+export interface LinkedHeader { title: string; rename(title: string): void; source: ReactNode }
 /** The view a block shows, and how to change it, drawn in its layout. */
 function DatabaseView(props: DatabaseViewProps) {
   useShownViews()
@@ -355,26 +384,30 @@ function DatabaseView(props: DatabaseViewProps) {
 }
 
 /** Above a view's rows, whatever its layout: the title, its view and `⋯` buttons, and the line of rules. */
-export function DatabaseHeader({ db, view, changeView, blockId, showTitle, onTitleEnter }: { db: Page & { database: Database }; view: View; changeView: ChangeView; blockId: string; showTitle: boolean; onTitleEnter(): void }) {
+export function DatabaseHeader({ db, view, changeView, blockId, showTitle, linked, onTitleEnter }: { db: Page & { database: Database }; view: View; changeView: ChangeView; blockId: string; showTitle: boolean; linked?: LinkedHeader; onTitleEnter(): void }) {
   const { run } = useWorkspace()
-  const rename = (title: string) => { if (title !== db.title) void run({ type: 'rename-page', pageId: db.id, title }) }
+  const rename = (title: string) => {
+    if (linked) { if (title !== linked.title) linked.rename(title); return }
+    if (title !== db.title) void run({ type: 'rename-page', pageId: db.id, title })
+  }
   const titleInput = useRef<HTMLInputElement>(null)
   useSaveOnHide(() => { if (titleInput.current && document.activeElement === titleInput.current) rename(titleInput.current.value.trim()) })
   return <>
     {!showTitle && <div className="database-title-row is-page"><DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} /><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
     {showTitle && <div className="database-title-row">
-      <input ref={titleInput} className="database-title" data-database={db.id} aria-label="Database name" placeholder="Untitled database" defaultValue={db.title} key={db.title}
+      <input ref={titleInput} className="database-title" data-database={linked ? undefined : db.id} aria-label={linked ? 'View name' : 'Database name'} placeholder="Untitled database" defaultValue={linked ? linked.title : db.title} key={linked ? linked.title : db.title}
         onBlur={e => rename(e.currentTarget.value.trim())}
         // Enter in a new database's title goes on to its first row's Name (design §3.1).
         onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.currentTarget.blur(); onTitleEnter() } }} />
-      <DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} />
+      {linked ? <span className="database-view-name is-static">{view.name}</span> : <DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} />}
       <DatabaseMenuButton blockId={blockId} databaseId={db.id} />
     </div>}
+    {linked?.source}
     {(view.filter.length > 0 || view.sort.length > 0) && <RulesLine db={db.database} view={view} blockId={blockId} databaseId={db.id} onChange={changeView} />}
   </>
 }
 
-export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
+export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true, linked }: DatabaseViewProps & { view: View; changeView: ChangeView; linked?: LinkedHeader }) {
   const { run, latest } = useWorkspace()
   const navigate = useNavigate()
   const commit = useCommitCell()
@@ -478,8 +511,10 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     const id = newId()
     void run(ws => {
       const now = ws.pages.find(p => p.id === db.id)
-      return isDatabase(now) ? { type: 'change-database', pageId: db.id, change: { kind: 'addProperty', property: { id, name: uniqueName(now.database), type: 'text' }, viewId: view.id } } : null
+      return isDatabase(now) ? { type: 'change-database', pageId: db.id, change: { kind: 'addProperty', property: { id, name: uniqueName(now.database), type: 'text' }, ...(linked ? {} : { viewId: view.id }) } } : null
     })
+    // A linked view shows it in its own columns; the source's views only list it.
+    if (linked) changeView(current => ({ columns: [...current.columns, { id }] }))
   }
 
   const shown = rows.slice(0, limit)
@@ -568,7 +603,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     return () => { for (const type of ['copy', 'cut', 'paste'] as const) window.removeEventListener(type, handle, true) }
   }, [])
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
-    <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
+    <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
       <table className="database-table">
         <thead>

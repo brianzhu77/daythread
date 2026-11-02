@@ -3,12 +3,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PGlite } from '@electric-sql/pglite'
-import { cellValue, databaseRows, newRowValues, readValue, storedValue, viewRows, type Condition, type Database, type Property, type View } from '../src/domain/database.ts'
+import { cellValue, databaseRows, newDatabase, newRowValues, readValue, storedValue, viewRows, type Condition, type Database, type Property, type View } from '../src/domain/database.ts'
 import { childPages, listedPages, moveRefusal, subtreeIds } from '../src/domain/page-tree.ts'
 import { exportFiles } from '../src/domain/export.ts'
 import { buildSearchIndex, search } from '../src/domain/search.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { blockPlace, withBlockBack, type EditorNode } from '../src/domain/editor-document.ts'
+import { linkedViewJson, linkedViewOf } from '../src/domain/linked-view.ts'
+import { isUntouchedCopy, pageFromTemplate } from '../src/domain/day-template.ts'
 import { PostgresWorkspaceRepository } from '../src/server/postgres-repository.ts'
 import { pgliteClient } from '../src/server/db/sql.ts'
 import type { Action, Page } from '../src/domain/types.ts'
@@ -401,4 +403,31 @@ test('a home block goes back where it sat, by its neighbours, wherever the page 
   assert.deepEqual(ids(withBlockBack([line('p', [line('a')])], place)), ['p', 'a', 'home'])
   assert.equal(withBlockBack([line('p', [line('a')])], place)[0]!.children!.length, 2)
   assert.equal(blockPlace([line('a')], 'home'), null)
+})
+
+test('a linked view reads its own settings, and a broken or empty one reads as the source first view', () => {
+  const db = newDatabase('home')
+  assert.equal(linkedViewOf(db, '').id, db.views[0]!.id)
+  assert.equal(linkedViewOf(db, 'not json').id, db.views[0]!.id)
+  assert.equal(linkedViewOf(db, JSON.stringify({ name: 'no id' })).id, db.views[0]!.id)
+  const json = linkedViewJson(db.views[0]!, 'mine')
+  const view = linkedViewOf(db, JSON.stringify({ ...JSON.parse(json), title: 'This week', filter: [{ by: 'title', op: 'contains', value: 'x' }], groupBy: 'status' }))
+  assert.equal(view.id, 'mine')
+  assert.equal(view.title, 'This week')
+  assert.equal(view.filter.length, 1)
+  // A later build's field isn't lost by this one's edits (R2-16).
+  assert.equal((view as unknown as { groupBy: string }).groupBy, 'status')
+  assert.equal(JSON.parse(JSON.stringify({ ...view, sort: [] })).groupBy, 'status')
+})
+
+test('a database block in a template is a linked view on each new page; nothing else is made', () => {
+  const view = linkedViewJson(newDatabase('home').views[0]!, 'in-template')
+  const template = { document: JSON.stringify([{ id: 't1', type: 'database', props: { pageId: 'list', view }, children: [] }]) } as Page
+  const a = pageFromTemplate(template, '2026-11-03'), b = pageFromTemplate(template, '2026-11-04')
+  assert.equal(a[0]!.type, 'database')
+  assert.equal(a[0]!.props?.view, view)
+  assert.equal(a[0]!.props?.pageId, 'list')
+  assert.notEqual(a[0]!.id, 't1')
+  assert.notEqual(a[0]!.id, b[0]!.id)
+  assert.equal(isUntouchedCopy(template, a), true)
 })
