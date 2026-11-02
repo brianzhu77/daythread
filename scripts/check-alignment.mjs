@@ -21,6 +21,8 @@
 //      A marker that can't be found is MISSING, never skipped.
 //   The title's date picker: each day's dot centred under its number (within 1px) and below the digits.
 //   Page card titles must wrap, not clip (link cards may end in an ellipsis).
+//   Tables (Lead 319a428b): in every cell type of a table's rows and of a row page's properties, what's drawn (text, chip,
+//   checkbox) is centred on its row within 1px; on a row page, the name's text too, and the value against the name.
 //   Inline chips (A9a page links, A11 line links): the chip's height within its line's box, and its text on the same
 //   baseline as the plain text beside it (Jazz line-links-states §7 check 10).
 //   3. Coverage. Every row type in REQUIRED must appear on the measured pages; one that doesn't is MISSING, never a
@@ -34,7 +36,42 @@ if (!base) { console.error('usage: node scripts/check-alignment.mjs <base url> [
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
-const REQUIRED = ['heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
+const REQUIRED = ['heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
+
+/** What a table cell or a row page's value draws: its box when it's a checkbox, else its first line of text, else a chip or dot. */
+function drawnCentres() {
+  const cy = r => r.top + r.height / 2
+  const drawn = host => {
+    const box = host.querySelector('.property-checkbox')
+    if (box) return cy(box.getBoundingClientRect())
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT)
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (!n.textContent.trim() || n.parentElement.closest('.database-open, .database-row-gutter, .is-placeholder')) continue
+      const range = document.createRange(); range.selectNodeContents(n)
+      const line = [...range.getClientRects()].find(r => r.width > 0 && r.height > 0)
+      if (line) return cy(line)
+    }
+    return null
+  }
+  const cells = [...document.querySelectorAll('.database-row')].flatMap(row => [...row.querySelectorAll(':scope > td')].map(td => {
+    const type = td.classList.contains('is-title') ? 'title' : [...td.classList].find(c => c.startsWith('is-') && !['is-saving', 'is-unsaved'].includes(c))?.slice(3)
+    const y = drawn(td)
+    return y === null ? null : { where: 'table cell', type, label: row.querySelector('.database-title-cell')?.textContent.trim().slice(0, 16) ?? '', off: y - cy(row.getBoundingClientRect()) }
+  })).filter(Boolean)
+  // The head's names, on their row the same way.
+  for (const th of document.querySelectorAll('.database-table th')) {
+    const y = drawn(th), row = th.closest('tr')
+    if (y !== null) cells.push({ where: 'table head', type: 'head', label: th.textContent.trim().slice(0, 16), off: y - cy(row.getBoundingClientRect()) })
+  }
+  const properties = [...document.querySelectorAll('.row-property')].flatMap(row => {
+    const name = row.querySelector('.row-property-name'), type = name?.getAttribute('data-type'), value = row.querySelector('.row-property-value')
+    if (!name || !value) return []
+    const nameY = drawn(name), y = drawn(value), own = cy(row.getBoundingClientRect())
+    return y === null || nameY === null ? [] : [{ where: 'row page', type, label: name.textContent.trim().slice(0, 16), off: y - own, name: nameY - own, against: y - nameY }]
+  })
+  const firstRow = document.querySelector('.database-row [data-cell]')?.getAttribute('data-cell')
+  return { cells, properties, firstRow }
+}
 
 function measure() {
   const visible = e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 }
@@ -186,6 +223,15 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     await page.goto(`${base}${path}`, { waitUntil: 'networkidle' }); await page.waitForTimeout(1000)
     const { rows, editorLeft, chips } = await page.evaluate(measure)
     await drawPass(page, rows)
+    const table = await page.evaluate(drawnCentres)
+    // A row page lists the same values: the table's first row, opened read-only (a cell's key is block|row|column).
+    let properties = []
+    if (table.firstRow) {
+      const rowPage = await browser.newPage({ viewport: { width, height } })
+      await rowPage.goto(`${base}/pages?page=${encodeURIComponent(table.firstRow.split('|')[1])}`, { waitUntil: 'networkidle' }); await rowPage.waitForTimeout(1000)
+      ;({ properties } = await rowPage.evaluate(drawnCentres))
+      await rowPage.close()
+    }
     // The drag handle shows on hover (desktop only): hover one row of each kind and measure it there.
     if (width === 1280) {
       const sampled = new Set()
@@ -276,6 +322,18 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
       results.push(r.newOnName == null
         ? { at, check: `database + New: "${r.label}"`, ok: 'missing', detail: 'no row or no + New, so not measured' }
         : { at, check: `database + New on Name's text: "${r.label}"`, ok: Math.abs(r.newOnName) <= TOLERANCE, detail: `${r.newOnName >= 0 ? '+' : ''}${fmt(r.newOnName)}px` })
+    }
+    // What's drawn in a table's cells and on a row page, centred on its row (Lead 319a428b).
+    const px = n => `${n >= 0 ? '+' : ''}${fmt(n)}px`
+    for (const c of table.cells) {
+      seen.get(width).add(c.type === 'head' ? 'table head' : `table cell: ${c.type}`)
+      results.push({ at, check: `${c.where} ${c.type} centred on its row: "${c.label}"`, ok: Math.abs(c.off) <= TOLERANCE, detail: px(c.off) })
+    }
+    for (const c of properties) {
+      seen.get(width).add(`row page: ${c.type}`)
+      results.push({ at, check: `row page ${c.type} value centred on its row: "${c.label}"`, ok: Math.abs(c.off) <= TOLERANCE, detail: px(c.off) })
+      results.push({ at, check: `row page ${c.type} name centred on its row: "${c.label}"`, ok: Math.abs(c.name) <= TOLERANCE, detail: px(c.name) })
+      results.push({ at, check: `row page ${c.type} value level with its name: "${c.label}"`, ok: Math.abs(c.against) <= TOLERANCE, detail: px(c.against) })
     }
     // 2. Markers on the first text line.
     for (const r of rows) {

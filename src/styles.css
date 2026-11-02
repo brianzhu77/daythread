@@ -1748,7 +1748,10 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 @media (hover: none) { .database-open { display: none; } }
 /* Checkbox: centred, and a tap anywhere in its cell ticks it; the tap area stays inside the cell. */
 .database-td.is-checkbox { position: relative; text-align: center; }
-.database-td.is-checkbox .property-checkbox { position: static; vertical-align: middle; }
+/* In a page, `.ProseMirror td` sets vertical-align: top, and the box sat 3.7 px (1280) to 7.7 px (phone) above the row's centre (Lead 319a428b). A flex row, so no line box adds its own offset. */
+.database-block .database-td, .database-block .database-th { vertical-align: middle; }
+.database-check-cell { display: flex; align-items: center; justify-content: center; }
+.database-td.is-checkbox .property-checkbox { position: static; }
 .database-td.is-checkbox .property-checkbox::after { content: ''; position: absolute; inset: 0; }
 
 /* Under the rows: + New on the Name column's text, quiet but always there. */

@@ -84,7 +84,18 @@ ws = await run({ type: 'save-editor', pageId: scratchId, expectedContent: pageCo
 
 ws = await run({ type: 'create-database', pageId: databaseId, parentId: scratchId, homeBlockId: databaseBlock, title: 'Fixture reading list' })
 ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'addProperty', property: { id: 'status', name: 'Status', type: 'status' } } })
-ws = await run({ type: 'add-row', databaseId, pageId: crypto.randomUUID(), title: 'Fixture row', values: {}, at: new Date().toISOString() })
+// One property of each type, with a value, so the gate measures what every cell draws (a table's and a row page's).
+for (const property of [
+  { id: 'text', name: 'Notes', type: 'text' },
+  { id: 'number', name: 'Pages', type: 'number' },
+  { id: 'select', name: 'Genre', type: 'select', options: [{ id: 'novel', name: 'Novel' }] },
+  { id: 'multi', name: 'Tags', type: 'multiSelect', options: [{ id: 'sf', name: 'SF' }] },
+  { id: 'date', name: 'Due', type: 'date' },
+  { id: 'done', name: 'Owned', type: 'checkbox' },
+  { id: 'url', name: 'Link', type: 'url' },
+] as const) ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'addProperty', property: property as never } })
+ws = await run({ type: 'add-row', databaseId, pageId: crypto.randomUUID(), title: 'Fixture row', values: { text: 'A note', number: 412, select: 'novel', multi: ['sf'], date: { start: SCRATCH }, done: true, url: 'https://example.com/fixture' }, at: new Date().toISOString() })
+ws = await run({ type: 'add-row', databaseId, pageId: crypto.randomUUID(), title: 'Fixture row, unticked', values: {}, at: new Date().toISOString() })
 
 const task = (title: string) => {
   const found = ws.tasks.find(t => t.title === title)
