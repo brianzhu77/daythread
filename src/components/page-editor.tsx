@@ -16,7 +16,7 @@ import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { blockPlace, editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, sectionRange, withBlockBack, type BlockPlace, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
-import { announceSave, changedBy, claim, clearOwn, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn } from './draft-slots'
+import { announceSave, changedBy, claim, clearOwn, landedSave, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn, type DraftSlot } from './draft-slots'
 import { applyCommand, plannedOn, taskRows as rowsOfTask, urlOwner } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
 import { defaultLinkTitle, isHttpUrl, urlKey } from '../domain/url-key'
@@ -376,7 +376,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const runRef = useRef(run); runRef.current = run
   const navigate = useNavigate()
   const key = `daythread:editor:${page.id}`
-  const initial = useRef<{ nodes: EditorNode[]; base: string; baseDocument: string; recovered: boolean; cutTaskIds: string[]; detach: string[]; adopt: { blockId: string; pageId: string }[] } | null>(null)
+  const initial = useRef<{ nodes: EditorNode[]; base: string; baseDocument: string; recovered: boolean; cutTaskIds: string[]; detach: string[]; adopt: { blockId: string; pageId: string }[]; sent: DraftSlot['sent'] } | null>(null)
   if (!initial.current) {
     // B40: from here on, a background save of kept drafts leaves this page's draft to this editor.
     noteEditorMounting(page.id)
@@ -384,8 +384,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     let nodes = editorSeed(page, workspace), recovered = false, savedBase = base, savedBaseDocument = page.document, cutTaskIds: string[] = [], detach: string[] = [], adopt: { blockId: string; pageId: string }[] = []
     // B35: this tab's own slot; drafts other tabs left behind are merged in after mount. A recovered draft brings back
     // its cuts too (Ratchet 067be3eb): a cut row in it is a move, never a delete.
-    try { const stored = readOwn(page.id); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; savedBaseDocument = stored.baseDocument ?? page.document; recovered = true; cutTaskIds = (stored.cutTaskIds ?? []).filter((x: unknown) => typeof x === 'string'); detach = stored.detachDatabaseIds ?? []; adopt = stored.adoptDatabaseBlocks ?? [] } } catch { /* fresh document */ }
-    initial.current = { nodes, base: savedBase, baseDocument: savedBaseDocument, recovered, cutTaskIds, detach, adopt }
+    let sent: DraftSlot['sent']
+    try {
+      const stored = readOwn(page.id), landed = stored?.document ? landedSave(stored, base) : 'no'
+      // B81: a reload beat the reply to a save that landed, so this draft only looks older than the page. With all of it
+      // saved there's nothing to recover; with more typed since, it goes on from the page it saved.
+      if (landed === 'all') clearOwn(page.id)
+      else if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = landed === 'more' ? base : stored.base; savedBaseDocument = landed === 'more' ? page.document : stored.baseDocument ?? page.document; recovered = true; cutTaskIds = (stored.cutTaskIds ?? []).filter((x: unknown) => typeof x === 'string'); detach = stored.detachDatabaseIds ?? []; adopt = stored.adoptDatabaseBlocks ?? []; sent = stored.sent }
+    } catch { /* fresh document */ }
+    initial.current = { nodes, base: savedBase, baseDocument: savedBaseDocument, recovered, cutTaskIds, detach, adopt, sent }
   }
   const [pastedChecklistIds, setPastedChecklistIds] = useState<string[]>(() => checklistIds(initial.current!.nodes))
   // The blocks the handle press picked; the drop handler moves exactly these.
@@ -538,6 +545,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const semanticDeletes = useRef(new Set<string>())
   // B33: tasks whose rows were cut (a move): the next save says so, so the task isn't deleted with its line.
   const cutTasks = useRef(new Set<string>(initial.current.cutTaskIds))
+  // B81: the save on its way, kept with the draft; and the one a recovered draft came with, which may land after this load.
+  const sentSave = useRef<DraftSlot['sent']>(undefined)
+  const recoveredSent = useRef(initial.current.sent)
   // Databases this page's next save turns into full pages (Turn into page) or makes at home here (Turn into inline),
   // by database page id; each goes with the save that carries it (model §3, rules 6 and 7).
   const databaseFlags = useRef({ detach: new Set(initial.current.detach), adopt: new Map(initial.current.adopt.map(a => [a.pageId, a.blockId])) })
@@ -744,7 +754,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     })()
     return true
   }
-  const stash = () => { if (claimedAway()) return; try { writeOwn(page.id, { base: base.current, baseDocument: baseDoc.current, document: JSON.stringify(nodes()), ...(cutTasks.current.size ? { cutTaskIds: [...cutTasks.current] } : {}), ...databaseFieldsNow() }) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
+  const stash = () => { if (claimedAway()) return; try { writeOwn(page.id, { base: base.current, baseDocument: baseDoc.current, document: JSON.stringify(nodes()), ...(cutTasks.current.size ? { cutTaskIds: [...cutTasks.current] } : {}), ...databaseFieldsNow(), ...(sentSave.current ? { sent: sentSave.current } : {}) }) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
   const flushRef = useRef<() => Promise<void>>(async () => {})
   /**
    * B35: a save that failed on the network tries again by itself, with the same operation id (a lost reply replays
@@ -797,11 +807,23 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     catch (error) { debugClient('editor.save.rejected',{operationId,pageId:page.id,result:'conflict',error:error instanceof Error?error.name:'UnknownError'}); sending.current = false; setFailed(true); setUnsaved('refused'); setStatus(error instanceof Error ? error.message : 'Cannot save; draft kept'); return }
     let settled!: () => void
     inflight.current = new Promise<void>(resolve => { settled = resolve })
+    sentSave.current = { base: pageContentKey(preview.pages.find(p => p.id === page.id)!), document: pageContentKey({ document }) }
+    stash()
     try {
       let failure = ''
       const result = await run(action,undefined,operationId,{ onFailure: m => { failure = m } })
       sending.current = false
+      // Only a reply clears it: a request cut off by a reload (WebKit runs this as the page goes) may still have landed.
+      if (result) sentSave.current = undefined
       if (!result) {
+        // B81: refused because the save this draft came with landed after the page loaded: it starts from that page, once.
+        const landedNow = latest()?.pages.find(p => p.id === page.id)
+        if (recoveredSent.current && landedNow && pageContentKey(landedNow) === recoveredSent.current.base) {
+          recoveredSent.current = undefined
+          base.current = pageContentKey(landedNow); baseDoc.current = landedNow.document
+          clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0)
+          return
+        }
         // Refused only because the workspace moved on (a new day made on another device, a change to another page):
         // run has already loaded the latest, and if this page is still what the save started from, nothing of his
         // conflicts, so it goes again once, silently (Lead b5e55c49, Jazz 3e569f5c). A real change to this page
@@ -821,7 +843,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         else setStatus("Couldn't save · draft kept")
         return
       }
-      clearTimeout(retryTimer.current); retries.current = 0; offlineFailure.current = false; resentForRevision.current = false
+      clearTimeout(retryTimer.current); retries.current = 0; offlineFailure.current = false; resentForRevision.current = false; recoveredSent.current = undefined
       announceSave(page.id)
       // A home block deleted with this save took its database to Trash (model §3): say so, with Undo, which puts the block
       // back at its place by id (the block back in the page restores the database and its rows). Not the editor's ⌘Z: he
@@ -1041,20 +1063,28 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // this page shows it on return ("Recovered unsaved draft", or Load latest after a conflict).
       stash()
       const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current], flags = databaseFields()
-      trackLeaveSave((async () => {
+      // React's strict check (the dev server only) runs this and mounts again at once: that's no leaving, and a save sent
+      // here would race the recovered draft's own, which then reads as changed elsewhere (B81).
+      queueMicrotask(() => { if (left.current) trackLeaveSave((async () => {
         // A save already on its way finishes first, so this one starts from the page it produced.
         await inflight.current
         if (document !== lastSaved.current) {
           const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), ...flags, today: todayIso() }
           debugClient('editor.save.leave',{pageId:page.id})
+          try {
+            const source = latestWorkspace.current
+            const after = applyCommand(source, { operationId: 'preview', expectedRevision: source.revision, action }).workspace.pages.find(p => p.id === page.id)!
+            sentSave.current = { base: pageContentKey(after), document: pageContentKey({ document }) }; stash()
+          } catch { /* the save below will say why */ }
           const result = await runRef.current(action, undefined, newOperationId(), { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => {} })
           if (!result) return false
+          sentSave.current = undefined
           rememberLeaveSave(page.id, document)
         }
         // Clear the stash only if it's still this draft: he may already be back on the page and typing.
         clearOwn(page.id, document)
         return true
-      })())
+      })()) })
     }
   }, [])
 
