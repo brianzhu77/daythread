@@ -5,7 +5,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { isDatabase, propertyOf, titleId, typeLabels, propertyTypes, type Condition, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { blockActions, setShownView, shownView } from './database-block'
+import { blockActions, setShownView, shownView, useViewChange } from './database-block'
 import { ChevronDownIcon } from './icons'
 import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
@@ -165,12 +165,11 @@ export function opsFor(type: PropertyType): FilterOp[] {
   }
 }
 const titleProperty: Property = { id: titleId, name: 'Name', type: 'text' }
-const viewIn = (current: Database, view: View) => current.views.find(v => v.id === view.id) ?? view
 function columnsOf(db: Database): Property[] { return [titleProperty, ...db.properties] }
 
 function FilterPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
-  const change = useChange(db)
-  const save = (build: (filter: Condition[]) => Condition[]) => change(current => ({ kind: 'updateView', viewId: view.id, filter: build(viewIn(current, view).filter) }))
+  const changeView = useViewChange(db.id, view.id)
+  const save = (build: (filter: Condition[]) => Condition[]) => changeView(current => ({ filter: build(current.filter) }))
   const set = (i: number, next: Condition) => save(filter => filter.map((c, j) => (j === i ? next : c)))
   const add = () => save(filter => [...filter, { by: titleId, op: 'contains' }])
   return <>
@@ -244,8 +243,8 @@ function CommitInput({ initial, onCommit, inputMode, placeholder, ariaLabel = 'V
 // ---------------------------------------------------------------- sort
 
 function SortPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
-  const change = useChange(db)
-  const save = (build: (sort: Sort[]) => Sort[]) => change(current => ({ kind: 'updateView', viewId: view.id, sort: build(viewIn(current, view).sort) }))
+  const changeView = useViewChange(db.id, view.id)
+  const save = (build: (sort: Sort[]) => Sort[]) => changeView(current => ({ sort: build(current.sort) }))
   const move = (i: number, by: number) => save(sort => { const next = [...sort]; const [s] = next.splice(i, 1); next.splice(i + by, 0, s!); return next })
   const unused = columnsOf(db.database).find(p => !view.sort.some(s => s.by === p.id))
   return <>
@@ -273,7 +272,8 @@ function PropertiesPanel({ db, view, go }: { db: DatabasePage; view: View; go: (
   const shown = new Set(view.columns.map(c => c.id))
   // Shown ones in the view's order, then the hidden ones in the database's order.
   const ordered = [...view.columns.map(c => db.database.properties.find(p => p.id === c.id)).filter((p): p is Property => Boolean(p)), ...db.database.properties.filter(p => !shown.has(p.id))]
-  const setColumns = (build: (columns: View['columns']) => View['columns']) => change(current => ({ kind: 'updateView', viewId: view.id, columns: build(viewIn(current, view).columns) }))
+  const changeView = useViewChange(db.id, view.id)
+  const setColumns = (build: (columns: View['columns']) => View['columns']) => changeView(current => ({ columns: build(current.columns) }))
   const toggle = (p: Property) => setColumns(columns => (columns.some(c => c.id === p.id) ? columns.filter(c => c.id !== p.id) : [...columns, { id: p.id }]))
   // Left and right, one place at a time (R1-14); dragging comes later.
   const shift = (p: Property, by: -1 | 1) => setColumns(columns => { const i = columns.findIndex(c => c.id === p.id), j = i + by; if (i < 0 || j < 0 || j >= columns.length) return columns; const next = [...columns]; [next[i], next[j]] = [next[j]!, next[i]!]; return next })
@@ -309,6 +309,7 @@ function NewPropertyPanel({ db, view, go }: { db: DatabasePage; view: View; go: 
 
 function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: View; propertyId: string; go: (p: Panel) => void }) {
   const change = useChange(db)
+  const changeView = useViewChange(db.id, view.id)
   const property = db.database.properties.find(p => p.id === propertyId)
   if (!property) return <><Head title="Property" back={() => go('properties')} /><p className="database-menu-quiet">Deleted</p></>
   const update = (fields: Omit<Extract<DatabaseChange, { kind: 'updateProperty' }>, 'kind' | 'propertyId'>, withUndo = false) => change({ kind: 'updateProperty', propertyId, ...fields }, withUndo)
@@ -346,7 +347,7 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
       <CommitInput key={options.length} ariaLabel="New option" initial="" placeholder="Add an option" onCommit={v => { if (v.trim()) { const made = { id: newId(), name: v.trim(), ...(property.type === 'status' ? { group: 'todo' as const } : {}) }; updateOptions(now => [...now, made]) } }} />
     </div>}
     <hr />
-    <button type="button" role="menuitem" onClick={() => change(current => { const { columns } = viewIn(current, view); return { kind: 'updateView', viewId: view.id, columns: columns.some(c => c.id === propertyId) ? columns.filter(c => c.id !== propertyId) : [...columns, { id: propertyId }] } })}>{shown ? 'Hide in this view' : 'Show in this view'}</button>
+    <button type="button" role="menuitem" onClick={() => changeView(({ columns }) => ({ columns: columns.some(c => c.id === propertyId) ? columns.filter(c => c.id !== propertyId) : [...columns, { id: propertyId }] }))}>{shown ? 'Hide in this view' : 'Show in this view'}</button>
     <button type="button" role="menuitem" className="is-danger" onClick={() => { change({ kind: 'removeProperty', propertyId }, true); go('properties') }}>Delete property</button>
   </>
 }
