@@ -32,7 +32,7 @@ import { newOperationId, useTaskTick, useWorkspace } from './use-day'
 import { useKeyboardTop } from './keyboard'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
+import { CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { DatabaseBlock, setDatabasePending, type BlockActions } from './database-block'
@@ -43,6 +43,7 @@ import { endOfLineAbove, rowArrows } from './row-arrows'
 import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, rememberLeaveSave, trackLeaveSave } from './editor-flush'
 import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
+import { isDatabase } from '../domain/database'
 import { openedByTurnover } from './use-screen-today'
 import { openedByMove } from './new-build'
 import { fixedOffset, seenArea } from './fixed-coords'
@@ -230,10 +231,14 @@ function PageCard({ pageId, cardId, url = '', line = '' }: { pageId: string; car
   // The first lines written on the page, as in Craft's card (v0.3 §6.2 "title, short preview").
   // A trashed page keeps its contents out of other pages (Ratchet).
   const preview = target && !trashed ? pagePreview(target) : ''
+  // A card to a full-page database whose parent is this page can turn back into its table (design §3.2).
+  const actions = useContext(DatabaseEditorActions)
+  const inline = actions && target && isDatabase(target) && !trashed && target.database.homeBlockId === null && target.parentId === actions.hostPageId
   return <span className={`editor-page-card-row ${link ? 'is-link' : ''}`} contentEditable={false}>
+    {inline && <span className="editor-row-menu editor-card-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${title}`} triggerClass="editor-row-more" groups={[{ items: [{ label: 'Turn into inline', onSelect: () => actions.turnIntoInline(cardId, pageId) }] }]} /></span>}
     <button type="button" className={`editor-page-card ${trashed ? 'in-trash' : ''}`} disabled={pending?.state === 'creating'}
       onClick={() => { if (pending) { if (pending.state === 'failed') pending.retry(); return } rememberCard(cardId); void navigate({ to: '/pages', search: { page: pageId } }) }}>
-      <span className="editor-page-card-icon">{link ? <GlobeIcon /> : <PagesIcon />}</span>
+      <span className="editor-page-card-icon">{link ? <GlobeIcon /> : target && isDatabase(target) ? <DatabaseIcon /> : <PagesIcon />}</span>
       <span className="editor-page-card-text">
         <span className={`editor-page-card-title ${target?.title || link ? '' : 'untitled'}`}>{title}</span>
         {/* Link cards stay one line (A2): they show the domain instead. */}
@@ -439,6 +444,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           : moving ? c : { ...c, props: { ...c.props, refId: crypto.randomUUID() } })
         const fresh = (node: EditorNode): EditorNode => {
           const id = crypto.randomUUID()
+          // A database block (R1, Jazz §6.3.12): a cut moves the database here (this save makes the block its home); a
+          // copy pastes a page card to it, never a second database. Linked views come with R2.
+          if (node.type === 'database') {
+            const pageId = String(node.props?.pageId ?? '')
+            if (moving) { databaseFlags.current.adopt.set(pageId, id); return { ...node, id } }
+            return { id, type: 'pageLink', props: { pageId }, children: [] }
+          }
           return { ...node, id, content: freshContent(node), ...(node.type === 'task' ? { props: moving && latestWorkspace.current.tasks.some(t => t.id === node.props?.taskId) ? node.props : { taskId: `editor-task:${id}`, role: 'reference', planDate: '' } } : {}), ...(node.children ? { children: node.children.map(fresh) } : {}) }
         }
         insert(payload.blocks.map(fresh))
@@ -1578,6 +1590,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     dragging.current = []; dropRef.current = null; setDrop(null); setTouchDragging(false)
   }
   const databaseActions = useMemo<BlockActions>(() => ({
+    hostPageId: page.id,
     // Turn into page (design §3.2): the table becomes our page card in place; the save says it's a full page now.
     turnIntoPage: (blockId, pageId) => {
       databaseFlags.current.adopt.delete(pageId); databaseFlags.current.detach.add(pageId)
@@ -1589,7 +1602,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       databaseFlags.current.detach.delete(pageId); databaseFlags.current.adopt.set(pageId, block!.id)
     },
     remove: blockId => editor.removeBlocks([blockId]),
-  }), [editor])
+    // Esc from the table: the block selected whole again, in the page editor (design §10).
+    select: blockId => { if (editor.getBlock(blockId)) { editor.setTextCursorPosition(blockId); editor.focus() } },
+  }), [editor, page.id])
   const [dock, setDock] = useState<HTMLElement | null>(null)
   useEffect(() => setDock(document.getElementById('editor-dock')), [])
   useEffect(() => {
@@ -1800,6 +1815,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       try { localStorage.setItem(`daythread:cut:${token}`, JSON.stringify(blocks)) } catch { /* same-tab move remains available */ }
       // Tasks typed in the editor keep their `editor-task:` id as their real id, so check the workspace, not the prefix.
       for (const n of deepNodes(blocks)) if (n.type === 'task' && latestWorkspace.current.tasks.some(t => t.id === n.props?.taskId)) cutTasks.current.add(String(n.props!.taskId))
+      // A database whose home block is cut becomes a full page here until the paste adopts it (model §3, 6 then 7); this
+      // save goes at once, so a paste on another page lands after it (Lead fdcc7b9f).
+      const homes = deepNodes(blocks).filter(n => n.type === 'database' && latestWorkspace.current.pages.some(p => p.id === n.props?.pageId && p.database?.homeBlockId === n.id && p.parentId === page.id))
+      for (const n of homes) databaseFlags.current.detach.add(String(n.props!.pageId))
+      if (homes.length) setTimeout(() => { clearTimeout(timer.current); void flushRef.current() }, 0)
       editor.transact(tr => { closeHistory(tr); if (chosen) editor.removeBlocks(chosen.map(n => n.id)); else tr.deleteSelection() })
       selected.current = []; setSelectionLabel('')
     }
@@ -2053,6 +2073,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       }
       // Keys inside a row's ⋯ menu belong to the menu (Enter chooses, arrows move), never to the editor's row rules.
       if ((e.target as Element).closest?.('.editor-row-menu')) return
+      // Keys inside a database table belong to the table (design §10): cells, its title, its menus.
+      if ((e.target as Element).closest?.('.database-block')) return
+      // A database block selected whole (↑/↓ stop on it once): Enter goes into its first cell (design §10).
+      if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const at = editor.getTextCursorPosition().block
+        if (at.type === 'database') {
+          const first = editor.domElement?.querySelector<HTMLElement>(`[data-id="${CSS.escape(at.id)}"] [data-nav="0:0"]`)
+          if (first) { e.preventDefault(); e.stopPropagation(); first.focus(); return }
+        }
+      }
       // Keys typed in a draft band belong to the band. The rules below act on the editor's own caret row, so End
       // there would move his caret into his own row and send his next words to it.
       if ((e.target as Element).closest?.('.draft-host')) return
