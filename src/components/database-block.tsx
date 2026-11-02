@@ -10,6 +10,7 @@ import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
 import { ChevronDownIcon } from './icons'
+import { holdKeyboard } from './keyboard'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useWide } from './property-editors'
 import { urlHref } from './property-values'
 import { useWorkspace } from './use-day'
@@ -341,6 +342,8 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
   const key = (rowId: string, columnId: string) => cellKey({ blockId, databaseId: db.id, rowId, columnId })
 
   const addRow = () => {
+    // On the phone the row opens as its page with the caret in its title: raise the keyboard inside this tap.
+    if (!wide) holdKeyboard()
     const prefill = newRowValues(db.database, view, context)
     const pageId = newId()
     void run({ type: 'add-row', databaseId: db.id, pageId, title: prefill.title, values: prefill.values, at: new Date().toISOString() },
