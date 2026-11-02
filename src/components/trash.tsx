@@ -2,24 +2,25 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { editorSeed, inlineText, type EditorNode } from '../domain/editor-document'
 import { cardTo, isTrashed, parentOf, subtreeIds, trashBatch, trashBatches, trashedChildPages } from '../domain/page-tree'
-import type { Page, Receipt, Workspace } from '../domain/types'
+import type { Action, Page, Receipt, Workspace } from '../domain/types'
 import { databaseOfRow, isDatabase } from '../domain/database'
 import { longLabel, toIso } from './dates'
 import { flushEditor } from './editor-flush'
 import { jumpToBlock, lookupFailed } from './line-jump'
 import { resolveLineLink } from '../server/functions'
 import { toast } from '@heroui/react'
-import { ChevronRightIcon, PageKindIcon, TrashIcon } from './icons'
+import { CalendarIcon, ChevronRightIcon, PageKindIcon, TrashIcon } from './icons'
 import { LinkUrlRow } from './link-url-row'
 import { InlineWithRefs } from './line-text'
 import { displayPageTitle } from './page-title'
 import { PageLink, pageHref, pageLabel, useToday } from './page-tree'
-import { useWorkspace } from './use-day'
+import { useWorkspace, type NoticeArg } from './use-day'
 
 // A4 trash and restore, laid out per Jazz docs/design/pages-trash-layout.md (2956eea). Data: docs/design/a4-trash-data.md.
 
 /** Where the old parent is, for "From …" and "was in …": a page title, a day label, or "Pages" for top level. */
 function oldParentLabel(ws: Workspace, p: Page, today: string): string {
+  if (p.type === 'daily') return 'Days'
   const parent = p.parentId ? ws.pages.find(x => x.id === p.parentId) : undefined
   return parent ? pageLabel(parent, today) : 'Pages'
 }
@@ -40,7 +41,8 @@ export function useDeletePage() {
     const card = (parent ? cardTo(parent, page.id) : undefined)
     const receipt = await run({ type: 'delete-page', pageId: page.id, at: new Date().toISOString() },
       r => ({ text: r.message, undoOperationId: r.operationId }))
-    if (receipt && openPageId && subtree.has(openPageId)) void navigate({ href: parent ? pageHref(parent, card?.id) : '/pages', resetScroll: !card })
+    // A day stays on its date, which now says its page is in Trash (B16).
+    if (receipt && openPageId && subtree.has(openPageId)) void navigate({ href: parent ? pageHref(parent, card?.id) : page.type === 'daily' ? `/day/${page.date}` : '/pages', resetScroll: !card })
   }
 }
 
@@ -54,18 +56,38 @@ function restoredText(ws: Workspace, page: Page, comingBack: Set<string>, today:
   return `Restored ${displayPageTitle(page)} to Pages · ${parent ? `${pageLabel(parent, today)} is in trash` : 'its page was deleted'}`
 }
 
-function useRestore() {
-  const { workspace, run } = useWorkspace()
+/**
+ * A command from a button with no editor line under it to show a failure: if another tab moved the workspace on, it's sent
+ * again once, on the fresh copy, so the button never just looks dead; if it still can't go, it says so.
+ */
+export function useRunFromButton() {
+  const { run } = useWorkspace()
+  return async (action: Action, notice: NoticeArg | undefined, failed: string): Promise<Receipt | null> => {
+    let stale = false
+    const said = () => toast(failed, { timeout: 6000 })
+    const first = await run(action, notice, undefined, { inlineRefusal: /Saved elsewhere/, onRefused: () => { stale = true }, quiet: true, onFailure: said })
+    return first ?? (stale ? run(action, notice, undefined, { quiet: true, onFailure: said }) : null)
+  }
+}
+
+export function useRestore() {
+  const { workspace } = useWorkspace()
+  const runFromButton = useRunFromButton()
   const navigate = useNavigate()
   const today = useToday()
   /** `whole`: what's left of the page's delete (Trash row, top page's banner); otherwise the page and its own subtree. */
-  return (page: Page, { whole, withOpen }: { whole: boolean; withOpen: boolean }) => {
-    if (!workspace || !page.trashId) return Promise.resolve(null)
+  return async (page: Page, { whole, withOpen }: { whole: boolean; withOpen: boolean }) => {
+    if (!workspace || !page.trashId) return null
+    // A date's new page may join this one (B16): its latest words go first, and nothing happens if that fails.
+    const newer = page.type === 'daily' ? workspace.pages.find(p => p.type === 'daily' && p.date === page.date && !p.trashedAt) : undefined
+    if (newer && !(await flushEditor(newer.id))) return null
     const members = whole ? trashBatch(workspace, page.trashId)?.members ?? [] : [page, ...descendantsInBatch(workspace, page)]
     const top = whole ? trashBatch(workspace, page.trashId)?.top ?? page : page
     const text = restoredText(workspace, top, new Set(members.map(m => m.id)), today)
-    return run(whole ? { type: 'restore-batch', trashId: page.trashId } : { type: 'restore-page', pageId: page.id },
-      (r: Receipt) => ({ text, ...(withOpen ? { extra: { label: 'Open', run: () => void navigate({ href: pageHref({ ...top, id: r.entityId ?? top.id }) }) } } : {}) }))
+    return runFromButton(whole ? { type: 'restore-batch', trashId: page.trashId } : { type: 'restore-page', pageId: page.id },
+      // Joining changes a page he wrote on, so like any change that can lose his lines it can be undone (Bumblebee).
+      (r: Receipt) => ({ text: top.type === 'daily' ? r.message : text, ...(newer ? { undoOperationId: r.operationId } : {}), ...(withOpen ? { extra: { label: 'Open', run: () => void navigate({ href: pageHref({ ...top, id: r.entityId ?? top.id, trashedAt: null }) }) } } : {}) }),
+      "Couldn't restore · try again")
   }
 }
 function descendantsInBatch(ws: Workspace, page: Page): Page[] {
@@ -107,15 +129,15 @@ export function TrashScreen() {
       {batches.length === 0 ? <p className="quiet">Trash is empty</p> : <>
         <ul className="plain card-list two-line">
           {batches.map(b => {
-            const n = b.members.length - 1
             // A database's rows are its rows, not subpages; a row whose database is also in the trash brings it back (§12).
             const isDb = isDatabase(b.top), rowOf = databaseOfRow(workspace, b.top)
+            const n = b.members.filter(m => isDb || m === b.top || !databaseOfRow(workspace, m)).length - 1
             return (
               <li key={b.trashId} className="trash-row">
                 <PageLink className="card-row" href={pageHref(b.top)}>
-                  <span className="card-row-icon"><PageKindIcon url={b.top.url} database={isDb} /></span>
+                  <span className="card-row-icon">{b.top.type === 'daily' ? <CalendarIcon /> : <PageKindIcon url={b.top.url} database={isDb} />}</span>
                   <span className="card-row-text">
-                    <span className={`card-row-title ${b.top.title ? '' : 'untitled'}`}>{displayPageTitle(b.top)}</span>
+                    <span className={`card-row-title ${b.top.title ? '' : 'untitled'}`}>{pageLabel(b.top, today)}</span>
                     <span className="card-row-detail">{[`From ${oldParentLabel(workspace, b.top, today)}`, n > 0 && (isDb ? `with ${n} row${n === 1 ? '' : 's'}` : `with ${n} subpage${n === 1 ? '' : 's'}`), when(b.trashedAt, today)].filter(Boolean).join(' · ')}</span>
                   </span>
                 </PageLink>
@@ -147,7 +169,7 @@ export function TrashedPage({ page, workspace }: { page: Page; workspace: Worksp
         <span>In trash · {isTop ? `was in ${oldParentLabel(workspace, page, today)}` : `deleted with ${displayPageTitle(batch!.top)}`}</span>
         <button type="button" className="restore-button" onClick={() => void restore(page, { whole: isTop, withOpen: false })}>Restore</button>
       </div>
-      <div className="page-head"><h1 className={`large-title ${page.title ? '' : 'untitled'}`}>{displayPageTitle(page)}</h1><LinkUrlRow page={page} /></div>
+      <div className="page-head"><h1 className={`large-title ${page.title ? '' : 'untitled'}`}>{pageLabel(page, today)}</h1><LinkUrlRow page={page} /></div>
       <ReadOnlyBody page={page} workspace={workspace} />
       {children.length > 0 && (
         <section className="subpages" aria-label="Subpages">

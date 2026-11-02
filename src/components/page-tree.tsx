@@ -1,7 +1,7 @@
 import { Modal, SearchField } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { cardTo, childPages, linkedFrom, moveRefusal, moveTargets, pageAncestors, pagesInDays, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
+import { cardTo, childPages, hasContent, linkedFrom, moveRefusal, moveTargets, pageAncestors, pagesInDays, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { fromIso, longLabel, todayIso } from './dates'
 import { ChevronRightIcon, PageKindIcon, PagesIcon } from './icons'
@@ -23,8 +23,10 @@ export function pageLabel(p: Page, today: LocalDate = todayIso()): string {
 }
 
 export function pageHref(p: Page, cardId?: string): string {
-  const block = cardId ? `${p.type === 'daily' ? '?' : '&'}block=${encodeURIComponent(cardId)}` : ''
-  return (p.type === 'daily' && p.date ? `/day/${p.date}` : `/pages?page=${encodeURIComponent(p.id)}`) + block
+  // A day page in the trash no longer holds its date (B16): it opens by its id, read-only.
+  const byDate = p.type === 'daily' && p.date && !p.trashedAt
+  const block = cardId ? `${byDate ? '?' : '&'}block=${encodeURIComponent(cardId)}` : ''
+  return (byDate ? `/day/${p.date}` : `/pages?page=${encodeURIComponent(p.id)}`) + block
 }
 
 /** Today's date, re-read every minute so "Today" becomes a date after midnight without a reload. */
@@ -122,7 +124,12 @@ function HiddenCrumbs({ pages, today }: { pages: Page[]; today: LocalDate }) {
     groups={[{ items: [...pages].reverse().map(p => ({ label: pageLabel(p, today), onSelect: () => open(pageHref(p)) })) }]} />
 }
 
-/** ⋯ on a document page: Move to…, then Delete after a divider (A4 layout §1). Day pages have none this round. */
+/** ⋯ on a day (B16): Delete, once there's something to delete. */
+export function dayMenuGroups(workspace: Workspace, page: Page, deletePage: () => void): { items: { label: string; danger?: boolean; onSelect: () => void }[] }[] | null {
+  return hasContent(page) || childPages(workspace, page.id).length > 0 ? [{ items: [{ label: 'Delete', danger: true, onSelect: deletePage }] }] : null
+}
+
+/** ⋯ on a document page: Move to…, then Delete after a divider (A4 layout §1). A day's is in its header (`dayMenuGroups`). */
 export function PageMenu({ page }: { page: Page }) {
   const [moving, setMoving] = useState(false)
   const deletePage = useDeletePage()
@@ -257,7 +264,7 @@ export function MovePageDialog({ page, onClose }: { page: Page; onClose: () => v
   const q = query.trim().toLowerCase()
   let groups: { title?: string; options: Option[] }[]
   if (!q) {
-    const todayPage = workspace.pages.find(p => p.type === 'daily' && p.date === today)
+    const todayPage = workspace.pages.find(p => p.type === 'daily' && p.date === today && !p.trashedAt)
     const recent = recentIds().map(id => candidates.find(p => p.id === id)).filter((p): p is Page => Boolean(p) && p !== todayPage && p !== current).slice(0, 6)
     const first = [null, todayPage, current].filter((p, i, list) => p !== undefined && list.indexOf(p) === i && (p === null || candidates.includes(p)))
     groups = [
@@ -447,6 +454,7 @@ export function SidebarTree({ workspace, activeId, today, footer }: { workspace:
             <button type="button" aria-label={`New subpage in ${pageLabel(p, today)}`} onClick={() => void newPage(p)}>+</button>
             {!day && <RowMenu label={`Actions for ${pageLabel(p, today)}`} triggerClass="tree-more"
               groups={[{ items: [{ label: 'Move to…', onSelect: () => setMoving(p) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void deletePage(p, activeId) }] }]} />}
+            {day && (() => { const groups = dayMenuGroups(workspace, p, () => void deletePage(p, activeId)); return groups && <RowMenu label={`Actions for ${pageLabel(p, today)}`} triggerClass="tree-more" groups={groups} /> })()}
           </span>
         </div>
         {isOpen && children.length > 0 && <ul className="plain" role="group">{children.map((c, i) => row(c, depth + 1, children[i + 1]?.id))}</ul>}
