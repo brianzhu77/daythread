@@ -1786,6 +1786,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-title-row.is-page { display: flex; align-items: center; gap: 4px; }
 .database-title-row.is-page .database-view-name { margin-right: 2px; }
 .database-title-row:not(.is-page) .database-more-button { margin-left: -6px; }
+.database-menu-scrim { display: none; }
 .database-menu { z-index: 60; width: 300px; max-height: min(70vh, 520px); overflow-y: auto; display: flex; flex-direction: column; gap: 1px; font-size: var(--text-ui); }
 .database-menu > button[role=menuitem] { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding: 0 10px; color: var(--ink); }
 .database-menu hr { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
@@ -1864,9 +1865,10 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .row-property-name[data-type="url"]::before { content: '↗'; }
 
 @media (max-width: 899px) {
-  /* The phone gets a bottom sheet (design §7.3): the host's inline position is overridden, and the page behind is
-     dimmed by a spread shadow; a tap there closes it, as the host already does for any tap outside. */
-  .database-menu { position: fixed !important; inset: auto 0 0 0 !important; width: auto; max-height: 85vh; padding: 8px 12px calc(12px + env(safe-area-inset-bottom)); border: 0; border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; box-shadow: 0 0 0 100vmax var(--scrim), var(--shadow-float); animation: sheet-in .2s ease-out; }
+  /* The phone gets a bottom sheet (design §7.3): the host's inline position is overridden, over a scrim that only
+     closes it. */
+  .database-menu { position: fixed !important; inset: auto 0 0 0 !important; width: auto; max-height: 85vh; padding: 8px 12px calc(12px + env(safe-area-inset-bottom)); border: 0; border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; box-shadow: var(--shadow-float); animation: sheet-in .2s ease-out; }
+  .database-menu-scrim { display: block; position: fixed; inset: 0; z-index: 59; background: var(--scrim); }
   .database-menu::before { content: ''; flex: none; align-self: center; width: 36px; height: 5px; margin-bottom: 6px; border-radius: 3px; background: var(--check); }
   .database-menu > button[role=menuitem], .database-menu-head, .database-property-line, .database-menu-row { min-height: 44px; }
   .database-menu input:not([type=checkbox]), .database-menu select { min-height: 40px; font-size: 16px; }
