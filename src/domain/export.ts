@@ -2,7 +2,7 @@ import { editorSeed, inlineText, pageNodes, type EditorNode } from './editor-doc
 import type { Page, Workspace } from './types.ts'
 import { isTemplate } from './day-template.ts'
 import { isDraft } from './day-draft.ts'
-import { cellValue, databaseOfRow, databaseRows, isDatabase, isEmptyValue, propertyOf, type CellValue, type Database } from './database.ts'
+import { cellValue, databaseOfRow, databaseRows, isDatabase, isEmptyValue, valueText, type Database } from './database.ts'
 
 /**
  * Export: his words out of the app, readable without its code. A folder of Markdown (a day page per date, a document
@@ -141,17 +141,6 @@ function blockLines(n: EditorNode, ws: Workspace, names: Map<string, string>, as
   }
 }
 
-/** A cell as text: option names, a date range with an arrow, a ticked box as "Yes". */
-export function valueText(db: Database, columnId: string, value: CellValue): string {
-  const property = propertyOf(db, columnId)
-  const name = (id: string) => property?.options?.find(o => o.id === id)?.name ?? ''
-  if (value === null || value === false) return ''
-  if (value === true) return 'Yes'
-  if (Array.isArray(value)) return value.map(name).filter(Boolean).join(', ')
-  if (typeof value === 'object') return value.end ? `${value.start} → ${value.end}` : value.start
-  if (property && (property.type === 'select' || property.type === 'status')) return name(String(value))
-  return String(value)
-}
 /** A database page: its rows as a table in page order (title linked to the row's file), one column per property. */
 function databaseMarkdown(ws: Workspace, p: Page & { database: Database }, names: Map<string, string>): string {
   const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim()

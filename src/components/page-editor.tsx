@@ -1,6 +1,6 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
 import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
-import { type ComponentProps, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { type ComponentProps, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
 import { type BlockNoteEditor, BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, editorHasBlockWithType, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
@@ -14,7 +14,7 @@ import { suggestionMenuMiddleware } from './suggestion-menu-placement'
 import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
-import { editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, sectionRange, type EditorNode } from '../domain/editor-document'
+import { blockPlace, editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, sectionRange, withBlockBack, type BlockPlace, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
 import { announceSave, changedBy, claim, clearOwn, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn } from './draft-slots'
 import { applyCommand, plannedOn, taskRows as rowsOfTask, urlOwner } from '../domain/workspace'
@@ -32,9 +32,10 @@ import { newOperationId, useTaskTick, useWorkspace } from './use-day'
 import { useKeyboardTop } from './keyboard'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
+import { CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
+import { DatabaseBlock, setDatabasePending, type BlockActions } from './database-block'
 import { addDays, fromIso, longLabel, shortLabel, todayIso, weekday } from './dates'
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
@@ -42,6 +43,7 @@ import { endOfLineAbove, rowArrows } from './row-arrows'
 import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, rememberLeaveSave, trackLeaveSave } from './editor-flush'
 import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
+import { databaseRows, isDatabase } from '../domain/database'
 import { openedByTurnover } from './use-screen-today'
 import { openedByMove } from './new-build'
 import { fixedOffset, seenArea } from './fixed-coords'
@@ -69,16 +71,28 @@ const pageLink = createReactBlockSpec({ type: 'pageLink', propSchema: { pageId: 
   render: ({ block }) => <PageCard pageId={block.props.pageId} cardId={block.id} url={block.props.url} line={block.props.line} />,
   toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Page</a></p>,
 })()
-// Databases R1 part 1: a `database` block is known to the editor, so a save keeps it whole (dropping its home block
-// would trash the database). Until the table ships it shows as a quiet label; it is also the floor a rollback lands on.
+// Databases (R1): a `database` block. Its database's home block draws the table; any other is a card to it (R2 makes
+// those linked views). Known to the editor since part 1, so a save always keeps it whole.
 const database = createReactBlockSpec({ type: 'database', propSchema: { pageId: { default: '' }, view: { default: '' } }, content: 'none' }, {
-  render: ({ block }) => <DatabaseLabel pageId={block.props.pageId} />,
+  render: ({ block }) => <DatabaseInPage blockId={block.id} pageId={block.props.pageId} />,
   toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Database</a></p>,
 })()
-function DatabaseLabel({ pageId }: { pageId: string }) {
-  const { workspace } = useWorkspace()
-  const target = workspace?.pages.find(p => p.id === pageId)
-  return <div className="editor-database-label" contentEditable={false}>{target ? displayPageTitle(target) : 'Database'}</div>
+function DatabaseInPage({ blockId, pageId }: { blockId: string; pageId: string }) {
+  const actions = useContext(DatabaseEditorActions)
+  return <DatabaseBlock blockId={blockId} pageId={pageId} hostDate={useContext(ChipPageDate)} actions={actions} />
+}
+/** What a database block asks of the page editor it sits in (model §3): switch it to a card and back, take it out. */
+const DatabaseEditorActions = createContext<BlockActions | null>(null)
+/** The open editors, by page: a block put back after the page changed goes in through its editor, if it has one open. */
+const blockReceivers = new Map<string, (place: BlockPlace) => void>()
+/** The home blocks a save removed, whose databases went to Trash with it, and where they sat. */
+function removedHomes(ws: Workspace, pageId: string, before: string, after: string): BlockPlace[] {
+  const was = JSON.parse(before) as EditorNode[], now = new Set(deepNodes(JSON.parse(after) as EditorNode[]).map(n => n.id))
+  return ws.pages.flatMap(p => {
+    if (p.parentId !== pageId || !p.trashedAt || !p.database?.homeBlockId || now.has(p.database.homeBlockId)) return []
+    const place = blockPlace(was, p.database.homeBlockId)
+    return place ? [place] : []
+  })
 }
 // A9a (Jazz page-links-states §1): a `[[` link is one inline unit, icon + the page's current title on a quiet chip.
 // Backspace removes it whole (it has no content of its own). It reads its title live, so nothing is stored as text.
@@ -228,10 +242,14 @@ function PageCard({ pageId, cardId, url = '', line = '' }: { pageId: string; car
   // The first lines written on the page, as in Craft's card (v0.3 §6.2 "title, short preview").
   // A trashed page keeps its contents out of other pages (Ratchet).
   const preview = target && !trashed ? pagePreview(target) : ''
+  // A card to a full-page database whose parent is this page can turn back into its table (design §3.2).
+  const actions = useContext(DatabaseEditorActions)
+  const inline = actions && target && isDatabase(target) && !trashed && target.database.homeBlockId === null && target.parentId === actions.hostPageId
   return <span className={`editor-page-card-row ${link ? 'is-link' : ''}`} contentEditable={false}>
+    {inline && <span className="editor-row-menu editor-card-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${title}`} triggerClass="editor-row-more" groups={[{ items: [{ label: 'Turn into inline', onSelect: () => actions.turnIntoInline(cardId, pageId) }] }]} /></span>}
     <button type="button" className={`editor-page-card ${trashed ? 'in-trash' : ''}`} disabled={pending?.state === 'creating'}
       onClick={() => { if (pending) { if (pending.state === 'failed') pending.retry(); return } rememberCard(cardId); void navigate({ to: '/pages', search: { page: pageId } }) }}>
-      <span className="editor-page-card-icon">{link ? <GlobeIcon /> : <PagesIcon />}</span>
+      <span className="editor-page-card-icon">{link ? <GlobeIcon /> : target && isDatabase(target) ? <DatabaseIcon /> : <PagesIcon />}</span>
       <span className="editor-page-card-text">
         <span className={`editor-page-card-title ${target?.title || link ? '' : 'untitled'}`}>{title}</span>
         {/* Link cards stay one line (A2): they show the domain instead. */}
@@ -343,7 +361,7 @@ const caretSettleMs = 120
 // Viewport y of the middle of a block's first line of text. Works for empty blocks and wrapped text alike,
 // since it reads the line box of the inline content rather than the rendered glyphs.
 function firstLineCenter(block: HTMLElement): number {
-  const inline = block.querySelector<HTMLElement>('.bn-inline-content, .editor-page-card-title') ?? block
+  const inline = block.querySelector<HTMLElement>('.bn-inline-content, .editor-page-card-title, .database-title') ?? block
   const style = getComputedStyle(inline)
   const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.2
   return inline.getBoundingClientRect().top + lineHeight / 2
@@ -356,16 +374,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const runRef = useRef(run); runRef.current = run
   const navigate = useNavigate()
   const key = `daythread:editor:${page.id}`
-  const initial = useRef<{ nodes: EditorNode[]; base: string; baseDocument: string; recovered: boolean; cutTaskIds: string[] } | null>(null)
+  const initial = useRef<{ nodes: EditorNode[]; base: string; baseDocument: string; recovered: boolean; cutTaskIds: string[]; detach: string[]; adopt: { blockId: string; pageId: string }[] } | null>(null)
   if (!initial.current) {
     // B40: from here on, a background save of kept drafts leaves this page's draft to this editor.
     noteEditorMounting(page.id)
     const base = pageContentKey(page)
-    let nodes = editorSeed(page, workspace), recovered = false, savedBase = base, savedBaseDocument = page.document, cutTaskIds: string[] = []
+    let nodes = editorSeed(page, workspace), recovered = false, savedBase = base, savedBaseDocument = page.document, cutTaskIds: string[] = [], detach: string[] = [], adopt: { blockId: string; pageId: string }[] = []
     // B35: this tab's own slot; drafts other tabs left behind are merged in after mount. A recovered draft brings back
     // its cuts too (Ratchet 067be3eb): a cut row in it is a move, never a delete.
-    try { const stored = readOwn(page.id); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; savedBaseDocument = stored.baseDocument ?? page.document; recovered = true; cutTaskIds = (stored.cutTaskIds ?? []).filter((x: unknown) => typeof x === 'string') } } catch { /* fresh document */ }
-    initial.current = { nodes, base: savedBase, baseDocument: savedBaseDocument, recovered, cutTaskIds }
+    try { const stored = readOwn(page.id); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; savedBaseDocument = stored.baseDocument ?? page.document; recovered = true; cutTaskIds = (stored.cutTaskIds ?? []).filter((x: unknown) => typeof x === 'string'); detach = stored.detachDatabaseIds ?? []; adopt = stored.adoptDatabaseBlocks ?? [] } } catch { /* fresh document */ }
+    initial.current = { nodes, base: savedBase, baseDocument: savedBaseDocument, recovered, cutTaskIds, detach, adopt }
   }
   const [pastedChecklistIds, setPastedChecklistIds] = useState<string[]>(() => checklistIds(initial.current!.nodes))
   // The blocks the handle press picked; the drop handler moves exactly these.
@@ -439,6 +457,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           : moving ? c : { ...c, props: { ...c.props, refId: crypto.randomUUID() } })
         const fresh = (node: EditorNode): EditorNode => {
           const id = crypto.randomUUID()
+          // A database block (R1, Jazz §6.3.12): a cut moves the database here (this save makes the block its home); a
+          // copy pastes a page card to it, never a second database. Linked views come with R2.
+          if (node.type === 'database') {
+            const pageId = String(node.props?.pageId ?? '')
+            if (moving) { databaseFlags.current.adopt.set(pageId, id); return { ...node, id } }
+            return { id, type: 'pageLink', props: { pageId }, children: [] }
+          }
           return { ...node, id, content: freshContent(node), ...(node.type === 'task' ? { props: moving && latestWorkspace.current.tasks.some(t => t.id === node.props?.taskId) ? node.props : { taskId: `editor-task:${id}`, role: 'reference', planDate: '' } } : {}), ...(node.children ? { children: node.children.map(fresh) } : {}) }
         }
         insert(payload.blocks.map(fresh))
@@ -511,6 +536,44 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const semanticDeletes = useRef(new Set<string>())
   // B33: tasks whose rows were cut (a move): the next save says so, so the task isn't deleted with its line.
   const cutTasks = useRef(new Set<string>(initial.current.cutTaskIds))
+  // Databases this page's next save turns into full pages (Turn into page) or makes at home here (Turn into inline),
+  // by database page id; each goes with the save that carries it (model §3, rules 6 and 7).
+  const databaseFlags = useRef({ detach: new Set(initial.current.detach), adopt: new Map(initial.current.adopt.map(a => [a.pageId, a.blockId])) })
+  // Home blocks that left this editor without deleting their database (Turn into page, cut, an undo or redo step), by
+  // block id: ⌘Z puts the same block back, and the next save makes it the home again rather than leave a card where the
+  // table was (Bumblebee). If the detach was never sent, adopting changes nothing: it's still home.
+  const formerHomes = useRef(new Map<string, string>())
+  const databaseFields = () => {
+    for (const [blockId, pageId] of formerHomes.current) {
+      if (editor.getBlock(blockId)?.type !== 'database') continue
+      formerHomes.current.delete(blockId)
+      databaseFlags.current.detach.delete(pageId)
+      databaseFlags.current.adopt.set(pageId, blockId)
+    }
+    return databaseFieldsNow()
+  }
+  // Inline databases made here by `/` Database: ⌘Z right after one, still empty, trashes it with no notice (nothing to
+  // keep). Sent by itself, after its create if that's still on its way: the page may never have saved the block.
+  const madeHere = useRef(new Set<string>())
+  /** A database block removed by an undo or redo step never deletes the database: it stays as its own page (Lead's review, 1, 2). */
+  const blockLeftByHistory = (blockId: string, pageId: string) => {
+    const ws = latest()
+    if (madeHere.current.has(pageId) && !ws?.pages.find(p => p.id === pageId)?.title.trim() && !ws?.pages.some(p => p.parentId === pageId && !p.trashedAt)) {
+      void runRef.current(now => (now.pages.some(p => p.id === pageId && !p.trashedAt) ? { type: 'delete-page', pageId, at: new Date().toISOString() } : null))
+      return
+    }
+    // Only its home: a block Move to… left behind is a card, and its database has nothing to do with this page any more.
+    if (!ws || (ws.pages.find(p => p.id === pageId)?.database?.homeBlockId !== blockId && databaseFlags.current.adopt.get(pageId) !== blockId)) return
+    if (databaseFlags.current.adopt.get(pageId) === blockId) databaseFlags.current.adopt.delete(pageId)
+    databaseFlags.current.detach.add(pageId)
+    formerHomes.current.set(blockId, pageId)
+  }
+  const databaseFieldsNow = () => ({
+    ...(databaseFlags.current.detach.size ? { detachDatabaseIds: [...databaseFlags.current.detach] } : {}),
+    ...(databaseFlags.current.adopt.size ? { adoptDatabaseBlocks: [...databaseFlags.current.adopt].map(([pageId, blockId]) => ({ blockId, pageId })) } : {}),
+  })
+  // A database block selected whole has no text to format: no formatting toolbar (it drew as a sliver over the line above).
+  const onDatabase = useEditorState({ editor, selector: ({ editor }) => editor.getTextCursorPosition().block.type === 'database' })
   const composing = useRef(false)
   const selected = useRef<string[]>([])
   const dragging = useRef<EditorNode[]>([])
@@ -679,7 +742,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     })()
     return true
   }
-  const stash = () => { if (claimedAway()) return; try { writeOwn(page.id, { base: base.current, baseDocument: baseDoc.current, document: JSON.stringify(nodes()), ...(cutTasks.current.size ? { cutTaskIds: [...cutTasks.current] } : {}) }) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
+  const stash = () => { if (claimedAway()) return; try { writeOwn(page.id, { base: base.current, baseDocument: baseDoc.current, document: JSON.stringify(nodes()), ...(cutTasks.current.size ? { cutTaskIds: [...cutTasks.current] } : {}), ...databaseFieldsNow() }) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
   const flushRef = useRef<() => Promise<void>>(async () => {})
   /**
    * B35: a save that failed on the network tries again by itself, with the same operation id (a lost reply replays
@@ -717,10 +780,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     sending.current = true
     const document = JSON.stringify(editor.document)
-    const deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
+    const deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current], flags = databaseFields()
+    const documentBefore = baseDoc.current
     lastSent.current = document
     setStatus('Saving…')
-    const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), today: todayIso() }
+    const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), ...flags, today: todayIso() }
     const fingerprint=JSON.stringify(action)
     if (pendingSave.current?.fingerprint !== fingerprint) pendingSave.current={fingerprint,operationId:newOperationId()}
     const operationId=pendingSave.current!.operationId
@@ -757,6 +821,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       }
       clearTimeout(retryTimer.current); retries.current = 0; offlineFailure.current = false; resentForRevision.current = false
       announceSave(page.id)
+      // A home block deleted with this save took its database to Trash (model §3): say so, with Undo, which puts the block
+      // back at its place by id (the block back in the page restores the database and its rows). Not the editor's ⌘Z: he
+      // may have typed since, or left the page (Lead's review, 4).
+      if (/ moved to Trash$/.test(result.message) && result.entityId && latest()?.pages.find(p => p.id === result.entityId)?.database) {
+        const places = removedHomes(latest()!, page.id, documentBefore, document)
+        const key: string = toast(result.message, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); putHomesBack(page.id, places) } } })
+      }
       pendingSave.current=null; lastSaved.current = document
       debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
       const savedPage = preview.pages.find(p => p.id === page.id)!
@@ -765,6 +836,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (left.current) return
       deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
       cutIds.forEach(id => cutTasks.current.delete(id))
+      flags.detachDatabaseIds?.forEach(id => databaseFlags.current.detach.delete(id))
+      flags.adoptDatabaseBlocks?.forEach(a => databaseFlags.current.adopt.delete(a.pageId))
       dirty.current = JSON.stringify(editor.document) !== document
       // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
       const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
@@ -809,6 +882,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         doc = merged.document; inserted += merged.inserted.length
         // Its cuts were moves too (B33): the save that carries its text mustn't delete them.
         for (const id of slot.cutTaskIds ?? []) cutTasks.current.add(id)
+        // And so were its databases: turned into pages or moved, not deleted.
+        for (const id of slot.detachDatabaseIds ?? []) databaseFlags.current.detach.add(id)
+        for (const a of slot.adoptDatabaseBlocks ?? []) databaseFlags.current.adopt.set(a.pageId, a.blockId)
       } catch { continue }
       claim(page.id, slotKey)
     }
@@ -832,8 +908,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return !dirty.current
   }), [page.id])
   useEffect(() => editor.onBeforeChange(({ getChanges, tr }) => {
-    if (historyGuardBypass.current || !isHistoryTransaction(tr)) return
+    if (!isHistoryTransaction(tr)) return
     const changes = getChanges()
+    for (const c of changes) {
+      const gone = c.type === 'delete' ? c.block : c.type === 'update' && c.block.type !== 'database' ? c.prevBlock : null
+      if (gone?.type === 'database') blockLeftByHistory(gone.id, String(gone.props.pageId))
+    }
+    if (historyGuardBypass.current) return
     if (!changes.some(c => c.source.type === 'redo')) return
     for (const c of changes) if (c.type === 'delete' && knownSemantic.current.has(c.block.id)) semanticDeletes.current.add(c.block.id)
   }), [editor])
@@ -957,12 +1038,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // Now the draft is stashed as before and then saved. If that save is refused or fails, the stash stays and
       // this page shows it on return ("Recovered unsaved draft", or Load latest after a conflict).
       stash()
-      const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
+      const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current], flags = databaseFields()
       trackLeaveSave((async () => {
         // A save already on its way finishes first, so this one starts from the page it produced.
         await inflight.current
         if (document !== lastSaved.current) {
-          const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), today: todayIso() }
+          const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), ...flags, today: todayIso() }
           debugClient('editor.save.leave',{pageId:page.id})
           const result = await runRef.current(action, undefined, newOperationId(), { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => {} })
           if (!result) return false
@@ -1003,6 +1084,38 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       editor.setTextCursorPosition(line!, 'start')
     })
     await confirmSubpage(pageId, cardId, true)
+  }
+  /**
+   * `/` Database (design §3.1): always an inline database. The block goes in at once with ids chosen here, then the
+   * database is made with that block as its home, retried like `/page`; the block shows "Creating…" until then and
+   * "Not created · Retry" if every try fails. The caret then goes to its title.
+   */
+  async function createDatabase() {
+    const pageId = crypto.randomUUID()
+    let blockId: string | undefined
+    editor.transact(() => {
+      const current = editor.getTextCursorPosition().block
+      const block = { type: 'database', props: { pageId } } as never
+      const [inserted] = inlineText(current.content).trim() && inlineText(current.content).trim() !== '/' ? editor.insertBlocks([block], current, 'after') : editor.replaceBlocks([current], [block]).insertedBlocks
+      blockId = inserted!.id
+      const [line] = editor.insertBlocks([{ type: 'paragraph' } as never], inserted!, 'after')
+      editor.setTextCursorPosition(line!, 'start')
+    })
+    madeHere.current.add(pageId)
+    await confirmDatabase(pageId, blockId!)
+  }
+  async function confirmDatabase(pageId: string, blockId: string) {
+    const retry = () => void confirmDatabase(pageId, blockId)
+    setDatabasePending(pageId, { state: 'creating', retry })
+    let created = false
+    for (let attempt = 0; attempt < 3 && !created; attempt++) {
+      if (!editor.getBlock(blockId)) { setDatabasePending(pageId, null); return } // block undone: abandon
+      created = Boolean(await run({ type: 'create-database', pageId, parentId: page.id, homeBlockId: blockId, title: '' }))
+        || latestWorkspace.current.pages.some(p => p.id === pageId)
+    }
+    if (!created) { setDatabasePending(pageId, { state: 'failed', retry }); setStatus('Database not created · tap it to retry'); return }
+    setDatabasePending(pageId, null)
+    requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`.database-title[data-database="${CSS.escape(pageId)}"]`)?.focus())
   }
   async function confirmSubpage(pageId: string, cardId: string | undefined, open: boolean) {
     const retry = () => void confirmSubpage(pageId, cardId, false)
@@ -1245,6 +1358,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   /** §3: where a page lives, for the list's second line. */
   function whereLabel(p: Page): string {
     if (p.url) { try { return new URL(p.url).hostname.replace(/^www\./, '') } catch { return p.url } }
+    // A database says what it is (design §4.4); a row says its database, as any page says its parent.
+    if (isDatabase(p)) { const n = databaseRows(latestWorkspace.current, p.id).length; return `Database · ${n} row${n === 1 ? '' : 's'}` }
     const parent = parentOf(latestWorkspace.current, p)
     // A day needs no second line: its calendar icon already says it (Jazz 2ff83a4e).
     return parent ? `in ${pageLabel(parent)}` : p.type === 'daily' ? '' : 'in Pages'
@@ -1537,6 +1652,46 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     dragging.current = []; dropRef.current = null; setDrop(null); setTouchDragging(false)
   }
+  useEffect(() => {
+    const receive = (place: BlockPlace) => {
+      const known = (id: string | null) => (id && editor.getBlock(id) ? id : null)
+      const after = known(place.afterId), before = known(place.beforeId), last = editor.document.at(-1)
+      if (after) editor.insertBlocks([place.node as never], after, 'after')
+      else if (before) editor.insertBlocks([place.node as never], before, 'before')
+      else if (last) editor.insertBlocks([place.node as never], last, 'after')
+    }
+    blockReceivers.set(page.id, receive)
+    return () => { if (blockReceivers.get(page.id) === receive) blockReceivers.delete(page.id) }
+  }, [editor, page.id])
+  /** Undo of a deleted table: into the open editor, or else a save of the page with the block back, from the latest copy. */
+  const putHomesBack = (pageId: string, places: BlockPlace[]) => {
+    const receive = blockReceivers.get(pageId)
+    if (receive) { places.forEach(receive); return }
+    void runRef.current(ws => {
+      const now = ws.pages.find(p => p.id === pageId)
+      return now ? { type: 'save-editor', pageId, expectedContent: pageContentKey(now), document: JSON.stringify(places.reduce(withBlockBack, pageNodes(now))), today: todayIso() } : null
+    }, undefined, undefined, { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => {} }).then(done => {
+      const title = displayPageTitle(latestWorkspace.current.pages.find(p => p.id === pageId) ?? page)
+      toast(done ? `Back on ${title}` : `Couldn't put it back on ${title} · it's in Trash`, { timeout: 6000 })
+    })
+  }
+  const databaseActions = useMemo<BlockActions>(() => ({
+    hostPageId: page.id,
+    // Turn into page (design §3.2): the table becomes our page card in place; the save says it's a full page now.
+    turnIntoPage: (blockId, pageId) => {
+      databaseFlags.current.adopt.delete(pageId); databaseFlags.current.detach.add(pageId)
+      formerHomes.current.set(blockId, pageId)
+      editor.replaceBlocks([blockId], [{ type: 'pageLink', props: { pageId } } as never])
+    },
+    // Turn into inline: the card becomes the table again, and the save makes this block its home.
+    turnIntoInline: (cardId, pageId) => {
+      const [block] = editor.replaceBlocks([cardId], [{ type: 'database', props: { pageId } } as never]).insertedBlocks
+      databaseFlags.current.detach.delete(pageId); databaseFlags.current.adopt.set(pageId, block!.id)
+    },
+    remove: blockId => editor.removeBlocks([blockId]),
+    // Esc from the table: the block selected whole again, in the page editor (design §10).
+    select: blockId => { if (editor.getBlock(blockId)) { editor.setTextCursorPosition(blockId); editor.focus() } },
+  }), [editor, page.id])
   const [dock, setDock] = useState<HTMLElement | null>(null)
   useEffect(() => setDock(document.getElementById('editor-dock')), [])
   useEffect(() => {
@@ -1544,7 +1699,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const firstHeading = blocks.findIndex(b => b.type === 'heading')
     const nextHeading = blocks.findIndex((b, i) => i > firstHeading && b.type === 'heading')
     const firstSection = blocks.slice(firstHeading + 1, nextHeading < 0 ? blocks.length : nextHeading)
-    const target = firstSection.find(b => !inlineText(b.content)) ?? blocks[(nextHeading < 0 ? blocks.length : nextHeading) - 1] ?? blocks[0]
+    // Only a line takes the caret: a card or a database block has no text, and would be selected whole instead.
+    const target = firstSection.find(b => Array.isArray(b.content) && !inlineText(b.content)) ?? blocks[(nextHeading < 0 ? blocks.length : nextHeading) - 1] ?? blocks[0]
     // Desktop opens ready to type; on touch screens focusing would raise the keyboard over a page that is read as often as written.
     // Arriving at a block from a tag focuses nothing, so the view stays on that block.
     // A page just made with `/page` opens to name it: the title field has the cursor (Jazz f69dd341).
@@ -1772,6 +1928,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       try { localStorage.setItem(`daythread:cut:${token}`, JSON.stringify(blocks)) } catch { /* same-tab move remains available */ }
       // Tasks typed in the editor keep their `editor-task:` id as their real id, so check the workspace, not the prefix.
       for (const n of deepNodes(blocks)) if (n.type === 'task' && latestWorkspace.current.tasks.some(t => t.id === n.props?.taskId)) cutTasks.current.add(String(n.props!.taskId))
+      // A database whose home block is cut becomes a full page here until the paste adopts it (model §3, 6 then 7); this
+      // save goes at once, so a paste on another page lands after it (Lead fdcc7b9f).
+      const homes = deepNodes(blocks).filter(n => n.type === 'database' && latestWorkspace.current.pages.some(p => p.id === n.props?.pageId && p.database?.homeBlockId === n.id && p.parentId === page.id))
+      for (const n of homes) { databaseFlags.current.detach.add(String(n.props!.pageId)); formerHomes.current.set(n.id, String(n.props!.pageId)) }
+      // R1-5: he sees where it went, and how to put it back.
+      for (const n of homes) { const db = latestWorkspace.current.pages.find(p => p.id === n.props?.pageId); if (db) toast(`${displayPageTitle(db)} is now its own page · paste to put it back`, { timeout: 8000 }) }
+      if (homes.length) setTimeout(() => { clearTimeout(timer.current); void flushRef.current() }, 0)
       editor.transact(tr => { closeHistory(tr); if (chosen) editor.removeBlocks(chosen.map(n => n.id)); else tr.deleteSelection() })
       selected.current = []; setSelectionLabel('')
     }
@@ -2025,6 +2188,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       }
       // Keys inside a row's ⋯ menu belong to the menu (Enter chooses, arrows move), never to the editor's row rules.
       if ((e.target as Element).closest?.('.editor-row-menu')) return
+      // Keys inside a database table belong to the table (design §10): cells, its title, its menus.
+      if ((e.target as Element).closest?.('.database-block')) return
+      // A database block selected whole (↑/↓ stop on it once): Enter goes into its first cell (design §10).
+      if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const at = editor.getTextCursorPosition().block
+        if (at.type === 'database') {
+          const first = editor.domElement?.querySelector<HTMLElement>(`[data-id="${CSS.escape(at.id)}"] [data-nav="0:0"]`)
+          if (first) { e.preventDefault(); e.stopPropagation(); first.focus(); return }
+        }
+      }
       // Keys typed in a draft band belong to the band. The rules below act on the editor's own caret row, so End
       // there would move his caret into his own row and send his next words to it.
       if ((e.target as Element).closest?.('.draft-host')) return
@@ -2131,11 +2304,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     <div ref={saveLine} className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? conflictText : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
     <ChipPageDate.Provider value={page.type === 'daily' ? page.date ?? null : null}>
+    <DatabaseEditorActions.Provider value={databaseActions}>
     <DraftBands draft={draft} workspace={workspace} groups={groups} fills={draftReady ? fillAnchors(draft, draftShown) : []} />
     {createPortal(<EventRows rows={rows} page={page} workspace={workspace} pageEnd={!rowsAnchor.current || rowsAnchor.current.labelled || (rowsAnchor.current.afterId !== null && !editor.getBlock(rowsAnchor.current.afterId))} />, rowsHost)}
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} shadCNComponents={doneInputs}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
-      {!compact && !selectionLabel && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
+      {!compact && !selectionLabel && !onDatabase && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
         <LineTypeSelect key="blockTypeSelect" isRoleHeading={isRoleHeading} canHoldHeading={canHoldHeading} />
         <BasicTextStyleButton key="bold" basicTextStyle="bold" />
         <BasicTextStyleButton key="italic" basicTextStyle="italic" />
@@ -2158,13 +2332,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           insertOrUpdateBlockForSlashMenu(editor, { ...(replaceCurrent ? {} : { id }), type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? page.date ?? '' : '' }, content: '' })
         } }
         const pageItem = { title: 'Page', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
+        const databaseItem = { title: 'Database', icon: <span className="slash-grid-icon" aria-hidden>▦</span>, aliases: ['database', 'table', 'db', '数据库', '表格'], group: 'Suggested', onItemClick: () => void createDatabase() }
         // A9a §3: the phone's way to `[[` (v0.3's toolbar button), through the same + menu.
         const linkItem = { title: 'Link to page', icon: <PagesIcon />, aliases: ['link', '[[', '链接', '引用'], group: 'Suggested', onItemClick: () => {
           if (!linkableLines.has(editor.getTextCursorPosition().block.type)) return
           setTimeout(() => editor.getExtension(SuggestionMenu)?.openSuggestionMenu('[[', { deleteTriggerCharacter: true }), 0)
         } }
         // Every item stays in the list; the menu scrolls past about 8 rows (F13). A cut hid Quote until its name was typed.
-        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, ...first, ...rest], query)
+        // Database sits after Page and Link to page (design §3.1); never in a template (linked views come with R2).
+        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, ...(onTemplate ? [] : [databaseItem]), ...first, ...rest], query)
       }} />
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}
@@ -2173,6 +2349,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       {hoverPointer && <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />}
       {(hoverPointer || linkTapped) && <LinkToolbarController />}
     </BlockNoteView>
+    </DatabaseEditorActions.Provider>
     </ChipPageDate.Provider>
     </RowActionsContext.Provider>
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}

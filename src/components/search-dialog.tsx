@@ -192,7 +192,7 @@ function pathOf(workspace: Workspace, p: Page, today: LocalDate): string {
 function PageRow({ page, today, path, query }: { page: Page; today: LocalDate; path: string; query: string }) {
   return (
     <>
-      <span className="search-row-icon">{page.type === 'daily' ? <CalendarIcon /> : <PageKindIcon url={page.url} />}</span>
+      <span className="search-row-icon">{page.type === 'daily' ? <CalendarIcon /> : <PageKindIcon url={page.url} database={Boolean(page.database)} />}</span>
       <span className="search-row-text">
         <span className={`search-row-title ${page.type === 'document' && !page.title ? 'untitled' : ''}`}><Marked text={pageLabel(page, today)} query={page.type === 'daily' ? '' : query} /></span>
         {path && <small>{path}</small>}
@@ -218,7 +218,7 @@ function PageHeading({ page, workspace, today }: { page: Page; workspace: Worksp
   const path = pathOf(workspace, page, today)
   return (
     <p className="search-page">
-      <span className="search-row-icon">{page.type === 'daily' ? <CalendarIcon /> : <PageKindIcon url={page.url} />}</span>
+      <span className="search-row-icon">{page.type === 'daily' ? <CalendarIcon /> : <PageKindIcon url={page.url} database={Boolean(page.database)} />}</span>
       <span className={`search-page-title ${page.type === 'document' && !page.title ? 'untitled' : ''}`}>{page.type === 'daily' && page.date ? dayWord(page.date, today) : pageLabel(page, today)}</span>
       {path && <small>{path}</small>}
     </p>

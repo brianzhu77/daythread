@@ -4,6 +4,7 @@ import { isTemplate } from './day-template.ts'
 import { isDraft } from './day-draft.ts'
 import { tagIndex, tagKey, type TagEntry } from './tags.ts'
 import type { LocalDate, Page, Workspace } from './types.ts'
+import { cellValue, databaseOfRow, valueText } from './database.ts'
 
 // Search (docs/design/search-states.md): a plain-text look over the loaded workspace. Nothing is stored or sent
 // anywhere; the index is read from the pages like tags and links are, and rebuilt whenever the workspace changes.
@@ -46,6 +47,9 @@ const dayWords = (date: LocalDate): string => {
 /** "Pages › Work" for a nested page, the day for a day's subpage, "" for a top-level page or a day. */
 export function pagePath(ws: Workspace, p: Page, dayLabel: (date: LocalDate) => string): string {
   if (p.type === 'daily') return ''
+  // A row is labelled by its database alone (design §4.4: "Dune · Reading list").
+  const db = databaseOfRow(ws, p)
+  if (db) return db.title || 'Untitled'
   const chain = pageAncestors(ws, p.id)
   if (chain.length === 0) return ''
   const labels = chain.map(x => x.type === 'daily' && x.date ? dayLabel(x.date) : x.title || 'Untitled')
@@ -62,7 +66,10 @@ export function buildSearchIndex(ws: Workspace, dayLabel: (date: LocalDate) => s
     .sort((a, b) => (b.page.date ?? '').localeCompare(a.page.date ?? '') || b.created - a.created).map(p => p.page)
   const indexedPages: IndexedPage[] = [], lines: IndexedLine[] = []
   for (const page of pages) {
-    indexedPages.push({ page, path: pagePath(ws, page, dayLabel), folded: fold(`${page.title} ${page.url ?? ''}`), dayWords: page.type === 'daily' && page.date ? dayWords(page.date) : '' })
+    // A row is also found by its text values (design §4.4).
+    const db = databaseOfRow(ws, page)
+    const values = db ? db.database.properties.map(p => valueText(db.database, p.id, cellValue(db.database, page, p.id))).filter(Boolean).join(' ') : ''
+    indexedPages.push({ page, path: pagePath(ws, page, dayLabel), folded: fold(`${page.title} ${page.url ?? ''} ${values}`), dayWords: page.type === 'daily' && page.date ? dayWords(page.date) : '' })
     let section = ''
     const visit = (node: EditorNode) => {
       if (node.type === 'heading') section = inlineText(node.content).trim()

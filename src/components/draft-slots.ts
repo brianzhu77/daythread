@@ -13,6 +13,9 @@ export interface DraftSlot {
   baseDocument?: string
   document: string
   cutTaskIds?: string[]
+  /** Databases this draft's save turns into full pages or makes at home here: without them it would read as a delete. */
+  detachDatabaseIds?: string[]
+  adoptDatabaseBlocks?: { blockId: string; pageId: string }[]
   /** Last time the tab that owns it was alive (ms). */
   seen: number
   /** Set when the tab closed (pagehide). */

@@ -2,6 +2,7 @@
 // Usage: node tests/evidence/databases/seed-block.ts /tmp/x/ws.sqlite
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
 import { pageContentKey } from '../../../src/domain/editor-document.ts'
+if (!process.argv[2]) { console.error('Usage: node tests/evidence/databases/seed-block.ts <store-path> (a throwaway SQLite file, never his data)'); process.exit(2) }
 const repo = new SqliteWorkspaceRepository(process.argv[2]!, undefined, { allowMissingLegacy: true })
 let ws = await repo.load()
 const run = async (action: any) => { ws = (await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: ws.revision, action })).workspace }

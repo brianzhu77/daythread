@@ -3,6 +3,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { editorSeed, inlineText, type EditorNode } from '../domain/editor-document'
 import { cardTo, isTrashed, parentOf, subtreeIds, trashBatch, trashBatches, trashedChildPages } from '../domain/page-tree'
 import type { Page, Receipt, Workspace } from '../domain/types'
+import { databaseOfRow, isDatabase } from '../domain/database'
 import { longLabel, toIso } from './dates'
 import { flushEditor } from './editor-flush'
 import { jumpToBlock, lookupFailed } from './line-jump'
@@ -45,6 +46,8 @@ export function useDeletePage() {
 
 /** Layout §5: "Restored to {parent}", or to Pages with the reason when the old parent is in the trash or gone. */
 function restoredText(ws: Workspace, page: Page, comingBack: Set<string>, today: string): string {
+  const db = databaseOfRow(ws, page)
+  if (db && isTrashed(db) && !comingBack.has(db.id)) return `Restored with ${displayPageTitle(db)}`
   if (!page.parentId) return 'Restored to Pages'
   const parent = ws.pages.find(x => x.id === page.parentId)
   if (parent && (!isTrashed(parent) || comingBack.has(parent.id))) return `Restored to ${pageLabel(parent, today)}`
@@ -105,16 +108,21 @@ export function TrashScreen() {
         <ul className="plain card-list two-line">
           {batches.map(b => {
             const n = b.members.length - 1
+            // A database's rows are its rows, not subpages; a row whose database is also in the trash brings it back (§12).
+            const isDb = isDatabase(b.top), rowOf = databaseOfRow(workspace, b.top)
             return (
               <li key={b.trashId} className="trash-row">
                 <PageLink className="card-row" href={pageHref(b.top)}>
-                  <span className="card-row-icon"><PageKindIcon url={b.top.url} /></span>
+                  <span className="card-row-icon"><PageKindIcon url={b.top.url} database={isDb} /></span>
                   <span className="card-row-text">
                     <span className={`card-row-title ${b.top.title ? '' : 'untitled'}`}>{displayPageTitle(b.top)}</span>
-                    <span className="card-row-detail">{[`From ${oldParentLabel(workspace, b.top, today)}`, n > 0 && `with ${n} subpage${n === 1 ? '' : 's'}`, when(b.trashedAt, today)].filter(Boolean).join(' · ')}</span>
+                    <span className="card-row-detail">{[`From ${oldParentLabel(workspace, b.top, today)}`, n > 0 && (isDb ? `with ${n} row${n === 1 ? '' : 's'}` : `with ${n} subpage${n === 1 ? '' : 's'}`), when(b.trashedAt, today)].filter(Boolean).join(' · ')}</span>
                   </span>
                 </PageLink>
-                <button type="button" className="restore-button" onClick={() => void restore(b.top, { whole: true, withOpen: true })}>Restore</button>
+                <span className="restore-cell">
+                  <button type="button" className="restore-button" onClick={() => void restore(b.top, { whole: true, withOpen: true })}>Restore</button>
+                  {rowOf && isTrashed(rowOf) && <span className="restore-note">Restores {displayPageTitle(rowOf)} too</span>}
+                </span>
               </li>
             )
           })}
