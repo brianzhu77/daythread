@@ -39,7 +39,7 @@ export function CalendarScreen({ from, today }: { from: LocalDate; today: LocalD
         </Link>
       </nav>
       {days.map(d => {
-        const page = workspace.pages.find(p => p.type === 'daily' && p.date === d) ?? null
+        const page = workspace.pages.find(p => p.type === 'daily' && p.date === d && !p.trashedAt) ?? null
         // Past days need the placements as they were that day (feature map K3); that query isn't in the domain yet.
         const tasks = d >= today ? getCalendarTasks(workspace, d) : null
         return <CalendarDay key={d} date={d} today={today} page={page} tasks={tasks} />

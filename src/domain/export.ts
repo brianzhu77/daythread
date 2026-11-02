@@ -33,7 +33,8 @@ export function exportFiles(ws: Workspace, now: Date): ExportFile[] {
 /** A file name per page: a day page by its date; any other page by its title, with " (2)" for a second page of the same title. */
 export function fileNames(ws: Workspace): Map<string, string> {
   const names = new Map<string, string>(), taken = new Set<string>()
-  const pages = [...ws.pages].sort((a, b) => (a.type === b.type ? 0 : a.type === 'daily' ? -1 : 1))
+  // A date's live page takes the plain name; one in the trash (B16) gets no file.
+  const pages = [...ws.pages].sort((a, b) => (a.type === b.type ? Number(Boolean(a.trashedAt)) - Number(Boolean(b.trashedAt)) : a.type === 'daily' ? -1 : 1))
   for (const p of pages) {
     const base = p.type === 'daily' && p.date ? p.date : safeName(p.title)
     let name = base

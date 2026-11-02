@@ -1,7 +1,7 @@
 import { Button, Calendar, Popover, Tooltip } from '@heroui/react'
 import { parseDate } from '@internationalized/date'
 import { useNavigate } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { LocalDate } from '../domain/types'
 import { writtenDays } from '../domain/page-tree'
 import { addDays, longLabel } from './dates'
@@ -12,7 +12,7 @@ import { ArrowLeftIcon, ArrowRightIcon, ChevronDownIcon } from './icons'
  * Day title that opens a date picker, and `Today ‹ ›` (date navigation rules R2, R3; Jazz's HeroUI note f853703).
  * Arrows move only up to today (R2); the title's picker opens any day, and a future one only as its preview.
  */
-export function DayHeader({ date, today }: { date: LocalDate; today: LocalDate }) {
+export function DayHeader({ date, today, menu }: { date: LocalDate; today: LocalDate; menu?: ReactNode }) {
   const navigate = useNavigate()
   const { workspace } = useWorkspace()
   // A dot under a day that has something written (or subpages): the sidebar Days rule, so browsing makes no dots.
@@ -93,6 +93,7 @@ export function DayHeader({ date, today }: { date: LocalDate; today: LocalDate }
             <ArrowRightIcon />
           </Button>
         )}
+        {menu}
       </nav>
     </header>
   )
