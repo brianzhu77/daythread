@@ -41,6 +41,21 @@ a faked keyboard.
 
 Video, frame by frame: on main the page jumps at once; here it rises in one motion with the keyboard.
 
+## Follow-up: a long block below the caret
+
+Only the top 72 px of the next block is kept clear, so a long paragraph or a table below doesn't push his line up to the clock. 5 runs per line; main (fed22c9c) one run per line.
+
+| Line, y before the tap | Main | This fix |
+| --- | --- | --- |
+| Above a long paragraph, 645 | 68 | 333 |
+| Above a long paragraph, 495 | 68 | 333 |
+| Line 19, above a 25-row table, 685 | 68 | 333 |
+| Line 18, one line above that, 655 | 375 | 375 |
+| Task 5, 445 | 367 | 367 |
+| Events, 546 | 374 | 374 |
+| Bullet under Events, 577 | 341 | 341 |
+| Bullet under Good Stuffs, 671 | 341 | 341 |
+
 ## Limits
 
 - The wait (120 ms of no movement) is based on the Simulator's timing. A real iPhone hasn't been measured.
