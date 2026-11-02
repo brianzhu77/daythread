@@ -58,6 +58,8 @@ const todo = (t: string, role: 'plan' | 'reference', children: EditorNode[] = []
 }
 const card = (pageId: string): EditorNode => ({ id: crypto.randomUUID(), type: 'pageLink', props: { pageId }, children: [] })
 const lineTarget = crypto.randomUUID()
+// Databases R1 (design §15): an inline table, so its title, `+ New` and view chevron are measured too.
+const databaseId = crypto.randomUUID(), databaseBlock = crypto.randomUUID()
 const document: EditorNode[] = [
   headingNode('TODO'),
   todo('Fixture open to-do', 'plan'),
@@ -75,9 +77,14 @@ const document: EditorNode[] = [
   card(previewId),
   card(emptyId),
   card(longId),
+  { id: databaseBlock, type: 'database', props: { pageId: databaseId, view: '' }, children: [] },
   { id: crypto.randomUUID(), type: 'bulletListItem', props: {}, content: [textRun('See '), { type: 'pageRef', props: { pageId: scratchId, refId: crypto.randomUUID(), newTitle: '', lineId: lineTarget, taskId: '' } }, textRun(' for the list')], children: [] },
 ]
 ws = await run({ type: 'save-editor', pageId: scratchId, expectedContent: pageContentKey(dayPage(ws, SCRATCH)), document: JSON.stringify(document), today })
+
+ws = await run({ type: 'create-database', pageId: databaseId, parentId: scratchId, homeBlockId: databaseBlock, title: 'Fixture reading list' })
+ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'addProperty', property: { id: 'status', name: 'Status', type: 'status' } } })
+ws = await run({ type: 'add-row', databaseId, pageId: crypto.randomUUID(), title: 'Fixture row', values: {}, at: new Date().toISOString() })
 
 const task = (title: string) => {
   const found = ws.tasks.find(t => t.title === title)
@@ -96,7 +103,7 @@ if (!written(ws, today)) {
   ws = await run({ type: 'save-editor', pageId: page.id, expectedContent: pageContentKey(page), document: JSON.stringify(nodes), today })
 }
 
-for (const [id, what] of [[previewId, 'page with words'], [emptyId, 'empty page'], [longId, 'long-title page'], [linkId, 'link page']] as const)
+for (const [id, what] of [[previewId, 'page with words'], [emptyId, 'empty page'], [longId, 'long-title page'], [linkId, 'link page'], [databaseId, 'database']] as const)
   if (!ws.pages.some(p => p.id === id && !p.trashedAt)) { console.error(`Fixture ${what} wasn't created.`); process.exit(1) }
 const statuses = ['Fixture done to-do', 'Fixture cancelled to-do'].map(t => task(t).status).join(', ')
 console.log(`Fixtures on /day/${SCRATCH} (revision ${ws.revision}): ${statuses}; ${flatNodes(pageNodes(dayPage(ws, SCRATCH))).length} rows. Today ${today}.`)

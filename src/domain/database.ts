@@ -355,7 +355,8 @@ function compareValues(property: Property, a: CellValue, b: CellValue): number {
       return x.length - y.length;
     }
     case "date":
-      return (a as DateValue).start.localeCompare((b as DateValue).start);
+      // ISO days and wall times compare exactly as strings.
+      return (a as DateValue).start < (b as DateValue).start ? -1 : (a as DateValue).start > (b as DateValue).start ? 1 : 0;
     case "checkbox":
       return Number(a) - Number(b);
   }
@@ -629,4 +630,16 @@ export function newRowStored(db: Database, input: Record<string, Json> | undefin
     if (stored !== undefined) values[key] = stored;
   }
   return Object.keys(values).length ? values : undefined;
+}
+
+/** A cell as text: option names, a date range with an arrow, a ticked box as "Yes". */
+export function valueText(db: Database, columnId: string, value: CellValue): string {
+  const property = propertyOf(db, columnId)
+  const name = (id: string) => property?.options?.find(o => o.id === id)?.name ?? ''
+  if (value === null || value === false) return ''
+  if (value === true) return 'Yes'
+  if (Array.isArray(value)) return value.map(name).filter(Boolean).join(', ')
+  if (typeof value === 'object') return value.end ? `${value.start} → ${value.end}` : value.start
+  if (property && (property.type === 'select' || property.type === 'status')) return name(String(value))
+  return String(value)
 }

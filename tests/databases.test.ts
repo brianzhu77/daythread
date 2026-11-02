@@ -6,6 +6,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { cellValue, databaseRows, newRowValues, readValue, storedValue, viewRows, type Condition, type Database, type Property, type View } from '../src/domain/database.ts'
 import { childPages, listedPages, moveRefusal, subtreeIds } from '../src/domain/page-tree.ts'
 import { exportFiles } from '../src/domain/export.ts'
+import { buildSearchIndex, search } from '../src/domain/search.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { PostgresWorkspaceRepository } from '../src/server/postgres-repository.ts'
 import { pgliteClient } from '../src/server/db/sql.ts'
@@ -206,7 +207,7 @@ test('rows: in page order, inserted before a row, never subpages or Move targets
 test('deleting the home block trashes the database and its rows as one batch; Undo and Restore bring them back', () => {
   const h = reading()
   const r = h.save('books', d => d.filter(n => n.id !== 'home'), { at })
-  assert.equal(r.receipt.message, 'Reading list moved to trash · 3 rows')
+  assert.equal(r.receipt.message, 'Reading list and its 3 rows moved to Trash')
   for (const id of ['list', 'dune', 'emma', 'ubik']) assert.equal(h.page(id).trashId, r.receipt.operationId)
   h.run({ type: 'undo', targetOperationId: r.receipt.operationId })
   assert.equal(h.page('list').trashedAt, undefined)
@@ -214,9 +215,15 @@ test('deleting the home block trashes the database and its rows as one batch; Un
   h.save('books', d => d.filter(n => n.id !== 'home'), { at })
   h.run({ type: 'restore-batch', trashId: h.page('list').trashId! })
   assert.equal(databaseRows(h.ws, 'list').length, 3)
-  // The block back in the page (the save that restores it) keeps it live; deleting it again trashes it again.
+  // Restored from Trash, the block isn't back in the page: putting it back keeps it live.
   h.save('books', d => [...d, block('home', 'list')])
   assert.equal(h.page('list').trashedAt, undefined)
+  // The block back in the page right after a delete (the editor's ⌘Z) restores the database and its rows.
+  h.save('books', d => d.filter(n => n.id !== 'home'), { at })
+  assert.ok(h.page('list').trashedAt)
+  h.save('books', d => [...d, block('home', 'list')])
+  assert.equal(h.page('list').trashedAt, undefined)
+  assert.equal(databaseRows(h.ws, 'list').length, 3)
 })
 
 test('moving the home block inside the page, or another block of it, never trashes anything', () => {
@@ -267,6 +274,12 @@ test('Trash: a row restored while its database is in the trash brings the databa
   const r = h.run({ type: 'restore-page', pageId: 'dune' })
   assert.equal(r.receipt.message, 'Restored with Reading list')
   assert.deepEqual(titles(databaseRows(h.ws, 'list')), ['Dune', 'Emma', 'Ubik'])
+  // The same from the Trash row's Restore (restore-batch) of a row whose database was deleted after it.
+  const rowDel = h.run({ type: 'delete-page', pageId: 'emma', at })
+  h.run({ type: 'delete-page', pageId: 'list', at })
+  assert.equal(h.run({ type: 'restore-batch', trashId: rowDel.receipt.operationId }).receipt.message, 'Restored with Reading list')
+  assert.equal(h.page('emma').parentId, 'list')
+  assert.deepEqual(titles(databaseRows(h.ws, 'list')), ['Dune', 'Emma', 'Ubik'])
   const many = h.run({ type: 'delete-pages', pageIds: ['dune', 'ubik'], at })
   assert.equal(many.receipt.message, '2 rows moved to trash')
   assert.deepEqual(titles(databaseRows(h.ws, 'list')), ['Emma'])
@@ -293,6 +306,12 @@ test('Duplicate row copies the values and the body; its to-dos are new tasks, so
   assert.notEqual(copied.props.taskId, original.id)
   assert.equal(h.ws.tasks.filter(t => t.title === 'Buy a copy').length, 2)
   assert.equal(h.ws.tasks.find(t => t.id === copied.props.taskId)!.sourcePageId, 'dune2')
+  // A done to-do is done in the copy too; ticking the copy's never touches the original.
+  h.run({ type: 'task-status', taskId: original.id, status: 'done', today })
+  const again = h.run({ type: 'add-row', databaseId: 'list', pageId: 'dune3', title: '', copyOf: 'dune', at })
+  const copiedTask = h.ws.tasks.find(t => t.id === JSON.parse(h.page(again.receipt.entityId!).document)[0].props.taskId)!
+  assert.equal(copiedTask.status, 'done')
+  assert.equal(copiedTask.doneOn, today)
 })
 
 test('the stored form is what readValue reads back; the schema accepts every new command', () => {
@@ -357,4 +376,12 @@ test('Postgres: the database columns are added to an existing schema on start, a
     assert.equal('database' in loaded.pages.find(p => p.id === 'dune')!, false)
     assert.equal('values' in loaded.pages.find(p => p.id === 'list')!, false)
   } finally { await db.close() }
+})
+
+test('search: a row is labelled by its database and found by its values', () => {
+  const h = reading()
+  const index = buildSearchIndex(h.ws)
+  const hit = (q: string) => search(index, q, today).pages.map(p => `${p.page.title} · ${p.path}`)
+  assert.deepEqual(hit('dune'), ['Dune · Reading list'])
+  assert.deepEqual(hit('history').sort(), ['Emma · Reading list', 'Ubik · Reading list'])
 })

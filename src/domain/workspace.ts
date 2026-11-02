@@ -344,6 +344,16 @@ function placeDatabases(state: Workspace, p: Page, before: EditorNode[], after: 
     trashSubtree(state, db, isoTime(action.at), operationId);
     trashed ??= { id: db.id, title: db.title, rows };
   }
+  // The home block back in its page (the editor's ⌘Z after deleting it) brings its database back from the trash with
+  // the rows trashed with it, so Undo in the page is Undo of the delete.
+  for (const db of state.pages) {
+    if (!isDatabase(db) || db.parentId !== p.id || !isTrashed(db) || db.database.homeBlockId === null) continue;
+    const home = db.database.homeBlockId;
+    if (had.has(home) || blocks.get(home)?.props?.pageId !== db.id) continue;
+    const parent = state.pages.find((x) => x.id === db.parentId);
+    if (parent && isTrashed(parent)) continue;
+    restorePages(state, restoreSetOf(state, db));
+  }
   for (const { blockId, pageId } of action.adoptDatabaseBlocks ?? []) {
     const block = blocks.get(blockId), db = state.pages.find((x) => x.id === pageId);
     // One that can't be adopted stays what it is: a view of that database.
@@ -355,12 +365,17 @@ function placeDatabases(state: Workspace, p: Page, before: EditorNode[], after: 
   }
   return trashed;
 }
-/** A duplicated row's body: fresh block ids, and its to-dos as new tasks of the copy, so ticking one never ticks the other. */
+/** A duplicated row's body: fresh block ids, and its to-dos as new tasks of the copy (same state), so ticking one never ticks the other. */
 function copiedBody(state: Workspace, from: Page, to: Page, on: string): EditorNode[] {
   const visit = (n: EditorNode): EditorNode => {
     const copy: EditorNode = { ...structuredClone(n), id: newId(), children: (n.children ?? []).map(visit) };
     const taskId = rowTaskId(n), t = taskId ? state.tasks.find((x) => x.id === taskId) : undefined;
-    if (t) { const fresh = createTask(state, t.title, to, on); copy.props = { ...copy.props, taskId: fresh.id, role: "reference", planDate: "" }; }
+    if (t) {
+      // The copy keeps each to-do's state, as Notion's Duplicate does: a done to-do is done in the copy too.
+      const fresh = createTask(state, t.title, to, on);
+      fresh.status = t.status; fresh.doneOn = t.doneOn ?? null;
+      copy.props = { ...copy.props, taskId: fresh.id, role: "reference", planDate: "" };
+    }
     else if (taskId) copy.props = { ...copy.props, taskId: `editor-task:${copy.id}` };
     if (Array.isArray(copy.content)) copy.content = (copy.content as { type?: string; props?: Record<string, unknown> }[]).map((c) => c?.type === "pageRef" ? { ...c, props: { ...c.props, refId: newId() } } : c);
     return copy;
@@ -426,7 +441,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         settleAfterRowsLeft(state, p, t, { single: rows.some((r) => single.has(r.id)), wasPlan: rows.some((r) => rowRole(r) === "plan"), today: action.today, plannedBefore: plannedBefore.get(id) ?? null });
       }
       const trashed = placeDatabases(state, p, before, all, action, operationId);
-      if (trashed) return { message: `${trashed.title.trim() || "Untitled"} moved to trash${trashed.rows ? ` · ${trashed.rows} row${trashed.rows === 1 ? "" : "s"}` : ""}`, entityId: trashed.id };
+      // The wording he sees (checklist R1-15): "Reading list and its 3 rows moved to Trash".
+      if (trashed) return { message: `${trashed.title.trim() || "Untitled"}${trashed.rows ? ` and its ${trashed.rows} row${trashed.rows === 1 ? "" : "s"}` : ""} moved to Trash`, entityId: trashed.id };
       return { message: "Page saved" };
     }
     case "ensure-day": {
@@ -626,7 +642,14 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     case "restore-batch": {
       const ids = new Set(state.pages.filter((x) => isTrashed(x) && x.trashId === action.trashId).map((x) => x.id));
       if (!ids.size) throw new DomainError("Nothing left to restore");
+      const batch = new Set(ids);
+      // Rows whose database is in the trash bring it back too (design §12), never land at the top level on their own.
+      const databases = new Set<Page>();
+      for (const id of ids) { const db = databaseOfRow(state, state.pages.find((x) => x.id === id)!); if (db && isTrashed(db) && !ids.has(db.id)) databases.add(db); }
+      for (const db of databases) for (const id of restoreSetOf(state, db)) ids.add(id);
       const { pages, toTopLevel } = restorePages(state, ids);
+      const batchTop = pages.find((x) => batch.has(x.id) && (!x.parentId || !batch.has(x.parentId)))!;
+      if (databases.size) return { message: `Restored with ${[...databases][0]!.title.trim() || "Untitled"}`, entityId: batchTop.id };
       const top = pages.find((x) => !x.parentId || !ids.has(x.parentId))!;
       return { message: toTopLevel.includes(top) ? "Restored to Pages" : "Restored", entityId: top.id };
     }
