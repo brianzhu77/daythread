@@ -52,7 +52,9 @@ export function DatabaseMenuHost() {
       const anchor = document.querySelector<HTMLElement>(anchorOf(open))
       if (!anchor) { setOpenMenu(null); return }
       const r = anchor.getBoundingClientRect()
-      const next = open.panel === 'views' ? { top: r.bottom + 4, left: Math.max(8, r.left) } : { top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) }
+      // Under its button, moved up only as far as it takes to stay on screen: a table low on the page would leave it cut off.
+      const top = Math.max(8, Math.min(r.bottom + 4, window.innerHeight - (ref.current?.offsetHeight ?? 0) - 8))
+      const next = open.panel === 'views' ? { top, left: Math.max(8, r.left) } : { top, right: Math.max(8, window.innerWidth - r.right) }
       setAt(a => (a && a.top === next.top && a.left === next.left && a.right === next.right ? a : next))
       frame = requestAnimationFrame(place)
     }
