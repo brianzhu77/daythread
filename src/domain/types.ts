@@ -132,7 +132,8 @@ export type Action =
   | { type: "change-database"; pageId: string; change: import("./database.ts").DatabaseChange }
   /** A row, at the end or before `beforeId`; `copyOf`: Duplicate row, copying that row's values and body. */
   | { type: "add-row"; databaseId: string; pageId: string; title: string; values?: Record<string, import("./database.ts").Json>; beforeId?: string | null; copyOf?: string; at: string }
-  | ({ type: "set-values"; at: string } & import("./database.ts").RowEdit)
+  /** `beforeId`: also moves the row, in one Undo (a card dragged to another column); null is the end. */
+  | ({ type: "set-values"; at: string; beforeId?: string | null } & import("./database.ts").RowEdit)
   | { type: "set-values-many"; items: import("./database.ts").RowEdit[]; at: string }
   /** Several pages to the trash as one batch and one Undo (rows selected together). */
   | { type: "delete-pages"; pageIds: string[]; at: string }

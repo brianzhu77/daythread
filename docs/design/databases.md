@@ -530,6 +530,37 @@ doesn't show.
 - **Hide empty groups** is a switch.
 - Each group can be hidden, and hidden groups are listed at the end as "Hidden: Done (12)".
 
+**Group, as built in R2 (task #265).**
+
+- **What each type groups by:**
+  - Select and Multi-select: every option has a group, in option order, plus **No value** last. A Multi-select row shows in each of its groups, so counts can add up to more than the rows.
+  - Status: To do, In progress, Done, as its editor lists them. It always has a value, so no group for none.
+  - Checkbox: Unchecked, Checked.
+  - Number and URL: by exact value, only where a row has it, smallest or A–Z first.
+  - Date: by **month** by default, with week and day as a choice in the Group sheet. A range groups by its start.
+- **A group's fold** is on this device only, per view of a block: no save and no Undo, like which view is showing.
+- **The Group sheet:** Group by (None on a table), By for a date, Hide empty groups, then each group with a box to show or hide it.
+- **Hidden groups** read "Hidden: Done (12)" under the view, and a tap shows that one again. With Hide empty groups on, an empty hidden one isn't listed.
+- **Each group follows the row cap** (25 inline, 100 on a full page), with Show 25 more under it.
+- **Dragging a row to another group** changes its value and its place in one change, with "Moved to Done · Undo". Only when the view isn't sorted, the same as dragging within a table.
+- **Moving between groups, the value:**
+  - Multi-select swaps the group it left and keeps its others. To No value, it empties.
+  - A date goes to today if today is in that group, else the group's first day, and keeps its time and length.
+- **Sub-groups** are R3: they'd be a second field on the view, and nothing here assumes one layer.
+
+**Board, as built in R2 (task #265).**
+
+- **Made from** `+ Add view` → Board, or `⋯` → Layout. It asks "Columns come from", listing Select, Status and Checkbox properties and **+ New Status property**. With exactly one, it doesn't ask. Switching a table already grouped by one of those keeps it.
+- **A new board's cards are titles alone.** Properties adds what shows on them (§7.5). A switched table keeps its shown properties. The property making the columns isn't repeated on a card, except a Multi-select.
+- **A column** is 260 px, or 300 px with snap on the phone, so the next one peeks. Its head reads "◐ Reading · 3". `+ New` at its foot sets its value; at 1280 the title opens to type, and on the phone the row opens as its page.
+- **`+ Add column`** at the end, for Select and Status, makes a new option there.
+- **A tap or click on a card opens its row.** A tick on a Checkbox property ticks in place.
+- **Dragging:** by pointer past 4 px at 1280; by a 350 ms long-press on the phone, and moving sooner stays a swipe or a scroll. A floating copy follows, with a line where it lands and the column tinted. Holding near an edge moves the board or page on. Esc cancels. When sorted, only the column counts, and its place comes from the sort.
+- **A failed save** stays shown in its new column, with "Not saved" on the card and the usual "1 change not saved · Retry · Undo".
+- **A filter that would hide it:** "Moved to Done · hidden by this view's filter · Undo", or for a new row, §7.4's notice.
+- **Keys at 1280:** arrows move between cards and columns, Shift-arrows move the card, Enter opens, Esc gives the block back, ⌘Z undoes, and cut, paste and copy stay out of the page.
+- **Its property deleted, or changed to a type that can't make columns:** all its rows in one column, with a "Group by" link above it. Undo or changing the type back brings the columns back.
+
 ### 7.4 A new row in a filtered or grouped view
 
 - **New rows get the values that keep them visible.** A row added in a view filtered to "Status is Reading" starts
@@ -685,7 +716,7 @@ The Lead recommends **option 1**, so this is option 1's design, with the differe
 | **New, no rows** | the header row, then `+ New`. Nothing else. |
 | **No rows match the filter** | "No rows match this view · Clear filter" in `--ink-3`, where the rows would be |
 | **A filter on a deleted property** | its chip shows the name struck through, "(deleted)". It's ignored until he removes it with `×`. |
-| **A sort or group on a deleted property** | dropped quietly. The view falls back to manual order or no groups. |
+| **A sort or group on a deleted property** | dropped quietly. The view falls back to manual order or no groups. A board asks what makes its columns (§7.3). |
 | **Loading** | none of its own. The whole workspace loads at once, so the block appears with the page (Roadbuster §2). |
 | **Offline, reading** | works from the offline copy, the same as pages |
 | **Offline, editing a value** | His value **stays shown** in the cell, in `--warn`, and the strip says **"1 change not saved · Retry"**. Retry sends it again. Undo puts back the old value. **Never a silent revert.** It's the same rule as a failed tick, and kept drafts for cells come later (Roadbuster §4). |
