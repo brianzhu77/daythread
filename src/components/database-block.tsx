@@ -159,32 +159,37 @@ function usePendingCells() {
 function useCommitCell() {
   const { run, refresh, latest } = useWorkspace()
   const commit = (db: Page & { database: Database }, row: Page, columnId: string, raw: Json | undefined, notice?: string, onSaved?: () => void) => {
-    const expected = (rawOf(row, columnId) ?? null) as Json
+    const key = pendingKey(row.id, columnId)
+    // A value still on its way is what this change will find when it lands, so it's built on that (Lead's review, 7).
+    const inFlight = pendingCells.get(key)
+    const expected = ((inFlight && !inFlight.failed ? inFlight.raw : rawOf(row, columnId)) ?? null) as Json
     const values = { [columnId]: raw ?? null } as Record<string, Json>
     const property = propertyOf(db.database, columnId) ?? titleProperty
-    const key = pendingKey(row.id, columnId)
     let resentOnce = false, refused = false
+    // Only the newest commit of a cell speaks for it: an older one landing must not clear what a newer one is showing.
+    let mine: PendingCell | null = null
+    const show = (next: PendingCell | null) => { if (mine && pendingCells.get(key) !== mine) return; mine = next; setPendingCell(key, next) }
     const pending = (failed: boolean): PendingCell => ({
       databaseId: db.id, raw, failed,
-      retry: () => { const now = latest()?.pages.find(p => p.id === row.id); setPendingCell(key, null); if (now && !now.trashedAt) commit(db, { ...now, ...(columnId === titleId ? { title: String(expected ?? '') } : { values: { ...now.values, [columnId]: expected } }) } as Page, columnId, raw, notice, onSaved) },
-      discard: () => { setPendingCell(key, null); onSaved?.() },
+      retry: () => { const now = latest()?.pages.find(p => p.id === row.id); show(null); if (now && !now.trashedAt) commit(db, { ...now, ...(columnId === titleId ? { title: String(expected ?? '') } : { values: { ...now.values, [columnId]: expected } }) } as Page, columnId, raw, notice, onSaved) },
+      discard: () => { show(null); onSaved?.() },
     })
     const send = () => run(
       { type: 'set-values', pageId: row.id, values, expected: { [columnId]: expected }, at: new Date().toISOString() },
       notice ? r => ({ text: notice, undoOperationId: r.operationId }) : null, newId(),
       { inlineRefusal: /Saved elsewhere|Changed elsewhere/, onRefused: () => { refused = true; void again() }, quiet: true })
     const settle = (r: unknown) => {
-      if (r) { setPendingCell(key, null); onSaved?.(); return }
-      if (!refused) setPendingCell(key, pending(true))
+      if (r) { show(null); onSaved?.(); return }
+      if (!refused) show(pending(true))
     }
     const again = async () => {
-      setPendingCell(key, null)
+      show(null)
       const fresh = await refresh()
       const now = fresh.pages.find(p => p.id === row.id)
       // A row deleted meanwhile: his value goes quietly (Bumblebee 3c5198d5). A kept copy is done with once its value
       // is saved, its row is gone, or he's been asked (the notice below); a save that only failed keeps it.
       if (!now || now.trashedAt) { onSaved?.(); return }
-      if (sameRaw(rawOf(now, columnId), expected) && !resentOnce) { resentOnce = true; refused = false; setPendingCell(key, pending(false)); void send().then(settle); return }
+      if (sameRaw(rawOf(now, columnId), expected) && !resentOnce) { resentOnce = true; refused = false; show(pending(false)); void send().then(settle); return }
       onSaved?.()
       // One wording everywhere (Lead 0b05067c, design §13).
       const mine = typeof raw === 'string' ? `“${raw.length > 40 ? `${raw.slice(0, 40)}…` : raw}”` : raw === undefined ? 'empty' : String(raw)
@@ -192,7 +197,8 @@ function useCommitCell() {
         timeout: 10_000, actionProps: { children: 'Use mine', onPress: () => { toast.close(toastKey); commit(db, now, columnId, raw) } },
       })
     }
-    setPendingCell(key, pending(false))
+    mine = pending(false)
+    setPendingCell(key, mine)
     void send().then(settle)
   }
   return commit
@@ -281,10 +287,12 @@ export function DatabaseCellEditor() {
     return () => cancelAnimationFrame(frame)
   }, [cell]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!cell || !isDatabase(db) || !row || row.trashedAt || !property || !anchor) return null
-  const expected = (rawOf(row, cell.columnId) ?? (cell.columnId === titleId ? '' : null)) as Json
+  // A value still on its way is the cell's value: the editor opens on it, not on the copy from before it.
+  const inFlight = pendingCells.get(pendingKey(row.id, cell.columnId))
+  const expected = ((inFlight ? inFlight.raw : rawOf(row, cell.columnId)) ?? (cell.columnId === titleId ? '' : null)) as Json
   const keeps = property.type === 'text' || property.type === 'url'
 
-  const value = cell.columnId === titleId ? (row.title || null) : cellValue(db.database, row, cell.columnId)
+  const value = cell.columnId === titleId ? ((inFlight ? String(inFlight.raw ?? '') : row.title) || null) : inFlight ? readValue(property, inFlight.raw) : cellValue(db.database, row, cell.columnId)
   return <PropertyEditor key={cellKey(cell)}
     property={property} value={value as CellValue} rowTitle={displayPageTitle(row)} anchor={anchor}
     onDraft={keeps ? text => keepDraft({ databaseId: db.id, rowId: row.id, columnId: cell.columnId, value: text, expected }) : undefined}
@@ -299,12 +307,15 @@ export function DatabaseCellEditor() {
 
 function createOption(run: ReturnType<typeof useWorkspace>['run'], db: Page & { database: Database }, property: Property, name: string): string {
   const id = newId()
-  const current = db.database.properties.find(p => p.id === property.id) ?? property
-  const options = [...(current.options ?? [])]
-  // Status: a new option goes at the end of To do (Jazz bf91cb72).
-  const at = property.type === 'status' ? options.reduce((last, o, i) => (o.group ?? 'todo') === 'todo' ? i + 1 : last, 0) : options.length
-  options.splice(at, 0, { id, name, ...(property.type === 'status' ? { group: 'todo' as const } : {}) })
-  void run({ type: 'change-database', pageId: db.id, change: { kind: 'updateProperty', propertyId: property.id, options } })
+  void run(ws => {
+    const now = ws.pages.find(p => p.id === db.id)
+    if (!isDatabase(now)) return null
+    const options = [...(now.database.properties.find(p => p.id === property.id)?.options ?? [])]
+    // Status: a new option goes at the end of To do (Jazz bf91cb72).
+    const at = property.type === 'status' ? options.reduce((last, o, i) => (o.group ?? 'todo') === 'todo' ? i + 1 : last, 0) : options.length
+    options.splice(at, 0, { id, name, ...(property.type === 'status' ? { group: 'todo' as const } : {}) })
+    return { type: 'change-database', pageId: db.id, change: { kind: 'updateProperty', propertyId: property.id, options } }
+  })
   return id
 }
 
@@ -330,6 +341,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
   // Opening a row remembers it, so Back tints it for a second where he left it (design §5).
   const openRow = (rowId: string, focus?: 'title') => { try { sessionStorage.setItem(returnKey, rowId) } catch { /* private mode */ } void navigate({ to: '/pages', search: { page: rowId, ...(focus ? { focus } : {}) } }) }
   const [returned, setReturned] = useState<string | null>(null)
+  const [reveal, setReveal] = useState<string | null>(null)
   // Several rows at 1280 (design §12): a box on hover at each row's left, Shift for a range, then the bar.
   const [picked, setPicked] = useState<string[]>([])
   const lastPicked = useRef<string | null>(null)
@@ -382,6 +394,11 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
     const t = setTimeout(() => setReturned(null), 1000)
     return () => clearTimeout(t)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!reveal) return
+    const row = tbody.current?.querySelector(`[data-row="${CSS.escape(reveal)}"]`)
+    if (row) { row.scrollIntoView({ block: 'nearest' }); setReveal(null) }
+  }, [reveal, rows, limit])
   const key = (rowId: string, columnId: string) => cellKey({ blockId, databaseId: db.id, rowId, columnId })
 
   const addRow = () => {
@@ -396,12 +413,20 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
       .then(r => {
         if (!r) return
         if (!wide) { openRow(pageId, 'title'); return }
-        if (prefill.visible) requestAnimationFrame(() => open(pageId, titleId))
+        if (!prefill.visible) return
+        // Past the rows shown, the new row is drawn all the same, and brought into view (Lead's review, 5).
+        const ws = latest(), at = ws ? viewRows(ws, db.id, view, context).findIndex(x => x.id === pageId) : -1
+        if (at >= limit) setLimit(at + 1)
+        setReveal(pageId)
+        requestAnimationFrame(() => open(pageId, titleId))
       })
   }
   const addProperty = () => {
-    const name = uniqueName(db.database)
-    void run({ type: 'change-database', pageId: db.id, change: { kind: 'addProperty', property: { id: newId(), name, type: 'text' }, viewId: view.id } })
+    const id = newId()
+    void run(ws => {
+      const now = ws.pages.find(p => p.id === db.id)
+      return isDatabase(now) ? { type: 'change-database', pageId: db.id, change: { kind: 'addProperty', property: { id, name: uniqueName(now.database), type: 'text' }, viewId: view.id } } : null
+    })
   }
   const rename = (title: string) => { if (title !== db.title) void run({ type: 'rename-page', pageId: db.id, title }) }
 
@@ -443,7 +468,8 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
       if (!row || !property || !['text', 'number', 'url'].includes(property.type)) return
       e.preventDefault()
       open(row.id, property.id)
-      typeInto(e.key)
+      // Space opens the cell as it is; any other key starts replacing it.
+      if (e.key !== ' ') typeInto(e.key)
     }
     else if ((e.key === 'Backspace' || e.key === 'Delete') && c > 0) {
       const row = shown[r], property = columns[c - 1]?.property
@@ -460,7 +486,10 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
       <DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} />
       <DatabaseMenuButton blockId={blockId} databaseId={db.id} />
     </div>}
-    {(view.filter.length > 0 || view.sort.length > 0) && <RulesLine db={db.database} view={view} blockId={blockId} databaseId={db.id} onChange={change => void run({ type: 'change-database', pageId: db.id, change: { kind: 'updateView', viewId: view.id, ...change } })} />}
+    {(view.filter.length > 0 || view.sort.length > 0) && <RulesLine db={db.database} view={view} blockId={blockId} databaseId={db.id} onChange={build => void run(ws => {
+      const now = ws.pages.find(p => p.id === db.id), current = isDatabase(now) ? now.database.views.find(v => v.id === view.id) : undefined
+      return current ? { type: 'change-database', pageId: db.id, change: { kind: 'updateView', viewId: view.id, ...build(current) } } : null
+    })} />}
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
       <table className="database-table">
         <thead>
@@ -625,13 +654,13 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
  * The line under the title (design §4.1, §13) whenever the view filters or sorts: each rule in words, opening its sheet
  * when tapped, each with its own ×; a rule on a deleted property struck through; one with no value yet reads "…".
  */
-function RulesLine({ db, view, blockId, databaseId, onChange }: { db: Database; view: View; blockId: string; databaseId: string; onChange: (change: { filter?: Condition[]; sort?: View['sort'] }) => void }) {
+function RulesLine({ db, view, blockId, databaseId, onChange }: { db: Database; view: View; blockId: string; databaseId: string; onChange: (build: (current: View) => { filter?: Condition[]; sort?: View['sort'] }) => void }) {
   return <div className="database-filter-line">
     {view.filter.map((c, i) => {
       const property = propertyOf(db, c.by)
       return <span key={`f${i}`} className={`database-filter-chip ${property ? '' : 'is-deleted'}`}>
         <button type="button" className="database-chip-open" onClick={() => openDatabaseMenu(blockId, databaseId, 'filter')}>{property ? property.name : '(deleted)'} {filterWords(c, property)}</button>
-        <button type="button" className="database-chip-remove" aria-label="Remove filter" onClick={() => onChange({ filter: view.filter.filter((_, j) => j !== i) })}>×</button>
+        <button type="button" className="database-chip-remove" aria-label="Remove filter" onClick={() => onChange(current => ({ filter: current.filter.filter((_, j) => j !== i) }))}>×</button>
       </span>
     })}
     {view.sort.map((s, i) => {
@@ -639,7 +668,7 @@ function RulesLine({ db, view, blockId, databaseId, onChange }: { db: Database; 
       if (!property) return null
       return <span key={`s${i}`} className="database-filter-chip is-sort">
         <button type="button" className="database-chip-open" onClick={() => openDatabaseMenu(blockId, databaseId, 'sort')}>{property.name} {s.direction === 'asc' ? '↑' : '↓'}</button>
-        <button type="button" className="database-chip-remove" aria-label="Remove sort" onClick={() => onChange({ sort: view.sort.filter((_, j) => j !== i) })}>×</button>
+        <button type="button" className="database-chip-remove" aria-label="Remove sort" onClick={() => onChange(current => ({ sort: current.sort.filter((_, j) => j !== i) }))}>×</button>
       </span>
     })}
   </div>

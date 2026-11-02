@@ -77,6 +77,8 @@ type NoticeArg = NoticeSpec | ((r: Receipt) => NoticeSpec)
 /** A domain refusal matching `inlineRefusal` is handed to `onRefused` instead of the save-failed bar. */
 type RunOptions = { inlineRefusal?: RegExp; onRefused?: (message: string) => void; /** The failure's message, for a caller that retries by itself (B35). */ onFailure?: (message: string) => void; /** B40: a background save; its failure says so in its own line, never the header's bar and Retry. */ quiet?: boolean }
 
+export type ActionSource = Action | ((workspace: Workspace) => Action | null)
+
 interface WorkspaceContextValue {
   workspace: Workspace | null
   loadError: string | null
@@ -86,7 +88,8 @@ interface WorkspaceContextValue {
   saveError: string | null
   /** The command that failed and Retry would resend, if any. */
   failedAction: Action['type'] | null
-  run(action: Action, notice?: NoticeArg, operationId?: string, options?: RunOptions): Promise<Receipt | null>
+  /** A function builds the action inside the queue, from the workspace every earlier command has landed on; null sends nothing. */
+  run(action: ActionSource, notice?: NoticeArg, operationId?: string, options?: RunOptions): Promise<Receipt | null>
   /** The workspace as of the last command or load, before React re-renders: what a command just did. */
   latest(): Workspace | null
   retry(): void
@@ -206,11 +209,13 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
   }, [])
 
   const run = useCallback(
-    (action: Action, notice?: NoticeArg, operationId = newOperationId(), options: RunOptions = {}) => {
+    (source: ActionSource, notice?: NoticeArg, operationId = newOperationId(), options: RunOptions = {}) => {
       commandsOut++
       const job = queue.current.then(async (): Promise<Receipt | null> => {
         const current = wsRef.current
         if (!current) return null
+        const action = typeof source === 'function' ? source(current) : source
+        if (!action) return null
         if (!options.quiet) setSaveState('saving')
         const started=performance.now()
         const fields={operationId,command:action.type,beforeRevision:current.revision,...('pageId' in action?{pageId:action.pageId}:{}),...('taskId' in action?{taskId:action.taskId}:{})}

@@ -95,7 +95,11 @@ type DatabasePage = Page & { database: Database }
 
 function useChange(db: DatabasePage) {
   const { run } = useWorkspace()
-  return (change: DatabaseChange, withUndo = false) => void run({ type: 'change-database', pageId: db.id, change }, withUndo ? r => ({ text: r.message, undoOperationId: r.operationId }) : null)
+  // Built from the latest database, inside the queue: two quick changes each build on the one before (Lead's review, 7).
+  return (change: DatabaseChange | ((current: Database) => DatabaseChange), withUndo = false) => void run(ws => {
+    const now = ws.pages.find(p => p.id === db.id)
+    return isDatabase(now) ? { type: 'change-database', pageId: db.id, change: typeof change === 'function' ? change(now.database) : change } : null
+  }, withUndo ? r => ({ text: r.message, undoOperationId: r.operationId }) : null)
 }
 
 function Head({ title, back }: { title: string; back?: () => void }) {
@@ -148,13 +152,14 @@ export function opsFor(type: PropertyType): FilterOp[] {
   }
 }
 const titleProperty: Property = { id: titleId, name: 'Name', type: 'text' }
+const viewIn = (current: Database, view: View) => current.views.find(v => v.id === view.id) ?? view
 function columnsOf(db: Database): Property[] { return [titleProperty, ...db.properties] }
 
 function FilterPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
   const change = useChange(db)
-  const save = (filter: Condition[]) => change({ kind: 'updateView', viewId: view.id, filter })
-  const set = (i: number, next: Condition) => save(view.filter.map((c, j) => (j === i ? next : c)))
-  const add = () => save([...view.filter, { by: titleId, op: 'contains' }])
+  const save = (build: (filter: Condition[]) => Condition[]) => change(current => ({ kind: 'updateView', viewId: view.id, filter: build(viewIn(current, view).filter) }))
+  const set = (i: number, next: Condition) => save(filter => filter.map((c, j) => (j === i ? next : c)))
+  const add = () => save(filter => [...filter, { by: titleId, op: 'contains' }])
   return <>
     <Head title="Filter" back={back} />
     {view.filter.length === 0 && <p className="database-menu-quiet">No filters</p>}
@@ -170,7 +175,7 @@ function FilterPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
           </select>
           <RuleValue property={property} condition={c} onChange={value => set(i, value === undefined ? { by: c.by, op: c.op } : { ...c, value })} />
         </> : <span className="database-rule-deleted">(deleted)</span>}
-        <button type="button" className="database-rule-remove" aria-label="Remove filter" onClick={() => save(view.filter.filter((_, j) => j !== i))}>×</button>
+        <button type="button" className="database-rule-remove" aria-label="Remove filter" onClick={() => save(filter => filter.filter((_, j) => j !== i))}>×</button>
       </div>
     })}
     <button type="button" role="menuitem" onClick={add}>+ Add filter</button>
@@ -223,24 +228,24 @@ function CommitInput({ initial, onCommit, inputMode, placeholder, ariaLabel = 'V
 
 function SortPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
   const change = useChange(db)
-  const save = (sort: Sort[]) => change({ kind: 'updateView', viewId: view.id, sort })
-  const move = (i: number, by: number) => { const next = [...view.sort]; const [s] = next.splice(i, 1); next.splice(i + by, 0, s!); save(next) }
+  const save = (build: (sort: Sort[]) => Sort[]) => change(current => ({ kind: 'updateView', viewId: view.id, sort: build(viewIn(current, view).sort) }))
+  const move = (i: number, by: number) => save(sort => { const next = [...sort]; const [s] = next.splice(i, 1); next.splice(i + by, 0, s!); return next })
   const unused = columnsOf(db.database).find(p => !view.sort.some(s => s.by === p.id))
   return <>
     <Head title="Sort" back={back} />
     {view.sort.length === 0 && <p className="database-menu-quiet">No sorts</p>}
     {view.sort.map((s, i) => <div key={s.by} className="database-rule">
-      <select aria-label="Property" value={s.by} onChange={e => save(view.sort.map((x, j) => (j === i ? { ...x, by: e.target.value } : x)))}>
+      <select aria-label="Property" value={s.by} onChange={e => { const by = e.target.value; save(sort => sort.map((x, j) => (j === i ? { ...x, by } : x))) }}>
         {columnsOf(db.database).filter(p => p.id === s.by || !view.sort.some(x => x.by === p.id)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         {!propertyOf(db.database, s.by) && <option value={s.by}>(deleted)</option>}
       </select>
-      <select aria-label="Direction" value={s.direction} onChange={e => save(view.sort.map((x, j) => (j === i ? { ...x, direction: e.target.value as Sort['direction'] } : x)))}>
+      <select aria-label="Direction" value={s.direction} onChange={e => { const direction = e.target.value as Sort['direction']; save(sort => sort.map((x, j) => (j === i ? { ...x, direction } : x))) }}>
         <option value="asc">Ascending</option><option value="desc">Descending</option>
       </select>
       {i > 0 && <button type="button" aria-label="Move up" onClick={() => move(i, -1)}>↑</button>}
-      <button type="button" className="database-rule-remove" aria-label="Remove sort" onClick={() => save(view.sort.filter((_, j) => j !== i))}>×</button>
+      <button type="button" className="database-rule-remove" aria-label="Remove sort" onClick={() => save(sort => sort.filter((_, j) => j !== i))}>×</button>
     </div>)}
-    {unused && <button type="button" role="menuitem" onClick={() => save([...view.sort, { by: unused.id, direction: 'asc' }])}>+ Add sort</button>}
+    {unused && <button type="button" role="menuitem" onClick={() => save(sort => [...sort, { by: unused.id, direction: 'asc' }])}>+ Add sort</button>}
   </>
 }
 
@@ -251,10 +256,10 @@ function PropertiesPanel({ db, view, go }: { db: DatabasePage; view: View; go: (
   const shown = new Set(view.columns.map(c => c.id))
   // Shown ones in the view's order, then the hidden ones in the database's order.
   const ordered = [...view.columns.map(c => db.database.properties.find(p => p.id === c.id)).filter((p): p is Property => Boolean(p)), ...db.database.properties.filter(p => !shown.has(p.id))]
-  const setColumns = (columns: View['columns']) => change({ kind: 'updateView', viewId: view.id, columns })
-  const toggle = (p: Property) => setColumns(shown.has(p.id) ? view.columns.filter(c => c.id !== p.id) : [...view.columns, { id: p.id }])
+  const setColumns = (build: (columns: View['columns']) => View['columns']) => change(current => ({ kind: 'updateView', viewId: view.id, columns: build(viewIn(current, view).columns) }))
+  const toggle = (p: Property) => setColumns(columns => (columns.some(c => c.id === p.id) ? columns.filter(c => c.id !== p.id) : [...columns, { id: p.id }]))
   // Left and right, one place at a time (R1-14); dragging comes later.
-  const shift = (p: Property, by: -1 | 1) => { const i = view.columns.findIndex(c => c.id === p.id), j = i + by; if (i < 0 || j < 0 || j >= view.columns.length) return; const next = [...view.columns]; [next[i], next[j]] = [next[j]!, next[i]!]; setColumns(next) }
+  const shift = (p: Property, by: -1 | 1) => setColumns(columns => { const i = columns.findIndex(c => c.id === p.id), j = i + by; if (i < 0 || j < 0 || j >= columns.length) return columns; const next = [...columns]; [next[i], next[j]] = [next[j]!, next[i]!]; return next })
   return <>
     <Head title="Properties" back={() => go('root')} />
     <div className="database-property-line is-title"><span>Name</span><span className="database-menu-quiet">always shown</span></div>
@@ -292,6 +297,8 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
   const update = (fields: Omit<Extract<DatabaseChange, { kind: 'updateProperty' }>, 'kind' | 'propertyId'>, withUndo = false) => change({ kind: 'updateProperty', propertyId, ...fields }, withUndo)
   const hasOptions = property.type === 'select' || property.type === 'multiSelect' || property.type === 'status'
   const options = property.options ?? []
+  const updateOptions = (build: (options: Property['options'] & object) => Property['options'] & object, withUndo = false) =>
+    change(current => ({ kind: 'updateProperty', propertyId, options: build(current.properties.find(p => p.id === propertyId)?.options ?? []) }), withUndo)
   const shown = view.columns.some(c => c.id === propertyId)
   return <>
     <Head title={property.name} back={() => go('properties')} />
@@ -312,17 +319,17 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
     </label>}
     {hasOptions && <div className="database-options">
       {options.map((o, i) => <div key={o.id} className="database-option-line">
-        {property.type === 'status' && <select aria-label="Group" value={o.group ?? 'todo'} onChange={e => update({ options: options.map(x => (x.id === o.id ? { ...x, group: e.target.value as 'todo' } : x)) })}>
+        {property.type === 'status' && <select aria-label="Group" value={o.group ?? 'todo'} onChange={e => { const group = e.target.value as 'todo'; updateOptions(now => now.map(x => (x.id === o.id ? { ...x, group } : x))) }}>
           <option value="todo">To do</option><option value="active">In progress</option><option value="done">Done</option>
         </select>}
-        <CommitInput key={o.name} ariaLabel="Option name" initial={o.name} onCommit={v => { if (v.trim()) update({ options: options.map(x => (x.id === o.id ? { ...x, name: v.trim() } : x)) }) }} />
-        {i > 0 && <button type="button" aria-label="Move up" onClick={() => { const next = [...options]; [next[i - 1], next[i]] = [next[i]!, next[i - 1]!]; update({ options: next }) }}>↑</button>}
-        <button type="button" className="database-rule-remove" aria-label={`Delete ${o.name}`} onClick={() => update({ options: options.filter(x => x.id !== o.id) }, true)}>×</button>
+        <CommitInput key={o.name} ariaLabel="Option name" initial={o.name} onCommit={v => { if (v.trim()) updateOptions(now => now.map(x => (x.id === o.id ? { ...x, name: v.trim() } : x))) }} />
+        {i > 0 && <button type="button" aria-label="Move up" onClick={() => updateOptions(now => { const at = now.findIndex(x => x.id === o.id); if (at < 1) return now; const next = [...now]; [next[at - 1], next[at]] = [next[at]!, next[at - 1]!]; return next })}>↑</button>}
+        <button type="button" className="database-rule-remove" aria-label={`Delete ${o.name}`} onClick={() => updateOptions(now => now.filter(x => x.id !== o.id), true)}>×</button>
       </div>)}
-      <CommitInput key={options.length} ariaLabel="New option" initial="" placeholder="Add an option" onCommit={v => { if (v.trim()) update({ options: [...options, { id: newId(), name: v.trim(), ...(property.type === 'status' ? { group: 'todo' as const } : {}) }] }) }} />
+      <CommitInput key={options.length} ariaLabel="New option" initial="" placeholder="Add an option" onCommit={v => { if (v.trim()) { const made = { id: newId(), name: v.trim(), ...(property.type === 'status' ? { group: 'todo' as const } : {}) }; updateOptions(now => [...now, made]) } }} />
     </div>}
     <hr />
-    <button type="button" role="menuitem" onClick={() => change({ kind: 'updateView', viewId: view.id, columns: shown ? view.columns.filter(c => c.id !== propertyId) : [...view.columns, { id: propertyId }] })}>{shown ? 'Hide in this view' : 'Show in this view'}</button>
+    <button type="button" role="menuitem" onClick={() => change(current => { const { columns } = viewIn(current, view); return { kind: 'updateView', viewId: view.id, columns: columns.some(c => c.id === propertyId) ? columns.filter(c => c.id !== propertyId) : [...columns, { id: propertyId }] } })}>{shown ? 'Hide in this view' : 'Show in this view'}</button>
     <button type="button" role="menuitem" className="is-danger" onClick={() => { change({ kind: 'removeProperty', propertyId }, true); go('properties') }}>Delete property</button>
   </>
 }
