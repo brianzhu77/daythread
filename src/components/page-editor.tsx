@@ -14,7 +14,7 @@ import { suggestionMenuMiddleware } from './suggestion-menu-placement'
 import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
-import { editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, sectionRange, type EditorNode } from '../domain/editor-document'
+import { blockPlace, editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, sectionRange, withBlockBack, type BlockPlace, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
 import { announceSave, changedBy, claim, clearOwn, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn } from './draft-slots'
 import { applyCommand, plannedOn, taskRows as rowsOfTask, urlOwner } from '../domain/workspace'
@@ -83,6 +83,17 @@ function DatabaseInPage({ blockId, pageId }: { blockId: string; pageId: string }
 }
 /** What a database block asks of the page editor it sits in (model §3): switch it to a card and back, take it out. */
 const DatabaseEditorActions = createContext<BlockActions | null>(null)
+/** The open editors, by page: a block put back after the page changed goes in through its editor, if it has one open. */
+const blockReceivers = new Map<string, (place: BlockPlace) => void>()
+/** The home blocks a save removed, whose databases went to Trash with it, and where they sat. */
+function removedHomes(ws: Workspace, pageId: string, before: string, after: string): BlockPlace[] {
+  const was = JSON.parse(before) as EditorNode[], now = new Set(deepNodes(JSON.parse(after) as EditorNode[]).map(n => n.id))
+  return ws.pages.flatMap(p => {
+    if (p.parentId !== pageId || !p.trashedAt || !p.database?.homeBlockId || now.has(p.database.homeBlockId)) return []
+    const place = blockPlace(was, p.database.homeBlockId)
+    return place ? [place] : []
+  })
+}
 // A9a (Jazz page-links-states §1): a `[[` link is one inline unit, icon + the page's current title on a quiet chip.
 // Backspace removes it whole (it has no content of its own). It reads its title live, so nothing is stored as text.
 // A11: with `lineId` it's a link to one line on that page (`taskId` when the line is a task row), drawn as a line chip.
@@ -361,16 +372,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const runRef = useRef(run); runRef.current = run
   const navigate = useNavigate()
   const key = `daythread:editor:${page.id}`
-  const initial = useRef<{ nodes: EditorNode[]; base: string; baseDocument: string; recovered: boolean; cutTaskIds: string[] } | null>(null)
+  const initial = useRef<{ nodes: EditorNode[]; base: string; baseDocument: string; recovered: boolean; cutTaskIds: string[]; detach: string[]; adopt: { blockId: string; pageId: string }[] } | null>(null)
   if (!initial.current) {
     // B40: from here on, a background save of kept drafts leaves this page's draft to this editor.
     noteEditorMounting(page.id)
     const base = pageContentKey(page)
-    let nodes = editorSeed(page, workspace), recovered = false, savedBase = base, savedBaseDocument = page.document, cutTaskIds: string[] = []
+    let nodes = editorSeed(page, workspace), recovered = false, savedBase = base, savedBaseDocument = page.document, cutTaskIds: string[] = [], detach: string[] = [], adopt: { blockId: string; pageId: string }[] = []
     // B35: this tab's own slot; drafts other tabs left behind are merged in after mount. A recovered draft brings back
     // its cuts too (Ratchet 067be3eb): a cut row in it is a move, never a delete.
-    try { const stored = readOwn(page.id); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; savedBaseDocument = stored.baseDocument ?? page.document; recovered = true; cutTaskIds = (stored.cutTaskIds ?? []).filter((x: unknown) => typeof x === 'string') } } catch { /* fresh document */ }
-    initial.current = { nodes, base: savedBase, baseDocument: savedBaseDocument, recovered, cutTaskIds }
+    try { const stored = readOwn(page.id); if (stored?.document) { nodes = JSON.parse(stored.document); savedBase = stored.base; savedBaseDocument = stored.baseDocument ?? page.document; recovered = true; cutTaskIds = (stored.cutTaskIds ?? []).filter((x: unknown) => typeof x === 'string'); detach = stored.detachDatabaseIds ?? []; adopt = stored.adoptDatabaseBlocks ?? [] } } catch { /* fresh document */ }
+    initial.current = { nodes, base: savedBase, baseDocument: savedBaseDocument, recovered, cutTaskIds, detach, adopt }
   }
   const [pastedChecklistIds, setPastedChecklistIds] = useState<string[]>(() => checklistIds(initial.current!.nodes))
   // The blocks the handle press picked; the drop handler moves exactly these.
@@ -525,19 +536,30 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const cutTasks = useRef(new Set<string>(initial.current.cutTaskIds))
   // Databases this page's next save turns into full pages (Turn into page) or makes at home here (Turn into inline),
   // by database page id; each goes with the save that carries it (model §3, rules 6 and 7).
-  const databaseFlags = useRef({ detach: new Set<string>(), adopt: new Map<string, string>() })
-  // Home blocks this editor turned into cards, by database: ⌘Z puts the same block back, and the next save makes it the
-  // home again rather than leave a card where the table was (Bumblebee).
+  const databaseFlags = useRef({ detach: new Set(initial.current.detach), adopt: new Map(initial.current.adopt.map(a => [a.pageId, a.blockId])) })
+  // Home blocks that left this editor without deleting their database (Turn into page, cut, an undo or redo step), by
+  // block id: ⌘Z puts the same block back, and the next save makes it the home again rather than leave a card where the
+  // table was (Bumblebee). If the detach was never sent, adopting changes nothing: it's still home.
   const formerHomes = useRef(new Map<string, string>())
   const databaseFields = () => {
-    for (const [pageId, blockId] of formerHomes.current) {
+    for (const [blockId, pageId] of formerHomes.current) {
       if (editor.getBlock(blockId)?.type !== 'database') continue
-      formerHomes.current.delete(pageId)
-      // Back before the detach was even sent: the save simply keeps it home.
-      if (databaseFlags.current.detach.delete(pageId)) continue
+      formerHomes.current.delete(blockId)
+      databaseFlags.current.detach.delete(pageId)
       databaseFlags.current.adopt.set(pageId, blockId)
     }
     return databaseFieldsNow()
+  }
+  // Inline databases made here by `/` Database: ⌘Z right after one, still empty, trashes it with no notice (nothing to keep).
+  const madeHere = useRef(new Set<string>())
+  const quietTrash = useRef(new Set<string>())
+  /** A database block removed by an undo or redo step never deletes the database: it stays as its own page (Lead's review, 1, 2). */
+  const blockLeftByHistory = (blockId: string, pageId: string) => {
+    const ws = latestWorkspace.current
+    if (madeHere.current.has(pageId) && !ws.pages.find(p => p.id === pageId)?.title.trim() && !ws.pages.some(p => p.parentId === pageId && !p.trashedAt)) { quietTrash.current.add(pageId); return }
+    if (databaseFlags.current.adopt.get(pageId) === blockId) databaseFlags.current.adopt.delete(pageId)
+    databaseFlags.current.detach.add(pageId)
+    formerHomes.current.set(blockId, pageId)
   }
   const databaseFieldsNow = () => ({
     ...(databaseFlags.current.detach.size ? { detachDatabaseIds: [...databaseFlags.current.detach] } : {}),
@@ -713,7 +735,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     })()
     return true
   }
-  const stash = () => { if (claimedAway()) return; try { writeOwn(page.id, { base: base.current, baseDocument: baseDoc.current, document: JSON.stringify(nodes()), ...(cutTasks.current.size ? { cutTaskIds: [...cutTasks.current] } : {}) }) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
+  const stash = () => { if (claimedAway()) return; try { writeOwn(page.id, { base: base.current, baseDocument: baseDoc.current, document: JSON.stringify(nodes()), ...(cutTasks.current.size ? { cutTaskIds: [...cutTasks.current] } : {}), ...databaseFieldsNow() }) } catch { setStatus('Draft stays in this tab; browser recovery storage unavailable') } }
   const flushRef = useRef<() => Promise<void>>(async () => {})
   /**
    * B35: a save that failed on the network tries again by itself, with the same operation id (a lost reply replays
@@ -752,6 +774,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     sending.current = true
     const document = JSON.stringify(editor.document)
     const deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current], flags = databaseFields()
+    const documentBefore = baseDoc.current
     lastSent.current = document
     setStatus('Saving…')
     const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), ...flags, today: todayIso() }
@@ -791,10 +814,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       }
       clearTimeout(retryTimer.current); retries.current = 0; offlineFailure.current = false; resentForRevision.current = false
       announceSave(page.id)
-      // A home block deleted with this save took its database to Trash (model §3): say so, with Undo, which is the
-      // editor's own ⌘Z — the block back in the page restores the database and its rows.
-      if (/ moved to Trash$/.test(result.message) && result.entityId && latest()?.pages.find(p => p.id === result.entityId)?.database) {
-        const key: string = toast(result.message, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); editor.undo(); editor.focus() } } })
+      // A home block deleted with this save took its database to Trash (model §3): say so, with Undo, which puts the block
+      // back at its place by id (the block back in the page restores the database and its rows). Not the editor's ⌘Z: he
+      // may have typed since, or left the page (Lead's review, 4).
+      if (/ moved to Trash$/.test(result.message) && result.entityId && latest()?.pages.find(p => p.id === result.entityId)?.database && !quietTrash.current.delete(result.entityId)) {
+        const places = removedHomes(latest()!, page.id, documentBefore, document)
+        const key: string = toast(result.message, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); putHomesBack(page.id, places) } } })
       }
       pendingSave.current=null; lastSaved.current = document
       debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
@@ -850,6 +875,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         doc = merged.document; inserted += merged.inserted.length
         // Its cuts were moves too (B33): the save that carries its text mustn't delete them.
         for (const id of slot.cutTaskIds ?? []) cutTasks.current.add(id)
+        // And so were its databases: turned into pages or moved, not deleted.
+        for (const id of slot.detachDatabaseIds ?? []) databaseFlags.current.detach.add(id)
+        for (const a of slot.adoptDatabaseBlocks ?? []) databaseFlags.current.adopt.set(a.pageId, a.blockId)
       } catch { continue }
       claim(page.id, slotKey)
     }
@@ -873,8 +901,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     return !dirty.current
   }), [page.id])
   useEffect(() => editor.onBeforeChange(({ getChanges, tr }) => {
-    if (historyGuardBypass.current || !isHistoryTransaction(tr)) return
+    if (!isHistoryTransaction(tr)) return
     const changes = getChanges()
+    for (const c of changes) {
+      const gone = c.type === 'delete' ? c.block : c.type === 'update' && c.block.type !== 'database' ? c.prevBlock : null
+      if (gone?.type === 'database') blockLeftByHistory(gone.id, String(gone.props.pageId))
+    }
+    if (historyGuardBypass.current) return
     if (!changes.some(c => c.source.type === 'redo')) return
     for (const c of changes) if (c.type === 'delete' && knownSemantic.current.has(c.block.id)) semanticDeletes.current.add(c.block.id)
   }), [editor])
@@ -1061,6 +1094,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const [line] = editor.insertBlocks([{ type: 'paragraph' } as never], inserted!, 'after')
       editor.setTextCursorPosition(line!, 'start')
     })
+    madeHere.current.add(pageId)
     await confirmDatabase(pageId, blockId!)
   }
   async function confirmDatabase(pageId: string, blockId: string) {
@@ -1611,12 +1645,35 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     dragging.current = []; dropRef.current = null; setDrop(null); setTouchDragging(false)
   }
+  useEffect(() => {
+    const receive = (place: BlockPlace) => {
+      const known = (id: string | null) => (id && editor.getBlock(id) ? id : null)
+      const after = known(place.afterId), before = known(place.beforeId), last = editor.document.at(-1)
+      if (after) editor.insertBlocks([place.node as never], after, 'after')
+      else if (before) editor.insertBlocks([place.node as never], before, 'before')
+      else if (last) editor.insertBlocks([place.node as never], last, 'after')
+    }
+    blockReceivers.set(page.id, receive)
+    return () => { if (blockReceivers.get(page.id) === receive) blockReceivers.delete(page.id) }
+  }, [editor, page.id])
+  /** Undo of a deleted table: into the open editor, or else a save of the page with the block back, from the latest copy. */
+  const putHomesBack = (pageId: string, places: BlockPlace[]) => {
+    const receive = blockReceivers.get(pageId)
+    if (receive) { places.forEach(receive); return }
+    void runRef.current(ws => {
+      const now = ws.pages.find(p => p.id === pageId)
+      return now ? { type: 'save-editor', pageId, expectedContent: pageContentKey(now), document: JSON.stringify(places.reduce(withBlockBack, pageNodes(now))), today: todayIso() } : null
+    }, undefined, undefined, { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => {} }).then(done => {
+      const title = displayPageTitle(latestWorkspace.current.pages.find(p => p.id === pageId) ?? page)
+      toast(done ? `Back on ${title}` : `Couldn't put it back on ${title} · it's in Trash`, { timeout: 6000 })
+    })
+  }
   const databaseActions = useMemo<BlockActions>(() => ({
     hostPageId: page.id,
     // Turn into page (design §3.2): the table becomes our page card in place; the save says it's a full page now.
     turnIntoPage: (blockId, pageId) => {
       databaseFlags.current.adopt.delete(pageId); databaseFlags.current.detach.add(pageId)
-      formerHomes.current.set(pageId, blockId)
+      formerHomes.current.set(blockId, pageId)
       editor.replaceBlocks([blockId], [{ type: 'pageLink', props: { pageId } } as never])
     },
     // Turn into inline: the card becomes the table again, and the save makes this block its home.
@@ -1841,7 +1898,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // A database whose home block is cut becomes a full page here until the paste adopts it (model §3, 6 then 7); this
       // save goes at once, so a paste on another page lands after it (Lead fdcc7b9f).
       const homes = deepNodes(blocks).filter(n => n.type === 'database' && latestWorkspace.current.pages.some(p => p.id === n.props?.pageId && p.database?.homeBlockId === n.id && p.parentId === page.id))
-      for (const n of homes) databaseFlags.current.detach.add(String(n.props!.pageId))
+      for (const n of homes) { databaseFlags.current.detach.add(String(n.props!.pageId)); formerHomes.current.set(n.id, String(n.props!.pageId)) }
       // R1-5: he sees where it went, and how to put it back.
       for (const n of homes) { const db = latestWorkspace.current.pages.find(p => p.id === n.props?.pageId); if (db) toast(`${displayPageTitle(db)} is now its own page · paste to put it back`, { timeout: 8000 }) }
       if (homes.length) setTimeout(() => { clearTimeout(timer.current); void flushRef.current() }, 0)

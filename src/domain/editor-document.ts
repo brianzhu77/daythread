@@ -171,3 +171,27 @@ export function sectionInsertIndex(doc: readonly EditorNode[], headingId: string
 
 /** The task of a row, by id, when it exists. */
 export const taskOfRow = (workspace: Workspace, n: EditorNode): Task | undefined => { const id = rowTaskId(n); return id ? workspace.tasks.find(t => t.id === id) : undefined }
+
+/** Where a block sat, so it can be put back by id even after the page has changed around it. */
+export interface BlockPlace { node: EditorNode; afterId: string | null; beforeId: string | null }
+export function blockPlace(list: readonly EditorNode[], id: string): BlockPlace | null {
+  for (const [i, node] of list.entries()) {
+    if (node.id === id) return { node, afterId: list[i - 1]?.id ?? null, beforeId: list[i + 1]?.id ?? null }
+    const inner = blockPlace(node.children ?? [], id)
+    if (inner) return inner
+  }
+  return null
+}
+/** The block back after its old neighbour, or before its other one, or else at the end of the page. */
+export function withBlockBack(list: readonly EditorNode[], place: BlockPlace): EditorNode[] {
+  const beside = (nodes: readonly EditorNode[], id: string, offset: 0 | 1): EditorNode[] | null => {
+    const at = nodes.findIndex(n => n.id === id)
+    if (at >= 0) return [...nodes.slice(0, at + offset), place.node, ...nodes.slice(at + offset)]
+    for (const [i, node] of nodes.entries()) {
+      const children = node.children?.length ? beside(node.children, id, offset) : null
+      if (children) return [...nodes.slice(0, i), { ...node, children }, ...nodes.slice(i + 1)]
+    }
+    return null
+  }
+  return (place.afterId && beside(list, place.afterId, 1)) || (place.beforeId && beside(list, place.beforeId, 0)) || [...list, place.node]
+}
