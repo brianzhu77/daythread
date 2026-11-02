@@ -6,6 +6,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { cellValue, databaseRows, newRowValues, readValue, storedValue, viewRows, type Condition, type Database, type Property, type View } from '../src/domain/database.ts'
 import { childPages, listedPages, moveRefusal, subtreeIds } from '../src/domain/page-tree.ts'
 import { exportFiles } from '../src/domain/export.ts'
+import { buildSearchIndex, search } from '../src/domain/search.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { PostgresWorkspaceRepository } from '../src/server/postgres-repository.ts'
 import { pgliteClient } from '../src/server/db/sql.ts'
@@ -369,4 +370,12 @@ test('Postgres: the database columns are added to an existing schema on start, a
     assert.equal('database' in loaded.pages.find(p => p.id === 'dune')!, false)
     assert.equal('values' in loaded.pages.find(p => p.id === 'list')!, false)
   } finally { await db.close() }
+})
+
+test('search: a row is labelled by its database and found by its values', () => {
+  const h = reading()
+  const index = buildSearchIndex(h.ws)
+  const hit = (q: string) => search(index, q, today).pages.map(p => `${p.page.title} · ${p.path}`)
+  assert.deepEqual(hit('dune'), ['Dune · Reading list'])
+  assert.deepEqual(hit('history').sort(), ['Emma · Reading list', 'Ubik · Reading list'])
 })

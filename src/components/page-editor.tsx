@@ -43,7 +43,7 @@ import { endOfLineAbove, rowArrows } from './row-arrows'
 import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, rememberLeaveSave, trackLeaveSave } from './editor-flush'
 import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
-import { isDatabase } from '../domain/database'
+import { databaseRows, isDatabase } from '../domain/database'
 import { openedByTurnover } from './use-screen-today'
 import { openedByMove } from './new-build'
 import { fixedOffset, seenArea } from './fixed-coords'
@@ -1297,6 +1297,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   /** §3: where a page lives, for the list's second line. */
   function whereLabel(p: Page): string {
     if (p.url) { try { return new URL(p.url).hostname.replace(/^www\./, '') } catch { return p.url } }
+    // A database says what it is (design §4.4); a row says its database, as any page says its parent.
+    if (isDatabase(p)) { const n = databaseRows(latestWorkspace.current, p.id).length; return `Database · ${n} row${n === 1 ? '' : 's'}` }
     const parent = parentOf(latestWorkspace.current, p)
     // A day needs no second line: its calendar icon already says it (Jazz 2ff83a4e).
     return parent ? `in ${pageLabel(parent)}` : p.type === 'daily' ? '' : 'in Pages'
