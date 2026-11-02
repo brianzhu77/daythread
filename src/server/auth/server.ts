@@ -8,6 +8,7 @@ import { PostgresWorkspaceRepository, schemaName } from '../postgres-repository.
 import type { SqlClient } from '../db/sql.ts'
 import { validTimezone } from '../../domain/workspace.ts'
 import { authConfig, authRequired, normalizeEmail, type AuthConfig } from './config.ts'
+import { onWorkers } from '../hosting.ts'
 import { AccountStore } from './accounts.ts'
 import { SessionStore, type CheckedSession, type Outcome } from './sessions.ts'
 import * as supabaseAuth from './supabase.ts'
@@ -142,7 +143,12 @@ function ipWaitMs(ip: string, now = Date.now()): number {
 }
 /** For tests: the per-address brake starts over. */
 export function resetTries(): void { tries.clear() }
-const clientIp = (request: Request) => request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'local'
+// The address the sign-in brake counts. Vercel overwrites X-Forwarded-For, so its first entry is the client there; on a
+// Worker the client's own X-Forwarded-For is kept and appended to, so only CF-Connecting-IP is trusted (Roadbuster
+// 3654a9a7), with no fallback a client could set.
+const clientIp = (request: Request) => onWorkers()
+  ? request.headers.get('cf-connecting-ip') || 'unknown'
+  : request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || 'local'
 
 const email = z.string().trim().email().max(320), password = z.string().min(1).max(1024)
 const timezone = z.string().max(100).optional()
