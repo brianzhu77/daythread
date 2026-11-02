@@ -214,9 +214,15 @@ test('deleting the home block trashes the database and its rows as one batch; Un
   h.save('books', d => d.filter(n => n.id !== 'home'), { at })
   h.run({ type: 'restore-batch', trashId: h.page('list').trashId! })
   assert.equal(databaseRows(h.ws, 'list').length, 3)
-  // The block back in the page (the save that restores it) keeps it live; deleting it again trashes it again.
+  // Restored from Trash, the block isn't back in the page: putting it back keeps it live.
   h.save('books', d => [...d, block('home', 'list')])
   assert.equal(h.page('list').trashedAt, undefined)
+  // The block back in the page right after a delete (the editor's ⌘Z) restores the database and its rows.
+  h.save('books', d => d.filter(n => n.id !== 'home'), { at })
+  assert.ok(h.page('list').trashedAt)
+  h.save('books', d => [...d, block('home', 'list')])
+  assert.equal(h.page('list').trashedAt, undefined)
+  assert.equal(databaseRows(h.ws, 'list').length, 3)
 })
 
 test('moving the home block inside the page, or another block of it, never trashes anything', () => {

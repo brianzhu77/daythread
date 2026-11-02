@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AccountRow } from './account-row'
 import { ContinuousPage } from './continuous-page'
@@ -11,6 +11,7 @@ import { LinkUrlRow } from './link-url-row'
 import { PagesTrashRow, TrashedPage, TrashScreen } from './trash'
 import { useWorkspace } from './use-day'
 import { DatabasePage, RowProperties } from './database-block'
+import { NewPageMenu } from './new-page-menu'
 import { databaseOfRow, isDatabase } from '../domain/database'
 import { RowMenu } from './row-menu'
 import { flushEditor } from './editor-flush'
@@ -35,26 +36,6 @@ export function useCreateDatabase() {
     return receipt ? pageId : null
   }
 }
-/** Pages' `+` (design §3.1): Page first (Enter takes it), then Database. */
-export function NewPageMenu({ onPage, onDatabase, className = 'round-add' }: { onPage: () => void; onDatabase: () => void; className?: string }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!open) return
-    const away = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('pointerdown', away)
-    return () => document.removeEventListener('pointerdown', away)
-  }, [open])
-  const pick = (f: () => void) => { setOpen(false); f() }
-  return <div className="new-page-menu" ref={ref}>
-    <button type="button" className={className} aria-label="New page" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}><PlusIcon /></button>
-    {open && <div className="app-menu new-page-menu-list" role="menu" onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}>
-      <button type="button" role="menuitem" autoFocus onClick={() => pick(onPage)}>Page</button>
-      <button type="button" role="menuitem" onClick={() => pick(onDatabase)}>Database</button>
-    </div>}
-  </div>
-}
-
 export function PagesScreen() {
   const { workspace } = useWorkspace()
   const createPage = useCreatePage()
@@ -116,7 +97,7 @@ function PageRows({ pages, workspace, onOpen, detail }: { pages: Page[]; workspa
         return (
           <li key={p.id}>
             <button type="button" className="card-row" onClick={() => onOpen(p.id)}>
-              <span className="card-row-icon"><PageKindIcon url={p.url} /></span>
+              <span className="card-row-icon"><PageKindIcon url={p.url} database={Boolean(p.database)} /></span>
               <span className="card-row-text">
                 <span className={`card-row-title ${p.title ? '' : 'untitled'}`}>{displayPageTitle(p)}</span>
                 {detail && <span className="card-row-detail">{detail(p)}</span>}

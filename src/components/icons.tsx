@@ -73,7 +73,14 @@ export const ExternalIcon = () => (
 )
 
 /** The icon of a page row: a globe for a link page, the page icon otherwise. */
-export const PageKindIcon = ({ url }: { url?: string | null }) => (url ? <GlobeIcon /> : <PagesIcon />)
+/** A database (design §4.4): a small grid. */
+export const DatabaseIcon = () => (
+  <Icon>
+    <rect x="4" y="4.5" width="16" height="15" rx="2" />
+    <path d="M4 9.5h16M4 14.5h16M10 9.5v10" />
+  </Icon>
+)
+export const PageKindIcon = ({ url, database }: { url?: string | null; database?: boolean }) => (database ? <DatabaseIcon /> : url ? <GlobeIcon /> : <PagesIcon />)
 
 /** ↳: a link to one line (A11, Jazz line-links-states §3): "a passage", not a page. */
 export const LineLinkIcon = () => (

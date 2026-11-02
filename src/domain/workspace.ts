@@ -344,6 +344,16 @@ function placeDatabases(state: Workspace, p: Page, before: EditorNode[], after: 
     trashSubtree(state, db, isoTime(action.at), operationId);
     trashed ??= { id: db.id, title: db.title, rows };
   }
+  // The home block back in its page (the editor's ⌘Z after deleting it) brings its database back from the trash with
+  // the rows trashed with it, so Undo in the page is Undo of the delete.
+  for (const db of state.pages) {
+    if (!isDatabase(db) || db.parentId !== p.id || !isTrashed(db) || db.database.homeBlockId === null) continue;
+    const home = db.database.homeBlockId;
+    if (had.has(home) || blocks.get(home)?.props?.pageId !== db.id) continue;
+    const parent = state.pages.find((x) => x.id === db.parentId);
+    if (parent && isTrashed(parent)) continue;
+    restorePages(state, restoreSetOf(state, db));
+  }
   for (const { blockId, pageId } of action.adoptDatabaseBlocks ?? []) {
     const block = blocks.get(blockId), db = state.pages.find((x) => x.id === pageId);
     // One that can't be adopted stays what it is: a view of that database.

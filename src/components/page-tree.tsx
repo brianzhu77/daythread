@@ -5,6 +5,7 @@ import { cardTo, childPages, linkedFrom, moveRefusal, moveTargets, pageAncestors
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { fromIso, longLabel, todayIso } from './dates'
 import { ChevronRightIcon, PageKindIcon, PagesIcon } from './icons'
+import { NewPageMenu } from './new-page-menu'
 import { displayPageTitle } from './page-title'
 import { RowMenu } from './row-menu'
 import { useTreeDrag, type Drop } from './tree-drag'
@@ -166,7 +167,7 @@ export function Subpages({ page, workspace }: { page: Page; workspace: Workspace
           return (
             <li key={c.id}>
               <PageLink className="subpage-row" href={pageHref(c)} title={pageLabel(c, today)}>
-                <PageKindIcon url={c.url} />
+                <PageKindIcon url={c.url} database={Boolean(c.database)} />
                 <span className={`subpage-title ${c.title ? '' : 'untitled'}`}>{pageLabel(c, today)}</span>
                 {n > 0 && <span className="subpage-count">{n}</span>}
                 <ChevronRightIcon />
@@ -374,6 +375,11 @@ export function SidebarTree({ workspace, activeId, today, footer }: { workspace:
   }, [activeId, expanded])
 
   // Both +s make an untitled page and open it with the caret in its title (Notion's way), at the top level or inside one.
+  const newDatabase = async () => {
+    const pageId = crypto.randomUUID()
+    const receipt = await run({ type: 'create-database', pageId, homeBlockId: null, title: '' })
+    if (receipt) open(`/pages?page=${encodeURIComponent(pageId)}&focus=title`)
+  }
   const newPage = async (parent: Page | null) => {
     const pageId = crypto.randomUUID()
     const receipt = await run({ type: 'create-document', title: '', body: '', pageId, ...(parent ? { parentId: parent.id } : {}) })
@@ -418,7 +424,7 @@ export function SidebarTree({ workspace, activeId, today, footer }: { workspace:
           {children.length > 0
             ? <button type="button" className="disclose" aria-expanded={isOpen} aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${pageLabel(p, today)}`} onClick={() => toggle(p.id)}><ChevronRightIcon /></button>
             : <span className="disclose none" aria-hidden="true" />}
-          <PageLink className="tree-title" href={pageHref(p)} title={pageLabel(p, today)}>{!day && <PageKindIcon url={p.url} />}<span>{pageLabel(p, today)}</span></PageLink>
+          <PageLink className="tree-title" href={pageHref(p)} title={pageLabel(p, today)}>{!day && <PageKindIcon url={p.url} database={Boolean(p.database)} />}<span>{pageLabel(p, today)}</span></PageLink>
           <span className="tree-acts">
             <button type="button" aria-label={`New subpage in ${pageLabel(p, today)}`} onClick={() => void newPage(p)}>+</button>
             {!day && <RowMenu label={`Actions for ${pageLabel(p, today)}`} triggerClass="tree-more"
@@ -451,7 +457,8 @@ export function SidebarTree({ workspace, activeId, today, footer }: { workspace:
       </ul>
       <div className="side-label-row" data-drop-top data-first={roots[0]?.id ?? ''} data-drop-zone={drag.drop?.rowKey === 'top' ? 'after' : undefined}>
         <p className="side-label">Pages</p>
-        <button type="button" className="side-label-add" aria-label="New page" title="New page" onClick={() => void newPage(null)}>+</button>
+        {/* Page or Database, as Pages' + offers (design §3.1). */}
+        <NewPageMenu className="side-label-add" onPage={() => void newPage(null)} onDatabase={() => void newDatabase()}>+</NewPageMenu>
       </div>
       {/* Only top-level pages (Brian 992f14f8, Notion's model): pages made in a day stay under that day above. */}
       {roots.length > 0 ? <ul className="plain tree" role="tree" aria-label="Pages">{roots.map((p, i) => row(p, 0, roots[i + 1]?.id))}</ul> : <p className="side-row small side-hint">No pages yet</p>}

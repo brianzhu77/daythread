@@ -1,6 +1,6 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
 import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
-import { type ComponentProps, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { type ComponentProps, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
 import { type BlockNoteEditor, BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, editorHasBlockWithType, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
@@ -35,7 +35,7 @@ import { DateTag } from './date-tag'
 import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
-import { DatabaseBlock, setDatabasePending } from './database-block'
+import { DatabaseBlock, setDatabasePending, type BlockActions } from './database-block'
 import { addDays, fromIso, longLabel, shortLabel, todayIso, weekday } from './dates'
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
@@ -77,8 +77,11 @@ const database = createReactBlockSpec({ type: 'database', propSchema: { pageId: 
   toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Database</a></p>,
 })()
 function DatabaseInPage({ blockId, pageId }: { blockId: string; pageId: string }) {
-  return <DatabaseBlock blockId={blockId} pageId={pageId} hostDate={useContext(ChipPageDate)} />
+  const actions = useContext(DatabaseEditorActions)
+  return <DatabaseBlock blockId={blockId} pageId={pageId} hostDate={useContext(ChipPageDate)} actions={actions} />
 }
+/** What a database block asks of the page editor it sits in (model §3): switch it to a card and back, take it out. */
+const DatabaseEditorActions = createContext<BlockActions | null>(null)
 // A9a (Jazz page-links-states §1): a `[[` link is one inline unit, icon + the page's current title on a quiet chip.
 // Backspace removes it whole (it has no content of its own). It reads its title live, so nothing is stored as text.
 // A11: with `lineId` it's a link to one line on that page (`taskId` when the line is a task row), drawn as a line chip.
@@ -508,6 +511,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const semanticDeletes = useRef(new Set<string>())
   // B33: tasks whose rows were cut (a move): the next save says so, so the task isn't deleted with its line.
   const cutTasks = useRef(new Set<string>(initial.current.cutTaskIds))
+  // Databases this page's next save turns into full pages (Turn into page) or makes at home here (Turn into inline),
+  // by database page id; each goes with the save that carries it (model §3, rules 6 and 7).
+  const databaseFlags = useRef({ detach: new Set<string>(), adopt: new Map<string, string>() })
+  const databaseFields = () => ({
+    ...(databaseFlags.current.detach.size ? { detachDatabaseIds: [...databaseFlags.current.detach] } : {}),
+    ...(databaseFlags.current.adopt.size ? { adoptDatabaseBlocks: [...databaseFlags.current.adopt].map(([pageId, blockId]) => ({ blockId, pageId })) } : {}),
+  })
   const composing = useRef(false)
   const selected = useRef<string[]>([])
   const dragging = useRef<EditorNode[]>([])
@@ -714,10 +724,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     sending.current = true
     const document = JSON.stringify(editor.document)
-    const deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
+    const deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current], flags = databaseFields()
     lastSent.current = document
     setStatus('Saving…')
-    const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), today: todayIso() }
+    const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), ...flags, today: todayIso() }
     const fingerprint=JSON.stringify(action)
     if (pendingSave.current?.fingerprint !== fingerprint) pendingSave.current={fingerprint,operationId:newOperationId()}
     const operationId=pendingSave.current!.operationId
@@ -762,6 +772,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (left.current) return
       deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
       cutIds.forEach(id => cutTasks.current.delete(id))
+      flags.detachDatabaseIds?.forEach(id => databaseFlags.current.detach.delete(id))
+      flags.adoptDatabaseBlocks?.forEach(a => databaseFlags.current.adopt.delete(a.pageId))
       dirty.current = JSON.stringify(editor.document) !== document
       // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
       const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
@@ -954,12 +966,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // Now the draft is stashed as before and then saved. If that save is refused or fails, the stash stays and
       // this page shows it on return ("Recovered unsaved draft", or Load latest after a conflict).
       stash()
-      const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current]
+      const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current], flags = databaseFields()
       trackLeaveSave((async () => {
         // A save already on its way finishes first, so this one starts from the page it produced.
         await inflight.current
         if (document !== lastSaved.current) {
-          const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), today: todayIso() }
+          const action = { type: 'save-editor' as const, pageId: page.id, expectedContent: base.current, document, singleDeleteIds: deletions, ...(cutIds.length ? { cutTaskIds: cutIds } : {}), ...flags, today: todayIso() }
           debugClient('editor.save.leave',{pageId:page.id})
           const result = await runRef.current(action, undefined, newOperationId(), { inlineRefusal: /changed elsewhere|changed since/i, onRefused: () => {} })
           if (!result) return false
@@ -1565,6 +1577,19 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     dragging.current = []; dropRef.current = null; setDrop(null); setTouchDragging(false)
   }
+  const databaseActions = useMemo<BlockActions>(() => ({
+    // Turn into page (design §3.2): the table becomes our page card in place; the save says it's a full page now.
+    turnIntoPage: (blockId, pageId) => {
+      databaseFlags.current.adopt.delete(pageId); databaseFlags.current.detach.add(pageId)
+      editor.replaceBlocks([blockId], [{ type: 'pageLink', props: { pageId } } as never])
+    },
+    // Turn into inline: the card becomes the table again, and the save makes this block its home.
+    turnIntoInline: (cardId, pageId) => {
+      const [block] = editor.replaceBlocks([cardId], [{ type: 'database', props: { pageId } } as never]).insertedBlocks
+      databaseFlags.current.detach.delete(pageId); databaseFlags.current.adopt.set(pageId, block!.id)
+    },
+    remove: blockId => editor.removeBlocks([blockId]),
+  }), [editor])
   const [dock, setDock] = useState<HTMLElement | null>(null)
   useEffect(() => setDock(document.getElementById('editor-dock')), [])
   useEffect(() => {
@@ -2134,6 +2159,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     <div ref={saveLine} className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? conflictText : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
     <ChipPageDate.Provider value={page.type === 'daily' ? page.date ?? null : null}>
+    <DatabaseEditorActions.Provider value={databaseActions}>
     <DraftBands draft={draft} workspace={workspace} groups={groups} fills={draftReady ? fillAnchors(draft, draftShown) : []} />
     {createPortal(<EventRows rows={rows} page={page} workspace={workspace} pageEnd={!rowsAnchor.current || rowsAnchor.current.labelled || (rowsAnchor.current.afterId !== null && !editor.getBlock(rowsAnchor.current.afterId))} />, rowsHost)}
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} shadCNComponents={doneInputs}>
@@ -2178,6 +2204,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       {hoverPointer && <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />}
       {(hoverPointer || linkTapped) && <LinkToolbarController />}
     </BlockNoteView>
+    </DatabaseEditorActions.Provider>
     </ChipPageDate.Provider>
     </RowActionsContext.Provider>
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}

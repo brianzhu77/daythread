@@ -5,13 +5,14 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { useLayoutEffect, useMemo, useState, useSyncExternalStore, type SyntheticEvent, type UIEvent } from 'react'
-import { cellValue, databaseRows, isDatabase, isEmptyValue, newRowValues, propertyOf, rawOf, sameRaw, titleId, viewColumns, viewRows, type CellValue, type Database, type Json, type Property, type View } from '../domain/database.ts'
+import { cellValue, databaseRows, isDatabase, isEmptyValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, viewColumns, viewRows, type CellValue, type Database, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
 import { ChevronDownIcon } from './icons'
 import { PropertyCell, PropertyCheckbox, PropertyEditor } from './property-editors'
 import { useWorkspace } from './use-day'
+import { DatabaseMenuButton } from './database-menu'
 
 const newId = (): string => crypto.randomUUID()
 /** Rows drawn before "Show 25 more" (design §13): inline, and on the full page. */
@@ -44,7 +45,17 @@ function usePendingDatabases() {
   return useSyncExternalStore(l => { pendingListeners.add(l); return () => pendingListeners.delete(l) }, () => pendingVersion, () => 0)
 }
 
-export function DatabaseBlock({ blockId, pageId, hostDate }: { blockId: string; pageId: string; hostDate: string | null }) {
+/** What a block's menu asks of the page editor holding it (page-editor.tsx provides them). */
+export interface BlockActions {
+  turnIntoPage(blockId: string, pageId: string): void
+  turnIntoInline(cardId: string, pageId: string): void
+  remove(blockId: string): void
+}
+/** The actions of each block on screen, by block id: the menu lives outside the editor (app shell) and finds them here. */
+export const blockActions = new Map<string, BlockActions>()
+
+export function DatabaseBlock({ blockId, pageId, hostDate, actions }: { blockId: string; pageId: string; hostDate: string | null; actions?: BlockActions | null }) {
+  useLayoutEffect(() => { if (!actions) return; blockActions.set(blockId, actions); return () => { if (blockActions.get(blockId) === actions) blockActions.delete(blockId) } }, [blockId, actions])
   const { workspace } = useWorkspace()
   usePendingDatabases()
   const db = workspace?.pages.find(p => p.id === pageId)
@@ -199,13 +210,16 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
 
   const shown = rows.slice(0, limit)
   return <div className="database-table-wrap">
+    {!showTitle && <div className="database-title-row is-page"><span className="database-view-name">{view.name}<ChevronDownIcon /></span><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
     {showTitle && <div className="database-title-row">
       <input className="database-title" data-database={db.id} aria-label="Database name" placeholder="Untitled database" defaultValue={db.title} key={db.title}
         onBlur={e => rename(e.currentTarget.value.trim())}
         // Enter in a new database's title goes on to its first row's Name (design §3.1).
         onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.currentTarget.blur(); if (!databaseRows(workspace, db.id).length) addRow() } }} />
       <span className="database-view-name">{view.name}<ChevronDownIcon /></span>
+      <DatabaseMenuButton blockId={blockId} databaseId={db.id} />
     </div>}
+    {view.filter.length > 0 && <FilterLine db={db.database} view={view} onClear={() => void run({ type: 'change-database', pageId: db.id, change: { kind: 'updateView', viewId: view.id, filter: [] } })} />}
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
       <table className="database-table">
         <thead>
@@ -239,7 +253,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
         </tbody>
       </table>
     </div>
-    {rows.length === 0 && view.filter.length > 0 && <p className="database-empty">No rows match this view</p>}
+    {rows.length === 0 && view.filter.length > 0 && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => void run({ type: 'change-database', pageId: db.id, change: { kind: 'updateView', viewId: view.id, filter: [] } })}>Clear filter</button></p>}
     {rows.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
     <button type="button" className="database-new" onClick={addRow}>+ New</button>
   </div>
@@ -284,7 +298,7 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
       const value = cellValue(db.database, row, property.id)
       const key = cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: property.id })
       return <div key={property.id} className="row-property">
-        <span className="row-property-name">{property.name}</span>
+        <span className="row-property-name" data-type={property.type}>{property.name}</span>
         {property.type === 'checkbox'
           ? <span className="row-property-value"><PropertyCheckbox checked={value === true} label={property.name} onToggle={next => commit(db, row, property.id, next ? true : undefined)} /></span>
           : <button type="button" className="row-property-value" data-cell={key} onClick={() => setOpenCell({ blockId, databaseId: db.id, rowId: row.id, columnId: property.id })}>
@@ -295,4 +309,27 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
     {fold && <button type="button" className="row-property-more" onClick={() => setUnfolded(true)}>{empty.length} empty properties ›</button>}
     <button type="button" className="row-property-add" onClick={addProperty}>+ Add property</button>
   </div>
+}
+
+/** The filter line under the title (design §4.1, §13): each rule in words; a rule on a deleted property struck through. */
+function FilterLine({ db, view, onClear }: { db: Database; view: View; onClear: () => void }) {
+  return <div className="database-filter-line">
+    {view.filter.map((c, i) => {
+      const property = propertyOf(db, c.by)
+      return <span key={i} className={`database-filter-chip ${property ? '' : 'is-deleted'}`}>{property ? property.name : '(deleted)'} {filterWords(c, property)}</span>
+    })}
+    <button type="button" className="app-link" onClick={onClear}>Clear</button>
+  </div>
+}
+function filterWords(c: Condition, property: Property | null): string {
+  const op = { contains: 'contains', doesNotContain: "doesn't contain", is: 'is', isNot: 'is not', isEmpty: 'is empty', isNotEmpty: 'is not empty', eq: '=', ne: '≠', gt: '>', lt: '<', gte: '≥', lte: '≤', isAnyOf: 'is', isNoneOf: 'is not', before: 'before', after: 'after', onOrBefore: 'on or before', onOrAfter: 'on or after', within: 'within' }[c.op]
+  const v = c.value
+  if (v === undefined) return op
+  const name = (id: unknown) => property?.options?.find(o => o.id === id)?.name ?? ''
+  const text = Array.isArray(v) ? v.map(name).filter(Boolean).join(' or ')
+    : v && typeof v === 'object' ? ('relative' in v ? (v.relative === 'today' ? 'today' : "this page's day") : String((v as { date?: string }).date ?? ''))
+    : v === true ? 'checked' : v === false ? 'unchecked'
+    : c.op === 'within' ? ({ thisWeek: 'this week', past7: 'the past 7 days', next7: 'the next 7 days' } as Record<string, string>)[String(v)] ?? ''
+    : String(v)
+  return `${op} ${text}`
 }
