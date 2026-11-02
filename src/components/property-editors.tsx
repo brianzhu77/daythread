@@ -38,6 +38,8 @@ export interface EditorProps {
   onCancel(): void
   /** Select, Multi-select, Status: makes the option (Status: at the end of To do) and returns its id. */
   onCreateOption?(name: string): string
+  /** Text and URL: what's typed so far, on every change, so the caller can keep it on the device (R1-15). */
+  onDraft?(text: string): void
   /** Tab / Shift-Tab in an in-cell field (≥ 900): called after the commit, to move the cell cursor along the row. */
   onMove?(direction: 'next' | 'previous'): void
 }
@@ -236,7 +238,7 @@ function TextEditor(p: EditorProps & { kind: 'text' | 'url' }) {
     'aria-label': p.property.name,
     'aria-invalid': long || undefined,
     enterKeyHint: wide ? undefined : 'done' as const,
-    onChange: (e: { target: { value: string } }) => setDraft(e.target.value),
+    onChange: (e: { target: { value: string } }) => { setDraft(e.target.value); p.onDraft?.(e.target.value) },
     onKeyDown,
     onFocus,
   }

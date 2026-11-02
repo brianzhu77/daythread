@@ -4,7 +4,7 @@
 // commit is one `set-values` with its per-cell check (model §5.2).
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
-import { useLayoutEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent, type SyntheticEvent, type UIEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent, type SyntheticEvent, type UIEvent } from 'react'
 import { cellValue, databaseRows, isDatabase, isEmptyValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, viewColumns, viewRows, type CellValue, type Database, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
@@ -115,7 +115,7 @@ const blockPlaces = new Map<string, { scrollLeft: number; limit: number }>()
 /** One cell's commit: sent with what the cell held, resent once after "Saved elsewhere" if that cell is unchanged. */
 function useCommitCell() {
   const { run, refresh } = useWorkspace()
-  const commit = (db: Page & { database: Database }, row: Page, columnId: string, raw: Json | undefined, notice?: string) => {
+  const commit = (db: Page & { database: Database }, row: Page, columnId: string, raw: Json | undefined, notice?: string, onSaved?: () => void) => {
     const expected = (rawOf(row, columnId) ?? null) as Json
     const values = { [columnId]: raw ?? null } as Record<string, Json>
     const property = propertyOf(db.database, columnId) ?? titleProperty
@@ -127,17 +127,82 @@ function useCommitCell() {
       const fresh = await refresh()
       const now = fresh.pages.find(p => p.id === row.id)
       // A row deleted meanwhile: his value goes quietly (Bumblebee 3c5198d5).
-      if (!now || now.trashedAt) return
-      if (sameRaw(rawOf(now, columnId), expected) && !resent.has(operationId)) { resent.add(operationId); void send(); return }
+      // A kept copy is done with once its value is saved, its row is gone, or he's been asked (the notice below); a save
+      // that only failed (offline) keeps it for the next start.
+      if (!now || now.trashedAt) { onSaved?.(); return }
+      if (sameRaw(rawOf(now, columnId), expected) && !resent.has(operationId)) { resent.add(operationId); void send().then(r => { if (r) onSaved?.() }); return }
+      onSaved?.()
       // One wording everywhere (Lead 0b05067c, design §13).
       const mine = typeof raw === 'string' ? `“${raw.length > 40 ? `${raw.slice(0, 40)}…` : raw}”` : raw === undefined ? 'empty' : String(raw)
       const key: string = toast(`${property.name} in ${displayPageTitle(now)} changed elsewhere · yours was ${mine}`, {
         timeout: 10_000, actionProps: { children: 'Use mine', onPress: () => { toast.close(key); commit(db, now, columnId, raw) } },
       })
     }
-    void send()
+    void send().then(r => { if (r) onSaved?.() })
   }
   return commit
+}
+
+// ---------------------------------------------------------------- kept drafts of text cells (R1-15)
+// An open Text or URL editor keeps what he types on this device, one entry per cell, so a phone app killed before its
+// hide event still has it: the next start sends it if the cell still holds what he started from, and otherwise says it
+// changed elsewhere (Lead 0b05067c's wording). A save that lands clears it; a row deleted meanwhile drops it quietly.
+
+interface CellDraft { databaseId: string; rowId: string; columnId: string; value: string; expected: Json; tab: string; seen: number }
+const draftPrefix = 'daythread:cell-draft:'
+const draftKey = (rowId: string, columnId: string) => `${draftPrefix}${rowId}:${columnId}`
+/** This tab, to tell its own open editor's draft from another live tab's. */
+const thisTab = crypto.randomUUID()
+function keepDraft(d: Omit<CellDraft, 'tab' | 'seen'>) {
+  try { localStorage.setItem(draftKey(d.rowId, d.columnId), JSON.stringify({ ...d, tab: thisTab, seen: Date.now() })) } catch { /* storage full or off: the hide save still runs */ }
+}
+function dropDraft(rowId: string, columnId: string, value?: string) {
+  try {
+    const key = draftKey(rowId, columnId)
+    // Only the draft it was saving: he may have opened the cell again and typed more since.
+    if (value !== undefined) { const kept = JSON.parse(localStorage.getItem(key) ?? 'null') as CellDraft | null; if (kept && kept.value !== value) return }
+    localStorage.removeItem(key)
+  } catch { /* nothing kept */ }
+}
+function keptDrafts(): CellDraft[] {
+  const out: CellDraft[] = []
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key?.startsWith(draftPrefix)) continue
+      try { out.push(JSON.parse(localStorage.getItem(key)!) as CellDraft) } catch { localStorage.removeItem(key) }
+    }
+  } catch { /* storage off */ }
+  return out
+}
+/** Another tab's draft that changed this recently may still be open there; it waits for the next look. */
+const liveDraftMs = 5000
+
+/** Sends the drafts a closed or killed tab left, once the workspace is here, and again a little later. */
+function useRecoverDrafts(commit: ReturnType<typeof useCommitCell>) {
+  const { workspace, latest } = useWorkspace()
+  const loaded = Boolean(workspace)
+  useEffect(() => {
+    if (!loaded) return
+    const recover = () => {
+      const ws = latest()
+      if (!ws) return
+      for (const d of keptDrafts()) {
+        if (d.tab === thisTab && openCell?.rowId === d.rowId && openCell.columnId === d.columnId) continue
+        if (d.tab !== thisTab && Date.now() - d.seen < liveDraftMs) continue
+        const db = ws.pages.find(p => p.id === d.databaseId), row = ws.pages.find(p => p.id === d.rowId)
+        if (!isDatabase(db) || !row || row.trashedAt || db.trashedAt || (d.columnId !== titleId && !propertyOf(db.database, d.columnId))) { dropDraft(d.rowId, d.columnId); continue }
+        const raw = d.value === '' ? undefined : d.value
+        if (sameRaw(rawOf(row, d.columnId), raw ?? (d.columnId === titleId ? '' : null))) { dropDraft(d.rowId, d.columnId); continue }
+        // Sent against what he started from: the resend-once and the "changed elsewhere" notice are the commit's own.
+        const started = { ...row, ...(d.columnId === titleId ? { title: String(d.expected ?? '') } : { values: { ...row.values, [d.columnId]: d.expected } }) } as Page
+        commit(db, started, d.columnId, d.columnId === titleId ? (raw ?? '') : raw, undefined, () => dropDraft(d.rowId, d.columnId))
+      }
+    }
+    recover()
+    const later = setTimeout(recover, liveDraftMs + 1000)
+    return () => clearTimeout(later)
+  }, [loaded]) // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 /** Mounted once (app shell): the editor of the open cell, under its cell, or as a sheet on the phone. */
@@ -145,6 +210,7 @@ export function DatabaseCellEditor() {
   const { workspace, run } = useWorkspace()
   const cell = useOpenCell()
   const commit = useCommitCell()
+  useRecoverDrafts(commit)
   const db = cell ? workspace?.pages.find(p => p.id === cell.databaseId) : undefined
   const row = cell ? workspace?.pages.find(p => p.id === cell.rowId) : undefined
   const property = cell && isDatabase(db) ? (cell.columnId === titleId ? titleProperty : propertyOf(db.database, cell.columnId)) : null
@@ -159,11 +225,19 @@ export function DatabaseCellEditor() {
     return () => cancelAnimationFrame(frame)
   }, [cell]) // eslint-disable-line react-hooks/exhaustive-deps
   if (!cell || !isDatabase(db) || !row || row.trashedAt || !property || !anchor) return null
+  const expected = (rawOf(row, cell.columnId) ?? (cell.columnId === titleId ? '' : null)) as Json
+  const keeps = property.type === 'text' || property.type === 'url'
+
   const value = cell.columnId === titleId ? (row.title || null) : cellValue(db.database, row, cell.columnId)
   return <PropertyEditor key={cellKey(cell)}
     property={property} value={value as CellValue} rowTitle={displayPageTitle(row)} anchor={anchor}
-    onCommit={(raw, info) => { setOpenCell(null); commit(db, row, cell.columnId, cell.columnId === titleId ? (raw ?? '') : raw, info?.notice) }}
-    onCancel={() => setOpenCell(null)}
+    onDraft={keeps ? text => keepDraft({ databaseId: db.id, rowId: row.id, columnId: cell.columnId, value: text, expected }) : undefined}
+    onCommit={(raw, info) => {
+      setOpenCell(null)
+      const sent = typeof raw === 'string' ? raw : ''
+      commit(db, row, cell.columnId, cell.columnId === titleId ? (raw ?? '') : raw, info?.notice, keeps ? () => dropDraft(row.id, cell.columnId, sent) : undefined)
+    }}
+    onCancel={() => { setOpenCell(null); if (keeps) dropDraft(row.id, cell.columnId) }}
     onCreateOption={name => createOption(run, db, property, name)} />
 }
 
