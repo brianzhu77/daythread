@@ -5,7 +5,7 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
-import { cellValue, databaseRows, isDatabase, isEmptyValue, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewRows, type CellValue, type Database, type Json, type Property, type View } from '../domain/database.ts'
+import { cellValue, databaseRows, isDatabase, isEmptyValue, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewRows, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -53,6 +53,16 @@ export function shownView(db: Database, blockId: string): View {
   try { id = localStorage.getItem(viewKey(blockId)) } catch { /* private mode */ }
   return db.views.find(v => v.id === id) ?? db.views[0]!
 }
+export type ViewFields = Omit<Extract<DatabaseChange, { kind: 'updateView' }>, 'kind' | 'viewId'>
+/** A change to a view's own settings: everything that edits one goes through here, built from its latest copy. */
+export type ChangeView = (build: (current: View) => ViewFields) => void
+export function useViewChange(databaseId: string, viewId: string): ChangeView {
+  const { run } = useWorkspace()
+  return build => void run(ws => {
+    const now = ws.pages.find(p => p.id === databaseId), current = isDatabase(now) ? now.database.views.find(v => v.id === viewId) : undefined
+    return current ? { type: 'change-database', pageId: databaseId, change: { kind: 'updateView', viewId, ...build(current) } } : null
+  })
+}
 
 /** Databases being made by `/` Database in this tab: the block shows "Creating…", then "Not created · Retry". */
 type Pending = { state: 'creating' | 'failed'; retry: () => void }
@@ -93,7 +103,7 @@ export function DatabaseBlock({ blockId, pageId, hostDate, actions }: { blockId:
   </div>
   if (!workspace || !isDatabase(db) || db.database.homeBlockId !== blockId || db.trashedAt) return <DatabaseCard pageId={pageId} />
   return <div className="database-block" contentEditable={false} {...isolate}>
-    <DatabaseTable workspace={workspace} db={db} blockId={blockId} pageDate={hostDate} cap={rowCaps.inline} />
+    <DatabaseView workspace={workspace} db={db} blockId={blockId} pageDate={hostDate} cap={rowCaps.inline} />
   </div>
 }
 
@@ -335,13 +345,40 @@ function createOption(run: ReturnType<typeof useWorkspace>['run'], db: Page & { 
 }
 
 /** The table view (design §4.1, §4.2): Name first, then the view's shown properties; `+ New` under the rows. */
-export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle = true }: { workspace: Workspace; db: Page & { database: Database }; blockId: string; pageDate: string | null; cap: number; showTitle?: boolean }) {
+interface DatabaseViewProps { workspace: Workspace; db: Page & { database: Database }; blockId: string; pageDate: string | null; cap: number; showTitle?: boolean }
+/** The view a block shows, and how to change it, drawn in its layout. */
+function DatabaseView(props: DatabaseViewProps) {
+  useShownViews()
+  const view = shownView(props.db.database, props.blockId)
+  const changeView = useViewChange(props.db.id, view.id)
+  return <DatabaseTable {...props} view={view} changeView={changeView} />
+}
+
+/** Above a view's rows, whatever its layout: the title, its view and `⋯` buttons, and the line of rules. */
+export function DatabaseHeader({ db, view, changeView, blockId, showTitle, onTitleEnter }: { db: Page & { database: Database }; view: View; changeView: ChangeView; blockId: string; showTitle: boolean; onTitleEnter(): void }) {
+  const { run } = useWorkspace()
+  const rename = (title: string) => { if (title !== db.title) void run({ type: 'rename-page', pageId: db.id, title }) }
+  const titleInput = useRef<HTMLInputElement>(null)
+  useSaveOnHide(() => { if (titleInput.current && document.activeElement === titleInput.current) rename(titleInput.current.value.trim()) })
+  return <>
+    {!showTitle && <div className="database-title-row is-page"><DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} /><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
+    {showTitle && <div className="database-title-row">
+      <input ref={titleInput} className="database-title" data-database={db.id} aria-label="Database name" placeholder="Untitled database" defaultValue={db.title} key={db.title}
+        onBlur={e => rename(e.currentTarget.value.trim())}
+        // Enter in a new database's title goes on to its first row's Name (design §3.1).
+        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.currentTarget.blur(); onTitleEnter() } }} />
+      <DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} />
+      <DatabaseMenuButton blockId={blockId} databaseId={db.id} />
+    </div>}
+    {(view.filter.length > 0 || view.sort.length > 0) && <RulesLine db={db.database} view={view} blockId={blockId} databaseId={db.id} onChange={changeView} />}
+  </>
+}
+
+export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
   const { run, latest } = useWorkspace()
   const navigate = useNavigate()
   const commit = useCommitCell()
   const today = todayIso()
-  useShownViews()
-  const view = shownView(db.database, blockId)
   const context = useMemo(() => ({ today, pageDate }), [today, pageDate])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
   const columns = viewColumns(db.database, view)
@@ -444,9 +481,6 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
       return isDatabase(now) ? { type: 'change-database', pageId: db.id, change: { kind: 'addProperty', property: { id, name: uniqueName(now.database), type: 'text' }, viewId: view.id } } : null
     })
   }
-  const rename = (title: string) => { if (title !== db.title) void run({ type: 'rename-page', pageId: db.id, title }) }
-  const titleInput = useRef<HTMLInputElement>(null)
-  useSaveOnHide(() => { if (titleInput.current && document.activeElement === titleInput.current) rename(titleInput.current.value.trim()) })
 
   const shown = rows.slice(0, limit)
   usePendingCells()
@@ -534,19 +568,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
     return () => { for (const type of ['copy', 'cut', 'paste'] as const) window.removeEventListener(type, handle, true) }
   }, [])
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
-    {!showTitle && <div className="database-title-row is-page"><DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} /><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
-    {showTitle && <div className="database-title-row">
-      <input ref={titleInput} className="database-title" data-database={db.id} aria-label="Database name" placeholder="Untitled database" defaultValue={db.title} key={db.title}
-        onBlur={e => rename(e.currentTarget.value.trim())}
-        // Enter in a new database's title goes on to its first row's Name (design §3.1).
-        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.currentTarget.blur(); if (!databaseRows(workspace, db.id).length) addRow() } }} />
-      <DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} />
-      <DatabaseMenuButton blockId={blockId} databaseId={db.id} />
-    </div>}
-    {(view.filter.length > 0 || view.sort.length > 0) && <RulesLine db={db.database} view={view} blockId={blockId} databaseId={db.id} onChange={build => void run(ws => {
-      const now = ws.pages.find(p => p.id === db.id), current = isDatabase(now) ? now.database.views.find(v => v.id === view.id) : undefined
-      return current ? { type: 'change-database', pageId: db.id, change: { kind: 'updateView', viewId: view.id, ...build(current) } } : null
-    })} />}
+    <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
       <table className="database-table">
         <thead>
@@ -596,7 +618,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
         </tbody>
       </table>
     </div>
-    {rows.length === 0 && view.filter.length > 0 && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => void run({ type: 'change-database', pageId: db.id, change: { kind: 'updateView', viewId: view.id, filter: [] } })}>Clear filter</button></p>}
+    {rows.length === 0 && view.filter.length > 0 && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => changeView(() => ({ filter: [] }))}>Clear filter</button></p>}
     {failedHere.length > 0 && <p className="database-unsaved" role="status">{failedHere.length === 1 ? '1 change' : `${failedHere.length} changes`} not saved · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.retry())}>Retry</button> · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.discard())}>Undo</button></p>}
     {picked.length > 0 && <div className="database-picked-bar" role="toolbar" aria-label="Selected rows">
       <span>{picked.length === 1 ? '1 row' : `${picked.length} rows`}</span>
@@ -683,7 +705,7 @@ function uniqueName(db: Database): string {
 
 /** The full page of a database (design §4.3): the page's own title above, the table, no body. */
 export function DatabasePage({ workspace, db }: { workspace: Workspace; db: Page & { database: Database } }) {
-  return <div className="database-block is-page"><DatabaseTable workspace={workspace} db={db} blockId={`page:${db.id}`} pageDate={null} cap={rowCaps.page} showTitle={false} /></div>
+  return <div className="database-block is-page"><DatabaseView workspace={workspace} db={db} blockId={`page:${db.id}`} pageDate={null} cap={rowCaps.page} showTitle={false} /></div>
 }
 
 /** A row's properties above its body (design §5): one line each; more than 4 empty ones fold into one line. */
