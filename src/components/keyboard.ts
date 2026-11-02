@@ -35,7 +35,8 @@ export function useKeyboardTop(): number | null {
  * iOS raises the keyboard only for a focus made inside the tap itself. A flow that saves, opens a page and only then
  * focuses a field there (a new page's or row's title) calls this inside the tap: a hidden field takes focus now, so
  * the keyboard comes up, and the title that takes focus later keeps it (Jazz's native run on 6b3f416a; Lead b50a8ee7).
- * The hidden field removes itself as soon as focus moves on, or after 5 s if nothing takes it (a refused save).
+ * The hidden field removes itself as soon as focus moves on, handing anything typed into it to the new field, or after
+ * 5 s if nothing takes focus (a refused save).
  * Touch screens only: with a mouse there's no keyboard to raise.
  */
 export function holdKeyboard(): void {
@@ -48,6 +49,14 @@ export function holdKeyboard(): void {
   document.body.append(proxy)
   const remove = () => { clearTimeout(timer); proxy.remove() }
   const timer = setTimeout(() => { if (document.activeElement === proxy) proxy.blur(); remove() }, 5000)
-  proxy.addEventListener('blur', remove, { once: true })
+  // Letters typed before the title takes focus land here: they go on to the title, as typing (Bumblebee 1dfbb133).
+  const handOver = () => {
+    const text = proxy.value
+    remove()
+    const target = document.activeElement as HTMLElement | null
+    if (text && target && (target.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement))
+      document.execCommand('insertText', false, text)
+  }
+  proxy.addEventListener('blur', () => setTimeout(handOver, 0), { once: true })
   proxy.focus({ preventScroll: true })
 }
