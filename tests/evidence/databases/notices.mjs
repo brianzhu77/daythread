@@ -28,7 +28,7 @@ out.undone = { trashed: Boolean(w.pages.find(p => p.id === 'list').trashedAt), r
 // Back from a row.
 await page.locator('.database-title-cell', { hasText: 'Emma' }).click(); await page.waitForTimeout(1500)
 await page.goBack(); await page.waitForTimeout(600)
-out.tinted = await page.locator('.database-row.is-returned').innerText().then(t => t.trim().split('\n')[0]).catch(() => '')
+out.tinted = await page.locator('.database-row.is-returned .database-title-cell').innerText().then(t => t.trim()).catch(() => '')
 // Cut.
 await page.waitForTimeout(1000)
 await selectBlock(); await page.keyboard.press('Meta+x'); await page.waitForTimeout(1500)
