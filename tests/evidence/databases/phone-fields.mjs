@@ -17,6 +17,10 @@ const open = async () => { await page.goto(`${base}/pages?page=books`); await pa
 const saved = async read => { for (let i = 0; i < 40 && !read(); i++) await page.waitForTimeout(100); return read() }
 const nothingFocused = () => page.evaluate(() => document.activeElement === document.body && !getSelection().rangeCount)
 
+await open()
+const tick = await page.evaluate(() => { const r = document.querySelector('.database-td .property-checkbox.is-checked svg').getBoundingClientRect(); return r.width })
+check(tick > 0, `a ticked box in an inline table draws its tick (${tick}px)`)
+
 for (const [name, button] of [['⋯', '.database-more-button'], ['Table', '[data-database-views]']]) {
   await open()
   const title = page.locator('.database-title')

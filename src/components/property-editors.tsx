@@ -581,7 +581,8 @@ export function PropertyCheckbox({ checked, label, disabled, onToggle }: { check
     <button type="button" role="checkbox" aria-checked={checked} aria-label={label} disabled={disabled} tabIndex={-1}
       className={`property-checkbox ${checked ? 'is-checked' : ''}`}
       onPointerDown={e => e.preventDefault()} onMouseDown={e => e.preventDefault()} onClick={() => onToggle(!checked)}>
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" /></svg>
+      {/* Its own size: inside the page editor, BlockNote's `.bn-shadcn svg` reverts the CSS one, and Chromium drew no tick. */}
+      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" /></svg>
     </button>
   )
 }
