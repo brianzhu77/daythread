@@ -4,7 +4,7 @@
 // commit is one `set-values` with its per-cell check (model §5.2).
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
-import { useLayoutEffect, useMemo, useState, useSyncExternalStore, type SyntheticEvent, type UIEvent } from 'react'
+import { useLayoutEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent, type SyntheticEvent, type UIEvent } from 'react'
 import { cellValue, databaseRows, isDatabase, isEmptyValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, viewColumns, viewRows, type CellValue, type Database, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
@@ -50,6 +50,7 @@ export interface BlockActions {
   turnIntoPage(blockId: string, pageId: string): void
   turnIntoInline(cardId: string, pageId: string): void
   remove(blockId: string): void
+  select(blockId: string): void
 }
 /** The actions of each block on screen, by block id: the menu lives outside the editor (app shell) and finds them here. */
 export const blockActions = new Map<string, BlockActions>()
@@ -177,7 +178,7 @@ function createOption(run: ReturnType<typeof useWorkspace>['run'], db: Page & { 
 
 /** The table view (design §4.1, §4.2): Name first, then the view's shown properties; `+ New` under the rows. */
 export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle = true }: { workspace: Workspace; db: Page & { database: Database }; blockId: string; pageDate: string | null; cap: number; showTitle?: boolean }) {
-  const { run } = useWorkspace()
+  const { run, latest } = useWorkspace()
   const navigate = useNavigate()
   const commit = useCommitCell()
   const today = todayIso()
@@ -209,7 +210,41 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
   const rename = (title: string) => { if (title !== db.title) void run({ type: 'rename-page', pageId: db.id, title }) }
 
   const shown = rows.slice(0, limit)
-  return <div className="database-table-wrap">
+  /**
+   * Keys in the table at 1280 (design §10): arrows move the cell cursor, Tab/Shift-Tab along a row, Enter opens the
+   * cell (a button's own Enter), Delete clears it, Esc gives the block back to the page selected whole, and ⌘Z undoes
+   * the last change where the workspace's one Undo slot still holds it.
+   */
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
+    const target = e.target as HTMLElement
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && target.tagName !== 'INPUT') {
+      e.preventDefault()
+      const undo = latest()?.undo
+      if (undo) void run({ type: 'undo', targetOperationId: undo.operationId }, { text: 'Undone' }, undefined, { inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => toast("Can't undo · edited since", { timeout: 6000 }) })
+      else toast("Can't undo · edited since", { timeout: 6000 })
+      return
+    }
+    const nav = target.closest<HTMLElement>('[data-nav]')?.dataset.nav
+    if (e.key === 'Escape' && !e.defaultPrevented) { e.preventDefault(); blockActions.get(blockId)?.select(blockId); return }
+    if (!nav || target.tagName === 'INPUT') return
+    const [r, c] = nav.split(':').map(Number) as [number, number]
+    const width = columns.length + 1
+    const move = (row: number, col: number) => {
+      const el = (e.currentTarget as HTMLElement).querySelector<HTMLElement>(`[data-nav="${row}:${col}"]`)
+      if (el) { e.preventDefault(); el.focus() }
+    }
+    if (e.key === 'ArrowDown') move(r + 1, c)
+    else if (e.key === 'ArrowUp') move(r - 1, c)
+    else if (e.key === 'ArrowRight') move(r, c + 1)
+    else if (e.key === 'ArrowLeft') move(r, c - 1)
+    else if (e.key === 'Tab') { e.preventDefault(); const i = r * width + c + (e.shiftKey ? -1 : 1); move(Math.floor(i / width), ((i % width) + width) % width) }
+    else if ((e.key === 'Backspace' || e.key === 'Delete') && c > 0) {
+      const row = shown[r], property = columns[c - 1]?.property
+      if (row && property && !isEmptyValue(cellValue(db.database, row, property.id))) { e.preventDefault(); commit(db, row, property.id, undefined) }
+    }
+  }
+  return <div className="database-table-wrap" onKeyDown={onKeyDown}>
     {!showTitle && <div className="database-title-row is-page"><span className="database-view-name">{view.name}<ChevronDownIcon /></span><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
     {showTitle && <div className="database-title-row">
       <input className="database-title" data-database={db.id} aria-label="Database name" placeholder="Untitled database" defaultValue={db.title} key={db.title}
@@ -233,17 +268,20 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
           {shown.map(row => <tr key={row.id} className="database-row">
             <td className="database-td is-title"><div className="database-title-inner">
               {/* A row opens as a page, from Name, at both widths (design §5). */}
-              <button type="button" className="database-title-cell" data-cell={key(row.id, titleId)} onClick={() => void navigate({ to: '/pages', search: { page: row.id } })}>
+              <button type="button" className="database-title-cell" data-cell={key(row.id, titleId)} data-nav={`${shown.indexOf(row)}:0`} onClick={() => void navigate({ to: '/pages', search: { page: row.id } })}>
                 <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
               </button>
               <button type="button" className="database-open" onClick={() => void navigate({ to: '/pages', search: { page: row.id } })}>Open</button>
             </div></td>
-            {columns.map(({ property }) => {
+            {columns.map(({ property }, col) => {
               const value = cellValue(db.database, row, property.id)
+              const navId = `${shown.indexOf(row)}:${col + 1}`
               return <td key={property.id} className={`database-td is-${property.type}`}>
                 {property.type === 'checkbox'
-                  ? <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
-                  : <button type="button" className="database-cell" data-cell={key(row.id, property.id)} onClick={() => open(row.id, property.id)}>
+                  ? <span data-nav={navId} tabIndex={0} className="database-check-cell" onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); commit(db, row, property.id, value === true ? undefined : true) } }}>
+                      <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
+                    </span>
+                  : <button type="button" className="database-cell" data-cell={key(row.id, property.id)} data-nav={navId} onClick={() => open(row.id, property.id)}>
                       <PropertyCell property={property} value={value} today={today} />
                     </button>}
               </td>

@@ -1589,6 +1589,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       databaseFlags.current.detach.delete(pageId); databaseFlags.current.adopt.set(pageId, block!.id)
     },
     remove: blockId => editor.removeBlocks([blockId]),
+    // Esc from the table: the block selected whole again, in the page editor (design §10).
+    select: blockId => { if (editor.getBlock(blockId)) { editor.setTextCursorPosition(blockId); editor.focus() } },
   }), [editor])
   const [dock, setDock] = useState<HTMLElement | null>(null)
   useEffect(() => setDock(document.getElementById('editor-dock')), [])
@@ -2053,6 +2055,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       }
       // Keys inside a row's ⋯ menu belong to the menu (Enter chooses, arrows move), never to the editor's row rules.
       if ((e.target as Element).closest?.('.editor-row-menu')) return
+      // Keys inside a database table belong to the table (design §10): cells, its title, its menus.
+      if ((e.target as Element).closest?.('.database-block')) return
+      // A database block selected whole (↑/↓ stop on it once): Enter goes into its first cell (design §10).
+      if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const at = editor.getTextCursorPosition().block
+        if (at.type === 'database') {
+          const first = editor.domElement?.querySelector<HTMLElement>(`[data-id="${CSS.escape(at.id)}"] [data-nav="0:0"]`)
+          if (first) { e.preventDefault(); e.stopPropagation(); first.focus(); return }
+        }
+      }
       // Keys typed in a draft band belong to the band. The rules below act on the editor's own caret row, so End
       // there would move his caret into his own row and send his next words to it.
       if ((e.target as Element).closest?.('.draft-host')) return
