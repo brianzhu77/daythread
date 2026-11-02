@@ -1,10 +1,10 @@
 // B81: a save that failed, the network back, a reload: the draft is saved once, with no conflict line, and it isn't kept.
 // On the dev server, React's strict check used to send a second save that was refused and read as "Changed on another device".
 // A real leave right after typing is still saved. Chromium only: page.route doesn't see these requests in WebKit.
-// Usage: node tests/evidence/b81-reload.mjs <base-url> <store-path>  (a throwaway SQLite file, reseeded)
+// Usage: node tests/evidence/b81/dev-reload.mjs <base-url> <store-path>  (a throwaway SQLite file, reseeded)
 import { chromium } from '@playwright/test'
 import { execSync } from 'node:child_process'
-if (!process.argv[2] || !process.argv[3]) { console.error('Usage: node tests/evidence/b81-reload.mjs <base-url> <store-path>'); process.exit(2) }
+if (!process.argv[2] || !process.argv[3]) { console.error('Usage: node tests/evidence/b81/dev-reload.mjs <base-url> <store-path>'); process.exit(2) }
 const [base, storePath] = process.argv.slice(2)
 const seed = () => execSync(`rm -f ${storePath} && node tests/evidence/databases/seed-table.ts ${storePath}`, { stdio: 'ignore' })
 const books = () => JSON.parse(execSync(`sqlite3 ${storePath} "select data from workspace"`, { maxBuffer: 1 << 26 }).toString()).pages.find(p => p.id === 'books').document
