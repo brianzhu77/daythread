@@ -839,6 +839,10 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .editor-drop-line { position:fixed; left:max(40px,calc((100vw - 760px)/2)); right:max(24px,calc((100vw - 760px)/2)); height:2px;background:var(--drop-line);pointer-events:none; z-index:100; }
 .continuous-editor .bn-block-outer { transition:background-color 150ms; }
 @media(max-width:700px) { .continuous-editor .bn-editor { padding-left:10px;padding-right:18px; } .continuous-editor { margin-inline:-8px; } }
+/* B82: an editor short enough to fit above the keyboard gets scrolled up whole by iOS (225 px on an empty day), wherever he
+   tapped, with its first line under the clock. Taller than the visible part, iOS only looks at the caret. Only while it's
+   being typed in, so the blank space is under the keyboard, and through a link form's field taking focus from it. */
+@media (max-width: 899px) { .continuous-editor .bn-editor:focus, .continuous-editor.is-keyboard-up .bn-editor { min-height: 80vh; } }
 .editor-task-title { flex:1; min-width:40px; outline:none; }
 /* B19: done rows grey out so open ones stand out. The strikethrough is one value, pending Brian's pick (2ea283a3). */
 :root { --done-decoration: line-through; }

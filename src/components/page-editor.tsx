@@ -356,6 +356,8 @@ function hasDateFacts(task: Task): boolean {
 }
 
 const touchHandleSize = 44
+/** How long the view has to hold still before the caret's line is moved clear (B82). iOS's scroll lands up to ~35 ms after the keyboard's resize. */
+const caretSettleMs = 120
 // Viewport y of the middle of a block's first line of text. Works for empty blocks and wrapped text alike,
 // since it reads the line box of the inline content rather than the rendered glyphs.
 function firstLineCenter(block: HTMLElement): number {
@@ -1768,16 +1770,20 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const keyboardUp = useRef(false); keyboardUp.current = keyboardTop !== null
   const menuOptions = useMemo(() => ({ useFloatingOptions: { middleware: suggestionMenuMiddleware(() => keyboardUp.current && phoneToolbar.current ? phoneToolbar.current.offsetHeight + 8 : 0) } }), [])
   // B48: iOS scrolls the caret to just above the keyboard, which is where the toolbar now sits, so keep the caret's line
-  // clear of the toolbar while the keyboard is up.
+  // clear of the toolbar while the keyboard is up. B82: on a short day iOS can also scroll it up under the clock, and
+  // measuring before iOS's own scroll lands moved the page too far, so this waits until the view has stopped moving, then
+  // moves the page once, as little as it can. A line that's already clear doesn't move.
+  const keyboardShown = keyboardTop !== null
   useEffect(() => {
-    if (keyboardTop === null && !styleOpen) return
-    const reveal = () => requestAnimationFrame(() => {
+    if (!keyboardShown && !styleOpen) return
+    const keepCaretClear = () => {
       const bar = phoneToolbar.current?.getBoundingClientRect(), selection = window.getSelection()
       // B53: the open Aa panel sits on top of the toolbar; the line it styles stays in view above it.
       const panel = styleOpen ? phoneToolbar.current?.querySelector('.editor-style-panel')?.getBoundingClientRect() : undefined
       if (!bar?.height || !selection?.rangeCount || !editor.isFocused()) return
       const range = selection.getRangeAt(0)
       const caret = range.getBoundingClientRect().height ? range.getBoundingClientRect() : (range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement)?.getBoundingClientRect()
+      if (!caret) return
       // B55: the line below the caret stays clear too, so its checkbox can be ticked without scrolling first.
       const row = (range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement)?.closest('[data-node-type="blockContainer"]')
       const rows = row ? [...(editor.domElement?.querySelectorAll<HTMLElement>('[data-node-type="blockContainer"]') ?? [])] : []
@@ -1785,13 +1791,35 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       let nextLine: DOMRect | undefined
       for (let i = rows.indexOf(row as HTMLElement) + 1; i > 0 && i < rows.length && !nextLine?.height; i++) nextLine = rows[i]!.querySelector('.bn-block-content')?.getBoundingClientRect()
       // With the panel open only the caret's line has to show; the panel is up for a moment, the line below can wait.
-      const lowest = panel?.height ? caret?.bottom ?? 0 : Math.max(caret?.bottom ?? 0, nextLine && nextLine.height ? nextLine.bottom : 0)
-      const overlap = lowest ? lowest + 8 - (panel?.height ? panel.top : bar.top) : 0
-      if (overlap > 0) window.scrollBy(0, overlap)
-    })
-    reveal()
-    return editor.onSelectionChange(reveal)
-  }, [editor, keyboardTop, styleOpen])
+      const lowest = panel?.height ? caret.bottom : Math.max(caret.bottom, nextLine?.height ? nextLine.bottom : 0)
+      const overlap = lowest + 8 - (panel?.height ? panel.top : bar.top)
+      const clock = document.querySelector('.safe-top')?.getBoundingClientRect().bottom ?? 0
+      const room = caret.top - (clock + 8)
+      // The caret's line wins when both can't fit. Smooth, so it carries on from iOS's own scroll instead of a second jump.
+      const move = room < 0 ? room : Math.min(Math.max(overlap, 0), room)
+      if (move) window.scrollBy({ top: move, behavior: 'smooth' })
+    }
+    let frame = 0
+    const whenSettled = () => {
+      if (frame) return
+      let seen = '', since = 0
+      const check = (now: number) => {
+        const vv = window.visualViewport
+        const view = `${vv?.height}|${vv?.offsetTop}|${window.scrollY}`
+        if (view !== seen) { seen = view; since = now }
+        if (now - since < caretSettleMs) { frame = requestAnimationFrame(check); return }
+        frame = 0
+        keepCaretClear()
+      }
+      frame = requestAnimationFrame(check)
+    }
+    // A finger on the page means he's scrolling it himself: leave the view where he puts it.
+    const hands = () => { cancelAnimationFrame(frame); frame = 0 }
+    whenSettled()
+    const off = editor.onSelectionChange(whenSettled)
+    window.addEventListener('touchmove', hands, { passive: true })
+    return () => { cancelAnimationFrame(frame); off(); window.removeEventListener('touchmove', hands) }
+  }, [editor, keyboardShown, styleOpen])
   // B58: Edit link's URL form opens below the link, and with the keyboard up its OK sat behind the toolbar (Ratchet's
   // native run). When the form takes focus, the page scrolls it clear of the toolbar, the same rule as the caret's line.
   useEffect(() => {
@@ -2072,7 +2100,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const conflictText = changedBy(page.id) === 'tab' ? 'Changed in another tab · draft kept' : 'Changed on another device · draft kept'
   // B38: the dock line's words stay steady while typing flips the header between "Unsaved changes" and "Saving…".
   const unsavedText = conflict ? conflictText : !online ? "Offline · saves when you're back" : unsaved === 'network' ? 'Not saved yet · trying again' : "Couldn't save · draft kept"
-  return <div className={`continuous-editor ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''} ${pasteMenu ? 'has-paste-menu' : ''} ${styleOpen && lineStyle ? 'has-style-panel' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
+  return <div className={`continuous-editor ${keyboardShown ? 'is-keyboard-up' : ''} ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''} ${pasteMenu ? 'has-paste-menu' : ''} ${styleOpen && lineStyle ? 'has-style-panel' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onBlur={e => { if (e.target === editor.domElement) setStyleOpen(false) }}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
     onMouseDownCapture={e => { const target = e.target as Element; if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') } }}
