@@ -1,6 +1,6 @@
 # Synced blocks: how they behave
 
-- Author: Bumblebee (Product), 2026-11-02. Status: **product decisions for the states doc and for sizing; not built.**
+- Author: Bumblebee (Product), 2026-11-02. Status: **reviewed by the Lead (f9ff5fa9, good to build on); not built.** Order: R2 first, then Jazz's states and Roadbuster's sizing.
 - Asked by: Lead 4599db6c (task #123, B21): design from how Notion actually behaves and settle the open points. Brian accepted Notion's model (7b89f7c9), and the Lead told him the design follows Notion (5a5f969b thread).
 - **Where this differs from `synced-block-states.md` (Jazz, 2026-10-21) or `b21-synced-block.md` (Roadbuster, commit 1f5f28a), this doc wins.** Their visual, conflict and geometry work stands. §9 lists what changes. Jazz writes the states; Roadbuster sizes after R2's first part (Lead 4599db6c).
 
@@ -87,7 +87,7 @@ Release order is Roadbuster's to propose (databases can come last), but nothing 
 
 Notion's rule, on his Day template: **made on the template, each new day gets its own unconnected block. A copy pasted into the template stays connected on every new day.** The second is the useful one: one note he edits once, on every day.
 
-**The cost, for Roadbuster to measure.** The 2026-10-21 plan writes the new lines into every page in one transaction. On a template copy that's one more page each day, so after a year one keystroke's save rewrites 365 pages, against a Postgres row per page and "send only what changed". Notion's own limit at 10 copies may come from the same thing. If that's too slow, reading the content from one record on load is the alternative. The **bar**, either way, is that a save from a block on 100 days feels the same as one on 2.
+**The cost, for Roadbuster to measure.** The 2026-10-21 plan writes the new lines into every page in one transaction. On a template copy that's one more page each day, so after a year one keystroke's save rewrites 365 pages, against a Postgres row per page and "send only what changed". Notion's own limit at 10 copies may come from the same thing. **Size one shared record read on load first, with writing to every page as the fallback (Lead f9ff5fa9).** This is reasoning, not a measurement, so Roadbuster's numbers can overrule it. The cost to weigh is §8's rollback and export: an older build can't draw a shared record, so the sizing states that floor. The **bar**, either way, is that a save from a block on 100 days feels the same as one on 2.
 
 ## 8. Elsewhere
 
