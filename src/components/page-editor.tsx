@@ -36,6 +36,7 @@ import { CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, 
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { DatabaseBlock, setDatabasePending, type BlockActions } from './database-block'
+import { databaseKeys, onDatabaseCell } from './database-keys'
 import { addDays, fromIso, longLabel, shortLabel, todayIso, weekday } from './dates'
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
@@ -418,7 +419,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   rowsAnchor.current = rows.length ? eventsAnchor(pageNodes(page), new Set(workspace.tasks.map(t => t.id))) : undefined
   // separatorShortcut needs the editor it is part of; a ref breaks the type cycle of passing `editor` itself.
   const editorRef = useRef<BlockNoteEditor<any, any, any> | null>(null)
-  const editor = useCreateBlockNote({ schema, dictionary, disableExtensions: ['gapCursor', 'divider-block-shortcuts'], extensions: [separatorShortcut(() => editorRef.current!), tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), draftBands(() => groupsRef.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  const editor = useCreateBlockNote({ schema, dictionary, disableExtensions: ['gapCursor', 'divider-block-shortcuts'], extensions: [databaseKeys(), separatorShortcut(() => editorRef.current!), tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), draftBands(() => groupsRef.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
     pastingNow.current = true; setTimeout(() => { pastingNow.current = false }, 0)
@@ -2222,7 +2223,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // Keys inside a row's ⋯ menu belong to the menu (Enter chooses, arrows move), never to the editor's row rules.
       if ((e.target as Element).closest?.('.editor-row-menu')) return
       // Keys inside a database table belong to the table (design §10): cells, its title, its menus.
-      if ((e.target as Element).closest?.('.database-block')) return
+      if ((e.target as Element).closest?.('.database-block')) {
+        // Nor can they edit the page: Safari can take Backspace on a button as going back a page.
+        if ((e.key === 'Backspace' || e.key === 'Delete') && onDatabaseCell(e.target as Element)) e.preventDefault()
+        return
+      }
       // A database block selected whole (↑/↓ stop on it once): Enter goes into its first cell (design §10).
       if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const at = editor.getTextCursorPosition().block
