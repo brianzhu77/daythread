@@ -27,7 +27,7 @@ Nobody on the team has tested this in Notion's app: the Notion connection isn't 
 
 **Notion's, in one line:** a synced block is one piece of content shown in several places. An edit anywhere is the edit everywhere. The place it was made is the **original**, and that's the only place that differs from the others: it's marked in the list, it offers Unsync all, and deleting it ends the syncing.
 
-This replaces "every place is equal, no original" from the 2026-10-21 doc. That rule was simpler, but it isn't what Brian accepted and it has no Unsync all. Making one follows Notion too: `/` Synced block, the Sync button on selected lines (the turn-into he already has), and the block's copy action. **Two copies on one page are allowed** (the old doc turned the second into plain lines).
+This replaces "every place is equal, no original" from the 2026-10-21 doc. That rule was simpler, but it isn't what Brian accepted and it has no Unsync all. Making one follows Notion too: `/` Synced block, the Sync button on selected lines (Jazz's entry for Turn into, not built yet), and the block's copy action. **Two copies on one page are allowed** (the old doc turned the second into plain lines).
 
 ## 3. Tasks inside: allowed
 
