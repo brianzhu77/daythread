@@ -803,6 +803,13 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     }
     case "set-values": {
       rowEdit(state, action, isoTime(action.at));
+      if (action.beforeId !== undefined) {
+        const row = page(state, action.pageId);
+        // Before a row that's gone meanwhile: the end, as `move-page`'s drag does.
+        const before = moveBefore(state, row.id, row.parentId ?? null, action.beforeId);
+        state.pages.splice(state.pages.indexOf(row), 1);
+        state.pages.splice(before ? state.pages.indexOf(before) : state.pages.length, 0, row);
+      }
       return { message: "Saved", entityId: action.pageId };
     }
     case "set-values-many": {

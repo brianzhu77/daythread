@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { filterOpList, propertyTypes, type Json } from "./database.ts";
+import { filterOpList, limits, propertyTypes, viewLayouts, type Json } from "./database.ts";
 const id = z.string().min(1).max(200);
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const title = z.string().max(1000);
@@ -14,14 +14,16 @@ const propertyFields = { name: z.string().max(200), type: z.enum(propertyTypes),
 const columns = z.array(z.object({ id, width: z.number().int().optional() })).max(100);
 const sort = z.array(z.object({ by: id, direction: z.enum(["asc", "desc"]) })).max(10);
 const filter = z.array(z.object({ by: id, op: z.enum(filterOpList), value: json.optional() })).max(20);
-const view = z.object({ id, name: z.string().max(200), layout: z.literal("table"), columns, sort, filter });
+const groupDateBy = z.enum(["day", "week", "month"]);
+const hiddenGroups = z.array(z.string().max(200)).max(limits.hiddenGroups);
+const view = z.object({ id, name: z.string().max(200), layout: z.enum(viewLayouts), columns, sort, filter, groupBy: id.optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional() });
 const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("addProperty"), property: z.object({ id, ...propertyFields }), viewId: id.optional() }),
   z.object({ kind: z.literal("updateProperty"), propertyId: id, ...propertyFields, name: propertyFields.name.optional(), type: propertyFields.type.optional() }),
   z.object({ kind: z.literal("removeProperty"), propertyId: id }),
   z.object({ kind: z.literal("moveProperty"), propertyId: id, beforeId: id.nullable() }),
   z.object({ kind: z.literal("addView"), view }),
-  z.object({ kind: z.literal("updateView"), viewId: id, name: z.string().max(200).optional(), columns: columns.optional(), sort: sort.optional(), filter: filter.optional() }),
+  z.object({ kind: z.literal("updateView"), viewId: id, name: z.string().max(200).optional(), columns: columns.optional(), sort: sort.optional(), filter: filter.optional(), layout: z.enum(viewLayouts).optional(), groupBy: id.nullable().optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional() }),
   z.object({ kind: z.literal("removeView"), viewId: id }),
   z.object({ kind: z.literal("moveView"), viewId: id, beforeId: id.nullable() }),
 ]);
@@ -57,7 +59,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("create-database"), pageId: id, parentId: id.nullable().optional(), homeBlockId: id.nullable(), title }),
   z.object({ type: z.literal("change-database"), pageId: id, change }),
   z.object({ type: z.literal("add-row"), databaseId: id, pageId: id, title, values: values.optional(), beforeId: id.nullable().optional(), copyOf: id.optional(), at }),
-  z.object({ type: z.literal("set-values"), ...rowEdit.shape, at }),
+  z.object({ type: z.literal("set-values"), ...rowEdit.shape, beforeId: id.nullable().optional(), at }),
   z.object({ type: z.literal("set-values-many"), items: z.array(rowEdit).min(1).max(200), at }),
   z.object({ type: z.literal("delete-pages"), pageIds: z.array(id).min(1).max(200), at }),
   z.object({ type: z.literal("set-timezone"), timezone: z.string().min(1).max(100) }),
