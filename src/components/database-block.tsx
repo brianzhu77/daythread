@@ -465,7 +465,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
       <table className="database-table">
         <thead>
           <tr>
-            <th scope="col" className="database-th is-title" data-type="title">Name</th>
+            <th scope="col" className="database-th is-title" data-type="title">{wide && <span className="database-pin-strip" />}Name</th>
             {columns.map(c => <th key={c.property.id} scope="col" className="database-th" data-type={c.property.type} style={{ width: c.width ?? defaultWidth(c.property) }}>{c.property.name}</th>)}
             <th scope="col" className="database-th is-add"><button type="button" aria-label="Add property" onClick={addProperty}>+</button></th>
           </tr>
@@ -473,6 +473,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
         <tbody ref={tbody} className={drag && drag.before === null ? 'is-drop-end' : undefined}>
           {shown.map(row => <tr key={row.id} data-row={row.id} className={`database-row${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${drag?.before === row.id && drag.rowId !== row.id ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
             <td className="database-td is-title"><div className="database-title-inner">
+              {wide && <span className="database-pin-strip" />}
               {wide && <span className="database-row-gutter">
                 {!view.sort.length && <span className="database-row-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id)}>⋮⋮</span>}
                 <input type="checkbox" className="database-row-pick" aria-label={`Select ${displayPageTitle(row)}`} checked={picked.includes(row.id)} onChange={() => undefined} onClick={e => pick(row.id, e.shiftKey)} />

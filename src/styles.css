@@ -1891,10 +1891,18 @@ button.database-view-name { padding: 0; border: 0; background: none; font: inher
 .database-row.is-returned > td { background: var(--blue-soft); transition: background 0.3s; }
 .database-url-cell { display: flex; align-items: center; gap: 4px; min-height: 34px; padding: 0 8px; overflow: hidden; }
 .database-url-link { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.database-url-edit { flex: none; padding: 0 4px; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; cursor: pointer; opacity: 0; }
+.database-url-edit { flex: none; min-height: 0; padding: 0 4px; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; cursor: pointer; opacity: 0; }
 .database-row:hover .database-url-edit, .database-url-edit:focus-visible { opacity: 1; }
 /* Design §12, §7.2 (1280): a row's gutter holds its drag handle and its select box, shown on hover or when picked. */
-.database-row-gutter { display: flex; align-items: center; gap: 2px; padding-left: 2px; opacity: 0; }
+.database-row-gutter { display: flex; align-items: center; justify-content: flex-end; gap: 2px; padding-right: 6px; opacity: 0; }
+/* The gutter sits in the margin left of the table, so Name's text stays under its heading and on `+ New`'s text (§15).
+   The scroller reaches into that margin to keep it unclipped; pinned Name carries a strip that hides what slides under. */
+@media (min-width: 900px) {
+  .database-scroll { --database-gutter: 40px; margin-left: calc(-1 * var(--database-gutter)); padding-left: var(--database-gutter); max-width: calc(100% + var(--database-gutter)); }
+  .database-th.is-title { overflow: visible; }
+  .database-pin-strip { position: absolute; top: -1px; bottom: -1px; left: calc(-1 * var(--database-gutter)); width: var(--database-gutter); background: var(--bg-doc); }
+  .database-row-gutter { position: absolute; z-index: 1; top: 0; bottom: 0; left: calc(-1 * var(--database-gutter)); width: var(--database-gutter); }
+}
 .database-row:hover .database-row-gutter, .database-row.is-picked .database-row-gutter, .database-row-gutter:focus-within { opacity: 1; }
 .database-row-handle { cursor: grab; color: var(--ink-3); font-size: 12px; letter-spacing: -2px; padding: 0 2px; touch-action: none; user-select: none; }
 .database-row.is-dragging { opacity: 0.5; }
