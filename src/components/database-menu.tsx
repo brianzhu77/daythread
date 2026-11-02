@@ -3,14 +3,14 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { isDatabase, propertyOf, titleId, typeLabels, propertyTypes, type Condition, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { databaseRows, groupableProperties, isDatabase, propertyOf, titleId, typeLabels, propertyTypes, viewGroupBy, viewGroups, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
 import { blockActions, setShownView, shownView, useViewChange } from './database-block'
 import { ChevronDownIcon } from './icons'
 import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
-type Panel = 'root' | 'filter' | 'sort' | 'properties' | { property: string } | 'new-property' | 'views'
+type Panel = 'root' | 'filter' | 'sort' | 'group' | 'layout' | 'properties' | { property: string } | 'new-property' | 'views'
 interface OpenMenu { blockId: string; databaseId: string; panel: Panel }
 /** The views list opens under "Table ⌄" on the left; every other panel under the `⋯` on the right. */
 const anchorOf = (m: OpenMenu) => m.panel === 'views' ? `[data-database-views="${CSS.escape(m.blockId)}"]` : `[data-database-menu="${CSS.escape(m.blockId)}"]`
@@ -21,7 +21,7 @@ function useOpenMenu() { return useSyncExternalStore(l => { listeners.add(l); re
 const newId = (): string => crypto.randomUUID()
 
 /** Opens a table's menu on one of its panels (a filter chip opens Filter). */
-export function openDatabaseMenu(blockId: string, databaseId: string, panel: 'filter' | 'sort' = 'filter') { setOpenMenu({ blockId, databaseId, panel }) }
+export function openDatabaseMenu(blockId: string, databaseId: string, panel: 'filter' | 'sort' | 'group' = 'filter') { setOpenMenu({ blockId, databaseId, panel }) }
 
 /** The `⋯` on a table (inline or full page): opens its menu under it. */
 export function DatabaseMenuButton({ blockId, databaseId }: { blockId: string; databaseId: string }) {
@@ -94,7 +94,9 @@ export function DatabaseMenuHost() {
     <div ref={ref} className="app-menu database-menu" role="dialog" aria-label="Database options" style={{ position: 'fixed', top: at.top, ...(at.left !== undefined ? { left: at.left } : { right: at.right }) }}
     onKeyDown={e => e.stopPropagation()}>
     {open.panel === 'views' && <ViewsPanel db={db} blockId={open.blockId} />}
-    {open.panel === 'root' && <RootPanel db={db} blockId={open.blockId} go={go} />}
+    {open.panel === 'root' && <RootPanel db={db} view={view} blockId={open.blockId} go={go} />}
+    {open.panel === 'group' && <GroupPanel db={db} view={view} back={() => go('root')} />}
+    {open.panel === 'layout' && <LayoutPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'filter' && <FilterPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'sort' && <SortPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'properties' && <PropertiesPanel db={db} view={view} go={go} />}
@@ -119,7 +121,7 @@ function Head({ title, back }: { title: string; back?: () => void }) {
   return <div className="database-menu-head">{back && <button type="button" className="database-menu-back" aria-label="Back" onClick={back}>‹</button>}<span>{title}</span></div>
 }
 
-function RootPanel({ db, blockId, go }: { db: DatabasePage; blockId: string; go: (p: Panel) => void }) {
+function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; blockId: string; go: (p: Panel) => void }) {
   const { run } = useWorkspace()
   const navigate = useNavigate()
   const inline = !blockId.startsWith('page:') && db.database.homeBlockId === blockId
@@ -135,8 +137,10 @@ function RootPanel({ db, blockId, go }: { db: DatabasePage; blockId: string; go:
     <div className="database-menu-tiles">
       <button type="button" onClick={() => go('filter')}>Filter</button>
       <button type="button" onClick={() => go('sort')}>Sort</button>
+      <button type="button" onClick={() => go('group')}>Group</button>
     </div>
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
+    <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
     <hr />
     {inline && <button type="button" role="menuitem" onClick={() => { close(); void navigate({ to: '/pages', search: { page: db.id } }) }}>Open as page</button>}
     {inline && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.turnIntoPage(blockId, db.id) }}>Turn into page</button>}
@@ -236,7 +240,7 @@ function CommitInput({ initial, onCommit, inputMode, placeholder, ariaLabel = 'V
   const sent = useRef(initial)
   const commit = () => { if (v !== sent.current) { sent.current = v; onCommit(v) } }
   useSaveOnHide(commit)
-  return <input aria-label={ariaLabel} value={v} inputMode={inputMode} placeholder={placeholder} autoFocus={autoFocus} onChange={e => setV(e.target.value)} onBlur={commit}
+  return <input aria-label={ariaLabel} value={v} inputMode={inputMode} placeholder={placeholder} autoFocus={autoFocus} onFocus={e => { if (autoFocus) e.currentTarget.select() }} onChange={e => setV(e.target.value)} onBlur={commit}
     onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); commit() } }} />
 }
 
@@ -262,6 +266,87 @@ function SortPanel({ db, view, back }: { db: DatabasePage; view: View; back: () 
       <button type="button" className="database-rule-remove" aria-label="Remove sort" onClick={() => save(sort => sort.filter((_, j) => j !== i))}>×</button>
     </div>)}
     {unused && <button type="button" role="menuitem" onClick={() => save(sort => [...sort, { by: unused.id, direction: 'asc' }])}>+ Add sort</button>}
+  </>
+}
+
+// ---------------------------------------------------------------- group and layout (design §7.2, §7.3)
+
+const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board' }
+/** "Status", "Status 2", …: never a name the database already has. */
+function newStatusName(db: Database): string {
+  const taken = new Set(['name', ...db.properties.map(p => p.name.toLocaleLowerCase())])
+  for (let n = 1; ; n++) { const name = n === 1 ? 'Status' : `Status ${n}`; if (!taken.has(name.toLocaleLowerCase())) return name }
+}
+/** A board's columns need a Select, Status or Checkbox: asked when one is made (§7.2), or a new Status, when he has none or wants one. */
+function BoardGroupChoices({ db, onPick }: { db: DatabasePage; onPick: (propertyId: string) => void }) {
+  const change = useChange(db)
+  const addStatus = () => {
+    const id = newId()
+    change(current => ({ kind: 'addProperty', property: { id, name: newStatusName(current), type: 'status' } }))
+    onPick(id)
+  }
+  return <>
+    <p className="database-menu-quiet">Columns come from</p>
+    {groupableProperties(db.database, 'board').map(p => <button key={p.id} type="button" role="menuitem" onClick={() => onPick(p.id)}>{p.name}<span className="database-menu-quiet">{typeLabels[p.type]}</span></button>)}
+    <button type="button" role="menuitem" onClick={addStatus}>+ New Status property</button>
+  </>
+}
+
+function GroupPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
+  const { workspace } = useWorkspace()
+  const changeView = useViewChange(db.id, view.id)
+  const property = viewGroupBy(db.database, view)
+  if (view.layout === 'board' && !property) return <><Head title="Group" back={back} /><BoardGroupChoices db={db} onPick={groupBy => changeView(() => ({ groupBy }))} /></>
+  const choices = groupableProperties(db.database, view.layout)
+  // Every group, listed whatever's hidden now, so a hidden one can come back from here too.
+  const all = property && workspace ? viewGroups(db.database, { ...view, hideEmptyGroups: false, hiddenGroups: [] }, databaseRows(workspace, db.id))!.shown : []
+  const hidden = new Set(view.hiddenGroups ?? [])
+  return <>
+    <Head title="Group" back={back} />
+    <label className="database-menu-row">Group by
+      <select value={property?.id ?? ''} onChange={e => { const groupBy = e.target.value || null; changeView(() => ({ groupBy, hiddenGroups: [] })) }}>
+        {view.layout === 'table' && <option value="">None</option>}
+        {choices.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </label>
+    {!choices.length && <p className="database-menu-quiet">No properties to group by yet</p>}
+    {property?.type === 'date' && <label className="database-menu-row">By
+      <select aria-label="By" value={view.groupDateBy ?? 'month'} onChange={e => { const groupDateBy = e.target.value as GroupDateBy; changeView(() => ({ groupDateBy, hiddenGroups: [] })) }}>
+        <option value="day">Day</option><option value="week">Week</option><option value="month">Month</option>
+      </select>
+    </label>}
+    {property && <>
+      <label className="database-menu-row">Hide empty groups
+        <input type="checkbox" checked={Boolean(view.hideEmptyGroups)} onChange={e => { const hideEmptyGroups = e.target.checked; changeView(() => ({ hideEmptyGroups })) }} />
+      </label>
+      <hr />
+      <div className="database-group-list">
+        {all.map(g => <label key={g.key} className="database-menu-row">{g.name}
+          <input type="checkbox" aria-label={`Show ${g.name}`} checked={!hidden.has(g.key)} onChange={e => { const show = e.target.checked; changeView(current => ({ hiddenGroups: show ? (current.hiddenGroups ?? []).filter(k => k !== g.key) : [...(current.hiddenGroups ?? []), g.key] })) }} />
+        </label>)}
+      </div>
+    </>}
+  </>
+}
+
+/** A view named after its type keeps following it; one he named keeps his name. */
+const renamedFor = (view: View, layout: View['layout']) => (view.name === layoutLabels[view.layout] ? { name: layoutLabels[layout] } : {})
+function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
+  const changeView = useViewChange(db.id, view.id)
+  const [asking, setAsking] = useState(false)
+  const toBoard = (groupBy: string) => { setAsking(false); changeView(current => ({ layout: 'board', groupBy, ...renamedFor(current, 'board') })) }
+  const pick = (layout: View['layout']) => {
+    if (layout === view.layout) return
+    if (layout === 'table') { changeView(current => ({ layout: 'table', ...renamedFor(current, 'table') })); return }
+    // Grouped already by what a board can use: those are its columns.
+    const kept = viewGroupBy(db.database, { ...view, layout: 'board' })
+    const only = groupableProperties(db.database, 'board')
+    if (kept) toBoard(kept.id); else if (only.length === 1) toBoard(only[0]!.id); else setAsking(true)
+  }
+  if (asking) return <><Head title="Board" back={() => setAsking(false)} /><BoardGroupChoices db={db} onPick={toBoard} /></>
+  return <>
+    <Head title="Layout" back={back} />
+    {(['table', 'board'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
   </>
 }
 
@@ -361,16 +446,25 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
   const current = shownView(db.database, blockId)
   const [actions, setActions] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
+  const [adding, setAdding] = useState<null | 'type' | 'board'>(null)
   const views = db.database.views
   const pick = (id: string) => { setShownView(blockId, id); setOpenMenu(null) }
-  const add = (from?: View) => {
+  const add = (from?: View, groupBy?: string) => {
     const id = newId()
-    // A new view is a Table named after its type, with the name ready to rename (design §7.1); Duplicate copies one.
-    const view: View = from ? { ...structuredClone(from), id, name: `${from.name} (copy)` } : { id, name: 'Table', layout: 'table', columns: current.columns, sort: [], filter: [] }
+    // A new view is named after its type, with the name ready to rename (design §7.1); Duplicate copies one. A new board's
+    // cards start as titles alone: Properties adds what he wants on them (§7.5).
+    const view: View = from ? { ...structuredClone(from), id, name: `${from.name} (copy)` } : { id, name: groupBy ? 'Board' : 'Table', layout: groupBy ? 'board' : 'table', columns: groupBy ? [] : current.columns, sort: [], filter: [], ...(groupBy ? { groupBy } : {}) }
     change({ kind: 'addView', view })
     setShownView(blockId, id)
-    setActions(null); setRenaming(id)
+    setActions(null); setAdding(null); setRenaming(id)
   }
+  const addBoard = () => { const only = groupableProperties(db.database, 'board'); if (only.length === 1) add(undefined, only[0]!.id); else setAdding('board') }
+  if (adding === 'board') return <><Head title="New board" back={() => setAdding('type')} /><BoardGroupChoices db={db} onPick={id => add(undefined, id)} /></>
+  if (adding === 'type') return <>
+    <Head title="New view" back={() => setAdding(null)} />
+    <button type="button" role="menuitem" onClick={() => add()}>Table</button>
+    <button type="button" role="menuitem" onClick={addBoard}>Board</button>
+  </>
   return <>
     <Head title="Views" />
     {views.map(v => <div key={v.id} className="database-view-line">
@@ -385,6 +479,6 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
       </div>}
     </div>)}
     <hr />
-    <button type="button" role="menuitem" onClick={() => add()}>+ Add view</button>
+    <button type="button" role="menuitem" onClick={() => setAdding('type')}>+ Add view</button>
   </>
 }

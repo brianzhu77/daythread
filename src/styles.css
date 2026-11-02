@@ -1918,3 +1918,49 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-row.is-picked > td { background: var(--blue-soft); }
 .database-picked-bar { display: flex; align-items: center; gap: 12px; padding: 6px 8px; font-size: var(--text-meta); color: var(--ink-2); position: relative; }
 .database-picked-menu { position: absolute; top: 100%; left: 60px; z-index: 30; min-width: 180px; }
+
+/* Databases R2: groups in a table (design §7.3). The name stays on Name's text while the columns slide under it. */
+.database-block .database-group-head { padding: 0; border: 0; background: none; vertical-align: middle; font-weight: var(--weight-regular); text-align: left; }
+.database-group-inner { position: sticky; left: 0; display: flex; flex-wrap: wrap; width: max-content; }
+.database-group-fold { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; margin-top: 8px; padding: 0 8px 0 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--text-small); font-weight: var(--weight-regular); cursor: pointer; }
+.database-group-fold > svg { flex: none; width: 14px; height: 14px; color: var(--ink-3); transition: transform .12s; }
+.database-group-fold[aria-expanded=true] > svg { transform: rotate(90deg); }
+.database-group-none { color: var(--ink-3); }
+.database-group-count { color: var(--ink-3); font-weight: var(--weight-regular); }
+.database-block .database-group-foot > td { padding: 0; border: 0; }
+.database-group-foot.is-drop-end > td { box-shadow: inset 0 2px 0 var(--blue); }
+.database-hidden-groups { margin: 4px 0 0; padding: 0 8px; color: var(--ink-3); font-size: var(--text-meta); }
+.database-hidden-groups .app-link { color: inherit; }
+.database-group-list { display: flex; flex-direction: column; flex: none; max-height: 40vh; overflow-y: auto; }
+
+/* Databases R2: the Board (design §7.2): columns of cards, 260 px, or one at a time at 300 px on the phone. */
+.database-board { display: flex; align-items: flex-start; gap: 12px; max-width: 100%; padding-bottom: 4px; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+.database-column { flex: none; display: flex; flex-direction: column; gap: 6px; width: 260px; min-height: 64px; border-radius: var(--radius-control); }
+.database-column.is-drop { background: var(--fill-soft); box-shadow: 0 0 0 4px var(--fill-soft); }
+.database-block .database-column-head { display: flex; align-items: baseline; gap: 4px; min-height: 32px; margin: 0; padding: 4px 0; color: var(--ink-2); font-size: var(--text-small); line-height: 24px; font-weight: var(--weight-regular); }
+.database-card { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--bg-doc); color: var(--ink); font-size: var(--text-small); line-height: 20px; cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+@media (hover: hover) { .database-card:hover { background: var(--fill-soft); } }
+.database-card.is-returned { background: var(--blue-soft); transition: background .3s; }
+.database-card.is-dragging { opacity: .4; }
+.database-card.is-drop-before::before, .database-column-drop-end { content: ''; display: block; height: 2px; border-radius: 1px; background: var(--blue); }
+.database-card.is-drop-before::before { position: absolute; top: -5px; right: 0; left: 0; }
+.database-card.is-ghost { position: fixed; z-index: 70; top: 0; left: 0; width: 260px; box-shadow: var(--shadow-float); cursor: grabbing; pointer-events: none; }
+/* The whole card opens the row, from its title's own button, and stays inside the card. A box on it sits above. */
+.database-card .database-card-title { display: block; width: 100%; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: var(--weight-regular); text-align: left; overflow-wrap: anywhere; cursor: inherit; }
+.database-card-title::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
+.database-card-title:focus-visible { outline: none; }
+.database-card:has(.database-card-title:focus-visible) { outline: 2px solid var(--blue); outline-offset: 1px; }
+.database-card .database-card-title.is-placeholder { color: var(--placeholder); }
+.database-card-value { max-width: 100%; overflow: hidden; color: var(--ink-3); font-size: var(--text-meta); white-space: nowrap; text-overflow: ellipsis; }
+.database-card-check { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: var(--text-meta); }
+.database-card-unsaved { color: var(--warn); font-size: var(--text-meta); }
+.database-column-name { width: 100%; min-height: 36px; padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: var(--radius-control); background: var(--bg-doc); color: var(--ink); font: inherit; font-size: 16px; }
+.database-column.is-add { width: 200px; min-height: 0; padding-top: 32px; }
+@media (max-width: 899px) {
+  .database-board { gap: 10px; scroll-snap-type: x mandatory; }
+  .database-board.is-dragging { scroll-snap-type: none; }
+  .database-column { width: 300px; scroll-snap-align: start; }
+  .database-column.is-add { width: 300px; }
+  .database-card { padding: 10px 12px; font-size: var(--text-ui); }
+  .database-card.is-ghost { width: 300px; }
+}
