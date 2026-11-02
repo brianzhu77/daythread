@@ -508,6 +508,35 @@ Row B22 and task #124 (Jazz, `fix/b22-paste-task`); list by Bumblebee, asked by 
 
 **Success check after release (Bumblebee's usage read, his workspace only, read-only):** count pastes of task rows, and how many took Make a copy. If most do, the default is wrong for him and I'll bring that back as evidence. Any change to the number of tasks with no Make a copy is a regression.
 
+## D4. Databases R3 (tracked, not counted)
+
+Acceptance list by Bumblebee (Lead a56d1d39), from `docs/design/databases.md` §6, §7, §13, §14 and `databases-model.md` §10. No tasks yet. Each piece can ship on its own when ready, and his use can reorder them but not stop or cut them (Brian 57deaed7). **Open** marks what the design doesn't answer yet. Status values as above.
+
+| ID | Check | Status |
+| --- | --- | --- |
+| R3-1 | **Calendar.** Our Calendar screen's month grid at 1280 with up to 3 titles a day, then "+2"; our phone calendar at 390, with dots and the chosen day's rows under it. Asks which date property, as Board asks for columns. `+` on a day sets the date; a row dragged to another day changes it, with Undo (1280). Rows with no date stay reachable, not silently missing. A range shows on its days. On To-dos (§11), Planned, Start or Deadline changes through the same task commands and carry-over as anywhere. **Open:** where undated rows are listed. | missing |
+| R3-2 | **List.** One line per row at 1280, title then up to 3 properties; properties under the title at 390. `+ New`, reorder when unsorted, Group and sub-groups work as in a table. | missing |
+| R3-3 | **Gallery.** 3 across at 1280, 2 at 390, with the first image in the body or a Files property, and the title. A row with no image has a clean card, no broken or empty picture frame. Works before Files ships. **Open:** does a body hold images today? Uploads don't exist (R3-11), so say what an image in a body means now. | missing |
+| R3-4 | **"Any rule matches".** One switch at the top of Filter. Saved on the view and readable from its chips. Under "any", a `+ New` takes a value only if that makes the row visible, otherwise §7.4's notice. | missing |
+| R3-5 | **Relation.** The `[[`-style pick list, limited to the target's rows, with "New row in Books…". Titles show as page refs and open the row. A deleted row reads without it. A target in Trash follows §13. Self-relation works. Undo after a change restores the links. Search, Trash counts and export list a row once. | missing |
+| R3-6 | **Two-way relations and the limit (added, see below).** "Show on Books" makes a mirrored property that stays in sync both ways with one Undo, and "1 page or no limit". Deleting one side says what happens to the other. | missing |
+| R3-7 | **Rollup.** Relation → property → function, read-only. Covers Notion's functions where our types apply (research §7): count, percent, sum, average, median, min, max, range, dates, checked. "—" when nothing is linked. No rollup of a rollup, no loops. A change in a linked row shows without a reload. Sorting and filtering on it agree with what's shown. | missing |
+| R3-8 | **Column calculations (added).** Per column at a table's foot: count, sum, percent checked and so on. They agree with what the filter shows, not all rows, and a group has its own. Don't fall under the toolbar at 390. | missing |
+| R3-9 | **Created time, Edited time, ID.** Read-only, in his local time. An edit to a value or the body moves Edited; opening a row doesn't. IDs never repeat, including after a delete or an undone add (`nextId`). A Duplicate gets its own. They can't be set by a filter's `+ New`, so §7.4's notice applies. | missing |
+| R3-10 | **Email and Phone.** As typed, nothing refused; a valid one is a link that opens mail or the dialler, and a pencil edits. A non-link stays plain text. | missing |
+| R3-11 | **Files.** Add, Remove and Open at both widths; photos from the phone. A failed or offline upload says so and keeps the row usable. Size limit stated. A file goes to Trash with its row and comes back; export includes it or names what's left out; another account can never read it. **Open for the Lead:** this is new infrastructure with a running cost, so it needs a choice of store (Cloudflare R2 or Supabase Storage) and sizes before design. Everything else here can go first. | missing |
+| R3-12 | **Row templates.** `+ New ⌄` at both widths; a template sets values and body. It isn't a row: it doesn't show in views, counts, search or To-dos. To-dos in a template make no tasks until a row is made (B70's rule), and each new row's to-dos are its own. A template deleted later leaves its rows alone. | missing |
+| R3-13 | **Sub-groups.** A second layer in a table, list or board. `+ New` starts with both values, and a drag changes both with one Undo. Each layer folds, and caps and Show more still hold (`groupBy` was kept open for this, Jazz d9014e3d). | missing |
+| R3-14 | **Wrap per property.** On the view. Row height follows, Name stays pinned at 390, sideways scroll and keeps-place still hold. | missing |
+| R3-15 | **Several rows on the phone.** Reaches §12's bar ("3 rows · Edit property · Delete"). The gesture doesn't collide with long-press for a row's menu or a Board drag (native check). Edit and Delete of several are one Undo. | missing |
+| R3-16 | **Every new type in every view.** Filter conditions per type, sort, Group, Board and Calendar where they apply, To-dos excluded from extra properties (§11), linked views and the template view included. Type changes follow §6.2: converts what it can, says how many it couldn't, and changing back restores them. | missing |
+| R3-17 | **His days don't change, old tabs, rollback.** R1-18 and R2-7 still hold. An older tab keeps new view fields and values when it saves, and a value of a type it doesn't know isn't wiped. Each release states its floor. | missing |
+| R3-18 | **Gates before each release** (§15): a copy of his real data at 390 and 1280; alignment gate at 0 fail / 0 missing, with each new view in it; native run for each phone sheet and gesture; keys and clipboard at 1280 on each new view (R1-26). | missing |
+
+**Added to §14 while writing this (Bumblebee):** my Notion research lists features that weren't in any release, which would have been a quiet cut. R3 gains column calculations and two-way relations with a limit. R4 gains sub-items and dependencies. Later gains Feed, Map, Dashboard and nested filter groups, and page icons and covers. The Lead can move any of them.
+
+**Success check after each release (Bumblebee's usage read, his workspace only, read-only):** which new view or type did he make and keep past a week? Sets order only (Brian 57deaed7). Any lost value is a regression.
+
 ## C. Open questions for Brian
 
 Asked 2026-10-19 02:18Z (9e538364 572b3c3a); Brian answered 02:20Z (a4fd5686). Re-ask any future question within 24 h if unanswered.
