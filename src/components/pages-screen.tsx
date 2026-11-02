@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { useNavigate, useSearch } from '@tanstack/react-router'
+import { Navigate, useNavigate, useSearch } from '@tanstack/react-router'
 import { AccountRow } from './account-row'
 import { ContinuousPage } from './continuous-page'
 import { displayPageTitle, PageTitleField } from './page-title'
@@ -50,6 +50,8 @@ export function PagesScreen() {
   if (p && isTemplate(p)) return <TemplateScreen key={p.id} page={p} workspace={workspace} today={today} autoFocusTitle={search.focus === 'title'} onDeleted={() => void navigate({ to: '/pages', search: { view: 'templates' } })} />
   if (search.view === 'templates' && !p) return <TemplatesScreen workspace={workspace} today={today} onOpen={(page, focus) => void navigate({ to: '/pages', search: { page, ...(focus ? { focus } : {}) } })} />
   if (p && isTrashed(p)) return <TrashedPage key={p.id} page={p} workspace={workspace} />
+  // A day page opened from the trash and just restored (B16): its home is its date.
+  if (p?.type === 'daily' && p.date) return <Navigate to="/day/$date" params={{ date: p.date }} replace />
   // A database's full page is its table, with no body (design §4.3); a row's page shows its properties over its body (§5).
   const rowOf = p ? databaseOfRow(workspace, p) : null
   if (p) return <div className="doc-screen"><PageHeaderRow page={p} workspace={workspace} />

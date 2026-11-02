@@ -1,3 +1,4 @@
+import { pageContentKey } from '../domain/editor-document.ts'
 /**
  * B35 part 2: unsaved editor text is kept per tab, not per page. Two tabs on one page used to share one localStorage
  * slot, so the second overwrote the first and only one draft came back (Ratchet 155). Now each tab writes
@@ -16,6 +17,11 @@ export interface DraftSlot {
   /** Databases this draft's save turns into full pages or makes at home here: without them it would read as a delete. */
   detachDatabaseIds?: string[]
   adoptDatabaseBlocks?: { blockId: string; pageId: string }[]
+  /**
+   * B81: the save on its way as this was written. A reload may beat its reply, leaving a draft that looks older than the
+   * page it just saved: `base` is what the page's key becomes when that save lands, `document` the key of what it sent.
+   */
+  sent?: { base: string; document: string }
   /** Last time the tab that owns it was alive (ms). */
   seen: number
   /** Set when the tab closed (pagehide). */
@@ -291,4 +297,10 @@ export function withoutSaved<N extends DraftNode>(draft: N[], latest: N[]): N[] 
     return [{ ...n, children }]
   })
   return clean(draft) as N[]
+}
+
+/** B81: what a kept draft's save on its way did, seen from the page now: nothing yet, landed with all of it, or landed with more typed since. */
+export function landedSave(slot: DraftSlot, pageKey: string): 'no' | 'all' | 'more' {
+  if (slot.sent?.base !== pageKey) return 'no'
+  return pageContentKey({ document: slot.document }) === slot.sent.document ? 'all' : 'more'
 }
