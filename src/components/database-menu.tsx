@@ -230,7 +230,10 @@ function RuleValue({ property, condition, onChange }: { property: Property; cond
 /** A text field that saves on Enter or when it loses focus, never per key: one change, one Undo. */
 function CommitInput({ initial, onCommit, inputMode, placeholder, ariaLabel = 'Value', autoFocus }: { initial: string; onCommit: (v: string) => void; inputMode?: 'decimal'; placeholder?: string; ariaLabel?: string; autoFocus?: boolean }) {
   const [v, setV] = useState(initial)
-  const commit = () => { if (v !== initial) onCommit(v) }
+  // What it last sent, not `initial`: a hide and then a blur can both land before the reply, and a second "Add an option"
+  // with the same name would be refused.
+  const sent = useRef(initial)
+  const commit = () => { if (v !== sent.current) { sent.current = v; onCommit(v) } }
   useSaveOnHide(commit)
   return <input aria-label={ariaLabel} value={v} inputMode={inputMode} placeholder={placeholder} autoFocus={autoFocus} onChange={e => setV(e.target.value)} onBlur={commit}
     onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); commit() } }} />
