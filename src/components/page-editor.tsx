@@ -543,6 +543,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     ...(databaseFlags.current.detach.size ? { detachDatabaseIds: [...databaseFlags.current.detach] } : {}),
     ...(databaseFlags.current.adopt.size ? { adoptDatabaseBlocks: [...databaseFlags.current.adopt].map(([pageId, blockId]) => ({ blockId, pageId })) } : {}),
   })
+  // A database block selected whole has no text to format: no formatting toolbar (it drew as a sliver over the line above).
+  const onDatabase = useEditorState({ editor, selector: ({ editor }) => editor.getTextCursorPosition().block.type === 'database' })
   const composing = useRef(false)
   const selected = useRef<string[]>([])
   const dragging = useRef<EditorNode[]>([])
@@ -2210,7 +2212,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     {createPortal(<EventRows rows={rows} page={page} workspace={workspace} pageEnd={!rowsAnchor.current || rowsAnchor.current.labelled || (rowsAnchor.current.afterId !== null && !editor.getBlock(rowsAnchor.current.afterId))} />, rowsHost)}
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} shadCNComponents={doneInputs}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
-      {!compact && !selectionLabel && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
+      {!compact && !selectionLabel && !onDatabase && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
         <LineTypeSelect key="blockTypeSelect" isRoleHeading={isRoleHeading} canHoldHeading={canHoldHeading} />
         <BasicTextStyleButton key="bold" basicTextStyle="bold" />
         <BasicTextStyleButton key="italic" basicTextStyle="italic" />
