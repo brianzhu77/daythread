@@ -133,7 +133,7 @@ export function PendingTomorrowLines({ today }: { today: LocalDate }) {
   const creating = useRef(new Map<LocalDate, Promise<Page | null>>())
   const ensurePage = useCallback(
     (date: LocalDate): Promise<Page | null> => {
-      const find = () => latest()?.pages.find(p => p.type === 'daily' && p.date === date) ?? null
+      const find = () => latest()?.pages.find(p => p.type === 'daily' && p.date === date && !p.trashedAt) ?? null
       if (find()) return Promise.resolve(find())
       let job = creating.current.get(date)
       if (!job) {
@@ -200,7 +200,7 @@ export function PendingTomorrowLines({ today }: { today: LocalDate }) {
         const saved = receipt ? true : landedEarlier ? await recoverEarlierAdd(line.key, date) : false
         setLines(all => (saved ? all.filter(l => l.key !== line.key) : all.map(l => (l.key === line.key ? { ...l, failed: true } : l))))
         // The day's record says he planned the next day from this page; nothing else reads the flag.
-        const typedPage = latest()?.pages.find(p => p.type === 'daily' && p.date === line.typedOn)
+        const typedPage = latest()?.pages.find(p => p.type === 'daily' && p.date === line.typedOn && !p.trashedAt)
         if (saved && typedPage && !typedPage.reviewSaved) void run({ type: 'save-review', date: line.typedOn }, null, undefined, { quiet: true })
         return saved
       })().finally(() => saving.current.delete(line.key))

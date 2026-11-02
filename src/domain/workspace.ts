@@ -4,7 +4,7 @@ import { broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyT
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget } from "./day-template.ts";
-import { isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
+import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
 import { changeDatabase, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
@@ -60,7 +60,8 @@ function task(state: Workspace, id: string): Task {
   if (!t) throw new DomainError("Task not found");
   return t;
 }
-const dayPage = (state: Workspace, day: string): Page | undefined => state.pages.find((p) => p.type === "daily" && p.date === day);
+/** The date's live page; one in the trash doesn't hold the date (B16). */
+const dayPage = (state: Workspace, day: string): Page | undefined => state.pages.find((p) => p.type === "daily" && p.date === day && !isTrashed(p));
 // A template's rows are never a task's place (B70): only live, ordinary pages hold tasks.
 const livePages = (state: Workspace): Page[] => state.pages.filter((p) => !isTrashed(p) && !isTemplate(p) && !isDraft(p));
 const docOf = (p: Page): EditorNode[] => structuredClone(pageNodes(p));
@@ -111,9 +112,9 @@ function tasksOnDay(state: Workspace, day: string): Task[] {
 export function isBlankTask(t: Task): boolean {
   return !t.title.trim();
 }
-/** The most recent day page before `day`. */
+/** The most recent live day page before `day`. */
 export function previousDayPage(state: Workspace, day: string): Page | undefined {
-  return state.pages.filter((p) => p.type === "daily" && p.date !== null && p.date < day).sort((a, b) => (a.date! < b.date! ? 1 : -1))[0];
+  return state.pages.filter((p) => p.type === "daily" && p.date !== null && p.date < day && !isTrashed(p)).sort((a, b) => (a.date! < b.date! ? 1 : -1))[0];
 }
 /** The task rows a task's row sat under on `from`, nearest first (other lines in between are skipped). */
 export function carryAncestors(from: Page | undefined, taskId: string): string[] {
@@ -233,7 +234,9 @@ function ensureDay(state: Workspace, day: string): Page {
   date(day);
   let p = dayPage(state, day);
   if (!p) {
-    const id = `day:${day}`;
+    // A page of this date in the trash keeps its id, for Restore (B16).
+    let id = `day:${day}`;
+    for (let n = 2; state.pages.some((x) => x.id === id && x.type === "daily" && isTrashed(x)); n++) id = `day:${day}:${n}`;
     if (state.pages.some((x) => x.id === id)) throw new DomainError("Page id already in use");
     const template = defaultTemplate(state, dayPagesTarget);
     p = { id, type: "daily", date: day, title: day, document: JSON.stringify(template ? pageFromTemplate(template, day) : templateDocument(id, day)) };
@@ -241,9 +244,34 @@ function ensureDay(state: Workspace, day: string): Page {
   }
   return p;
 }
-function restorePages(state: Workspace, ids: Set<string>): { pages: Page[]; toTopLevel: Page[] } {
-  const pages = state.pages.filter((p) => ids.has(p.id));
+/**
+ * A day page coming back to a date that has a new page (B16): it takes the date back, and what the new page holds joins
+ * it, below its own lines, so nothing is lost. A new page with nothing written just goes.
+ */
+function joinNewDayPage(state: Workspace, restored: Page): boolean {
+  const newer = dayPage(state, restored.date!);
+  if (!newer) return false;
+  const children = state.pages.filter((x) => x.parentId === newer.id);
+  const pages = children.filter((x) => !isDraft(x));
+  // A heading he changed is writing too; the template's own aren't.
+  const headings = (p: Page) => flatNodes(pageNodes(p)).filter((n) => n.type === "heading").map((n) => inlineText(n.content).trim());
+  const own = new Set(headings(restored));
+  const written = hasContent(newer) || headings(newer).some((h) => h && !own.has(h));
+  const joined = written || pages.length > 0;
+  if (written) setDocument(restored, [...docOf(restored), ...docOf(newer)]);
+  for (const x of pages) x.parentId = restored.id;
+  if (newer.handoffDone) restored.handoffDone = true;
+  if (newer.reviewSaved) restored.reviewSaved = true;
+  const gone = new Set([newer.id, draftPageId(newer.id)]);
+  state.pages = state.pages.filter((x) => !gone.has(x.id));
+  return joined;
+}
+function restorePages(state: Workspace, ids: Set<string>): { pages: Page[]; toTopLevel: Page[]; joined: boolean } {
+  let pages = state.pages.filter((p) => ids.has(p.id));
   const toTopLevel: Page[] = [];
+  let joined = false;
+  for (const p of pages) if (p.type === "daily" && p.date && joinNewDayPage(state, p)) joined = true;
+  pages = state.pages.filter((p) => ids.has(p.id));
   for (const p of pages) { delete p.trashedAt; delete p.trashId; }
   for (const p of pages) {
     if (!p.parentId || ids.has(p.parentId)) continue;
@@ -254,7 +282,7 @@ function restorePages(state: Workspace, ids: Set<string>): { pages: Page[]; toTo
       if (p.database) p.database.homeBlockId = null;
     }
   }
-  return { pages, toTopLevel };
+  return { pages, toTopLevel, joined };
 }
 /** The pages to trash with `p`, as one batch: it and its live descendants (a database's rows with it). */
 function trashSubtree(state: Workspace, p: Page, at: string, operationId: string): Page[] {
@@ -620,10 +648,12 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     }
     case "delete-page": {
       const p = page(state, action.pageId);
-      if (p.type !== "document") throw new DomainError("Day pages can't be deleted");
+      if (p.type !== "document" && p.type !== "daily") throw new DomainError("This page can't be deleted");
+      if (isTrashed(p)) throw new DomainError("Page is in trash");
       if (!Number.isFinite(Date.parse(action.at))) throw new DomainError("Invalid time");
       const rows = isDatabase(p) ? databaseRows(state, p.id).length : 0;
-      const n = trashSubtree(state, p, action.at, operationId).length - 1;
+      // A database's rows go with it, and aren't subpages he'd count.
+      const n = trashSubtree(state, p, action.at, operationId).filter((x) => !databaseOfRow(state, x)).length - 1;
       if (isDatabase(p)) return { message: rows ? `Moved to trash · ${rows} row${rows === 1 ? "" : "s"}` : "Moved to trash", entityId: p.id };
       return { message: n ? `Moved to trash · ${n} subpage${n === 1 ? "" : "s"}` : "Moved to trash", entityId: p.id };
     }
@@ -635,7 +665,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const db = databaseOfRow(state, p);
       const withDatabase = Boolean(db && isTrashed(db));
       if (db && withDatabase) for (const id of restoreSetOf(state, db)) ids.add(id);
-      const { toTopLevel } = restorePages(state, ids);
+      const { toTopLevel, joined } = restorePages(state, ids);
+      if (joined) return { message: "Restored · joined with the new page", entityId: p.id };
       if (withDatabase) return { message: `Restored with ${db!.title.trim() || "Untitled"}`, entityId: p.id };
       return { message: toTopLevel.length ? "Restored to Pages" : "Restored", entityId: p.id };
     }
@@ -647,7 +678,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const databases = new Set<Page>();
       for (const id of ids) { const db = databaseOfRow(state, state.pages.find((x) => x.id === id)!); if (db && isTrashed(db) && !ids.has(db.id)) databases.add(db); }
       for (const db of databases) for (const id of restoreSetOf(state, db)) ids.add(id);
-      const { pages, toTopLevel } = restorePages(state, ids);
+      const { pages, toTopLevel, joined } = restorePages(state, ids);
+      if (joined) return { message: "Restored · joined with the new page", entityId: pages.find((x) => x.type === "daily")!.id };
       const batchTop = pages.find((x) => batch.has(x.id) && (!x.parentId || !batch.has(x.parentId)))!;
       if (databases.size) return { message: `Restored with ${[...databases][0]!.title.trim() || "Untitled"}`, entityId: batchTop.id };
       const top = pages.find((x) => !x.parentId || !ids.has(x.parentId))!;

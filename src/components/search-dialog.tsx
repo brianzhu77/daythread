@@ -161,7 +161,7 @@ function build(workspace: Workspace | null, results: ReturnType<typeof search> |
   if (!workspace) return []
   if (!results) {
     // Today first, whether or not its page exists yet (opening it makes the page); then the pages opened lately.
-    const todayPage = workspace.pages.find(p => p.type === 'daily' && p.date === today)
+    const todayPage = workspace.pages.find(p => p.type === 'daily' && p.date === today && !p.trashedAt)
     const recent = recentIds().map(id => workspace.pages.find(p => p.id === id)).filter((p): p is Page => Boolean(p) && !p!.trashedAt && p !== todayPage).slice(0, 8)
     const rowOf = (p: Page): Row => ({ key: p.id, href: pageHref(p), render: () => <PageRow page={p} today={today} path={pathOf(workspace, p, today)} query="" /> })
     const todayRow: Row = { key: 'today', href: '/', render: () => <><span className="search-row-icon"><CalendarIcon /></span><span className="search-row-text"><span className="search-row-title">Today</span></span></> }
