@@ -224,7 +224,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
 
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(columns[0]!.key === allKey ? undefined : columns[0]!.key) }} />
-    {!groups && <p className="database-empty">Choose what makes the columns · <button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'group')}>Group by</button></p>}
+    {!groups && <p className="database-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'group')}>Group by</button></p>}
     <div className={`database-board${drag ? ' is-dragging' : ''}`} ref={scroller} onScroll={onScroll}>
       {columns.map(group => {
         const shown = group.rows.slice(0, limitOf(group.key))

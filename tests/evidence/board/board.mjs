@@ -127,6 +127,23 @@ check(Math.abs(edge.name - edge.add) <= 1 && Math.abs(edge.fold - edge.title) <=
 await setGroup(null)
 check(await groupNames().then(n => n.length) === 0 && await block.locator('.database-title-cell').count() > 0, 'None takes the groups away')
 
+// ---- every menu stays on the screen
+const onScreen = async what => {
+  const b = await menu.boundingBox()
+  check(b && b.x >= 0 && b.x + b.width <= Number(width) && b.y >= 0 && b.y + b.height <= (wide ? 900 : 844), `${what} menu stays on the screen`, b)
+}
+await clearNotices(); await tap(block.locator('.database-view-name')); await wait(400); await onScreen('Views')
+if (wide) {
+  const more = menu.locator('.database-view-more').first(), m = await more.boundingBox()
+  check(m && m.x + m.width <= Number(width), "a view's ⋯ can be reached", m)
+}
+await tap(menu.getByRole('menuitem', { name: '+ Add view' })); await wait(300); await onScreen('New view')
+await closeMenu()
+await openMenu(); await onScreen('⋯')
+await tap(menu.getByRole('button', { name: 'Group' })); await wait(300); await onScreen('Group')
+await tap(menu.getByLabel('Back')); await wait(200); await tap(menu.getByRole('menuitem', { name: /Layout/ })); await wait(300); await onScreen('Layout')
+await closeMenu()
+
 // ---- a board, made from + Add view
 await clearNotices(); await tap(block.locator('.database-view-name')); await wait(300)
 await tap(menu.getByRole('menuitem', { name: '+ Add view' })); await wait(200)
@@ -233,7 +250,7 @@ if (!wide) {
   // A board's property deleted: all its rows in one column, and it asks; Undo brings the columns back.
   await openMenu(); await tap(menu.getByRole('menuitem', { name: /Properties/ })); await tap(menu.getByRole('button', { name: /^Status/ })); await wait(200)
   await tap(menu.getByRole('menuitem', { name: 'Delete property' })); await wait(1000); await closeMenu()
-  check(await page.getByText('Choose what makes the columns').count() === 1 && await page.locator('.database-column').count() === 1, 'its property deleted, one column and a question')
+  check(await page.locator('.database-empty').getByRole('button', { name: 'Group by' }).count() === 1 && await page.locator('.database-column').count() === 1, 'its property deleted, one column and a Group by link')
   check(await page.locator('.database-card').count() === 25 && (await page.locator('.database-more').count()) === 1, 'no row vanishes: the capped column offers the rest')
   await shot('no-group')
   await tap(page.getByRole('button', { name: 'Undo' }).first()); await wait(1000)

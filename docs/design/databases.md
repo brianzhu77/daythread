@@ -559,7 +559,7 @@ doesn't show.
 - **A failed save** stays shown in its new column, with "Not saved" on the card and the usual "1 change not saved · Retry · Undo".
 - **A filter that would hide it:** "Moved to Done · hidden by this view's filter · Undo", or for a new row, §7.4's notice.
 - **Keys at 1280:** arrows move between cards and columns, Shift-arrows move the card, Enter opens, Esc gives the block back, ⌘Z undoes, and cut, paste and copy stay out of the page.
-- **Its property deleted, or changed to a type that can't make columns:** all its rows in one column, with "Choose what makes the columns · Group by". Undo or changing the type back brings the columns back.
+- **Its property deleted, or changed to a type that can't make columns:** all its rows in one column, with a "Group by" link above it. Undo or changing the type back brings the columns back.
 
 ### 7.4 A new row in a filtered or grouped view
 

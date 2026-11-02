@@ -54,7 +54,8 @@ export function DatabaseMenuHost() {
       const r = anchor.getBoundingClientRect()
       // Under its button, moved up only as far as it takes to stay on screen: a table low on the page would leave it cut off.
       const top = Math.max(8, Math.min(r.bottom + 4, window.innerHeight - (ref.current?.offsetHeight ?? 0) - 8))
-      const next = open.panel === 'views' ? { top, left: Math.max(8, r.left) } : { top, right: Math.max(8, window.innerWidth - r.right) }
+      // Moved left as far as it takes too, for the same reason: "Table ⌄" sits near the page's right edge.
+      const next = open.panel === 'views' ? { top, left: Math.max(8, Math.min(r.left, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) } : { top, right: Math.max(8, window.innerWidth - r.right) }
       setAt(a => (a && a.top === next.top && a.left === next.left && a.right === next.right ? a : next))
       frame = requestAnimationFrame(place)
     }
