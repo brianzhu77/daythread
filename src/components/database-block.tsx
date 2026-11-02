@@ -214,9 +214,11 @@ interface CellDraft { databaseId: string; rowId: string; columnId: string; value
 const draftPrefix = 'daythread:cell-draft:'
 const draftKey = (rowId: string, columnId: string) => `${draftPrefix}${rowId}:${columnId}`
 /** This tab, to tell its own open editor's draft from another live tab's. */
-const thisTab = crypto.randomUUID()
+let thisTabId: string | null = null
+// On first use: Cloudflare Workers refuse random values in global scope, and this module loads on the server too.
+const thisTab = () => (thisTabId ??= crypto.randomUUID())
 function keepDraft(d: Omit<CellDraft, 'tab' | 'seen'>) {
-  try { localStorage.setItem(draftKey(d.rowId, d.columnId), JSON.stringify({ ...d, tab: thisTab, seen: Date.now() })) } catch { /* storage full or off: the hide save still runs */ }
+  try { localStorage.setItem(draftKey(d.rowId, d.columnId), JSON.stringify({ ...d, tab: thisTab(), seen: Date.now() })) } catch { /* storage full or off: the hide save still runs */ }
 }
 function dropDraft(rowId: string, columnId: string, value?: string) {
   try {
@@ -250,8 +252,8 @@ function useRecoverDrafts(commit: ReturnType<typeof useCommitCell>) {
       const ws = latest()
       if (!ws) return
       for (const d of keptDrafts()) {
-        if (d.tab === thisTab && openCell?.rowId === d.rowId && openCell.columnId === d.columnId) continue
-        if (d.tab !== thisTab && Date.now() - d.seen < liveDraftMs) continue
+        if (d.tab === thisTab() && openCell?.rowId === d.rowId && openCell.columnId === d.columnId) continue
+        if (d.tab !== thisTab() && Date.now() - d.seen < liveDraftMs) continue
         const db = ws.pages.find(p => p.id === d.databaseId), row = ws.pages.find(p => p.id === d.rowId)
         if (!isDatabase(db) || !row || row.trashedAt || db.trashedAt || (d.columnId !== titleId && !propertyOf(db.database, d.columnId))) { dropDraft(d.rowId, d.columnId); continue }
         const raw = d.value === '' ? undefined : d.value
