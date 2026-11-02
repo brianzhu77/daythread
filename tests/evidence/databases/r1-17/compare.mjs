@@ -4,7 +4,7 @@ import { execSync } from 'node:child_process'
 import { writeFileSync, mkdirSync } from 'node:fs'
 const [mainUrl, prUrl, mainStore, prStore, outDir] = process.argv.slice(2)
 if (!outDir) { console.error('Usage: node compare.mjs <main-url> <this-url> <main-store> <this-store> <out-dir>'); process.exit(2) }
-// WebKit draws the 64th page opened in one context blank, on either build (order swapped: it hits main), so keep each run under that.
+// WebKit draws the 64th page opened in one browser run blank, on either build (order swapped: it hits main), so the last path needs a check of its own.
 mkdirSync(outDir, { recursive: true })
 const ws = s => JSON.parse(execSync(`sqlite3 ${s} "select data from workspace"`, { maxBuffer: 1 << 28 }).toString())
 const before = ws(prStore)
