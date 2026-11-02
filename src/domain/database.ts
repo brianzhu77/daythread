@@ -35,15 +35,25 @@ export type Within = "thisWeek" | "past7" | "next7";
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 export interface Condition { by: string; op: FilterOp; value?: Json }
 export interface Sort { by: string; direction: "asc" | "desc" }
+export type GroupDateBy = "day" | "week" | "month";
+export const viewLayouts = ["table", "board"] as const;
+export type ViewLayout = (typeof viewLayouts)[number];
 export interface View {
   id: string;
   name: string;
-  layout: "table";
+  layout: ViewLayout;
   /** Shown properties, in order, with widths; one not listed is hidden. The title column is always shown first and is not listed. */
   columns: { id: string; width?: number }[];
   sort: Sort[];
   /** All must hold. */
   filter: Condition[];
+  /** Table: its groups. Board: what makes its columns. Ignored while its property is deleted or can't group (design §13). */
+  groupBy?: string;
+  /** A date's groups; a month when absent. */
+  groupDateBy?: GroupDateBy;
+  hideEmptyGroups?: boolean;
+  /** Group keys listed at the end as "Hidden: Done (12)". */
+  hiddenGroups?: string[];
 }
 export interface Database {
   /** The `database` block that is its place in its parent page; null: shown as a full page. */
@@ -59,7 +69,7 @@ export type CellValue = string | number | string[] | DateValue | boolean | null;
 /** The column id of a row's title, in views, sorts, filters and `set-values`. */
 export const titleId = "title";
 export const databaseBlockType = "database";
-export const limits = { properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 200 } as const;
+export const limits = { properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 200, hiddenGroups: 200 } as const;
 
 export const isDatabase = (p: Page | undefined | null): p is Page & { database: Database } => Boolean(p?.database);
 /** A row: a page whose parent is a database. */
@@ -392,7 +402,7 @@ export function viewColumns(db: Database, view: View): { property: Property; wid
  * A new row in a filtered view (design §7.4): the values that keep it in sight where one value fits a condition, and
  * whether the row will be shown at all ("Added · hidden by this view's filter · Show" when not).
  */
-export function newRowValues(db: Database, view: View, context: ViewContext): { title: string; values: RawValues; visible: boolean } {
+export function newRowValues(db: Database, view: View, context: ViewContext, groupKey?: string): { title: string; values: RawValues; visible: boolean } {
   let title = "";
   const values: RawValues = {};
   for (const c of view.filter) {
@@ -411,8 +421,120 @@ export function newRowValues(db: Database, view: View, context: ViewContext): { 
     if (value === undefined) continue;
     if (property.id === titleId) title = value as string; else values[property.id] = value;
   }
+  // A row added under a group starts with that group's value, even where the filter wants another (then it's hidden, and the notice says so).
+  const grouped = groupKey === undefined ? null : viewGroupBy(db, view);
+  if (grouped) {
+    const value = groupKey === noGroupKey ? undefined : storedValue(grouped, groupValue(grouped, groupKey!, undefined, undefined, context.today, view.groupDateBy));
+    if (value === undefined) delete values[grouped.id]; else values[grouped.id] = value;
+  }
   const probe = { id: "", type: "document", date: null, title, document: "[]", values } as Page;
   return { title, values, visible: rowMatches(db, probe, view.filter, context) };
+}
+
+// ---------------------------------------------------------------- views: groups (design §7.2, §7.3)
+
+/** The group of rows with no value. */
+export const noGroupKey = "none";
+const canGroup = (type: PropertyType): boolean => type !== "text";
+const canMakeColumns = (type: PropertyType): boolean => type === "select" || type === "status" || type === "checkbox";
+/** What a view of this layout can group by: a board's columns need a value a card can be dragged to (design §7.2). */
+export function groupableProperties(db: Database, layout: ViewLayout): Property[] {
+  return db.properties.filter((p) => (layout === "board" ? canMakeColumns(p.type) : canGroup(p.type)));
+}
+/** The property a view groups by now; null when it was deleted or its type can't group any more. */
+export function viewGroupBy(db: Database, view: View): Property | null {
+  const property = view.groupBy ? db.properties.find((p) => p.id === view.groupBy) : undefined;
+  return property && (view.layout === "board" ? canMakeColumns(property.type) : canGroup(property.type)) ? property : null;
+}
+const statusOrder: StatusGroup[] = ["todo", "active", "done"];
+/** Options in the order groups show them: a status's by To do, In progress, Done, as its editor lists them. */
+export function groupOptions(property: Property): Option[] {
+  const options = property.options ?? [];
+  return property.type === "status" ? statusOrder.flatMap((g) => options.filter((o) => (o.group ?? "todo") === g)) : options;
+}
+const startOfWeek = (day: LocalDate): LocalDate => addDays(day, -((new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7));
+function dateGroupKey(start: string, by: GroupDateBy): string {
+  const day = start.slice(0, 10);
+  return by === "day" ? day : by === "week" ? startOfWeek(day) : day.slice(0, 7);
+}
+const dayLabel = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const monthLabel = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+function dateGroupName(key: string, by: GroupDateBy): string {
+  if (by === "month") return monthLabel.format(new Date(`${key}-01T12:00:00Z`));
+  const label = dayLabel.format(new Date(`${key}T12:00:00Z`));
+  return by === "week" ? `Week of ${label}` : label;
+}
+/** The keys of the groups a value belongs to: several for a multi-select, the no-value group when empty. */
+function groupKeys(property: Property, value: CellValue, by: GroupDateBy): string[] {
+  if (property.type === "checkbox") return [value === true ? "checked" : "unchecked"];
+  if (isEmptyValue(value)) return [noGroupKey];
+  if (property.type === "multiSelect") return value as string[];
+  if (property.type === "date") return [dateGroupKey((value as DateValue).start, by)];
+  return [String(value)];
+}
+export interface ViewGroup { key: string; name: string; rows: Page[] }
+export interface ViewGroups {
+  property: Property;
+  shown: ViewGroup[];
+  /** Hidden by him, listed at the end with their counts. */
+  hidden: ViewGroup[];
+}
+/**
+ * A view's rows in its groups, each keeping the order they came in. Options always have a group, so a board keeps a
+ * column to drag to; other values only where a row has them. No value comes last. `rawFor` reads a row's value, so a
+ * change on its way shows in its new group at once.
+ */
+export function viewGroups(db: Database, view: View, rows: readonly Page[], rawFor: (row: Page, columnId: string) => unknown = rawOf): ViewGroups | null {
+  const property = viewGroupBy(db, view);
+  if (!property) return null;
+  const by = view.groupDateBy ?? "month";
+  const found = new Map<string, Page[]>();
+  for (const row of rows) for (const key of groupKeys(property, readValue(property, rawFor(row, property.id)), by)) {
+    const list = found.get(key);
+    if (list) list.push(row); else found.set(key, [row]);
+  }
+  const group = (key: string, name: string): ViewGroup => ({ key, name, rows: found.get(key) ?? [] });
+  const groups: ViewGroup[] = [];
+  if (property.type === "checkbox") groups.push(group("unchecked", "Unchecked"), group("checked", "Checked"));
+  else if (hasOptions(property.type)) {
+    groups.push(...groupOptions(property).map((o) => group(o.id, o.name)));
+    // A status always has a value (design §6.1), so it has no group for none.
+    if (property.type !== "status") groups.push(group(noGroupKey, "No value"));
+  } else {
+    const keys = [...found.keys()].filter((k) => k !== noGroupKey);
+    if (property.type === "number") keys.sort((a, b) => Number(a) - Number(b)); else keys.sort(collator.compare);
+    groups.push(...keys.map((k) => group(k, property.type === "date" ? dateGroupName(k, by) : k)));
+    if (found.has(noGroupKey)) groups.push(group(noGroupKey, "No value"));
+  }
+  const hidden = new Set(view.hiddenGroups ?? []);
+  const keep = (g: ViewGroup) => !view.hideEmptyGroups || g.rows.length > 0;
+  return { property, shown: groups.filter((g) => !hidden.has(g.key) && keep(g)), hidden: groups.filter((g) => hidden.has(g.key) && keep(g)) };
+}
+/**
+ * What a row stores once it's in this group, given what it holds now. A multi-select swaps the group it left for this
+ * one and keeps its others. A date keeps its time and its length, moved to a day in the group: `today` if it's in that
+ * group, else the group's first day.
+ */
+export function groupValue(property: Property, key: string, raw: unknown, fromKey: string | undefined, today: LocalDate, by: GroupDateBy = "month"): Json | undefined {
+  if (key === noGroupKey) return undefined;
+  switch (property.type) {
+    case "checkbox": return key === "checked" ? true : undefined;
+    case "number": return Number(key);
+    case "multiSelect": {
+      const had = readValue(property, raw);
+      const kept = Array.isArray(had) ? (had as string[]).filter((id) => id !== fromKey && id !== key) : [];
+      return [...kept, key];
+    }
+    case "date": {
+      const day = dateGroupKey(today, by) === key ? today : by === "month" ? `${key}-01` : key;
+      const had = readValue(property, raw) as DateValue | null;
+      if (!had) return { start: day };
+      const shift = Math.round((Date.parse(`${day}T12:00:00Z`) - Date.parse(`${had.start.slice(0, 10)}T12:00:00Z`)) / 86_400_000);
+      const moved = (text: string) => `${addDays(text.slice(0, 10), shift)}${text.slice(10)}`;
+      return { start: moved(had.start), ...(had.end ? { end: moved(had.end) } : {}) };
+    }
+    default: return key;
+  }
 }
 
 // ---------------------------------------------------------------- commands' inputs
@@ -426,7 +548,7 @@ export type DatabaseChange =
   | { kind: "removeProperty"; propertyId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[] }
+  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[] }
   | { kind: "removeView"; viewId: string }
   | { kind: "moveView"; viewId: string; beforeId: string | null };
 /** One row's edit: values by column id (`title` for the title), null clears; `expected`: those columns as the edit saw them. */
@@ -505,9 +627,31 @@ function cleanFilter(db: Database, input: unknown, before: Condition[]): Conditi
     return { by: c.by, op: c.op, value: structuredClone(c.value) as Json };
   });
 }
+function cleanLayout(input: unknown): ViewLayout {
+  if (!(viewLayouts as readonly unknown[]).includes(input)) throw new DatabaseError("Unknown view type");
+  return input as ViewLayout;
+}
+const dateBys = new Set<unknown>(["day", "week", "month"]);
+type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups">;
+/** A view's group fields, checked. A new `groupBy` must name a live property that can group; one it already holds may be deleted since, and is kept unread, so Undo or changing the type back reads it again. */
+function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before?: string): GroupFields {
+  const out: GroupFields = {};
+  if (input.groupBy !== undefined) {
+    if (input.groupBy !== before && !groupableProperties(db, layout).some((p) => p.id === input.groupBy)) throw new DatabaseError("Can't group by that");
+    out.groupBy = input.groupBy;
+  }
+  if (input.groupDateBy !== undefined) { if (!dateBys.has(input.groupDateBy)) throw new DatabaseError("Invalid view"); out.groupDateBy = input.groupDateBy; }
+  if (input.hideEmptyGroups) out.hideEmptyGroups = true;
+  if (input.hiddenGroups !== undefined) {
+    if (!Array.isArray(input.hiddenGroups) || input.hiddenGroups.length > limits.hiddenGroups || input.hiddenGroups.some((k) => typeof k !== "string" || k.length > 200)) throw new DatabaseError("Invalid view");
+    if (input.hiddenGroups.length) out.hiddenGroups = [...new Set(input.hiddenGroups)];
+  }
+  return out;
+}
 function cleanView(db: Database, input: View): View {
-  if (!input || input.layout !== "table") throw new DatabaseError("Unknown view type");
-  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout: "table", columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []) };
+  if (!input) throw new DatabaseError("Unknown view type");
+  const layout = cleanLayout(input.layout);
+  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...cleanGroup(db, input, layout, input.groupBy && !viewGroupBy(db, { ...input, layout }) ? input.groupBy : undefined) };
 }
 function move<T extends { id: string }>(list: T[], id: string, beforeId: string | null): T[] {
   const item = list.find((x) => x.id === id);
@@ -570,12 +714,22 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     }
     case "updateView": {
       const old = view(change.viewId);
+      const { groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, ...rest } = old;
+      const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
+      const group = cleanGroup(db, {
+        groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
+        groupDateBy: change.groupDateBy ?? old.groupDateBy,
+        hideEmptyGroups: change.hideEmptyGroups ?? old.hideEmptyGroups,
+        hiddenGroups: change.hiddenGroups ?? old.hiddenGroups,
+      }, layout, old.groupBy);
       const next: View = {
-        ...old,
+        ...rest,
+        layout,
         ...(change.name !== undefined ? { name: cleanName(change.name, "A view") } : {}),
         ...(change.columns !== undefined ? { columns: cleanColumns(db, change.columns) } : {}),
         ...(change.sort !== undefined ? { sort: cleanSort(db, change.sort, old.sort) } : {}),
         ...(change.filter !== undefined ? { filter: cleanFilter(db, change.filter, old.filter) } : {}),
+        ...group,
       };
       db.views[db.views.indexOf(old)] = next;
       return "View saved";

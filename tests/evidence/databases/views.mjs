@@ -16,7 +16,7 @@ const block = page.locator('.database-block').first(), menu = page.locator('.dat
 const titles = () => block.locator('.database-title-cell').allInnerTexts()
 await page.goto(`${base}/pages?page=books`); await page.waitForTimeout(2500)
 await block.locator('.database-view-name').click()
-await menu.getByRole('menuitem', { name: '+ Add view' }).click(); await page.waitForTimeout(800)
+await menu.getByRole('menuitem', { name: '+ Add view' }).click(); await menu.getByRole('menuitem', { name: 'Table' }).click(); await page.waitForTimeout(800)
 await page.keyboard.press('Meta+A'); await page.keyboard.type('Owned'); await page.keyboard.press('Enter'); await page.waitForTimeout(1000)
 await page.keyboard.press('Escape')
 out.viewName = (await block.locator('.database-view-name').innerText()).trim()
