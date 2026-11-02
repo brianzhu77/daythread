@@ -54,8 +54,17 @@ export function holdKeyboard(): void {
     const text = proxy.value
     remove()
     const target = document.activeElement as HTMLElement | null
-    if (text && target && (target.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement))
-      document.execCommand('insertText', false, text)
+    if (!text || !target || !(target.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return
+    document.execCommand('insertText', false, text)
+    // iOS settles its own caret after the focus change and put it back at the start (native run), so what he typed
+    // next went before these letters. Put the caret after them again once that has settled.
+    const toEnd = () => {
+      if (document.activeElement !== target) return
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) { target.setSelectionRange(target.value.length, target.value.length); return }
+      const range = document.createRange(); range.selectNodeContents(target); range.collapse(false)
+      const selection = window.getSelection(); selection?.removeAllRanges(); selection?.addRange(range)
+    }
+    toEnd(); requestAnimationFrame(toEnd); setTimeout(toEnd, 150)
   }
   proxy.addEventListener('blur', () => setTimeout(handOver, 0), { once: true })
   proxy.focus({ preventScroll: true })
