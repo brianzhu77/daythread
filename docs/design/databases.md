@@ -715,8 +715,9 @@ The estimates are Roadbuster's (`database-fit.md` §7) unless marked as mine.
 
 - **On a copy of his real data, at 390 and 1280**, with the built app:
   - every state in §13 that the release includes;
-  - the alignment gate at 0 fail / 0 missing, plus the database block's own columns: the title on the text column,
-    and `+ New` on the Name column.
+  - the alignment gate at 0 fail / 0 missing, plus the database block's own columns: the title on the headings'
+    edge (it's styled as a section heading, so on a day page it sits left of the bullets' text), the view chevron
+    centred on its word, and `+ New` on Name's text. `check-alignment.mjs` measures all three.
 - **On a native Simulator, in the Home Screen app:**
   - every phone sheet;
   - the keyboard comes up only in sheets with a text field (§4.2);
