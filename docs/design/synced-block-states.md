@@ -128,7 +128,7 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
 - **The block's edges hold.** The earlier experiment showed lines spilling out and being pulled in, so:
   - Backspace at the start of its first line does nothing to the block, and doesn't pull that line out.
   - Backspace at the start of the line below it, or Delete at the end of the line above, puts the caret at the block's edge and
-    moves nothing in. Only a line of his own stays his.
+    moves nothing in.
   - Enter on an empty last line leaves the block, with a new line below it.
 - **Empty:** if he deletes every line inside, one empty line stays inside the outline, with the placeholder "Empty
   synced block". Removing the block itself is §6.
