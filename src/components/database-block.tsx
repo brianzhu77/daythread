@@ -4,7 +4,7 @@
 // commit is one `set-values` with its per-cell check (model §5.2).
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
-import { useLayoutEffect, useMemo, useState, useSyncExternalStore, type SyntheticEvent } from 'react'
+import { useLayoutEffect, useMemo, useState, useSyncExternalStore, type SyntheticEvent, type UIEvent } from 'react'
 import { cellValue, databaseRows, isDatabase, newRowValues, propertyOf, rawOf, sameRaw, titleId, viewColumns, viewRows, type CellValue, type Database, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
@@ -72,6 +72,9 @@ function useOpenCell(): OpenCell | null {
 const cellKey = (c: OpenCell) => `${c.blockId}|${c.rowId}|${c.columnId}`
 /** Operations already resent once after "Saved elsewhere" (model §5.2: once, never in a loop). */
 const resent = new Set<string>()
+
+/** What a block's table keeps across BlockNote's redraws (by block id, for this tab): where it was scrolled, rows shown. */
+const blockPlaces = new Map<string, { scrollLeft: number; limit: number }>()
 
 /** One cell's commit: sent with what the cell held, resent once after "Saved elsewhere" if that cell is unchanged. */
 function useCommitCell() {
@@ -149,7 +152,12 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap }: { works
   const context = useMemo(() => ({ today, pageDate }), [today, pageDate])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
   const columns = viewColumns(db.database, view)
-  const [limit, setLimit] = useState(cap)
+  const place = blockPlaces.get(blockId)
+  const [limit, setLimitState] = useState(place?.limit ?? cap)
+  const setLimit = (next: number) => { setLimitState(next); blockPlaces.set(blockId, { scrollLeft: blockPlaces.get(blockId)?.scrollLeft ?? 0, limit: next }) }
+  // Sideways scroll comes back after a redraw, so an edit never sends him back to Name (Jazz 8985f9e7).
+  const scroller = (el: HTMLDivElement | null) => { const left = blockPlaces.get(blockId)?.scrollLeft; if (el && left && el.scrollLeft !== left) el.scrollLeft = left }
+  const onScroll = (e: UIEvent<HTMLDivElement>) => blockPlaces.set(blockId, { limit, scrollLeft: e.currentTarget.scrollLeft })
   const open = (rowId: string, columnId: string) => setOpenCell({ blockId, databaseId: db.id, rowId, columnId })
   const key = (rowId: string, columnId: string) => cellKey({ blockId, databaseId: db.id, rowId, columnId })
 
@@ -174,7 +182,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap }: { works
         onBlur={e => rename(e.currentTarget.value.trim())} onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) e.currentTarget.blur() }} />
       <span className="database-view-name">{view.name}</span>
     </div>
-    <div className="database-scroll">
+    <div className="database-scroll" ref={scroller} onScroll={onScroll}>
       <table className="database-table">
         <thead>
           <tr>
@@ -208,7 +216,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap }: { works
       </table>
     </div>
     {rows.length === 0 && view.filter.length > 0 && <p className="database-empty">No rows match this view</p>}
-    {rows.length > limit && <button type="button" className="database-more" onClick={() => setLimit(l => l + 25)}>Show 25 more</button>}
+    {rows.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
     <button type="button" className="database-new" onClick={addRow}>+ New</button>
   </div>
 }
