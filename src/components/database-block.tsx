@@ -5,19 +5,20 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent, type SyntheticEvent, type UIEvent } from 'react'
-import { cellValue, databaseRows, isDatabase, isEmptyValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, viewColumns, viewRows, type CellValue, type Database, type Json, type Property, type View } from '../domain/database.ts'
+import { cellValue, databaseRows, isDatabase, isEmptyValue, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, viewColumns, viewRows, type CellValue, type Database, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
 import { ChevronDownIcon } from './icons'
-import { PropertyCell, PropertyCheckbox, PropertyEditor } from './property-editors'
+import { PropertyCell, PropertyCheckbox, PropertyEditor, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
-import { DatabaseMenuButton, openDatabaseMenu } from './database-menu'
+import { DatabaseMenuButton, DatabaseViewsButton, openDatabaseMenu } from './database-menu'
 
 const newId = (): string => crypto.randomUUID()
 /** Rows drawn before "Show 25 more" (design §13): inline, and on the full page. */
 export const rowCaps = { inline: 25, page: 100 } as const
 const titleProperty: Property = { id: titleId, name: 'Name', type: 'text' }
+const returnKey = "daythread.database-return"
 
 /** Keys, input and pointer presses inside the block never reach the page editor (design §10). */
 const isolate = { onKeyDown: stop, onKeyUp: stop, onKeyPress: stop, onBeforeInput: stop, onInput: stop, onPaste: stop, onCut: stop, onCopy: stop, onCompositionStart: stop, onCompositionUpdate: stop, onCompositionEnd: stop, onMouseDown: noTouchFocus, onPointerDown: rememberPointer, onDrop: stop, onDragOver: stop }
@@ -36,6 +37,15 @@ function noTouchFocus(e: React.MouseEvent) {
 
 /** The view a block shows on this device: a local preference per block, never a save (Lead 7b3b9664). */
 function viewKey(blockId: string) { return `daythread.database-view.${blockId}` }
+const viewListeners = new Set<() => void>()
+let viewVersion = 0
+/** Picks the view a block shows on this device: a local preference, never a save or an Undo (Lead 7b3b9664). */
+export function setShownView(blockId: string, viewId: string) {
+  try { localStorage.setItem(viewKey(blockId), viewId) } catch { /* private mode: this tab only */ }
+  viewVersion++
+  for (const l of viewListeners) l()
+}
+function useShownViews() { return useSyncExternalStore(l => { viewListeners.add(l); return () => viewListeners.delete(l) }, () => viewVersion, () => 0) }
 export function shownView(db: Database, blockId: string): View {
   let id: string | null = null
   try { id = localStorage.getItem(viewKey(blockId)) } catch { /* private mode */ }
@@ -124,35 +134,68 @@ const resent = new Set<string>()
 const blockPlaces = new Map<string, { scrollLeft: number; limit: number }>()
 
 /** One cell's commit: sent with what the cell held, resent once after "Saved elsewhere" if that cell is unchanged. */
+/** Cell values on their way to the server, or whose save failed (offline): shown in the cell until saved or undone. */
+interface PendingCell { databaseId: string; raw: Json | undefined; failed: boolean; retry: () => void; discard: () => void }
+const pendingCells = new Map<string, PendingCell>()
+const pendingCellListeners = new Set<() => void>()
+let pendingCellVersion = 0
+const pendingKey = (rowId: string, columnId: string) => `${rowId}|${columnId}`
+function setPendingCell(key: string, cell: PendingCell | null) {
+  if (cell) pendingCells.set(key, cell); else pendingCells.delete(key)
+  pendingCellVersion++
+  for (const l of pendingCellListeners) l()
+}
+function usePendingCells() {
+  return useSyncExternalStore(l => { pendingCellListeners.add(l); return () => pendingCellListeners.delete(l) }, () => pendingCellVersion, () => 0)
+}
+
+/**
+ * One cell's commit: sent with what the cell held, resent once after "Saved elsewhere" if that cell is unchanged, else
+ * the changed-elsewhere notice. While it's on its way, and after a save that failed (offline), the cell shows his value
+ * (design §13: "Never a silent revert") and the table says "1 change not saved · Retry · Undo".
+ */
 function useCommitCell() {
-  const { run, refresh } = useWorkspace()
+  const { run, refresh, latest } = useWorkspace()
   const commit = (db: Page & { database: Database }, row: Page, columnId: string, raw: Json | undefined, notice?: string, onSaved?: () => void) => {
     const expected = (rawOf(row, columnId) ?? null) as Json
     const values = { [columnId]: raw ?? null } as Record<string, Json>
     const property = propertyOf(db.database, columnId) ?? titleProperty
-    const send = (operationId = newId()) => run(
+    const key = pendingKey(row.id, columnId)
+    let resentOnce = false, refused = false
+    const pending = (failed: boolean): PendingCell => ({
+      databaseId: db.id, raw, failed,
+      retry: () => { const now = latest()?.pages.find(p => p.id === row.id); setPendingCell(key, null); if (now && !now.trashedAt) commit(db, { ...now, ...(columnId === titleId ? { title: String(expected ?? '') } : { values: { ...now.values, [columnId]: expected } }) } as Page, columnId, raw, notice, onSaved) },
+      discard: () => { setPendingCell(key, null); onSaved?.() },
+    })
+    const send = () => run(
       { type: 'set-values', pageId: row.id, values, expected: { [columnId]: expected }, at: new Date().toISOString() },
-      notice ? r => ({ text: notice, undoOperationId: r.operationId }) : null, operationId,
-      { inlineRefusal: /Saved elsewhere|Changed elsewhere/, onRefused: () => void again(operationId) })
-    const again = async (operationId: string) => {
+      notice ? r => ({ text: notice, undoOperationId: r.operationId }) : null, newId(),
+      { inlineRefusal: /Saved elsewhere|Changed elsewhere/, onRefused: () => { refused = true; void again() }, quiet: true })
+    const settle = (r: unknown) => {
+      if (r) { setPendingCell(key, null); onSaved?.(); return }
+      if (!refused) setPendingCell(key, pending(true))
+    }
+    const again = async () => {
+      setPendingCell(key, null)
       const fresh = await refresh()
       const now = fresh.pages.find(p => p.id === row.id)
-      // A row deleted meanwhile: his value goes quietly (Bumblebee 3c5198d5).
-      // A kept copy is done with once its value is saved, its row is gone, or he's been asked (the notice below); a save
-      // that only failed (offline) keeps it for the next start.
+      // A row deleted meanwhile: his value goes quietly (Bumblebee 3c5198d5). A kept copy is done with once its value
+      // is saved, its row is gone, or he's been asked (the notice below); a save that only failed keeps it.
       if (!now || now.trashedAt) { onSaved?.(); return }
-      if (sameRaw(rawOf(now, columnId), expected) && !resent.has(operationId)) { resent.add(operationId); void send().then(r => { if (r) onSaved?.() }); return }
+      if (sameRaw(rawOf(now, columnId), expected) && !resentOnce) { resentOnce = true; refused = false; setPendingCell(key, pending(false)); void send().then(settle); return }
       onSaved?.()
       // One wording everywhere (Lead 0b05067c, design §13).
       const mine = typeof raw === 'string' ? `“${raw.length > 40 ? `${raw.slice(0, 40)}…` : raw}”` : raw === undefined ? 'empty' : String(raw)
-      const key: string = toast(`${property.name} in ${displayPageTitle(now)} changed elsewhere · yours was ${mine}`, {
-        timeout: 10_000, actionProps: { children: 'Use mine', onPress: () => { toast.close(key); commit(db, now, columnId, raw) } },
+      const toastKey: string = toast(`${property.name} in ${displayPageTitle(now)} changed elsewhere · yours was ${mine}`, {
+        timeout: 10_000, actionProps: { children: 'Use mine', onPress: () => { toast.close(toastKey); commit(db, now, columnId, raw) } },
       })
     }
-    void send().then(r => { if (r) onSaved?.() })
+    setPendingCell(key, pending(false))
+    void send().then(settle)
   }
   return commit
 }
+
 
 // ---------------------------------------------------------------- kept drafts of text cells (R1-15)
 // An open Text or URL editor keeps what he types on this device, one entry per cell, so a phone app killed before its
@@ -269,6 +312,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
   const navigate = useNavigate()
   const commit = useCommitCell()
   const today = todayIso()
+  useShownViews()
   const view = shownView(db.database, blockId)
   const context = useMemo(() => ({ today, pageDate }), [today, pageDate])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
@@ -280,6 +324,19 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
   const scroller = (el: HTMLDivElement | null) => { const left = blockPlaces.get(blockId)?.scrollLeft; if (el && left && el.scrollLeft !== left) el.scrollLeft = left }
   const onScroll = (e: UIEvent<HTMLDivElement>) => blockPlaces.set(blockId, { limit, scrollLeft: e.currentTarget.scrollLeft })
   const open = (rowId: string, columnId: string) => setOpenCell({ blockId, databaseId: db.id, rowId, columnId })
+  const wide = useWide()
+  // Opening a row remembers it, so Back tints it for a second where he left it (design §5).
+  const openRow = (rowId: string, focus?: 'title') => { try { sessionStorage.setItem(returnKey, rowId) } catch { /* private mode */ } void navigate({ to: '/pages', search: { page: rowId, ...(focus ? { focus } : {}) } }) }
+  const [returned, setReturned] = useState<string | null>(null)
+  useEffect(() => {
+    let id: string | null = null
+    try { id = sessionStorage.getItem(returnKey) } catch { /* private mode */ }
+    if (!id || !rows.some(r => r.id === id)) return
+    sessionStorage.removeItem(returnKey)
+    setReturned(id)
+    const t = setTimeout(() => setReturned(null), 1000)
+    return () => clearTimeout(t)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const key = (rowId: string, columnId: string) => cellKey({ blockId, databaseId: db.id, rowId, columnId })
 
   const addRow = () => {
@@ -287,8 +344,13 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
     const pageId = newId()
     void run({ type: 'add-row', databaseId: db.id, pageId, title: prefill.title, values: prefill.values, at: new Date().toISOString() },
       r => prefill.visible ? null : { text: "Added · hidden by this view's filter", extra: { label: 'Show', run: () => void navigate({ to: '/pages', search: { page: r.entityId ?? pageId } }) } })
-      // A new row opens its Name to be typed (design §3.1), once it's drawn.
-      .then(r => { if (r && prefill.visible) requestAnimationFrame(() => open(pageId, titleId)) })
+      // A new row opens its Name to be typed (design §3.1), once it's drawn; on the phone it opens as its page, with the
+      // caret in its title (R1-7: nothing is edited in the table itself there).
+      .then(r => {
+        if (!r) return
+        if (!wide) { openRow(pageId, 'title'); return }
+        if (prefill.visible) requestAnimationFrame(() => open(pageId, titleId))
+      })
   }
   const addProperty = () => {
     const name = uniqueName(db.database)
@@ -297,6 +359,8 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
   const rename = (title: string) => { if (title !== db.title) void run({ type: 'rename-page', pageId: db.id, title }) }
 
   const shown = rows.slice(0, limit)
+  usePendingCells()
+  const failedHere = [...pendingCells.values()].filter(p => p.failed && p.databaseId === db.id)
   /**
    * Keys in the table at 1280 (design §10): arrows move the cell cursor, Tab/Shift-Tab along a row, Enter opens the
    * cell (a button's own Enter), Delete clears it, Esc gives the block back to the page selected whole, and ⌘Z undoes
@@ -332,13 +396,13 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
     }
   }
   return <div className="database-table-wrap" onKeyDown={onKeyDown}>
-    {!showTitle && <div className="database-title-row is-page"><span className="database-view-name">{view.name}<ChevronDownIcon /></span><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
+    {!showTitle && <div className="database-title-row is-page"><DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} /><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
     {showTitle && <div className="database-title-row">
       <input className="database-title" data-database={db.id} aria-label="Database name" placeholder="Untitled database" defaultValue={db.title} key={db.title}
         onBlur={e => rename(e.currentTarget.value.trim())}
         // Enter in a new database's title goes on to its first row's Name (design §3.1).
         onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.currentTarget.blur(); if (!databaseRows(workspace, db.id).length) addRow() } }} />
-      <span className="database-view-name">{view.name}<ChevronDownIcon /></span>
+      <DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} />
       <DatabaseMenuButton blockId={blockId} databaseId={db.id} />
     </div>}
     {(view.filter.length > 0 || view.sort.length > 0) && <RulesLine db={db.database} view={view} blockId={blockId} databaseId={db.id} onChange={change => void run({ type: 'change-database', pageId: db.id, change: { kind: 'updateView', viewId: view.id, ...change } })} />}
@@ -352,18 +416,20 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
           </tr>
         </thead>
         <tbody>
-          {shown.map(row => <tr key={row.id} className="database-row">
+          {shown.map(row => <tr key={row.id} className={`database-row${returned === row.id ? ' is-returned' : ''}`}>
             <td className="database-td is-title"><div className="database-title-inner">
               {/* A row opens as a page, from Name, at both widths (design §5). */}
-              <button type="button" className="database-title-cell" data-cell={key(row.id, titleId)} data-nav={`${shown.indexOf(row)}:0`} onClick={() => void navigate({ to: '/pages', search: { page: row.id } })}>
+              <button type="button" className="database-title-cell" data-cell={key(row.id, titleId)} data-nav={`${shown.indexOf(row)}:0`} onClick={() => openRow(row.id)}>
                 <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
               </button>
-              <button type="button" className="database-open" onClick={() => void navigate({ to: '/pages', search: { page: row.id } })}>Open</button>
+              <button type="button" className="database-open" onClick={() => openRow(row.id)}>Open</button>
             </div></td>
             {columns.map(({ property }, col) => {
-              const value = cellValue(db.database, row, property.id)
+              const pending = pendingCells.get(pendingKey(row.id, property.id))
+              // His value stays shown while it saves and after a failed save, never a silent revert (design §13).
+              const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
               const navId = `${shown.indexOf(row)}:${col + 1}`
-              return <td key={property.id} className={`database-td is-${property.type}`}>
+              return <td key={property.id} className={`database-td is-${property.type}${pending?.failed ? ' is-unsaved' : pending ? ' is-saving' : ''}`}>
                 {property.type === 'checkbox'
                   ? <span data-nav={navId} tabIndex={0} className="database-check-cell" onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); commit(db, row, property.id, value === true ? undefined : true) } }}>
                       <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
@@ -379,6 +445,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
       </table>
     </div>
     {rows.length === 0 && view.filter.length > 0 && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => void run({ type: 'change-database', pageId: db.id, change: { kind: 'updateView', viewId: view.id, filter: [] } })}>Clear filter</button></p>}
+    {failedHere.length > 0 && <p className="database-unsaved" role="status">{failedHere.length === 1 ? '1 change' : `${failedHere.length} changes`} not saved · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.retry())}>Retry</button> · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.discard())}>Undo</button></p>}
     {rows.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
     <button type="button" className="database-new" onClick={addRow}>+ New</button>
   </div>
@@ -415,14 +482,17 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
   const properties = db.database.properties
   const empty = properties.filter(p => isEmptyValue(cellValue(db.database, row, p.id)) && p.type !== 'checkbox' && p.type !== 'status')
   const fold = !unfolded && empty.length > 4
+  usePendingCells()
+  const failedHere = [...pendingCells.values()].filter(p => p.failed && p.databaseId === db.id)
   const shown = fold ? properties.filter(p => !empty.includes(p)) : properties
   const addProperty = () => void run({ type: 'change-database', pageId: db.id, change: { kind: 'addProperty', property: { id: newId(), name: uniqueName(db.database), type: 'text' } } })
   void workspace
   return <div className="row-properties" aria-label="Properties">
     {shown.map(property => {
-      const value = cellValue(db.database, row, property.id)
+      const pending = pendingCells.get(pendingKey(row.id, property.id))
+      const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
       const key = cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: property.id })
-      return <div key={property.id} className="row-property">
+      return <div key={property.id} className={`row-property${pending?.failed ? ' is-unsaved' : ''}`}>
         <span className="row-property-name" data-type={property.type}>{property.name}</span>
         {property.type === 'checkbox'
           ? <span className="row-property-value"><PropertyCheckbox checked={value === true} label={property.name} onToggle={next => commit(db, row, property.id, next ? true : undefined)} /></span>
@@ -432,6 +502,7 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
       </div>
     })}
     {fold && <button type="button" className="row-property-more" onClick={() => setUnfolded(true)}>{empty.length} empty properties ›</button>}
+    {failedHere.length > 0 && <p className="database-unsaved" role="status">{failedHere.length === 1 ? '1 change' : `${failedHere.length} changes`} not saved · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.retry())}>Retry</button> · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.discard())}>Undo</button></p>}
     <button type="button" className="row-property-add" onClick={addProperty}>+ Add property</button>
   </div>
 }
