@@ -439,6 +439,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           : moving ? c : { ...c, props: { ...c.props, refId: crypto.randomUUID() } })
         const fresh = (node: EditorNode): EditorNode => {
           const id = crypto.randomUUID()
+          // A database block (R1, Jazz §6.3.12): a cut moves the database here (this save makes the block its home); a
+          // copy pastes a page card to it, never a second database. Linked views come with R2.
+          if (node.type === 'database') {
+            const pageId = String(node.props?.pageId ?? '')
+            if (moving) { databaseFlags.current.adopt.set(pageId, id); return { ...node, id } }
+            return { id, type: 'pageLink', props: { pageId }, children: [] }
+          }
           return { ...node, id, content: freshContent(node), ...(node.type === 'task' ? { props: moving && latestWorkspace.current.tasks.some(t => t.id === node.props?.taskId) ? node.props : { taskId: `editor-task:${id}`, role: 'reference', planDate: '' } } : {}), ...(node.children ? { children: node.children.map(fresh) } : {}) }
         }
         insert(payload.blocks.map(fresh))
@@ -1802,6 +1809,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       try { localStorage.setItem(`daythread:cut:${token}`, JSON.stringify(blocks)) } catch { /* same-tab move remains available */ }
       // Tasks typed in the editor keep their `editor-task:` id as their real id, so check the workspace, not the prefix.
       for (const n of deepNodes(blocks)) if (n.type === 'task' && latestWorkspace.current.tasks.some(t => t.id === n.props?.taskId)) cutTasks.current.add(String(n.props!.taskId))
+      // A database whose home block is cut becomes a full page here until the paste adopts it (model §3, 6 then 7); this
+      // save goes at once, so a paste on another page lands after it (Lead fdcc7b9f).
+      const homes = deepNodes(blocks).filter(n => n.type === 'database' && latestWorkspace.current.pages.some(p => p.id === n.props?.pageId && p.database?.homeBlockId === n.id && p.parentId === page.id))
+      for (const n of homes) databaseFlags.current.detach.add(String(n.props!.pageId))
+      if (homes.length) setTimeout(() => { clearTimeout(timer.current); void flushRef.current() }, 0)
       editor.transact(tr => { closeHistory(tr); if (chosen) editor.removeBlocks(chosen.map(n => n.id)); else tr.deleteSelection() })
       selected.current = []; setSelectionLabel('')
     }
