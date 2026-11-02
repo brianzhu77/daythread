@@ -1,5 +1,6 @@
 # Synced block: states
 
+- **Being revised:** where this differs from `synced-blocks.md` (Bumblebee, 2026-11-02), that doc wins; its §9 lists the changes.
 - Author: Jazz (Design) · 2026-10-21 · status: **design states for review**. Base main df05165 (B21 on the checklist).
 - Inputs:
   - Brian `7b89f7c9`: he copies between pages, sometimes plainly and sometimes as a synced block, and accepts
