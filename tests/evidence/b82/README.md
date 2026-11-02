@@ -18,7 +18,7 @@ Run from the repo root on a disposable store, with an Appium session of your own
 
 ## Result (main 20844995 → this branch), y of the tapped line
 
-Toolbar top 440, clock's strip ends at 62. 5 runs per line on a filled day, each run gave the same number.
+Toolbar top 440, clock's strip ends at 62. This branch: 5 runs per line on a filled day, each gave the same number. Main: one run per line.
 
 | Line, y before the tap | Main | This branch | App's moves |
 | --- | --- | --- | --- |
@@ -44,4 +44,4 @@ Video, frame by frame: on main the page jumps at once; here it rises in one moti
 ## Limits
 
 - The wait (120 ms of no movement) is based on the Simulator's timing. A real iPhone hasn't been measured.
-- On an empty day a lower line's move is now the app's alone, and iOS's own scroll is gone. With the keyboard up the page is taller than before, by what's under the keyboard.
+- With the keyboard up, a short page is taller than before. The extra space sits under the keyboard and goes when the keyboard does.
