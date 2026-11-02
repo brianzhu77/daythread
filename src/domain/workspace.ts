@@ -641,7 +641,14 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     case "restore-batch": {
       const ids = new Set(state.pages.filter((x) => isTrashed(x) && x.trashId === action.trashId).map((x) => x.id));
       if (!ids.size) throw new DomainError("Nothing left to restore");
+      const batch = new Set(ids);
+      // Rows whose database is in the trash bring it back too (design §12), never land at the top level on their own.
+      const databases = new Set<Page>();
+      for (const id of ids) { const db = databaseOfRow(state, state.pages.find((x) => x.id === id)!); if (db && isTrashed(db) && !ids.has(db.id)) databases.add(db); }
+      for (const db of databases) for (const id of restoreSetOf(state, db)) ids.add(id);
       const { pages, toTopLevel } = restorePages(state, ids);
+      const batchTop = pages.find((x) => batch.has(x.id) && (!x.parentId || !batch.has(x.parentId)))!;
+      if (databases.size) return { message: `Restored with ${[...databases][0]!.title.trim() || "Untitled"}`, entityId: batchTop.id };
       const top = pages.find((x) => !x.parentId || !ids.has(x.parentId))!;
       return { message: toTopLevel.includes(top) ? "Restored to Pages" : "Restored", entityId: top.id };
     }

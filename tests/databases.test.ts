@@ -274,6 +274,12 @@ test('Trash: a row restored while its database is in the trash brings the databa
   const r = h.run({ type: 'restore-page', pageId: 'dune' })
   assert.equal(r.receipt.message, 'Restored with Reading list')
   assert.deepEqual(titles(databaseRows(h.ws, 'list')), ['Dune', 'Emma', 'Ubik'])
+  // The same from the Trash row's Restore (restore-batch) of a row whose database was deleted after it.
+  const rowDel = h.run({ type: 'delete-page', pageId: 'emma', at })
+  h.run({ type: 'delete-page', pageId: 'list', at })
+  assert.equal(h.run({ type: 'restore-batch', trashId: rowDel.receipt.operationId }).receipt.message, 'Restored with Reading list')
+  assert.equal(h.page('emma').parentId, 'list')
+  assert.deepEqual(titles(databaseRows(h.ws, 'list')), ['Dune', 'Emma', 'Ubik'])
   const many = h.run({ type: 'delete-pages', pageIds: ['dune', 'ubik'], at })
   assert.equal(many.receipt.message, '2 rows moved to trash')
   assert.deepEqual(titles(databaseRows(h.ws, 'list')), ['Emma'])

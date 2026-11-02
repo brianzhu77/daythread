@@ -11,6 +11,7 @@ import { RowMenu } from './row-menu'
 import { useTreeDrag, type Drop } from './tree-drag'
 import { useDeletePage } from './trash'
 import { useWorkspace } from './use-day'
+import { databaseOfRow } from '../domain/database'
 
 // pages-delta N-2 / N-5 / N-9 step B, laid out per Jazz docs/design/pages-tree-layout.md (cfc7b92): breadcrumb,
 // Linked from, Subpages, Move to… and the sidebar tree.
@@ -125,7 +126,24 @@ function HiddenCrumbs({ pages, today }: { pages: Page[]; today: LocalDate }) {
 export function PageMenu({ page }: { page: Page }) {
   const [moving, setMoving] = useState(false)
   const deletePage = useDeletePage()
+  const { workspace, run } = useWorkspace()
+  const open = useOpen()
   if (page.type === 'daily') return null
+  // A row (design §5, §12): Copy link, Duplicate row, Delete row; no Move to…, since a row stays in its database.
+  const db = workspace ? databaseOfRow(workspace, page) : null
+  if (db) {
+    const copyLink = () => void navigator.clipboard?.writeText(new URL(pageHref(page), window.location.origin).href)
+    const duplicate = async () => {
+      const pageId = crypto.randomUUID()
+      const r = await run({ type: 'add-row', databaseId: db.id, pageId, title: '', copyOf: page.id, at: new Date().toISOString() }, receipt => ({ text: receipt.message, undoOperationId: receipt.operationId }))
+      if (r) open(pageHref({ ...page, id: pageId }))
+    }
+    const remove = () => {
+      void run({ type: 'delete-page', pageId: page.id, at: new Date().toISOString() }, r => ({ text: 'Row deleted', undoOperationId: r.operationId }))
+      open(pageHref(db))
+    }
+    return <RowMenu label="Row actions" triggerClass="page-more" groups={[{ items: [{ label: 'Copy link', onSelect: copyLink }, { label: 'Duplicate row', onSelect: () => void duplicate() }] }, { items: [{ label: 'Delete row', danger: true, onSelect: remove }] }]} />
+  }
   return (
     <>
       <RowMenu label="Page actions" triggerClass="page-more" groups={[{ items: [{ label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void deletePage(page, page.id) }] }]} />
