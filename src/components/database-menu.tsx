@@ -7,6 +7,7 @@ import { isDatabase, propertyOf, titleId, typeLabels, propertyTypes, type Condit
 import type { Page } from '../domain/types'
 import { blockActions, setShownView, shownView } from './database-block'
 import { ChevronDownIcon } from './icons'
+import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
 type Panel = 'root' | 'filter' | 'sort' | 'properties' | { property: string } | 'new-property' | 'views'
@@ -70,6 +71,16 @@ export function DatabaseMenuHost() {
     document.addEventListener('keydown', esc)
     return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', esc) }
   }, [open])
+  // A phone's sheet sits at the bottom of the screen, so a keyboard left up by the database title or the page's text
+  // hides it completely (Jazz's native run on 930e18b2). Leaving the field also saves it.
+  const wide = useWide()
+  const opened = Boolean(open)
+  useEffect(() => {
+    if (!opened || wide) return
+    const focused = document.activeElement
+    if (focused instanceof HTMLElement) focused.blur()
+    window.getSelection()?.removeAllRanges()
+  }, [opened, wide])
   const db = open ? workspace?.pages.find(p => p.id === open.databaseId) : undefined
   if (!open || !at || !isDatabase(db) || db.trashedAt) return null
   const view = shownView(db.database, open.blockId)
@@ -220,6 +231,7 @@ function RuleValue({ property, condition, onChange }: { property: Property; cond
 function CommitInput({ initial, onCommit, inputMode, placeholder, ariaLabel = 'Value', autoFocus }: { initial: string; onCommit: (v: string) => void; inputMode?: 'decimal'; placeholder?: string; ariaLabel?: string; autoFocus?: boolean }) {
   const [v, setV] = useState(initial)
   const commit = () => { if (v !== initial) onCommit(v) }
+  useSaveOnHide(commit)
   return <input aria-label={ariaLabel} value={v} inputMode={inputMode} placeholder={placeholder} autoFocus={autoFocus} onChange={e => setV(e.target.value)} onBlur={commit}
     onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); commit() } }} />
 }

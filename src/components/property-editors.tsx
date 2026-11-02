@@ -197,7 +197,7 @@ function FieldError({ children }: { children: ReactNode }) {
 }
 
 /** Saves an open in-cell field when the page is hidden (a tab closed, the app sent away), so typing is never lost. */
-function useSaveOnHide(save: () => void) {
+export function useSaveOnHide(save: () => void) {
   const latest = useRef(save)
   latest.current = save
   useEffect(() => {

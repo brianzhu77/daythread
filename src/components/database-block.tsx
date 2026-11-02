@@ -11,7 +11,7 @@ import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
 import { ChevronDownIcon } from './icons'
 import { holdKeyboard } from './keyboard'
-import { PropertyCell, PropertyCheckbox, PropertyEditor, useWide } from './property-editors'
+import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide } from './property-editors'
 import { urlHref } from './property-values'
 import { useWorkspace } from './use-day'
 import { DatabaseMenuButton, DatabaseViewsButton, openDatabaseMenu } from './database-menu'
@@ -429,6 +429,8 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
     })
   }
   const rename = (title: string) => { if (title !== db.title) void run({ type: 'rename-page', pageId: db.id, title }) }
+  const titleInput = useRef<HTMLInputElement>(null)
+  useSaveOnHide(() => { if (titleInput.current && document.activeElement === titleInput.current) rename(titleInput.current.value.trim()) })
 
   const shown = rows.slice(0, limit)
   usePendingCells()
@@ -479,7 +481,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
   return <div className="database-table-wrap" onKeyDown={onKeyDown}>
     {!showTitle && <div className="database-title-row is-page"><DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} /><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
     {showTitle && <div className="database-title-row">
-      <input className="database-title" data-database={db.id} aria-label="Database name" placeholder="Untitled database" defaultValue={db.title} key={db.title}
+      <input ref={titleInput} className="database-title" data-database={db.id} aria-label="Database name" placeholder="Untitled database" defaultValue={db.title} key={db.title}
         onBlur={e => rename(e.currentTarget.value.trim())}
         // Enter in a new database's title goes on to its first row's Name (design §3.1).
         onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.currentTarget.blur(); if (!databaseRows(workspace, db.id).length) addRow() } }} />
