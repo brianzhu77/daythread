@@ -1893,3 +1893,13 @@ button.database-view-name { padding: 0; border: 0; background: none; font: inher
 .database-url-link { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .database-url-edit { flex: none; padding: 0 4px; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; cursor: pointer; opacity: 0; }
 .database-row:hover .database-url-edit, .database-url-edit:focus-visible { opacity: 1; }
+/* Design §12, §7.2 (1280): a row's gutter holds its drag handle and its select box, shown on hover or when picked. */
+.database-row-gutter { display: flex; align-items: center; gap: 2px; padding-left: 2px; opacity: 0; }
+.database-row:hover .database-row-gutter, .database-row.is-picked .database-row-gutter, .database-row-gutter:focus-within { opacity: 1; }
+.database-row-handle { cursor: grab; color: var(--ink-3); font-size: 12px; letter-spacing: -2px; padding: 0 2px; touch-action: none; user-select: none; }
+.database-row.is-dragging { opacity: 0.5; }
+.database-row.is-drop-before > td { box-shadow: inset 0 2px 0 var(--blue); }
+tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue); }
+.database-row.is-picked > td { background: var(--blue-soft); }
+.database-picked-bar { display: flex; align-items: center; gap: 12px; padding: 6px 8px; font-size: var(--text-meta); color: var(--ink-2); position: relative; }
+.database-picked-menu { position: absolute; top: 100%; left: 60px; z-index: 30; min-width: 180px; }

@@ -4,7 +4,7 @@
 // commit is one `set-values` with its per-cell check (model §5.2).
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
-import { useEffect, useLayoutEffect, useMemo, useState, useSyncExternalStore, type KeyboardEvent, type SyntheticEvent, type UIEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
 import { cellValue, databaseRows, isDatabase, isEmptyValue, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, viewColumns, viewRows, type CellValue, type Database, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
@@ -329,6 +329,49 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
   // Opening a row remembers it, so Back tints it for a second where he left it (design §5).
   const openRow = (rowId: string, focus?: 'title') => { try { sessionStorage.setItem(returnKey, rowId) } catch { /* private mode */ } void navigate({ to: '/pages', search: { page: rowId, ...(focus ? { focus } : {}) } }) }
   const [returned, setReturned] = useState<string | null>(null)
+  // Several rows at 1280 (design §12): a box on hover at each row's left, Shift for a range, then the bar.
+  const [picked, setPicked] = useState<string[]>([])
+  const lastPicked = useRef<string | null>(null)
+  const pick = (rowId: string, shift: boolean) => {
+    const ids = shown.map(r => r.id)
+    if (shift && lastPicked.current && ids.includes(lastPicked.current)) {
+      const [a, b] = [ids.indexOf(lastPicked.current), ids.indexOf(rowId)].sort((x, y) => x - y)
+      setPicked(p => [...new Set([...p, ...ids.slice(a!, b! + 1)])])
+    } else setPicked(p => (p.includes(rowId) ? p.filter(x => x !== rowId) : [...p, rowId]))
+    lastPicked.current = rowId
+  }
+  const deletePicked = () => {
+    const ids = picked.filter(id => rows.some(r => r.id === id))
+    setPicked([])
+    if (ids.length) void run({ type: 'delete-pages', pageIds: ids, at: new Date().toISOString() }, r => ({ text: ids.length === 1 ? 'Row deleted' : `${ids.length} rows deleted`, undoOperationId: r.operationId }))
+  }
+  // Rows drag by their ⋮⋮ only while the view isn't sorted (design §7.2); the drop is a move-page among the rows.
+  const [drag, setDrag] = useState<{ rowId: string; before: string | null } | null>(null)
+  const tbody = useRef<HTMLTableSectionElement>(null)
+  const startDrag = (e: ReactPointerEvent, rowId: string) => {
+    if (view.sort.length) return
+    e.preventDefault()
+    const el = e.currentTarget as HTMLElement
+    el.setPointerCapture(e.pointerId)
+    const target = (y: number): string | null => {
+      const trs = [...(tbody.current?.querySelectorAll<HTMLTableRowElement>('tr.database-row') ?? [])]
+      const i = trs.findIndex(tr => { const r = tr.getBoundingClientRect(); return y < r.top + r.height / 2 })
+      return i < 0 ? null : trs[i]!.dataset.row ?? null
+    }
+    setDrag({ rowId, before: target(e.clientY) })
+    const move = (ev: PointerEvent) => setDrag({ rowId, before: target(ev.clientY) })
+    const up = (ev: PointerEvent) => {
+      el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up)
+      setDrag(null)
+      if (ev.type === 'pointercancel') return
+      const before = target(ev.clientY)
+      const ids = shown.map(r => r.id), from = ids.indexOf(rowId)
+      // Dropped where it already is: nothing to send.
+      if (before === rowId || (before === null ? from === ids.length - 1 : ids.indexOf(before) === from + 1)) return
+      void run({ type: 'move-page', pageId: rowId, parentId: db.id, beforeId: before }, r => ({ text: 'Row moved', undoOperationId: r.operationId }))
+    }
+    el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up)
+  }
   useEffect(() => {
     let id: string | null = null
     try { id = sessionStorage.getItem(returnKey) } catch { /* private mode */ }
@@ -424,9 +467,13 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
             <th scope="col" className="database-th is-add"><button type="button" aria-label="Add property" onClick={addProperty}>+</button></th>
           </tr>
         </thead>
-        <tbody>
-          {shown.map(row => <tr key={row.id} className={`database-row${returned === row.id ? ' is-returned' : ''}`}>
+        <tbody ref={tbody} className={drag && drag.before === null ? 'is-drop-end' : undefined}>
+          {shown.map(row => <tr key={row.id} data-row={row.id} className={`database-row${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${drag?.before === row.id && drag.rowId !== row.id ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
             <td className="database-td is-title"><div className="database-title-inner">
+              {wide && <span className="database-row-gutter">
+                {!view.sort.length && <span className="database-row-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id)}>⋮⋮</span>}
+                <input type="checkbox" className="database-row-pick" aria-label={`Select ${displayPageTitle(row)}`} checked={picked.includes(row.id)} onChange={() => undefined} onClick={e => pick(row.id, e.shiftKey)} />
+              </span>}
               {/* A row opens as a page, from Name, at both widths (design §5). */}
               <button type="button" className="database-title-cell" data-cell={key(row.id, titleId)} data-nav={`${shown.indexOf(row)}:0`} onClick={() => openRow(row.id)}>
                 <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
@@ -461,9 +508,47 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
     </div>
     {rows.length === 0 && view.filter.length > 0 && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => void run({ type: 'change-database', pageId: db.id, change: { kind: 'updateView', viewId: view.id, filter: [] } })}>Clear filter</button></p>}
     {failedHere.length > 0 && <p className="database-unsaved" role="status">{failedHere.length === 1 ? '1 change' : `${failedHere.length} changes`} not saved · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.retry())}>Retry</button> · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.discard())}>Undo</button></p>}
+    {picked.length > 0 && <div className="database-picked-bar" role="toolbar" aria-label="Selected rows">
+      <span>{picked.length === 1 ? '1 row' : `${picked.length} rows`}</span>
+      <EditPickedButton db={db} rowIds={picked} />
+      <button type="button" className="app-link is-danger" onClick={deletePicked}>Delete</button>
+      <button type="button" className="app-link" onClick={() => setPicked([])}>Done</button>
+    </div>}
     {rows.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
     <button type="button" className="database-new" onClick={addRow}>+ New</button>
   </div>
+}
+
+/**
+ * "Edit property ▾" on the selected rows' bar (design §12): pick a property, then its editor; the value goes to every
+ * selected row as one change and one Undo (set-values-many), each row checked against what it held.
+ */
+function EditPickedButton({ db, rowIds }: { db: Page & { database: Database }; rowIds: string[] }) {
+  const { workspace, run } = useWorkspace()
+  const [open, setOpen] = useState(false)
+  const [property, setProperty] = useState<Property | null>(null)
+  const anchor = useRef<HTMLButtonElement>(null)
+  const rows = (workspace?.pages ?? []).filter(p => rowIds.includes(p.id) && !p.trashedAt)
+  const apply = (raw: Json | undefined) => {
+    const p = property!
+    setProperty(null)
+    const items = rows.map(r => ({ pageId: r.id, values: { [p.id]: raw ?? null } as Record<string, Json>, expected: { [p.id]: (rawOf(r, p.id) ?? null) as Json } }))
+    if (items.length) void run({ type: 'set-values-many', items, at: new Date().toISOString() }, r => ({ text: `${p.name} set on ${items.length === 1 ? '1 row' : `${items.length} rows`}`, undoOperationId: r.operationId }))
+  }
+  const editable = db.database.properties
+  return <>
+    <button type="button" ref={anchor} className="app-link" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>Edit property ▾</button>
+    {open && <div className="app-menu database-picked-menu" role="menu">
+      {editable.map(p => <button key={p.id} type="button" role="menuitem" onClick={() => { setOpen(false); setProperty(p) }}>{p.name}</button>)}
+    </div>}
+    {property && property.type === 'checkbox' && <span className="database-picked-check">
+      <button type="button" className="app-link" onClick={() => apply(true)}>Check all</button>
+      <button type="button" className="app-link" onClick={() => apply(undefined)}>Uncheck all</button>
+    </span>}
+    {property && property.type !== 'checkbox' && rows[0] && <PropertyEditor property={property} value={null} rowTitle={rows.length === 1 ? displayPageTitle(rows[0]) : `${rows.length} rows`} anchor={anchor.current}
+      onCommit={raw => apply(raw)} onCancel={() => setProperty(null)}
+      onCreateOption={name => createOption(run, db, property, name)} />}
+  </>
 }
 
 /** Puts `text` into the editor that is opening, as typed, replacing what was there (a few frames for it to mount). */
