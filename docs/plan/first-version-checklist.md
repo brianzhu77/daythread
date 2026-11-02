@@ -510,7 +510,7 @@ Row B22 and task #124 (Jazz, `fix/b22-paste-task`); list by Bumblebee, asked by 
 
 ## D4. Databases R3 (tracked, not counted)
 
-Acceptance list by Bumblebee (Lead a56d1d39), from `docs/design/databases.md` §6, §7, §13, §14 and `databases-model.md` §10. No tasks yet. Each piece can ship on its own when ready, and his use can reorder them but not stop or cut them (Brian 57deaed7). **Open** marks what the design doesn't answer yet. Status values as above.
+Acceptance list by Bumblebee (Lead a56d1d39), from `docs/design/databases.md` §6, §7, §13, §14 and `databases-model.md` §10. No tasks yet. Order (Lead 6ef1bf4a): Jazz does the layouts (Calendar, List, Gallery) after B22, answering R3-1 and R3-3 first; Roadbuster does relations and rollups after #264 and B29; Files last. Each piece can ship on its own when ready, and his use can reorder them but not stop or cut them (Brian 57deaed7). **Open** marks what the design doesn't answer yet. Status values as above.
 
 | ID | Check | Status |
 | --- | --- | --- |
@@ -524,7 +524,7 @@ Acceptance list by Bumblebee (Lead a56d1d39), from `docs/design/databases.md` §
 | R3-8 | **Column calculations (added).** Per column at a table's foot: count, sum, percent checked and so on. They agree with what the filter shows, not all rows, and a group has its own. Don't fall under the toolbar at 390. | missing |
 | R3-9 | **Created time, Edited time, ID.** Read-only, in his local time. An edit to a value or the body moves Edited; opening a row doesn't. IDs never repeat, including after a delete or an undone add (`nextId`). A Duplicate gets its own. They can't be set by a filter's `+ New`, so §7.4's notice applies. | missing |
 | R3-10 | **Email and Phone.** As typed, nothing refused; a valid one is a link that opens mail or the dialler, and a pencil edits. A non-link stays plain text. | missing |
-| R3-11 | **Files.** Add, Remove and Open at both widths; photos from the phone. A failed or offline upload says so and keeps the row usable. Size limit stated. A file goes to Trash with its row and comes back; export includes it or names what's left out; another account can never read it. **Open for the Lead:** this is new infrastructure with a running cost, so it needs a choice of store (Cloudflare R2 or Supabase Storage) and sizes before design. Everything else here can go first. | missing |
+| R3-11 | **Files.** Add, Remove and Open at both widths; photos from the phone. A failed or offline upload says so and keeps the row usable. Size limit stated. A file goes to Trash with its row and comes back; export includes it or names what's left out; another account can never read it. **Last in R3 (Lead 6ef1bf4a):** new infrastructure, so the Lead picks the store and sizes with Roadbuster's sizing when R3 reaches it (leaning Cloudflare R2, not priced or tried). | missing |
 | R3-12 | **Row templates.** `+ New ⌄` at both widths; a template sets values and body. It isn't a row: it doesn't show in views, counts, search or To-dos. To-dos in a template make no tasks until a row is made (B70's rule), and each new row's to-dos are its own. A template deleted later leaves its rows alone. | missing |
 | R3-13 | **Sub-groups.** A second layer in a table, list or board. `+ New` starts with both values, and a drag changes both with one Undo. Each layer folds, and caps and Show more still hold (`groupBy` was kept open for this, Jazz d9014e3d). | missing |
 | R3-14 | **Wrap per property.** On the view. Row height follows, Name stays pinned at 390, sideways scroll and keeps-place still hold. | missing |
