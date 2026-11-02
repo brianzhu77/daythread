@@ -358,6 +358,8 @@ function hasDateFacts(task: Task): boolean {
 const touchHandleSize = 44
 /** How long the view has to hold still before the caret's line is moved clear (B82). iOS's scroll lands up to ~35 ms after the keyboard's resize. */
 const caretSettleMs = 120
+/** How much of the line below the caret is kept clear of the toolbar: a line or a heading with its margin. */
+const nextLineShownPx = 72
 // Viewport y of the middle of a block's first line of text. Works for empty blocks and wrapped text alike,
 // since it reads the line box of the inline content rather than the rendered glyphs.
 function firstLineCenter(block: HTMLElement): number {
@@ -1791,7 +1793,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       let nextLine: DOMRect | undefined
       for (let i = rows.indexOf(row as HTMLElement) + 1; i > 0 && i < rows.length && !nextLine?.height; i++) nextLine = rows[i]!.querySelector('.bn-block-content')?.getBoundingClientRect()
       // With the panel open only the caret's line has to show; the panel is up for a moment, the line below can wait.
-      const lowest = panel?.height ? caret.bottom : Math.max(caret.bottom, nextLine?.height ? nextLine.bottom : 0)
+      // Only the top of it: a long paragraph or a table below would otherwise push his line up under the clock.
+      const lowest = panel?.height ? caret.bottom : Math.max(caret.bottom, nextLine?.height ? Math.min(nextLine.bottom, nextLine.top + nextLineShownPx) : 0)
       const overlap = lowest + 8 - (panel?.height ? panel.top : bar.top)
       const clock = document.querySelector('.safe-top')?.getBoundingClientRect().bottom ?? 0
       const room = caret.top - (clock + 8)

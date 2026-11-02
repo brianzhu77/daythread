@@ -11,7 +11,7 @@ def judge(s,moved_ok=True):
     bad=[]
     if s['top']<s['clock']: bad.append('under clock')
     if s['bottom']>s['bar']: bad.append('behind toolbar')
-    if s['next'] and s['next']>s['bar']+1 and s['top']>s['clock']+9: bad.append('next line behind toolbar')
+    if s['next'] and s['next']>s['bar']+1 and s['next']-s['bottom']<=72 and s['top']>s['clock']+9: bad.append('next line behind toolbar')
     if s['n']>1: bad.append(f"{s['n']} moves")
     if not s['inLine']: bad.append('caret elsewhere')
     return bad
