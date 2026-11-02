@@ -1041,7 +1041,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // this page shows it on return ("Recovered unsaved draft", or Load latest after a conflict).
       stash()
       const document = JSON.stringify(editor.document), deletions = [...semanticDeletes.current], cutIds = [...cutTasks.current], flags = databaseFields()
-      trackLeaveSave((async () => {
+      // React's strict check (the dev server only) runs this and mounts again at once: that's no leaving, and a save sent
+      // here would race the recovered draft's own, which then reads as changed elsewhere (B81).
+      queueMicrotask(() => { if (left.current) trackLeaveSave((async () => {
         // A save already on its way finishes first, so this one starts from the page it produced.
         await inflight.current
         if (document !== lastSaved.current) {
@@ -1054,7 +1056,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // Clear the stash only if it's still this draft: he may already be back on the page and typing.
         clearOwn(page.id, document)
         return true
-      })())
+      })()) })
     }
   }, [])
 
