@@ -22,8 +22,19 @@ const titleProperty: Property = { id: titleId, name: 'Name', type: 'text' }
 const returnKey = "daythread.database-return"
 
 /** Keys, input and pointer presses inside the block never reach the page editor (design §10). */
-const isolate = { onKeyDown: stop, onKeyUp: stop, onKeyPress: stop, onBeforeInput: stop, onInput: stop, onPaste: stop, onCut: stop, onCopy: stop, onCompositionStart: stop, onCompositionUpdate: stop, onCompositionEnd: stop, onMouseDown: stop, onPointerDown: stop, onDrop: stop, onDragOver: stop }
+const isolate = { onKeyDown: stop, onKeyUp: stop, onKeyPress: stop, onBeforeInput: stop, onInput: stop, onPaste: stop, onCut: stop, onCopy: stop, onCompositionStart: stop, onCompositionUpdate: stop, onCompositionEnd: stop, onMouseDown: noTouchFocus, onPointerDown: rememberPointer, onDrop: stop, onDragOver: stop }
 function stop(e: SyntheticEvent) { e.stopPropagation() }
+/**
+ * On a phone, a tap on a cell or a button in the block focused the page editor around it: a caret at the page's
+ * start, and the keyboard coming up under the `⋯` sheet (Jazz's native run on 24fbd0c9). A touch's mousedown keeps
+ * focus where it is, except on a field of the block's own (the title). A mouse still focuses, for the cell cursor.
+ */
+let lastPointer = 'mouse'
+function rememberPointer(e: React.PointerEvent) { e.stopPropagation(); lastPointer = e.pointerType }
+function noTouchFocus(e: React.MouseEvent) {
+  e.stopPropagation()
+  if (lastPointer !== 'mouse' && !(e.target as Element).closest('input, textarea, select')) e.preventDefault()
+}
 
 /** The view a block shows on this device: a local preference per block, never a save (Lead 7b3b9664). */
 function viewKey(blockId: string) { return `daythread.database-view.${blockId}` }

@@ -62,7 +62,8 @@ export function DatabaseMenuHost() {
     if (!open) return
     const away = (e: PointerEvent) => {
       const t = e.target as Element
-      if (!ref.current?.contains(t) && !t.closest?.(`[data-database-menu], [data-database-views]`)) setOpenMenu(null)
+      // The scrim closes on its own click, so the tap's click can't land on the page once it's gone.
+      if (!ref.current?.contains(t) && !t.closest?.(`[data-database-menu], [data-database-views], .database-menu-scrim`)) setOpenMenu(null)
     }
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenMenu(null) }
     document.addEventListener('pointerdown', away)
@@ -73,7 +74,11 @@ export function DatabaseMenuHost() {
   if (!open || !at || !isDatabase(db) || db.trashedAt) return null
   const view = shownView(db.database, open.blockId)
   const go = (panel: Panel) => setOpenMenu({ ...open, panel })
-  return <div ref={ref} className="app-menu database-menu" role="dialog" aria-label="Database options" style={{ position: 'fixed', top: at.top, ...(at.left !== undefined ? { left: at.left } : { right: at.right }) }}
+  // The phone's dimmed page behind the sheet (CSS hides it at ≥ 900 px): a tap there only closes the menu, and never
+  // reaches the page under it (Jazz's native run: it put a caret there).
+  return <>
+    <div className="database-menu-scrim" aria-hidden="true" onClick={() => setOpenMenu(null)} />
+    <div ref={ref} className="app-menu database-menu" role="dialog" aria-label="Database options" style={{ position: 'fixed', top: at.top, ...(at.left !== undefined ? { left: at.left } : { right: at.right }) }}
     onKeyDown={e => e.stopPropagation()}>
     {open.panel === 'views' && <ViewsPanel db={db} blockId={open.blockId} />}
     {open.panel === 'root' && <RootPanel db={db} blockId={open.blockId} go={go} />}
@@ -83,6 +88,7 @@ export function DatabaseMenuHost() {
     {open.panel === 'new-property' && <NewPropertyPanel db={db} view={view} go={go} />}
     {typeof open.panel === 'object' && <PropertyPanel db={db} view={view} propertyId={open.panel.property} go={go} />}
   </div>
+  </>
 }
 
 type DatabasePage = Page & { database: Database }
