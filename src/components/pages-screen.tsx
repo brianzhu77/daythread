@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AccountRow } from './account-row'
 import { ContinuousPage } from './continuous-page'
@@ -10,6 +10,8 @@ import { ChevronRightIcon, PageKindIcon, PlusIcon } from './icons'
 import { LinkUrlRow } from './link-url-row'
 import { PagesTrashRow, TrashedPage, TrashScreen } from './trash'
 import { useWorkspace } from './use-day'
+import { DatabasePage, RowProperties } from './database-block'
+import { databaseOfRow, isDatabase } from '../domain/database'
 import { RowMenu } from './row-menu'
 import { flushEditor } from './editor-flush'
 import { dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, templates, templateTarget, topLevelTarget } from '../domain/day-template'
@@ -24,9 +26,39 @@ export function useCreatePage() {
   }
 }
 
+/** A full-page database at the top level (design §3.1: Pages' `+` → Database); resolves to its id, or null. */
+export function useCreateDatabase() {
+  const { run } = useWorkspace()
+  return async () => {
+    const pageId = crypto.randomUUID()
+    const receipt = await run({ type: 'create-database', pageId, homeBlockId: null, title: '' })
+    return receipt ? pageId : null
+  }
+}
+/** Pages' `+` (design §3.1): Page first (Enter takes it), then Database. */
+export function NewPageMenu({ onPage, onDatabase, className = 'round-add' }: { onPage: () => void; onDatabase: () => void; className?: string }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const away = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('pointerdown', away)
+    return () => document.removeEventListener('pointerdown', away)
+  }, [open])
+  const pick = (f: () => void) => { setOpen(false); f() }
+  return <div className="new-page-menu" ref={ref}>
+    <button type="button" className={className} aria-label="New page" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}><PlusIcon /></button>
+    {open && <div className="app-menu new-page-menu-list" role="menu" onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}>
+      <button type="button" role="menuitem" autoFocus onClick={() => pick(onPage)}>Page</button>
+      <button type="button" role="menuitem" onClick={() => pick(onDatabase)}>Database</button>
+    </div>}
+  </div>
+}
+
 export function PagesScreen() {
   const { workspace } = useWorkspace()
   const createPage = useCreatePage()
+  const createDatabase = useCreateDatabase()
   const search = useSearch({ from: '/pages' })
   const navigate = useNavigate()
   const today = useToday()
@@ -37,14 +69,19 @@ export function PagesScreen() {
   if (p && isTemplate(p)) return <TemplateScreen key={p.id} page={p} workspace={workspace} today={today} autoFocusTitle={search.focus === 'title'} onDeleted={() => void navigate({ to: '/pages', search: { view: 'templates' } })} />
   if (search.view === 'templates' && !p) return <TemplatesScreen workspace={workspace} today={today} onOpen={(page, focus) => void navigate({ to: '/pages', search: { page, ...(focus ? { focus } : {}) } })} />
   if (p && isTrashed(p)) return <TrashedPage key={p.id} page={p} workspace={workspace} />
+  // A database's full page is its table, with no body (design §4.3); a row's page shows its properties over its body (§5).
+  const rowOf = p ? databaseOfRow(workspace, p) : null
   if (p) return <div className="doc-screen"><PageHeaderRow page={p} workspace={workspace} />
     <div className="page-head">
       {p.type === 'document' ? <PageTitleField key={p.id} page={p} autoFocus={search.focus === 'title'} /> : <h1 className="large-title">{p.title}</h1>}
-      <LinkUrlRow page={p} />
+      {!isDatabase(p) && <LinkUrlRow page={p} />}
       <LinkedFrom page={p} workspace={workspace} />
     </div>
-    <ContinuousPage page={p} workspace={workspace} />
-    <Subpages page={p} workspace={workspace} /></div>
+    {isDatabase(p) ? <DatabasePage key={p.id} workspace={workspace} db={p} /> : <>
+      {rowOf && <RowProperties key={p.id} workspace={workspace} row={p} db={rowOf} />}
+      <ContinuousPage page={p} workspace={workspace} />
+      <Subpages page={p} workspace={workspace} />
+    </>}</div>
   // Top-level pages, then pages made inside day pages by day (Lead 02cbc559); deeper pages are reached through each
   // page's Subpages list (layout §6).
   const documents = childPages(workspace, null)
@@ -53,7 +90,7 @@ export function PagesScreen() {
     <div className="list-screen">
       <div className="title-row">
         <h1 className="large-title">Pages</h1>
-        <button type="button" className="round-add" aria-label="New page" onClick={async () => { const id = await createPage(); if (id) setSelected(id, 'title') }}><PlusIcon /></button>
+        <NewPageMenu onPage={async () => { const id = await createPage(); if (id) setSelected(id, 'title') }} onDatabase={async () => { const id = await createDatabase(); if (id) setSelected(id, 'title') }} />
       </div>
       {/* Pages lists only pages (Brian 77423ea0); Tags is a navigation destination of its own. */}
       {documents.length === 0 && inDays.length === 0 && <p className="quiet">No pages yet</p>}

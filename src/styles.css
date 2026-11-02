@@ -1690,3 +1690,14 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 @media (hover: none) { .database-open { display: none; } }
 .database-new, .database-more { display: block; padding: 6px 8px; border: 0; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
 .database-empty { margin: 0; padding: 8px; color: var(--ink-3); }
+.database-block.is-page { margin-top: 8px; }
+.row-properties { display: flex; flex-direction: column; margin: 4px 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); font-size: var(--text-ui); }
+.row-property { display: grid; grid-template-columns: minmax(96px, 160px) 1fr; align-items: center; min-height: 36px; }
+@media (max-width: 899px) { .row-property { min-height: 44px; } }
+.row-property-name { color: var(--ink-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.row-property-value { display: flex; align-items: center; justify-content: flex-start; min-height: 32px; padding: 0 6px; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.row-property-value .is-placeholder { color: var(--placeholder); }
+.row-property-more, .row-property-add { align-self: flex-start; min-height: 32px; padding: 0; border: 0; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+.new-page-menu { position: relative; }
+.new-page-menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 160px; }
+.slash-grid-icon { display: inline-grid; place-items: center; width: 18px; }

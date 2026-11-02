@@ -5,7 +5,7 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { useLayoutEffect, useMemo, useState, useSyncExternalStore, type SyntheticEvent, type UIEvent } from 'react'
-import { cellValue, databaseRows, isDatabase, newRowValues, propertyOf, rawOf, sameRaw, titleId, viewColumns, viewRows, type CellValue, type Database, type Json, type Property, type View } from '../domain/database.ts'
+import { cellValue, databaseRows, isDatabase, isEmptyValue, newRowValues, propertyOf, rawOf, sameRaw, titleId, viewColumns, viewRows, type CellValue, type Database, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -164,7 +164,7 @@ function createOption(run: ReturnType<typeof useWorkspace>['run'], db: Page & { 
 }
 
 /** The table view (design §4.1, §4.2): Name first, then the view's shown properties; `+ New` under the rows. */
-export function DatabaseTable({ workspace, db, blockId, pageDate, cap }: { workspace: Workspace; db: Page & { database: Database }; blockId: string; pageDate: string | null; cap: number }) {
+export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle = true }: { workspace: Workspace; db: Page & { database: Database }; blockId: string; pageDate: string | null; cap: number; showTitle?: boolean }) {
   const { run } = useWorkspace()
   const navigate = useNavigate()
   const commit = useCommitCell()
@@ -198,13 +198,13 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap }: { works
 
   const shown = rows.slice(0, limit)
   return <div className="database-table-wrap">
-    <div className="database-title-row">
+    {showTitle && <div className="database-title-row">
       <input className="database-title" data-database={db.id} aria-label="Database name" placeholder="Untitled database" defaultValue={db.title} key={db.title}
         onBlur={e => rename(e.currentTarget.value.trim())}
         // Enter in a new database's title goes on to its first row's Name (design §3.1).
         onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.currentTarget.blur(); if (!databaseRows(workspace, db.id).length) addRow() } }} />
       <span className="database-view-name">{view.name}</span>
-    </div>
+    </div>}
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
       <table className="database-table">
         <thead>
@@ -253,4 +253,40 @@ function defaultWidth(property: Property): number {
 function uniqueName(db: Database): string {
   const taken = new Set(['name', ...db.properties.map(p => p.name.toLocaleLowerCase())])
   for (let n = 1; ; n++) { const name = n === 1 ? 'Property' : `Property ${n}`; if (!taken.has(name.toLocaleLowerCase())) return name }
+}
+
+/** The full page of a database (design §4.3): the page's own title above, the table, no body. */
+export function DatabasePage({ workspace, db }: { workspace: Workspace; db: Page & { database: Database } }) {
+  return <div className="database-block is-page"><DatabaseTable workspace={workspace} db={db} blockId={`page:${db.id}`} pageDate={null} cap={rowCaps.page} showTitle={false} /></div>
+}
+
+/** A row's properties above its body (design §5): one line each; more than 4 empty ones fold into one line. */
+export function RowProperties({ workspace, row, db }: { workspace: Workspace; row: Page; db: Page & { database: Database } }) {
+  const { run } = useWorkspace()
+  const commit = useCommitCell()
+  const [unfolded, setUnfolded] = useState(false)
+  const today = todayIso()
+  const blockId = `row:${row.id}`
+  const properties = db.database.properties
+  const empty = properties.filter(p => isEmptyValue(cellValue(db.database, row, p.id)) && p.type !== 'checkbox' && p.type !== 'status')
+  const fold = !unfolded && empty.length > 4
+  const shown = fold ? properties.filter(p => !empty.includes(p)) : properties
+  const addProperty = () => void run({ type: 'change-database', pageId: db.id, change: { kind: 'addProperty', property: { id: newId(), name: uniqueName(db.database), type: 'text' } } })
+  void workspace
+  return <div className="row-properties" aria-label="Properties">
+    {shown.map(property => {
+      const value = cellValue(db.database, row, property.id)
+      const key = cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: property.id })
+      return <div key={property.id} className="row-property">
+        <span className="row-property-name">{property.name}</span>
+        {property.type === 'checkbox'
+          ? <span className="row-property-value"><PropertyCheckbox checked={value === true} label={property.name} onToggle={next => commit(db, row, property.id, next ? true : undefined)} /></span>
+          : <button type="button" className="row-property-value" data-cell={key} onClick={() => setOpenCell({ blockId, databaseId: db.id, rowId: row.id, columnId: property.id })}>
+              {isEmptyValue(value) ? <span className="is-placeholder">Empty</span> : <PropertyCell property={property} value={value} today={today} />}
+            </button>}
+      </div>
+    })}
+    {fold && <button type="button" className="row-property-more" onClick={() => setUnfolded(true)}>{empty.length} empty properties ›</button>}
+    <button type="button" className="row-property-add" onClick={addProperty}>+ Add property</button>
+  </div>
 }
