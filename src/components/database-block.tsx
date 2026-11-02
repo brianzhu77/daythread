@@ -587,13 +587,27 @@ function EditPickedButton({ db, rowIds }: { db: Page & { database: Database }; r
 }
 
 /** Puts `text` into the editor that is opening, as typed, replacing what was there (a few frames for it to mount). */
-function typeInto(text: string, tries = 10) {
-  const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>('.property-popover input, .property-popover textarea, .property-sheet input, .property-sheet textarea')
-  if (!input) { if (tries > 0) requestAnimationFrame(() => typeInto(text, tries - 1)); return }
-  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value')?.set
-  setter?.call(input, text)
-  input.dispatchEvent(new Event('input', { bubbles: true }))
-  input.setSelectionRange?.(text.length, text.length)
+/** What he's typed on a cell before its editor is up: it all goes in, replacing the value, however fast he types. */
+let typedAhead = ''
+function typeInto(text: string) {
+  const waiting = typedAhead !== ''
+  typedAhead += text
+  if (waiting) return
+  const field = () => document.querySelector<HTMLInputElement | HTMLTextAreaElement>('.property-popover input, .property-popover textarea, .property-sheet input, .property-sheet textarea')
+  const place = (input: HTMLInputElement | HTMLTextAreaElement) => {
+    const typed = typedAhead
+    typedAhead = ''
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value')?.set?.call(input, typed)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    input.setSelectionRange?.(typed.length, typed.length)
+  }
+  const now = field()
+  if (now) { place(now); return }
+  // Placed as soon as the field exists, before the next key can land in it.
+  const observer = new MutationObserver(() => { const input = field(); if (input) { stop(); place(input) } })
+  const giveUp = setTimeout(() => { stop(); typedAhead = '' }, 2000)
+  const stop = () => { observer.disconnect(); clearTimeout(giveUp) }
+  observer.observe(document.body, { childList: true, subtree: true })
 }
 
 /** Column widths until he drags one (stored on the view), design §4.1. Name's width is in CSS: 240, or 150 on the phone. */

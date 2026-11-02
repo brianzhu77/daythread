@@ -1,4 +1,6 @@
 // Lead's review of #61 (R1-19 to R1-25), as checks: each scenario prints what happened and PASS or FAIL.
+// In WebKit, page.route doesn't see these requests, so the scenarios with a delay (doubleTick, doubleEdit, twoToggles, twoOptions,
+// twoFilters, filterValueThenAdd) are evidence in Chromium only; in WebKit they run with no delay. Offline uses setOffline, which cuts both.
 // Usage: node tests/evidence/databases/review-fixes.mjs <base-url> <store-path> <chromium|webkit> [scenario...]  (a throwaway store, reseeded for each scenario)
 import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
@@ -9,7 +11,7 @@ const store = () => JSON.parse(execSync(`sqlite3 ${storePath} "select data from 
 const browser = await pw[engine].launch({ headless: true })
 const seededNotes = (() => { reseed(); return store().pages.find(p => p.id === 'dune').values?.notes ?? null })()
 const wait = ms => new Promise(r => setTimeout(r, ms))
-const state = () => { const ws = store(); const list = ws.pages.find(p => p.id === 'list'); const doc = JSON.parse(ws.pages.find(p => p.id === list.parentId)?.document ?? '[]'); return { home: list.database.homeBlockId, trashed: Boolean(list.trashedAt), parent: list.parentId, rowsLive: ws.pages.filter(p => p.parentId === 'list' && !p.trashedAt).length, types: doc.map(n => n.type).join(',') } }
+const state = () => { const ws = store(); const list = ws.pages.find(p => p.id === 'list'); const doc = JSON.parse(ws.pages.find(p => p.id === 'books')?.document ?? '[]'); return { home: list.database.homeBlockId, trashed: Boolean(list.trashedAt), parent: list.parentId ?? null, rowsLive: ws.pages.filter(p => p.parentId === 'list' && !p.trashedAt).length, types: doc.map(n => n.type).join(',') } }
 async function open(opts = {}) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } })
   if (engine === 'chromium') await context.grantPermissions(['clipboard-read', 'clipboard-write'])
@@ -23,7 +25,6 @@ async function open(opts = {}) {
 const toasts = page => page.locator('[role=alert], [role=status]').allInnerTexts().then(t => [...new Set(t.map(x => x.trim().replace(/\s+/g, ' ')).filter(Boolean))].join(' | ').slice(0, 300))
 const turnIntoPage = async page => { await page.locator('.database-more-button').first().click(); await page.locator('.database-menu').getByRole('menuitem', { name: 'Turn into page' }).click() }
 const selectBlock = async page => { await page.getByText('Before the table').click(); await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.press('ArrowDown'); await page.waitForTimeout(200) }
-const offline = page => page.route('**/_serverFn/**', r => r.request().method() === 'POST' ? r.abort() : r.continue())
 const scenarios = {
   // Turn into inline, then ⌘Z in the page: expected back to a card, database not trashed.
   async inlineUndo() {
@@ -56,10 +57,10 @@ const scenarios = {
   // Turn into page while offline, app closed, reopened online: expected a full page, nothing trashed.
   async offlineTurnReload() {
     const { page, context, errors } = await open()
-    await offline(page)
+    await context.setOffline(true)
     await turnIntoPage(page); await wait(2500)
     const offlineStatus = await page.locator('.editor-save-line').innerText()
-    await page.unroute('**/_serverFn/**')
+    await context.setOffline(false)
     await page.reload(); await wait(5000)
     const r = { offlineStatus, after: state(), toast: await toasts(page), errors }
     await context.close(); return r
@@ -67,9 +68,9 @@ const scenarios = {
   // Cut while offline, app closed, reopened online: expected a full page, nothing trashed.
   async offlineCutReload() {
     const { page, context, errors } = await open()
-    await offline(page)
+    await context.setOffline(true)
     await selectBlock(page); await page.keyboard.press('Meta+x'); await wait(2500)
-    await page.unroute('**/_serverFn/**')
+    await context.setOffline(false)
     await page.reload(); await wait(5000)
     const r = { after: state(), toast: await toasts(page), errors }
     await context.close(); return r
@@ -162,7 +163,7 @@ const scenarios = {
   // The truer offline: the app closes while still offline (no save can leave), reopens, then the network is back.
   async offlineTurnStillOffline() {
     const { page, context, errors } = await open()
-    await offline(page)
+    await page.route('**/_serverFn/**', r => r.request().method() === 'POST' ? r.abort() : r.continue())
     await turnIntoPage(page); await wait(2500)
     await page.reload(); await wait(1500)
     const whileOffline = state()
@@ -222,6 +223,50 @@ const scenarios = {
     const r = { filter: store().pages.find(p => p.id === 'list').database.views[0].filter, errors }
     await context.close(); return r
   },
+  // `/` Database then ⌘Z before the page's own save: expected no stray database.
+  async slashThenFastUndo() {
+    const { page, context, errors } = await open()
+    const before = store().pages.filter(p => p.database).map(p => p.id)
+    await page.getByText('After the table').click(); await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.press('Enter')
+    await page.keyboard.type('/database'); await wait(400); await page.keyboard.press('Enter')
+    await wait(60)
+    await page.locator('.bn-editor').first().focus().catch(() => {})
+    await page.keyboard.press('Meta+z'); await wait(3000)
+    const ws = store()
+    const made = ws.pages.filter(p => p.database && !before.includes(p.id)).map(p => ({ title: p.title, trashed: Boolean(p.trashedAt), parent: p.parentId, home: Boolean(p.database.homeBlockId) }))
+    const doc = JSON.parse(ws.pages.find(p => p.id === 'books').document).map(n => n.type).join(',')
+    const r = { made, doc, subpages: await page.locator('.subpage-row').allInnerTexts(), toast: await toasts(page), errors }
+    await context.close(); return r
+  },
+  // A block left behind by Move to… (a card): deleted, ⌘Z, ⌘⇧Z, ⌘Z. Expected: the database stays where it was moved.
+  async staleBlockHistory() {
+    execSync(`node --input-type=module -e "const {SqliteWorkspaceRepository}=await import('./src/server/sqlite-repository.ts');const r=new SqliteWorkspaceRepository('${storePath}',undefined,{allowMissingLegacy:true});const w=await r.load();await r.execute({operationId:'mv',expectedRevision:w.revision,action:{type:'move-page',pageId:'list',parentId:null,beforeId:null}})"`, { stdio: 'ignore' })
+    const { page, context, errors } = await open()
+    const moved = state()
+    await selectBlock(page); await page.keyboard.press('Backspace'); await wait(1200)
+    const deleted = state()
+    await page.getByText('After the table').click()
+    await page.keyboard.press('Meta+z'); await wait(1200)
+    await page.keyboard.press('Meta+Shift+z'); await wait(1200)
+    await page.keyboard.press('Meta+z'); await wait(2000)
+    const r = { moved, deleted, after: state(), toast: await toasts(page), errors }
+    await context.close(); return r
+  },
+  // Rapid ⌘Z / ⌘⇧Z with no waiting, many rounds (saves overlap): nothing may reach Trash.
+  async undoRedoStorm() {
+    const { page, context, errors } = await open()
+    await turnIntoPage(page); await wait(120)
+    await page.getByText('After the table').click()
+    let bad = 0, rounds = 12
+    for (let i = 0; i < rounds; i++) {
+      await page.keyboard.press('Meta+z'); await wait(i % 3 === 0 ? 700 : 60)
+      await page.keyboard.press('Meta+Shift+z'); await wait(i % 2 === 0 ? 500 : 60)
+      if (state().trashed) bad++
+    }
+    await wait(2500)
+    const r = { rounds, bad, after: state(), toast: await toasts(page), errors }
+    await context.close(); return r
+  },
   // Two filters added within a round trip: both kept.
   async twoFilters() {
     const { page, context, errors } = await open({ delay: 400 })
@@ -234,7 +279,7 @@ const scenarios = {
   },
 }
 const noTrash = s => !s.trashed && s.rowsLive === 3
-const clean = r => !r.errors.length
+const clean = (r, name) => !r.errors.filter(e => !(name.startsWith('offline') && e.includes('_serverFn'))).length // WebKit reports a failed fetch as a page error
 const checks = {
   inlineUndo: r => noTrash(r.afterUndo) && r.afterUndo.home === null && !/moved to Trash/.test(r.toast),
   cutPasteUndo: r => noTrash(r.cut) && noTrash(r.pasted) && r.pasted.home !== null && noTrash(r.undone) && r.undone.home === null && !/moved to Trash/.test(r.toast),
@@ -254,14 +299,20 @@ const checks = {
   slashThenUndo: r => r.made && r.trashed && !/moved to Trash/.test(r.toast),
   cutThenUndo: r => r.cut.home === null && noTrash(r.after) && r.after.home !== null && r.tables === 1,
   twoFilters: r => r.filters === 2,
+  slashThenFastUndo: r => r.made.every(d => d.trashed) && r.subpages.length === 1 && !/moved to Trash/.test(r.toast),
+  staleBlockHistory: r => r.moved.parent === null && r.after.parent === null && r.after.home === null && noTrash(r.after),
+  undoRedoStorm: r => r.bad === 0 && noTrash(r.after),
   filterValueThenAdd: r => r.filter.length === 2 && r.filter[0].value === 'Dune',
 }
 let failed = 0
+// A reload needs the network to load the app, so "still offline" only blocks the saves, which page.route can't do in WebKit.
+const chromiumOnly = ['offlineTurnStillOffline']
 for (const name of names.length ? names : Object.keys(scenarios)) {
+  if (engine !== 'chromium' && chromiumOnly.includes(name)) { console.log('SKIP', name); continue }
   reseed()
   let r
   try { r = await scenarios[name]() } catch (e) { r = { threw: e.message.split('\n')[0], errors: ['threw'] } }
-  const ok = !r.threw && clean(r) && checks[name](r)
+  const ok = !r.threw && clean(r, name) && checks[name](r)
   if (!ok) failed++
   console.log(ok ? 'PASS' : 'FAIL', name, JSON.stringify(r))
 }
