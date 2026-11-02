@@ -106,7 +106,30 @@ interface ShellProps {
   maxWidth?: number
   children: ReactNode
 }
+/**
+ * A phone sheet closing must not leave a caret in the page. The sheet's focus scope gives focus back towards the cell,
+ * which sits inside the page editor, so the editor takes it: a caret at the page's start, and the keyboard stays up
+ * after a Text sheet (native run on dc9b8db7). If he was typing in the page before, the caret goes back there.
+ */
+function useNoCaretAfterSheet(sheet: boolean) {
+  useEffect(() => {
+    if (!sheet) return
+    const editing = Boolean(document.activeElement?.closest?.('[contenteditable=true]'))
+    return () => {
+      if (editing) return
+      const settle = () => {
+        const active = document.activeElement as HTMLElement | null
+        if (!active?.closest?.('[contenteditable=true]')) return
+        active.blur()
+        getSelection()?.removeAllRanges()
+      }
+      requestAnimationFrame(() => { settle(); setTimeout(settle, 60) })
+    }
+  }, [sheet])
+}
+
 function EditorShell({ wide, anchor, property, rowTitle, onDismiss, overCell, maxWidth = 320, children }: ShellProps) {
+  useNoCaretAfterSheet(!wide)
   // Keys stay inside: nothing typed here reaches the page editor's handlers through the React tree (§10). That also
   // keeps Esc from the dismiss listeners on the document, so the shell handles Esc itself. (They still catch an Esc
   // after focus has left, as after an outside click that Too long refused.)
