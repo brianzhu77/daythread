@@ -1764,6 +1764,12 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 }
 
 .database-block.is-page { margin-top: 8px; }
+/* A full-page database is opened to see more columns (design §4.3, Bumblebee bf73592e): at ≥ 900 px its table runs
+   right of the text column, to 24 px from the window's edge and at most 1100 px. Name stays under the title, so the
+   page still reads from the text column. (The column starts (100vw - 260px sidebar - column) / 2 after the sidebar.) */
+@media (min-width: 900px) {
+  .database-block.is-page { width: min(1100px, calc(var(--column) + (100vw - 260px - var(--column)) / 2 - 24px)); max-width: none; }
+}
 .row-properties { display: flex; flex-direction: column; margin: 4px 0 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); font-size: var(--text-ui); }
 .row-property { display: grid; grid-template-columns: minmax(96px, 160px) 1fr; align-items: center; min-height: 36px; }
 @media (max-width: 899px) { .row-property { min-height: 44px; } }
