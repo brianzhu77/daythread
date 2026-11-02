@@ -205,8 +205,9 @@ function TextEditor(p: EditorProps & { kind: 'text' | 'url' }) {
   const long = tooLong(draft)
   const save = (): boolean => {
     if (long) return false
-    // The phone has no ⌘Z, so any change to a Text or URL value gets the Undo notice there (Lead f1e56ab4).
-    const info = !wide && draft !== before ? { notice: changedNotice(p.property.name) } : undefined
+    // The phone has no ⌘Z, so any change to a Text or URL value gets the Undo notice there (Lead f1e56ab4). A value
+    // typed into an empty field (naming a new row) has nothing to lose, so it's quiet.
+    const info = !wide && before !== '' && draft !== before ? { notice: changedNotice(p.property.name) } : undefined
     return finish(p, draft, p.property, info)
   }
   useSaveOnHide(() => { void save() })
