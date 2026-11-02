@@ -209,8 +209,8 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
       <table className="database-table">
         <thead>
           <tr>
-            <th scope="col" className="database-th is-title" style={{ width: titleWidth }}>Name</th>
-            {columns.map(c => <th key={c.property.id} scope="col" className="database-th" style={{ width: c.width ?? defaultWidth(c.property) }}>{c.property.name}</th>)}
+            <th scope="col" className="database-th is-title" data-type="title">Name</th>
+            {columns.map(c => <th key={c.property.id} scope="col" className="database-th" data-type={c.property.type} style={{ width: c.width ?? defaultWidth(c.property) }}>{c.property.name}</th>)}
             <th scope="col" className="database-th is-add"><button type="button" aria-label="Add property" onClick={addProperty}>+</button></th>
           </tr>
         </thead>
@@ -244,10 +244,15 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
   </div>
 }
 
-/** Column widths until he drags one (stored on the view): the title wider, a box or a number narrower. */
-const titleWidth = 220
+/** Column widths until he drags one (stored on the view), design §4.1. Name's width is in CSS: 240, or 150 on the phone. */
 function defaultWidth(property: Property): number {
-  return property.type === 'checkbox' ? 90 : property.type === 'number' ? 110 : 160
+  switch (property.type) {
+    case 'checkbox': return 60
+    case 'number': return 90
+    case 'date': return 110
+    case 'select': case 'multiSelect': case 'status': return 140
+    case 'text': case 'url': return 180
+  }
 }
 /** "Property", "Property 2", …: never a name the database already has (or "Name"). */
 function uniqueName(db: Database): string {
