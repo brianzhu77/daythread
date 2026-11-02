@@ -135,7 +135,9 @@ function measure() {
       if (!title) return
       Object.assign(row, { kind: 'database table', label: (title.value || '(untitled)').slice(0, 24), ...firstLine(title) })
       const view = content.querySelector('.database-view-name'), chevron = view?.querySelector('svg')
-      if (view && chevron && visible(chevron)) {
+      // A linked view shows its view's name with nothing to open, so no chevron to measure.
+      if (view?.classList.contains('is-static')) row.viewChevron = 'none'
+      else if (view && chevron && visible(chevron)) {
         const range = document.createRange(); range.selectNodeContents(view.firstChild ?? view)
         const word = [...range.getClientRects()].find(r => r.width > 0)
         if (word) row.viewChevron = cy(chevron.getBoundingClientRect()) - cy(word)
@@ -316,7 +318,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
       results.push({ at, check: `${r.kind} title not clipped: "${r.label}"`, ok: !r.clipped, detail: r.clipped ?? 'wraps' })
     // The database block's own columns (design §15).
     for (const r of rows.filter(r => r.kind === 'database table')) {
-      results.push(r.viewChevron == null
+      if (r.viewChevron !== 'none') results.push(r.viewChevron == null
         ? { at, check: `database view chevron: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
         : { at, check: `database view chevron centred on its word: "${r.label}"`, ok: Math.abs(r.viewChevron) <= TOLERANCE, detail: `${r.viewChevron >= 0 ? '+' : ''}${fmt(r.viewChevron)}px` })
       results.push(r.newOnName == null
