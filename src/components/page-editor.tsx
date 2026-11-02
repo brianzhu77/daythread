@@ -791,6 +791,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       }
       clearTimeout(retryTimer.current); retries.current = 0; offlineFailure.current = false; resentForRevision.current = false
       announceSave(page.id)
+      // A home block deleted with this save took its database to Trash (model §3): say so, with Undo, which is the
+      // editor's own ⌘Z — the block back in the page restores the database and its rows.
+      if (/ moved to Trash$/.test(result.message) && result.entityId && latest()?.pages.find(p => p.id === result.entityId)?.database) {
+        const key: string = toast(result.message, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); editor.undo(); editor.focus() } } })
+      }
       pendingSave.current=null; lastSaved.current = document
       debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
       const savedPage = preview.pages.find(p => p.id === page.id)!
@@ -1837,6 +1842,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // save goes at once, so a paste on another page lands after it (Lead fdcc7b9f).
       const homes = deepNodes(blocks).filter(n => n.type === 'database' && latestWorkspace.current.pages.some(p => p.id === n.props?.pageId && p.database?.homeBlockId === n.id && p.parentId === page.id))
       for (const n of homes) databaseFlags.current.detach.add(String(n.props!.pageId))
+      // R1-5: he sees where it went, and how to put it back.
+      for (const n of homes) { const db = latestWorkspace.current.pages.find(p => p.id === n.props?.pageId); if (db) toast(`${displayPageTitle(db)} is now its own page · paste to put it back`, { timeout: 8000 }) }
       if (homes.length) setTimeout(() => { clearTimeout(timer.current); void flushRef.current() }, 0)
       editor.transact(tr => { closeHistory(tr); if (chosen) editor.removeBlocks(chosen.map(n => n.id)); else tr.deleteSelection() })
       selected.current = []; setSelectionLabel('')

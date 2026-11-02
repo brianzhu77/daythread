@@ -441,7 +441,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         settleAfterRowsLeft(state, p, t, { single: rows.some((r) => single.has(r.id)), wasPlan: rows.some((r) => rowRole(r) === "plan"), today: action.today, plannedBefore: plannedBefore.get(id) ?? null });
       }
       const trashed = placeDatabases(state, p, before, all, action, operationId);
-      if (trashed) return { message: `${trashed.title.trim() || "Untitled"} moved to trash${trashed.rows ? ` · ${trashed.rows} row${trashed.rows === 1 ? "" : "s"}` : ""}`, entityId: trashed.id };
+      // The wording he sees (checklist R1-15): "Reading list and its 3 rows moved to Trash".
+      if (trashed) return { message: `${trashed.title.trim() || "Untitled"}${trashed.rows ? ` and its ${trashed.rows} row${trashed.rows === 1 ? "" : "s"}` : ""} moved to Trash`, entityId: trashed.id };
       return { message: "Page saved" };
     }
     case "ensure-day": {

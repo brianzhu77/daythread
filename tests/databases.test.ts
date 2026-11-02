@@ -207,7 +207,7 @@ test('rows: in page order, inserted before a row, never subpages or Move targets
 test('deleting the home block trashes the database and its rows as one batch; Undo and Restore bring them back', () => {
   const h = reading()
   const r = h.save('books', d => d.filter(n => n.id !== 'home'), { at })
-  assert.equal(r.receipt.message, 'Reading list moved to trash · 3 rows')
+  assert.equal(r.receipt.message, 'Reading list and its 3 rows moved to Trash')
   for (const id of ['list', 'dune', 'emma', 'ubik']) assert.equal(h.page(id).trashId, r.receipt.operationId)
   h.run({ type: 'undo', targetOperationId: r.receipt.operationId })
   assert.equal(h.page('list').trashedAt, undefined)

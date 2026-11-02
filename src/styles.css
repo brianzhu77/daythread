@@ -1885,3 +1885,5 @@ button.database-view-name { padding: 0; border: 0; background: none; font: inher
 .database-view-pick { flex: 1; min-height: 34px; padding: 0 4px; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
 .database-view-more { border: 0; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
 .database-view-actions { display: flex; flex-direction: column; width: 100%; padding-left: 12px; }
+/* Design §5: back from a row, it's tinted for a second where he left it. */
+.database-row.is-returned > td { background: var(--blue-soft); transition: background 0.3s; }

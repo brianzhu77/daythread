@@ -10,7 +10,7 @@ import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
 import { ChevronDownIcon } from './icons'
-import { PropertyCell, PropertyCheckbox, PropertyEditor } from './property-editors'
+import { PropertyCell, PropertyCheckbox, PropertyEditor, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 import { DatabaseMenuButton, DatabaseViewsButton, openDatabaseMenu } from './database-menu'
 
@@ -18,6 +18,7 @@ const newId = (): string => crypto.randomUUID()
 /** Rows drawn before "Show 25 more" (design §13): inline, and on the full page. */
 export const rowCaps = { inline: 25, page: 100 } as const
 const titleProperty: Property = { id: titleId, name: 'Name', type: 'text' }
+const returnKey = "daythread.database-return"
 
 /** Keys, input and pointer presses inside the block never reach the page editor (design §10). */
 const isolate = { onKeyDown: stop, onKeyUp: stop, onKeyPress: stop, onBeforeInput: stop, onInput: stop, onPaste: stop, onCut: stop, onCopy: stop, onCompositionStart: stop, onCompositionUpdate: stop, onCompositionEnd: stop, onMouseDown: stop, onPointerDown: stop, onDrop: stop, onDragOver: stop }
@@ -312,6 +313,19 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
   const scroller = (el: HTMLDivElement | null) => { const left = blockPlaces.get(blockId)?.scrollLeft; if (el && left && el.scrollLeft !== left) el.scrollLeft = left }
   const onScroll = (e: UIEvent<HTMLDivElement>) => blockPlaces.set(blockId, { limit, scrollLeft: e.currentTarget.scrollLeft })
   const open = (rowId: string, columnId: string) => setOpenCell({ blockId, databaseId: db.id, rowId, columnId })
+  const wide = useWide()
+  // Opening a row remembers it, so Back tints it for a second where he left it (design §5).
+  const openRow = (rowId: string, focus?: 'title') => { try { sessionStorage.setItem(returnKey, rowId) } catch { /* private mode */ } void navigate({ to: '/pages', search: { page: rowId, ...(focus ? { focus } : {}) } }) }
+  const [returned, setReturned] = useState<string | null>(null)
+  useEffect(() => {
+    let id: string | null = null
+    try { id = sessionStorage.getItem(returnKey) } catch { /* private mode */ }
+    if (!id || !rows.some(r => r.id === id)) return
+    sessionStorage.removeItem(returnKey)
+    setReturned(id)
+    const t = setTimeout(() => setReturned(null), 1000)
+    return () => clearTimeout(t)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const key = (rowId: string, columnId: string) => cellKey({ blockId, databaseId: db.id, rowId, columnId })
 
   const addRow = () => {
@@ -319,8 +333,13 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
     const pageId = newId()
     void run({ type: 'add-row', databaseId: db.id, pageId, title: prefill.title, values: prefill.values, at: new Date().toISOString() },
       r => prefill.visible ? null : { text: "Added · hidden by this view's filter", extra: { label: 'Show', run: () => void navigate({ to: '/pages', search: { page: r.entityId ?? pageId } }) } })
-      // A new row opens its Name to be typed (design §3.1), once it's drawn.
-      .then(r => { if (r && prefill.visible) requestAnimationFrame(() => open(pageId, titleId)) })
+      // A new row opens its Name to be typed (design §3.1), once it's drawn; on the phone it opens as its page, with the
+      // caret in its title (R1-7: nothing is edited in the table itself there).
+      .then(r => {
+        if (!r) return
+        if (!wide) { openRow(pageId, 'title'); return }
+        if (prefill.visible) requestAnimationFrame(() => open(pageId, titleId))
+      })
   }
   const addProperty = () => {
     const name = uniqueName(db.database)
@@ -386,13 +405,13 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
           </tr>
         </thead>
         <tbody>
-          {shown.map(row => <tr key={row.id} className="database-row">
+          {shown.map(row => <tr key={row.id} className={`database-row${returned === row.id ? ' is-returned' : ''}`}>
             <td className="database-td is-title"><div className="database-title-inner">
               {/* A row opens as a page, from Name, at both widths (design §5). */}
-              <button type="button" className="database-title-cell" data-cell={key(row.id, titleId)} data-nav={`${shown.indexOf(row)}:0`} onClick={() => void navigate({ to: '/pages', search: { page: row.id } })}>
+              <button type="button" className="database-title-cell" data-cell={key(row.id, titleId)} data-nav={`${shown.indexOf(row)}:0`} onClick={() => openRow(row.id)}>
                 <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
               </button>
-              <button type="button" className="database-open" onClick={() => void navigate({ to: '/pages', search: { page: row.id } })}>Open</button>
+              <button type="button" className="database-open" onClick={() => openRow(row.id)}>Open</button>
             </div></td>
             {columns.map(({ property }, col) => {
               const pending = pendingCells.get(pendingKey(row.id, property.id))
