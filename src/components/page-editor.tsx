@@ -550,13 +550,18 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     return databaseFieldsNow()
   }
-  // Inline databases made here by `/` Database: ⌘Z right after one, still empty, trashes it with no notice (nothing to keep).
+  // Inline databases made here by `/` Database: ⌘Z right after one, still empty, trashes it with no notice (nothing to
+  // keep). Sent by itself, after its create if that's still on its way: the page may never have saved the block.
   const madeHere = useRef(new Set<string>())
-  const quietTrash = useRef(new Set<string>())
   /** A database block removed by an undo or redo step never deletes the database: it stays as its own page (Lead's review, 1, 2). */
   const blockLeftByHistory = (blockId: string, pageId: string) => {
-    const ws = latestWorkspace.current
-    if (madeHere.current.has(pageId) && !ws.pages.find(p => p.id === pageId)?.title.trim() && !ws.pages.some(p => p.parentId === pageId && !p.trashedAt)) { quietTrash.current.add(pageId); return }
+    const ws = latest()
+    if (madeHere.current.has(pageId) && !ws?.pages.find(p => p.id === pageId)?.title.trim() && !ws?.pages.some(p => p.parentId === pageId && !p.trashedAt)) {
+      void runRef.current(now => (now.pages.some(p => p.id === pageId && !p.trashedAt) ? { type: 'delete-page', pageId, at: new Date().toISOString() } : null))
+      return
+    }
+    // Only its home: a block Move to… left behind is a card, and its database has nothing to do with this page any more.
+    if (!ws || (ws.pages.find(p => p.id === pageId)?.database?.homeBlockId !== blockId && databaseFlags.current.adopt.get(pageId) !== blockId)) return
     if (databaseFlags.current.adopt.get(pageId) === blockId) databaseFlags.current.adopt.delete(pageId)
     databaseFlags.current.detach.add(pageId)
     formerHomes.current.set(blockId, pageId)
@@ -817,7 +822,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // A home block deleted with this save took its database to Trash (model §3): say so, with Undo, which puts the block
       // back at its place by id (the block back in the page restores the database and its rows). Not the editor's ⌘Z: he
       // may have typed since, or left the page (Lead's review, 4).
-      if (/ moved to Trash$/.test(result.message) && result.entityId && latest()?.pages.find(p => p.id === result.entityId)?.database && !quietTrash.current.delete(result.entityId)) {
+      if (/ moved to Trash$/.test(result.message) && result.entityId && latest()?.pages.find(p => p.id === result.entityId)?.database) {
         const places = removedHomes(latest()!, page.id, documentBefore, document)
         const key: string = toast(result.message, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); putHomesBack(page.id, places) } } })
       }
