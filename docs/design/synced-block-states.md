@@ -37,7 +37,7 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
   **"Synced block · Copy it to another page · Undo"**, where "Copy" copies it right away (the phone has no ⌘C on a
   block). Undo puts back the plain lines exactly, with the same line ids, so links to them survive.
 - **From nothing: `/` Synced block.** It makes the block with one empty line and the caret in it, with the placeholder
-  "Empty synced block". No notice. ⌘Z or Backspace on that empty line removes it.
+  "Empty synced block". No notice. ⌘Z removes it, and so does Backspace on that empty line while this is its only place (§5).
 - **What can go inside: everything he can put on a page** (`synced-blocks.md` §6), including to-dos, headings, a day's
   template headings, and page and link cards. **Except:**
   - **another synced block.** If the selection holds one, Sync still shows, and a tap changes nothing and says why:
@@ -86,6 +86,11 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
 - **Copy, then paste** (Brian's words): select the whole synced block and ⌘C, or use Copy in its label menu or in the
   notice. Paste on an empty line on another page, or replacing whole lines → that page now shows the same block. No
   offer, no question; it simply arrives synced, as in Notion. The label on both pages now reads "2 pages".
+- **On the phone, Copy from the label has to arrive synced too. Not tested yet.** A block copy carries our own clipboard type,
+  set during a copy event, and the label's Copy is a tap, so iOS may drop that type (Bumblebee). The paste would then be plain
+  lines with nothing to show it isn't synced. Roadbuster tries this in the Home Screen app when sizing. If it fails, either the
+  app remembers the copied block and matches it at paste, or the menu offers an "Add to a page" picker. A plain-lines result
+  isn't acceptable.
 - **Copying text inside it** (part of a line, or some lines but not the whole block) is a **plain copy**, as today.
   Only the whole block copies as synced.
 - **Two copies on one page are allowed.** A paste on the page it's already on arrives synced, like any other. Typing in one
@@ -126,7 +131,9 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
 - **Deleting lines inside a block shown elsewhere** is a loss on pages he isn't looking at, and the phone has no ⌘Z, so it
   gets a notice: **"Removed from 3 pages · Undo"**. Typing gets none.
 - **The block's edges hold.** The earlier experiment showed lines spilling out and being pulled in, so:
-  - Backspace at the start of its first line does nothing to the block, and doesn't pull that line out.
+  - Backspace at the start of its first line does nothing to the block, and doesn't pull that line out. The one exception:
+    on a block that's empty and in only this place, it removes the block. An empty block shown elsewhere stays, because that
+    would be a delete with no notice. He removes a shared block by selecting it (§6).
   - Backspace at the start of the line below it, or Delete at the end of the line above, puts the caret at the block's edge and
     moves nothing in.
   - Enter on an empty last line leaves the block, with a new line below it.
@@ -190,9 +197,11 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
 
 1. Select 2 bullets on a doc page → Sync → outline appears; bullets and text don't move (`check-alignment`).
    Undo → plain bullets, identical, with the same line ids.
-1b. `/` Synced block → an empty block with the caret in it; Backspace removes it.
+1b. `/` Synced block → an empty block with the caret in it; Backspace removes it. Pasted on a second page and emptied: Backspace
+   on either does nothing, and selecting it → Delete follows §6.
 2. Copy (label menu) → paste on an empty line on today's Notes → the doc page reads "↻ Original · 2 pages", today "↻ Synced
    · 2 pages"; "On" lists the other page, with Original marked, and opens it at the block.
+2a. **On the phone, in the Home Screen app:** Copy from the label, paste on another page → it arrives synced, both labels "2 pages".
 2b. Paste it a second time on today → "3 places"; typing in one shows in the other with the caret unmoved.
 3. Edit on today → switch to the doc page's tab → the edit is there without a reload, and the caret and scroll there
    didn't move. Same the other way.
