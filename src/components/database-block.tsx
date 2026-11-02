@@ -47,6 +47,8 @@ function usePendingDatabases() {
 
 /** What a block's menu asks of the page editor holding it (page-editor.tsx provides them). */
 export interface BlockActions {
+  /** The page the editor is editing. */
+  hostPageId: string
   turnIntoPage(blockId: string, pageId: string): void
   turnIntoInline(cardId: string, pageId: string): void
   remove(blockId: string): void

@@ -32,7 +32,7 @@ import { newOperationId, useTaskTick, useWorkspace } from './use-day'
 import { useKeyboardTop } from './keyboard'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
+import { CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { DatabaseBlock, setDatabasePending, type BlockActions } from './database-block'
@@ -43,6 +43,7 @@ import { endOfLineAbove, rowArrows } from './row-arrows'
 import { doneEditorMounting, isOwnLeaveSave, noteEditorMounting, registerEditorFlush, rememberLeaveSave, trackLeaveSave } from './editor-flush'
 import { isNetworkFailure, recoveredEvent, takeRecoveredNotice } from './draft-recovery'
 import { RowMenu } from './row-menu'
+import { isDatabase } from '../domain/database'
 import { openedByTurnover } from './use-screen-today'
 import { openedByMove } from './new-build'
 import { fixedOffset, seenArea } from './fixed-coords'
@@ -230,10 +231,14 @@ function PageCard({ pageId, cardId, url = '', line = '' }: { pageId: string; car
   // The first lines written on the page, as in Craft's card (v0.3 §6.2 "title, short preview").
   // A trashed page keeps its contents out of other pages (Ratchet).
   const preview = target && !trashed ? pagePreview(target) : ''
+  // A card to a full-page database whose parent is this page can turn back into its table (design §3.2).
+  const actions = useContext(DatabaseEditorActions)
+  const inline = actions && target && isDatabase(target) && !trashed && target.database.homeBlockId === null && target.parentId === actions.hostPageId
   return <span className={`editor-page-card-row ${link ? 'is-link' : ''}`} contentEditable={false}>
+    {inline && <span className="editor-row-menu editor-card-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${title}`} triggerClass="editor-row-more" groups={[{ items: [{ label: 'Turn into inline', onSelect: () => actions.turnIntoInline(cardId, pageId) }] }]} /></span>}
     <button type="button" className={`editor-page-card ${trashed ? 'in-trash' : ''}`} disabled={pending?.state === 'creating'}
       onClick={() => { if (pending) { if (pending.state === 'failed') pending.retry(); return } rememberCard(cardId); void navigate({ to: '/pages', search: { page: pageId } }) }}>
-      <span className="editor-page-card-icon">{link ? <GlobeIcon /> : <PagesIcon />}</span>
+      <span className="editor-page-card-icon">{link ? <GlobeIcon /> : target && isDatabase(target) ? <DatabaseIcon /> : <PagesIcon />}</span>
       <span className="editor-page-card-text">
         <span className={`editor-page-card-title ${target?.title || link ? '' : 'untitled'}`}>{title}</span>
         {/* Link cards stay one line (A2): they show the domain instead. */}
@@ -1585,6 +1590,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     dragging.current = []; dropRef.current = null; setDrop(null); setTouchDragging(false)
   }
   const databaseActions = useMemo<BlockActions>(() => ({
+    hostPageId: page.id,
     // Turn into page (design §3.2): the table becomes our page card in place; the save says it's a full page now.
     turnIntoPage: (blockId, pageId) => {
       databaseFlags.current.adopt.delete(pageId); databaseFlags.current.detach.add(pageId)
@@ -1598,7 +1604,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     remove: blockId => editor.removeBlocks([blockId]),
     // Esc from the table: the block selected whole again, in the page editor (design §10).
     select: blockId => { if (editor.getBlock(blockId)) { editor.setTextCursorPosition(blockId); editor.focus() } },
-  }), [editor])
+  }), [editor, page.id])
   const [dock, setDock] = useState<HTMLElement | null>(null)
   useEffect(() => setDock(document.getElementById('editor-dock')), [])
   useEffect(() => {
