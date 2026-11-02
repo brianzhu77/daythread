@@ -284,7 +284,8 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
     in `--text-meta` `--ink-3` ("Status · Thinking in Systems"), because the sheet covers the table. **Done** is on the
     right, as `.app-link`.
   - Rows are 44 px.
-  - It closes with Done, a tap on the scrim, or a swipe down. **All three keep what he did.** A sheet never throws
+  - It closes with Done or a tap on the scrim. **Both keep what he did.** (A swipe down would too, but our sheets
+    don't swipe today, the Move dialog included. That's a change for every sheet, not just these.) A sheet never throws
     away an edit. To go back, he picks the old value again. A text field still being composed (IME) is committed
     first.
   - **The keyboard comes up only when he taps a text field,** with one exception: Text, Number and URL focus their
@@ -300,8 +301,8 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
   gets no notice either.
 - **The one exception: Text and URL on the phone** (Bumblebee 94ba9595, Lead f1e56ab4). The phone has no ⌘Z, and an
   old Select, Status, Date or Checkbox value is one tap away, but a long Text or URL value isn't. So **below 900 px,
-  any Text or URL commit that changes the value** shows our usual Undo notice, **"Notes changed · Undo"**, with the
-  property's name. Undo puts back the whole old value. There's no threshold and no second wording. At 900 px and up
+  any Text or URL commit that changes a value that wasn't empty** shows our usual Undo notice, **"Notes changed ·
+  Undo"**, with the property's name. (Typing into an empty field, as when naming a new row, loses nothing.) Undo puts back the whole old value. There's no threshold and no second wording. At 900 px and up
   there's no notice, since ⌘Z covers it.
 
 #### 6.3.2 The cell
@@ -328,7 +329,8 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
   `--shadow-float` and the 2 px `--blue` outline. It grows downward as lines are added.
   - **Enter** saves and keeps the cursor on the cell. **Shift-Enter** adds a line.
   - **Esc** saves as well. Losing text by pressing Esc is worse than one ⌘Z.
-  - A blur saves, and so does 1 s without typing (§10).
+  - A blur saves. So does the page being hidden (a tab closed, the app sent away), so typing is never lost. That
+    replaces the 1 s idle save in §10: saving while he's still typing would make one Undo step per pause.
   - **Tab / Shift-Tab** save and move the cursor along the row.
 - **Phone sheet:** one field, focused on open, 3 lines tall and growing to 8. The return key reads **Done**
   (`enterkeyhint="done"`) and saves. A new line on the phone only comes from pasting; a value that already has lines
@@ -418,8 +420,8 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
      is focused on open at ≥ 900 and not on the phone.
   2. **Quick days:** Today, Tomorrow, then two more days, with the same labels as the empty `@` list
      (`relativeDay`). A tap saves and closes.
-  3. **Pick on calendar…** opens the system date picker (the same hidden native date input that `row-actions` uses,
-     but with no `min`).
+  3. **Pick on calendar…** opens our own month calendar inside the editor, the same one as the day title's picker.
+     (Built that way instead of the system picker, which can't be opened reliably from a sheet.)
   4. **End date** and **Include time**, as switches. End date adds a second field, "End", with its own Pick on
      calendar…. Include time adds a time to each date (native `type="time"`).
   5. **Clear**, in `--ink-2`, only when there's a value.
@@ -447,8 +449,8 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
   as our page-in-Trash state.
 - **The property is deleted elsewhere:** the editor closes with "Rating was deleted".
 - **An option is removed elsewhere:** it leaves the list at once. If it was the value, the value goes too.
-- **The same value changes elsewhere:** the editor keeps what he's doing. His commit then follows §13 ("yours was 4 ·
-  Use mine").
+- **The same value changes elsewhere:** the editor keeps what he's doing. His commit then follows §13 ("…changed elsewhere ·
+  yours was 4 · Use mine").
 - **Offline:** every editor works. A commit that fails follows §13: his value stays shown in `--warn`, with "1 change
   not saved · Retry".
 - **The window crosses 900 px** (a rotation or a resize): the editor closes, keeping what was typed, and the cursor
@@ -683,7 +685,7 @@ The Lead recommends **option 1**, so this is option 1's design, with the differe
 | **Offline, reading** | works from the offline copy, the same as pages |
 | **Offline, editing a value** | His value **stays shown** in the cell, in `--warn`, and the strip says **"1 change not saved · Retry"**. Retry sends it again. Undo puts back the old value. **Never a silent revert.** It's the same rule as a failed tick, and kept drafts for cells come later (Roadbuster §4). |
 | **Offline, a row body** | the editor's kept drafts, as on any page |
-| **The same cell changed on another device** | The other value loads, and the notice says **"Rating changed in another tab · yours was 4 · Use mine"**. Use mine sends his value again. |
+| **The same cell changed on another device, or a kept cell value sent after the app was closed** (Roadbuster 6aa746aa) | The other value loads, and **one notice, everywhere** (Lead 0b05067c) names the row: **"Notes in Thinking in Systems changed elsewhere · yours was “A primer on systems thi…” · Use mine"**. A text value is quoted to its first 40 characters on one line, and Use mine sends the whole value. With no conflict, a kept value is sent with no notice. If the row was deleted in between, the kept value is dropped quietly. |
 | **A different cell or row changed elsewhere** | Both edits stay. No notice (Roadbuster §4: the per-cell check). |
 | **The row he has open is deleted elsewhere** | our existing "This page is in Trash · Restore" state |
 | **The database page is open and deleted elsewhere** | the same |
@@ -713,8 +715,9 @@ The estimates are Roadbuster's (`database-fit.md` §7) unless marked as mine.
 
 - **On a copy of his real data, at 390 and 1280**, with the built app:
   - every state in §13 that the release includes;
-  - the alignment gate at 0 fail / 0 missing, plus the database block's own columns: the title on the text column,
-    and `+ New` on the Name column.
+  - the alignment gate at 0 fail / 0 missing, plus the database block's own columns: the title on the headings'
+    edge (it's styled as a section heading, so on a day page it sits left of the bullets' text), the view chevron
+    centred on its word, and `+ New` on Name's text. `check-alignment.mjs` measures all three.
 - **On a native Simulator, in the Home Screen app:**
   - every phone sheet;
   - the keyboard comes up only in sheets with a text field (§4.2);
