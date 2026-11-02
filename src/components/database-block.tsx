@@ -5,7 +5,7 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
-import { cellValue, databaseRows, isDatabase, isEmptyValue, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, viewColumns, viewRows, type CellValue, type Database, type Json, type Property, type View } from '../domain/database.ts'
+import { cellValue, databaseRows, isDatabase, isEmptyValue, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewRows, type CellValue, type Database, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -305,6 +305,19 @@ export function DatabaseCellEditor() {
     onCreateOption={name => createOption(run, db, property, name)} />
 }
 
+/** What a pasted line means in a cell: undefined when it means nothing there. An option is found by its name; a new one isn't made by a paste. */
+function pastedValue(db: Database, property: Property, line: string): Json | undefined {
+  const text = line.trim()
+  if (line.length > 10_000) return undefined
+  if (property.id === titleId || property.type === 'text') return line
+  if (property.type === 'url') return text
+  if (property.type === 'number') { const n = Number(text.replace(/,/g, '')); return Number.isFinite(n) ? n : undefined }
+  const option = (propertyOf(db, property.id)?.options ?? []).find(o => o.name.toLowerCase() === text.toLowerCase())
+  if (property.type === 'select' || property.type === 'status') return option?.id
+  if (property.type === 'multiSelect') return option ? [option.id] : undefined
+  return undefined
+}
+
 function createOption(run: ReturnType<typeof useWorkspace>['run'], db: Page & { database: Database }, property: Property, name: string): string {
   const id = newId()
   void run(ws => {
@@ -361,6 +374,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
   // Rows drag by their ⋮⋮ only while the view isn't sorted (design §7.2); the drop is a move-page among the rows.
   const [drag, setDrag] = useState<{ rowId: string; before: string | null } | null>(null)
   const tbody = useRef<HTMLTableSectionElement>(null)
+  const wrap = useRef<HTMLDivElement>(null)
   const startDrag = (e: ReactPointerEvent, rowId: string) => {
     if (view.sort.length) return
     e.preventDefault()
@@ -450,6 +464,8 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
       else toast("Can't undo · edited since", { timeout: 6000 })
       return
     }
+    // ⌘A on a cell selects nothing: the browser's select-all would take the page around it, and the next key replace it.
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a' && target.tagName !== 'INPUT') { e.preventDefault(); return }
     const nav = target.closest<HTMLElement>('[data-nav]')?.dataset.nav
     if (e.key === 'Escape' && !e.defaultPrevented) { e.preventDefault(); blockActions.get(blockId)?.select(blockId); return }
     if (!nav || target.tagName === 'INPUT') return
@@ -478,7 +494,44 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
       if (row && property && !isEmptyValue(cellValue(db.database, row, property.id))) { e.preventDefault(); commit(db, row, property.id, undefined) }
     }
   }
-  return <div className="database-table-wrap" onKeyDown={onKeyDown}>
+  /**
+   * ⌘C, ⌘X and ⌘V with focus in the table are about the table, never the page around it (design §10): they stop at the
+   * window, before the page's clipboard handlers, which act on the block the page's selection is on. On a cell, copy
+   * and cut take its value (a cut clears it, as Delete does), and paste sets it from the first line (§6.3).
+   */
+  const onClipboard = (e: ClipboardEvent) => {
+    const focused = document.activeElement
+    if (!wrap.current?.contains(focused)) return
+    e.stopPropagation()
+    if (focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement) return
+    e.preventDefault()
+    const nav = focused?.closest<HTMLElement>('[data-nav]')?.dataset.nav
+    if (!nav) return
+    const [r, c] = nav.split(':').map(Number) as [number, number]
+    const row = shown[r], property = c === 0 ? titleProperty : columns[c - 1]?.property
+    if (!row || !property) return
+    const value = c === 0 ? (row.title || null) : cellValue(db.database, row, property.id)
+    if (e.type !== 'paste') {
+      e.clipboardData?.setData('text/plain', valueText(db.database, property.id, value))
+      if (e.type === 'cut' && c > 0 && !isEmptyValue(value)) commit(db, row, property.id, undefined)
+      return
+    }
+    const lines = (e.clipboardData?.getData('text/plain') ?? '').replace(/\r?\n$/, '').split(/\r?\n/), first = lines[0]!
+    if (!first.trim()) return
+    const raw = pastedValue(db.database, property, first)
+    if (raw === undefined) { toast(`Can't paste that into ${property.name}`, { timeout: 6000 }); return }
+    commit(db, row, property.id, raw)
+    if (lines.length > 1) toast('Pasted the first line only', { timeout: 6000 })
+  }
+  const clipboardHandler = useRef(onClipboard)
+  clipboardHandler.current = onClipboard
+  useEffect(() => {
+    const handle = (e: ClipboardEvent) => clipboardHandler.current(e)
+    // On the window: React's own capture listeners are on the document, as the app renders the whole document.
+    for (const type of ['copy', 'cut', 'paste'] as const) window.addEventListener(type, handle, true)
+    return () => { for (const type of ['copy', 'cut', 'paste'] as const) window.removeEventListener(type, handle, true) }
+  }, [])
+  return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
     {!showTitle && <div className="database-title-row is-page"><DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} /><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
     {showTitle && <div className="database-title-row">
       <input ref={titleInput} className="database-title" data-database={db.id} aria-label="Database name" placeholder="Untitled database" defaultValue={db.title} key={db.title}
