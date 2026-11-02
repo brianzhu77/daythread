@@ -12,6 +12,7 @@ await run({ type: 'ensure-day', date })
 const day = ws.pages.find(p => p.date === date)!
 const bullet = (id: string, text: string) => ({ id, type: 'bulletListItem', props: {}, content: [{ type: 'text', text, styles: {} }], children: [] })
 const base = JSON.parse(day.document)
-const doc = [base[0], ...Array.from({ length: 6 }, (_, i) => bullet(`t${i}`, `Task ${i} for today`)), ...base.slice(1), ...Array.from({ length: 20 }, (_, i) => bullet(`l${i}`, `Line ${i} of the day, with a few words in it`))]
+const long = { id: 'para', type: 'paragraph', props: {}, content: [{ type: 'text', text: 'A long paragraph. '.repeat(60), styles: {} }], children: [] }
+const doc = [base[0], ...Array.from({ length: 6 }, (_, i) => bullet(`t${i}`, `Task ${i} for today`)), ...base.slice(1), bullet('before', 'The line above a long paragraph'), long, ...Array.from({ length: 20 }, (_, i) => bullet(`l${i}`, `Line ${i} of the day, with a few words in it`))]
 await run({ type: 'save-editor', pageId: day.id, expectedContent: pageContentKey(day), document: JSON.stringify(doc), today: date })
 console.log('seeded', date)

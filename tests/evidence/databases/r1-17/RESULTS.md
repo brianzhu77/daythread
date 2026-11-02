@@ -17,8 +17,16 @@ Code: `feat/databases-ui` at aa3dc3f1 (this file and its scripts came after it, 
 ## The 2 of 128
 
 WebKit's last path at both widths came out blank on this build. It's the harness: WebKit draws the 64th page opened in
-one context blank. With the order swapped, the 64th was main's, and main's went blank (`goto` timed out) while this
-build's rendered. That path alone, in a fresh context, is identical on both builds at both widths, to the byte.
+one browser run blank. With the order swapped, the 64th was main's, and main's went blank (`goto` timed out) while this
+build's rendered. A new context partway through doesn't help; it still happens, so the limit looks like the browser's.
+That path alone, in a fresh browser, is identical on both builds at both widths, to the byte.
+
+## The heads after this one
+
+- **97224382** (clipboard and Worker fixes): 34 of 34 script runs, 17 scripts in both engines.
+- **f917f61e** (menu on screen, checkbox centring, a wider gate): the gate 1285 passed, 0 failed, 0 missing; the 9 scripts
+  touching those changes, 18 of 18; the pages again 126 of 128, the same 2.
+- **31523c10** (main with #63 merged, what went live as #61): not rerun here. The Lead's gates and Jazz's native run were on it.
 
 ## Limits
 
