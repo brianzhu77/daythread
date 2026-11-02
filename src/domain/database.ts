@@ -631,3 +631,15 @@ export function newRowStored(db: Database, input: Record<string, Json> | undefin
   }
   return Object.keys(values).length ? values : undefined;
 }
+
+/** A cell as text: option names, a date range with an arrow, a ticked box as "Yes". */
+export function valueText(db: Database, columnId: string, value: CellValue): string {
+  const property = propertyOf(db, columnId)
+  const name = (id: string) => property?.options?.find(o => o.id === id)?.name ?? ''
+  if (value === null || value === false) return ''
+  if (value === true) return 'Yes'
+  if (Array.isArray(value)) return value.map(name).filter(Boolean).join(', ')
+  if (typeof value === 'object') return value.end ? `${value.start} → ${value.end}` : value.start
+  if (property && (property.type === 'select' || property.type === 'status')) return name(String(value))
+  return String(value)
+}

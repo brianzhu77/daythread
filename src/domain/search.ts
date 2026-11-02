@@ -4,8 +4,7 @@ import { isTemplate } from './day-template.ts'
 import { isDraft } from './day-draft.ts'
 import { tagIndex, tagKey, type TagEntry } from './tags.ts'
 import type { LocalDate, Page, Workspace } from './types.ts'
-import { cellValue, databaseOfRow } from './database.ts'
-import { valueText } from './export.ts'
+import { cellValue, databaseOfRow, valueText } from './database.ts'
 
 // Search (docs/design/search-states.md): a plain-text look over the loaded workspace. Nothing is stored or sent
 // anywhere; the index is read from the pages like tags and links are, and rebuilt whenever the workspace changes.
