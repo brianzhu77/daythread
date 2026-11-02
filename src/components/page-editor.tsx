@@ -35,7 +35,7 @@ import { DateTag } from './date-tag'
 import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
-import { DatabaseBlock } from './database-block'
+import { DatabaseBlock, setDatabasePending } from './database-block'
 import { addDays, fromIso, longLabel, shortLabel, todayIso, weekday } from './dates'
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
@@ -1000,6 +1000,37 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       editor.setTextCursorPosition(line!, 'start')
     })
     await confirmSubpage(pageId, cardId, true)
+  }
+  /**
+   * `/` Database (design §3.1): always an inline database. The block goes in at once with ids chosen here, then the
+   * database is made with that block as its home, retried like `/page`; the block shows "Creating…" until then and
+   * "Not created · Retry" if every try fails. The caret then goes to its title.
+   */
+  async function createDatabase() {
+    const pageId = crypto.randomUUID()
+    let blockId: string | undefined
+    editor.transact(() => {
+      const current = editor.getTextCursorPosition().block
+      const block = { type: 'database', props: { pageId } } as never
+      const [inserted] = inlineText(current.content).trim() && inlineText(current.content).trim() !== '/' ? editor.insertBlocks([block], current, 'after') : editor.replaceBlocks([current], [block]).insertedBlocks
+      blockId = inserted!.id
+      const [line] = editor.insertBlocks([{ type: 'paragraph' } as never], inserted!, 'after')
+      editor.setTextCursorPosition(line!, 'start')
+    })
+    await confirmDatabase(pageId, blockId!)
+  }
+  async function confirmDatabase(pageId: string, blockId: string) {
+    const retry = () => void confirmDatabase(pageId, blockId)
+    setDatabasePending(pageId, { state: 'creating', retry })
+    let created = false
+    for (let attempt = 0; attempt < 3 && !created; attempt++) {
+      if (!editor.getBlock(blockId)) { setDatabasePending(pageId, null); return } // block undone: abandon
+      created = Boolean(await run({ type: 'create-database', pageId, parentId: page.id, homeBlockId: blockId, title: '' }))
+        || latestWorkspace.current.pages.some(p => p.id === pageId)
+    }
+    if (!created) { setDatabasePending(pageId, { state: 'failed', retry }); setStatus('Database not created · tap it to retry'); return }
+    setDatabasePending(pageId, null)
+    requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`.database-title[data-database="${CSS.escape(pageId)}"]`)?.focus())
   }
   async function confirmSubpage(pageId: string, cardId: string | undefined, open: boolean) {
     const retry = () => void confirmSubpage(pageId, cardId, false)
@@ -2130,13 +2161,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           insertOrUpdateBlockForSlashMenu(editor, { ...(replaceCurrent ? {} : { id }), type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? page.date ?? '' : '' }, content: '' })
         } }
         const pageItem = { title: 'Page', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
+        const databaseItem = { title: 'Database', icon: <span className="slash-grid-icon" aria-hidden>▦</span>, aliases: ['database', 'table', 'db', '数据库', '表格'], group: 'Suggested', onItemClick: () => void createDatabase() }
         // A9a §3: the phone's way to `[[` (v0.3's toolbar button), through the same + menu.
         const linkItem = { title: 'Link to page', icon: <PagesIcon />, aliases: ['link', '[[', '链接', '引用'], group: 'Suggested', onItemClick: () => {
           if (!linkableLines.has(editor.getTextCursorPosition().block.type)) return
           setTimeout(() => editor.getExtension(SuggestionMenu)?.openSuggestionMenu('[[', { deleteTriggerCharacter: true }), 0)
         } }
         // Every item stays in the list; the menu scrolls past about 8 rows (F13). A cut hid Quote until its name was typed.
-        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, ...first, ...rest], query)
+        // Database sits after Page and Link to page (design §3.1); never in a template (linked views come with R2).
+        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, ...(onTemplate ? [] : [databaseItem]), ...first, ...rest], query)
       }} />
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}
