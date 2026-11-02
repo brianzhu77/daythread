@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Page } from '../domain/types'
 import { useWorkspace } from './use-day'
 
@@ -30,10 +30,10 @@ export function PageTitleField({ page, autoFocus }: { page: Page; autoFocus?: bo
     saved.current = title
     void run({ type: 'rename-page', pageId: page.id, title })
   }
-  // The text isn't a React child: when a save updated `page.title`, React rewrote the text node he was typing in and the
-  // caret jumped to the start ("Sl", a pause, "ow" read "owSl"; live, both engines). It's set once here, and the effect
-  // below follows outside changes.
-  useLayoutEffect(() => { if (el.current) el.current.textContent = page.title }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // The text is a React child that never changes: when it followed `page.title`, a save rewrote the text node he was
+  // typing in and the caret jumped to the start ("Sl", a pause, "ow" read "owSl"). Frozen at mount, it still comes
+  // with the server's HTML (no empty flash on a cold load), and the effect below follows outside changes.
+  const [initial] = useState(page.title)
   useEffect(() => {
     // Only follow outside changes while Brian isn't typing here.
     if (el.current && document.activeElement !== el.current && el.current.textContent !== page.title) { el.current.textContent = page.title; saved.current = page.title }
@@ -55,5 +55,5 @@ export function PageTitleField({ page, autoFocus }: { page: Page; autoFocus?: bo
       } else if (e.key === 'Escape') {
         e.preventDefault(); if (el.current) el.current.textContent = before.current; save(); el.current?.blur()
       }
-    }} />
+    }}>{initial}</h1>
 }
