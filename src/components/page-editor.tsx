@@ -1,6 +1,6 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
 import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
-import { type ComponentProps, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { type ComponentProps, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
 import { type BlockNoteEditor, BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, editorHasBlockWithType, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
@@ -35,6 +35,7 @@ import { DateTag } from './date-tag'
 import { CheckboxIcon, ChevronRightIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
+import { DatabaseBlock } from './database-block'
 import { addDays, fromIso, longLabel, shortLabel, todayIso, weekday } from './dates'
 import { notTodayText } from './task-row'
 import { tagDecorations } from './tag-decorations'
@@ -69,16 +70,14 @@ const pageLink = createReactBlockSpec({ type: 'pageLink', propSchema: { pageId: 
   render: ({ block }) => <PageCard pageId={block.props.pageId} cardId={block.id} url={block.props.url} line={block.props.line} />,
   toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Page</a></p>,
 })()
-// Databases R1 part 1: a `database` block is known to the editor, so a save keeps it whole (dropping its home block
-// would trash the database). Until the table ships it shows as a quiet label; it is also the floor a rollback lands on.
+// Databases (R1): a `database` block. Its database's home block draws the table; any other is a card to it (R2 makes
+// those linked views). Known to the editor since part 1, so a save always keeps it whole.
 const database = createReactBlockSpec({ type: 'database', propSchema: { pageId: { default: '' }, view: { default: '' } }, content: 'none' }, {
-  render: ({ block }) => <DatabaseLabel pageId={block.props.pageId} />,
+  render: ({ block }) => <DatabaseInPage blockId={block.id} pageId={block.props.pageId} />,
   toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Database</a></p>,
 })()
-function DatabaseLabel({ pageId }: { pageId: string }) {
-  const { workspace } = useWorkspace()
-  const target = workspace?.pages.find(p => p.id === pageId)
-  return <div className="editor-database-label" contentEditable={false}>{target ? displayPageTitle(target) : 'Database'}</div>
+function DatabaseInPage({ blockId, pageId }: { blockId: string; pageId: string }) {
+  return <DatabaseBlock blockId={blockId} pageId={pageId} hostDate={useContext(ChipPageDate)} />
 }
 // A9a (Jazz page-links-states §1): a `[[` link is one inline unit, icon + the page's current title on a quiet chip.
 // Backspace removes it whole (it has no content of its own). It reads its title live, so nothing is stored as text.
@@ -1542,7 +1541,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const firstHeading = blocks.findIndex(b => b.type === 'heading')
     const nextHeading = blocks.findIndex((b, i) => i > firstHeading && b.type === 'heading')
     const firstSection = blocks.slice(firstHeading + 1, nextHeading < 0 ? blocks.length : nextHeading)
-    const target = firstSection.find(b => !inlineText(b.content)) ?? blocks[(nextHeading < 0 ? blocks.length : nextHeading) - 1] ?? blocks[0]
+    // Only a line takes the caret: a card or a database block has no text, and would be selected whole instead.
+    const target = firstSection.find(b => Array.isArray(b.content) && !inlineText(b.content)) ?? blocks[(nextHeading < 0 ? blocks.length : nextHeading) - 1] ?? blocks[0]
     // Desktop opens ready to type; on touch screens focusing would raise the keyboard over a page that is read as often as written.
     // Arriving at a block from a tag focuses nothing, so the view stays on that block.
     // A page just made with `/page` opens to name it: the title field has the cursor (Jazz f69dd341).

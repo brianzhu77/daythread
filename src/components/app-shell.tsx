@@ -6,6 +6,7 @@ import { Navigation } from './navigation'
 import { KeptDrafts } from './kept-drafts'
 import { GlobalSearch } from './search-dialog'
 import { WorkspaceProvider, isConflict, useWorkspace } from './use-day'
+import { DatabaseCellEditor } from './database-block'
 import { flushAllEditors } from './editor-flush'
 import { useMoveToNewBuild } from './new-build'
 
@@ -29,6 +30,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <KeptDrafts />
         </div>
         <Toasts />
+        <DatabaseCellEditor />
         <GlobalSearch />
         <div className="safe-top" aria-hidden="true" />
       </div>

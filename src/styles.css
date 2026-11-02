@@ -1662,3 +1662,31 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .property-checkbox.is-checked { border-color: var(--ink-2); }
 .property-checkbox.is-checked svg { opacity: 1; }
 .property-checkbox:disabled { cursor: default; opacity: .6; }
+
+/* Databases R1 (design §4): the table block. A working baseline; Jazz's §4.1/§4.2 pass sets the final look. */
+.bn-block-content[data-content-type="database"] { display: block; width: 100%; min-width: 0; }
+.bn-block-content[data-content-type="database"] > div { width: 100%; min-width: 0; }
+.database-block { width: 100%; min-width: 0; max-width: 100%; margin-block: 6px; color: var(--ink); font-size: var(--text-ui); }
+.database-title-row { display: flex; align-items: baseline; gap: 10px; padding-inline: 2px; }
+.database-title { flex: 1; min-width: 0; border: 0; background: none; color: var(--ink); font: inherit; font-weight: var(--weight-semibold); font-size: var(--text-row); padding: 4px 0; outline: none; }
+.database-title::placeholder { color: var(--placeholder); }
+.database-view-name { color: var(--ink-3); font-size: var(--text-meta); }
+.database-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.database-table { border-collapse: collapse; table-layout: fixed; width: max-content; min-width: 100%; }
+.database-th { padding: 6px 8px; border-block: 1px solid var(--line); color: var(--ink-3); font-weight: var(--weight-regular); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.database-th.is-title { position: sticky; left: 0; z-index: 1; background: var(--bg-doc); }
+.database-th.is-add { min-width: 36px; width: 36px; }
+.database-th.is-add button { border: 0; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+.database-td { padding: 0; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.database-td.is-title { position: sticky; left: 0; z-index: 1; background: var(--bg-doc); }
+.database-title-inner { display: flex; align-items: center; min-width: 0; }
+.database-title-inner .database-title-cell { flex: 1; min-width: 0; }
+.database-title-cell, .database-cell { display: block; width: 100%; min-height: 34px; padding: 6px 8px; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.database-td.is-number .database-cell { text-align: right; }
+.database-td.is-checkbox { padding: 9px 8px; }
+.database-title-cell .is-placeholder { color: var(--placeholder); }
+.database-open { flex: none; margin-right: 4px; padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--radius-tight); background: var(--bg-doc); color: var(--ink-3); font-size: var(--text-meta); cursor: pointer; opacity: 0; }
+.database-row:hover .database-open, .database-open:focus-visible { opacity: 1; }
+@media (hover: none) { .database-open { display: none; } }
+.database-new, .database-more { display: block; padding: 6px 8px; border: 0; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+.database-empty { margin: 0; padding: 8px; color: var(--ink-3); }
