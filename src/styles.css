@@ -1671,8 +1671,9 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-title-row { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
 .database-title { flex: 1; min-width: 0; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-section); line-height: 28px; font-weight: var(--weight-semibold); outline: none; text-overflow: ellipsis; }
 .database-title::placeholder { color: var(--placeholder); }
-.database-view-name { flex: none; color: var(--ink-2); font-size: var(--text-ui); }
-.database-view-name::after { content: ' ⌄'; color: var(--ink-3); }
+.database-view-name { flex: none; display: inline-flex; align-items: center; gap: 2px; color: var(--ink-2); font-size: var(--text-ui); line-height: 20px; }
+/* The same chevron as the day title's picker, centred on the word (Lead b8be5d85: the glyph sat 3 px low). */
+.database-view-name > svg { width: 14px; height: 14px; color: var(--ink-3); }
 
 /* Too wide: it scrolls sideways inside the block, Name stays pinned, and the clipped edge fades while there's more to
    the right (a scroll-driven fade: without support, no fade, nothing else changes). */
@@ -1680,6 +1681,10 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 @supports (animation-timeline: scroll()) {
   /* Named, so cells that clip (and so are scroll containers themselves) still follow this scroller. */
   .database-scroll { scroll-timeline: --database-x inline; animation: database-edge-fade linear both; animation-timeline: --database-x; }
+}
+/* No scroll-driven CSS: the fade stays on, so a clipped table always hints at more columns (Bumblebee dbf24b36). */
+@supports not (animation-timeline: scroll()) {
+  .database-scroll { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
 }
 @keyframes database-edge-fade {
   from, 96% { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
@@ -1713,8 +1718,10 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-th[data-type="url"]::before { content: '↗'; }
 .database-th[data-type="number"] { text-align: right; }
 .database-th.is-title { position: sticky; left: 0; z-index: 2; width: 240px; background: var(--bg-doc); }
-.database-th.is-add { width: 40px; padding: 0; }
-.database-th.is-add button { display: grid; place-items: center; width: 100%; height: 31px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; font-size: 18px; cursor: pointer; }
+/* The trailing column takes whatever width is left, so a short table keeps its columns' widths and its lines still run
+   the full width; its + stays next to the last column. */
+.database-th.is-add { width: auto; min-width: 40px; padding: 0; }
+.database-th.is-add button { display: grid; place-items: center; width: 40px; height: 31px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; font-size: 18px; cursor: pointer; }
 
 /* Rows: 36 px at ≥ 900, 44 px below; a hairline between rows. */
 .database-td { height: 36px; padding: 0; border-bottom: 1px solid var(--line); vertical-align: middle; }

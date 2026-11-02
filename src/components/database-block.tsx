@@ -9,6 +9,7 @@ import { cellValue, databaseRows, isDatabase, isEmptyValue, newRowValues, proper
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
+import { ChevronDownIcon } from './icons'
 import { PropertyCell, PropertyCheckbox, PropertyEditor } from './property-editors'
 import { useWorkspace } from './use-day'
 
@@ -203,7 +204,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
         onBlur={e => rename(e.currentTarget.value.trim())}
         // Enter in a new database's title goes on to its first row's Name (design §3.1).
         onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.currentTarget.blur(); if (!databaseRows(workspace, db.id).length) addRow() } }} />
-      <span className="database-view-name">{view.name}</span>
+      <span className="database-view-name">{view.name}<ChevronDownIcon /></span>
     </div>}
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
       <table className="database-table">
