@@ -110,8 +110,10 @@ await scenario('its layout and grouping are its own too (R2-16: they survive its
   await makeLinked(page)
   const homeView = JSON.stringify(list(store()).database.views)
   await second(page).locator('.database-more-button').click()
-  await menu(page).getByRole('menuitem', { name: 'Layout' }).click().catch(() => menu(page).getByRole('button', { name: 'Layout' }).click()); await wait(200)
-  await menu(page).getByRole('button', { name: 'Board' }).or(menu(page).getByRole('menuitem', { name: 'Board' })).first().click(); await wait(1800)
+  await menu(page).getByRole('menuitem', { name: 'Layout' }).click(); await wait(200)
+  await menu(page).getByText('Board', { exact: true }).click(); await wait(300)
+  // More than one property can make the columns: it asks which.
+  await menu(page).getByRole('menuitem', { name: /^Status/ }).first().click(); await wait(1800)
   await page.keyboard.press('Escape'); await wait(200)
   const ws = store(), linked = JSON.parse(dbBlocks(ws)[1].props.view)
   const r = { layout: linked.layout, sourceSame: JSON.stringify(list(ws).database.views) === homeView, boards: await page.locator('.database-board').count(), tables: await page.locator('.database-table').count(), source: await second(page).locator('.database-source').count() }
