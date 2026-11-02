@@ -2,7 +2,7 @@ import { mergeDraft } from '../domain/draft-merge.ts'
 import { editorSeed, pageContentKey, type EditorNode } from '../domain/editor-document.ts'
 import type { Action, Page, Receipt, Workspace } from '../domain/types.ts'
 import { todayIso } from './dates.ts'
-import { claim, clearOwn, orphans, ownDrafts, release, take, withoutSaved, type DraftSlot } from './draft-slots.ts'
+import { claim, clearOwn, orphans, ownDrafts, release, take, withoutSaved, type DraftSlot, landedSave } from './draft-slots.ts'
 import { openEditorPages } from './editor-flush.ts'
 
 /**
@@ -17,7 +17,8 @@ export function recoveredDocument(ws: Workspace, page: Page, slot: DraftSlot, ow
 /** The same, with where its lines went (B44: its kept links follow them). */
 export function recovered(ws: Workspace, page: Page, slot: DraftSlot, own: boolean): { document: EditorNode[]; placed: Map<string, string> } {
   const draft = JSON.parse(slot.document) as EditorNode[]
-  if (own && slot.base === pageContentKey(page)) return { document: draft, placed: new Map() }
+  // Its save on the way landed (B81): the page is what it started from, so nothing of his or anyone's needs merging.
+  if (own && (slot.base === pageContentKey(page) || landedSave(slot, pageContentKey(page)) !== 'no')) return { document: draft, placed: new Map() }
   const started: Page = { ...page, document: slot.baseDocument ?? page.document }
   const seed = (p: Page) => editorSeed(p, ws)
   const latest = seed(page)
@@ -96,6 +97,8 @@ export function saveKeptDrafts(refresh: () => Promise<Workspace>, run: Run, skip
       // Another tab (or that page's editor here) merged this gone tab's draft while we waited for the lock; else it's ours
       // until the save is done, so an editor opening the page elsewhere doesn't merge it too.
       if (key !== null && !take(pageId, key)) continue
+      // Its save on the way landed with all of it (B81): nothing to save.
+      if (key === null && landedSave(slot, pageContentKey(page)) === 'all') { clearOwn(pageId, slot.document); continue }
       let document: EditorNode[]
       try { document = recovered(ws, page, slot, key === null).document } catch { if (key !== null) release(pageId, key); return false }
       let failure = ''

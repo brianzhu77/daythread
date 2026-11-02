@@ -33,7 +33,8 @@ test('pages: create (top level and under a day), rename, move, a cycle refused, 
   h.run({ type: 'restore-batch', trashId: r.receipt.operationId })
   assert.deepEqual(h.ws.pages.filter(isTrashed), [])
   assert.equal(h.page('C').parentId, 'W')
-  assert.throws(() => h.run({ type: 'delete-page', pageId: dayId(today), at: '2026-10-22T12:00:00.000Z' }), /can't be deleted/)
+  // A day page can be deleted too (B16, tests/day-delete.test.ts); a draft can't.
+  assert.throws(() => h.run({ type: 'delete-page', pageId: 'nope', at: '2026-10-22T12:00:00.000Z' }), /not found/i)
 })
 
 test('B14 drag: before a sibling, at the end, inside another page or a day; the spot it holds and a stale sibling', () => {

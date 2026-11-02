@@ -2,6 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mergeDraft } from '../src/domain/draft-merge.ts'
 import { inlineText, type EditorNode } from '../src/domain/editor-document.ts'
+import { pageContentKey } from '../src/domain/editor-document.ts'
+import { landedSave, type DraftSlot } from '../src/components/draft-slots.ts'
 
 // B23 (docs/design/save-conflict-states.md §2): Load latest puts his changes below their lines in the latest page.
 const t = (text: string) => (text ? [{ type: 'text', text, styles: {} }] : [])
@@ -125,4 +127,14 @@ test('B44: placed says where each of his lines went, so what rides on a line (a 
   const { document, placed } = merge(base, draft, latest)
   assert.equal(placed.get('2'), 'new-1')
   assert.equal(inlineText(document.find(x => x.id === 'new-1')!.content), 'https://sspai.com/post/1 (mine)')
+})
+
+test('B81: a kept draft reads a landed save from the page, not from its own older base', () => {
+  const page = { document: 'the page after the save' }, key = pageContentKey(page)
+  const slot = (document: string, sentDocument: string): DraftSlot => ({ base: 'older', document, seen: 0, sent: { base: key, document: pageContentKey({ document: sentDocument }) } })
+  assert.equal(landedSave(slot('sent text', 'sent text'), key), 'all')
+  assert.equal(landedSave(slot('sent text, and more', 'sent text'), key), 'more')
+  // Elsewhere's change, or a save that hasn't landed, isn't this save: the normal paths still decide.
+  assert.equal(landedSave(slot('sent text', 'sent text'), pageContentKey({ document: 'changed elsewhere' })), 'no')
+  assert.equal(landedSave({ base: 'older', document: 'text', seen: 0 }, key), 'no')
 })

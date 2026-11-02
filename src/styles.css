@@ -295,6 +295,7 @@ button:where(:not([data-slot])):focus-visible, a:where(:not([data-slot])):focus-
 /* B9: the page's space while its editor mounts, so nothing jumps when it appears. */
 .page-opening { min-height: 52vh; }
 .loading, .empty { padding: 48px 0; color: var(--ink-soft); text-align: center; display: grid; gap: 12px; justify-items: center; }
+.day-in-trash-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 
 /* ---------- Day header: the page title ---------- */
 .day-head { display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 2px 12px; padding: 24px 0 12px; }
@@ -969,6 +970,10 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .day-title-trigger, .day-title-trigger:active, .day-title-trigger[data-pressed=true] { transform: none; }
 .day-nav { gap: 4px; }
 .day-nav > :first-child { margin-right: 4px; }
+/* B16: the day's ⋯ joins the arrows. On a phone, a long date with Today as well doesn't fit on one line, and the tab bar's
+   first tab already goes to today. */
+.day-nav .page-more { width: 32px; margin-right: -8px; }
+@media (max-width: 599px) { .day-nav > :first-child { display: none; } }
 .day-head { margin-bottom: 20px; }
 /* Header picker day states (Brian a6bd90e4): every day is clickable; days that haven't happened yet are grey; a day
    with something written gets a small, quiet blue dot. Today and the current page keep HeroUI's own states. */

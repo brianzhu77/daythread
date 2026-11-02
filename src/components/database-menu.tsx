@@ -394,9 +394,9 @@ function NewPropertyPanel({ db, view, go }: { db: DatabasePage; view: View; go: 
 
 function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: View; propertyId: string; go: (p: Panel) => void }) {
   const change = useChange(db)
+  const changeView = useViewChange(db.id, view.id)
   const property = db.database.properties.find(p => p.id === propertyId)
   if (!property) return <><Head title="Property" back={() => go('properties')} /><p className="database-menu-quiet">Deleted</p></>
-  const changeView = useViewChange(db.id, view.id)
   const update = (fields: Omit<Extract<DatabaseChange, { kind: 'updateProperty' }>, 'kind' | 'propertyId'>, withUndo = false) => change({ kind: 'updateProperty', propertyId, ...fields }, withUndo)
   const hasOptions = property.type === 'select' || property.type === 'multiSelect' || property.type === 'status'
   const options = property.options ?? []

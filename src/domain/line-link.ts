@@ -50,7 +50,8 @@ function checked(pageId: unknown, lineId: unknown, taskId: unknown): LineTarget 
 }
 
 /** A page's own address, opened at a line: a day page by its date, any other page by its id (as pageHref). */
-export function pagePath(page: Pick<Page, 'id' | 'type' | 'date'>, blockId?: string): string {
-  if (page.type === 'daily' && page.date) return `/day/${page.date}${blockId ? `?block=${encodeURIComponent(blockId)}` : ''}`
+export function pagePath(page: Pick<Page, 'id' | 'type' | 'date' | 'trashedAt'>, blockId?: string): string {
+  // A day page in the trash no longer holds its date (B16): it opens by its id, read-only.
+  if (page.type === 'daily' && page.date && !page.trashedAt) return `/day/${page.date}${blockId ? `?block=${encodeURIComponent(blockId)}` : ''}`
   return `/pages?page=${encodeURIComponent(page.id)}${blockId ? `&block=${encodeURIComponent(blockId)}` : ''}`
 }
