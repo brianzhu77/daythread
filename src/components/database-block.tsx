@@ -4,16 +4,17 @@
 // commit is one `set-values` with its per-cell check (model §5.2).
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
-import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
-import { cellValue, databaseRows, isDatabase, isEmptyValue, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewRows, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
+import { cellValue, databaseRows, groupValue, isDatabase, isEmptyValue, noGroupKey, readValue, rowMatches, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
-import { ChevronDownIcon } from './icons'
+import { ChevronRightIcon } from './icons'
 import { holdKeyboard } from './keyboard'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide } from './property-editors'
 import { urlHref } from './property-values'
 import { useWorkspace } from './use-day'
+import { DatabaseBoard } from './database-board'
 import { LinkedDatabase } from './database-linked'
 import { DatabaseMenuButton, DatabaseViewsButton, openDatabaseMenu } from './database-menu'
 
@@ -158,33 +159,35 @@ export function DatabaseCard({ pageId }: { pageId: string }) {
 // BlockNote may draw a block again (a remount, losing its state) whenever the page editor's focus or selection changes,
 // which an editor taking the focus does at once. Only which cell is open is shared, here.
 
-export interface OpenCell { blockId: string; databaseId: string; rowId: string; columnId: string }
+/** `group`: a Multi-select's row is shown in each of its groups, with a cell in each; the editor opens under the one tapped. */
+export interface OpenCell { blockId: string; databaseId: string; rowId: string; columnId: string; group?: string }
 let openCell: OpenCell | null = null
 const cellListeners = new Set<() => void>()
-function setOpenCell(next: OpenCell | null) { openCell = next; for (const l of cellListeners) l() }
+export function setOpenCell(next: OpenCell | null) { openCell = next; for (const l of cellListeners) l() }
 function useOpenCell(): OpenCell | null {
   return useSyncExternalStore(l => { cellListeners.add(l); return () => cellListeners.delete(l) }, () => openCell, () => null)
 }
-const cellKey = (c: OpenCell) => `${c.blockId}|${c.rowId}|${c.columnId}`
+export const cellKey = (c: OpenCell) => `${c.blockId}|${c.rowId}|${c.columnId}|${c.group ?? ''}`
 /** Operations already resent once after "Saved elsewhere" (model §5.2: once, never in a loop). */
 const resent = new Set<string>()
 
 /** What a block's table keeps across BlockNote's redraws (by block id, for this tab): where it was scrolled, rows shown. */
-const blockPlaces = new Map<string, { scrollLeft: number; limit: number }>()
+export const blockPlaces = new Map<string, { scrollLeft: number; limit: number; groups?: Record<string, number> }>()
 
 /** One cell's commit: sent with what the cell held, resent once after "Saved elsewhere" if that cell is unchanged. */
 /** Cell values on their way to the server, or whose save failed (offline): shown in the cell until saved or undone. */
-interface PendingCell { databaseId: string; raw: Json | undefined; failed: boolean; retry: () => void; discard: () => void }
-const pendingCells = new Map<string, PendingCell>()
+/** `beforeId`: the place a dropped card is going to, so it shows there until it's saved. */
+interface PendingCell { databaseId: string; rowId: string; columnId: string; raw: Json | undefined; failed: boolean; retry: () => void; discard: () => void; beforeId?: string | null }
+export const pendingCells = new Map<string, PendingCell>()
 const pendingCellListeners = new Set<() => void>()
 let pendingCellVersion = 0
-const pendingKey = (rowId: string, columnId: string) => `${rowId}|${columnId}`
+export const pendingKey = (rowId: string, columnId: string) => `${rowId}|${columnId}`
 function setPendingCell(key: string, cell: PendingCell | null) {
   if (cell) pendingCells.set(key, cell); else pendingCells.delete(key)
   pendingCellVersion++
   for (const l of pendingCellListeners) l()
 }
-function usePendingCells() {
+export function usePendingCells() {
   return useSyncExternalStore(l => { pendingCellListeners.add(l); return () => pendingCellListeners.delete(l) }, () => pendingCellVersion, () => 0)
 }
 
@@ -193,9 +196,9 @@ function usePendingCells() {
  * the changed-elsewhere notice. While it's on its way, and after a save that failed (offline), the cell shows his value
  * (design §13: "Never a silent revert") and the table says "1 change not saved · Retry · Undo".
  */
-function useCommitCell() {
+export function useCommitCell() {
   const { run, refresh, latest } = useWorkspace()
-  const commit = (db: Page & { database: Database }, row: Page, columnId: string, raw: Json | undefined, notice?: string, onSaved?: () => void) => {
+  const commit = (db: Page & { database: Database }, row: Page, columnId: string, raw: Json | undefined, notice?: string, onSaved?: () => void, beforeId?: string | null) => {
     const key = pendingKey(row.id, columnId)
     // A value still on its way is what this change will find when it lands, so it's built on that (Lead's review, 7).
     const inFlight = pendingCells.get(key)
@@ -207,12 +210,12 @@ function useCommitCell() {
     let mine: PendingCell | null = null
     const show = (next: PendingCell | null) => { if (mine && pendingCells.get(key) !== mine) return; mine = next; setPendingCell(key, next) }
     const pending = (failed: boolean): PendingCell => ({
-      databaseId: db.id, raw, failed,
-      retry: () => { const now = latest()?.pages.find(p => p.id === row.id); show(null); if (now && !now.trashedAt) commit(db, { ...now, ...(columnId === titleId ? { title: String(expected ?? '') } : { values: { ...now.values, [columnId]: expected } }) } as Page, columnId, raw, notice, onSaved) },
+      databaseId: db.id, rowId: row.id, columnId, raw, failed, ...(beforeId !== undefined ? { beforeId } : {}),
+      retry: () => { const now = latest()?.pages.find(p => p.id === row.id); show(null); if (now && !now.trashedAt) commit(db, { ...now, ...(columnId === titleId ? { title: String(expected ?? '') } : { values: { ...now.values, [columnId]: expected } }) } as Page, columnId, raw, notice, onSaved, beforeId) },
       discard: () => { show(null); onSaved?.() },
     })
     const send = () => run(
-      { type: 'set-values', pageId: row.id, values, expected: { [columnId]: expected }, at: new Date().toISOString() },
+      { type: 'set-values', pageId: row.id, values, expected: { [columnId]: expected }, ...(beforeId !== undefined ? { beforeId } : {}), at: new Date().toISOString() },
       notice ? r => ({ text: notice, undoOperationId: r.operationId }) : null, newId(),
       { inlineRefusal: /Saved elsewhere|Changed elsewhere/, onRefused: () => { refused = true; void again() }, quiet: true })
     const settle = (r: unknown) => {
@@ -319,7 +322,8 @@ export function DatabaseCellEditor() {
   const find = () => cell ? document.querySelector<HTMLElement>(`[data-cell="${CSS.escape(cellKey(cell))}"]`) : null
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   useLayoutEffect(() => {
-    if (!cell) return
+    // Forgotten when it closes: a cell drawn again since would leave the next editor placed against nothing, at the screen's corner.
+    if (!cell) { setAnchor(null); return }
     let frame = 0
     const check = () => { const el = find(); setAnchor(a => (a === el ? a : el)); frame = requestAnimationFrame(check) }
     check()
@@ -371,8 +375,166 @@ function createOption(run: ReturnType<typeof useWorkspace>['run'], db: Page & { 
   return id
 }
 
+/** A row's value as it shows now: one on its way, or kept after a failed save, comes first. */
+export function shownRaw(row: Page, columnId: string): unknown {
+  const pending = pendingCells.get(pendingKey(row.id, columnId))
+  return pending ? pending.raw ?? null : rawOf(row, columnId)
+}
+/** The rows in the order they show: a dropped card is already where it's going while it saves. */
+export function withPendingMoves(rows: readonly Page[]): Page[] {
+  const out = [...rows]
+  for (const p of pendingCells.values()) {
+    if (p.beforeId === undefined) continue
+    const from = out.findIndex(r => r.id === p.rowId)
+    if (from < 0) continue
+    const [row] = out.splice(from, 1)
+    const to = p.beforeId === null ? -1 : out.findIndex(r => r.id === p.beforeId)
+    out.splice(to < 0 ? out.length : to, 0, row!)
+  }
+  return out
+}
+
+/** What a group's name reads as: a status with its dot, a number in its format. No value is quiet. */
+export function GroupName({ groups, group }: { groups: ViewGroups; group: ViewGroup }) {
+  if (group.key === noGroupKey) return <span className="database-group-none">{group.name}</span>
+  const { property } = groups
+  if (property.type === 'status' || property.type === 'number') return <PropertyCell property={property} value={property.type === 'number' ? Number(group.key) : group.key} />
+  return <span>{group.name}</span>
+}
+/** "Hidden: Done (12)" at the end of a view (design §7.3): a tap shows that group again. */
+export function HiddenGroups({ groups, changeView }: { groups: ViewGroups; changeView: ChangeView }) {
+  if (!groups.hidden.length) return null
+  return <p className="database-hidden-groups">Hidden: {groups.hidden.map((g, i) => <span key={g.key}>{i > 0 && ' · '}<button type="button" className="app-link" onClick={() => changeView(current => ({ hiddenGroups: (current.hiddenGroups ?? []).filter(k => k !== g.key) }))}>{g.name} ({g.rows.length})</button></span>)}</p>
+}
+/** How many rows each group draws, for this tab: "Show 25 more" (design §13) under each group or column. */
+export function useGroupLimits(blockId: string, cap: number) {
+  const [limits, setLimits] = useState<Record<string, number>>(() => blockPlaces.get(blockId)?.groups ?? {})
+  const set = (key: string, next: number) => setLimits(now => {
+    const groups = { ...now, [key]: next }
+    blockPlaces.set(blockId, { scrollLeft: blockPlaces.get(blockId)?.scrollLeft ?? 0, limit: blockPlaces.get(blockId)?.limit ?? cap, groups })
+    return groups
+  })
+  const limitOf = (key: string) => limits[key] ?? cap
+  return { limitOf, showMore: (key: string) => set(key, limitOf(key) + 25), reach: (key: string, at: number) => { if (at >= limitOf(key)) set(key, at + 1) } }
+}
+
+/**
+ * A row moved within its group, or to another: within one is a `move-page`; to another is one `set-values` with its new
+ * place, so one Undo takes back both. `before` is the row it goes in front of, or null for the end of the group.
+ */
+export function useMoveRow(db: Page & { database: Database }, view: View, context: ViewContext, groups: ViewGroups | null) {
+  const { run, latest } = useWorkspace()
+  const commit = useCommitCell()
+  return (rowId: string, from: string | null, to: string | null, before: string | null, shown: readonly Page[]) => {
+    const ws = latest()
+    const row = ws?.pages.find(p => p.id === rowId)
+    if (!ws || !row || row.trashedAt) return
+    // Sorted, a card's place comes from the sort: only its value changes.
+    const sorted = view.sort.length > 0
+    const all = databaseRows(ws, db.id), rest = all.filter(r => r.id !== rowId)
+    const target = groups?.shown.find(g => g.key === to)
+    const last = target?.rows.filter(r => r.id !== rowId).at(-1)
+    // The end of a group is just before whatever follows its last row; an empty group has no place to keep.
+    const end = groups ? (last ? rest[rest.indexOf(rest.find(r => r.id === last.id)!) + 1]?.id ?? null : undefined) : null
+    const beforeId = sorted ? undefined : before ?? end
+    if (from === to) {
+      // Dropped where it already is, as he sees it: nothing to send.
+      const here = groups ? groups.shown.find(g => g.key === to)?.rows ?? [] : shown
+      const next = here[here.findIndex(r => r.id === rowId) + 1]?.id ?? null
+      if (sorted || before === rowId || before === next || beforeId === undefined) return
+      void run({ type: 'move-page', pageId: rowId, parentId: db.id, beforeId }, r => ({ text: 'Row moved', undoOperationId: r.operationId }))
+      return
+    }
+    if (!groups || to === null || !target) return
+    const value = groupValue(groups.property, to, shownRaw(row, groups.property.id), from ?? undefined, context.today, view.groupDateBy)
+    const probe = { ...row, values: { ...row.values, ...(value === undefined ? {} : { [groups.property.id]: value }) } } as Page
+    if (value === undefined) delete probe.values![groups.property.id]
+    const hidden = !rowMatches(db.database, probe, view.filter, context)
+    commit(db, row, groups.property.id, value, `Moved to ${target.name}${hidden ? " · hidden by this view's filter" : ''}`, undefined, beforeId)
+  }
+}
+
+/** Opening a row remembers it, so Back tints it for a second where he left it (design §5). */
+export function useOpenRow() {
+  const navigate = useNavigate()
+  return (rowId: string, focus?: 'title') => { try { sessionStorage.setItem(returnKey, rowId) } catch { /* private mode */ } void navigate({ to: '/pages', search: { page: rowId, ...(focus ? { focus } : {}) } }) }
+}
+/** The row he's just come back from, for a second. */
+export function useReturnedRow(rows: readonly Page[]): string | null {
+  const [returned, setReturned] = useState<string | null>(null)
+  useEffect(() => {
+    let id: string | null = null
+    try { id = sessionStorage.getItem(returnKey) } catch { /* private mode */ }
+    if (!id || !rows.some(r => r.id === id)) return
+    sessionStorage.removeItem(returnKey)
+    setReturned(id)
+    const t = setTimeout(() => setReturned(null), 1000)
+    return () => clearTimeout(t)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  return returned
+}
+/**
+ * `+ New` (design §3.1, §7.4), under a view or a group: with the values that keep it in sight, and the notice when none
+ * do. On the phone it opens as its page with the caret in its title; at 1280 its Name opens to be typed, once it's drawn.
+ */
+export function useAddRow(db: Page & { database: Database }, view: View, context: ViewContext, reveal: (rowId: string, group: string | undefined) => void) {
+  const { run } = useWorkspace()
+  const navigate = useNavigate()
+  const openRow = useOpenRow()
+  const wide = useWide()
+  return (group?: string) => {
+    // Raise the keyboard inside this tap, for the row's page.
+    if (!wide) holdKeyboard()
+    const prefill = newRowValues(db.database, view, context, group)
+    const pageId = newId()
+    void run({ type: 'add-row', databaseId: db.id, pageId, title: prefill.title, values: prefill.values, at: new Date().toISOString() },
+      r => prefill.visible ? null : { text: "Added · hidden by this view's filter", extra: { label: 'Show', run: () => void navigate({ to: '/pages', search: { page: r.entityId ?? pageId } }) } })
+      .then(r => {
+        if (!r) return
+        if (!wide) { openRow(pageId, 'title'); return }
+        if (prefill.visible) reveal(pageId, group)
+      })
+  }
+}
+/** ⌘Z in a view: the last change, where the workspace's one Undo slot still holds it (design §10). True when it took the key. */
+export function useUndoKey() {
+  const { run, latest } = useWorkspace()
+  return (e: KeyboardEvent<HTMLElement>): boolean => {
+    if (!(e.metaKey || e.ctrlKey) || e.shiftKey || e.key.toLowerCase() !== 'z' || (e.target as HTMLElement).tagName === 'INPUT') return false
+    e.preventDefault()
+    const undo = latest()?.undo
+    if (undo) void run({ type: 'undo', targetOperationId: undo.operationId }, { text: 'Undone' }, undefined, { inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => toast("Can't undo · edited since", { timeout: 6000 }) })
+    else toast("Can't undo · edited since", { timeout: 6000 })
+    return true
+  }
+}
+/** Under any view: a filter that matches nothing, and changes that weren't saved (design §13). */
+export function ViewNotes({ db, view, changeView, empty }: { db: Page; view: View; changeView: ChangeView; empty: boolean }) {
+  usePendingCells()
+  const failedHere = [...pendingCells.values()].filter(p => p.failed && p.databaseId === db.id)
+  return <>
+    {empty && view.filter.length > 0 && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => changeView(() => ({ filter: [] }))}>Clear filter</button></p>}
+    {failedHere.length > 0 && <p className="database-unsaved" role="status">{failedHere.length === 1 ? '1 change' : `${failedHere.length} changes`} not saved · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.retry())}>Retry</button> · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.discard())}>Undo</button></p>}
+  </>
+}
+
+/** Which groups are folded in a table: on this device only, per view of a block, never a save or an Undo, like the view shown. */
+function foldKey(blockId: string, viewId: string) { return `daythread.database-fold.${blockId}.${viewId}` }
+function useFolds(blockId: string, viewId: string) {
+  const read = () => { try { return new Set<string>(JSON.parse(localStorage.getItem(foldKey(blockId, viewId)) ?? '[]') as string[]) } catch { return new Set<string>() } }
+  const [folded, setFolded] = useState(read)
+  useEffect(() => setFolded(read()), [blockId, viewId]) // eslint-disable-line react-hooks/exhaustive-deps
+  const toggle = (key: string) => {
+    const next = new Set(folded)
+    if (!next.delete(key)) next.add(key)
+    setFolded(next)
+    try { localStorage.setItem(foldKey(blockId, viewId), JSON.stringify([...next])) } catch { /* private mode: this tab only */ }
+  }
+  return { folded, toggle }
+}
+
 /** The table view (design §4.1, §4.2): Name first, then the view's shown properties; `+ New` under the rows. */
-interface DatabaseViewProps { workspace: Workspace; db: Page & { database: Database }; blockId: string; pageDate: string | null; cap: number; showTitle?: boolean }
+export interface DatabaseViewProps { workspace: Workspace; db: Page & { database: Database }; blockId: string; pageDate: string | null; cap: number; showTitle?: boolean }
 /** A linked view's own title and the line under it (design §9.2). */
 export interface LinkedHeader { title: string; rename(title: string): void; source: ReactNode }
 /** The view a block shows, and how to change it, drawn in its layout. */
@@ -380,7 +542,7 @@ function DatabaseView(props: DatabaseViewProps) {
   useShownViews()
   const view = shownView(props.db.database, props.blockId)
   const changeView = useViewChange(props.db.id, view.id)
-  return <DatabaseTable {...props} view={view} changeView={changeView} />
+  return view.layout === 'board' ? <DatabaseBoard {...props} view={view} changeView={changeView} /> : <DatabaseTable {...props} view={view} changeView={changeView} />
 }
 
 /** Above a view's rows, whatever its layout: the title, its view and `⋯` buttons, and the line of rules. */
@@ -421,11 +583,16 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   // Sideways scroll comes back after a redraw, so an edit never sends him back to Name (Jazz 8985f9e7).
   const scroller = (el: HTMLDivElement | null) => { const left = blockPlaces.get(blockId)?.scrollLeft; if (el && left && el.scrollLeft !== left) el.scrollLeft = left }
   const onScroll = (e: UIEvent<HTMLDivElement>) => blockPlaces.set(blockId, { limit, scrollLeft: e.currentTarget.scrollLeft })
-  const open = (rowId: string, columnId: string) => setOpenCell({ blockId, databaseId: db.id, rowId, columnId })
+  const open = (rowId: string, columnId: string, group?: string) => setOpenCell({ blockId, databaseId: db.id, rowId, columnId, ...(group !== undefined ? { group } : {}) })
+  usePendingCells()
+  // Rows in their groups, with a change on its way already in its new group (R2-13).
+  const groups = viewGroups(db.database, view, withPendingMoves(rows), shownRaw)
+  const { limitOf, showMore, reach } = useGroupLimits(`${blockId}|${view.id}`, cap)
+  const { folded, toggle } = useFolds(blockId, view.id)
+  const moveRow = useMoveRow(db, view, context, groups)
   const wide = useWide()
-  // Opening a row remembers it, so Back tints it for a second where he left it (design §5).
-  const openRow = (rowId: string, focus?: 'title') => { try { sessionStorage.setItem(returnKey, rowId) } catch { /* private mode */ } void navigate({ to: '/pages', search: { page: rowId, ...(focus ? { focus } : {}) } }) }
-  const [returned, setReturned] = useState<string | null>(null)
+  const openRow = useOpenRow()
+  const returned = useReturnedRow(rows)
   const [reveal, setReveal] = useState<string | null>(null)
   // Several rows at 1280 (design §12): a box on hover at each row's left, Shift for a range, then the bar.
   const [picked, setPicked] = useState<string[]>([])
@@ -444,69 +611,46 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     if (ids.length) void run({ type: 'delete-pages', pageIds: ids, at: new Date().toISOString() }, r => ({ text: ids.length === 1 ? 'Row deleted' : `${ids.length} rows deleted`, undoOperationId: r.operationId }))
   }
   // Rows drag by their ⋮⋮ only while the view isn't sorted (design §7.2); the drop is a move-page among the rows.
-  const [drag, setDrag] = useState<{ rowId: string; before: string | null } | null>(null)
+  const [drag, setDrag] = useState<{ rowId: string; from: string | null; before: string | null; group: string | null } | null>(null)
   const tbody = useRef<HTMLTableSectionElement>(null)
   const wrap = useRef<HTMLDivElement>(null)
-  const startDrag = (e: ReactPointerEvent, rowId: string) => {
+  const startDrag = (e: ReactPointerEvent, rowId: string, from: string | null) => {
     if (view.sort.length) return
     e.preventDefault()
     const el = e.currentTarget as HTMLElement
     el.setPointerCapture(e.pointerId)
-    const target = (y: number): string | null => {
-      const trs = [...(tbody.current?.querySelectorAll<HTMLTableRowElement>('tr.database-row') ?? [])]
-      const i = trs.findIndex(tr => { const r = tr.getBoundingClientRect(); return y < r.top + r.height / 2 })
-      return i < 0 ? null : trs[i]!.dataset.row ?? null
+    // The row under the pointer, or a group's foot for the end of that group.
+    const target = (y: number): { before: string | null; group: string | null } => {
+      const trs = [...(tbody.current?.querySelectorAll<HTMLTableRowElement>('tr.database-row, tr.database-group-foot') ?? [])]
+      const tr = trs.find(t => { const r = t.getBoundingClientRect(); return y < r.top + r.height / 2 })
+      return { before: tr?.classList.contains('database-row') ? tr.dataset.row ?? null : null, group: (tr ?? trs.at(-1))?.dataset.group ?? null }
     }
-    setDrag({ rowId, before: target(e.clientY) })
-    const move = (ev: PointerEvent) => setDrag({ rowId, before: target(ev.clientY) })
+    setDrag({ rowId, from, ...target(e.clientY) })
+    const move = (ev: PointerEvent) => setDrag({ rowId, from, ...target(ev.clientY) })
     const up = (ev: PointerEvent) => {
       el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up)
       setDrag(null)
       if (ev.type === 'pointercancel') return
-      const before = target(ev.clientY)
-      const ids = shown.map(r => r.id), from = ids.indexOf(rowId)
-      // Dropped where it already is: nothing to send.
-      if (before === rowId || (before === null ? from === ids.length - 1 : ids.indexOf(before) === from + 1)) return
-      void run({ type: 'move-page', pageId: rowId, parentId: db.id, beforeId: before }, r => ({ text: 'Row moved', undoOperationId: r.operationId }))
+      const { before, group } = target(ev.clientY)
+      moveRow(rowId, from, group, before, entries.map(x => x.row))
     }
     el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up)
   }
-  useEffect(() => {
-    let id: string | null = null
-    try { id = sessionStorage.getItem(returnKey) } catch { /* private mode */ }
-    if (!id || !rows.some(r => r.id === id)) return
-    sessionStorage.removeItem(returnKey)
-    setReturned(id)
-    const t = setTimeout(() => setReturned(null), 1000)
-    return () => clearTimeout(t)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!reveal) return
     const row = tbody.current?.querySelector(`[data-row="${CSS.escape(reveal)}"]`)
     if (row) { row.scrollIntoView({ block: 'nearest' }); setReveal(null) }
   }, [reveal, rows, limit])
-  const key = (rowId: string, columnId: string) => cellKey({ blockId, databaseId: db.id, rowId, columnId })
+  const key = (rowId: string, columnId: string, group?: string) => cellKey({ blockId, databaseId: db.id, rowId, columnId, ...(group !== undefined ? { group } : {}) })
 
-  const addRow = () => {
-    // On the phone the row opens as its page with the caret in its title: raise the keyboard inside this tap.
-    if (!wide) holdKeyboard()
-    const prefill = newRowValues(db.database, view, context)
-    const pageId = newId()
-    void run({ type: 'add-row', databaseId: db.id, pageId, title: prefill.title, values: prefill.values, at: new Date().toISOString() },
-      r => prefill.visible ? null : { text: "Added · hidden by this view's filter", extra: { label: 'Show', run: () => void navigate({ to: '/pages', search: { page: r.entityId ?? pageId } }) } })
-      // A new row opens its Name to be typed (design §3.1), once it's drawn; on the phone it opens as its page, with the
-      // caret in its title (R1-7: nothing is edited in the table itself there).
-      .then(r => {
-        if (!r) return
-        if (!wide) { openRow(pageId, 'title'); return }
-        if (!prefill.visible) return
-        // Past the rows shown, the new row is drawn all the same, and brought into view (Lead's review, 5).
-        const ws = latest(), at = ws ? viewRows(ws, db.id, view, context).findIndex(x => x.id === pageId) : -1
-        if (at >= limit) setLimit(at + 1)
-        setReveal(pageId)
-        requestAnimationFrame(() => open(pageId, titleId))
-      })
-  }
+  const addRow = useAddRow(db, view, context, (pageId, group) => {
+    // Past the rows shown, the new row is drawn all the same, and brought into view (Lead's review, 5).
+    const ws = latest(), now = ws ? viewRows(ws, db.id, view, context) : []
+    if (group === undefined) { const at = now.findIndex(x => x.id === pageId); if (at >= limit) setLimit(at + 1) }
+    else reach(group, ws ? viewGroups(db.database, view, now)?.shown.find(g => g.key === group)?.rows.length ?? 0 : 0)
+    setReveal(pageId)
+    requestAnimationFrame(() => open(pageId, titleId, group))
+  })
   const addProperty = () => {
     const id = newId()
     void run(ws => {
@@ -517,9 +661,11 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     if (linked) changeView(current => ({ columns: [...current.columns, { id }] }))
   }
 
-  const shown = rows.slice(0, limit)
-  usePendingCells()
-  const failedHere = [...pendingCells.values()].filter(p => p.failed && p.databaseId === db.id)
+  // What's drawn, in order: a Multi-select's row once in each of its groups, so a row's place is its index here.
+  const sections = groups?.shown.map(group => ({ group, rows: folded.has(group.key) ? [] : group.rows.slice(0, limitOf(group.key)) }))
+  const entries: { row: Page; group?: string }[] = sections ? sections.flatMap(({ group, rows: inGroup }) => inGroup.map(row => ({ row, group: group.key }))) : rows.slice(0, limit).map(row => ({ row }))
+  const shown = entries.map(e => e.row)
+  const undoKey = useUndoKey()
   /**
    * Keys in the table at 1280 (design §10): arrows move the cell cursor, Tab/Shift-Tab along a row, Enter opens the
    * cell (a button's own Enter), Delete clears it, Esc gives the block back to the page selected whole, and ⌘Z undoes
@@ -528,13 +674,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
     const target = e.target as HTMLElement
-    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && target.tagName !== 'INPUT') {
-      e.preventDefault()
-      const undo = latest()?.undo
-      if (undo) void run({ type: 'undo', targetOperationId: undo.operationId }, { text: 'Undone' }, undefined, { inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => toast("Can't undo · edited since", { timeout: 6000 }) })
-      else toast("Can't undo · edited since", { timeout: 6000 })
-      return
-    }
+    if (undoKey(e)) return
     // ⌘A on a cell selects nothing: the browser's select-all would take the page around it, and the next key replace it.
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a' && target.tagName !== 'INPUT') { e.preventDefault(); return }
     const nav = target.closest<HTMLElement>('[data-nav]')?.dataset.nav
@@ -556,7 +696,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
       const row = shown[r], property = c === 0 ? titleProperty : columns[c - 1]?.property
       if (!row || !property || !['text', 'number', 'url'].includes(property.type)) return
       e.preventDefault()
-      open(row.id, property.id)
+      open(row.id, property.id, entries[r]!.group)
       // Space opens the cell as it is; any other key starts replacing it.
       if (e.key !== ' ') typeInto(e.key)
     }
@@ -602,6 +742,42 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     for (const type of ['copy', 'cut', 'paste'] as const) window.addEventListener(type, handle, true)
     return () => { for (const type of ['copy', 'cut', 'paste'] as const) window.removeEventListener(type, handle, true) }
   }, [])
+  const rowLine = (row: Page, index: number, group?: string) => <tr key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})} className={`database-row${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
+            <td className="database-td is-title"><div className="database-title-inner">
+              {wide && <span className="database-pin-strip" />}
+              {wide && <span className="database-row-gutter">
+                {!view.sort.length && <span className="database-row-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
+                <input type="checkbox" className="database-row-pick" aria-label={`Select ${displayPageTitle(row)}`} checked={picked.includes(row.id)} onChange={() => undefined} onClick={e => pick(row.id, e.shiftKey)} />
+              </span>}
+              {/* A row opens as a page, from Name, at both widths (design §5). */}
+              <button type="button" className="database-title-cell" data-cell={key(row.id, titleId, group)} data-nav={`${index}:0`} onClick={() => openRow(row.id)}>
+                <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
+              </button>
+              <button type="button" className="database-open" onClick={() => openRow(row.id)}>Open</button>
+            </div></td>
+            {columns.map(({ property }, col) => {
+              const pending = pendingCells.get(pendingKey(row.id, property.id))
+              // His value stays shown while it saves and after a failed save, never a silent revert (design §13).
+              const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
+              const navId = `${index}:${col + 1}`
+              return <td key={property.id} className={`database-td is-${property.type}${pending?.failed ? ' is-unsaved' : pending ? ' is-saving' : ''}`}>
+                {property.type === 'checkbox'
+                  ? <span data-nav={navId} tabIndex={0} className="database-check-cell" onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); commit(db, row, property.id, value === true ? undefined : true) } }}>
+                      <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
+                    </span>
+                  : wide && property.type === 'url' && typeof value === 'string' && urlHref(value)
+                  // At 1280 a link opens from its text, and the pencil edits it (design §6.1, Jazz bf91cb72).
+                  ? <span className="database-url-cell">
+                      <a href={urlHref(value)!} target="_blank" rel="noreferrer" className="database-url-link"><PropertyCell property={property} value={value} today={today} /></a>
+                      <button type="button" className="database-url-edit" aria-label={`Edit ${property.name}`} data-cell={key(row.id, property.id, group)} data-nav={navId} onClick={() => open(row.id, property.id, group)}>✎</button>
+                    </span>
+                  : <button type="button" className="database-cell" data-cell={key(row.id, property.id, group)} data-nav={navId} onClick={() => open(row.id, property.id, group)}>
+                      <PropertyCell property={property} value={value} today={today} />
+                    </button>}
+              </td>
+            })}
+            <td className="database-td is-add" />
+          </tr>
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
@@ -613,56 +789,41 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
             <th scope="col" className="database-th is-add"><button type="button" aria-label="Add property" onClick={addProperty}>+</button></th>
           </tr>
         </thead>
-        <tbody ref={tbody} className={drag && drag.before === null ? 'is-drop-end' : undefined}>
-          {shown.map(row => <tr key={row.id} data-row={row.id} className={`database-row${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${drag?.before === row.id && drag.rowId !== row.id ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
-            <td className="database-td is-title"><div className="database-title-inner">
-              {wide && <span className="database-pin-strip" />}
-              {wide && <span className="database-row-gutter">
-                {!view.sort.length && <span className="database-row-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id)}>⋮⋮</span>}
-                <input type="checkbox" className="database-row-pick" aria-label={`Select ${displayPageTitle(row)}`} checked={picked.includes(row.id)} onChange={() => undefined} onClick={e => pick(row.id, e.shiftKey)} />
-              </span>}
-              {/* A row opens as a page, from Name, at both widths (design §5). */}
-              <button type="button" className="database-title-cell" data-cell={key(row.id, titleId)} data-nav={`${shown.indexOf(row)}:0`} onClick={() => openRow(row.id)}>
-                <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
-              </button>
-              <button type="button" className="database-open" onClick={() => openRow(row.id)}>Open</button>
-            </div></td>
-            {columns.map(({ property }, col) => {
-              const pending = pendingCells.get(pendingKey(row.id, property.id))
-              // His value stays shown while it saves and after a failed save, never a silent revert (design §13).
-              const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
-              const navId = `${shown.indexOf(row)}:${col + 1}`
-              return <td key={property.id} className={`database-td is-${property.type}${pending?.failed ? ' is-unsaved' : pending ? ' is-saving' : ''}`}>
-                {property.type === 'checkbox'
-                  ? <span data-nav={navId} tabIndex={0} className="database-check-cell" onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); commit(db, row, property.id, value === true ? undefined : true) } }}>
-                      <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
-                    </span>
-                  : wide && property.type === 'url' && typeof value === 'string' && urlHref(value)
-                  // At 1280 a link opens from its text, and the pencil edits it (design §6.1, Jazz bf91cb72).
-                  ? <span className="database-url-cell">
-                      <a href={urlHref(value)!} target="_blank" rel="noreferrer" className="database-url-link"><PropertyCell property={property} value={value} today={today} /></a>
-                      <button type="button" className="database-url-edit" aria-label={`Edit ${property.name}`} data-cell={key(row.id, property.id)} data-nav={navId} onClick={() => open(row.id, property.id)}>✎</button>
-                    </span>
-                  : <button type="button" className="database-cell" data-cell={key(row.id, property.id)} data-nav={navId} onClick={() => open(row.id, property.id)}>
-                      <PropertyCell property={property} value={value} today={today} />
-                    </button>}
-              </td>
-            })}
-            <td className="database-td is-add" />
-          </tr>)}
+        <tbody ref={tbody} className={!groups && drag && drag.before === null ? 'is-drop-end' : undefined}>
+          {sections ? sections.map(({ group, rows: inGroup }) => {
+            const isFolded = folded.has(group.key)
+            const start = entries.findIndex(e => e.group === group.key)
+            const more = !isFolded && group.rows.length > inGroup.length
+            return <Fragment key={group.key}>
+              <tr className="database-group"><th scope="rowgroup" colSpan={columns.length + 2} className="database-group-head">
+                <div className="database-group-inner">
+                  <button type="button" className="database-group-fold" aria-expanded={!isFolded} onClick={() => toggle(group.key)}>
+                    <ChevronRightIcon /><GroupName groups={groups!} group={group} /><span className="database-group-count">· {group.rows.length}</span>
+                  </button>
+                </div>
+              </th></tr>
+              {inGroup.map((row, i) => rowLine(row, start + i, group.key))}
+              {!isFolded && <tr className={`database-group-foot${drag && drag.before === null && drag.group === group.key ? ' is-drop-end' : ''}`} data-group={group.key}><td colSpan={columns.length + 2}>
+                <div className="database-group-inner">
+                  {more && <button type="button" className="database-more" onClick={() => showMore(group.key)}>Show 25 more</button>}
+                  <button type="button" className="database-new" onClick={() => addRow(group.key)}>+ New</button>
+                </div>
+              </td></tr>}
+            </Fragment>
+          }) : entries.map((e, i) => rowLine(e.row, i))}
         </tbody>
       </table>
     </div>
-    {rows.length === 0 && view.filter.length > 0 && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => changeView(() => ({ filter: [] }))}>Clear filter</button></p>}
-    {failedHere.length > 0 && <p className="database-unsaved" role="status">{failedHere.length === 1 ? '1 change' : `${failedHere.length} changes`} not saved · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.retry())}>Retry</button> · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.discard())}>Undo</button></p>}
+    <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
     {picked.length > 0 && <div className="database-picked-bar" role="toolbar" aria-label="Selected rows">
       <span>{picked.length === 1 ? '1 row' : `${picked.length} rows`}</span>
       <EditPickedButton db={db} rowIds={picked} />
       <button type="button" className="app-link is-danger" onClick={deletePicked}>Delete</button>
       <button type="button" className="app-link" onClick={() => setPicked([])}>Done</button>
     </div>}
-    {rows.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
-    <button type="button" className="database-new" onClick={addRow}>+ New</button>
+    {groups && <HiddenGroups groups={groups} changeView={changeView} />}
+    {!groups && rows.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
+    {!groups && <button type="button" className="database-new" onClick={() => addRow()}>+ New</button>}
   </div>
 }
 

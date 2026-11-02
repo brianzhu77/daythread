@@ -10,7 +10,7 @@ const errors = []
 page.on('pageerror', e => errors.push(e.message))
 await page.goto(`${base}/pages?page=books`)
 await page.waitForTimeout(2500)
-const label = await page.locator('.editor-database-label').allTextContents()
+const label = await page.locator('.database-title').evaluateAll(l => l.map(e => e.value))
 console.log('label', JSON.stringify(label))
 await page.getByText('After the table').click()
 await page.keyboard.press('Meta+ArrowRight')

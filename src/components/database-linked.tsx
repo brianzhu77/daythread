@@ -4,6 +4,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { isDatabase, type Database } from '../domain/database'
 import { linkedViewOf, linkedViewJson, type LinkedView } from '../domain/linked-view'
 import type { Page, Workspace } from '../domain/types'
+import { DatabaseBoard } from './database-board'
 import { setLinkedBlock, DatabaseTable, rowCaps, type BlockActions, type ChangeView } from './database-block'
 import { displayPageTitle } from './page-title'
 import { useWorkspace } from './use-day'
@@ -43,7 +44,8 @@ export function LinkedDatabase({ workspace, db, blockId, json, pageDate, actions
   useLayoutEffect(() => { setLinkedBlock(blockId, { view, json, change }) })
   useLayoutEffect(() => () => setLinkedBlock(blockId, null), [blockId])
   if (db.trashedAt) return <TrashedSource db={db} label={view.title || displayPageTitle(db)} />
-  return <DatabaseTable workspace={workspace} db={db} view={view} changeView={change} blockId={blockId} pageDate={pageDate} cap={rowCaps.inline}
+  const Layout = view.layout === 'board' ? DatabaseBoard : DatabaseTable
+  return <Layout workspace={workspace} db={db} view={view} changeView={change} blockId={blockId} pageDate={pageDate} cap={rowCaps.inline}
     linked={{ title: view.title ?? displayPageTitle(db), rename, source: <SourceLine workspace={workspace} db={db} /> }} />
 }
 

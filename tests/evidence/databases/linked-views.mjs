@@ -106,6 +106,30 @@ await scenario('`/` Database: Enter is New database, typing filters, picking mak
   const r = { shown: shown.length, filtered: filtered.map(t => t.replace(/\s+/g, ' ')), blocks: dbBlocks(ws).length, databases: ws.pages.filter(p => p.database).length, picked: dbBlocks(ws)[1]?.props.pageId }
   return { ...r, ok: r.shown >= 3 && r.filtered.length === 1 && /Reading list/.test(r.filtered[0]) && r.blocks === 2 && r.databases === 2 && r.picked === 'list' }
 })
+await scenario('its layout and grouping are its own too (R2-16: they survive its edits)', async page => {
+  await makeLinked(page)
+  const homeView = JSON.stringify(list(store()).database.views)
+  await second(page).locator('.database-more-button').click()
+  await menu(page).getByRole('menuitem', { name: 'Layout' }).click().catch(() => menu(page).getByRole('button', { name: 'Layout' }).click()); await wait(200)
+  await menu(page).getByRole('button', { name: 'Board' }).or(menu(page).getByRole('menuitem', { name: 'Board' })).first().click(); await wait(1800)
+  await page.keyboard.press('Escape'); await wait(200)
+  const ws = store(), linked = JSON.parse(dbBlocks(ws)[1].props.view)
+  const r = { layout: linked.layout, sourceSame: JSON.stringify(list(ws).database.views) === homeView, boards: await page.locator('.database-board').count(), tables: await page.locator('.database-table').count(), source: await second(page).locator('.database-source').count() }
+  return { ...r, ok: r.layout === 'board' && r.sourceSame && r.boards === 1 && r.tables === 1 && r.source === 1 }
+})
+await scenario('"this page\'s day" off a day page hides nothing, writes nothing (R2-4)', async page => {
+  await makeLinked(page)
+  const view = JSON.parse(dbBlocks(store())[1].props.view)
+  await second(page).locator('.database-more-button').click()
+  await menu(page).getByRole('button', { name: 'Filter' }).click(); await menu(page).getByText('+ Add filter').click(); await wait(400)
+  await page.locator('.database-rule select[aria-label=Property]').first().selectOption({ label: 'Due' }); await wait(300)
+  await page.locator('.database-rule select[aria-label=Condition]').first().selectOption('is'); await wait(300)
+  await page.locator('.database-rule select[aria-label=Day]').first().selectOption('pageDate'); await wait(800)
+  await page.keyboard.press('Escape'); await wait(1500)
+  const stored = JSON.parse(dbBlocks(store())[1].props.view).filter
+  const r = { view: view.filter.length, stored, rows: await second(page).locator('.database-row').count(), chip: await second(page).locator('.database-filter-chip').count() }
+  return { ...r, ok: r.stored.length === 1 && r.stored[0].value?.relative === 'pageDate' && r.rows === 3 && r.chip === 1 }
+})
 await scenario('Duplicate makes a linked view', async page => {
   await page.locator('.database-more-button').first().click()
   await menu(page).getByRole('menuitem', { name: 'Duplicate' }).click(); await wait(1800)
