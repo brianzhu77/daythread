@@ -107,16 +107,15 @@ interface ShellProps {
   children: ReactNode
 }
 /**
- * A phone sheet closing must not leave a caret in the page. The sheet's focus scope gives focus back towards the cell,
- * which sits inside the page editor, so the editor takes it: a caret at the page's start, and the keyboard stays up
- * after a Text sheet (native run on dc9b8db7). If he was typing in the page before, the caret goes back there.
+ * A phone sheet closing leaves no caret in the page. The sheet's focus scope gives focus back towards the cell, which
+ * sits inside the page editor, so the editor took it: a caret at the page's start, and after a Text sheet the keyboard
+ * stayed up (native run on dc9b8db7). A tap on a cell has already left any line he was typing in, so after a sheet
+ * the keyboard stays down.
  */
 function useNoCaretAfterSheet(sheet: boolean) {
   useEffect(() => {
     if (!sheet) return
-    const editing = Boolean(document.activeElement?.closest?.('[contenteditable=true]'))
     return () => {
-      if (editing) return
       const settle = () => {
         const active = document.activeElement as HTMLElement | null
         if (!active?.closest?.('[contenteditable=true]')) return
