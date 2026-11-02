@@ -165,6 +165,8 @@ function Popover({ anchor, label, onDismiss, overCell, maxWidth, children }: { a
     onOpenChange: (open, _event, reason) => { if (!open) onDismiss(reason === 'escape-key' ? 'escape' : 'outside') },
     elements: { reference: anchor },
     placement,
+    // Fixed: its field takes the focus before it's placed, and absolute at the page's top would scroll the page up there.
+    strategy: 'fixed',
     whileElementsMounted: autoUpdate,
     middleware: [
       offset(({ rects }) => (overCell ? -rects.reference.height : 4)),
