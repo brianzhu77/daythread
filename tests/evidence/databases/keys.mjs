@@ -1,6 +1,7 @@
 // R1 keys at 1280 (design §10), on a fresh store (reseeded): ↓ from the line above stops on the block once, ↓ again
 // leaves it; Enter goes into the first cell; arrows move; Delete clears a cell and ⌘Z in the table undoes it; Esc gives
-// the block back selected; "/", "[[", Backspace and Enter typed in the title never reach the page editor.
+// the block back selected; typing on a text cell replaces its value; "/", "[[", Backspace and Enter typed in the title
+// never reach the page editor.
 // Usage: node tests/evidence/databases/keys.mjs <base-url> <store-path> [chromium|webkit]  (the store is a throwaway SQLite file the dev server at <base-url> uses; both are required)
 import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
@@ -25,6 +26,13 @@ await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowRight')
 await page.keyboard.press('Delete'); await page.waitForTimeout(1200); out.cleared = store().pages.find(p => p.id === 'emma').values.pages ?? null
 await page.keyboard.press('Meta+z'); await page.waitForTimeout(1200); out.undone = store().pages.find(p => p.id === 'emma').values.pages ?? null
 await page.keyboard.press('Escape'); await page.waitForTimeout(300); out.esc = await focused()
+// Typing on a text cell replaces its value: Dune's Notes (0:8).
+await page.keyboard.press('Enter'); await page.waitForTimeout(200)
+for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowRight')
+out.notesCell = await focused()
+await page.keyboard.type('Zed'); await page.keyboard.press('Enter'); await page.waitForTimeout(1500)
+out.replaced = store().pages.find(p => p.id === 'dune').values.notes
+await page.keyboard.press('Escape'); await page.waitForTimeout(300)
 // Title: keys stay in it.
 await page.locator('.database-title').first().click(); await page.keyboard.press('Meta+ArrowRight')
 await page.keyboard.type(' /x [[y'); await page.keyboard.press('Backspace'); await page.waitForTimeout(500)
@@ -36,5 +44,5 @@ out.docSame = ws.pages.find(p => p.id === 'books').document === doc0
 out.errors = errors
 console.log(JSON.stringify(out))
 const ok = out.down1 === 'editor:block' && out.down2 === 'editor:text' && out.up === 'editor:block' && out.enter === '0:0' && out.moved === '1:2'
-  && out.cleared === null && out.undone === 300 && out.esc === 'editor:block' && out.slashMenu === 0 && out.title === 'Reading list /x [[' && out.docSame && !errors.length
+  && out.cleared === null && out.undone === 300 && out.esc === 'editor:block' && out.notesCell === '0:8' && out.replaced === 'Zed' && out.slashMenu === 0 && out.title === 'Reading list /x [[' && out.docSame && !errors.length
 console.log(ok ? 'PASS' : 'FAIL'); await browser.close(); if (!ok) process.exit(1)

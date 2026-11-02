@@ -1889,3 +1889,7 @@ button.database-view-name { padding: 0; border: 0; background: none; font: inher
 .database-view-actions { display: flex; flex-direction: column; width: 100%; padding-left: 12px; }
 /* Design §5: back from a row, it's tinted for a second where he left it. */
 .database-row.is-returned > td { background: var(--blue-soft); transition: background 0.3s; }
+.database-url-cell { display: flex; align-items: center; gap: 4px; min-height: 34px; padding: 0 8px; overflow: hidden; }
+.database-url-link { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.database-url-edit { flex: none; padding: 0 4px; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; cursor: pointer; opacity: 0; }
+.database-row:hover .database-url-edit, .database-url-edit:focus-visible { opacity: 1; }

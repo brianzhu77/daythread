@@ -11,6 +11,7 @@ import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
 import { ChevronDownIcon } from './icons'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useWide } from './property-editors'
+import { urlHref } from './property-values'
 import { useWorkspace } from './use-day'
 import { DatabaseMenuButton, DatabaseViewsButton, openDatabaseMenu } from './database-menu'
 
@@ -390,6 +391,14 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
     else if (e.key === 'ArrowRight') move(r, c + 1)
     else if (e.key === 'ArrowLeft') move(r, c - 1)
     else if (e.key === 'Tab') { e.preventDefault(); const i = r * width + c + (e.shiftKey ? -1 : 1); move(Math.floor(i / width), ((i % width) + width) % width) }
+    else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      // Typing on a text, number or URL cell (or Name) starts replacing its value (design §10).
+      const row = shown[r], property = c === 0 ? titleProperty : columns[c - 1]?.property
+      if (!row || !property || !['text', 'number', 'url'].includes(property.type)) return
+      e.preventDefault()
+      open(row.id, property.id)
+      typeInto(e.key)
+    }
     else if ((e.key === 'Backspace' || e.key === 'Delete') && c > 0) {
       const row = shown[r], property = columns[c - 1]?.property
       if (row && property && !isEmptyValue(cellValue(db.database, row, property.id))) { e.preventDefault(); commit(db, row, property.id, undefined) }
@@ -434,6 +443,12 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
                   ? <span data-nav={navId} tabIndex={0} className="database-check-cell" onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); commit(db, row, property.id, value === true ? undefined : true) } }}>
                       <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
                     </span>
+                  : wide && property.type === 'url' && typeof value === 'string' && urlHref(value)
+                  // At 1280 a link opens from its text, and the pencil edits it (design §6.1, Jazz bf91cb72).
+                  ? <span className="database-url-cell">
+                      <a href={urlHref(value)!} target="_blank" rel="noreferrer" className="database-url-link"><PropertyCell property={property} value={value} today={today} /></a>
+                      <button type="button" className="database-url-edit" aria-label={`Edit ${property.name}`} data-cell={key(row.id, property.id)} data-nav={navId} onClick={() => open(row.id, property.id)}>✎</button>
+                    </span>
                   : <button type="button" className="database-cell" data-cell={key(row.id, property.id)} data-nav={navId} onClick={() => open(row.id, property.id)}>
                       <PropertyCell property={property} value={value} today={today} />
                     </button>}
@@ -449,6 +464,16 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
     {rows.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
     <button type="button" className="database-new" onClick={addRow}>+ New</button>
   </div>
+}
+
+/** Puts `text` into the editor that is opening, as typed, replacing what was there (a few frames for it to mount). */
+function typeInto(text: string, tries = 10) {
+  const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>('.property-popover input, .property-popover textarea, .property-sheet input, .property-sheet textarea')
+  if (!input) { if (tries > 0) requestAnimationFrame(() => typeInto(text, tries - 1)); return }
+  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input), 'value')?.set
+  setter?.call(input, text)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  input.setSelectionRange?.(text.length, text.length)
 }
 
 /** Column widths until he drags one (stored on the view), design §4.1. Name's width is in CSS: 240, or 150 on the phone. */
