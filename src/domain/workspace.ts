@@ -253,12 +253,19 @@ function joinNewDayPage(state: Workspace, restored: Page): boolean {
   if (!newer) return false;
   const children = state.pages.filter((x) => x.parentId === newer.id);
   const pages = children.filter((x) => !isDraft(x));
+  // A to-do picked up again on the new page is the same to-do: one row of it, unless lines are nested under the new one.
+  const doc = docOf(restored);
+  const held = new Map(flatNodes(doc).flatMap((n) => { const id = rowTaskId(n); return id ? [[id, n] as const] : []; }));
+  const extra = flatNodes(docOf(newer)).filter((n) => held.has(rowTaskId(n) ?? "") && !n.children?.length);
+  for (const n of extra) if (rowRole(n) === "plan") setRole(doc, rowTaskId(n)!, "plan", restored.date!);
+  const rest = removeNodes(docOf(newer), new Set(extra.map((n) => n.id)));
   // A heading he changed is writing too; the template's own aren't.
-  const headings = (p: Page) => flatNodes(pageNodes(p)).filter((n) => n.type === "heading").map((n) => inlineText(n.content).trim());
+  const headings = (p: Pick<Page, "document">) => flatNodes(pageNodes(p)).filter((n) => n.type === "heading").map((n) => inlineText(n.content).trim());
   const own = new Set(headings(restored));
-  const written = hasContent(newer) || headings(newer).some((h) => h && !own.has(h));
+  const kept = { ...newer, document: JSON.stringify(rest) };
+  const written = hasContent(kept) || headings(kept).some((h) => h && !own.has(h));
   const joined = written || pages.length > 0;
-  if (written) setDocument(restored, [...docOf(restored), ...docOf(newer)]);
+  setDocument(restored, written ? [...doc, ...rest] : doc);
   for (const x of pages) x.parentId = restored.id;
   if (newer.handoffDone) restored.handoffDone = true;
   if (newer.reviewSaved) restored.reviewSaved = true;

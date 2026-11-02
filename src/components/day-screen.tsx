@@ -5,7 +5,7 @@ import { longLabel } from './dates'
 import { ContinuousPage } from './continuous-page'
 import { dayMenuGroups, LinkedFrom, Subpages } from './page-tree'
 import { RowMenu } from './row-menu'
-import { useDeletePage, useRestore } from './trash'
+import { useDeletePage, useRestore, useRunFromButton } from './trash'
 import { FactsStrip } from './facts-strip'
 import { useDay, useWorkspace } from './use-day'
 import { DayHeader } from './day-header'
@@ -20,6 +20,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
   const page = view?.page ?? null
   const deletePage = useDeletePage()
   const restore = useRestore()
+  const runFromButton = useRunFromButton()
   // The newest page of this date in the trash, while no live one holds the date (B16).
   const trashed = page ? undefined : workspace?.pages.filter(p => p.type === 'daily' && p.date === date && p.trashedAt).sort((a, b) => b.trashedAt!.localeCompare(a.trashedAt!))[0]
 
@@ -74,7 +75,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
             <p>{isToday ? "Today's page" : `The page for ${longLabel(date)}`} is in Trash.</p>
             <div className="day-in-trash-actions">
               <button type="button" className="secondary" onClick={() => void restore(trashed, { whole: true, withOpen: false })}>Restore</button>
-              <button type="button" className="secondary" onClick={() => void run({ type: 'ensure-day', date })}>Start a new page</button>
+              <button type="button" className="secondary" onClick={() => void runFromButton({ type: 'ensure-day', date }, undefined, "Couldn't start a page · try again")}>Start a new page</button>
             </div>
           </div>
         ) : (

@@ -2,7 +2,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { editorSeed, inlineText, type EditorNode } from '../domain/editor-document'
 import { cardTo, isTrashed, parentOf, subtreeIds, trashBatch, trashBatches, trashedChildPages } from '../domain/page-tree'
-import type { Page, Receipt, Workspace } from '../domain/types'
+import type { Action, Page, Receipt, Workspace } from '../domain/types'
 import { databaseOfRow, isDatabase } from '../domain/database'
 import { longLabel, toIso } from './dates'
 import { flushEditor } from './editor-flush'
@@ -14,7 +14,7 @@ import { LinkUrlRow } from './link-url-row'
 import { InlineWithRefs } from './line-text'
 import { displayPageTitle } from './page-title'
 import { PageLink, pageHref, pageLabel, useToday } from './page-tree'
-import { useWorkspace } from './use-day'
+import { useWorkspace, type NoticeArg } from './use-day'
 
 // A4 trash and restore, laid out per Jazz docs/design/pages-trash-layout.md (2956eea). Data: docs/design/a4-trash-data.md.
 
@@ -56,8 +56,23 @@ function restoredText(ws: Workspace, page: Page, comingBack: Set<string>, today:
   return `Restored ${displayPageTitle(page)} to Pages · ${parent ? `${pageLabel(parent, today)} is in trash` : 'its page was deleted'}`
 }
 
+/**
+ * A command from a button with no editor line under it to show a failure: if another tab moved the workspace on, it's sent
+ * again once, on the fresh copy, so the button never just looks dead; if it still can't go, it says so.
+ */
+export function useRunFromButton() {
+  const { run } = useWorkspace()
+  return async (action: Action, notice: NoticeArg | undefined, failed: string): Promise<Receipt | null> => {
+    let stale = false
+    const said = () => toast(failed, { timeout: 6000 })
+    const first = await run(action, notice, undefined, { inlineRefusal: /Saved elsewhere/, onRefused: () => { stale = true }, quiet: true, onFailure: said })
+    return first ?? (stale ? run(action, notice, undefined, { quiet: true, onFailure: said }) : null)
+  }
+}
+
 export function useRestore() {
-  const { workspace, run } = useWorkspace()
+  const { workspace } = useWorkspace()
+  const runFromButton = useRunFromButton()
   const navigate = useNavigate()
   const today = useToday()
   /** `whole`: what's left of the page's delete (Trash row, top page's banner); otherwise the page and its own subtree. */
@@ -69,9 +84,10 @@ export function useRestore() {
     const members = whole ? trashBatch(workspace, page.trashId)?.members ?? [] : [page, ...descendantsInBatch(workspace, page)]
     const top = whole ? trashBatch(workspace, page.trashId)?.top ?? page : page
     const text = restoredText(workspace, top, new Set(members.map(m => m.id)), today)
-    return run(whole ? { type: 'restore-batch', trashId: page.trashId } : { type: 'restore-page', pageId: page.id },
+    return runFromButton(whole ? { type: 'restore-batch', trashId: page.trashId } : { type: 'restore-page', pageId: page.id },
       // Joining changes a page he wrote on, so like any change that can lose his lines it can be undone (Bumblebee).
-      (r: Receipt) => ({ text: top.type === 'daily' ? r.message : text, ...(newer ? { undoOperationId: r.operationId } : {}), ...(withOpen ? { extra: { label: 'Open', run: () => void navigate({ href: pageHref({ ...top, id: r.entityId ?? top.id, trashedAt: null }) }) } } : {}) }))
+      (r: Receipt) => ({ text: top.type === 'daily' ? r.message : text, ...(newer ? { undoOperationId: r.operationId } : {}), ...(withOpen ? { extra: { label: 'Open', run: () => void navigate({ href: pageHref({ ...top, id: r.entityId ?? top.id, trashedAt: null }) }) } } : {}) }),
+      "Couldn't restore · try again")
   }
 }
 function descendantsInBatch(ws: Workspace, page: Page): Page[] {

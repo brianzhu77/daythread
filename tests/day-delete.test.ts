@@ -113,6 +113,46 @@ test('a new page with writing joins the restored one below its lines, its subpag
   assert.equal(h.page('sub').parentId, newer)
 })
 
+test('a to-do picked up again on the new page is one row after joining, and the same to-do', () => {
+  const h = written()
+  const { entityId: task } = h.run({ type: 'add-task', pageId: dayId, title: 'TRV', plannedOn: today }).receipt
+  h.run({ type: 'delete-page', pageId: dayId, at })
+  h.run({ type: 'plan-task', taskId: task!, date: today })
+  const newer = `${dayId}:2`
+  h.save(newer, d => [...d, para('p-second', text('Second try'))])
+  const count = h.ws.tasks.length
+  const r = h.run({ type: 'restore-batch', trashId: h.page(dayId).trashId! })
+  assert.equal(r.receipt.message, 'Restored · joined with the new page')
+  assert.equal(taskRows(h.ws, task!).length, 1)
+  assert.equal(taskRows(h.ws, task!)[0]!.role, 'plan')
+  assert.equal(plannedOn(h.ws, task!), today)
+  assert.equal(h.ws.tasks.length, count)
+  assert.deepEqual(words(h.page(dayId)).filter(w => w === 'Second try'), ['Second try'])
+})
+
+test("a new page holding only a to-do the old page has isn't writing: no join, one row", () => {
+  const h = written()
+  const { entityId: task } = h.run({ type: 'add-task', pageId: dayId, title: 'TRV', plannedOn: today }).receipt
+  h.run({ type: 'delete-page', pageId: dayId, at })
+  h.run({ type: 'plan-task', taskId: task!, date: today })
+  const r = h.run({ type: 'restore-batch', trashId: h.page(dayId).trashId! })
+  assert.equal(r.receipt.message, 'Restored')
+  assert.equal(taskRows(h.ws, task!).length, 1)
+  assert.deepEqual(pagesOn(h).map(p => p.id), [dayId])
+})
+
+test('a new row with lines nested under it stays, so nothing is lost', () => {
+  const h = written()
+  const { entityId: task } = h.run({ type: 'add-task', pageId: dayId, title: 'TRV', plannedOn: today }).receipt
+  h.run({ type: 'delete-page', pageId: dayId, at })
+  h.run({ type: 'plan-task', taskId: task!, date: today })
+  const newer = `${dayId}:2`
+  h.save(newer, d => d.map(n => (n.props?.taskId === task ? { ...n, children: [para('p-sub', text('Book the train'))] } : n)))
+  h.run({ type: 'restore-batch', trashId: h.page(dayId).trashId! })
+  assert.ok(words(h.page(dayId)).includes('Book the train'))
+  assert.equal(taskRows(h.ws, task!).length, 2)
+})
+
 test('a heading he changed on the new page counts as writing, so it joins', () => {
   const h = written()
   h.run({ type: 'delete-page', pageId: dayId, at })

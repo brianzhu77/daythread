@@ -9,6 +9,7 @@ Run against the built app on a throwaway store: all pass at 1280, 390 and 375, i
 
 ## Limits
 
+- Typing in another tab still open on the deleted page saves into the trashed page, with no refusal. Restore brings it back, so it isn't lost, but until then it's only reachable through Trash.
 - Links or page cards to a new page that's joined or replaced read as not found.
 - A kept draft of that new page, left unsaved on this device, isn't carried over when it's joined.
 - Rollback: a second page for a date has the id `day:<date>:2`, and the old build takes the first page it finds for a date, which could be the trashed one. Restore or join those pages before rolling back.

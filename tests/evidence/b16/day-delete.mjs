@@ -95,6 +95,17 @@ await tap(page.getByRole('button', { name: 'Restore' })); await wait(1500)
 check(live().length === 1 && live()[0].document.includes('Second try') && !live()[0].document.includes('Slept well'), 'Restore brings back the newest')
 check(dayPages().filter(p => p.trashedAt).length === 1, 'the older stays in Trash')
 
+// A second tab moves the workspace on while this one shows "in Trash": Restore works the first time.
+await page.goto(`${base}/`); await wait(2500)
+const tab2 = await context.newPage()
+await tab2.goto(`${base}/day/2026-09-30`); await wait(2500)
+await page.bringToFront(); await del()
+await tab2.bringToFront(); await tab2.locator('.bn-inline-content').last().click(); await tab2.keyboard.type('From the other tab'); await wait(2200)
+await tab2.close(); await page.bringToFront()
+const before = store().revision
+await tap(page.getByRole('button', { name: 'Restore' })); await wait(1800)
+check(live().length === 1 && await inTrash().count() === 0, 'Restore works the first time after another tab saved', { before, after: store().revision })
+
 if (wide) {
   // The sidebar's row: same Delete, and it stays on the date.
   await page.goto(`${base}/`); await wait(2500)
