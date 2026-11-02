@@ -634,6 +634,11 @@ Restore brings back the database with its rows. Nothing else shows, and nothing 
 - **A filter value only day pages have:** for a date property, **"this page's day"**. A linked view on Nov 3's page
   filtered by "Added is this page's day" shows Nov 3's rows. In the **Day template** it gives every new day its own
   slice. This is the strongest reason for linked views in Daythread.
+- **"This page's day" where there's no day (R2-4):** on the Day template itself and on any page that isn't a day, the rule
+  can't be read, so **it's ignored and hides nothing**. The view shows every row its other rules allow, and its chip still
+  reads "Added is this page's day". No error and no write. Hiding every row would look like a broken or empty database just
+  when he's setting it up on the template. A `+ New` there starts with no date, because no single day fits (§7.4). This is
+  already how `conditionHolds` and `newRowValues` treat it, so only #263 needs to keep it true for a linked view.
 - **A linked view in the Day template** is copied into each new day as a linked view, with the same filter. It never
   creates a new database.
 
