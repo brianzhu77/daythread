@@ -30,9 +30,30 @@ export function shownView(db: Database, blockId: string): View {
   return db.views.find(v => v.id === id) ?? db.views[0]!
 }
 
+/** Databases being made by `/` Database in this tab: the block shows "Creating…", then "Not created · Retry". */
+type Pending = { state: 'creating' | 'failed'; retry: () => void }
+const pendingDatabases = new Map<string, Pending>()
+const pendingListeners = new Set<() => void>()
+let pendingVersion = 0
+export function setDatabasePending(pageId: string, pending: Pending | null) {
+  if (pending) pendingDatabases.set(pageId, pending); else pendingDatabases.delete(pageId)
+  pendingVersion++
+  for (const l of pendingListeners) l()
+}
+function usePendingDatabases() {
+  return useSyncExternalStore(l => { pendingListeners.add(l); return () => pendingListeners.delete(l) }, () => pendingVersion, () => 0)
+}
+
 export function DatabaseBlock({ blockId, pageId, hostDate }: { blockId: string; pageId: string; hostDate: string | null }) {
   const { workspace } = useWorkspace()
+  usePendingDatabases()
   const db = workspace?.pages.find(p => p.id === pageId)
+  const pending = db ? undefined : pendingDatabases.get(pageId)
+  if (pending) return <div className="database-block is-pending" contentEditable={false} {...isolate}>
+    <div className="database-title-row"><span className="database-title is-placeholder">Untitled database</span></div>
+    {pending.state === 'creating' ? <p className="database-empty">Creating…</p>
+      : <button type="button" className="database-new" onClick={pending.retry}>Not created · Retry</button>}
+  </div>
   if (!workspace || !isDatabase(db) || db.database.homeBlockId !== blockId || db.trashedAt) return <DatabaseCard pageId={pageId} />
   return <div className="database-block" contentEditable={false} {...isolate}>
     <DatabaseTable workspace={workspace} db={db} blockId={blockId} pageDate={hostDate} cap={rowCaps.inline} />
@@ -179,8 +200,10 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap }: { works
   const shown = rows.slice(0, limit)
   return <div className="database-table-wrap">
     <div className="database-title-row">
-      <input className="database-title" aria-label="Database name" placeholder="Untitled database" defaultValue={db.title} key={db.title}
-        onBlur={e => rename(e.currentTarget.value.trim())} onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) e.currentTarget.blur() }} />
+      <input className="database-title" data-database={db.id} aria-label="Database name" placeholder="Untitled database" defaultValue={db.title} key={db.title}
+        onBlur={e => rename(e.currentTarget.value.trim())}
+        // Enter in a new database's title goes on to its first row's Name (design §3.1).
+        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.currentTarget.blur(); if (!databaseRows(workspace, db.id).length) addRow() } }} />
       <span className="database-view-name">{view.name}<ChevronDownIcon /></span>
     </div>
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
