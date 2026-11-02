@@ -5,11 +5,14 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { isDatabase, propertyOf, titleId, typeLabels, propertyTypes, type Condition, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { blockActions, shownView } from './database-block'
+import { blockActions, setShownView, shownView } from './database-block'
+import { ChevronDownIcon } from './icons'
 import { useWorkspace } from './use-day'
 
-type Panel = 'root' | 'filter' | 'sort' | 'properties' | { property: string } | 'new-property'
+type Panel = 'root' | 'filter' | 'sort' | 'properties' | { property: string } | 'new-property' | 'views'
 interface OpenMenu { blockId: string; databaseId: string; panel: Panel }
+/** The views list opens under "Table ⌄" on the left; every other panel under the `⋯` on the right. */
+const anchorOf = (m: OpenMenu) => m.panel === 'views' ? `[data-database-views="${CSS.escape(m.blockId)}"]` : `[data-database-menu="${CSS.escape(m.blockId)}"]`
 let openMenu: OpenMenu | null = null
 const listeners = new Set<() => void>()
 function setOpenMenu(next: OpenMenu | null) { openMenu = next; for (const l of listeners) l() }
@@ -27,30 +30,39 @@ export function DatabaseMenuButton({ blockId, databaseId }: { blockId: string; d
     onClick={() => setOpenMenu(here ? null : { blockId, databaseId, panel: 'root' })}>⋯</button>
 }
 
+/** "Table ⌄" (design §7.1): the view the block shows, opening the list of views. */
+export function DatabaseViewsButton({ blockId, databaseId, name }: { blockId: string; databaseId: string; name: string }) {
+  const open = useOpenMenu()
+  const here = open?.blockId === blockId && open.panel === 'views'
+  return <button type="button" className="database-view-name" data-database-views={blockId} aria-haspopup="menu" aria-expanded={here}
+    onClick={() => setOpenMenu(here ? null : { blockId, databaseId, panel: 'views' })}>{name}<ChevronDownIcon /></button>
+}
+
 /** Mounted once (app shell): the open table menu, under its `⋯`. */
 export function DatabaseMenuHost() {
   const open = useOpenMenu()
   const { workspace } = useWorkspace()
   const ref = useRef<HTMLDivElement>(null)
-  const [at, setAt] = useState<{ top: number; right: number } | null>(null)
+  const [at, setAt] = useState<{ top: number; right?: number; left?: number } | null>(null)
   useLayoutEffect(() => {
     if (!open) { setAt(null); return }
     let frame = 0
     const place = () => {
-      const anchor = document.querySelector<HTMLElement>(`[data-database-menu="${CSS.escape(open.blockId)}"]`)
+      const anchor = document.querySelector<HTMLElement>(anchorOf(open))
       if (!anchor) { setOpenMenu(null); return }
       const r = anchor.getBoundingClientRect()
-      setAt(a => (a && a.top === r.bottom + 4 && a.right === window.innerWidth - r.right ? a : { top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) }))
+      const next = open.panel === 'views' ? { top: r.bottom + 4, left: Math.max(8, r.left) } : { top: r.bottom + 4, right: Math.max(8, window.innerWidth - r.right) }
+      setAt(a => (a && a.top === next.top && a.left === next.left && a.right === next.right ? a : next))
       frame = requestAnimationFrame(place)
     }
     place()
     return () => cancelAnimationFrame(frame)
-  }, [open?.blockId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open?.blockId, open?.panel === 'views']) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return
     const away = (e: PointerEvent) => {
       const t = e.target as Element
-      if (!ref.current?.contains(t) && !t.closest?.(`[data-database-menu]`)) setOpenMenu(null)
+      if (!ref.current?.contains(t) && !t.closest?.(`[data-database-menu], [data-database-views]`)) setOpenMenu(null)
     }
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenMenu(null) }
     document.addEventListener('pointerdown', away)
@@ -61,8 +73,9 @@ export function DatabaseMenuHost() {
   if (!open || !at || !isDatabase(db) || db.trashedAt) return null
   const view = shownView(db.database, open.blockId)
   const go = (panel: Panel) => setOpenMenu({ ...open, panel })
-  return <div ref={ref} className="app-menu database-menu" role="dialog" aria-label="Database options" style={{ position: 'fixed', top: at.top, right: at.right }}
+  return <div ref={ref} className="app-menu database-menu" role="dialog" aria-label="Database options" style={{ position: 'fixed', top: at.top, ...(at.left !== undefined ? { left: at.left } : { right: at.right }) }}
     onKeyDown={e => e.stopPropagation()}>
+    {open.panel === 'views' && <ViewsPanel db={db} blockId={open.blockId} />}
     {open.panel === 'root' && <RootPanel db={db} blockId={open.blockId} go={go} />}
     {open.panel === 'filter' && <FilterPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'sort' && <SortPanel db={db} view={view} back={() => go('root')} />}
@@ -143,7 +156,7 @@ function FilterPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
       const property = propertyOf(db.database, c.by)
       return <div key={i} className="database-rule">
         {property ? <>
-          <select aria-label="Property" value={c.by} onChange={e => { const p = propertyOf(db.database, e.target.value)!; set(i, { by: p.id, op: opsFor(p.type)[0]! }) }}>
+          <select aria-label="Property" value={c.by} onChange={e => { const p = propertyOf(db.database, e.target.value)!; set(i, { by: p.id, op: opsFor(p.type)[0]!, ...(p.type === 'checkbox' ? { value: true } : {}) }) }}>
             {columnsOf(db.database).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
           <select aria-label="Condition" value={c.op} onChange={e => set(i, { by: c.by, op: e.target.value as FilterOp, ...(c.value !== undefined && !e.target.value.includes('Empty') ? { value: c.value } : {}) })}>
@@ -308,3 +321,39 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
   </>
 }
 
+
+// ---------------------------------------------------------------- views (design §7.1)
+
+/** Every view, the current one ticked, each with Rename, Duplicate and Delete (none on the last); + Add view. */
+function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
+  const change = useChange(db)
+  const current = shownView(db.database, blockId)
+  const [actions, setActions] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const views = db.database.views
+  const pick = (id: string) => { setShownView(blockId, id); setOpenMenu(null) }
+  const add = (from?: View) => {
+    const id = newId()
+    // A new view is a Table named after its type, with the name ready to rename (design §7.1); Duplicate copies one.
+    const view: View = from ? { ...structuredClone(from), id, name: `${from.name} (copy)` } : { id, name: 'Table', layout: 'table', columns: current.columns, sort: [], filter: [] }
+    change({ kind: 'addView', view })
+    setShownView(blockId, id)
+    setActions(null); setRenaming(id)
+  }
+  return <>
+    <Head title="Views" />
+    {views.map(v => <div key={v.id} className="database-view-line">
+      {renaming === v.id
+        ? <CommitInput key={v.name} ariaLabel="View name" initial={v.name} autoFocus onCommit={name => { if (name.trim()) change({ kind: 'updateView', viewId: v.id, name: name.trim() }); setRenaming(null) }} />
+        : <button type="button" role="menuitemradio" aria-checked={v.id === current.id} className="database-view-pick" onClick={() => pick(v.id)}>{v.id === current.id ? '✓ ' : ''}{v.name}</button>}
+      <button type="button" className="database-view-more" aria-label={`${v.name} options`} onClick={() => setActions(actions === v.id ? null : v.id)}>⋯</button>
+      {actions === v.id && <div className="database-view-actions">
+        <button type="button" role="menuitem" onClick={() => { setActions(null); setRenaming(v.id) }}>Rename</button>
+        <button type="button" role="menuitem" onClick={() => add(v)}>Duplicate</button>
+        {views.length > 1 && <button type="button" role="menuitem" className="is-danger" onClick={() => { setActions(null); change({ kind: 'removeView', viewId: v.id }, true) }}>Delete</button>}
+      </div>}
+    </div>)}
+    <hr />
+    <button type="button" role="menuitem" onClick={() => add()}>+ Add view</button>
+  </>
+}

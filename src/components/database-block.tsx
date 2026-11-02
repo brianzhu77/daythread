@@ -12,7 +12,7 @@ import { displayPageTitle } from './page-title'
 import { ChevronDownIcon } from './icons'
 import { PropertyCell, PropertyCheckbox, PropertyEditor } from './property-editors'
 import { useWorkspace } from './use-day'
-import { DatabaseMenuButton, openDatabaseMenu } from './database-menu'
+import { DatabaseMenuButton, DatabaseViewsButton, openDatabaseMenu } from './database-menu'
 
 const newId = (): string => crypto.randomUUID()
 /** Rows drawn before "Show 25 more" (design §13): inline, and on the full page. */
@@ -25,6 +25,15 @@ function stop(e: SyntheticEvent) { e.stopPropagation() }
 
 /** The view a block shows on this device: a local preference per block, never a save (Lead 7b3b9664). */
 function viewKey(blockId: string) { return `daythread.database-view.${blockId}` }
+const viewListeners = new Set<() => void>()
+let viewVersion = 0
+/** Picks the view a block shows on this device: a local preference, never a save or an Undo (Lead 7b3b9664). */
+export function setShownView(blockId: string, viewId: string) {
+  try { localStorage.setItem(viewKey(blockId), viewId) } catch { /* private mode: this tab only */ }
+  viewVersion++
+  for (const l of viewListeners) l()
+}
+function useShownViews() { return useSyncExternalStore(l => { viewListeners.add(l); return () => viewListeners.delete(l) }, () => viewVersion, () => 0) }
 export function shownView(db: Database, blockId: string): View {
   let id: string | null = null
   try { id = localStorage.getItem(viewKey(blockId)) } catch { /* private mode */ }
@@ -291,6 +300,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
   const navigate = useNavigate()
   const commit = useCommitCell()
   const today = todayIso()
+  useShownViews()
   const view = shownView(db.database, blockId)
   const context = useMemo(() => ({ today, pageDate }), [today, pageDate])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
@@ -356,13 +366,13 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap, showTitle
     }
   }
   return <div className="database-table-wrap" onKeyDown={onKeyDown}>
-    {!showTitle && <div className="database-title-row is-page"><span className="database-view-name">{view.name}<ChevronDownIcon /></span><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
+    {!showTitle && <div className="database-title-row is-page"><DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} /><DatabaseMenuButton blockId={blockId} databaseId={db.id} /></div>}
     {showTitle && <div className="database-title-row">
       <input className="database-title" data-database={db.id} aria-label="Database name" placeholder="Untitled database" defaultValue={db.title} key={db.title}
         onBlur={e => rename(e.currentTarget.value.trim())}
         // Enter in a new database's title goes on to its first row's Name (design §3.1).
         onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.currentTarget.blur(); if (!databaseRows(workspace, db.id).length) addRow() } }} />
-      <span className="database-view-name">{view.name}<ChevronDownIcon /></span>
+      <DatabaseViewsButton blockId={blockId} databaseId={db.id} name={view.name} />
       <DatabaseMenuButton blockId={blockId} databaseId={db.id} />
     </div>}
     {(view.filter.length > 0 || view.sort.length > 0) && <RulesLine db={db.database} view={view} blockId={blockId} databaseId={db.id} onChange={change => void run({ type: 'change-database', pageId: db.id, change: { kind: 'updateView', viewId: view.id, ...change } })} />}

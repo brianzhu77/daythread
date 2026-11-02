@@ -1880,3 +1880,8 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 /* Design §13: a value not saved yet stays shown, in --warn, with the strip under the table. */
 .database-td.is-unsaved, .row-property.is-unsaved .row-property-value { color: var(--warn); }
 .database-unsaved { margin: 0; padding: 6px 8px; color: var(--warn); font-size: var(--text-meta); }
+button.database-view-name { padding: 0; border: 0; background: none; font: inherit; cursor: pointer; }
+.database-view-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 0 6px; }
+.database-view-pick { flex: 1; min-height: 34px; padding: 0 4px; border: 0; background: none; font: inherit; text-align: left; cursor: pointer; }
+.database-view-more { border: 0; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+.database-view-actions { display: flex; flex-direction: column; width: 100%; padding-left: 12px; }
