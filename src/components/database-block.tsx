@@ -9,6 +9,7 @@ import { cellValue, databaseRows, isDatabase, newRowValues, propertyOf, rawOf, s
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
+import { ChevronDownIcon } from './icons'
 import { PropertyCell, PropertyCheckbox, PropertyEditor } from './property-editors'
 import { useWorkspace } from './use-day'
 
@@ -180,7 +181,7 @@ export function DatabaseTable({ workspace, db, blockId, pageDate, cap }: { works
     <div className="database-title-row">
       <input className="database-title" aria-label="Database name" placeholder="Untitled database" defaultValue={db.title} key={db.title}
         onBlur={e => rename(e.currentTarget.value.trim())} onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) e.currentTarget.blur() }} />
-      <span className="database-view-name">{view.name}</span>
+      <span className="database-view-name">{view.name}<ChevronDownIcon /></span>
     </div>
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
       <table className="database-table">

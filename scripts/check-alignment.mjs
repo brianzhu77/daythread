@@ -13,7 +13,7 @@
 //        shared text column, the one most rows use;
 //      - a nested row: its parent's text column + 24px (B19: one step right of the parent's text); a nested task's
 //        checkbox starts at its parent's text instead (B39, Notion's convention), so its text sits further in;
-//      - headings: the editor's own left edge.
+//      - headings, and a database table's title (styled as a section heading): the editor's own left edge.
 //   2. Markers on the first text line: a task's checkbox (and its ⋯, labels and tags), a bullet's marker (top level and nested), a card's icon
 //      and chevron, and (1280, hovered, one row per type) the drag handle, each centred on the row's first text line.
 //      Bullet markers are measured as drawn (screenshot pixels in the zone left of the text), at every level, and
@@ -34,7 +34,7 @@ if (!base) { console.error('usage: node scripts/check-alignment.mjs <base url> [
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
-const REQUIRED = ['heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
+const REQUIRED = ['heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
 
 function measure() {
   const visible = e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 }
@@ -91,6 +91,24 @@ function measure() {
       if (type === 'bulletListItem') row.zone = { left: content.getBoundingClientRect().left, right: row.left, top: row.lineTop, bottom: row.lineBottom }
     } else if (type === 'heading') {
       Object.assign(row, { kind: 'heading', ...firstLine(content.querySelector('.bn-inline-content')) })
+    } else if (type === 'database') {
+      // Databases (design §15): the title on the row column (as any top-level row), the view's chevron centred on its
+      // word, and `+ New` on Name's text. Only a home block draws a table; any other is a page card, not measured here.
+      const title = content.querySelector('.database-title')
+      if (!title) return
+      Object.assign(row, { kind: 'database table', label: (title.value || '(untitled)').slice(0, 24), ...firstLine(title) })
+      const view = content.querySelector('.database-view-name'), chevron = view?.querySelector('svg')
+      if (view && chevron && visible(chevron)) {
+        const range = document.createRange(); range.selectNodeContents(view.firstChild ?? view)
+        const word = [...range.getClientRects()].find(r => r.width > 0)
+        if (word) row.viewChevron = cy(chevron.getBoundingClientRect()) - cy(word)
+      } else row.viewChevron = null
+      const name = content.querySelector('.database-title-cell > span'), add = content.querySelector('.database-new')
+      if (name && add) {
+        const r = document.createRange(); r.selectNodeContents(name); const nameText = [...r.getClientRects()].find(x => x.width > 0)
+        const a = document.createRange(); a.selectNodeContents(add); const addText = [...a.getClientRects()].find(x => x.width > 0)
+        row.newOnName = nameText && addText ? addText.left - nameText.left : null
+      } else row.newOnName = null
     } else return
     rows.push(row)
   })
@@ -180,7 +198,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
         const after = await page.evaluate(i => {
           const outer = document.querySelectorAll('.continuous-editor .bn-block-outer')[i]
           const content = [...outer.querySelectorAll('.bn-block-content')].find(c => c.closest('.bn-block-outer') === outer)
-          const text = content?.querySelector('.editor-task-title, .editor-page-card-title, .bn-inline-content')
+          const text = content?.querySelector('.editor-task-title, .editor-page-card-title, .bn-inline-content, .database-title')
           if (!text) return null
           const range = document.createRange(); range.selectNodeContents(text)
           const line = [...range.getClientRects()].find(r => r.width > 0 && r.height > 0)
@@ -235,7 +253,8 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     const column = usual === null ? null : top.find(r => Math.round(r.left) === usual).left
     for (const r of rows) {
       let expected = null, rule = '', x = r.left, what = 'text'
-      if (r.kind === 'heading') { expected = editorLeft; rule = 'editor edge' }
+      // A database's title is styled as a section heading (design §4.1), so it shares the headings' edge.
+      if (r.kind === 'heading' || r.kind === 'database table') { expected = editorLeft; rule = 'editor edge' }
       else if (r.kind === 'paragraph') continue
       else if (r.depth > 0) {
         const parent = rows.find(p => p.index === r.parent); if (!parent) continue
@@ -249,6 +268,15 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     }
     for (const r of rows) if (r.clipped !== undefined && !r.kind.startsWith('link'))
       results.push({ at, check: `${r.kind} title not clipped: "${r.label}"`, ok: !r.clipped, detail: r.clipped ?? 'wraps' })
+    // The database block's own columns (design §15).
+    for (const r of rows.filter(r => r.kind === 'database table')) {
+      results.push(r.viewChevron == null
+        ? { at, check: `database view chevron: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
+        : { at, check: `database view chevron centred on its word: "${r.label}"`, ok: Math.abs(r.viewChevron) <= TOLERANCE, detail: `${r.viewChevron >= 0 ? '+' : ''}${fmt(r.viewChevron)}px` })
+      results.push(r.newOnName == null
+        ? { at, check: `database + New: "${r.label}"`, ok: 'missing', detail: 'no row or no + New, so not measured' }
+        : { at, check: `database + New on Name's text: "${r.label}"`, ok: Math.abs(r.newOnName) <= TOLERANCE, detail: `${r.newOnName >= 0 ? '+' : ''}${fmt(r.newOnName)}px` })
+    }
     // 2. Markers on the first text line.
     for (const r of rows) {
       const markers = Object.entries(r.markers).map(([m, y]) => [m, y === null ? null : y - r.cy])
