@@ -301,8 +301,8 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
   gets no notice either.
 - **The one exception: Text and URL on the phone** (Bumblebee 94ba9595, Lead f1e56ab4). The phone has no ⌘Z, and an
   old Select, Status, Date or Checkbox value is one tap away, but a long Text or URL value isn't. So **below 900 px,
-  any Text or URL commit that changes the value** shows our usual Undo notice, **"Notes changed · Undo"**, with the
-  property's name. Undo puts back the whole old value. There's no threshold and no second wording. At 900 px and up
+  any Text or URL commit that changes a value that wasn't empty** shows our usual Undo notice, **"Notes changed ·
+  Undo"**, with the property's name. (Typing into an empty field, as when naming a new row, loses nothing.) Undo puts back the whole old value. There's no threshold and no second wording. At 900 px and up
   there's no notice, since ⌘Z covers it.
 
 #### 6.3.2 The cell
