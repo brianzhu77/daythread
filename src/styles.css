@@ -1780,29 +1780,96 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .new-page-menu { position: relative; }
 .new-page-menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 160px; }
 .slash-grid-icon { display: inline-grid; place-items: center; width: 18px; }
-/* Databases: the table's ⋯ menu (a working baseline; Jazz's pass sets the look). */
-.database-more-button { margin-left: auto; padding: 2px 8px; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
-.database-title-row.is-page { display: flex; align-items: center; }
-.database-menu { z-index: 60; width: 300px; max-height: min(70vh, 520px); overflow-y: auto; display: flex; flex-direction: column; }
-.database-menu > button[role=menuitem] { display: flex; justify-content: space-between; }
+/* Databases: the table's ⋯ menu (design §7.3, §8, §6.2): the .app-menu surface at ≥ 900 px, a bottom sheet below. */
+.database-more-button { flex: none; display: inline-grid; place-items: center; width: 32px; height: 28px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
+@media (hover: hover) { .database-more-button:hover, .database-more-button[aria-expanded=true] { background: var(--hover-dim); color: var(--ink); } }
+.database-title-row.is-page { display: flex; align-items: center; gap: 4px; }
+.database-title-row.is-page .database-view-name { margin-right: 2px; }
+.database-title-row:not(.is-page) .database-more-button { margin-left: -6px; }
+.database-menu { z-index: 60; width: 300px; max-height: min(70vh, 520px); overflow-y: auto; display: flex; flex-direction: column; gap: 1px; font-size: var(--text-ui); }
+.database-menu > button[role=menuitem] { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding: 0 10px; color: var(--ink); }
 .database-menu hr { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
-.database-menu-head { display: flex; align-items: center; gap: 6px; padding: 6px 10px; font-weight: var(--weight-semibold); }
-.database-menu-back { border: 0; background: none; font: inherit; cursor: pointer; color: var(--ink-3); }
-.database-menu-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 6px; }
-.database-menu-tiles button { min-height: 40px; border: 1px solid var(--line); border-radius: var(--radius-control); background: none; font: inherit; cursor: pointer; }
-.database-menu-quiet { margin: 0; padding: 4px 10px; color: var(--ink-3); }
+.database-menu-head { display: flex; align-items: center; gap: 4px; min-height: 36px; padding: 0 6px 0 2px; font-weight: var(--weight-semibold); color: var(--ink); }
+.database-menu-back { display: inline-grid; place-items: center; width: 28px; height: 28px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
+/* Filter · Sort tiles, as Craft's (design §7.3). */
+.database-menu-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 2px 4px 6px; }
+.database-menu-tiles button { min-height: 44px; border: 0; border-radius: var(--radius-control); background: var(--fill-soft); color: var(--ink); font: inherit; font-weight: var(--weight-medium); cursor: pointer; }
+@media (hover: hover) { .database-menu-tiles button:hover { background: var(--fill); } }
+.database-menu-quiet { margin: 0; padding: 6px 10px; color: var(--ink-3); font-size: var(--text-meta); }
 .database-menu-chevron { color: var(--ink-3); }
-.database-menu input:not([type=checkbox]), .database-menu select { min-width: 0; font: inherit; }
-.database-menu-field, .database-menu > input { margin: 4px 10px; }
-.database-menu-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 10px; }
-.database-rule { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 10px; }
-.database-rule-options { display: flex; flex-wrap: wrap; gap: 6px; }
-.database-rule-remove { border: 0; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+/* Fields and pickers inside the menu: the editors' field look, smaller. */
+.database-menu input:not([type=checkbox]), .database-menu select { box-sizing: border-box; min-width: 0; min-height: 32px; padding: 4px 8px; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--fill-soft); color: var(--ink); font: inherit; font-size: var(--text-ui); outline: none; }
+.database-menu input:not([type=checkbox]):focus, .database-menu select:focus { border-color: var(--blue); }
+.database-menu select { padding-right: 4px; }
+.database-menu input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(--ink); }
+.database-menu-field, .database-menu > input { margin: 2px 6px 6px; }
+.database-menu-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; color: var(--ink); }
+/* A filter or sort rule: property → condition → value on one line when it fits, then wrapping. */
+.database-rule { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 6px 6px 10px; border-radius: var(--radius-row); }
+.database-rule + .database-rule { border-top: 1px solid var(--line-soft); }
+.database-rule > select, .database-rule > input { flex: 1 1 80px; }
+.database-rule-options { display: flex; flex-wrap: wrap; gap: 4px 10px; width: 100%; }
+/* × stays on the rule's first line, after property and condition; the value follows on its own line. */
+.database-rule > .database-rule-remove { order: 2; }
+.database-rule > .database-rule-options, .database-rule > .database-rule-date, .database-rule > input { order: 3; flex-basis: 100%; }
+.database-rule-options label { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; color: var(--ink); }
+.database-rule-date { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.database-rule button:not(.database-rule-remove) { min-height: 0; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
+.database-rule-remove { display: inline-grid; place-items: center; width: 28px; height: 28px; min-height: 0; margin-left: auto; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
+@media (hover: hover) { .database-rule-remove:hover, .database-menu-back:hover { background: var(--hover-dim); color: var(--ink); } }
 .database-rule-deleted, .database-filter-chip.is-deleted { text-decoration: line-through; color: var(--ink-3); }
-.database-property-line { display: flex; align-items: center; gap: 6px; padding: 2px 10px; min-height: 34px; }
-.database-property-name { flex: 1; text-align: left; border: 0; background: none; font: inherit; cursor: pointer; }
-.database-options { display: flex; flex-direction: column; gap: 2px; padding: 4px 10px; }
-.database-option-line { display: flex; align-items: center; gap: 4px; }
+/* Properties (design §7.5): a switch, the name with its type, and a move. */
+.database-property-line { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 6px 0 10px; color: var(--ink); }
+.database-property-line.is-title { justify-content: space-between; }
+/* Show / hide is a switch, as in the Date editor and Craft's Display Fields (design §7.5). */
+.database-property-switch { display: inline-flex; flex: none; }
+.database-menu .database-property-switch input { appearance: none; position: relative; width: 36px; height: 22px; margin: 0; border-radius: var(--radius-pill); background: var(--gray-6); cursor: pointer; transition: background var(--dur-fast); }
+.database-menu .database-property-switch input::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--gray-1); box-shadow: var(--shadow-row); transition: transform var(--dur-fast); }
+.database-menu .database-property-switch input:checked { background: var(--ink); }
+.database-menu .database-property-switch input:checked::after { transform: translateX(14px); }
+.database-menu .database-property-switch input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.database-property-line.is-title .database-menu-quiet { padding: 0; }
+.database-property-line > button:not(.database-property-name) { width: 28px; height: 28px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+.database-property-name { flex: 1; min-width: 0; min-height: 32px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.database-property-name .database-menu-quiet { padding: 0; }
+.database-options { display: flex; flex-direction: column; gap: 4px; padding: 4px 6px 4px 10px; }
+.database-option-line { display: flex; align-items: center; gap: 6px; }
+.database-option-line > input { flex: 1; }
+.database-option-line > button:not(.database-rule-remove) { width: 28px; height: 28px; min-height: 0; padding: 0; border: 0; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
 .database-menu .is-danger { color: var(--app-danger); }
-.database-filter-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 2px 2px 6px; color: var(--ink-2); font-size: var(--text-meta); }
-.database-filter-chip { padding: 1px 8px; border-radius: var(--radius-pill); background: var(--fill-soft); }
+/* .app-menu gives every button the full width and a 38 px height, meant for menu items; the small controls inside
+   these panels (back, ×, ↑, the property name) size themselves instead. */
+.database-menu button:not([role=menuitem]) { width: auto; }
+.database-menu .database-menu-back, .database-menu .database-rule-remove, .database-menu .database-rule button,
+.database-menu .database-property-line > button:not(.database-property-name), .database-menu .database-option-line > button {
+  flex: none; justify-content: center; width: 28px; height: 28px; min-height: 0; padding: 0; }
+.database-menu .database-property-name { flex: 1; justify-content: flex-start; min-height: 32px; padding: 0; }
+.database-menu .database-menu-tiles button { justify-content: center; width: 100%; min-height: 44px; }
+
+/* The filter line (design §4.1): one grey chip per rule, the same chip as a tag; only there while the view filters. */
+.database-filter-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 2px 0 6px; color: var(--ink-2); font-size: var(--text-meta); line-height: 20px; }
+.database-filter-chip { display: inline-flex; align-items: center; max-width: 100%; height: 24px; padding: 0 8px; border-radius: var(--radius-badge); background: var(--tag-bg); color: var(--tag-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.database-filter-line .app-link { min-height: 0; font-size: var(--text-meta); }
+.database-empty .app-link { min-height: 0; font-size: inherit; }
+
+/* The row page's property names carry the same type marks as the table's header (design §5). */
+.row-property-name[data-type]::before { display: inline-block; width: 1.2em; margin-right: 6px; color: var(--ink-3); text-align: center; font-size: var(--text-meta); }
+.row-property-name[data-type="text"]::before { content: '≡'; }
+.row-property-name[data-type="number"]::before { content: '#'; }
+.row-property-name[data-type="select"]::before { content: '◉'; font-size: 11px; }
+.row-property-name[data-type="multiSelect"]::before { content: '☰'; font-size: 11px; }
+.row-property-name[data-type="status"]::before { content: '◐'; font-size: 11px; }
+.row-property-name[data-type="date"]::before { content: '◷'; }
+.row-property-name[data-type="checkbox"]::before { content: '☑'; }
+.row-property-name[data-type="url"]::before { content: '↗'; }
+
+@media (max-width: 899px) {
+  /* The phone gets a bottom sheet (design §7.3): the host's inline position is overridden, and the page behind is
+     dimmed by a spread shadow; a tap there closes it, as the host already does for any tap outside. */
+  .database-menu { position: fixed !important; inset: auto 0 0 0 !important; width: auto; max-height: 85vh; padding: 8px 12px calc(12px + env(safe-area-inset-bottom)); border: 0; border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; box-shadow: 0 0 0 100vmax var(--scrim), var(--shadow-float); animation: sheet-in .2s ease-out; }
+  .database-menu::before { content: ''; flex: none; align-self: center; width: 36px; height: 5px; margin-bottom: 6px; border-radius: 3px; background: var(--check); }
+  .database-menu > button[role=menuitem], .database-menu-head, .database-property-line, .database-menu-row { min-height: 44px; }
+  .database-menu input:not([type=checkbox]), .database-menu select { min-height: 40px; font-size: 16px; }
+  .database-more-button { width: 44px; height: 44px; margin-right: -8px; }
+}
+@media (max-width: 899px) and (prefers-reduced-motion: reduce) { .database-menu { animation: none; } }
