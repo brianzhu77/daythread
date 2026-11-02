@@ -141,6 +141,8 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
     if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (undoKey(e)) return
     const target = e.target as HTMLElement
+    // ⌘A on a card selects nothing: the browser's select-all would take the page around it, and the next key replace it.
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a' && target.tagName !== 'INPUT') { e.preventDefault(); return }
     if (e.key === 'Escape' && !e.defaultPrevented) { e.preventDefault(); blockActions.get(blockId)?.select(blockId); return }
     const card = target.closest<HTMLElement>('[data-card]')
     if (!card || target.tagName === 'INPUT') return
@@ -175,6 +177,22 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
     }
   }
 
+  // ⌘C, ⌘X and ⌘V on a card are about the board, never the page around it (design §10), as in a table: they stop at the
+  // window, before the page's clipboard handlers. Copy takes the card's title; a card isn't cut or pasted over.
+  const wrap = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const handle = (e: ClipboardEvent) => {
+      const focused = document.activeElement
+      if (!wrap.current?.contains(focused)) return
+      e.stopPropagation()
+      if (focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement) return
+      e.preventDefault()
+      if (e.type === 'copy' && focused?.closest('[data-card]')) e.clipboardData?.setData('text/plain', focused.textContent ?? '')
+    }
+    for (const type of ['copy', 'cut', 'paste'] as const) window.addEventListener(type, handle, true)
+    return () => { for (const type of ['copy', 'cut', 'paste'] as const) window.removeEventListener(type, handle, true) }
+  }, [])
+
   // Sideways scroll comes back after a redraw, as in a table.
   const scroller = (el: HTMLDivElement | null) => { board.current = el; const left = blockPlaces.get(placeKey)?.scrollLeft; if (el && left && el.scrollLeft !== left) el.scrollLeft = left }
   const onScroll = (e: UIEvent<HTMLDivElement>) => { const place = blockPlaces.get(placeKey); blockPlaces.set(placeKey, { limit: place?.limit ?? cap, ...(place?.groups ? { groups: place.groups } : {}), scrollLeft: e.currentTarget.scrollLeft }) }
@@ -186,6 +204,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
     return <>
       <button type="button" tabIndex={interactive ? 0 : -1} className={`database-card-title${row.title ? '' : ' is-placeholder'}`}
         data-cell={interactive ? cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, group }) : undefined}
+        data-nav={interactive && row.id === firstCard ? '0:0' : undefined}
         onClick={() => { if (!justDragged.current) openRow(row.id) }}>{row.title || 'Untitled'}</button>
       {cardColumns.map(({ property }) => {
         const pending = pendingCells.get(pendingKey(row.id, property.id))
@@ -199,9 +218,11 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
       {unsaved && <span className="database-card-unsaved">Not saved</span>}
     </>
   }
+  // Where Enter goes on the block selected whole (design §10), as a table's first cell.
+  const firstCard = columns.find(g => g.rows.length)?.rows[0]?.id
   const canAddColumn = groups && (groups.property.type === 'select' || groups.property.type === 'status')
 
-  return <div className="database-table-wrap" onKeyDown={onKeyDown}>
+  return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(columns[0]!.key === allKey ? undefined : columns[0]!.key) }} />
     {!groups && <p className="database-empty">Choose what makes the columns · <button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'group')}>Group by</button></p>}
     <div className={`database-board${drag ? ' is-dragging' : ''}`} ref={scroller} onScroll={onScroll}>

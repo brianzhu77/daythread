@@ -121,6 +121,9 @@ if (wide) {
   await tap(page.getByRole('button', { name: 'Undo' }).first()); await wait(1000)
   check(row('dune').values.status === 'now', 'Undo puts it back')
 }
+// + New stays on Name's text, and a group's name is under the header's edge (design §15).
+const edge = await page.evaluate(() => { const x = s => { const e = document.querySelector(s), r = document.createRange(); r.selectNodeContents(e); return r.getBoundingClientRect().x }; return { name: x('.database-title-cell span'), add: x('.database-group-foot .database-new'), title: document.querySelector('.database-title-row').getBoundingClientRect().x, fold: document.querySelector('.database-group-fold').getBoundingClientRect().x } })
+check(Math.abs(edge.name - edge.add) <= 1 && Math.abs(edge.fold - edge.title) <= 1, "+ New on Name's text, a group's chevron on the title's edge", edge)
 await setGroup(null)
 check(await groupNames().then(n => n.length) === 0 && await block.locator('.database-title-cell').count() > 0, 'None takes the groups away')
 
@@ -193,6 +196,19 @@ if (!wide) {
   await card('Emma').locator('.database-card-title').focus()
   await page.keyboard.press('ArrowRight'); await wait(100)
   check(await page.evaluate(() => document.activeElement?.closest('[data-column]')?.dataset.column) !== 'todo', 'arrows move between columns')
+  await page.keyboard.press('Escape'); await wait(200)
+  // Keys and clipboard on a card stay out of the page around it (R1-26).
+  const hostDoc = () => row('books').document, doc0 = hostDoc()
+  // Esc gives the block back selected; Enter comes in to its first card, and Backspace there is the card's, not the block's.
+  await card('Emma').locator('.database-card-title').focus(); await page.keyboard.press('Escape'); await wait(300)
+  await page.keyboard.press('Enter'); await wait(300)
+  check(await page.evaluate(() => Boolean(document.activeElement?.closest('[data-card]'))), 'Enter on the selected block comes to its first card')
+  await page.keyboard.press('Backspace'); await wait(500)
+  check(hostDoc() === doc0 && await page.locator('.database-board').count() === 1, 'and Backspace there leaves the block')
+  for (const key of ['ControlOrMeta+x', 'ControlOrMeta+v', 'Backspace', 'Delete', '/', 'ControlOrMeta+a']) {
+    await card('Emma').locator('.database-card-title').focus(); await page.keyboard.press(key); await wait(500)
+    check(hostDoc() === doc0 && await page.locator('.database-board').count() === 1 && !row('emma').trashedAt && await page.locator('[role=menu], .bn-suggestion-menu').count() === 0, `${key} on a card leaves the page and the block alone`)
+  }
   await page.keyboard.press('Escape'); await wait(200)
   // + New at a column's foot: its value, and its name opens to be typed.
   await tap(col('Reading').locator('.database-new')); await wait(1000)
