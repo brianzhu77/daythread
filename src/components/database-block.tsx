@@ -5,14 +5,14 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
-import { cellValue, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnlyType, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnlyType, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
 import { ChevronRightIcon } from './icons'
 import { holdKeyboard } from './keyboard'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide } from './property-editors'
-import { emailHref, phoneHref, urlHref } from './property-values'
+import { calcText, emailHref, phoneHref, urlHref } from './property-values'
 import { useWorkspace } from './use-day'
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
@@ -784,6 +784,26 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     for (const type of ['copy', 'cut', 'paste'] as const) window.addEventListener(type, handle, true)
     return () => { for (const type of ['copy', 'cut', 'paste'] as const) window.removeEventListener(type, handle, true) }
   }, [])
+  // The foot appears once a column has a calculation (design §4.1a): nothing at rest for a table that has none.
+  const calculations = viewCalculations(db.database, view)
+  const footColumns = [propertyOf(db.database, titleId)!, ...columns.map(c => c.property)]
+  const hasFoot = footColumns.some(p => calculations[p.id])
+  const readShown = (row: Page, columnId: string) => {
+    const pending = pendingCells.get(pendingKey(row.id, columnId)), property = propertyOf(db.database, columnId)
+    return pending && property ? readValue(property, pending.raw) : cellValue(db.database, row, columnId)
+  }
+  const footRow = (over: readonly Page[]) => <tr className="database-calc">
+    {footColumns.map(property => {
+      const kind = calculations[property.id]
+      const text = kind ? calcText(kind, columnCalc(db.database, over, property.id, kind, readShown), property.format, today) : null
+      return <td key={property.id} className={`database-td is-${property.id === titleId ? 'title' : property.type}`}>
+        {(text || wide) && <button type="button" className="database-cell database-calc-cell" aria-label={text ? `${property.name}: ${text.label} ${text.value}` : `Calculate ${property.name}`} onClick={() => openDatabaseMenu(blockId, db.id, 'calculate')}>
+          {text ? <span className="database-calc-text">{text.label && <span className="database-calc-label">{text.label}</span>}<span>{text.value}</span></span> : <span className="database-calc-empty">Calculate</span>}
+        </button>}
+      </td>
+    })}
+    <td className="database-td is-add" />
+  </tr>
   const rowLine = (row: Page, index: number, group?: string) => <tr key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})} className={`database-row${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
             <td className="database-td is-title"><div className="database-title-inner">
               {wide && <span className="database-pin-strip" />}
@@ -847,6 +867,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
                 </div>
               </th></tr>
               {inGroup.map((row, i) => rowLine(row, start + i, group.key))}
+              {!isFolded && hasFoot && footRow(group.rows)}
               {!isFolded && <tr className={`database-group-foot${drag && drag.before === null && drag.group === group.key ? ' is-drop-end' : ''}`} data-group={group.key}><td colSpan={columns.length + 2}>
                 <div className="database-group-inner">
                   {more && <button type="button" className="database-more" onClick={() => showMore(group.key)}>Show 25 more</button>}
@@ -856,6 +877,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
             </Fragment>
           }) : entries.map((e, i) => rowLine(e.row, i))}
         </tbody>
+        {!groups && hasFoot && <tfoot>{footRow(rows)}</tfoot>}
       </table>
     </div>
     <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
