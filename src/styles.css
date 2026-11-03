@@ -1970,6 +1970,13 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-new-more svg { width: 14px; height: 14px; }
 @media (hover: hover) { .database-new-more:hover { color: var(--ink); background: var(--hover-dim); } }
 @media (max-width: 899px) { .database-new-more { width: 44px; min-height: 44px; } }
+.database-group-inner.is-sub { padding-left: 16px; }
+/* Every lane as wide as the widest row, so a lane's name stays in sight to the end of the scroll. */
+.database-board.has-lanes { display: grid; grid-template-columns: max-content; align-items: start; }
+.database-lane-heads { display: flex; gap: 12px; }
+.database-lane-head-cell { flex: none; width: 260px; }
+.database-lane-heads .database-column.is-add { padding-top: 0; }
+.database-lane-columns { display: flex; align-items: flex-start; gap: 12px; }
 .database-group-inner { position: sticky; left: 0; display: flex; flex-direction: column; align-items: flex-start; width: max-content; }
 .database-group-fold { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; margin-top: 8px; padding: 0 8px 0 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--text-small); font-weight: var(--weight-regular); cursor: pointer; }
 .database-group-fold > svg { flex: none; width: 14px; height: 14px; color: var(--ink-3); transition: transform .12s; }
@@ -2018,7 +2025,7 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 @media (max-width: 899px) {
   .database-board { gap: 10px; scroll-snap-type: x mandatory; }
   .database-board.is-dragging { scroll-snap-type: none; }
-  .database-column { width: 300px; scroll-snap-align: start; }
+  .database-column, .database-lane-head-cell { width: 300px; scroll-snap-align: start; }
   .database-column.is-add { width: 300px; }
   .database-card { padding: 10px 12px; font-size: var(--text-ui); }
   .database-column .database-new, .database-column .database-more { padding-inline: 13px; }
