@@ -4,6 +4,14 @@ import { limits, type DateValue, type NumberFormat, type Option, type StatusGrou
 import type { LocalDate } from '../domain/types'
 import { fromIso } from './dates.ts'
 
+/** A mail link for what looks like an address; null for anything else, which stays plain text (R3-10). */
+export const emailHref = (text: string): string | null => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text.trim()) ? `mailto:${text.trim()}` : null
+/** A dialler link for what looks like a phone number: at least 3 digits, and only what numbers are written with. */
+export function phoneHref(text: string): string | null {
+  const s = text.trim()
+  return /^\+?[\d\s().-]+$/.test(s) && (s.match(/\d/g)?.length ?? 0) >= 3 ? `tel:${s.replace(/[\s().-]/g, '')}` : null
+}
+
 /** The width at which editors become popovers instead of sheets (§6.3.1); the editor's compact layout uses the same. */
 export const popoverMinWidth = 900
 

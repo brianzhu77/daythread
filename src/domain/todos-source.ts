@@ -26,7 +26,7 @@ const properties: Property[] = [
     { id: todoStatus.done, name: 'Done', group: 'done' },
     { id: todoStatus.cancelled, name: 'Cancelled', group: 'done' },
   ] },
-  { id: planned, name: 'Planned', type: 'date', dayOnly: true },
+  { id: planned, name: 'Planned', type: 'date', dayOnly: true, clearLabel: 'Not today' },
   { id: start, name: 'Start', type: 'date', dayOnly: true },
   { id: deadline, name: 'Deadline', type: 'date', dayOnly: true },
   { id: page, name: 'Page', type: 'text', readOnly: true },
@@ -104,6 +104,8 @@ export function todoChange(ws: Workspace, taskId: string, columnId: string, raw:
   if (columnId === planned) {
     const value = dateOf(raw)
     if (value === was) return null
+    // A finished to-do stays on the day it was finished (R2-9).
+    if (t.status !== 'open') return { refused: 'Reopen it first' }
     return value
       ? { action: { type: 'plan-task', taskId, date: value, today, ...(was ? { from: was } : {}) }, notice: value === today ? 'On today' : `Planned for ${value}` }
       : { action: { type: 'not-today', taskId, date: was ?? today }, notice: 'Not today' }

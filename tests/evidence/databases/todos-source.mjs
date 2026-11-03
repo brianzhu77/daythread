@@ -119,14 +119,18 @@ await scenario('R2-9: Deadline and Planned through their cells are the task; Und
   await rowOf(page, task.id).locator('.database-td.is-date').nth(2).click(); await wait(300)
   const toggles = await page.getByText('End date').count() + await page.getByText('Include time').count()
   await page.keyboard.press('Escape'); await wait(300)
+  // Clearing Planned is Not today, and its button says so.
+  await rowOf(page, task.id).locator('.database-td.is-date').nth(0).click(); await wait(300)
+  const clearLabel = await page.locator('.property-row.is-quiet').first().innerText()
+  await page.keyboard.press('Escape'); await wait(300)
   await set(2)
-  const r = { toggles, deadline: store().tasks.find(t => t.id === task.id).deadlineOn, notice: await notices(page) }
+  const r = { toggles, clearLabel, deadline: store().tasks.find(t => t.id === task.id).deadlineOn, notice: await notices(page) }
   await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(1500)
   r.afterUndo = store().tasks.find(t => t.id === task.id).deadlineOn
   await set(0)
   const ws = store()
   r.onDay = ws.pages.find(p => p.date === '2026-12-15')?.document.includes(task.id) ?? false
-  return { ...r, ok: r.toggles === 0 && r.deadline === '2026-12-15' && /Deadline set/.test(r.notice) && r.afterUndo === null && r.onDay }
+  return { ...r, ok: r.toggles === 0 && r.clearLabel === 'Not today' && r.deadline === '2026-12-15' && /Deadline set/.test(r.notice) && r.afterUndo === null && r.onDay }
 })
 await scenario('R2-9: a Board by Status: a card moved to Paused is Not today; no way to add a column', async page => {
   await makeView(page)

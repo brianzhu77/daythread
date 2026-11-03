@@ -3,7 +3,7 @@
 // rewrites only the database page. Pure: the domain's commands and the browser's views share it.
 import type { LocalDate, Page, WeekStart, Workspace } from "./types.ts";
 
-export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url"] as const;
+export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url", "email", "phone", "createdTime", "editedTime", "id"] as const;
 export type PropertyType = (typeof propertyTypes)[number];
 export type NumberFormat = "plain" | "comma" | "percent" | "currency";
 export type StatusGroup = "todo" | "active" | "done";
@@ -23,6 +23,8 @@ export interface Property {
   readOnly?: true;
   /** date, To-dos': one day, as a task's dates are: no end, no time. */
   dayOnly?: true;
+  /** What clearing this means, where it's more than emptying a cell. */
+  clearLabel?: string;
 }
 export interface DateValue { start: string; end?: string }
 /** A fixed day, or one relative to today or to the day page the view is on, with an offset in days. */
@@ -73,6 +75,8 @@ export interface Database {
   views: View[];
   /** To-dos: its properties and rows come from his tasks, so none can be added, changed or reordered here. Never stored. */
   fixed?: true;
+  /** The next row number, once an ID property has been made. It only goes up, past a delete or an undone add (R3-9). */
+  nextRowNumber?: number;
 }
 export type RawValues = Record<string, Json>;
 /** What a cell shows: the typed value, or null for empty (checkbox: false). */
@@ -80,6 +84,17 @@ export type CellValue = string | number | string[] | DateValue | boolean | null;
 
 /** The column id of a row's title, in views, sorts, filters and `set-values`. */
 export const titleId = "title";
+/** Where a row keeps its number, among its values: under no property, so changing a property's type never touches it. */
+const rowNumberKey = "@id";
+/** The types the app fills in: they can't be typed, pasted, or set by a filter's `+ New` (R3-9). */
+export const isReadOnlyType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime" || type === "id";
+export const isTimeType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime";
+const isTextType = (type: PropertyType): boolean => type === "text" || type === "url" || type === "email" || type === "phone";
+/** An ISO time as a wall clock on this device: what a date cell holds, so a created time reads in local time. */
+function localWall(iso: string): string {
+  const d = new Date(iso), two = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`;
+}
 export const databaseBlockType = "database";
 export const limits = { properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 200, hiddenGroups: 200 } as const;
 
@@ -141,8 +156,15 @@ function parseNumber(value: string): number | null {
 export function readValue(property: Property, raw: unknown): CellValue {
   const ids = optionIds(property);
   switch (property.type) {
+    // The app's own, read from the row by `cellValue`: nothing is stored under the property.
+    case "createdTime":
+    case "editedTime":
+    case "id":
+      return null;
     case "text":
-    case "url": {
+    case "url":
+    case "email":
+    case "phone": {
       if (typeof raw === "string") return raw === "" ? null : (property.options?.find((o) => o.id === raw)?.name ?? raw);
       if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
       if (Array.isArray(raw)) { const names = raw.map((id) => property.options?.find((o) => o.id === id)?.name).filter((x): x is string => Boolean(x)); return names.length ? names.join(", ") : null; }
@@ -187,8 +209,14 @@ export function storedValue(property: Property, input: unknown): Json | undefine
   if (input === null || input === undefined) return undefined;
   const refuse = (): never => { throw new DatabaseError(`Not a value for ${property.name || "this property"}`); };
   switch (property.type) {
+    case "createdTime":
+    case "editedTime":
+    case "id":
+      return refuse();
     case "text":
-    case "url": {
+    case "url":
+    case "email":
+    case "phone": {
       if (typeof input !== "string" || input.length > limits.text) refuse();
       const s = (input as string).replace(/\u0000/g, "");
       return s === "" ? undefined : s;
@@ -244,7 +272,13 @@ export function propertyOf(db: Database, id: string): Property | null {
 /** A row's value for a column, as its cell shows it. */
 export function cellValue(db: Database, row: Page, columnId: string): CellValue {
   const property = propertyOf(db, columnId);
-  return property ? readValue(property, rawOf(row, columnId)) : null;
+  if (!property) return null;
+  if (property.type === "id") { const n = row.values?.[rowNumberKey]; return typeof n === "number" ? n : null; }
+  if (isTimeType(property.type)) {
+    const at = property.type === "editedTime" ? row.editedAt ?? row.createdAt : row.createdAt;
+    return at ? { start: localWall(at) } : null;
+  }
+  return readValue(property, rawOf(row, columnId));
 }
 
 /** The rows whose stored value for this property reads differently as `type`: the "N values show as empty" count. */
@@ -305,7 +339,9 @@ export function conditionHolds(property: Property, condition: Condition, value: 
   if (op === "isNotEmpty") return !isEmptyValue(value);
   switch (property.type) {
     case "text":
-    case "url": {
+    case "url":
+    case "email":
+    case "phone": {
       if (typeof want !== "string") return null;
       const have = typeof value === "string" ? fold(value) : "";
       if (op === "contains") return have.includes(fold(want));
@@ -314,7 +350,8 @@ export function conditionHolds(property: Property, condition: Condition, value: 
       if (op === "isNot") return have !== fold(want);
       return null;
     }
-    case "number": {
+    case "number":
+    case "id": {
       if (typeof want !== "number" || !Number.isFinite(want)) return null;
       if (typeof value !== "number") return op === "ne";
       const cmp = { eq: value === want, ne: value !== want, gt: value > want, lt: value < want, gte: value >= want, lte: value <= want } as Record<string, boolean>;
@@ -333,7 +370,9 @@ export function conditionHolds(property: Property, condition: Condition, value: 
     }
     case "checkbox":
       return op === "is" && typeof want === "boolean" ? value === want : null;
-    case "date": {
+    case "date":
+    case "createdTime":
+    case "editedTime": {
       const start = value && typeof value === "object" && !Array.isArray(value) ? value.start.slice(0, 10) : null;
       const end = value && typeof value === "object" && !Array.isArray(value) ? (value.end ?? value.start).slice(0, 10) : null;
       if (op === "within") {
@@ -370,8 +409,11 @@ function compareValues(property: Property, a: CellValue, b: CellValue): number {
   switch (property.type) {
     case "text":
     case "url":
+    case "email":
+    case "phone":
       return collator.compare(String(a), String(b));
     case "number":
+    case "id":
       return (a as number) - (b as number);
     case "select":
     case "status":
@@ -382,6 +424,8 @@ function compareValues(property: Property, a: CellValue, b: CellValue): number {
       return x.length - y.length;
     }
     case "date":
+    case "createdTime":
+    case "editedTime":
       // ISO days and wall times compare exactly as strings.
       return (a as DateValue).start < (b as DateValue).start ? -1 : (a as DateValue).start > (b as DateValue).start ? 1 : 0;
     case "checkbox":
@@ -422,15 +466,15 @@ export function viewColumns(db: Database, view: View): { property: Property; wid
 export function newRowValues(db: Database, view: View, context: ViewContext, groupKey?: string): { title: string; values: RawValues; visible: boolean } {
   let title = "";
   const values: RawValues = {};
-  const probeOf = (t: string, v: RawValues) => ({ id: "", type: "document", date: null, title: t, document: "[]", values: v }) as Page;
+  const probeOf = (t: string, v: RawValues) => newRowProbe(db, t, v);
   // Under "any", one rule's value is enough, and only if it makes the row show; if it already shows, it needs none.
   const any = Boolean(view.filterAny);
   if (!any || !rowMatches(db, probeOf("", {}), view.filter, context, true)) for (const c of view.filter) {
     const property = propertyOf(db, c.by);
-    if (!property) continue;
+    if (!property || isReadOnlyType(property.type)) continue;
     const want = c.value;
     let value: Json | undefined;
-    if (property.type === "text" || property.type === "url") { if (c.op === "is" && typeof want === "string") value = want; }
+    if (isTextType(property.type)) { if (c.op === "is" && typeof want === "string") value = want; }
     else if (property.type === "number") { if (c.op === "eq" && typeof want === "number") value = want; }
     else if (property.type === "select" || property.type === "status") { const ids = strings(want); if (["isAnyOf", "is"].includes(c.op) && ids.length === 1) value = ids[0]; }
     else if (property.type === "multiSelect") { const ids = strings(want); if (["isAnyOf", "contains"].includes(c.op) && ids.length === 1) value = [ids[0]]; }
@@ -445,18 +489,19 @@ export function newRowValues(db: Database, view: View, context: ViewContext, gro
   }
   // A row added under a group starts with that group's value, even where the filter wants another (then it's hidden, and the notice says so).
   const grouped = groupKey === undefined ? null : viewGroupBy(db, view);
-  if (grouped) {
+  // A group by created time can't start a row off with a value: it lands in the group its own time says.
+  if (grouped && !isReadOnlyType(grouped.type)) {
     const value = groupKey === noGroupKey ? undefined : storedValue(grouped, groupValue(grouped, groupKey!, undefined, undefined, context.today, view.groupDateBy, context.weekStart));
     if (value === undefined) delete values[grouped.id]; else values[grouped.id] = value;
   }
-  return { title, values, visible: inView(db, probeOf(title, values), view, context) };
+  return { title, values, visible: inView(db, newRowProbe(db, title, values), view, context) };
 }
 
 // ---------------------------------------------------------------- views: groups (design §7.2, §7.3)
 
 /** The group of rows with no value. */
 export const noGroupKey = "none";
-const canGroup = (type: PropertyType): boolean => type !== "text";
+const canGroup = (type: PropertyType): boolean => type !== "text" && type !== "id";
 const canMakeColumns = (type: PropertyType): boolean => type === "select" || type === "status" || type === "checkbox";
 /** What a view of this layout can group by: a board's columns need a value a card can be dragged to (design §7.2). */
 export function groupableProperties(db: Database, layout: ViewLayout): Property[] {
@@ -487,12 +532,17 @@ function dateGroupName(key: string, by: GroupDateBy): string {
   const label = dayLabel.format(new Date(`${key}T12:00:00Z`));
   return by === "week" ? `Week of ${label}` : label;
 }
+/** A row as it would be if added now, app-filled values included, to ask whether a view's filter would show it. */
+export function newRowProbe(db: Database, title: string, values: Page["values"]): Page {
+  const now = new Date().toISOString();
+  return { id: "", type: "document", date: null, title, document: "[]", values: { ...values, ...(db.nextRowNumber === undefined ? {} : { [rowNumberKey]: db.nextRowNumber }) }, createdAt: now, editedAt: now } as Page;
+}
 /** The keys of the groups a value belongs to: several for a multi-select, the no-value group when empty. */
 function groupKeys(property: Property, value: CellValue, by: GroupDateBy, weekStart: WeekStart): string[] {
   if (property.type === "checkbox") return [value === true ? "checked" : "unchecked"];
   if (isEmptyValue(value)) return [noGroupKey];
   if (property.type === "multiSelect") return value as string[];
-  if (property.type === "date") return [dateGroupKey((value as DateValue).start, by, weekStart)];
+  if (property.type === "date" || isTimeType(property.type)) return [dateGroupKey((value as DateValue).start, by, weekStart)];
   return [String(value)];
 }
 export interface ViewGroup { key: string; name: string; rows: Page[] }
@@ -512,7 +562,7 @@ export function viewGroups(db: Database, view: View, rows: readonly Page[], rawF
   if (!property) return null;
   const by = view.groupDateBy ?? "month";
   const found = new Map<string, Page[]>();
-  for (const row of rows) for (const key of groupKeys(property, readValue(property, rawFor(row, property.id)), by, weekStart)) {
+  for (const row of rows) for (const key of groupKeys(property, isReadOnlyType(property.type) ? cellValue(db, row, property.id) : readValue(property, rawFor(row, property.id)), by, weekStart)) {
     const list = found.get(key);
     if (list) list.push(row); else found.set(key, [row]);
   }
@@ -526,7 +576,7 @@ export function viewGroups(db: Database, view: View, rows: readonly Page[], rawF
   } else {
     const keys = [...found.keys()].filter((k) => k !== noGroupKey);
     if (property.type === "number") keys.sort((a, b) => Number(a) - Number(b)); else keys.sort(collator.compare);
-    groups.push(...keys.map((k) => group(k, property.type === "date" ? dateGroupName(k, by) : k)));
+    groups.push(...keys.map((k) => group(k, property.type === "date" || isTimeType(property.type) ? dateGroupName(k, by) : k)));
     if (found.has(noGroupKey)) groups.push(group(noGroupKey, "No value"));
   }
   const hidden = new Set(view.hiddenGroups ?? []);
@@ -618,7 +668,7 @@ export interface RowEdit { pageId: string; values: Record<string, Json>; expecte
 const filterOps = new Set<string>(filterOpList);
 const statusGroups = new Set<StatusGroup>(["todo", "active", "done"]);
 const numberFormats = new Set<NumberFormat>(["plain", "comma", "percent", "currency"]);
-export const typeLabels: Record<PropertyType, string> = { text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL" };
+export const typeLabels: Record<PropertyType, string> = { text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
 const hasOptions = (type: PropertyType): boolean => type === "select" || type === "multiSelect" || type === "status";
 
 function cleanName(value: unknown, what: string): string {
@@ -728,6 +778,28 @@ function move<T extends { id: string }>(list: T[], id: string, beforeId: string 
 }
 const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
 
+/** Gives every row of a database with no number one, in page order, once it has an ID property. Trashed rows too: they can come back. */
+function numberRows(ws: Workspace, page: Page & { database: Database }): void {
+  let next = page.database.nextRowNumber ?? 1;
+  for (const row of ws.pages) {
+    if (row.parentId !== page.id || row.type !== "document" || typeof row.values?.[rowNumberKey] === "number") continue;
+    row.values = { ...row.values, [rowNumberKey]: next++ };
+  }
+  page.database.nextRowNumber = next;
+}
+/** A new row's number, once numbers have started. */
+export function numberNewRow(db: Database, row: Page): void {
+  if (db.nextRowNumber !== undefined) row.values = { ...row.values, [rowNumberKey]: db.nextRowNumber++ };
+}
+/** After an Undo, a database's next number stays where it had got to, so a number is never used twice. */
+export function keepRowNumbers(before: Workspace, after: Workspace): void {
+  for (const page of after.pages) {
+    if (!isDatabase(page)) continue;
+    const had = before.pages.find((p) => p.id === page.id)?.database?.nextRowNumber;
+    if (had !== undefined && had > (page.database.nextRowNumber ?? 0)) page.database.nextRowNumber = had;
+  }
+}
+
 /** Applies one change to the database page in place; returns the receipt's message. */
 export function changeDatabase(ws: Workspace, page: Page & { database: Database }, change: DatabaseChange): string {
   const db = page.database;
@@ -740,6 +812,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       const added = cleanProperty(change.property, db);
       if (change.viewId !== undefined) view(change.viewId);
       db.properties.push(added);
+      if (added.type === "id") numberRows(ws, page);
       // A new property shows in every view, at the end (Notion shows it where it was made; one person rarely needs it hidden elsewhere).
       for (const v of db.views) v.columns.push({ id: added.id });
       return `Added ${added.name}`;
@@ -758,6 +831,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         for (const o of old.options ?? []) if (!kept.has(o.id)) { const n = rowsWithOption(ws, page.id, old, o.id); notes.push(n ? `Option "${o.name}" removed from ${plural(n, "row")}` : `Option "${o.name}" removed`); }
       }
       db.properties[db.properties.indexOf(old)] = next;
+      if (next.type === "id") numberRows(ws, page);
       return notes.join(" · ") || (next.name !== old.name ? `Renamed to ${next.name}` : "Property saved");
     }
     case "removeProperty": {
@@ -822,6 +896,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
  */
 export function editRow(db: Database, row: Page, edit: RowEdit, at: string): void {
   const keys = Object.keys(edit.values ?? {});
+  if (keys.includes(rowNumberKey)) throw new DatabaseError("Not a value for this property");
   if (!keys.length || keys.length > limits.properties + 1) throw new DatabaseError("Nothing to save");
   for (const [key, want] of Object.entries(edit.expected ?? {})) if (!sameRaw(rawOf(row, key), want)) throw new DatabaseError("Changed elsewhere");
   const values: RawValues = { ...(row.values ?? {}) };
@@ -859,6 +934,7 @@ export function valueText(db: Database, columnId: string, value: CellValue): str
   const property = propertyOf(db, columnId)
   const name = (id: string) => property?.options?.find(o => o.id === id)?.name ?? ''
   if (value === null || value === false) return ''
+  if (property?.type === 'createdTime' || property?.type === 'editedTime') return (value as DateValue).start.replace('T', ' ')
   if (value === true) return 'Yes'
   if (Array.isArray(value)) return value.map(name).filter(Boolean).join(', ')
   if (typeof value === 'object') return value.end ? `${value.start} → ${value.end}` : value.start

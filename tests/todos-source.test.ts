@@ -66,6 +66,11 @@ test('R2-9: an edit is the task command, with its notice', () => {
   assert.deepEqual(change(paused, 'status', 'open'), { action: { type: 'plan-task', taskId: paused, date: today, today }, notice: 'On today' })
   assert.deepEqual(change(done, 'status', 'paused'), { refused: 'Reopen it first' })
   assert.deepEqual(change(open, 'planned', { start: tomorrow }), { action: { type: 'plan-task', taskId: open, date: tomorrow, today, from: today }, notice: `Planned for ${tomorrow}` })
+  assert.deepEqual(change(open, 'planned', undefined), { action: { type: 'not-today', taskId: open, date: today }, notice: 'Not today' })
+  // A finished to-do stays on the day it was finished.
+  assert.deepEqual(change(done, 'planned', { start: tomorrow }), { refused: 'Reopen it first' })
+  assert.deepEqual(change(done, 'planned', undefined), { refused: 'Reopen it first' })
+  assert.deepEqual(change(cancelled, 'planned', { start: tomorrow }), { refused: 'Reopen it first' })
   assert.deepEqual(change(open, 'deadline', { start: tomorrow }), { action: { type: 'set-task-dates', taskId: open, deadlineOn: tomorrow }, notice: 'Deadline set' })
   assert.deepEqual(change(open, 'start', { start: tomorrow }), { action: { type: 'set-task-dates', taskId: open, attentionOn: tomorrow }, notice: 'Start set' })
   assert.deepEqual(change(open, 'title', 'New words'), { action: { type: 'rename-task', taskId: open, title: 'New words' }, notice: 'Renamed' })
