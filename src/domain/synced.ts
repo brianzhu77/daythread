@@ -160,6 +160,7 @@ export function settleSynced(state: Workspace): void {
     })
   }
   for (const record of state.synced!) if (recordKey(record) !== was.get(record.id)) record.rev++
+  dropUnheldRecords(state)
   for (const page of state.pages) {
     if (!mentionsBlock(page.document)) continue
     // A place's roles come from its rows when it has them, or its stored block when it was written without.
@@ -171,6 +172,59 @@ export function settleSynced(state: Workspace): void {
     })
     page.document = JSON.stringify(nodes)
   }
+}
+
+/** Every place a record is shown, Trash included, with the page it's on, in the workspace's order. */
+export function syncedPlaces(ws: Pick<Workspace, 'pages'>, syncId: string): { page: Page; block: EditorNode }[] {
+  const out: { page: Page; block: EditorNode }[] = []
+  for (const page of ws.pages) {
+    if (!mentionsBlock(page.document)) continue
+    walk(pageNodes(page), n => { if (isBlock(n) && n.props?.syncId === syncId) out.push({ page, block: n }) })
+  }
+  return out
+}
+/** Once no place is left anywhere, the record goes: a deleted note isn't kept behind his back (Undo's copy still has it). */
+function dropUnheldRecords(state: Workspace): void {
+  if (!state.synced?.length) return
+  const held = new Set<string>()
+  for (const page of state.pages) {
+    if (!mentionsBlock(page.document)) continue
+    walk(pageNodes(page), n => { if (isBlock(n)) held.add(String(n.props?.syncId)) })
+  }
+  state.synced = state.synced.filter(r => held.has(r.id))
+  if (!state.synced.length) delete state.synced
+}
+/** A block turned into ordinary lines, where it sits, under the ids they have there, its rows keeping their roles. */
+function withoutBlock(nodes: EditorNode[], matches: (n: EditorNode) => boolean, keepLines: boolean): EditorNode[] {
+  return nodes.flatMap(n => {
+    if (isBlock(n) && matches(n)) return keepLines ? n.children ?? [] : []
+    return n.children?.length ? [{ ...n, children: withoutBlock(n.children, matches, keepLines) }] : [n]
+  })
+}
+function rewrite(page: Page, matches: (n: EditorNode) => boolean, keepLines: boolean): void {
+  page.document = JSON.stringify(withoutBlock(pageNodes(page), matches, keepLines))
+}
+/** "Unsync here" or, on the original, "Unsync all": those places become ordinary lines. No task changes: rows stay rows of the same task. */
+export function unsyncBlock(state: Workspace, syncId: string, blockId: string, all: boolean): number {
+  const places = syncedPlaces(state, syncId)
+  const here = places.find(p => p.block.id === blockId)
+  if (!here) return 0
+  const pages = new Set((all ? places : [here]).map(p => p.page))
+  for (const page of pages) rewrite(page, n => n.props?.syncId === syncId && (all || n.id === blockId), true)
+  return places.length
+}
+/**
+ * Deleting a place. A copy just goes. The original ends the syncing: every other place keeps its lines as ordinary lines, as
+ * the only choice that loses nothing (design §4), at any count. How many places it had.
+ */
+export function deleteBlockPlace(state: Workspace, syncId: string, blockId: string): { places: number; wasOriginal: boolean } {
+  const places = syncedPlaces(state, syncId), record = state.synced?.find(r => r.id === syncId)
+  const here = places.find(p => p.block.id === blockId)
+  if (!here || !record) return { places: 0, wasOriginal: false }
+  const wasOriginal = record.original === blockId
+  rewrite(here.page, n => n.id === blockId, false)
+  if (wasOriginal) for (const { page } of places) if (mentionsBlock(page.document)) rewrite(page, n => n.props?.syncId === syncId, true)
+  return { places: places.length, wasOriginal }
 }
 
 /**
@@ -188,6 +242,8 @@ export function blockUpdates(editorNodes: EditorNode[], saved: string, own: bool
     const e = isBlock(s) ? held.get(s.id) : undefined
     if (!e) return
     const rev = Number(s.props?.rev), key = String(s.props?.key ?? ''), mine = blockLinesKey(e)
+    // A copy just pasted hasn't read the record yet: the block has the record's lines, whatever came with it.
+    if (!Number(e.props?.rev)) { out.push({ id: e.id, rev, key, lines: s.children ?? [], rename: {} }); return }
     if (mine === key) {
       // The same lines: only what's new here takes this place's ids.
       const rename: Record<string, string> = {}, ids = new Set<string>()

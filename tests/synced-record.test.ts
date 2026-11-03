@@ -2,6 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PGlite } from '@electric-sql/pglite'
+import { commandSchema } from '../src/domain/command-schema.ts'
 import { flatNodes, pageContentKey, pageNodes, type EditorNode } from '../src/domain/editor-document.ts'
 import { blockUpdates, expandedWorkspace, storedDocument, strippedWorkspace, syncedBlockType } from '../src/domain/synced.ts'
 import { applyChanges, changesBetween } from '../src/domain/workspace-changes.ts'
@@ -214,6 +215,89 @@ test('a block whose record is missing stays as it is: no save removes it or make
   assert.equal(h.ws.synced!.length, before)
   h.save('b', d => d)
   assert.ok(pageNodes(h.page('b')).some(n => n.id === 'sx'))
+})
+
+test('Unsync here: that place keeps its lines as ordinary lines, the others stay synced, one Undo', () => {
+  const h = shown()
+  const r = h.run({ type: 'unsync-block', pageId: 'b', blockId: 'sb' })
+  assert.equal(r.receipt.message, 'Unsynced here')
+  assert.ok(!pageNodes(h.page('b')).some(n => n.type === syncedBlockType))
+  assert.deepEqual(lines(h.page('b')), ['Kept', 'First', 'Second'])
+  h.save('a', d => d.map(n => n.type === syncedBlockType ? { ...n, children: [line('l1', 'Changed')] } : n))
+  assert.deepEqual(lines(h.page('c')), ['Changed'])
+  assert.deepEqual(lines(h.page('b')), ['Kept', 'First', 'Second'], 'no longer follows')
+})
+
+test('Unsync all on the original: every page keeps its lines, the record goes, one Undo restores every place', () => {
+  const h = shown()
+  assert.throws(() => h.run({ type: 'unsync-block', pageId: 'b', blockId: 'sb', all: true }), /Only the original/)
+  const r = h.run({ type: 'unsync-block', pageId: 'a', blockId: 'sa', all: true })
+  assert.equal(r.receipt.message, 'Unsynced on 3 pages')
+  for (const id of ['a', 'b', 'c']) { assert.ok(!pageNodes(h.page(id)).some(n => n.type === syncedBlockType)); assert.ok(lines(h.page(id)).includes('First')) }
+  assert.equal(h.ws.synced, undefined)
+  h.run({ type: 'undo', targetOperationId: r.receipt.operationId })
+  assert.equal(h.ws.synced!.length, 1)
+  for (const id of ['a', 'b', 'c']) assert.ok(pageNodes(h.page(id)).some(n => n.type === syncedBlockType))
+  assert.deepEqual(blockOf(h.page('a')).children!.map(n => n.id), ['l1', 'l2'], 'line ids as they were')
+})
+
+test('deleting a copy leaves the others; deleting the original ends the syncing, each keeping its lines; Undo restores', () => {
+  const h = shown()
+  const copy = h.run({ type: 'delete-synced-place', pageId: 'c', blockId: 'sc' })
+  assert.equal(copy.receipt.message, 'Removed from this page · still on 2 pages')
+  assert.deepEqual(lines(h.page('c')), [])
+  assert.deepEqual(lines(h.page('b')), ['Kept', 'First', 'Second'])
+  h.run({ type: 'undo', targetOperationId: copy.receipt.operationId })
+  assert.deepEqual(lines(h.page('c')), ['First', 'Second'])
+  const original = h.run({ type: 'delete-synced-place', pageId: 'a', blockId: 'sa' })
+  assert.equal(original.receipt.message, 'Removed · the other 2 pages keep their lines, no longer synced')
+  assert.deepEqual(lines(h.page('a')), ['Before'])
+  assert.deepEqual(lines(h.page('b')), ['Kept', 'First', 'Second'])
+  assert.ok(!pageNodes(h.page('b')).some(n => n.type === syncedBlockType))
+  assert.equal(h.ws.synced, undefined, 'no place left: the record goes')
+  h.run({ type: 'undo', targetOperationId: original.receipt.operationId })
+  assert.equal(h.ws.synced!.length, 1)
+  assert.deepEqual(lines(h.page('a')), ['Before', 'First', 'Second'])
+})
+
+test('Trash: a place in Trash holds the record; the others stay synced; restored it reads the latest; with its original deleted it comes back as ordinary lines', () => {
+  const h = shown()
+  h.run({ type: 'delete-page', pageId: 'a', at: '2026-10-22T18:00:00.000Z' })
+  assert.equal(h.ws.synced!.length, 1)
+  h.save('b', d => d.map(n => n.type === syncedBlockType ? { ...n, children: [line('l1:sb', 'Changed')] } : n))
+  assert.deepEqual(lines(h.page('c')), ['Changed'])
+  h.run({ type: 'restore-page', pageId: 'a' })
+  assert.deepEqual(lines(h.page('a')), ['Before', 'Changed'])
+  // A copy in Trash while the original goes: it keeps the last shared lines.
+  h.run({ type: 'delete-page', pageId: 'c', at: '2026-10-22T18:00:00.000Z' })
+  h.run({ type: 'delete-synced-place', pageId: 'a', blockId: 'sa' })
+  h.run({ type: 'restore-page', pageId: 'c' })
+  assert.deepEqual(lines(h.page('c')), ['Changed'])
+  assert.ok(!pageNodes(h.page('c')).some(n => n.type === syncedBlockType))
+})
+
+test('a block removed by a save, with no place left, takes its record with it; a to-do in a block is one task through it all', () => {
+  const h = harness()
+  h.day(today)
+  const day = `day:${today}`
+  h.run({ type: 'create-document', title: 'B', body: '', pageId: 'b' })
+  h.save(day, d => [...d, block('sa', 's1', [todo('r1', 'Book the flights')])])
+  h.save('b', d => [...d, block('sb', 's1')])
+  const count = () => h.ws.tasks.filter(t => t.title === 'Book the flights').length
+  assert.equal(count(), 1)
+  const r = h.run({ type: 'unsync-block', pageId: day, blockId: 'sa', all: true })
+  assert.equal(count(), 1)
+  h.run({ type: 'undo', targetOperationId: r.receipt.operationId })
+  h.save('b', d => d.filter(n => n.type !== syncedBlockType))
+  assert.equal(count(), 1)
+  h.save(day, d => d.filter(n => n.type !== syncedBlockType))
+  assert.equal(h.ws.synced, undefined)
+})
+
+test('the new commands pass the schema', () => {
+  for (const action of [{ type: 'unsync-block', pageId: 'p', blockId: 'b' }, { type: 'unsync-block', pageId: 'p', blockId: 'b', all: true }, { type: 'delete-synced-place', pageId: 'p', blockId: 'b' }]) {
+    assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 0, action }).success, true, action.type)
+  }
 })
 
 test('with no block nothing changes: the same objects, the same key', () => {

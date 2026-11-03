@@ -106,6 +106,10 @@ export type Action =
   | { type: "task-status"; taskId: string; status: Task["status"]; today?: LocalDate }
   /** New words for a to-do: its title and every line of it, on any page. */
   | { type: "rename-task"; taskId: string; title: string }
+  /** Synced blocks: this place, or every place on the original, becomes ordinary lines. */
+  | { type: "unsync-block"; pageId: string; blockId: string; all?: true }
+  /** Synced blocks: this place goes; the original ends the syncing, and the others keep their lines. */
+  | { type: "delete-synced-place"; pageId: string; blockId: string }
   /** Start and Deadline; a field left out stays as it is, null clears it. */
   | { type: "set-task-dates"; taskId: string; attentionOn?: LocalDate | null; deadlineOn?: LocalDate | null }
   /** `from`: the day page the move is made from, with the browser's `today`; its row leaves unless that day is past. */

@@ -8,7 +8,7 @@ import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./pa
 import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
-import { acceptSavedBlocks, expandedWorkspace, settleSynced } from "./synced.ts";
+import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, settleSynced, unsyncBlock } from "./synced.ts";
 
 export class DomainError extends Error {}
 export function createEmptyWorkspace(timezone = "America/Vancouver"): Workspace {
@@ -575,6 +575,22 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (action.deadlineOn !== undefined) t.deadlineOn = action.deadlineOn === null ? null : date(action.deadlineOn);
       t.version++;
       return { message: "Date set", entityId: t.id };
+    }
+    case "unsync-block":
+    case "delete-synced-place": {
+      const here = pageNodes(page(state, action.pageId));
+      const block = flatNodes(here).find((n) => n.id === action.blockId);
+      const syncId = block?.props?.syncId;
+      if (!block || typeof syncId !== "string") throw new DomainError("Block not found");
+      if (action.type === "unsync-block") {
+        if (action.all && state.synced?.find((r) => r.id === syncId)?.original !== block.id) throw new DomainError("Only the original can do that");
+        const places = unsyncBlock(state, syncId, block.id, Boolean(action.all));
+        const others = places - 1;
+        return { message: action.all ? `Unsynced on ${places} ${places === 1 ? "page" : "pages"}` : others ? "Unsynced here" : "Unsynced", entityId: action.pageId };
+      }
+      const { places, wasOriginal } = deleteBlockPlace(state, syncId, block.id);
+      const others = places - 1;
+      return { message: !others ? "Deleted" : wasOriginal ? `Removed · the other ${others} ${others === 1 ? "page keeps its" : "pages keep their"} lines, no longer synced` : `Removed from this page · still on ${others} ${others === 1 ? "page" : "pages"}`, entityId: action.pageId };
     }
     case "plan-task": {
       const t = task(state, action.taskId);
