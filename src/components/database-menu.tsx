@@ -302,7 +302,7 @@ function CalendarDateChoices({ db, onPick }: { db: DatabasePage; onPick: (proper
     onPick(id)
   }
   return <>
-    <p className="database-menu-quiet">Rows sit by</p>
+    <p className="database-menu-quiet">Show calendar by</p>
     {dateProperties(db.database).map(p => <button key={p.id} type="button" role="menuitem" onClick={() => onPick(p.id)}>{p.name}</button>)}
     <button type="button" role="menuitem" onClick={addDate}>+ New Date property</button>
   </>
@@ -371,7 +371,7 @@ function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
   return <>
     <Head title="Layout" back={back} />
     {(['table', 'board', 'list', 'gallery', 'calendar'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
-    {view.layout === 'calendar' && dateProperties(db.database).length > 0 && <label className="database-menu-row">Rows sit by
+    {view.layout === 'calendar' && dateProperties(db.database).length > 0 && <label className="database-menu-row">Show calendar by
       <select value={viewDateBy(db.database, view)?.id ?? ''} onChange={e => { const dateBy = e.target.value; if (dateBy) changeView(() => ({ dateBy })) }}>
         {!viewDateBy(db.database, view) && <option value="">Choose…</option>}
         {dateProperties(db.database).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
