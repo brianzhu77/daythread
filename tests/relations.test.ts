@@ -138,6 +138,11 @@ test('rollups: each function, "—" when nothing is linked, read-only, and filte
   assert.equal(value('min'), 41); assert.equal(value('max'), 65); assert.equal(value('range'), 24); assert.equal(value('percentEmpty'), 0); assert.equal(value('countUnique'), 2)
   assert.deepEqual(value('first'), { start: '1775-12-16' }); assert.deepEqual(value('last'), { start: '1920-10-08' }); assert.equal(value('span'), '52891 days')
   assert.equal(value('names'), 'Herbert, Austen'); assert.equal(value('done'), 1); assert.equal(value('share'), 50)
+  // The rest of the list, with one linked row missing its value.
+  for (const fn of ['countValues', 'countEmpty', 'countNotEmpty', 'percentNotEmpty'] as const) add(fn, fn, 'alive')
+  add('uniques', 'unique', 'title'); add('off', 'unchecked', 'alive'); add('offShare', 'percentUnchecked', 'alive')
+  assert.equal(value('countValues'), 1); assert.equal(value('countEmpty'), 1); assert.equal(value('countNotEmpty'), 1); assert.equal(value('percentNotEmpty'), 50)
+  assert.equal(value('uniques'), 'Herbert, Austen'); assert.equal(value('off'), 1); assert.equal(value('offShare'), 50)
   assert.equal(value('countAll', 'emma'), null, 'nothing linked')
   assert.equal(value('sum', 'emma'), null)
   const sum = db(h, 'books').database.properties.find(p => p.id === 'sum')!
