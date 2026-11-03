@@ -19,7 +19,7 @@ import { useWorkspace } from './use-day'
 import {
   changedNotice, dateLabel, enterChoice, flipSign, hasTime, joinDate, matchOptions, numberDraft, numberLabel,
   orderedDate, popoverMinWidth, readNumberInput, readingLabel, splitDate, statusDot, statusGroups, tooLong,
-  tooLongMessage, urlHref, urlLabel, withoutTime,
+  emailHref, phoneHref, tooLongMessage, urlHref, urlLabel, withoutTime,
 } from './property-values.ts'
 
 export interface CommitInfo {
@@ -64,6 +64,12 @@ export function PropertyEditor(props: EditorProps) {
   switch (props.property.type) {
     case 'text': return <TextEditor {...props} kind="text" />
     case 'url': return <TextEditor {...props} kind="url" />
+    // As typed, nothing refused (R3-10).
+    case 'email': return <TextEditor {...props} kind="email" />
+    case 'phone': return <TextEditor {...props} kind="phone" />
+    case 'createdTime':
+    case 'editedTime':
+    case 'id': return null
     case 'number': return <NumberEditor {...props} />
     case 'select':
     case 'status':
@@ -224,7 +230,7 @@ function useCaretAtEnd() {
 
 // ---------- Text and URL (§6.3.3, §6.3.10) ----------
 
-function TextEditor(p: EditorProps & { kind: 'text' | 'url' }) {
+function TextEditor(p: EditorProps & { kind: 'text' | 'url' | 'email' | 'phone' }) {
   const wide = useWide()
   const before = typeof p.value === 'string' ? p.value : ''
   const [draft, setDraft] = useState(before)
@@ -254,7 +260,10 @@ function TextEditor(p: EditorProps & { kind: 'text' | 'url' }) {
     else if (e.key === 'Enter' && e.shiftKey && (p.kind === 'url' || !wide)) e.preventDefault()
     else if (e.key === 'Tab' && wide) { e.preventDefault(); if (save()) p.onMove?.(e.shiftKey ? 'previous' : 'next') }
   }
-  const href = p.kind === 'url' ? urlHref(draft) : null
+  const link = p.kind === 'url' ? { href: urlHref(draft), label: 'Open link ↗' }
+    : p.kind === 'email' ? { href: emailHref(draft), label: 'Email ↗' }
+    : p.kind === 'phone' ? { href: phoneHref(draft), label: 'Call ↗' }
+    : null
   const common = {
     ref: field,
     className: 'property-field',
@@ -271,10 +280,11 @@ function TextEditor(p: EditorProps & { kind: 'text' | 'url' }) {
     <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onDismiss={onDismiss} overCell={wide} maxWidth={360}>
       {p.kind === 'text'
         ? <textarea {...common} rows={wide ? 1 : 3} />
-        : <input {...common} type="url" inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} />}
+        // Email is a text input with an email keyboard: type="email" would drop what's typed around the address, and has no caret to place.
+        : <input {...common} type={p.kind === 'url' ? 'url' : p.kind === 'phone' ? 'tel' : 'text'} inputMode={p.kind === 'phone' ? 'tel' : p.kind} autoCapitalize="off" autoCorrect="off" spellCheck={false} />}
       {long && <FieldError>{tooLongMessage}</FieldError>}
-      {!wide && href && (
-        <a className="property-row" href={href} target="_blank" rel="noopener noreferrer">Open link ↗</a>
+      {!wide && link?.href && (
+        <a className="property-row" href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a>
       )}
     </EditorShell>
   )
@@ -552,7 +562,12 @@ export function PropertyCell({ property, value, today = todayIso() }: { property
   if (read === null) return null
   switch (property.type) {
     case 'text': return <span className="cell-text">{String(read).replace(/\s*\n\s*/g, ' ')}</span>
+    case 'email':
+    case 'phone': return <span className={`cell-text${(property.type === 'email' ? emailHref : phoneHref)(String(read)) ? ' cell-url' : ''}`}>{String(read)}</span>
     case 'number': return <span className="cell-number">{numberLabel(read as number, property.format)}</span>
+    case 'id': return <span className="cell-number">{String(read)}</span>
+    case 'createdTime':
+    case 'editedTime': return <span className="cell-text">{dateLabel(read as DateValue, today)}</span>
     case 'url': {
       const href = urlHref(read as string)
       return href ? <span className="cell-text cell-url">{urlLabel(read as string)}</span> : <span className="cell-text">{read as string}</span>

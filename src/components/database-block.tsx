@@ -5,14 +5,14 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
-import { cellValue, databaseRows, groupValue, isDatabase, inView, isEmptyValue, noGroupKey, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { cellValue, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnlyType, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
 import { ChevronRightIcon } from './icons'
 import { holdKeyboard } from './keyboard'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide } from './property-editors'
-import { urlHref } from './property-values'
+import { emailHref, phoneHref, urlHref } from './property-values'
 import { useWorkspace } from './use-day'
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
@@ -336,7 +336,7 @@ export function DatabaseCellEditor() {
   // A value still on its way is the cell's value: the editor opens on it, not on the copy from before it.
   const inFlight = pendingCells.get(pendingKey(row.id, cell.columnId))
   const expected = ((inFlight ? inFlight.raw : rawOf(row, cell.columnId)) ?? (cell.columnId === titleId ? '' : null)) as Json
-  const keeps = property.type === 'text' || property.type === 'url'
+  const keeps = property.type === 'text' || property.type === 'url' || property.type === 'email' || property.type === 'phone'
 
   const value = cell.columnId === titleId ? ((inFlight ? String(inFlight.raw ?? '') : row.title) || null) : inFlight ? readValue(property, inFlight.raw) : cellValue(db.database, row, cell.columnId)
   return <PropertyEditor key={cellKey(cell)}
@@ -356,7 +356,8 @@ function pastedValue(db: Database, property: Property, line: string): Json | und
   const text = line.trim()
   if (line.length > 10_000) return undefined
   if (property.id === titleId || property.type === 'text') return line
-  if (property.type === 'url') return text
+  if (property.type === 'url' || property.type === 'email' || property.type === 'phone') return text
+  if (isReadOnlyType(property.type)) return undefined
   if (property.type === 'number') { const n = Number(text.replace(/,/g, '')); return Number.isFinite(n) ? n : undefined }
   const option = (propertyOf(db, property.id)?.options ?? []).find(o => o.name.toLowerCase() === text.toLowerCase())
   if (property.type === 'select' || property.type === 'status') return option?.id
@@ -378,6 +379,10 @@ function createOption(run: ReturnType<typeof useWorkspace>['run'], db: Page & { 
   return id
 }
 
+/** Where a URL, Email or Phone cell's words link to; null when they don't read as one, so they stay plain text. */
+function linkHref(property: Property, text: string): string | null {
+  return property.type === 'url' ? urlHref(text) : property.type === 'email' ? emailHref(text) : property.type === 'phone' ? phoneHref(text) : null
+}
 /** A row's value as it shows now: one on its way, or kept after a failed save, comes first. */
 export function shownRaw(row: Page, columnId: string): unknown {
   const pending = pendingCells.get(pendingKey(row.id, columnId))
@@ -449,6 +454,7 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
       return
     }
     if (!groups || to === null || !target) return
+    if (isReadOnlyType(groups.property.type)) { toast(`${groups.property.name} can't be changed`, { timeout: 4000 }); return }
     const value = groupValue(groups.property, to, shownRaw(row, groups.property.id), from ?? undefined, context.today, view.groupDateBy, context.weekStart)
     const probe = { ...row, values: { ...row.values, ...(value === undefined ? {} : { [groups.property.id]: value }) } } as Page
     if (value === undefined) delete probe.values![groups.property.id]
@@ -492,7 +498,7 @@ export function useAddRow(db: Page & { database: Database }, view: View, context
     const prefill = newRowValues(db.database, view, context, group)
     if (values) {
       Object.assign(prefill.values, values)
-      prefill.visible = inView(db.database, { id: '', type: 'document', date: null, title: prefill.title, document: '[]', values: prefill.values } as Page, view, context)
+      prefill.visible = inView(db.database, newRowProbe(db.database, prefill.title, prefill.values), view, context)
     }
     const pageId = newId()
     void run({ type: 'add-row', databaseId: db.id, pageId, title: prefill.title, values: prefill.values, at: new Date().toISOString() },
@@ -730,7 +736,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
       // Typing on a text, number or URL cell (or Name) starts replacing its value (design §10).
       const row = shown[r], property = c === 0 ? titleProperty : columns[c - 1]?.property
-      if (!row || !property || !['text', 'number', 'url'].includes(property.type)) return
+      if (!row || !property || !['text', 'number', 'url', 'email', 'phone'].includes(property.type)) return
       e.preventDefault()
       open(row.id, property.id, entries[r]!.group)
       // Space opens the cell as it is; any other key starts replacing it.
@@ -738,7 +744,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     }
     else if ((e.key === 'Backspace' || e.key === 'Delete') && c > 0) {
       const row = shown[r], property = columns[c - 1]?.property
-      if (row && property && !isEmptyValue(cellValue(db.database, row, property.id))) { e.preventDefault(); commit(db, row, property.id, undefined) }
+      if (row && property && !isReadOnlyType(property.type) && !isEmptyValue(cellValue(db.database, row, property.id))) { e.preventDefault(); commit(db, row, property.id, undefined) }
     }
   }
   /**
@@ -760,7 +766,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     const value = c === 0 ? (row.title || null) : cellValue(db.database, row, property.id)
     if (e.type !== 'paste') {
       e.clipboardData?.setData('text/plain', valueText(db.database, property.id, value))
-      if (e.type === 'cut' && c > 0 && !isEmptyValue(value)) commit(db, row, property.id, undefined)
+      if (e.type === 'cut' && c > 0 && !isReadOnlyType(property.type) && !isEmptyValue(value)) commit(db, row, property.id, undefined)
       return
     }
     const lines = (e.clipboardData?.getData('text/plain') ?? '').replace(/\r?\n$/, '').split(/\r?\n/), first = lines[0]!
@@ -801,10 +807,12 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
                   ? <span data-nav={navId} tabIndex={0} className="database-check-cell" onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); commit(db, row, property.id, value === true ? undefined : true) } }}>
                       <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
                     </span>
-                  : wide && property.type === 'url' && typeof value === 'string' && urlHref(value)
+                  : isReadOnlyType(property.type)
+                  ? <span data-nav={navId} tabIndex={0} className="database-cell is-read-only"><PropertyCell property={property} value={value} today={today} /></span>
+                  : wide && typeof value === 'string' && linkHref(property, value)
                   // At 1280 a link opens from its text, and the pencil edits it (design §6.1, Jazz bf91cb72).
                   ? <span className="database-url-cell">
-                      <a href={urlHref(value)!} target="_blank" rel="noreferrer" className="database-url-link"><PropertyCell property={property} value={value} today={today} /></a>
+                      <a href={linkHref(property, value)!} target="_blank" rel="noreferrer" className="database-url-link"><PropertyCell property={property} value={value} today={today} /></a>
                       <button type="button" className="database-url-edit" aria-label={`Edit ${property.name}`} data-cell={key(row.id, property.id, group)} data-nav={navId} onClick={() => open(row.id, property.id, group)}>✎</button>
                     </span>
                   : <button type="button" className="database-cell" data-cell={key(row.id, property.id, group)} data-nav={navId} onClick={() => open(row.id, property.id, group)}>
@@ -879,7 +887,7 @@ function EditPickedButton({ db, rowIds }: { db: Page & { database: Database }; r
     const items = rows.map(r => ({ pageId: r.id, values: { [p.id]: raw ?? null } as Record<string, Json>, expected: { [p.id]: (rawOf(r, p.id) ?? null) as Json } }))
     if (items.length) void run({ type: 'set-values-many', items, at: new Date().toISOString() }, r => ({ text: `${p.name} set on ${items.length === 1 ? '1 row' : `${items.length} rows`}`, undoOperationId: r.operationId }))
   }
-  const editable = db.database.properties
+  const editable = db.database.properties.filter(p => !isReadOnlyType(p.type))
   return <>
     <button type="button" ref={anchor} className="app-link" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>Edit property ▾</button>
     {open && <div className="app-menu database-picked-menu" role="menu">
@@ -926,7 +934,9 @@ function defaultWidth(property: Property): number {
     case 'number': return 90
     case 'date': return 110
     case 'select': case 'multiSelect': case 'status': return 140
-    case 'text': case 'url': return 180
+    case 'text': case 'url': case 'email': case 'phone': return 180
+    case 'createdTime': case 'editedTime': return 150
+    case 'id': return 70
   }
 }
 /** "Property", "Property 2", …: never a name the database already has (or "Name"). */
@@ -962,7 +972,9 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
       const key = cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: property.id })
       return <div key={property.id} className={`row-property${pending?.failed ? ' is-unsaved' : ''}`}>
         <span className="row-property-name" data-type={property.type}>{property.name}</span>
-        {property.type === 'checkbox'
+        {isReadOnlyType(property.type)
+          ? <span className="row-property-value is-read-only">{isEmptyValue(value) ? <span className="is-placeholder">Empty</span> : <PropertyCell property={property} value={value} today={today} />}</span>
+          : property.type === 'checkbox'
           ? <span className="row-property-value"><PropertyCheckbox checked={value === true} label={property.name} onToggle={next => commit(db, row, property.id, next ? true : undefined)} /></span>
           : <button type="button" className="row-property-value" data-cell={key} onClick={() => setOpenCell({ blockId, databaseId: db.id, rowId: row.id, columnId: property.id })}>
               {isEmptyValue(value) ? <span className="is-placeholder">Empty</span> : <PropertyCell property={property} value={value} today={today} />}

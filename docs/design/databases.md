@@ -219,7 +219,8 @@ Editor = a popover under the cell at 1280, or a bottom sheet at 390. Both have t
 | **Relation** | titles of linked rows as page refs (`▢ Title`, our `[[` look) | the `[[`-style pick list, limited to the target database's rows, with checkmarks. The top line is "New row in Books…". | — |
 | **Rollup** | the computed value | none (read-only). The property menu sets relation → property → function. | "—" when nothing is linked |
 | **Formula** | the computed value | none (read-only). The property menu has an expression field with a live preview of the current row. | an error shows as "Error" in `--red` in the cell, with the message in the property menu |
-| **Created time / Edited time** | `Oct 12, 9:14` | none | — |
+| **Created time / Edited time** | `Oct 12, 9:14 AM`, in local time | none (read-only, §6.3.14) | empty for a row from before these were kept |
+| **ID** | the row's number, `12` | none (read-only, §6.3.14) | — |
 | **ID** | `12`, or `BK-12` with a prefix | none | — |
 
 - **Not offered:** **Person, Created by, Edited by** (a workspace is one person, the same reason the Lead dropped
@@ -443,6 +444,15 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
   **Open link ↗**, only when the value is a link. This refines §6.1 for 390.
 - **The value is kept exactly as typed.** Opening adds `https://` when there's no scheme.
 
+#### 6.3.10a Email and Phone (R3-10)
+
+- **Like URL:** blue when it's a link, with the pencil at ≥ 900; on the phone a tap opens the sheet, never the link. The
+  sheet says **Email ↗** or **Call ↗**, only when the value is a link. The value is kept as typed, and nothing is refused.
+- **A link:** an address with `@` and a dot in the domain opens mail. Only digits and `+ ( ) . -` with at least 3 digits
+  opens the dialler. Anything else is plain text in `--ink`.
+- **The field:** a text input with `inputmode="email"`, because `type="email"` strips what's typed and has no caret to
+  place; `type="tel"` for Phone.
+
 #### 6.3.11 While an editor is open
 
 - **The row is deleted elsewhere:** the editor closes, and the notice says "This row was deleted · Restore", the same
@@ -464,6 +474,23 @@ Linked views come in R2, so in R1 (Bumblebee 120fdcd6):
   icon. It's a real link, and it never makes a second database.
 - **Cut, then paste** moves the block, as in §9.1.
 - **Duplicate isn't in a database block's menu** in R1. It comes back in R2 as "make a linked view".
+
+#### 6.3.14 Created time, Edited time, ID (R3-9)
+
+- **Read-only everywhere.** The cell is focusable for arrows and copy but isn't a button: a tap opens nothing, typing and
+  Delete do nothing, and a paste skips it. On a row page the value shows without a hover or an editor. Bulk Edit doesn't
+  list them.
+- **Edited moves** on a value, a rename, or a changed body. Opening a row, or a save with nothing new, doesn't move it.
+- **ID belongs to the row, not the property.** The first ID property numbers every row in page order, trashed ones too;
+  after that each new row and each Duplicate takes the next. A number is never reused, past a delete or an Undo. Undoing
+  the property keeps the count, so a new one starts after the old numbers. A second ID property reads the same numbers.
+- **Filter:** times as dates, ID as a number; no Is empty on ID. **Sort:** the same.
+- **Group:** by a time, as dates (day, week, month). A drag to another group changes nothing and says "{name} can't be
+  changed", and `+ New` under a group sets nothing, so the row lands in the group its own time gives it. Never by ID.
+  Not board columns: a card couldn't be dragged.
+- **`+ New` under a rule on one of these** sets no value, and asks whether the view would show it from its real time and
+  next number, so §7.4's notice is right.
+- **Calendar** still shows by a Date property only.
 
 #### 6.3.13 Accessibility
 

@@ -3,7 +3,7 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { databaseRows, dateProperties, groupableProperties, isDatabase, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewGroupBy, viewGroups, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewGroupBy, viewGroups, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
 import { blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange } from './database-block'
 import { ChevronDownIcon } from './icons'
@@ -168,8 +168,10 @@ const opLabels: Record<FilterOp, string> = {
 /** The conditions each type offers (design §7.3). */
 export function opsFor(type: PropertyType): FilterOp[] {
   switch (type) {
-    case 'text': case 'url': return ['contains', 'is', 'isEmpty', 'isNotEmpty']
+    case 'text': case 'url': case 'email': case 'phone': return ['contains', 'is', 'isEmpty', 'isNotEmpty']
     case 'number': return ['eq', 'ne', 'gt', 'lt', 'isEmpty']
+    case 'id': return ['eq', 'ne', 'gt', 'lt']
+    case 'createdTime': case 'editedTime': return ['is', 'before', 'after', 'within']
     case 'select': case 'status': return ['isAnyOf', 'isNoneOf', 'isEmpty']
     case 'multiSelect': return ['contains', 'doesNotContain', 'isEmpty']
     case 'date': return ['is', 'before', 'after', 'within', 'isEmpty']
@@ -215,9 +217,9 @@ function RuleValue({ property, condition, onChange }: { property: Property; cond
   const { op, value } = condition
   if (op === 'isEmpty' || op === 'isNotEmpty') return null
   switch (property.type) {
-    case 'text': case 'url':
+    case 'text': case 'url': case 'email': case 'phone':
       return <CommitInput key={String(value ?? '')} initial={typeof value === 'string' ? value : ''} onCommit={v => onChange(v || undefined)} />
-    case 'number':
+    case 'number': case 'id':
       return <CommitInput key={String(value ?? '')} initial={typeof value === 'number' ? String(value) : ''} inputMode="decimal" onCommit={v => { const n = Number(v.replace(/,/g, '')); onChange(v.trim() && Number.isFinite(n) ? n : undefined) }} />
     case 'checkbox':
       return <select aria-label="Value" value={value === false ? 'no' : 'yes'} onChange={e => onChange(e.target.value === 'yes')}>
@@ -229,7 +231,7 @@ function RuleValue({ property, condition, onChange }: { property: Property; cond
         <input type="checkbox" checked={picked.has(o.id)} onChange={e => { const next = new Set(picked); if (e.target.checked) next.add(o.id); else next.delete(o.id); onChange(next.size ? [...next] : undefined) }} />{o.name}
       </label>)}</div>
     }
-    case 'date': {
+    case 'date': case 'createdTime': case 'editedTime': {
       if (op === 'within') return <select aria-label="Value" value={typeof value === 'string' ? value : ''} onChange={e => onChange(e.target.value || undefined)}>
         <option value="">Choose…</option><option value="thisWeek">this week</option><option value="past7">the past 7 days</option><option value="next7">the next 7 days</option>
       </select>
@@ -338,7 +340,7 @@ function GroupPanel({ db, view, back }: { db: DatabasePage; view: View; back: ()
       </select>
     </label>
     {!choices.length && <p className="database-menu-quiet">No properties to group by yet</p>}
-    {property?.type === 'date' && <label className="database-menu-row">By
+    {property && (property.type === 'date' || isTimeType(property.type)) && <label className="database-menu-row">By
       <select aria-label="By" value={view.groupDateBy ?? 'month'} onChange={e => { const groupDateBy = e.target.value as GroupDateBy; changeView(() => ({ groupDateBy, hiddenGroups: [] })) }}>
         <option value="day">Day</option><option value="week">Week</option><option value="month">Month</option>
       </select>
