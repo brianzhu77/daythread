@@ -1,7 +1,7 @@
 // Relations and rollups (design §6, R3-5, R3-6, R3-7): links stored on rows, both sides in one operation, read through `withLinks`.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cellValue, databaseRows, groupableProperties, groupValue, isReadOnly, newRowValues, noGroupKey, propertyOf, viewGroups, viewRows, type Database, type DatabaseChange, type Rollup } from '../src/domain/database.ts'
+import { sectionKey, viewSubGroupBy, cellValue, databaseRows, groupableProperties, groupValue, isReadOnly, newRowValues, noGroupKey, propertyOf, viewGroups, viewRows, type Database, type DatabaseChange, type Rollup } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { exportFiles } from '../src/domain/export.ts'
 import { listedPages } from '../src/domain/page-tree.ts'
@@ -337,4 +337,15 @@ test('R3-25: a resend makes no second to-do, and a refused save makes none', () 
   const other = crypto.randomUUID()
   assert.throws(() => h.run({ ...action, expected: { jobs: null }, values: { jobs: [todoRowId(other)] }, newTodos: [{ id: other, title: 'Refused', on: today }] } as never))
   assert.equal(h.ws.tasks.some(t => t.title === 'Refused'), false)
+})
+
+test('R3-13: a rollup can be a second layer, and is read-only there', () => {
+  const { h, change } = books()
+  change('books', { kind: 'addProperty', property: { id: 'age', name: 'Age', type: 'rollup', rollup: { relation: 'by', property: 'age', fn: 'sum' } } })
+  const viewId = db(h, 'books').database.views[0]!.id
+  change('books', { kind: 'addProperty', property: { id: 'kind', name: 'Kind', type: 'select', options: [{ id: 'a', name: 'A' }] } })
+  change('books', { kind: 'updateView', viewId, groupBy: 'kind', subGroupBy: 'age' })
+  const d = db(h, 'books').database
+  assert.equal(viewSubGroupBy(d, d.views[0]!)?.id, 'age')
+  assert.deepEqual(newRowValues(d, d.views[0]!, { today, pageDate: null }, sectionKey('a', '65')).values, { kind: 'a' }, 'a rollup sets no value')
 })

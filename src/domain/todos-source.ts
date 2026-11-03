@@ -123,6 +123,18 @@ export function todoChange(ws: Workspace, taskId: string, columnId: string, raw:
   return { action: { type: 'task-status', taskId, status: 'open' }, notice: from === todoStatus.cancelled ? 'Restored' : 'Reopened' }
 }
 
+/**
+ * A drag across both layers of a To-dos view: which changes to send, in order. Status and Planned aren't independent:
+ * a paused to-do has no day, a finished one stays on the day it was finished, and planning a paused one opens it.
+ * So only an open to-do with a day takes both; any other status goes alone and the to-do lands on the day it really has.
+ */
+export function todoMoves<T extends { id: string; value: Json | undefined }>(ws: Workspace, taskId: string, moved: readonly T[]): readonly T[] {
+  const status = moved.find(m => m.id === todoStatus.id), day = moved.find(m => m.id === planned)
+  if (!status || !day) return moved
+  if (status.value !== todoStatus.open || !day.value) return [status]
+  return ws.tasks.find(t => t.id === taskId)?.paused ? [day] : [status, day]
+}
+
 /** `+ New` (§11, R2-11): today's page, planned for today; in a view pinned to this page's day, that day. Dates the view pins come along. */
 export function newTodo(view: View, context: ViewContext, group?: string, placed?: Record<string, Json>): { date: LocalDate; attentionOn?: LocalDate; deadlineOn?: LocalDate; status?: string; visible: boolean } {
   const made = newRowValues(todosDatabase, view, context, group)

@@ -2,7 +2,7 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { sectionKey, splitSection, viewSections, viewSubGroupBy, viewSubGroups, viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
+import { sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
@@ -820,6 +820,33 @@ test('a second layer sits inside each group, and needs a first', () => {
   assert.deepEqual(flat.find(s => s.key === sectionKey('novel', 'checked'))?.rows.map(r => r.id), ['dune'])
   assert.equal(flat.find(s => s.key === sectionKey('novel', 'checked'))?.name, 'Novel · Checked')
   assert.deepEqual(viewSections(h.db(), view({ groupBy: 'kind' }), h.rows(view()))!.shown.map(s => s.key), ['novel', 'essay', noGroupKey], 'one layer: the groups')
+})
+test('a group with no rows keeps a section of its own, when the second layer has no options', () => {
+  const h = reading()
+  const v = view({ groupBy: 'status', subGroupBy: 'due', filter: [{ by: 'title', op: 'is', value: 'dune' }] })
+  const flat = viewSections(h.db(), v, h.rows(v))!.shown
+  const empty = viewGroups(h.db(), v, h.rows(v))!.shown.filter(g => !g.rows.length).map(g => g.key)
+  assert.ok(empty.length > 0)
+  for (const key of empty) assert.ok(flat.some(s => s.key === key), `${key} has its own`)
+  assert.equal(flat.some(s => empty.includes(splitSection(s.key).group) && splitSection(s.key).sub !== undefined), false)
+  // Its sub-groups all hidden, a group with rows keeps them hidden: it isn't empty.
+  const hid = view({ groupBy: 'kind', subGroupBy: 'owned', hiddenSubGroups: ['checked', 'unchecked'] })
+  assert.equal(viewSections(h.db(), hid, h.rows(hid))!.shown.some(s => s.key === 'novel'), false)
+})
+test("a board's cell is a place, though its group has no rows in that lane", () => {
+  const h = reading()
+  const v = view({ groupBy: 'kind', subGroupBy: 'due' })
+  const rows = h.rows(v)
+  const lanes = viewSubGroups(h.db(), v, rows)!.shown
+  const groups = viewGroups(h.db(), v, rows)!.shown
+  const key = groups.flatMap(g => lanes.map(l => sectionKey(g.key, l.key))).find(k => !viewSections(h.db(), v, rows)!.shown.some(s => s.key === k))
+  assert.ok(key, 'this view has a cell with no rows')
+  const cell = viewSection(h.db(), v, rows, key)!
+  assert.deepEqual(cell.rows, [])
+  assert.ok(cell.name.includes(' · '), 'named from both layers')
+  assert.equal(viewSection(h.db(), v, rows, sectionKey(groups[0]!.key, 'gone')), null, 'a lane no longer there is no place')
+  assert.equal(viewSection(h.db(), v, rows, 'gone'), null)
+  assert.equal(viewSection(h.db(), v, rows, groups[0]!.key)?.key, groups[0]!.key, "a group's own key")
 })
 test('sections keep their own keys apart, with no value too', () => {
   assert.deepEqual(splitSection('novel'), { group: 'novel' })

@@ -47,7 +47,9 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   const { limitOf, showMore, reach } = useGroupLimits(placeKey, cap)
   const { folded, toggle } = useFolds(blockId, view.id)
   // A second layer is a lane of the same columns across the board, their heads only on the first (R3-13).
-  const subs = groups ? viewSubGroups(db.database, view, ordered, shownRaw, weekStart) : null
+  const laneGroups = groups ? viewSubGroups(db.database, view, ordered, shownRaw, weekStart) : null
+  // With no rows and no options there are no lanes to draw, so the columns stay in reach.
+  const subs = laneGroups?.shown.length ? laneGroups : null
   const moveRow = useMoveRow(db, view, context, groups)
   const returned = useReturnedRow(rows)
   const sorted = view.sort.length > 0
@@ -231,16 +233,15 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(columns[0]!.key === allKey ? undefined : columns[0]!.key) }} />
     {!groups && <p className="database-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'group')}>Group by</button></p>}
     <div className={`database-board${subs ? ' has-lanes' : ''}${drag ? ' is-dragging' : ''}`} ref={scroller} onScroll={onScroll}>
-      {(subs ? subs.shown : [null]).map((lane, laneIndex, lanes) => {
-        // The heads go on the first lane that's open.
-        const headsHere = laneIndex === lanes.findIndex(l => !l || !folded.has(sectionKey('lane', l.key)))
+      {subs && <div className="database-lane-heads">{columns.map(c => <div key={c.key} className="database-lane-head-cell"><h3 className="database-column-head"><GroupName groups={groups!} group={c} /><span className="database-group-count">· {headOf(c.rows)}</span></h3></div>)}</div>}
+      {(subs ? subs.shown : [null]).map((lane, laneIndex) => {
         const laneColumns = lane ? columns.map(c => ({ ...c, head: c, key: sectionKey(c.key, lane.key), rows: c.rows.filter(r => lane.rows.includes(r)) })) : columns.map(c => ({ ...c, head: c }))
         const laneKey = lane ? sectionKey('lane', lane.key) : ''
         const body = laneColumns.map(group => {
         const shown = group.rows.slice(0, limitOf(group.key))
         const over = drag?.over === group.key
         return <section key={group.key} className={`database-column${over && (sorted || drag!.from !== group.key) ? ' is-drop' : ''}`} data-column={group.key} aria-label={group.name ? `${group.name}, ${group.rows.length}` : 'All rows'}>
-          {groups && headsHere && <h3 className="database-column-head"><GroupName groups={groups} group={group.head} /><span className="database-group-count">· {headOf(group.head.rows)}</span></h3>}
+          {groups && !subs && <h3 className="database-column-head"><GroupName groups={groups} group={group.head} /><span className="database-group-count">· {headOf(group.head.rows)}</span></h3>}
           {shown.map(row => <article key={row.id} data-card={row.id}
             className={`database-card${returned === row.id ? ' is-returned' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}${over && !sorted && drag!.before === row.id && drag!.rowId !== row.id ? ' is-drop-before' : ''}`}
             // A mouse press selects no text: that would move the page's selection, and redraw this block under the drag.
@@ -252,10 +253,10 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
           <NewRow db={db} blockId={blockId} addRow={addRow} {...(group.key === allKey ? {} : { group: group.key })} />
         </section>
         })
-        const adding = headsHere && canAddColumn && <AddColumn run={run} db={db} propertyId={groups!.property.id} />
+        const adding = laneIndex === 0 && canAddColumn && <AddColumn run={run} db={db} propertyId={groups!.property.id} />
         if (!lane || !subs) return <Fragment key="all">{body}{adding}</Fragment>
         return <div key={laneKey} className="database-lane">
-          <SubGroupHead groups={subs} group={lane} isFolded={folded.has(laneKey)} onToggle={() => toggle(laneKey)} />
+          <SubGroupHead lane groups={subs} group={lane} isFolded={folded.has(laneKey)} onToggle={() => toggle(laneKey)} />
           {!folded.has(laneKey) && <div className="database-lane-columns">{body}{adding}</div>}
         </div>
       })}

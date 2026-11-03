@@ -128,7 +128,7 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
               <ChevronRightIcon /><GroupName groups={groups} group={group} /><span className="database-group-count">· {group.rows.length}</span>
             </button>
           </div>
-          {!isFolded && (subs
+          {!isFolded && (subs && group.rows.length
             ? subs.shown.map(sub => { const key = sectionKey(group.key, sub.key); return <Fragment key={key}><SubGroupHead groups={subs} group={sub} isFolded={folded.has(key)} onToggle={() => toggle(key)} />{body(key, sub.rows)}</Fragment> })
             : body(group.key, group.rows))}
         </Fragment>

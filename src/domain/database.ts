@@ -599,7 +599,7 @@ export function splitSection(key: string): { group: string; sub?: string } {
 export function viewSubGroupBy(db: Database, view: View): Property | null {
   if (!viewGroupBy(db, view) || view.subGroupBy === view.groupBy) return null;
   const property = view.subGroupBy ? db.properties.find((p) => p.id === view.subGroupBy) : undefined;
-  return property && canGroup(property.type) ? property : null;
+  return property && groupsBy(property, "table") ? property : null;
 }
 /** These rows in the second layer, as `viewGroups` does the first; null without one. */
 export function viewSubGroups(db: Database, view: View, rows: readonly Page[], rawFor: (row: Page, columnId: string) => unknown = rawOf, weekStart: WeekStart = 0): ViewGroups | null {
@@ -611,7 +611,16 @@ export function viewSubGroups(db: Database, view: View, rows: readonly Page[], r
 export function viewSections(db: Database, view: View, rows: readonly Page[], rawFor: (row: Page, columnId: string) => unknown = rawOf, weekStart: WeekStart = 0): ViewGroups | null {
   const groups = viewGroups(db, view, rows, rawFor, weekStart);
   if (!groups || !viewSubGroupBy(db, view)) return groups;
-  return { ...groups, shown: groups.shown.flatMap((g) => viewSubGroups(db, view, g.rows, rawFor, weekStart)!.shown.map((s) => ({ key: sectionKey(g.key, s.key), name: `${g.name} · ${s.name}`, rows: s.rows }))) };
+  // A group with no rows keeps one section of its own, or a second layer with no options would leave it nowhere to add or drop.
+  return { ...groups, shown: groups.shown.flatMap((g) => !g.rows.length ? [g] : viewSubGroups(db, view, g.rows, rawFor, weekStart)!.shown.map((s) => ({ key: sectionKey(g.key, s.key), name: `${g.name} · ${s.name}`, rows: s.rows }))) };
+}
+/** One group or section by its key. A board draws every group in every lane, so a cell with no rows is a place too, though `viewSections` doesn't list it. */
+export function viewSection(db: Database, view: View, rows: readonly Page[], key: string, rawFor: (row: Page, columnId: string) => unknown = rawOf, weekStart: WeekStart = 0): ViewGroup | null {
+  const { group, sub } = splitSection(key);
+  const first = viewGroups(db, view, rows, rawFor, weekStart)?.shown.find((g) => g.key === group);
+  if (!first || sub === undefined) return first ?? null;
+  const second = viewSubGroups(db, view, rows, rawFor, weekStart)?.shown.find((s) => s.key === sub);
+  return second ? { key, name: `${first.name} · ${second.name}`, rows: first.rows.filter((r) => second.rows.includes(r)) } : null;
 }
 export function viewGroupBy(db: Database, view: View): Property | null {
   // A calendar doesn't group; its `groupBy` is kept unread, for switching back.
@@ -1032,7 +1041,7 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
   if (input.hideEmptyGroups) out.hideEmptyGroups = true;
   if (input.subGroupBy !== undefined) {
     const property = db.properties.find((p) => p.id === input.subGroupBy);
-    if (input.subGroupBy !== before?.subGroupBy && !(property && canGroup(property.type))) throw new DatabaseError("Can't group by that");
+    if (input.subGroupBy !== before?.subGroupBy && !(property && groupsBy(property, "table"))) throw new DatabaseError("Can't group by that");
     out.subGroupBy = input.subGroupBy;
   }
   if (input.subGroupDateBy !== undefined) { if (!dateBys.has(input.subGroupDateBy)) throw new DatabaseError("Invalid view"); out.subGroupDateBy = input.subGroupDateBy; }

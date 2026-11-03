@@ -88,7 +88,54 @@ if (wide) {
   check(await page.getByText(/Moved to To read · Essay/).count() >= 1, 'and says where')
   await tap(page.getByRole('button', { name: 'Undo' }).first()); await wait(1000)
   check(pageOf('dune').values.status === 'now' && pageOf('dune').values.kind === 'novel', 'one Undo takes back both', [pageOf('dune').values.status, pageOf('dune').values.kind])
+
+  // While it saves, and if the save fails, the row stays where it was dropped, for both layers.
+  const dragDune = async () => {
+    const r = block.locator('tr.database-row[data-row="dune"]')
+    const f = block.locator(`tr.database-group-foot[data-group="${section('todo', 'essay')}"]`)
+    await f.scrollIntoViewIfNeeded(); await r.scrollIntoViewIfNeeded(); await r.hover()
+    const a = await r.locator('.database-row-handle').boundingBox(), b = await f.boundingBox()
+    await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2); await page.mouse.down()
+    await page.mouse.move(a.x + 8, a.y + 8, { steps: 3 }); await wait(80)
+    await page.mouse.move(b.x + b.width / 2, b.y + b.height * 0.2, { steps: 10 }); await wait(200)
+    await page.mouse.up()
+  }
+  const isCommand = req => req.method() === 'POST' && /_serverFn|functions/.test(req.url())
+  await page.route('**/*', async route => { if (isCommand(route.request())) await new Promise(res => setTimeout(res, 1500)); await route.continue() })
+  await dragDune(); await wait(350)
+  check(await inSection('todo', 'essay').filter({ has: page.locator('[data-row="dune"]') }).count() + await block.locator(`tr.database-row[data-row="dune"][data-group="${section('todo', 'essay')}"]`).count() >= 1, 'while saving, it shows in its new section at once')
+  await wait(2200)
+  check(pageOf('dune').values.kind === 'essay', 'then it saves', pageOf('dune').values.kind)
+  await tap(page.getByRole('button', { name: 'Undo' }).first()); await wait(2200)
+  await page.unroute('**/*')
+  await page.route('**/*', route => (isCommand(route.request()) ? route.abort() : route.continue()))
+  await dragDune(); await wait(1500)
+  check(await block.locator(`tr.database-row[data-row="dune"][data-group="${section('todo', 'essay')}"]`).count() === 1, 'a failed save keeps it where it was dropped')
+  const unsaved = block.locator('.database-unsaved')
+  check((await unsaved.innerText()).includes('1 change'), 'as one change, with Retry', await unsaved.innerText())
+  await page.unroute('**/*')
+  await tap(unsaved.getByRole('button', { name: 'Retry' })); await wait(1400)
+  check(pageOf('dune').values.status === 'todo' && pageOf('dune').values.kind === 'essay' && await unsaved.count() === 0, 'and Retry saves both', [pageOf('dune').values.status, pageOf('dune').values.kind])
+  await tap(page.getByRole('button', { name: 'Undo' }).first()); await wait(1000)
+  check(pageOf('dune').values.status === 'now' && pageOf('dune').values.kind === 'novel', 'and one Undo takes back both')
 }
+
+// A group with no rows still has its + New, with a second layer that has no options.
+await openGroup(); await menu.getByLabel('Sub-group', { exact: true }).selectOption({ label: 'Due' }); await wait(800); await closeMenu()
+await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('button', { name: 'Filter' })); await wait(300)
+await tap(menu.getByText('+ Add filter')); await wait(700)
+await menu.getByLabel('Property').last().selectOption({ label: 'Kind' }); await wait(700)
+await menu.getByLabel('Novel').last().click({ force: !wide }); await wait(900)
+await closeMenu()
+check(await block.locator('tr.database-group-foot[data-group="done"] .database-new').count() === 1, 'an empty group keeps its own + New and drop target')
+before = ids()
+await tap(block.locator('tr.database-group-foot[data-group="done"] .database-new')); await wait(1400)
+made = store().pages.find(p => p.parentId === 'list' && !before.has(p.id))
+check(made?.values?.status === 'done' && made?.values?.kind === 'novel', 'and adding there sets its value', made?.values)
+await leave()
+await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('button', { name: 'Filter' })); await wait(300)
+await tap(menu.getByLabel('Remove filter').first()); await wait(800); await closeMenu()
+await openGroup(); await menu.getByLabel('Sub-group', { exact: true }).selectOption({ label: 'Kind' }); await wait(800); await closeMenu()
 
 // Hide a sub-group, then bring it back; a reload keeps the layer.
 await openGroup()
@@ -119,7 +166,9 @@ await layout('Board')
 const lanes = await block.locator('.database-lane').count()
 check(lanes >= 3, 'a board draws a lane per sub-group', lanes)
 const columnHeads = await block.locator('.database-column-head').allInnerTexts()
-check(columnHeads.length === 3, 'with the column heads once', columnHeads)
+check(columnHeads.length === 3 && await block.locator('.database-lane-heads .database-column-head').count() === 3, 'with one row of column heads, above every lane', columnHeads)
+const laneEdge = await page.evaluate(() => { const t = document.querySelector('.database-title')?.getBoundingClientRect().left ?? 0, f = document.querySelector('.database-lane .database-group-fold').getBoundingClientRect().left; return Math.abs(f - t) })
+check(laneEdge <= 1, "a lane's chevron is on the title's edge", laneEdge)
 check(await block.locator('.database-column[data-column]').count() === lanes * 3, 'and the same columns in each lane', await block.locator('.database-column[data-column]').count())
 await shot('board')
 before = ids()
@@ -140,6 +189,32 @@ if (wide) {
   check(moved.kind === 'essay' && moved.status === 'done', 'a card dragged across lanes and columns changes both', [moved.status, moved.kind])
   await tap(page.getByRole('button', { name: 'Undo' }).first()); await wait(900)
   check(pageOf('dune').values.kind === 'novel' && pageOf('dune').values.status === 'now', 'one Undo takes back both', [pageOf('dune').values.status, pageOf('dune').values.kind])
+}
+if (wide) {
+  // A cell with no rows, in a lane the group has none in: a second layer with no options, so nothing but the lanes says it's there.
+  await openGroup(); await menu.getByLabel('Sub-group', { exact: true }).selectOption({ label: 'Due' }); await wait(800); await closeMenu()
+  const lane = (await block.locator('.database-column:has([data-card="emma"])').getAttribute('data-column')).split(SEP)[1]
+  const dragTo = async (rowId, key) => {
+    const card = block.locator(`[data-card="${rowId}"]`), to = block.locator(`.database-column[data-column="${key}"]`)
+    await card.scrollIntoViewIfNeeded()
+    const a = await card.boundingBox(), b = await to.boundingBox()
+    await page.mouse.move(a.x + 20, a.y + 10); await page.mouse.down()
+    await page.mouse.move(a.x + 28, a.y + 18, { steps: 3 }); await wait(80)
+    await page.mouse.move(Math.min(b.x + 20, 1110), b.y + b.height / 2, { steps: 12 }); await wait(250)
+    await page.mouse.up(); await wait(1000)
+  }
+  check(await block.locator(`.database-column[data-column="${section('done', lane)}"] [data-card]`).count() === 0, 'this cell has no rows')
+  await dragTo('dune', section('done', lane))
+  const dropped = pageOf('dune').values
+  check(dropped.status === 'done' && dropped.due?.start !== '2026-10-25', 'a drop on it changes both layers', [dropped.status, dropped.due])
+  check(await block.locator(`.database-column[data-column="${section('done', lane)}"] [data-card="dune"]`).count() === 1, 'and the card is there')
+  await tap(page.getByRole('button', { name: 'Undo' }).first()); await wait(900)
+  check(pageOf('dune').values.status === 'now' && pageOf('dune').values.due?.start === '2026-10-25', 'one Undo takes back both', [pageOf('dune').values.status, pageOf('dune').values.due])
+  const here = (await block.locator('.database-column:has([data-card="dune"])').getAttribute('data-column')).split(SEP)[1]
+  await dragTo('dune', section('done', here))
+  check(pageOf('dune').values.status === 'done' && pageOf('dune').values.due?.start === '2026-10-25', 'in its own lane, a drop changes the group only', [pageOf('dune').values.status, pageOf('dune').values.due])
+  await tap(page.getByRole('button', { name: 'Undo' }).first()); await wait(900)
+  await openGroup(); await menu.getByLabel('Sub-group', { exact: true }).selectOption({ label: 'Kind' }); await wait(800); await closeMenu()
 }
 const laneFold = block.locator('.database-lane .database-group-fold').first()
 await tap(laneFold); await wait(300)
