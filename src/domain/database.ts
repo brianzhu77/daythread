@@ -99,6 +99,10 @@ export interface View {
   hideEmptyGroups?: boolean;
   /** Group keys listed at the end as "Hidden: Done (12)". */
   hiddenGroups?: string[];
+  /** A second layer inside each group, by another property (R3-13); read only while there's a first. `hideEmptyGroups` covers both. */
+  subGroupBy?: string;
+  subGroupDateBy?: GroupDateBy;
+  hiddenSubGroups?: string[];
   /** Calendar: the date property its rows sit by. Ignored while it's deleted or no longer a date (design §13). */
   dateBy?: string;
   /** Calendar: a week at a time; a month when absent (R3-20). */
@@ -565,11 +569,17 @@ export function newRowValues(db: Database, view: View, context: ViewContext, gro
     if (any) break;
   }
   // A row added under a group starts with that group's value, even where the filter wants another (then it's hidden, and the notice says so).
-  const grouped = groupKey === undefined ? null : viewGroupBy(db, view);
+  const section = groupKey === undefined ? undefined : splitSection(groupKey);
+  const grouped = section ? viewGroupBy(db, view) : null;
   // A group by created time can't start a row off with a value: it lands in the group its own time says.
   if (grouped && !isReadOnly(grouped)) {
-    const value = groupKey === noGroupKey ? undefined : storedValue(grouped, groupValue(grouped, groupKey!, undefined, undefined, context.today, view.groupDateBy, context.weekStart));
+    const value = section!.group === noGroupKey ? undefined : storedValue(grouped, groupValue(grouped, section!.group, undefined, undefined, context.today, view.groupDateBy, context.weekStart));
     if (value === undefined) delete values[grouped.id]; else values[grouped.id] = value;
+  }
+  const subGrouped = section?.sub !== undefined ? viewSubGroupBy(db, view) : null;
+  if (subGrouped && !isReadOnly(subGrouped)) {
+    const value = section!.sub === noGroupKey ? undefined : storedValue(subGrouped, groupValue(subGrouped, section!.sub!, undefined, undefined, context.today, view.subGroupDateBy, context.weekStart));
+    if (value === undefined) delete values[subGrouped.id]; else values[subGrouped.id] = value;
   }
   return { title, values, visible: inView(db, newRowProbe(db, title, values), view, context) };
 }
@@ -588,6 +598,39 @@ export function groupableProperties(db: Database, layout: ViewLayout): Property[
   return db.properties.filter((p) => groupsBy(p, layout));
 }
 /** The property a view groups by now; null when it was deleted or its type can't group any more. */
+/** A section of a view with two layers has both keys in one: `+ New` under it, a drag to it and its fold all read this. */
+const sectionSeparator = "\u0001";
+export const sectionKey = (group: string, sub: string): string => `${group}${sectionSeparator}${sub}`;
+export function splitSection(key: string): { group: string; sub?: string } {
+  const [group, sub] = key.split(sectionSeparator) as [string, string | undefined];
+  return sub === undefined ? { group } : { group, sub };
+}
+export function viewSubGroupBy(db: Database, view: View): Property | null {
+  if (!viewGroupBy(db, view) || view.subGroupBy === view.groupBy) return null;
+  const property = view.subGroupBy ? db.properties.find((p) => p.id === view.subGroupBy) : undefined;
+  return property && groupsBy(property, "table") ? property : null;
+}
+/** These rows in the second layer, as `viewGroups` does the first; null without one. */
+export function viewSubGroups(db: Database, view: View, rows: readonly Page[], rawFor: (row: Page, columnId: string) => unknown = rawOf, weekStart: WeekStart = 0): ViewGroups | null {
+  if (!viewSubGroupBy(db, view)) return null;
+  const { subGroupDateBy, hiddenSubGroups, ...rest } = view;
+  return viewGroups(db, { ...rest, layout: "table", groupBy: view.subGroupBy!, ...(subGroupDateBy ? { groupDateBy: subGroupDateBy } : { groupDateBy: "month" as const }), hiddenGroups: hiddenSubGroups ?? [] }, rows, rawFor, weekStart);
+}
+/** The sections rows are drawn in and dragged between: the groups, or each group's sub-groups under one key. */
+export function viewSections(db: Database, view: View, rows: readonly Page[], rawFor: (row: Page, columnId: string) => unknown = rawOf, weekStart: WeekStart = 0): ViewGroups | null {
+  const groups = viewGroups(db, view, rows, rawFor, weekStart);
+  if (!groups || !viewSubGroupBy(db, view)) return groups;
+  // A group with no rows keeps one section of its own, or a second layer with no options would leave it nowhere to add or drop.
+  return { ...groups, shown: groups.shown.flatMap((g) => !g.rows.length ? [g] : viewSubGroups(db, view, g.rows, rawFor, weekStart)!.shown.map((s) => ({ key: sectionKey(g.key, s.key), name: `${g.name} · ${s.name}`, rows: s.rows }))) };
+}
+/** One group or section by its key. A board draws every group in every lane, so a cell with no rows is a place too, though `viewSections` doesn't list it. */
+export function viewSection(db: Database, view: View, rows: readonly Page[], key: string, rawFor: (row: Page, columnId: string) => unknown = rawOf, weekStart: WeekStart = 0): ViewGroup | null {
+  const { group, sub } = splitSection(key);
+  const first = viewGroups(db, view, rows, rawFor, weekStart)?.shown.find((g) => g.key === group);
+  if (!first || sub === undefined) return first ?? null;
+  const second = viewSubGroups(db, view, rows, rawFor, weekStart)?.shown.find((s) => s.key === sub);
+  return second ? { key, name: `${first.name} · ${second.name}`, rows: first.rows.filter((r) => second.rows.includes(r)) } : null;
+}
 export function viewGroupBy(db: Database, view: View): Property | null {
   // A calendar doesn't group; its `groupBy` is kept unread, for switching back.
   if (view.layout === "calendar") return null;
@@ -742,7 +785,7 @@ export type DatabaseChange =
   | { kind: "removeProperty"; propertyId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
+  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
   /** null: none */
   | { kind: "setDefaultTemplate"; templateId: string | null }
   | { kind: "removeView"; viewId: string }
@@ -997,9 +1040,9 @@ function cleanLayout(input: unknown): ViewLayout {
   return input as ViewLayout;
 }
 const dateBys = new Set<unknown>(["day", "week", "month"]);
-type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "dateBy" | "calendarSpan">;
+type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "subGroupBy" | "subGroupDateBy" | "hiddenSubGroups" | "dateBy" | "calendarSpan">;
 /** A view's group fields, checked. A new `groupBy` must name a live property that can group; one it already holds may be deleted since, and is kept unread, so Undo or changing the type back reads it again. */
-function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before?: Pick<View, "groupBy" | "dateBy">): GroupFields {
+function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before?: Pick<View, "groupBy" | "subGroupBy" | "dateBy">): GroupFields {
   const out: GroupFields = {};
   if (input.groupBy !== undefined) {
     if (input.groupBy !== before?.groupBy && !groupableProperties(db, layout).some((p) => p.id === input.groupBy)) throw new DatabaseError("Can't group by that");
@@ -1013,6 +1056,16 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
   if (input.calendarSpan === "week") out.calendarSpan = "week";
   if (input.groupDateBy !== undefined) { if (!dateBys.has(input.groupDateBy)) throw new DatabaseError("Invalid view"); out.groupDateBy = input.groupDateBy; }
   if (input.hideEmptyGroups) out.hideEmptyGroups = true;
+  if (input.subGroupBy !== undefined) {
+    const property = db.properties.find((p) => p.id === input.subGroupBy);
+    if (input.subGroupBy !== before?.subGroupBy && !(property && groupsBy(property, "table"))) throw new DatabaseError("Can't group by that");
+    out.subGroupBy = input.subGroupBy;
+  }
+  if (input.subGroupDateBy !== undefined) { if (!dateBys.has(input.subGroupDateBy)) throw new DatabaseError("Invalid view"); out.subGroupDateBy = input.subGroupDateBy; }
+  if (input.hiddenSubGroups !== undefined) {
+    if (!Array.isArray(input.hiddenSubGroups) || input.hiddenSubGroups.length > limits.hiddenGroups || input.hiddenSubGroups.some((k) => typeof k !== "string" || k.length > 200)) throw new DatabaseError("Invalid view");
+    if (input.hiddenSubGroups.length) out.hiddenSubGroups = [...new Set(input.hiddenSubGroups)];
+  }
   if (input.hiddenGroups !== undefined) {
     if (!Array.isArray(input.hiddenGroups) || input.hiddenGroups.length > limits.hiddenGroups || input.hiddenGroups.some((k) => typeof k !== "string" || k.length > 200)) throw new DatabaseError("Invalid view");
     if (input.hiddenGroups.length) out.hiddenGroups = [...new Set(input.hiddenGroups)];
@@ -1154,13 +1207,16 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     }
     case "updateView": {
       const old = view(change.viewId);
-      const { filterAny: _filterAny, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, ...rest } = old;
+      const { filterAny: _filterAny, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, ...rest } = old;
       const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
       const group = cleanGroup(db, {
         groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
         groupDateBy: change.groupDateBy ?? old.groupDateBy,
         hideEmptyGroups: change.hideEmptyGroups ?? old.hideEmptyGroups,
         hiddenGroups: change.hiddenGroups ?? old.hiddenGroups,
+        ...(change.subGroupBy === null ? {} : { subGroupBy: change.subGroupBy ?? old.subGroupBy }),
+        subGroupDateBy: change.subGroupDateBy ?? old.subGroupDateBy,
+        hiddenSubGroups: change.hiddenSubGroups ?? old.hiddenSubGroups,
         dateBy: change.dateBy ?? old.dateBy,
         ...(change.calendarSpan === null ? {} : { calendarSpan: change.calendarSpan ?? old.calendarSpan }),
       }, layout, old);

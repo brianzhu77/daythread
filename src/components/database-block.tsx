@@ -6,8 +6,8 @@ import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
 import { formulaErrorOf } from '../domain/formula'
-import { canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
-import type { Page, Workspace } from '../domain/types'
+import { sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
 import { ChevronDownIcon, ChevronRightIcon } from './icons'
@@ -18,7 +18,7 @@ import { defaultRowTemplate } from '../domain/day-template'
 import { useTaskTick, useWorkspace } from './use-day'
 import { announceSave } from './draft-slots'
 import { taskRows } from '../domain/workspace'
-import { newTodo, newTodoRowId, taskIdOfRow, todoChange, todoLine, todoRowId, todosSourceId, readingWorkspace, withTodos } from '../domain/todos-source'
+import { newTodo, newTodoRowId, taskIdOfRow, todoChange, todoLine, todoMoves, todoRowId, todosSourceId, readingWorkspace, withTodos } from '../domain/todos-source'
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
 import { DatabaseGallery } from './database-gallery'
@@ -186,7 +186,7 @@ export const blockPlaces = new Map<string, { scrollLeft: number; limit: number; 
 /** One cell's commit: sent with what the cell held, resent once after "Saved elsewhere" if that cell is unchanged. */
 /** Cell values on their way to the server, or whose save failed (offline): shown in the cell until saved or undone. */
 /** `beforeId`: the place a dropped card is going to, so it shows there until it's saved. */
-interface PendingCell { databaseId: string; rowId: string; columnId: string; raw: Json | undefined; failed: boolean; retry: () => void; discard: () => void; beforeId?: string | null }
+interface PendingCell { databaseId: string; rowId: string; columnId: string; raw: Json | undefined; failed: boolean; retry: () => void; discard: () => void; beforeId?: string | null; /** The rest of one change, whose first cell speaks for it. */ part?: true }
 export const pendingCells = new Map<string, PendingCell>()
 const pendingCellListeners = new Set<() => void>()
 let pendingCellVersion = 0
@@ -207,7 +207,8 @@ export function usePendingCells() {
  */
 export function useCommitCell() {
   const { run, refresh, latest } = useWorkspace()
-  const commit = (db: Page & { database: Database }, row: Page, columnId: string, raw: Json | undefined, notice?: string, onSaved?: () => void, beforeId?: string | null) => {
+  /** `also`: more cells of this row in the same save, so one Undo takes them all: a drag across both layers of a view. */
+  const commit = (db: Page & { database: Database }, row: Page, columnId: string, raw: Json | undefined, notice?: string, onSaved?: () => void, beforeId?: string | null, also: { columnId: string; raw: Json | undefined }[] = []) => {
     const key = pendingKey(row.id, columnId)
     const taskId = taskIdOfRow(row.id)
     // A to-do: the task's own command and notice, with no check of its own (those commands have none), never a row's set-values.
@@ -230,22 +231,35 @@ export function useCommitCell() {
     // A value still on its way is what this change will find when it lands, so it's built on that (Lead's review, 7).
     const inFlight = pendingCells.get(key)
     const expected = ((inFlight && !inFlight.failed ? inFlight.raw : rawOf(row, columnId)) ?? null) as Json
-    const values = { [columnId]: raw ?? null } as Record<string, Json>
+    const expectedOf = (id: string): Json => { const flying = pendingCells.get(pendingKey(row.id, id)); return ((flying && !flying.failed ? flying.raw : rawOf(row, id)) ?? null) as Json }
+    const alsoExpected = also.map(c => ({ ...c, expected: expectedOf(c.columnId) }))
+    const values = { [columnId]: raw ?? null, ...Object.fromEntries(also.map(c => [c.columnId, c.raw ?? null])) } as Record<string, Json>
     const property = propertyOf(db.database, columnId) ?? titleProperty
     let resentOnce = false, refused = false
     // Only the newest commit of a cell speaks for it: an older one landing must not clear what a newer one is showing.
     let mine: PendingCell | null = null
-    const show = (next: PendingCell | null) => { if (mine && pendingCells.get(key) !== mine) return; mine = next; setPendingCell(key, next) }
+    // The first cell holds the row's place; a part leaves alone a newer value of its own cell.
+    const parts = new Map<string, PendingCell>()
+    const showAlso = (next: PendingCell | null) => {
+      for (const c of also) {
+        const partKey = pendingKey(row.id, c.columnId), held = parts.get(partKey)
+        if (held && pendingCells.get(partKey) !== held) continue
+        const part = next ? (() => { const { beforeId: _place, ...rest } = next; return { ...rest, columnId: c.columnId, raw: c.raw, part: true as const } })() : null
+        if (part) parts.set(partKey, part)
+        setPendingCell(partKey, part)
+      }
+    }
+    const show = (next: PendingCell | null) => { if (mine && pendingCells.get(key) !== mine) return; mine = next; setPendingCell(key, next); showAlso(next) }
     const pending = (failed: boolean): PendingCell => ({
       databaseId: db.id, rowId: row.id, columnId, raw, failed, ...(beforeId !== undefined ? { beforeId } : {}),
-      retry: () => { const now = latest()?.pages.find(p => p.id === row.id); show(null); if (now && !now.trashedAt) commit(db, { ...now, ...(columnId === titleId ? { title: String(expected ?? '') } : { values: { ...now.values, [columnId]: expected } }) } as Page, columnId, raw, notice, onSaved, beforeId) },
+      retry: () => { const now = latest()?.pages.find(p => p.id === row.id); show(null); if (now && !now.trashedAt) commit(db, { ...now, ...(columnId === titleId ? { title: String(expected ?? '') } : { values: { ...now.values, [columnId]: expected, ...Object.fromEntries(alsoExpected.map(c => [c.columnId, c.expected])) } }) } as Page, columnId, raw, notice, onSaved, beforeId, also) },
       discard: () => { show(null); onSaved?.() },
     })
     const named = (Array.isArray(raw) ? raw : []).flatMap(id => namedTodos.get(String(id)) ?? [])
     const newTodos = named.map(todo => ({ ...todo, on: todayIso() }))
     const said = notice ?? (named.length ? (named.length === 1 ? 'To-do added' : `${named.length} to-dos added`) : undefined)
     const send = () => run(
-      { type: 'set-values', pageId: row.id, values, expected: { [columnId]: expected }, ...(beforeId !== undefined ? { beforeId } : {}), ...(newTodos.length ? { newTodos } : {}), at: new Date().toISOString() },
+      { type: 'set-values', pageId: row.id, values, expected: { [columnId]: expected, ...Object.fromEntries(alsoExpected.map(c => [c.columnId, c.expected])) }, ...(beforeId !== undefined ? { beforeId } : {}), ...(newTodos.length ? { newTodos } : {}), at: new Date().toISOString() },
       said ? r => ({ text: said, undoOperationId: r.operationId }) : null, newId(),
       { inlineRefusal: /Saved elsewhere|Changed elsewhere/, onRefused: () => { refused = true; void again() }, quiet: true })
     const settle = (r: unknown) => {
@@ -259,16 +273,17 @@ export function useCommitCell() {
       // A row deleted meanwhile: his value goes quietly (Bumblebee 3c5198d5). A kept copy is done with once its value
       // is saved, its row is gone, or he's been asked (the notice below); a save that only failed keeps it.
       if (!now || now.trashedAt) { onSaved?.(); return }
-      if (sameRaw(rawOf(now, columnId), expected) && !resentOnce) { resentOnce = true; refused = false; show(pending(false)); void send().then(settle); return }
+      if (sameRaw(rawOf(now, columnId), expected) && alsoExpected.every(c => sameRaw(rawOf(now, c.columnId), c.expected)) && !resentOnce) { resentOnce = true; refused = false; show(pending(false)); void send().then(settle); return }
       onSaved?.()
       // One wording everywhere (Lead 0b05067c, design §13).
       const mine = typeof raw === 'string' ? `“${raw.length > 40 ? `${raw.slice(0, 40)}…` : raw}”` : raw === undefined ? 'empty' : String(raw)
       const toastKey: string = toast(`${property.name} in ${displayPageTitle(now)} changed elsewhere · yours was ${mine}`, {
-        timeout: 10_000, actionProps: { children: 'Use mine', onPress: () => { toast.close(toastKey); commit(db, now, columnId, raw) } },
+        timeout: 10_000, actionProps: { children: 'Use mine', onPress: () => { toast.close(toastKey); commit(db, now, columnId, raw, undefined, undefined, undefined, also) } },
       })
     }
     mine = pending(false)
     setPendingCell(key, mine)
+    showAlso(mine)
     void send().then(settle)
   }
   return commit
@@ -451,6 +466,14 @@ export function withPendingMoves(rows: readonly Page[]): Page[] {
 }
 
 /** What a group's name reads as: a status with its dot, a number in its format. No value is quiet. */
+/** A sub-group's line (R3-13), set in one step under its group's, with its own fold and count. */
+export function SubGroupHead({ groups, group, isFolded, onToggle, lane }: { groups: ViewGroups; group: ViewGroup; isFolded: boolean; onToggle: () => void; /** A board's first level, so it sits on the title's edge. */ lane?: boolean }) {
+  return <div className={`database-group-inner${lane ? '' : ' is-sub'}`}>
+    <button type="button" className="database-group-fold" aria-expanded={!isFolded} onClick={onToggle}>
+      <ChevronRightIcon /><GroupName groups={groups} group={group} /><span className="database-group-count">· {group.rows.length}</span>
+    </button>
+  </div>
+}
 export function GroupName({ groups, group }: { groups: ViewGroups; group: ViewGroup }) {
   if (group.key === noGroupKey) return <span className="database-group-none">{group.name}</span>
   const { property } = groups
@@ -458,6 +481,12 @@ export function GroupName({ groups, group }: { groups: ViewGroups; group: ViewGr
   return <span>{group.name}</span>
 }
 /** "Hidden: Done (12)" at the end of a view (design §7.3): a tap shows that group again. */
+/** The second layer's hidden ones, over every row of the view. */
+export function HiddenSubGroups({ db, view, rows, changeView, weekStart, underCards }: { db: Database; view: View; rows: readonly Page[]; changeView: ChangeView; weekStart: WeekStart; underCards?: boolean }) {
+  const subs = viewSubGroups(db, view, rows, shownRaw, weekStart)
+  if (!subs?.hidden.length) return null
+  return <p className={`database-hidden-groups${underCards ? ' is-under-cards' : ''}`}>Hidden: {subs.hidden.map((g, i) => <span key={g.key}>{i > 0 && ' · '}<button type="button" className="app-link" onClick={() => changeView(current => ({ hiddenSubGroups: (current.hiddenSubGroups ?? []).filter(k => k !== g.key) }))}>{g.name} ({g.rows.length})</button></span>)}</p>
+}
 export function HiddenGroups({ groups, changeView, underCards }: { groups: ViewGroups; changeView: ChangeView; underCards?: boolean }) {
   if (!groups.hidden.length) return null
   return <p className={`database-hidden-groups${underCards ? ' is-under-cards' : ''}`}>Hidden: {groups.hidden.map((g, i) => <span key={g.key}>{i > 0 && ' · '}<button type="button" className="app-link" onClick={() => changeView(current => ({ hiddenGroups: (current.hiddenGroups ?? []).filter(k => k !== g.key) }))}>{g.name} ({g.rows.length})</button></span>)}</p>
@@ -489,7 +518,7 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
     // Sorted, a card's place comes from the sort: only its value changes.
     const sorted = view.sort.length > 0
     const all = databaseRows(ws, db.id), rest = all.filter(r => r.id !== rowId)
-    const target = groups?.shown.find(g => g.key === to)
+    const target = to === null || !groups ? undefined : viewSection(db.database, view, withPendingMoves(viewRows(ws, db.id, view, context)), to, shownRaw, context.weekStart)
     const last = target?.rows.filter(r => r.id !== rowId).at(-1)
     // The end of a group is just before whatever follows its last row; an empty group has no place to keep.
     const end = groups ? (last ? rest[rest.indexOf(rest.find(r => r.id === last.id)!) + 1]?.id ?? null : undefined) : null
@@ -498,19 +527,35 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
       // To-dos have no order of their own to keep.
       if (db.database.fixed) return
       // Dropped where it already is, as he sees it: nothing to send.
-      const here = groups ? groups.shown.find(g => g.key === to)?.rows ?? [] : shown
+      const here = groups ? target?.rows ?? [] : shown
       const next = here[here.findIndex(r => r.id === rowId) + 1]?.id ?? null
       if (sorted || before === rowId || before === next || beforeId === undefined) return
       void run({ type: 'move-page', pageId: rowId, parentId: db.id, beforeId }, r => ({ text: 'Row moved', undoOperationId: r.operationId }))
       return
     }
     if (!groups || to === null || !target) return
-    if (isReadOnly(groups.property)) { toast(`${groups.property.name} can't be changed`, { timeout: 4000 }); return }
-    const value = groupValue(groups.property, to, shownRaw(row, groups.property.id), from ?? undefined, context.today, view.groupDateBy, context.weekStart)
-    const probe = { ...row, values: { ...row.values, ...(value === undefined ? {} : { [groups.property.id]: value }) } } as Page
-    if (value === undefined) delete probe.values![groups.property.id]
+    // Each layer the drop changed: a drag across both is one change with one Undo (R3-13).
+    const was = from === null ? null : splitSection(from), now = splitSection(to), subProperty = viewSubGroupBy(db.database, view)
+    const layers = [
+      ...(was?.group !== now.group ? [{ property: groups.property, key: now.group, fromKey: was?.group, by: view.groupDateBy }] : []),
+      ...(subProperty && now.sub !== undefined && was?.sub !== now.sub ? [{ property: subProperty, key: now.sub, fromKey: was?.sub, by: view.subGroupDateBy }] : []),
+    ]
+    const stuck = layers.find(l => isReadOnly(l.property))
+    if (stuck) { toast(`${stuck.property.name} can't be changed`, { timeout: 4000 }); return }
+    const moved = layers.map(l => ({ id: l.property.id, value: groupValue(l.property, l.key, shownRaw(row, l.property.id), l.fromKey, context.today, l.by, context.weekStart) }))
+    const probe = { ...row, values: { ...row.values } } as Page
+    for (const { id, value } of moved) { if (value === undefined) delete probe.values![id]; else probe.values![id] = value }
     const hidden = !inView(db.database, probe, view, context)
-    commit(db, row, groups.property.id, value, `Moved to ${target.name}${hidden ? " · hidden by this view's filter" : ''}`, undefined, beforeId)
+    const notice = `Moved to ${target.name}${hidden ? " · hidden by this view's filter" : ''}`
+    if (moved.length === 1) { commit(db, row, moved[0]!.id, moved[0]!.value, notice, undefined, beforeId); return }
+    // To-dos have a command per column, so there it's one each, each reading what the last one left.
+    if (db.database.fixed) {
+      const taskId = taskIdOfRow(row.id), sends = taskId ? todoMoves(ws, taskId, moved) : moved
+      const send = (i: number) => { const m = sends[i]; if (m) commit(db, row, m.id, m.value, undefined, () => send(i + 1)) }
+      send(0)
+      return
+    }
+    commit(db, row, moved[0]!.id, moved[0]!.value, notice, undefined, beforeId, moved.slice(1).map(m => ({ columnId: m.id, raw: m.value })))
   }
 }
 
@@ -606,7 +651,10 @@ export function useAddRow(db: Page & { database: Database }, view: View, context
       .then(r => {
         if (!r) return
         if (!wide) { openRow(pageId, 'title'); return }
-        if (prefill.visible) reveal(pageId, group)
+        if (!prefill.visible) return
+        // An empty group's first row is drawn in a section as soon as it's there, so its Name opens under that section's key.
+        const now = latest(), lone = group !== undefined && splitSection(group).sub === undefined && viewSubGroupBy(db.database, view) && now
+        reveal(pageId, (lone ? viewSections(db.database, view, viewRows(now, db.id, view, context), undefined, context.weekStart)?.shown.find(s => splitSection(s.key).group === group && s.rows.some(r => r.id === pageId))?.key : undefined) ?? group)
       })
   }
 }
@@ -632,7 +680,7 @@ export function useUndoKey() {
 /** Under any view: a filter that matches nothing, and changes that weren't saved (design §13). */
 export function ViewNotes({ db, view, changeView, empty }: { db: Page; view: View; changeView: ChangeView; empty: boolean }) {
   usePendingCells()
-  const failedHere = [...pendingCells.values()].filter(p => p.failed && p.databaseId === db.id)
+  const failedHere = [...pendingCells.values()].filter(p => p.failed && !p.part && p.databaseId === db.id)
   return <>
     {empty && view.filter.length > 0 && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => changeView(() => ({ filter: [] }))}>Clear filter</button></p>}
     {failedHere.length > 0 && <p className="database-unsaved" role="status">{failedHere.length === 1 ? '1 change' : `${failedHere.length} changes`} not saved · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.retry())}>Retry</button> · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.discard())}>Undo</button></p>}
@@ -796,7 +844,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     // Past the rows shown, the new row is drawn all the same, and brought into view (Lead's review, 5).
     const ws = latest(), now = ws ? viewRows(ws, db.id, view, context) : []
     if (group === undefined) { const at = now.findIndex(x => x.id === pageId); if (at >= limit) setLimit(at + 1) }
-    else reach(group, ws ? viewGroups(db.database, view, now, undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0 : 0)
+    else reach(group, ws ? viewSections(db.database, view, now, undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0 : 0)
     setReveal(pageId)
     requestAnimationFrame(() => open(pageId, titleId, group))
   })
@@ -811,8 +859,12 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   }
 
   // What's drawn, in order: a Multi-select's row once in each of its groups, so a row's place is its index here.
-  const sections = groups?.shown.map(group => ({ group, rows: folded.has(group.key) ? [] : group.rows.slice(0, limitOf(group.key)) }))
-  const entries: { row: Page; group?: string }[] = sections ? sections.flatMap(({ group, rows: inGroup }) => inGroup.map(row => ({ row, group: group.key }))) : rows.slice(0, limit).map(row => ({ row }))
+  // Each group, with its sub-groups if the view has them; rows are drawn per section, under the section's key.
+  const layers = groups?.shown.map(group => ({ group, subs: viewSubGroups(db.database, view, group.rows, shownRaw, weekStart) }))
+  const drawn = (key: string, all: readonly Page[]) => (folded.has(key) ? [] : all.slice(0, limitOf(key)))
+  const entries: { row: Page; group?: string }[] = layers ? layers.flatMap(({ group, subs }) => folded.has(group.key) ? [] : subs && group.rows.length
+    ? subs.shown.flatMap(sub => { const key = sectionKey(group.key, sub.key); return drawn(key, sub.rows).map(row => ({ row, group: key })) })
+    : drawn(group.key, group.rows).map(row => ({ row, group: group.key }))) : rows.slice(0, limit).map(row => ({ row }))
   const shown = entries.map(e => e.row)
   const undoKey = useUndoKey()
   /**
@@ -960,10 +1012,22 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
           </tr>
         </thead>
         <tbody ref={tbody} className={!groups && drag && drag.before === null ? 'is-drop-end' : undefined}>
-          {sections ? sections.map(({ group, rows: inGroup }) => {
+          {layers ? layers.map(({ group, subs }) => {
             const isFolded = folded.has(group.key)
-            const start = entries.findIndex(e => e.group === group.key)
-            const more = !isFolded && group.rows.length > inGroup.length
+            const body = (key: string, all: readonly Page[]) => {
+              if (folded.has(key)) return null
+              const inGroup = drawn(key, all), start = entries.findIndex(e => e.group === key), more = all.length > inGroup.length
+              return <>
+                {inGroup.map((row, i) => rowLine(row, start + i, key))}
+                {hasFoot && footRow(all)}
+                <tr className={`database-group-foot${drag && drag.before === null && drag.group === key ? ' is-drop-end' : ''}`} data-group={key}><td colSpan={columns.length + 2}>
+                  <div className="database-group-inner">
+                    {more && <button type="button" className="database-more" onClick={() => showMore(key)}>Show 25 more</button>}
+                    <span className="database-new-row"><NewRow db={db} blockId={blockId} addRow={addRow} group={key} /></span>
+                  </div>
+                </td></tr>
+              </>
+            }
             return <Fragment key={group.key}>
               <tr className="database-group"><th scope="rowgroup" colSpan={columns.length + 2} className="database-group-head">
                 <div className="database-group-inner">
@@ -972,14 +1036,12 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
                   </button>
                 </div>
               </th></tr>
-              {inGroup.map((row, i) => rowLine(row, start + i, group.key))}
-              {!isFolded && hasFoot && footRow(group.rows)}
-              {!isFolded && <tr className={`database-group-foot${drag && drag.before === null && drag.group === group.key ? ' is-drop-end' : ''}`} data-group={group.key}><td colSpan={columns.length + 2}>
-                <div className="database-group-inner">
-                  {more && <button type="button" className="database-more" onClick={() => showMore(group.key)}>Show 25 more</button>}
-                  <span className="database-new-row"><NewRow db={db} blockId={blockId} addRow={addRow} group={group.key} /></span>
-                </div>
-              </td></tr>}
+              {!isFolded && (subs && group.rows.length
+                ? subs.shown.map(sub => { const key = sectionKey(group.key, sub.key); return <Fragment key={key}>
+                    <tr className="database-group"><th scope="rowgroup" colSpan={columns.length + 2} className="database-group-head"><SubGroupHead groups={subs} group={sub} isFolded={folded.has(key)} onToggle={() => toggle(key)} /></th></tr>
+                    {body(key, sub.rows)}
+                  </Fragment> })
+                : body(group.key, group.rows))}
             </Fragment>
           }) : entries.map((e, i) => rowLine(e.row, i))}
         </tbody>
@@ -994,6 +1056,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
       <button type="button" className="app-link" onClick={() => setPicked([])}>Done</button>
     </div>}
     {groups && <HiddenGroups groups={groups} changeView={changeView} />}
+    {groups && <HiddenSubGroups db={db.database} view={view} rows={withPendingMoves(rows)} changeView={changeView} weekStart={weekStart} />}
     {!groups && rows.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
     {!groups && <NewRow db={db} blockId={blockId} addRow={addRow} />}
   </div>
@@ -1094,7 +1157,7 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
   const empty = properties.filter(p => isEmptyValue(cellValue(db.database, row, p.id)) && p.type !== 'checkbox' && p.type !== 'status')
   const fold = !unfolded && empty.length > 4
   usePendingCells()
-  const failedHere = [...pendingCells.values()].filter(p => p.failed && p.databaseId === db.id)
+  const failedHere = [...pendingCells.values()].filter(p => p.failed && !p.part && p.databaseId === db.id)
   const shown = fold ? properties.filter(p => !empty.includes(p)) : properties
   const addProperty = () => void run({ type: 'change-database', pageId: db.id, change: { kind: 'addProperty', property: { id: newId(), name: uniqueName(db.database), type: 'text' } } })
   void workspace

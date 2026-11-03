@@ -3,11 +3,11 @@
 // one Undo takes back both. Nothing moves in the page while dragging, only a floating copy: a redraw of the block mid-drag
 // would lose the pointer.
 import { formulaErrorOf } from '../domain/formula'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type UIEvent } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type UIEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { columnCalc, propertyOf, viewBoardCalculation, canWrap, cellValue, databaseRows, isDatabase, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
+import { sectionKey, viewSections, viewSubGroups, columnCalc, propertyOf, viewBoardCalculation, canWrap, cellValue, databaseRows, isDatabase, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { NewRow, shownValue, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { SubGroupHead, HiddenSubGroups, useFolds, NewRow, shownValue, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { calcText } from './property-values'
 import { openDatabaseMenu } from './database-menu'
 import { todayIso } from './dates'
@@ -46,6 +46,11 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   // Each view of a block keeps its own place: a board doesn't open where a table was scrolled to.
   const placeKey = `${blockId}|${view.id}`
   const { limitOf, showMore, reach } = useGroupLimits(placeKey, cap)
+  const { folded, toggle } = useFolds(blockId, view.id)
+  // A second layer is a lane of the same columns across the board, their heads only on the first (R3-13).
+  const laneGroups = groups ? viewSubGroups(db.database, view, ordered, shownRaw, weekStart) : null
+  // With no rows and no options there are no lanes to draw, so the columns stay in reach. Lanes he hid still keep their rows out of sight.
+  const subs = laneGroups?.shown.length || laneGroups?.hidden.length ? laneGroups : null
   const moveRow = useMoveRow(db, view, context, groups)
   const returned = useReturnedRow(rows)
   const sorted = view.sort.length > 0
@@ -53,7 +58,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   const open = (rowId: string, group: string) => setOpenCell({ blockId, databaseId: db.id, rowId, columnId: titleId, group })
   const addRow = useAddRow(db, view, context, blockId, (pageId, group) => {
     const ws = latest()
-    if (ws && group !== undefined) reach(group, viewGroups(db.database, view, viewRows(ws, db.id, view, context), undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0)
+    if (ws && group !== undefined) reach(group, viewSections(db.database, view, viewRows(ws, db.id, view, context), undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0)
     if (group !== undefined) requestAnimationFrame(() => open(pageId, group))
   })
 
@@ -70,7 +75,11 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
 
   /** The column under a point, or the nearest; in it, the card to go before. A sorted view has no place to choose. */
   const targetAt = (x: number, y: number, rowId: string): { over: string; before: string | null } | null => {
-    const cols = [...(board.current?.querySelectorAll<HTMLElement>('[data-column]') ?? [])]
+    // With lanes, the lane under the point first; a column's own height says nothing about which it's nearest.
+    const lanes = [...(board.current?.querySelectorAll<HTMLElement>('.database-lane-columns') ?? [])]
+    const heightFrom = (el: HTMLElement) => { const r = el.getBoundingClientRect(); return y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0 }
+    const scope = lanes.length ? lanes.reduce((best, el) => (heightFrom(el) < heightFrom(best) ? el : best)) : board.current
+    const cols = [...(scope?.querySelectorAll<HTMLElement>('[data-column]') ?? [])]
     if (!cols.length) return null
     const distance = (el: HTMLElement) => { const r = el.getBoundingClientRect(); return x < r.left ? r.left - x : x > r.right ? x - r.right : 0 }
     const col = cols.reduce((best, el) => (distance(el) < distance(best) ? el : best))
@@ -158,7 +167,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
     const card = target.closest<HTMLElement>('[data-card]')
     if (!card || target.tagName === 'INPUT') return
     const column = card.closest<HTMLElement>('[data-column]')!
-    const cols = [...(board.current?.querySelectorAll<HTMLElement>('[data-column]') ?? [])], c = cols.indexOf(column)
+    const cols = [...(column.parentElement?.querySelectorAll<HTMLElement>('[data-column]') ?? [])], c = cols.indexOf(column)
     const cards = [...column.querySelectorAll<HTMLElement>('[data-card]')], i = cards.indexOf(card)
     const focus = (el: HTMLElement | undefined) => { if (el) { e.preventDefault(); el.querySelector<HTMLElement>('.database-card-title')?.focus() } }
     const rowId = card.dataset.card!, from = column.dataset.column!
@@ -224,12 +233,16 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(columns[0]!.key === allKey ? undefined : columns[0]!.key) }} />
     {!groups && <p className="database-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'group')}>Group by</button></p>}
-    <div className={`database-board${drag ? ' is-dragging' : ''}`} ref={scroller} onScroll={onScroll}>
-      {columns.map(group => {
+    <div className={`database-board${subs ? ' has-lanes' : ''}${drag ? ' is-dragging' : ''}`} ref={scroller} onScroll={onScroll}>
+      {subs && <div className="database-lane-heads">{columns.map(c => <div key={c.key} className="database-lane-head-cell"><h3 className="database-column-head"><GroupName groups={groups!} group={c} /><span className="database-group-count">· {headOf(c.rows)}</span></h3></div>)}{canAddColumn && <AddColumn run={run} db={db} propertyId={groups!.property.id} />}</div>}
+      {(subs ? subs.shown : [null]).map(lane => {
+        const laneColumns = lane ? columns.map(c => ({ ...c, head: c, key: sectionKey(c.key, lane.key), rows: c.rows.filter(r => lane.rows.includes(r)) })) : columns.map(c => ({ ...c, head: c }))
+        const laneKey = lane ? sectionKey('lane', lane.key) : ''
+        const body = laneColumns.map(group => {
         const shown = group.rows.slice(0, limitOf(group.key))
         const over = drag?.over === group.key
         return <section key={group.key} className={`database-column${over && (sorted || drag!.from !== group.key) ? ' is-drop' : ''}`} data-column={group.key} aria-label={group.name ? `${group.name}, ${group.rows.length}` : 'All rows'}>
-          {groups && <h3 className="database-column-head"><GroupName groups={groups} group={group} /><span className="database-group-count">· {headOf(group.rows)}</span></h3>}
+          {groups && !subs && <h3 className="database-column-head"><GroupName groups={groups} group={group.head} /><span className="database-group-count">· {headOf(group.head.rows)}</span></h3>}
           {shown.map(row => <article key={row.id} data-card={row.id}
             className={`database-card${returned === row.id ? ' is-returned' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}${over && !sorted && drag!.before === row.id && drag!.rowId !== row.id ? ' is-drop-before' : ''}`}
             // A mouse press selects no text: that would move the page's selection, and redraw this block under the drag.
@@ -240,11 +253,18 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
           {group.rows.length > shown.length && <button type="button" className="database-more" onClick={() => showMore(group.key)}>Show 25 more</button>}
           <NewRow db={db} blockId={blockId} addRow={addRow} {...(group.key === allKey ? {} : { group: group.key })} />
         </section>
+        })
+        const adding = !subs && canAddColumn && <AddColumn run={run} db={db} propertyId={groups!.property.id} />
+        if (!lane || !subs) return <Fragment key="all">{body}{adding}</Fragment>
+        return <div key={laneKey} className="database-lane">
+          <SubGroupHead lane groups={subs} group={lane} isFolded={folded.has(laneKey)} onToggle={() => toggle(laneKey)} />
+          {!folded.has(laneKey) && <div className="database-lane-columns">{body}{adding}</div>}
+        </div>
       })}
-      {canAddColumn && <AddColumn run={run} db={db} propertyId={groups!.property.id} />}
     </div>
     <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
     {groups && <HiddenGroups groups={groups} changeView={changeView} />}
+    {groups && <HiddenSubGroups db={db.database} view={view} rows={ordered} changeView={changeView} weekStart={weekStart} />}
     {drag && draggedRow && createPortal(<div ref={ghost} className="database-card is-ghost" aria-hidden="true">{cardBody(draggedRow, drag.from, false)}</div>, document.body)}
   </div>
 }

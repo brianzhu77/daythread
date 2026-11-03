@@ -3,9 +3,9 @@
 // their ⋮⋮ while the view isn't sorted, within a group or to another.
 import { formulaErrorOf } from '../domain/formula'
 import { Fragment, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { cellValue, databaseRows, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
+import { sectionKey, viewSections, viewSubGroups, cellValue, databaseRows, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { SubGroupHead, HiddenSubGroups, NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { todayIso } from './dates'
 import { ChevronRightIcon } from './icons'
 import { displayPageTitle } from './page-title'
@@ -43,7 +43,7 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
   const addRow = useAddRow(db, view, context, blockId, (pageId, group) => {
     const ws = latest(), now = ws ? viewRows(ws, db.id, view, context) : []
     if (group === undefined) { const at = now.findIndex(r => r.id === pageId); if (at >= limit) setLimit(at + 1) }
-    else reach(group, viewGroups(db.database, view, now, undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0)
+    else reach(group, viewSections(db.database, view, now, undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0)
     requestAnimationFrame(() => open(pageId, group))
   })
 
@@ -111,23 +111,33 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
     <div className={`database-list${view.wrapName ? ' wraps-name' : ''}${!groups && drag && drag.before === null ? ' is-drop-end' : ''}`} ref={body}>
       {groups ? groups.shown.map(group => {
         const isFolded = folded.has(group.key)
-        const shown = isFolded ? [] : group.rows.slice(0, limitOf(group.key))
+        const subs = viewSubGroups(db.database, view, group.rows, shownRaw, weekStart)
+        const body = (key: string, all: readonly Page[]) => {
+          if (folded.has(key)) return null
+          const shown = all.slice(0, limitOf(key))
+          return <>
+            {shown.map(row => rowLine(row, key))}
+            <div className={`database-list-foot${drag && drag.before === null && drag.group === key ? ' is-drop-end' : ''}`} data-group={key}>
+              {all.length > shown.length && <button type="button" className="database-more" onClick={() => showMore(key)}>Show 25 more</button>}
+              <span className="database-new-row"><NewRow db={db} blockId={blockId} addRow={addRow} group={key} /></span>
+            </div>
+          </>
+        }
         return <Fragment key={group.key}>
           <div className="database-group-inner">
             <button type="button" className="database-group-fold" aria-expanded={!isFolded} onClick={() => toggle(group.key)}>
               <ChevronRightIcon /><GroupName groups={groups} group={group} /><span className="database-group-count">· {group.rows.length}</span>
             </button>
           </div>
-          {shown.map(row => rowLine(row, group.key))}
-          {!isFolded && <div className={`database-list-foot${drag && drag.before === null && drag.group === group.key ? ' is-drop-end' : ''}`} data-group={group.key}>
-            {group.rows.length > shown.length && <button type="button" className="database-more" onClick={() => showMore(group.key)}>Show 25 more</button>}
-            <span className="database-new-row"><NewRow db={db} blockId={blockId} addRow={addRow} group={group.key} /></span>
-          </div>}
+          {!isFolded && (subs && group.rows.length
+            ? subs.shown.map(sub => { const key = sectionKey(group.key, sub.key); return <Fragment key={key}><SubGroupHead groups={subs} group={sub} isFolded={folded.has(key)} onToggle={() => toggle(key)} />{body(key, sub.rows)}</Fragment> })
+            : body(group.key, group.rows))}
         </Fragment>
       }) : ordered.slice(0, limit).map(row => rowLine(row))}
     </div>
     <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
     {groups && <HiddenGroups groups={groups} changeView={changeView} />}
+    {groups && <HiddenSubGroups db={db.database} view={view} rows={ordered} changeView={changeView} weekStart={weekStart} />}
     {!groups && ordered.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
     {!groups && <NewRow db={db} blockId={blockId} addRow={addRow} />}
   </div>
