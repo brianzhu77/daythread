@@ -3,7 +3,7 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { databaseRows, groupableProperties, isDatabase, propertyOf, titleId, typeLabels, propertyTypes, viewGroupBy, viewGroups, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { databaseRows, dateProperties, groupableProperties, isDatabase, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewGroupBy, viewGroups, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
 import { blockActions, setShownView, shownView, useViewChange } from './database-block'
 import { ChevronDownIcon } from './icons'
@@ -21,7 +21,7 @@ function useOpenMenu() { return useSyncExternalStore(l => { listeners.add(l); re
 const newId = (): string => crypto.randomUUID()
 
 /** Opens a table's menu on one of its panels (a filter chip opens Filter). */
-export function openDatabaseMenu(blockId: string, databaseId: string, panel: 'filter' | 'sort' | 'group' = 'filter') { setOpenMenu({ blockId, databaseId, panel }) }
+export function openDatabaseMenu(blockId: string, databaseId: string, panel: 'filter' | 'sort' | 'group' | 'layout' = 'filter') { setOpenMenu({ blockId, databaseId, panel }) }
 
 /** The `⋯` on a table (inline or full page): opens its menu under it. */
 export function DatabaseMenuButton({ blockId, databaseId }: { blockId: string; databaseId: string }) {
@@ -138,7 +138,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     <div className="database-menu-tiles">
       <button type="button" onClick={() => go('filter')}>Filter</button>
       <button type="button" onClick={() => go('sort')}>Sort</button>
-      {view.layout !== 'gallery' && <button type="button" onClick={() => go('group')}>Group</button>}
+      {view.layout !== 'gallery' && view.layout !== 'calendar' && <button type="button" onClick={() => go('group')}>Group</button>}
     </div>
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
@@ -272,24 +272,39 @@ function SortPanel({ db, view, back }: { db: DatabasePage; view: View; back: () 
 
 // ---------------------------------------------------------------- group and layout (design §7.2, §7.3)
 
-const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery' }
+const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar' }
 /** "Status", "Status 2", …: never a name the database already has. */
-function newStatusName(db: Database): string {
+function newPropertyName(db: Database, base: string): string {
   const taken = new Set(['name', ...db.properties.map(p => p.name.toLocaleLowerCase())])
-  for (let n = 1; ; n++) { const name = n === 1 ? 'Status' : `Status ${n}`; if (!taken.has(name.toLocaleLowerCase())) return name }
+  for (let n = 1; ; n++) { const name = n === 1 ? base : `${base} ${n}`; if (!taken.has(name.toLocaleLowerCase())) return name }
 }
 /** A board's columns need a Select, Status or Checkbox: asked when one is made (§7.2), or a new Status, when he has none or wants one. */
 function BoardGroupChoices({ db, onPick }: { db: DatabasePage; onPick: (propertyId: string) => void }) {
   const change = useChange(db)
   const addStatus = () => {
     const id = newId()
-    change(current => ({ kind: 'addProperty', property: { id, name: newStatusName(current), type: 'status' } }))
+    change(current => ({ kind: 'addProperty', property: { id, name: newPropertyName(current, 'Status'), type: 'status' } }))
     onPick(id)
   }
   return <>
     <p className="database-menu-quiet">Columns come from</p>
     {groupableProperties(db.database, 'board').map(p => <button key={p.id} type="button" role="menuitem" onClick={() => onPick(p.id)}>{p.name}<span className="database-menu-quiet">{typeLabels[p.type]}</span></button>)}
     <button type="button" role="menuitem" onClick={addStatus}>+ New Status property</button>
+  </>
+}
+
+/** A calendar's rows sit by a date property: asked when one is made (R3-1), as a board asks for its columns. */
+function CalendarDateChoices({ db, onPick }: { db: DatabasePage; onPick: (propertyId: string) => void }) {
+  const change = useChange(db)
+  const addDate = () => {
+    const id = newId()
+    change(current => ({ kind: 'addProperty', property: { id, name: newPropertyName(current, 'Date'), type: 'date' } }))
+    onPick(id)
+  }
+  return <>
+    <p className="database-menu-quiet">Rows sit by</p>
+    {dateProperties(db.database).map(p => <button key={p.id} type="button" role="menuitem" onClick={() => onPick(p.id)}>{p.name}</button>)}
+    <button type="button" role="menuitem" onClick={addDate}>+ New Date property</button>
   </>
 }
 
@@ -335,9 +350,16 @@ const renamedFor = (view: View, layout: View['layout']) => (view.name === layout
 function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
   const changeView = useViewChange(db.id, view.id)
   const [asking, setAsking] = useState(false)
+  const [askingDate, setAskingDate] = useState(false)
+  const toCalendar = (dateBy: string) => { setAskingDate(false); changeView(current => ({ layout: 'calendar', dateBy, ...renamedFor(current, 'calendar') })) }
   const toBoard = (groupBy: string) => { setAsking(false); changeView(current => ({ layout: 'board', groupBy, ...renamedFor(current, 'board') })) }
   const pick = (layout: View['layout']) => {
     if (layout === view.layout) return
+    if (layout === 'calendar') {
+      const kept = viewDateBy(db.database, view), only = dateProperties(db.database)
+      if (kept) toCalendar(kept.id); else if (only.length === 1) toCalendar(only[0]!.id); else setAskingDate(true)
+      return
+    }
     if (layout !== 'board') { changeView(current => ({ layout, ...renamedFor(current, layout) })); return }
     // Grouped already by what a board can use: those are its columns.
     const kept = viewGroupBy(db.database, { ...view, layout: 'board' })
@@ -345,9 +367,16 @@ function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
     if (kept) toBoard(kept.id); else if (only.length === 1) toBoard(only[0]!.id); else setAsking(true)
   }
   if (asking) return <><Head title="Board" back={() => setAsking(false)} /><BoardGroupChoices db={db} onPick={toBoard} /></>
+  if (askingDate) return <><Head title="Calendar" back={() => setAskingDate(false)} /><CalendarDateChoices db={db} onPick={toCalendar} /></>
   return <>
     <Head title="Layout" back={back} />
-    {(['table', 'board', 'list', 'gallery'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
+    {(['table', 'board', 'list', 'gallery', 'calendar'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
+    {view.layout === 'calendar' && dateProperties(db.database).length > 0 && <label className="database-menu-row">Rows sit by
+      <select value={viewDateBy(db.database, view)?.id ?? ''} onChange={e => { const dateBy = e.target.value; if (dateBy) changeView(() => ({ dateBy })) }}>
+        {!viewDateBy(db.database, view) && <option value="">Choose…</option>}
+        {dateProperties(db.database).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </label>}
   </>
 }
 
@@ -447,19 +476,21 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
   const current = shownView(db.database, blockId)
   const [actions, setActions] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
-  const [adding, setAdding] = useState<null | 'type' | 'board'>(null)
+  const [adding, setAdding] = useState<null | 'type' | 'board' | 'calendar'>(null)
   const views = db.database.views
   const pick = (id: string) => { setShownView(blockId, id); setOpenMenu(null) }
-  const add = (from?: View, groupBy?: string, layout: 'table' | 'list' | 'gallery' = 'table') => {
+  const add = (from?: View, groupBy?: string, layout: 'table' | 'list' | 'gallery' | 'calendar' = 'table', dateBy?: string) => {
     const id = newId()
     // A new view is named after its type, with the name ready to rename (design §7.1); Duplicate copies one. A new board's or
     // gallery's cards start as titles alone: Properties adds what he wants on them (§7.5).
-    const view: View = from ? { ...structuredClone(from), id, name: `${from.name} (copy)` } : { id, name: groupBy ? 'Board' : layoutLabels[layout], layout: groupBy ? 'board' : layout, columns: groupBy || layout === 'gallery' ? [] : current.columns, sort: [], filter: [], ...(groupBy ? { groupBy } : {}) }
+    const view: View = from ? { ...structuredClone(from), id, name: `${from.name} (copy)` } : { id, name: groupBy ? 'Board' : layoutLabels[layout], layout: groupBy ? 'board' : layout, columns: groupBy || layout === 'gallery' || layout === 'calendar' ? [] : current.columns, sort: [], filter: [], ...(groupBy ? { groupBy } : {}), ...(dateBy ? { dateBy } : {}) }
     change({ kind: 'addView', view })
     setShownView(blockId, id)
     setActions(null); setAdding(null); setRenaming(id)
   }
   const addBoard = () => { const only = groupableProperties(db.database, 'board'); if (only.length === 1) add(undefined, only[0]!.id); else setAdding('board') }
+  const addCalendar = () => { const only = dateProperties(db.database); if (only.length === 1) add(undefined, undefined, 'calendar', only[0]!.id); else setAdding('calendar') }
+  if (adding === 'calendar') return <><Head title="New calendar" back={() => setAdding('type')} /><CalendarDateChoices db={db} onPick={id => add(undefined, undefined, 'calendar', id)} /></>
   if (adding === 'board') return <><Head title="New board" back={() => setAdding('type')} /><BoardGroupChoices db={db} onPick={id => add(undefined, id)} /></>
   if (adding === 'type') return <>
     <Head title="New view" back={() => setAdding(null)} />
@@ -467,6 +498,7 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
     <button type="button" role="menuitem" onClick={addBoard}>Board</button>
     <button type="button" role="menuitem" onClick={() => add(undefined, undefined, 'list')}>List</button>
     <button type="button" role="menuitem" onClick={() => add(undefined, undefined, 'gallery')}>Gallery</button>
+    <button type="button" role="menuitem" onClick={addCalendar}>Calendar</button>
   </>
   return <>
     <Head title="Views" />
