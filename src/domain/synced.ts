@@ -158,8 +158,8 @@ export function acceptSavedBlocks(state: Workspace, page: Page, nodes: EditorNod
  * place is written again from the record, its own roles kept, so one command never leaves two places apart.
  */
 export function settleSynced(state: Workspace): { linesRemovedFrom?: number } {
-  if (!hasRecords(state) && !state.pages.some(p => mentionsBlock(p.document))) return {}
-  state.synced ??= []
+  // A block only comes from a template or a duplicate where a record exists already, so with none this costs nothing (B21-14).
+  if (!hasRecords(state)) return {}
   let linesRemovedFrom: number | undefined
   // Measured against the record as it was, so the places that haven't changed don't change it back.
   const was = new Map(state.synced!.map(r => [r.id, recordKey(r)]))

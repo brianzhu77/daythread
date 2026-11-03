@@ -13,12 +13,14 @@ const date = '2026-12-21', next = '2026-12-22'
 const anyIds = (s: string) => s.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, 'ID')
 const shape = (nodes: EditorNode[]) => nodes.filter(n => n.type !== 'database').map(n => `${n.type}:${inlineText(n.content).trim()}`)
 
-async function run(variant: 'plain' | 'viewed' | 'todos') {
+async function run(variant: 'plain' | 'viewed' | 'todos' | 'block') {
   const path = `${scratch}/draft-${variant}.sqlite`
   execSync(`rm -f ${path} ${path}-wal ${path}-shm`)
   copyFileSync(copy, path)
   execSync(`node tests/evidence/databases/seed-table.ts ${path}`, { stdio: 'ignore' })
-  execSync(`node tests/evidence/databases/template-view-seed.ts ${path} ${variant === 'viewed' ? '' : variant}`, { stdio: 'ignore' })
+  execSync(`node tests/evidence/databases/template-view-seed.ts ${path} ${variant === 'viewed' ? '' : variant === 'block' ? 'plain' : variant}`, { stdio: 'ignore' })
+  // A synced block's copy in the template, as well: the day it makes has to read as a day with a note in it, and nothing else.
+  if (variant === 'block') execSync(`node tests/evidence/b21/template-seed.ts ${path}`, { stdio: 'ignore' })
   const repo = new SqliteWorkspaceRepository(path)
   let ws = await repo.load()
   const exec = async (action: Action) => { const r = await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: ws.revision, action }); ws = r.workspace; return r.receipt }
@@ -45,7 +47,7 @@ async function run(variant: 'plain' | 'viewed' | 'todos') {
 
 const plain = await run('plain')
 let allOk = true
-for (const variant of ['viewed', 'todos'] as const) {
+for (const variant of ['viewed', 'todos', 'block'] as const) {
 const viewed = await run(variant)
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const checks = {
