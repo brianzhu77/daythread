@@ -650,7 +650,10 @@ export function useAddRow(db: Page & { database: Database }, view: View, context
       .then(r => {
         if (!r) return
         if (!wide) { openRow(pageId, 'title'); return }
-        if (prefill.visible) reveal(pageId, group)
+        if (!prefill.visible) return
+        // An empty group's first row is drawn in a section as soon as it's there, so its Name opens under that section's key.
+        const now = latest(), lone = group !== undefined && splitSection(group).sub === undefined && viewSubGroupBy(db.database, view) && now
+        reveal(pageId, (lone ? viewSections(db.database, view, viewRows(now, db.id, view, context), undefined, context.weekStart)?.shown.find(s => splitSection(s.key).group === group && s.rows.some(r => r.id === pageId))?.key : undefined) ?? group)
       })
   }
 }
