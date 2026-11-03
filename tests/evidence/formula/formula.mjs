@@ -28,10 +28,12 @@ const menu = page => page.locator('.database-menu')
 // Set by the scenario below: the page's clock has to be in place before the app loads.
 const r_midnight = async page => {
   const r = {}
-  await page.clock.install({ time: new Date(2026, 10, 3, 23, 59, 30) })
+  await page.clock.install({ time: new Date('2026-11-03T15:50:00Z') })
   await page.goto(`${base}/pages?page=shop`); await wait(2500)
+  r.clockBefore = await page.evaluate(() => new Date().toString())
   r.before = await cells(page, 'pear')
-  await page.clock.fastForward(120_000); await wait(1500)
+  await page.clock.fastForward(20 * 60_000); await wait(1500)
+  r.clockAfter = await page.evaluate(() => new Date().toString())
   r.after = await cells(page, 'pear')
   r.ok = r.before.includes('2026-11-03') && r.after.includes('2026-11-04')
   return r
@@ -247,7 +249,8 @@ await scenario('A pathological pattern and repeat don\'t hang the tab, at 390', 
   return r
 }, phone)
 
-await scenario('today() turns over at local midnight with no reload', 'clock', async page => r_midnight(page))
+// Shanghai has no change of clocks, and Playwright's WebKit and Node disagree about this week's in Vancouver.
+await scenario('today() turns over at local midnight with no reload', 'clock', async page => r_midnight(page), { ...wide, timezoneId: 'Asia/Shanghai' })
 
 await browser.close()
 console.log(failed ? `${failed} FAILED` : 'ALL PASS')
