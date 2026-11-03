@@ -138,7 +138,7 @@ test('the view fields: checked, stored, and kept by every other change', () => {
   assert.deepEqual([v().layout, v().groupBy, v().hideEmptyGroups, v().hiddenGroups], ['table', 'pages', undefined, undefined])
   h.change({ kind: 'updateView', viewId: v().id, groupBy: null })
   assert.equal(v().groupBy, undefined)
-  assert.throws(() => h.change({ kind: 'addView', view: { ...view({ layout: 'list' as never }), id: 'x' } }), /Unknown view type/)
+  assert.throws(() => h.change({ kind: 'addView', view: { ...view({ layout: 'nonsense' as never }), id: 'x' } }), /Unknown view type/)
   h.change({ kind: 'addView', view: view({ id: 'b', name: 'Board', layout: 'board', groupBy: 'status' }) })
   assert.equal(h.db().views[1]!.groupBy, 'status')
   assert.ok(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId: 'b', groupBy: null, hiddenGroups: [], layout: 'board', groupDateBy: 'day' } } }).success)

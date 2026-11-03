@@ -15,6 +15,7 @@ import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide 
 import { urlHref } from './property-values'
 import { useWorkspace } from './use-day'
 import { DatabaseBoard } from './database-board'
+import { DatabaseList } from './database-list'
 import { DatabaseMenuButton, DatabaseViewsButton, openDatabaseMenu } from './database-menu'
 
 const newId = (): string => crypto.randomUUID()
@@ -491,9 +492,28 @@ export function ViewNotes({ db, view, changeView, empty }: { db: Page; view: Vie
   </>
 }
 
-/** Which groups are folded in a table: on this device only, per view of a block, never a save or an Undo, like the view shown. */
+/**
+ * ⌘C, ⌘X and ⌘V in a board or list are about it, never the page around it (design §10), as in a table: they stop at the
+ * window, before the page's clipboard handlers. Copy takes the row's title; a row isn't cut or pasted over here.
+ */
+export function useViewClipboard(wrap: { current: HTMLElement | null }) {
+  useEffect(() => {
+    const handle = (e: ClipboardEvent) => {
+      const focused = document.activeElement
+      if (!wrap.current?.contains(focused)) return
+      e.stopPropagation()
+      if (focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement) return
+      e.preventDefault()
+      if (e.type === 'copy' && focused?.closest('[data-card], [data-row]')) e.clipboardData?.setData('text/plain', focused.textContent ?? '')
+    }
+    for (const type of ['copy', 'cut', 'paste'] as const) window.addEventListener(type, handle, true)
+    return () => { for (const type of ['copy', 'cut', 'paste'] as const) window.removeEventListener(type, handle, true) }
+  }, [wrap])
+}
+
+/** Which groups are folded in a table or list: on this device only, per view of a block, never a save or an Undo, like the view shown. */
 function foldKey(blockId: string, viewId: string) { return `daythread.database-fold.${blockId}.${viewId}` }
-function useFolds(blockId: string, viewId: string) {
+export function useFolds(blockId: string, viewId: string) {
   const read = () => { try { return new Set<string>(JSON.parse(localStorage.getItem(foldKey(blockId, viewId)) ?? '[]') as string[]) } catch { return new Set<string>() } }
   const [folded, setFolded] = useState(read)
   useEffect(() => setFolded(read()), [blockId, viewId]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -513,7 +533,9 @@ function DatabaseView(props: DatabaseViewProps) {
   useShownViews()
   const view = shownView(props.db.database, props.blockId)
   const changeView = useViewChange(props.db.id, view.id)
-  return view.layout === 'board' ? <DatabaseBoard {...props} view={view} changeView={changeView} /> : <DatabaseTable {...props} view={view} changeView={changeView} />
+  if (view.layout === 'board') return <DatabaseBoard {...props} view={view} changeView={changeView} />
+  if (view.layout === 'list') return <DatabaseList {...props} view={view} changeView={changeView} />
+  return <DatabaseTable {...props} view={view} changeView={changeView} />
 }
 
 /** Above a view's rows, whatever its layout: the title, its view and `⋯` buttons, and the line of rules. */

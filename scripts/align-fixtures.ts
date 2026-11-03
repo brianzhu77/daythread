@@ -61,7 +61,7 @@ const lineTarget = crypto.randomUUID()
 // Databases R1 (design §15): an inline table, so its title, `+ New` and view chevron are measured too.
 const databaseId = crypto.randomUUID(), databaseBlock = crypto.randomUUID()
 // R2: a board and a grouped table, each with a column or group past the row cap and a hidden one.
-const boardId = crypto.randomUUID(), boardBlock = crypto.randomUUID(), groupedId = crypto.randomUUID(), groupedBlock = crypto.randomUUID()
+const boardId = crypto.randomUUID(), boardBlock = crypto.randomUUID(), groupedId = crypto.randomUUID(), groupedBlock = crypto.randomUUID(), listId = crypto.randomUUID(), listBlock = crypto.randomUUID()
 const document: EditorNode[] = [
   headingNode('TODO'),
   todo('Fixture open to-do', 'plan'),
@@ -82,6 +82,7 @@ const document: EditorNode[] = [
   { id: databaseBlock, type: 'database', props: { pageId: databaseId, view: '' }, children: [] },
   { id: boardBlock, type: 'database', props: { pageId: boardId, view: '' }, children: [] },
   { id: groupedBlock, type: 'database', props: { pageId: groupedId, view: '' }, children: [] },
+  { id: listBlock, type: 'database', props: { pageId: listId, view: '' }, children: [] },
   { id: crypto.randomUUID(), type: 'bulletListItem', props: {}, content: [textRun('See '), { type: 'pageRef', props: { pageId: scratchId, refId: crypto.randomUUID(), newTitle: '', lineId: lineTarget, taskId: '' } }, textRun(' for the list')], children: [] },
 ]
 ws = await run({ type: 'save-editor', pageId: scratchId, expectedContent: pageContentKey(dayPage(ws, SCRATCH)), document: JSON.stringify(document), today })
@@ -100,14 +101,14 @@ for (const property of [
 ] as const) ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'addProperty', property: property as never } })
 ws = await run({ type: 'add-row', databaseId, pageId: crypto.randomUUID(), title: 'Fixture row', values: { text: 'A note', number: 412, select: 'novel', multi: ['sf'], date: { start: SCRATCH }, done: true, url: 'https://example.com/fixture' }, at: new Date().toISOString() })
 ws = await run({ type: 'add-row', databaseId, pageId: crypto.randomUUID(), title: 'Fixture row, unticked', values: {}, at: new Date().toISOString() })
-for (const [id, block, title, layout] of [[boardId, boardBlock, 'Fixture board', 'board'], [groupedId, groupedBlock, 'Fixture grouped table', 'table']] as const) {
+for (const [id, block, title, layout] of [[boardId, boardBlock, 'Fixture board', 'board'], [groupedId, groupedBlock, 'Fixture grouped table', 'table'], [listId, listBlock, 'Fixture list', 'list']] as const) {
   ws = await run({ type: 'create-database', pageId: id, parentId: scratchId, homeBlockId: block, title })
   const change = async (c: unknown) => { ws = await run({ type: 'change-database', pageId: id, change: c as never }) }
   await change({ kind: 'addProperty', property: { id: 'state', name: 'State', type: 'status', options: [{ id: 'next', name: 'Next', group: 'todo' }, { id: 'now', name: 'Now', group: 'active' }, { id: 'old', name: 'Old', group: 'done' }] } })
   await change({ kind: 'addProperty', property: { id: 'note', name: 'Note', type: 'text' } })
   await change({ kind: 'addProperty', property: { id: 'done', name: 'Done', type: 'checkbox' } })
   const view = ws.pages.find(p => p.id === id)!.database!.views[0]!
-  await change({ kind: 'updateView', viewId: view.id, layout, groupBy: 'state', hiddenGroups: ['old'], name: layout === 'board' ? 'Board' : 'Table', ...(layout === 'board' ? { columns: [{ id: 'note' }, { id: 'done' }] } : {}) })
+  await change({ kind: 'updateView', viewId: view.id, layout, groupBy: 'state', hiddenGroups: ['old'], name: { board: 'Board', table: 'Table', list: 'List' }[layout], ...(layout === 'table' ? {} : { columns: [{ id: 'note' }, { id: 'done' }] }) })
   for (let i = 0; i < 26; i++) ws = await run({ type: 'add-row', databaseId: id, pageId: crypto.randomUUID(), title: `Fixture row ${i + 1}`, values: { state: 'next', note: 'A note' }, at: new Date().toISOString() })
   ws = await run({ type: 'add-row', databaseId: id, pageId: crypto.randomUUID(), title: 'Fixture hidden row', values: { state: 'old' }, at: new Date().toISOString() })
 }
@@ -129,7 +130,7 @@ if (!written(ws, today)) {
   ws = await run({ type: 'save-editor', pageId: page.id, expectedContent: pageContentKey(page), document: JSON.stringify(nodes), today })
 }
 
-for (const [id, what] of [[previewId, 'page with words'], [emptyId, 'empty page'], [longId, 'long-title page'], [linkId, 'link page'], [databaseId, 'database'], [boardId, 'board'], [groupedId, 'grouped table']] as const)
+for (const [id, what] of [[previewId, 'page with words'], [emptyId, 'empty page'], [longId, 'long-title page'], [linkId, 'link page'], [databaseId, 'database'], [boardId, 'board'], [groupedId, 'grouped table'], [listId, 'list']] as const)
   if (!ws.pages.some(p => p.id === id && !p.trashedAt)) { console.error(`Fixture ${what} wasn't created.`); process.exit(1) }
 const statuses = ['Fixture done to-do', 'Fixture cancelled to-do'].map(t => task(t).status).join(', ')
 console.log(`Fixtures on /day/${SCRATCH} (revision ${ws.revision}): ${statuses}; ${flatNodes(pageNodes(dayPage(ws, SCRATCH))).length} rows. Today ${today}.`)

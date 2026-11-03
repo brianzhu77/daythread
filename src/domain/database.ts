@@ -36,7 +36,7 @@ export type Json = string | number | boolean | null | Json[] | { [key: string]: 
 export interface Condition { by: string; op: FilterOp; value?: Json }
 export interface Sort { by: string; direction: "asc" | "desc" }
 export type GroupDateBy = "day" | "week" | "month";
-export const viewLayouts = ["table", "board"] as const;
+export const viewLayouts = ["table", "board", "list"] as const;
 export type ViewLayout = (typeof viewLayouts)[number];
 export interface View {
   id: string;
@@ -47,7 +47,7 @@ export interface View {
   sort: Sort[];
   /** All must hold. */
   filter: Condition[];
-  /** Table: its groups. Board: what makes its columns. Ignored while its property is deleted or can't group (design §13). */
+  /** Table and list: their groups. Board: what makes its columns. Ignored while its property is deleted or can't group (design §13). */
   groupBy?: string;
   /** A date's groups; a month when absent. */
   groupDateBy?: GroupDateBy;
