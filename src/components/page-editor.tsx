@@ -16,6 +16,7 @@ import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { linkedViewJson, linkedViewOf } from '../domain/linked-view'
+import { syncedBlockType } from '../domain/synced'
 import { databaseSource, withTodos } from '../domain/todos-source'
 import { DatabasePicker } from './database-linked'
 import { holdKeyboard } from './keyboard'
@@ -83,6 +84,11 @@ const database = createReactBlockSpec({ type: 'database', propSchema: { pageId: 
   render: ({ block }) => <DatabaseInPage blockId={block.id} pageId={block.props.pageId} viewJson={block.props.view} />,
   toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Database</a></p>,
 })()
+// A synced block (docs/design/synced-blocks.md): the lines shown in several places, as this block's children. Known to the
+// editor before anything can make one, so a build at the rollback floor keeps it whole (docs/plan/b21-sizing.md).
+const syncedBlock = createReactBlockSpec({ type: syncedBlockType, propSchema: { syncId: { default: '' }, rev: { default: 0 }, roles: { default: '' } }, content: 'none' }, {
+  render: () => <span className="synced-block-mark" contentEditable={false} />,
+})()
 function DatabaseInPage({ blockId, pageId, viewJson }: { blockId: string; pageId: string; viewJson: string }) {
   const actions = useContext(DatabaseEditorActions)
   return <DatabaseBlock blockId={blockId} pageId={pageId} viewJson={viewJson} hostDate={useContext(ChipPageDate)} actions={actions} />
@@ -134,7 +140,7 @@ const dateMention = createReactInlineContentSpec({ type: 'dateMention', propSche
   render: ({ inlineContent: { props } }) => <DateChipInPage date={props.date} time={props.time || null} />,
   toExternalHTML: ({ inlineContent: { props } }) => <span>{mentionText({ date: props.date, time: props.time || null }, null)}</span>,
 })
-const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink, database }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef, dateMention } })
+const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink, database, [syncedBlockType]: syncedBlock }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef, dateMention } })
 // B4 (F13): a plain line is "Body" and the divider is "Separator", in the / menu and the toolbar's line-type menu alike.
 const dictionary = { ...en, slash_menu: { ...en.slash_menu,
   paragraph: { ...en.slash_menu.paragraph, title: 'Body', aliases: [...en.slash_menu.paragraph.aliases, 'body', 'text', '正文'] },

@@ -1,5 +1,6 @@
 import type { LocalDate, Page, Task, Workspace } from './types.ts'
 import { mentionText, readMention } from './date-chip.ts'
+import { storedDocument } from './synced.ts'
 
 export interface EditorNode {
   id: string
@@ -77,7 +78,8 @@ export function pageNodes(page: Pick<Page, 'document'>): EditorNode[] {
 /** A stale-save check: the saved document's fingerprint, short enough to travel with every save. */
 export function pageContentKey(page: Pick<Page, 'document'>): string {
   let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762
-  const s = page.document
+  // Another place's edit to a synced block isn't a change to this page.
+  const s = storedDocument(page.document)
   for (let i = 0; i < s.length; i++) {
     const k = s.charCodeAt(i)
     h1 = h2 ^ Math.imul(h1 ^ k, 597399067); h2 = h3 ^ Math.imul(h2 ^ k, 2869860233); h3 = h4 ^ Math.imul(h3 ^ k, 951274213); h4 = h1 ^ Math.imul(h4 ^ k, 2716044179)

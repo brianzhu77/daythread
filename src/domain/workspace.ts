@@ -8,6 +8,7 @@ import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./pa
 import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
+import { acceptSavedBlocks, expandedWorkspace, settleSynced } from "./synced.ts";
 
 export class DomainError extends Error {}
 export function createEmptyWorkspace(timezone = "America/Vancouver"): Workspace {
@@ -473,6 +474,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const ids = new Set<string>();
       for (const n of all) { if (!n || typeof n.id !== "string" || !n.id || typeof n.type !== "string" || ids.has(n.id)) throw new DomainError("Duplicate editor block identity"); ids.add(n.id); }
       const renamed = claimLineIds(state, p, all);
+      acceptSavedBlocks(state, p, nodes, (message) => { throw new DomainError(message); });
       if (isTemplate(p)) { setDocument(p, templateRows(nodes)); return { message: "Template saved" }; }
       const before = flatNodes(pageNodes(p));
       const on = action.today ?? p.date ?? new Date().toISOString().slice(0, 10);
@@ -1071,10 +1073,13 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   if (command.action.type === "undo") {
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");
-    state = { ...structuredClone(previous.before), revision: input.revision, receipts: structuredClone(input.receipts) };
+    state = expandedWorkspace({ ...structuredClone(previous.before), revision: input.revision, receipts: structuredClone(input.receipts) });
     keepRowNumbers(input, state);
     result = { message: "Previous operation restored" };
-  } else result = execute(state, command.action, command.operationId);
+  } else {
+    result = execute(state, command.action, command.operationId);
+    settleSynced(state);
+  }
   state.revision = input.revision + 1;
   const receipt = { operationId: command.operationId, ...result, fingerprint };
   state.receipts = compactReceipts({ ...state.receipts, [command.operationId]: receipt });

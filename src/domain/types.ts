@@ -6,7 +6,7 @@ export type LocalDate = string;
 export interface Page {
   id: string;
   /** `template`: the day template (B70), one per workspace, copied into each new day page; never listed as a page. */
-  type: "daily" | "document" | "template" | "draft";
+  type: "daily" | "document" | "template" | "draft" | "synced";
   /** Day pages: their date; one page per date, id `day:<date>`. */
   date: LocalDate | null;
   title: string;
@@ -69,6 +69,8 @@ export interface Workspace {
   tasks: Task[];
   /** Tasks deleted with their last line (newest last, at most `tombstoneLimit`), so ⌘Z brings one back whole. */
   deletedTasks: Task[];
+  /** Synced blocks' lines, once each (synced.ts). Absent until there's one. */
+  synced?: import("./synced.ts").SyncedRecord[];
   receipts: Record<string, Receipt>;
   undo?: {
     operationId: string;
