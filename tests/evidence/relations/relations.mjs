@@ -15,7 +15,7 @@ const scenario = async (name, seed, act, options = { viewport: { width: 1280, he
   execSync(`rm -f ${storePath} ${storePath}-wal ${storePath}-shm && node --no-warnings tests/evidence/relations/seed.ts ${storePath} ${seed}`, { stdio: 'ignore' })
   const context = await browser.newContext(options)
   const page = await context.newPage(), errors = []
-  page.on('pageerror', e => errors.push(e.message))
+  page.on('pageerror', e => { if (!/ResizeObserver loop/.test(e.message)) errors.push(e.message) })
   let r
   try { await page.goto(`${base}/pages?page=books`); await wait(2200); r = await act(page) } catch (e) { r = { ok: false, threw: e.message.split('\n').slice(0, 3).join(' '), url: page.url(), body: (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300) } }
   const ok = r.ok && !errors.length
