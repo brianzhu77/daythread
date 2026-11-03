@@ -2028,6 +2028,9 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-list.is-drop-end { box-shadow: 0 2px 0 var(--blue); }
 .database-list-row .database-list-title { display: block; flex: 1; min-width: 0; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; }
 .database-list-title::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
+/* A long title runs on to more lines; its values stay on their one line, by the title's first (R3-14). */
+.database-list.wraps-name .database-list-row { align-items: flex-start; padding-block: 6px; }
+.database-list.wraps-name .database-list-row .database-list-title { white-space: normal; overflow-wrap: anywhere; }
 .database-list-title:focus-visible { outline: none; }
 .database-list-row:has(.database-list-title:focus-visible) { outline: 2px solid var(--blue); outline-offset: -2px; }
 .database-list-row .database-list-title.is-placeholder { color: var(--placeholder); }

@@ -2,7 +2,7 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
+import { viewBoardCalculation, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
@@ -663,4 +663,32 @@ test('a view keeps what it wraps, and it never touches another view or a row', (
 test('what can wrap', () => {
   assert.deepEqual(['text', 'url', 'email', 'phone', 'select', 'multiSelect', 'status', 'date', 'createdTime', 'editedTime'].filter(t => !canWrap(t as never)), [])
   assert.deepEqual(['number', 'checkbox', 'id'].filter(t => canWrap(t as never)), [])
+})
+
+// ---------- R3-24: calculations on a board
+
+test('a board keeps one calculation, and it stops when it no longer fits', () => {
+  const h = reading()
+  const viewId = h.db().views[0]!.id, first = () => h.db().views[0]!
+  assert.equal(viewBoardCalculation(h.db(), first()), null)
+  h.change({ kind: 'updateView', viewId, boardCalculation: { by: 'pages', kind: 'sum' } })
+  assert.deepEqual(viewBoardCalculation(h.db(), first()), { by: 'pages', kind: 'sum' })
+  h.change({ kind: 'updateView', viewId, name: 'Renamed' })
+  assert.deepEqual(first().boardCalculation, { by: 'pages', kind: 'sum' }, 'a rename keeps it')
+  h.change({ kind: 'updateProperty', propertyId: 'pages', type: 'text' })
+  assert.equal(viewBoardCalculation(h.db(), first()), null, 'Sum on text: back to the count')
+  h.change({ kind: 'updateProperty', propertyId: 'pages', type: 'number' })
+  assert.deepEqual(viewBoardCalculation(h.db(), first()), { by: 'pages', kind: 'sum' }, 'and back with the type')
+  h.change({ kind: 'updateView', viewId, boardCalculation: null })
+  assert.equal('boardCalculation' in first(), false)
+  assert.throws(() => h.change({ kind: 'updateView', viewId, boardCalculation: { by: 'gone', kind: 'sum' } }))
+  assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId, boardCalculation: { by: 'pages', kind: 'nonsense' } } } }).success, false)
+})
+test('its heads give the same numbers as a table foot over the same group', () => {
+  const h = reading()
+  const grouped = view({ layout: 'board', groupBy: 'kind' })
+  const groups = viewGroups(h.db(), grouped, h.rows(grouped))!.shown
+  const tabled = view({ groupBy: 'kind' })
+  const inTable = viewGroups(h.db(), tabled, h.rows(tabled))!.shown
+  assert.deepEqual(groups.map(g => columnCalc(h.db(), g.rows, 'pages', 'sum').value), inTable.map(g => columnCalc(h.db(), g.rows, 'pages', 'sum').value))
 })
