@@ -710,7 +710,7 @@ The Lead recommends **option 1**, so this is option 1's design, with the differe
 - **To-dos is a built-in source.** It's listed in `/` Database → "Show an existing one". It shows every task as a row,
   with fixed properties:
   - **Name** (the title);
-  - **Status** (Open / Done / Paused);
+  - **Status** (Open / Paused / Done / Cancelled);
   - **Planned** (a day);
   - **Start**;
   - **Deadline**;
@@ -718,7 +718,9 @@ The Lead recommends **option 1**, so this is option 1's design, with the differe
 - **Views work as on any database:** filters, sorts and groups, plus board and calendar, which a calendar of
   deadlines needs.
 - **Edits go through the task commands he already uses:**
-  - the checkbox ticks exactly as on a day page, including its notice;
+  - the checkbox ticks exactly as on a day page, including its notice; a cancelled to-do's stays disabled;
+  - Name changes the title and every line of it. A line holding a chip or a link keeps them: Name refuses there with
+    "Open its line to change it", and renaming to nothing keeps the words;
   - a date is set with the same picker;
   - **a to-do can't get extra properties.** Neither `+` nor `+ Add property` is shown, and there's no explanatory
     line.
@@ -726,8 +728,9 @@ The Lead recommends **option 1**, so this is option 1's design, with the differe
   A to-do has no body of its own, so there's no row page.
 - **+ New** in a To-dos view makes a task on **today's page, planned for today, where carried and planned to-dos already go** (Roadbuster
   e1e7bffd: with the other to-dos under the outermost heading above the first to-do, which is Morning Planning on his
-  template; under the first heading if there are no to-dos yet; at the top if there's no heading). The
-  row appears at once, and the notice says **"Added · Open"**, where Open goes to its line.
+  template; under the first heading if there are no to-dos yet; at the top if there's no heading). It asks for the
+  words first, since a blank to-do isn't a row (B69), and nothing is made without them. The
+  row then appears at once, and the notice says **"Added · Open"**, where Open goes to its line.
 - **Option 2** (custom properties on to-dos): the same, but `+` is shown, and extra properties appear on the to-do's row
   in the table. They're edited in the table or popover only, since there's still no row page.
 - **Option 3** (to-dos become rows): opening a to-do opens a row page, and its body exists. On day pages, the task line

@@ -255,9 +255,12 @@ values on rows deleted and undone in that build. Acceptable, and the backup befo
 
 ## 7. To-dos (Brian's choice; the Lead recommends option 1)
 
-- **Option 1 in this model:** a view can have `source: { kind: 'tasks' }` instead of a database. Its "rows" are tasks.
-  Its columns are fixed fields (title, status, start, deadline, planned day, source page). Edits go through the existing
-  task commands (`task-status`, start and deadline changes), so carry-over, ticks and the day draft are untouched. It
+- **Option 1 in this model, as built:** a block whose `pageId` is `source:tasks` shows To-dos, with its own view in its
+  `view` prop like any linked view. `withTodos` (`todos-source.ts`) adds a database and one row per task to the workspace
+  the layouts read, never to the stored one. Its columns are fixed fields (title, status, start, deadline, planned day,
+  source page). Edits go through task commands (`task-status`, `plan-task`, `not-today`), so carry-over, ticks and the day
+  draft are untouched. Two commands are new, as none existed: `rename-task` and `set-task-dates`. The `source` field below
+  wasn't needed. It
   can be a full page ("To-dos") or a linked view in any page, including a day page. About 1 day on top of the table
   view.
   **`+ New` in To-dos** is today's `add-task { pageId: today's day page, plannedOn: today }` (after `ensure-day`). It
