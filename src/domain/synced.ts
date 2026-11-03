@@ -22,6 +22,11 @@ const isBlock = (n: EditorNode) => n.type === syncedBlockType
 const isRow = (n: EditorNode) => n.type === 'task'
 const walk = (nodes: EditorNode[], visit: (n: EditorNode) => void) => { for (const n of nodes) { visit(n); if (n.children?.length) walk(n.children, visit) } }
 const separator = ':'
+/** A new line's id, the same in the browser's preview and on the server. Only the hash of the key: it has no separator in it. */
+function derivedId(text: string): string {
+  const hash = pageContentKey({ document: text }).split(separator).at(-1)!.padEnd(32, '0')
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-8${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`
+}
 /** A line's id in a place: its own at the original, so links to the lines he synced still work; elsewhere unique to that place. */
 const placeId = (lineId: string, blockId: string, original: boolean) => (original ? lineId : `${lineId}${separator}${blockId}`)
 const lineIdOf = (id: string, blockId: string) => (id.endsWith(`${separator}${blockId}`) ? id.slice(0, -(blockId.length + 1)) : id)
@@ -131,8 +136,7 @@ export function acceptSavedBlocks(state: Workspace, page: Page, nodes: EditorNod
       if (changed) {
         const mine = (n.children ?? []).map(function fresh(line: EditorNode): EditorNode {
           const { id, ...rest } = line
-          const hash = pageContentKey({ document: `${id}|${n.id}|${record.rev}` }).padEnd(32, '0')
-          return { ...rest, id: `${hash.slice(0, 8)}-${hash.slice(8, 12)}-8${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`, children: (line.children ?? []).map(fresh) }
+          return { ...rest, id: derivedId(`${id}|${n.id}|${record.rev}`), children: (line.children ?? []).map(fresh) }
         })
         list.splice(i + 1, 0, ...mine)
         i += mine.length
@@ -277,7 +281,8 @@ export function blockUpdates(editorNodes: EditorNode[], saved: string, own: bool
       walk(s.children ?? [], n => ids.add(n.id))
       walk(e.children ?? [], n => { if (!ids.has(n.id) && ids.has(`${n.id}${separator}${e.id}`)) rename[n.id] = `${n.id}${separator}${e.id}` })
       if (rev !== Number(e.props?.rev) || e.props?.key !== key || Object.keys(rename).length) out.push({ id: e.id, rev, key, lines: null, rename })
-    } else if (own) out.push({ id: e.id, rev, key: mine, lines: null, rename: {} })
+    // His own save, and he's typed since: it starts from what was saved, so what he's typed still reads as changed, and saves.
+    } else if (own) out.push({ id: e.id, rev, key, lines: null, rename: {} })
     else if (mine === e.props?.key) out.push({ id: e.id, rev, key, lines: s.children ?? [], rename: {} })
   })
   return out
