@@ -898,6 +898,9 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     case "set-timezone":
       state.timezone = validTimezone(action.timezone);
       return { message: "Time zone saved" };
+    case "set-week-start":
+      if (action.weekStart === 1) state.weekStart = 1; else delete state.weekStart;
+      return { message: action.weekStart === 1 ? "Weeks start on Monday" : "Weeks start on Sunday" };
     case "undo":
       throw new DomainError("Unreachable");
   }

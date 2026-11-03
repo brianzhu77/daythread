@@ -3,8 +3,8 @@
 // A row drags to another day at 1280, moving its date and keeping its time and length. Which month is showing is this tab's,
 // never a save, like which view is showing.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { calendarRows, databaseRows, movedDate, rowMatches, titleId, viewDateBy, viewRows, type Json, type View } from '../domain/database.ts'
-import type { LocalDate, Page } from '../domain/types'
+import { calendarRows, databaseRows, inView, movedDate, startOfWeek, titleId, viewDateBy, viewRows, type Json, type View } from '../domain/database.ts'
+import type { LocalDate, Page, WeekStart } from '../domain/types'
 import { blockActions, cellKey, DatabaseHeader, pendingCells, setOpenCell, shownRaw, useAddRow, useCommitCell, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
 import { addDays, fromIso, longLabel, todayIso } from './dates'
@@ -14,19 +14,19 @@ import { useWorkspace } from './use-day'
 
 /** Titles a day shows at 1280 (design §7.2) before "+2". */
 const perDay = 3
-const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 /** Where a block's calendar is, for this tab: BlockNote may draw a block again, which would otherwise send him back to this month. */
-const places = new Map<string, { month: string; chosen: LocalDate | null; undatedOpen: boolean }>()
+const places = new Map<string, { anchor: LocalDate; chosen: LocalDate | null; undatedOpen: boolean }>()
 
 const monthOf = (day: LocalDate) => day.slice(0, 7)
 function shiftMonth(month: string, by: number): string {
   const [y, m] = month.split('-').map(Number) as [number, number]
   return new Date(Date.UTC(y, m - 1 + by, 1)).toISOString().slice(0, 7)
 }
-/** The weeks a month's grid draws: whole weeks from Sunday, as the date picker's. */
-function monthDays(month: string): LocalDate[] {
+/** The weeks a month's grid draws: whole weeks, as the date picker's. */
+function monthDays(month: string, weekStart: WeekStart): LocalDate[] {
   const first = `${month}-01`
-  const start = addDays(first, -fromIso(first).getDay())
+  const start = startOfWeek(first, weekStart)
   const last = addDays(`${shiftMonth(month, 1)}-01`, -1)
   // Rounded first: a day with a clock change isn't 24 hours.
   const count = Math.ceil((Math.round((fromIso(last).getTime() - fromIso(start).getTime()) / 86_400_000) + 1) / 7) * 7
@@ -40,16 +40,20 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
   const undoKey = useUndoKey()
   const wide = useWide()
   const today = todayIso()
-  const context = useMemo(() => ({ today, pageDate }), [today, pageDate])
+  const weekStart = workspace.weekStart ?? 0
+  const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
   usePendingCells()
   const returned = useReturnedRow(rows)
   const property = viewDateBy(db.database, view)
 
   const placeKey = `${blockId}|${view.id}`
-  const [place, setPlaceState] = useState(() => places.get(placeKey) ?? { month: monthOf(pageDate ?? today), chosen: wide ? null as LocalDate | null : pageDate ?? today, undatedOpen: false })
+  const [place, setPlaceState] = useState(() => places.get(placeKey) ?? { anchor: pageDate ?? today, chosen: wide ? null as LocalDate | null : pageDate ?? today, undatedOpen: false })
   const setPlace = (next: Partial<typeof place>) => setPlaceState(now => { const merged = { ...now, ...next }; places.set(placeKey, merged); return merged })
-  const days = monthDays(place.month)
+  // The month or week showing is `anchor`'s.
+  const byWeek = view.calendarSpan === 'week'
+  const month = monthOf(place.anchor)
+  const days = byWeek ? Array.from({ length: 7 }, (_, i) => addDays(startOfWeek(place.anchor, weekStart), i)) : monthDays(month, weekStart)
   const { days: onDays, undated } = calendarRows(property, rows, days[0]!, days.at(-1)!, shownRaw)
   const [undatedLimit, setUndatedLimit] = useState(cap)
 
@@ -62,7 +66,7 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
   const moveTo = (row: Page, from: LocalDate | null, to: LocalDate) => {
     if (!property || from === to) return
     const value = movedDate(property, shownRaw(row, property.id), from, to)
-    const hidden = !rowMatches(db.database, { ...row, values: { ...row.values, [property.id]: value as unknown as Json } } as Page, view.filter, context)
+    const hidden = !inView(db.database, { ...row, values: { ...row.values, [property.id]: value as unknown as Json } } as Page, view, context)
     commit(db, row, property.id, value as unknown as Json, `Moved to ${longLabel(to)}${hidden ? " · hidden by this view's filter" : ''}`)
   }
 
@@ -116,14 +120,14 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
     const chip = target.closest<HTMLElement>('[data-chip]')
     if (chip && e.shiftKey) {
       const row = rows.find(r => r.id === chip.dataset.chip), from = chip.dataset.from
-      if (row && from) { e.preventDefault(); const to = addDays(from, step); refocus.current = { rowId: row.id, day: to }; moveTo(row, from, to); if (!days.includes(to)) setPlace({ month: monthOf(to) }) }
+      if (row && from) { e.preventDefault(); const to = addDays(from, step); refocus.current = { rowId: row.id, day: to }; moveTo(row, from, to); if (!days.includes(to)) setPlace({ anchor: to }) }
       return
     }
     const day = target.closest<HTMLElement>('[data-day]')?.dataset.day
     if (!day) return
     const next = addDays(day, step)
     e.preventDefault()
-    if (monthOf(next) !== place.month && !days.includes(next)) setPlace({ month: monthOf(next) })
+    if (!days.includes(next)) setPlace({ anchor: next })
     requestAnimationFrame(() => wrap.current?.querySelector<HTMLElement>(`[data-day="${next}"] .database-day-number`)?.focus())
   }
 
@@ -136,31 +140,38 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
     </div>
   }
   const chosenRows = place.chosen ? onDays.get(place.chosen) ?? [] : []
-  const showsChosen = Boolean(place.chosen) && (!wide || chosenRows.length > perDay)
-  const monthLabel = fromIso(`${place.month}-01`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  const thisMonth = monthOf(today)
+  const showsChosen = Boolean(place.chosen) && (!wide || (!byWeek && chosenRows.length > perDay))
+  const short = (d: LocalDate) => fromIso(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const periodLabel = byWeek
+    ? `${short(days[0]!)} – ${monthOf(days[0]!) === monthOf(days[6]!) ? Number(days[6]!.slice(8)) : short(days[6]!)}, ${days[6]!.slice(0, 4)}`
+    : fromIso(`${month}-01`).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const showsToday = byWeek ? days.includes(today) : month === monthOf(today)
+  const step = (by: number) => setPlace({ anchor: byWeek ? addDays(place.anchor, by * 7) : `${shiftMonth(month, by)}-01` })
+  const weekdays = weekStart === 1 ? [...weekdayNames.slice(1), weekdayNames[0]!] : weekdayNames
 
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addOn(place.chosen ?? today) }} />
     {!property && <p className="database-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'layout')}>Choose a date property</button></p>}
     <div className="database-calendar-head">
-      <span className="database-calendar-month">{monthLabel}</span>
-      {place.month !== thisMonth && <button type="button" className="database-calendar-today" onClick={() => setPlace({ month: thisMonth, chosen: today })}>Today</button>}
-      <button type="button" className="database-calendar-arrow" aria-label="Previous month" onClick={() => setPlace({ month: shiftMonth(place.month, -1) })}><ArrowLeftIcon /></button>
-      <button type="button" className="database-calendar-arrow" aria-label="Next month" onClick={() => setPlace({ month: shiftMonth(place.month, 1) })}><ArrowRightIcon /></button>
+      <span className="database-calendar-month">{periodLabel}</span>
+      {!showsToday && <button type="button" className="database-calendar-today" onClick={() => setPlace({ anchor: today, chosen: today })}>Today</button>}
+      <button type="button" className="database-calendar-arrow" aria-label={byWeek ? 'Previous week' : 'Previous month'} onClick={() => step(-1)}><ArrowLeftIcon /></button>
+      <button type="button" className="database-calendar-arrow" aria-label={byWeek ? 'Next week' : 'Next month'} onClick={() => step(1)}><ArrowRightIcon /></button>
     </div>
-    <div className={`database-calendar${drag ? ' is-dragging' : ''}`} role="grid" aria-label={monthLabel}>
+    <div className={`database-calendar${byWeek ? ' is-week' : ''}${drag ? ' is-dragging' : ''}`} role="grid" aria-label={periodLabel}>
       {weekdays.map(d => <div key={d} className="database-calendar-weekday" role="columnheader">{wide ? d : d[0]}</div>)}
       {days.map((day, i) => {
         const here = onDays.get(day) ?? []
-        const more = here.length - perDay
-        const classes = `database-day${monthOf(day) !== place.month ? ' is-other-month' : ''}${day === today ? ' is-today' : ''}${day === place.chosen ? ' is-chosen' : ''}${drag?.over === day ? ' is-drop' : ''}`
+        // A week has the room to show them all.
+        const limit = byWeek ? here.length : perDay
+        const more = here.length - limit
+        const classes = `database-day${!byWeek && monthOf(day) !== month ? ' is-other-month' : ''}${day === today ? ' is-today' : ''}${day === place.chosen ? ' is-chosen' : ''}${drag?.over === day ? ' is-drop' : ''}`
         return <div key={day} role="gridcell" data-day={day} className={classes}>
-          <button type="button" className="database-day-number" data-nav={day === (place.month === thisMonth ? today : `${place.month}-01`) ? '0:0' : undefined} tabIndex={i === 0 ? 0 : -1} aria-label={longLabel(day)}
+          <button type="button" className="database-day-number" data-nav={day === (showsToday ? today : days[0]) ? '0:0' : undefined} tabIndex={i === 0 ? 0 : -1} aria-label={longLabel(day)}
             onClick={() => setPlace({ chosen: day })}>{Number(day.slice(8))}</button>
           {wide
             ? <>
-                {here.slice(0, perDay).map(row => rowLine(row, day))}
+                {here.slice(0, limit).map(row => rowLine(row, day))}
                 {more > 0 && <button type="button" className="database-day-more" onClick={() => setPlace({ chosen: day })}>+{more}</button>}
                 <button type="button" className="database-day-add" aria-label={`New on ${longLabel(day)}`} onClick={() => addOn(day)}>+</button>
               </>

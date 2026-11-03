@@ -2057,8 +2057,10 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-day-list .database-day-title, .database-undated .database-day-title { display: block; width: 100%; min-height: 36px; padding: 6px 8px; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink); font: inherit; font-size: var(--text-row); line-height: 24px; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 @media (hover: hover) { .database-day-list .database-day-title:hover, .database-undated .database-day-title:hover { background: var(--fill-soft); } }
 .database-undated .database-undated-head { min-height: 32px; padding: 4px 8px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: var(--text-small); cursor: pointer; }
+.database-calendar.is-week .database-day { min-height: 200px; }
 @media (max-width: 899px) {
   .database-calendar { border: 0; }
+  .database-calendar.is-week .database-day { min-height: 44px; }
   .database-calendar-weekday { padding: 0; border: 0; text-align: center; }
   .database-day { align-items: center; justify-content: flex-start; min-height: 44px; padding: 2px 0; border: 0; }
   .database-day.is-other-month { background: none; }
@@ -2068,4 +2070,4 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
   .database-day-list .database-day-title, .database-undated .database-day-title { min-height: 44px; padding-block: 10px; }
   .database-undated .database-undated-head { min-height: 44px; }
 }
-
+.database-filter-or { color: var(--ink-3); font-size: var(--text-meta); }

@@ -502,7 +502,7 @@ Linked views come in R2, so in R1 (Bumblebee 120fdcd6):
 
 Every view type opens a row the same way (§5), and every view shows the filter line (§4.1).
 
-**Calendar: which date, and its weeks (R3-1).** It's asked when the view is made, with "+ New Date property" offered, and with one date property it doesn't ask. `⋯` → Layout has "Rows sit by" to change it. Weeks start on Sunday, as the date picker's. A row dragged from the second day of a range moves the range by how far it went, keeping its length and time. Which month is showing and which day is chosen are this tab's, with no save.
+**Calendar: which date, and its weeks (R3-1).** It's asked when the view is made, with "+ New Date property" offered, and with one date property it doesn't ask. `⋯` → Layout has "Show calendar by" to change it, and "Show as" Month or Week. A week shows every title on a day. **Weeks start on Sunday** in database views and the date pickers, unless he chooses "Week starts Monday" on the account line, which moves the calendar, the pickers, the filter's "this week" and group by week together (R3-20; Lead 39431a3e). It's saved with the workspace. The row menu's "Next week" stays as it is. A row dragged from the second day of a range moves the range by how far it went, keeping its length and time. Which month is showing and which day is chosen are this tab's, with no save.
 
 **Calendar: rows with no date (R3-1).** They stay in reach, in one quiet line under the month at both widths: **"No date · 3 ›"**. Tapping it opens the list in place, each row opening its page as usual. At 1280 a row in that list drags onto a day, which sets its date. With none, the line isn't there. `+ New` in that list isn't offered, since a calendar adds by day. A row whose date property is gone or empty is here, so nothing is silently missing.
 
@@ -528,7 +528,7 @@ opens a small sheet (390) or popover (1280).
   - checkbox: is checked, isn't;
   - relation: contains, is empty.
 - **Combining rules:** one line at the top switches between **all rules match** (the default) and **any rule
-  matches**. R1 ships "all" only, and the switch comes in R3 (§14). Nested groups wait in Later (§14): one person's databases rarely need them, and a nested filter is the hardest
+  matches**. It shows once there are two rules, and the line of rules reads "or" between them under any. A rule that can't be read (its property deleted, or no value yet) doesn't count either way. A `+ New` under any takes the first single value that shows it (§7.4), and otherwise the notice. Nested groups wait in Later (§14): one person's databases rarely need them, and a nested filter is the hardest
   thing to read back from a chip line, so they need a design of their own.
 - **"Only for me" vs "for everyone" doesn't exist.** A workspace is one person (Lead: Q5 drops).
 

@@ -453,3 +453,24 @@ test('a database block in a template is a linked view on each new page; nothing 
   assert.notEqual(a[0]!.id, b[0]!.id)
   assert.equal(isUntouchedCopy(template, a), true)
 })
+
+test('week start on Postgres: an older store gets the column on start, and it saves, loads and undoes', async () => {
+  const db = await PGlite.create()
+  try {
+    const sql = pgliteClient(db)
+    const old = new PostgresWorkspaceRepository(sql)
+    await old.workspaceIdFor(null)
+    await db.exec(`alter table daythread.workspaces drop column week_start`)
+    const repo = new PostgresWorkspaceRepository(sql)
+    let ws = await repo.load()
+    assert.equal(ws.weekStart, undefined)
+    const r = await repo.execute({ operationId: 'w1', expectedRevision: ws.revision, action: { type: 'set-week-start', weekStart: 1 } })
+    assert.equal(r.workspace.weekStart, 1)
+    ws = await new PostgresWorkspaceRepository(sql).load()
+    assert.equal(ws.weekStart, 1)
+    const undone = await repo.execute({ operationId: 'w2', expectedRevision: ws.revision, action: { type: 'undo', targetOperationId: 'w1' } })
+    assert.equal(undone.workspace.weekStart, undefined)
+    assert.equal((await new PostgresWorkspaceRepository(sql).load()).weekStart, undefined)
+  } finally { await db.close() }
+})
+
