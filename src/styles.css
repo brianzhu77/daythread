@@ -869,6 +869,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* Its record can't be read (states §8, B21-17): no lines, so this is what holds its place. */
 .continuous-editor .bn-block-content[data-content-type="syncedBlock"]:has(.synced-unavailable) { height: auto; }
 .synced-unavailable { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; color: var(--ink-2); font-size: var(--text-meta); }
+.synced-unavailable .app-link { font: inherit; }
+/* The phone's handle has a backing for whatever scrolls under it, and beside these lines that would cut the outline. */
+body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transparent; }
 /* Deeper levels step by the same 24px: the top-level group's 45px already includes the dot column. */
 .continuous-editor .bn-block-group .bn-block-group .bn-block-group { margin-left:24px; }
 /* B39 (Jazz; Lead: Notion's convention): every nested block starts at its parent's text, so a nested to-do's checkbox
@@ -905,6 +908,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
   background: radial-gradient(circle, transparent 1.5px, currentColor 1.8px, currentColor 2.7px, transparent 3.1px) 20px 50% / 6px 6px no-repeat;
 }
 .continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer:only-child > .bn-block > .bn-block-content[data-content-type="paragraph"] .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before { content: "Empty synced block"; position: absolute; color: var(--ink-3); pointer-events: none; }
+.continuous-editor .bn-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer:only-child > .bn-block > .bn-block-content[data-content-type="paragraph"]:has(.ProseMirror-trailingBreak:only-child)::after { content: none; }
 /* BlockNote's type-specific hints ignore focus; only the bullet being typed in shows one. */
 .continuous-editor .bn-editor .bn-block-content[data-content-type="bulletListItem"][data-is-empty-and-focused]:has(.ProseMirror-trailingBreak:only-child):after { content:"Write…"; }
 .continuous-editor [data-is-empty-and-focused] .editor-task-title:empty:before { content:attr(data-placeholder); color:var(--ink-3); pointer-events:none; }
