@@ -1,7 +1,8 @@
 // Relations and rollups as the layouts read them (design §6, R3-5, R3-7). Nothing here is stored. A relation's options become
 // its target's rows, so it reads, sorts and filters as a multi-select does; a rollup becomes a read-only column of the type it
 // works out to, with its value on each row, so its cell, sort and filter can't disagree. With neither, this is the workspace.
-import { cellValue, isDatabase, isEmptyValue, propertyOf, titleId, valueText, type CellValue, type Database, type DateValue, type Json, type Option, type Property, type Rollup, type RollupFunction } from './database.ts'
+import { cellValue, isDatabase, isEmptyValue, propertyOf, titleId, todosSourceId, valueText, type CellValue, type Database, type DateValue, type Json, type Option, type Property, type Rollup, type RollupFunction } from './database.ts'
+import { withTodos } from './todos-source.ts'
 import type { Page, Workspace } from './types.ts'
 
 const shows = (p: Property) => p.type === 'relation' || p.type === 'rollup'
@@ -83,10 +84,14 @@ export function withLinks(ws: Workspace): Workspace {
   }
   // First the relations of every database, as a rollup reads through them; then the rollups, from those.
   const linked = new Map<string, Database>()
+  const tasks = withTodos(ws)
+  let todoOptions: Option[] | undefined
   for (const p of ws.pages) {
     if (!isDatabase(p) || !p.database.properties.some(shows)) continue
     linked.set(p.id, { ...p.database, properties: p.database.properties.map(x => {
       if (x.type !== 'relation') return x
+      // To-dos: its rows are his tasks, so a deleted task drops out, and comes back with it (R3-23).
+      if (x.target === todosSourceId) { todoOptions ??= tasks.pages.filter(p => p.parentId === todosSourceId).map(r => ({ id: r.id, name: r.title })); return { ...x, options: todoOptions, targetTitle: 'To-dos' } }
       const target = byId.get(x.target ?? '')
       return { ...x, options: target && isDatabase(target) ? optionsFor(target) : [], targetTitle: target?.title || 'Untitled', ...(target?.trashedAt ? { targetTrashed: true as const } : {}) }
     }) })
@@ -109,7 +114,7 @@ export function withLinks(ws: Workspace): Workspace {
       const values: Record<string, Json> = { ...row.values }
       const database = finalById.get(row.parentId!)!.database!
       for (const r of rollups) {
-        const worked = r.rollup ? rollupOf(r.rollup, row, database, finalById) : undefined
+        const worked = r.rollup ? rollupOf(r.rollup, row, database, finalById, tasks) : undefined
         if (worked === undefined) delete values[r.id]; else values[r.id] = worked
       }
       return { ...row, values }
@@ -119,9 +124,10 @@ export function withLinks(ws: Workspace): Workspace {
   return next
 }
 
-function rollupOf(rollup: Rollup, row: Page, database: Database, pages: ReadonlyMap<string, Page>): Json | undefined {
+function rollupOf(rollup: Rollup, row: Page, database: Database, stored: ReadonlyMap<string, Page>, tasks: Workspace): Json | undefined {
   const relation = propertyOf(database, rollup.relation)
   if (relation?.type !== 'relation') return undefined
+  const pages = relation.target === todosSourceId ? new Map(tasks.pages.map(p => [p.id, p])) : stored
   const target = pages.get(relation.target ?? '')
   if (!isDatabase(target)) return undefined
   const known = new Set((relation.options ?? []).map(o => o.id))

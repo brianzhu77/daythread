@@ -104,6 +104,8 @@ export type CellValue = string | number | string[] | DateValue | boolean | null;
 
 /** The column id of a row's title, in views, sorts, filters and `set-values`. */
 export const titleId = "title";
+/** The `pageId` of a block showing To-dos, and a relation's target when it links tasks. No real page has it. */
+export const todosSourceId = "source:tasks";
 /** Where a row keeps its number, among its values: under no property, so changing a property's type never touches it. */
 const rowNumberKey = "@id";
 /** The types the app fills in: they can't be typed, pasted, or set by a filter's `+ New` (R3-9). */
@@ -844,11 +846,13 @@ function cleanRollup(input: Rollup | undefined): Rollup {
 }
 /** A relation's target is a live database. A rollup reads a relation of this database, and a property of its target, never another rollup: no loop can form. */
 function checkLinks(ws: Workspace, db: Database, property: Property): void {
-  if (property.type === "relation" && !isDatabase(ws.pages.find((p) => p.id === property.target))) throw new DatabaseError("That database isn't there");
+  if (property.type === "relation" && property.target !== todosSourceId && !isDatabase(ws.pages.find((p) => p.id === property.target))) throw new DatabaseError("That database isn't there");
   if (property.type !== "rollup") return;
   const { relation, property: read } = property.rollup!;
   const through = db.properties.find((p) => p.id === relation);
   if (!through || through.type !== "relation") throw new DatabaseError("A rollup reads a relation");
+  // To-dos' fixed columns, read through its own rows (relations.ts).
+  if (through.target === todosSourceId) return;
   const target = ws.pages.find((p) => p.id === through.target);
   if (!isDatabase(target)) throw new DatabaseError("That database isn't there");
   if (read === titleId) return;
@@ -1078,6 +1082,8 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         return `${old.name} no longer shows on the other side`;
       }
       if (old.mirror) throw new DatabaseError("Already shown there");
+      // To-dos can't have extra properties (design §11): one way only.
+      if (old.target === todosSourceId) throw new DatabaseError("To-dos can't show it");
       const target = ws.pages.find((p) => p.id === old.target);
       if (!isDatabase(target)) throw new DatabaseError("That database isn't there");
       if (target.database.properties.length >= limits.properties) throw new DatabaseError("Too many properties");

@@ -6,8 +6,9 @@ import { commandSchema } from '../src/domain/command-schema.ts'
 import { exportFiles } from '../src/domain/export.ts'
 import { listedPages } from '../src/domain/page-tree.ts'
 import { withLinks } from '../src/domain/relations.ts'
+import { todoRowId, todosSourceId } from '../src/domain/todos-source.ts'
 import type { Page } from '../src/domain/types.ts'
-import { harness } from './v2-helpers.ts'
+import { dayId, harness, todo, today } from './v2-helpers.ts'
 
 const at = '2026-10-22T18:00:00.000Z', later = '2026-10-23T18:00:00.000Z'
 function books() {
@@ -249,9 +250,37 @@ test('R3-22: a rollup groups a table by what it works out to, read-only, and mak
   assert.equal(newRowValues(database(), { ...database().views[0]!, layout: 'table', groupBy: 'sum' }, context, '65').values.sum, undefined)
 })
 
-test('the new changes pass the schema; To-dos is not a target', () => {
+test('R3-23: a relation to To-dos: one way, a task reads as its title, a deleted one drops out, a rollup reads its columns', () => {
+  const { h, change } = books()
+  h.day(today)
+  h.save(dayId(today), d => [...d, todo('r1', 'Book the flights'), todo('r2', 'Buy a dog bed')])
+  const flights = h.task('Book the flights').id, bed = h.task('Buy a dog bed').id
+  change('books', { kind: 'addProperty', property: { id: 'jobs', name: 'Jobs', type: 'relation', target: todosSourceId } })
+  assert.throws(() => change('books', { kind: 'setMirror', propertyId: 'jobs', mirror: { id: 'x', name: 'X' } }), /can't show it/)
+  change('books', { kind: 'addProperty', property: { id: 'jobCount', name: 'Count', type: 'rollup', rollup: { relation: 'jobs', property: 'status', fn: 'countAll' } } })
+  change('books', { kind: 'addProperty', property: { id: 'jobPlan', name: 'Plan', type: 'rollup', rollup: { relation: 'jobs', property: 'planned', fn: 'latest' } } })
+  set(h, 'dune', { jobs: [todoRowId(flights), todoRowId(bed)] })
+  assert.deepEqual(read(h, 'books', 'dune', 'jobs'), [todoRowId(flights), todoRowId(bed)])
+  assert.equal(db(h, 'books').database.properties.find(p => p.id === 'jobs')!.options!.find(o => o.id === todoRowId(flights))!.name, 'Book the flights')
+  assert.equal(read(h, 'books', 'dune', 'jobCount'), 2)
+  assert.deepEqual(read(h, 'books', 'dune', 'jobPlan'), { start: today })
+  // Nothing is written on a task.
+  assert.equal(h.ws.tasks.find(t => t.id === flights)!.version, 1)
+  // A deleted task drops out, and the stored link stays for a restore.
+  const saved = h.page(dayId(today)).document
+  h.save(dayId(today), d => d.filter(n => n.id !== 'r2'))
+  assert.deepEqual(read(h, 'books', 'dune', 'jobs'), [todoRowId(flights)])
+  assert.equal(read(h, 'books', 'dune', 'jobCount'), 1)
+  h.save(dayId(today), () => JSON.parse(saved))
+  assert.deepEqual(read(h, 'books', 'dune', 'jobs'), [todoRowId(flights), todoRowId(bed)])
+  // The export reads titles, not ids, and To-dos stays out of Pages.
+  assert.match(exportFiles(h.ws, new Date(at)).find(f => f.path.endsWith('/pages/Dune.md'))!.text, /Book the flights/)
+  assert.ok(!listedPages(h.ws).some(p => p.id === todosSourceId))
+})
+
+test('the new changes pass the schema; a target must exist', () => {
   const { change } = books()
-  assert.throws(() => change('books', { kind: 'addProperty', property: { id: 'x', name: 'X', type: 'relation', target: 'source:tasks' } }), /isn't there/)
+  assert.throws(() => change('books', { kind: 'addProperty', property: { id: 'x', name: 'X', type: 'relation', target: 'nowhere' } }), /isn't there/)
   const changes: DatabaseChange[] = [
     { kind: 'addProperty', property: { id: 'r', name: 'R', type: 'relation', target: 'books' } },
     { kind: 'addProperty', property: { id: 'u', name: 'U', type: 'rollup', rollup: { relation: 'r', property: 'title', fn: 'countAll' } } },

@@ -1,7 +1,7 @@
 // To-dos as a source (design §11, model §7): a built-in database whose rows are his tasks. Nothing here is stored: the
 // layouts read a workspace with this database added (`withTodos`, only ever handed to them, so Pages, search and the
 // export never see it), and an edit becomes the task command the day page uses (`todoChange`).
-import { inView, newRowValues, titleId, type Database, type DateValue, type Json, type Property, type View, type ViewContext } from './database.ts'
+import { inView, newRowValues, titleId, todosSourceId, type Database, type DateValue, type Json, type Property, type View, type ViewContext } from './database.ts'
 import type { LineTarget } from './page-refs.ts'
 import type { Action, LocalDate, Page, Task, Workspace } from './types.ts'
 import { withLinks } from './relations.ts'
@@ -9,8 +9,8 @@ import { canRenameTask, isBlankTask, plannedOn, taskRows } from './workspace.ts'
 
 export { canRenameTask }
 
-/** The `pageId` of a block that shows To-dos. No real page has it; an older build draws such a block as a card and keeps it. */
-export const todosSourceId = 'source:tasks'
+// An older build draws a block with this `pageId` as a card and keeps it.
+export { todosSourceId }
 export const todosTitle = 'To-dos'
 const rowPrefix = 'todo:'
 export const todoRowId = (taskId: string) => `${rowPrefix}${taskId}`

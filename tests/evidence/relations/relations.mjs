@@ -122,6 +122,24 @@ await scenario('A linked view of a database with a relation reads it the same', 
   r.row = (await page.locator('.database-block .database-row[data-row="dune"]').innerText()).replace(/\s+/g, ' ')
   return { ...r, ok: /Herbert/.test(r.row) && /Austen/.test(r.row) && /106/.test(r.row) }
 })
+await scenario('R3-23: a relation to To-dos: pick a task, its title opens its line, a rollup counts, no Show on, no New row', 'todos', async page => {
+  const r = {}
+  await cell(page, 'dune', 0).click(); await wait(400)
+  r.newRow = await page.locator('.property-create').count()
+  await page.locator('.property-search input').fill('flights'); await wait(150); await page.keyboard.press('Enter'); await wait(200); await page.keyboard.press('Escape'); await wait(1800)
+  const task = store().tasks.find(t => t.title === 'Book the flights')
+  r.stored = pageOf('dune').values?.jobs; r.version = task.version
+  r.count = (await cell(page, 'dune', 1).innerText()).trim()
+  r.shown = (await cell(page, 'dune', 0).innerText()).replace(/\s+/g, ' ').trim()
+  await page.locator('.database-more-button').first().click(); await wait(200)
+  await menu(page).getByRole('menuitem', { name: 'Properties' }).click(); await wait(200)
+  await menu(page).locator('.database-property-name', { hasText: 'Jobs' }).click(); await wait(300)
+  r.showOn = await menu(page).getByText(/^Show on/).count(); r.oneWay = await menu(page).getByText(/One way/).count()
+  await page.keyboard.press('Escape'); await wait(300)
+  await cell(page, 'dune', 0).locator('a', { hasText: 'Book the flights' }).click(); await wait(2200)
+  r.url = page.url(); r.line = await page.locator('.bn-inline-content', { hasText: 'Book the flights' }).first().isVisible()
+  return { ...r, ok: r.newRow === 0 && r.stored?.join() === `todo:${task.id}` && r.count === '1' && r.shown === 'Book the flights' && r.showOn === 0 && r.oneWay === 1 && /\/day\/|page=day/.test(r.url) && r.line }
+})
 await scenario('at 390: a relation cell opens its sheet and a pick links it', 'linked', async page => {
   const r = { overflow: await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) }
   await page.locator('.database-row[data-row="emma"] .database-td.is-relation').click(); await wait(600)
