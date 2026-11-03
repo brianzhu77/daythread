@@ -105,9 +105,14 @@ for (const property of [
   { id: 'made', name: 'Made', type: 'createdTime' },
   { id: 'seen', name: 'Changed', type: 'editedTime' },
   { id: 'number-id', name: 'No.', type: 'id' },
+  { id: 'related', name: 'Related', type: 'relation', target: databaseId },
+  { id: 'rolled', name: 'Rolled', type: 'rollup', rollup: { relation: 'related', property: 'number', fn: 'sum' } },
 ] as const) ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'addProperty', property: property as never } })
 ws = await run({ type: 'add-row', databaseId, pageId: crypto.randomUUID(), title: 'Fixture row', values: { text: 'A note', number: 412, select: 'novel', multi: ['sf'], date: { start: SCRATCH }, done: true, url: 'https://example.com/fixture', email: 'fixture@example.com', phone: '+1 415 555 0100' }, at: new Date().toISOString() })
-ws = await run({ type: 'add-row', databaseId, pageId: crypto.randomUUID(), title: 'Fixture row, unticked', values: {}, at: new Date().toISOString() })
+const untickedRow = crypto.randomUUID()
+ws = await run({ type: 'add-row', databaseId, pageId: untickedRow, title: 'Fixture row, unticked', values: {}, at: new Date().toISOString() })
+// A link to the row above, so both a relation's title and a rollup's number are drawn.
+ws = await run({ type: 'set-values', pageId: untickedRow, values: { related: [ws.pages.find(p => p.parentId === databaseId && p.title === 'Fixture row')!.id] }, expected: {}, at: new Date().toISOString() })
 // Every kind of foot cell the gate measures: a count on Name, a number, a checkbox.
 ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'updateView', viewId: ws.pages.find(p => p.id === databaseId)!.database!.views[0]!.id, calculations: { title: 'countAll', number: 'sum', done: 'percentChecked' } } })
 // One wrapped column, on a value that fits a line: a wrapped table's rows and columns must still sit where they did.

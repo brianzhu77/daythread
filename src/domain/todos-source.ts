@@ -1,15 +1,16 @@
 // To-dos as a source (design §11, model §7): a built-in database whose rows are his tasks. Nothing here is stored: the
 // layouts read a workspace with this database added (`withTodos`, only ever handed to them, so Pages, search and the
 // export never see it), and an edit becomes the task command the day page uses (`todoChange`).
-import { inView, newRowValues, titleId, type Database, type DateValue, type Json, type Property, type View, type ViewContext } from './database.ts'
+import { inView, newRowValues, titleId, todosSourceId, type Database, type DateValue, type Json, type Property, type View, type ViewContext } from './database.ts'
 import type { LineTarget } from './page-refs.ts'
 import type { Action, LocalDate, Page, Task, Workspace } from './types.ts'
+import { withLinks } from './relations.ts'
 import { canRenameTask, isBlankTask, plannedOn, taskRows } from './workspace.ts'
 
 export { canRenameTask }
 
-/** The `pageId` of a block that shows To-dos. No real page has it; an older build draws such a block as a card and keeps it. */
-export const todosSourceId = 'source:tasks'
+// An older build draws a block with this `pageId` as a card and keeps it.
+export { todosSourceId }
 export const todosTitle = 'To-dos'
 const rowPrefix = 'todo:'
 export const todoRowId = (taskId: string) => `${rowPrefix}${taskId}`
@@ -72,7 +73,9 @@ export function withTodos(ws: Workspace): Workspace {
   return next
 }
 /** A block's database, To-dos included. */
-export const databaseSource = (ws: Workspace, pageId: string): Page | undefined => (pageId === todosSourceId ? withTodos(ws) : ws).pages.find(p => p.id === pageId)
+/** The workspace a block of this database reads: relations and rollups worked out (relations.ts), To-dos added where it's the source. */
+export const readingWorkspace = (ws: Workspace, pageId: string | undefined): Workspace => (pageId === todosSourceId ? withTodos(withLinks(ws)) : withLinks(ws))
+export const databaseSource = (ws: Workspace, pageId: string): Page | undefined => readingWorkspace(ws, pageId).pages.find(p => p.id === pageId)
 
 /** Where opening a to-do goes: its line, or null when no line of it is left. */
 export function todoLine(ws: Workspace, taskId: string): LineTarget | null {
