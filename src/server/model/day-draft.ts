@@ -66,7 +66,9 @@ export function buildDayDraftRequest(ws: Workspace, page: Page): DayDraftRequest
     const id = `P${blocks.size + 1}`; blocks.set(id, n); return [`${id} ${describe(n, day)}`]
   })
   const yesterday = previousDayPage(ws, day)
-  const yest = yesterday ? flatNodes(pageNodes(yesterday)).filter(n => n.type !== 'divider' && inlineText(n.content).trim()).map(n => {
+  // A synced block already on today's page isn't sent again from yesterday's: one note on every day is one note (states §7).
+  const seenLines = new Set((yesterday ? flatNodes(pageNodes(yesterday)) : []).filter(n => isSyncedBlock(n) && shownBlocks.has(n.props?.syncId)).flatMap(n => flatNodes(n.children ?? []).map(l => l.id)))
+  const yest = yesterday ? flatNodes(pageNodes(yesterday)).filter(n => n.type !== 'divider' && !seenLines.has(n.id) && inlineText(n.content).trim()).map(n => {
     const id = `L${lines.size + 1}`; lines.set(id, n)
     const t = n.type === 'task' ? ws.tasks.find(x => x.id === n.props?.taskId) : undefined
     return `${id} ${describe(n, yesterday.date)}${t ? ` (to-do, ${t.status})` : ''}`

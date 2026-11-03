@@ -32,7 +32,7 @@ r.record = JSON.parse(s2.synced.find(x => x.id === 'standing').lines)[0].content
 await page.goto(`${base}/day/${days[0]}`); await wait(2500)
 r.otherDay = (await texts()).some(t => t.includes('standing note #standing edited') || (t.includes('standing note') && t.includes('edited')))
 // Search finds it once, under the original.
-await page.keyboard.press('Meta+k'); await wait(400); await page.keyboard.type('standing note'); await wait(800)
+await page.locator('button, a', { hasText: 'Search' }).first().click(); await wait(500); await page.keyboard.type('standing note'); await wait(900)
 r.search = (await page.locator('.search-row-text').allInnerTexts()).map(t => t.replace(/\s+/g, ' ')).filter(t => /standing note/.test(t))
 await page.keyboard.press('Escape'); await wait(200)
 // A tag counts once.

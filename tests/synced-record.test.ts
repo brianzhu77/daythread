@@ -407,6 +407,8 @@ test('once: Tags and Search count a block once, under the original or its earlie
   assert.equal(buildSearchIndex(h.ws).lines.filter(l => l.text.includes('A note')).length, 1)
   const request = buildDayDraftRequest(h.ws, h.page(dayId(today)))
   assert.equal(JSON.stringify(request.messages).match(/A note/g)!.length, 1, 'once, though shown twice on the day')
+  // And once when yesterday showed it too.
+  assert.equal(JSON.stringify(buildDayDraftRequest(h.ws, h.page(dayId(tomorrow))).messages).match(/A note/g)!.length, 1)
   assert.ok(![...request.blocks.values()].some(n => n.type === syncedBlockType))
 })
 
