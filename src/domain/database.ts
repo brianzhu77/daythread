@@ -46,6 +46,11 @@ export interface Sort { by: string; direction: "asc" | "desc" }
 export type GroupDateBy = "day" | "week" | "month";
 export const viewLayouts = ["table", "board", "list", "gallery", "calendar"] as const;
 export type ViewLayout = (typeof viewLayouts)[number];
+/** Values a new row takes from a template: not its number, which is its own. */
+export function templateValues(template: Pick<Page, "values">): NonNullable<Page["values"]> {
+  const { [rowNumberKey]: _number, ...values } = template.values ?? {};
+  return values;
+}
 export const calcKinds = ["countAll", "countValues", "countUnique", "countEmpty", "countNotEmpty", "percentEmpty", "percentNotEmpty", "sum", "average", "median", "min", "max", "range", "earliest", "latest", "dateRange", "checked", "unchecked", "percentChecked", "percentUnchecked", "countPerGroup", "percentPerGroup"] as const;
 export type CalcKind = (typeof calcKinds)[number];
 export interface View {
@@ -59,6 +64,8 @@ export interface View {
   filter: Condition[];
   /** "Any rule matches" (design §7.3, R3-4). */
   filterAny?: true;
+  /** What `+ New` starts from in this view, over the database's own (R3-12). */
+  defaultTemplate?: string;
   /** A table's foot: what each column adds up to, by column id (design §4.1a, R3-8). */
   calculations?: Record<string, CalcKind>;
   /** Table and list: their groups. Board: what makes its columns. Ignored while its property is deleted or can't group (design §13). */
@@ -81,6 +88,8 @@ export interface Database {
   views: View[];
   /** To-dos: its properties and rows come from his tasks, so none can be added, changed or reordered here. Never stored. */
   fixed?: true;
+  /** What `+ New` starts from in every view without its own (R3-12). */
+  defaultTemplate?: string;
   /** The next row number, once an ID property has been made. It only goes up, past a delete or an undone add (R3-9). */
   nextRowNumber?: number;
 }
@@ -665,7 +674,9 @@ export type DatabaseChange =
   | { kind: "removeProperty"; propertyId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; filterAny?: boolean; calculations?: Record<string, CalcKind> }
+  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; filterAny?: boolean; calculations?: Record<string, CalcKind>; /** null: none of its own */ defaultTemplate?: string | null }
+  /** null: none */
+  | { kind: "setDefaultTemplate"; templateId: string | null }
   | { kind: "removeView"; viewId: string }
   | { kind: "moveView"; viewId: string; beforeId: string | null };
 /** One row's edit: values by column id (`title` for the title), null clears; `expected`: those columns as the edit saw them. */
@@ -864,7 +875,7 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
 function cleanView(db: Database, input: View): View {
   if (!input) throw new DatabaseError("Unknown view type");
   const layout = cleanLayout(input.layout);
-  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...cleanGroup(db, input, layout, input) };
+  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.defaultTemplate ? { defaultTemplate: input.defaultTemplate } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...cleanGroup(db, input, layout, input) };
 }
 function move<T extends { id: string }>(list: T[], id: string, beforeId: string | null): T[] {
   const item = list.find((x) => x.id === id);
@@ -951,7 +962,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     }
     case "updateView": {
       const old = view(change.viewId);
-      const { filterAny: _filterAny, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, ...rest } = old;
+      const { filterAny: _filterAny, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, ...rest } = old;
       const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
       const group = cleanGroup(db, {
         groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
@@ -969,11 +980,16 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         ...(change.sort !== undefined ? { sort: cleanSort(db, change.sort, old.sort) } : {}),
         ...(change.filter !== undefined ? { filter: cleanFilter(db, change.filter, old.filter) } : {}),
         ...((change.filterAny ?? old.filterAny) ? { filterAny: true as const } : {}),
+        ...(() => { const template = change.defaultTemplate === undefined ? old.defaultTemplate : change.defaultTemplate; return template ? { defaultTemplate: template } : {}; })(),
         ...(() => { const calculations = change.calculations !== undefined ? cleanCalculations(db, change.calculations) : old.calculations; return calculations && Object.keys(calculations).length ? { calculations } : {}; })(),
         ...group,
       };
       db.views[db.views.indexOf(old)] = next;
       return "View saved";
+    }
+    case "setDefaultTemplate": {
+      if (change.templateId) db.defaultTemplate = checkId(change.templateId); else delete db.defaultTemplate;
+      return change.templateId ? "Default for all views" : "No default";
     }
     case "removeView": {
       const old = view(change.viewId);

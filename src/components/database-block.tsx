@@ -5,14 +5,15 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
-import { cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnlyType, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnlyType, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
-import { ChevronRightIcon } from './icons'
+import { ChevronDownIcon, ChevronRightIcon } from './icons'
 import { holdKeyboard } from './keyboard'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide } from './property-editors'
 import { calcText, emailHref, phoneHref, urlHref } from './property-values'
+import { defaultRowTemplate } from '../domain/day-template'
 import { useTaskTick, useWorkspace } from './use-day'
 import { announceSave } from './draft-slots'
 import { taskRows } from '../domain/workspace'
@@ -558,12 +559,12 @@ function useAddTodo() {
  * do. On the phone it opens as its page with the caret in its title; at 1280 its Name opens to be typed, once it's drawn.
  */
 export function useAddRow(db: Page & { database: Database }, view: View, context: ViewContext, blockId: string, reveal: (rowId: string, group: string | undefined) => void) {
-  const { run } = useWorkspace()
+  const { run, latest } = useWorkspace()
   const navigate = useNavigate()
   const openRow = useOpenRow()
   const wide = useWide()
-  /** `values`: what its place says, over what the view's filter asks: a calendar day's date. */
-  return (group?: string, values?: Record<string, Json>) => {
+  /** `values`: what its place says, over what the view's filter asks: a calendar day's date. `template`: one picked, or null for an empty row; else the default. */
+  return (group?: string, values?: Record<string, Json>, template?: string | null) => {
     // Raise the keyboard inside this tap, for the row's page.
     if (!wide) holdKeyboard()
     // A to-do needs its words first: a blank one isn't a row, and shouldn't exist (B69).
@@ -577,8 +578,11 @@ export function useAddRow(db: Page & { database: Database }, view: View, context
       Object.assign(prefill.values, values)
       prefill.visible = inView(db.database, newRowProbe(db.database, prefill.title, prefill.values), view, context)
     }
+    const ws = latest()
+    const from = template === null || !ws ? undefined : template ? ws.pages.find(p => p.id === template) : defaultRowTemplate(ws, db, view)
+    if (from) prefill.visible = inView(db.database, newRowProbe(db.database, prefill.title || from.title, { ...templateValues(from), ...prefill.values }), view, context)
     const pageId = newId()
-    void run({ type: 'add-row', databaseId: db.id, pageId, title: prefill.title, values: prefill.values, at: new Date().toISOString() },
+    void run({ type: 'add-row', databaseId: db.id, pageId, title: prefill.title, values: prefill.values, ...(from ? { template: from.id } : {}), at: new Date().toISOString() },
       r => prefill.visible ? null : { text: "Added · hidden by this view's filter", extra: { label: 'Show', run: () => void navigate({ to: '/pages', search: { page: r.entityId ?? pageId } }) } })
       .then(r => {
         if (!r) return
@@ -586,6 +590,13 @@ export function useAddRow(db: Page & { database: Database }, view: View, context
         if (prefill.visible) reveal(pageId, group)
       })
   }
+}
+/** `+ New`, and its `⌄` for the database's templates (R3-12). To-dos are made from words, so they have none. */
+export function NewRow({ db, blockId, addRow, group, className = 'database-new' }: { db: Page & { database: Database }; blockId: string; addRow: ReturnType<typeof useAddRow>; group?: string; className?: string }) {
+  return <>
+    <button type="button" className={className} onClick={() => addRow(group)}>+ New</button>
+    {!db.database.fixed && <button type="button" className="database-new-more" aria-label="New from a template" aria-haspopup="menu" onClick={() => openDatabaseMenu(blockId, db.id, 'templates', template => addRow(group, undefined, template))}><ChevronDownIcon /></button>}
+  </>
 }
 /** ⌘Z in a view: the last change, where the workspace's one Undo slot still holds it (design §10). True when it took the key. */
 export function useUndoKey() {
@@ -949,7 +960,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
               {!isFolded && <tr className={`database-group-foot${drag && drag.before === null && drag.group === group.key ? ' is-drop-end' : ''}`} data-group={group.key}><td colSpan={columns.length + 2}>
                 <div className="database-group-inner">
                   {more && <button type="button" className="database-more" onClick={() => showMore(group.key)}>Show 25 more</button>}
-                  <button type="button" className="database-new" onClick={() => addRow(group.key)}>+ New</button>
+                  <span className="database-new-row"><NewRow db={db} blockId={blockId} addRow={addRow} group={group.key} /></span>
                 </div>
               </td></tr>}
             </Fragment>
@@ -967,7 +978,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     </div>}
     {groups && <HiddenGroups groups={groups} changeView={changeView} />}
     {!groups && rows.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
-    {!groups && <button type="button" className="database-new" onClick={() => addRow()}>+ New</button>}
+    {!groups && <NewRow db={db} blockId={blockId} addRow={addRow} />}
   </div>
 }
 

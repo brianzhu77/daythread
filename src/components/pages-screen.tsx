@@ -15,7 +15,7 @@ import { NewPageMenu } from './new-page-menu'
 import { databaseOfRow, isDatabase } from '../domain/database'
 import { RowMenu } from './row-menu'
 import { flushEditor } from './editor-flush'
-import { dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, templates, templateTarget, topLevelTarget } from '../domain/day-template'
+import { dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, rowTemplateDatabaseId, templates, templateTarget, topLevelTarget } from '../domain/day-template'
 
 /** Creates an untitled top-level page, as the sidebar's + does; resolves to its id, or null if the save failed. */
 export function useCreatePage() {
@@ -189,6 +189,9 @@ function TemplatesScreen({ workspace, today, onOpen }: { workspace: Workspace; t
 function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: { page: Page; workspace: Workspace; today: string; autoFocusTitle: boolean; onDeleted: () => void }) {
   const { run } = useWorkspace()
   const target = templateTarget(page)
+  // A row template (R3-12) belongs to its database: its way back goes there, and it has the row's properties, not a target.
+  const ownerId = rowTemplateDatabaseId(page), owner = ownerId ? workspace.pages.find(p => p.id === ownerId) : undefined
+  const navigate = useNavigate()
   // "Pages in…": documents, as Move to… offers them, plus the current target if it's a day or in the trash.
   const documents = listedPages(workspace).filter(p => p.type === 'document')
   const current = target && ![dayPagesTarget, topLevelTarget, daySubpagesTarget].includes(target) ? workspace.pages.find(p => p.id === target) : undefined
@@ -205,19 +208,25 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
   const remove = async () => {
     // His latest words go first, as on a document page's Delete: a save that fails stops the delete (Ratchet).
     if (!(await flushEditor(page.id))) return
-    if (await run({ type: 'delete-template', pageId: page.id }, r => ({ text: r.message, undoOperationId: r.operationId }))) onDeleted()
+    if (await run({ type: 'delete-template', pageId: page.id }, r => ({ text: r.message, undoOperationId: r.operationId }))) {
+      if (owner) void navigate({ to: '/pages', search: { page: owner.id } }); else onDeleted()
+    }
   }
   return (
     <div className="doc-screen template-screen">
       {/* The way back to the list, set like a document page's "Pages" crumb: the Home Screen app has no Back button. */}
       <div className="crumbs">
-        <nav className="crumbs-path folded" aria-label="Page location"><PageLink className="crumb" href="/pages?view=templates">Templates</PageLink></nav>
+        <nav className="crumbs-path folded" aria-label="Page location">
+          {owner
+            ? <><PageLink className="crumb" href={`/pages?page=${encodeURIComponent(owner.id)}`}>{displayPageTitle(owner)}</PageLink><span className="crumb"> › Template</span></>
+            : <PageLink className="crumb" href="/pages?view=templates">Templates</PageLink>}
+        </nav>
         {/* Delete sits in the ⋯ where a document page has it (Jazz dbb8b038). */}
         <RowMenu label="Template actions" triggerClass="page-more" groups={[{ items: [{ label: 'Delete', danger: true, onSelect: () => void remove() }] }]} />
       </div>
       <div className="page-head">
         <PageTitleField key={page.id} page={page} autoFocus={autoFocusTitle} />
-        <p className="template-note">
+        {!owner && <p className="template-note">
           <label>Default for:{' '}
             <select className="template-target" value={target ?? ''} onChange={e => setTarget(e.target.value)}>
               <option value="">None</option>
@@ -231,8 +240,9 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
               )}
             </select>
           </label>
-        </p>
+        </p>}
       </div>
+      {isDatabase(owner) && <RowProperties key={page.id} workspace={workspace} row={page} db={owner} />}
       <ContinuousPage page={page} workspace={workspace} />
     </div>
   )
