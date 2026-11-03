@@ -304,6 +304,19 @@ const browser = await chromium.launch()
 const results = [], seen = new Map()
 for (const [width, height] of [[1280, 900], [390, 844]]) {
   seen.set(width, new Set())
+  // The account line's selects draw their words at full width: a select holding its own text clipped them (Lead b6ca77b3).
+  {
+    const page = await browser.newPage({ viewport: { width, height } })
+    await page.goto(`${base}/pages`, { waitUntil: 'networkidle' }); await page.waitForTimeout(800)
+    const selects = await page.evaluate(() => [...document.querySelectorAll('.account-row select')].filter(select => select.getClientRects().length).map(select => {
+      const clip = select.closest('.account-row').querySelector(':scope > p').getBoundingClientRect(), words = select.closest('.account-select')?.querySelector('.account-select-text'), box = words?.getBoundingClientRect()
+      const range = document.createRange(); if (words) range.selectNodeContents(words)
+      return { label: select.getAttribute('aria-label'), text: words?.textContent ?? '', over: !box ? null : Math.max(range.getBoundingClientRect().right - box.right, box.right - clip.right), full: Boolean(box) && select.getBoundingClientRect().width >= box.width - 0.5 }
+    }))
+    if (!selects.length) results.push({ at: `${width}`, check: 'account line selects: not on /pages', ok: 'missing', detail: 'nothing to measure' })
+    for (const r of selects) results.push({ at: `${width} /pages`, check: `account line "${r.label}" shows all its words: "${r.text}"`, ok: r.over !== null && r.over <= 0.5 && r.full, detail: r.over === null ? 'a bare select, which clips' : `${fmt(r.over)}px past its box` })
+    await page.close()
+  }
   for (const path of paths) {
     const page = await browser.newPage({ viewport: { width, height } })
     await page.goto(`${base}${path}`, { waitUntil: 'networkidle' }); await page.waitForTimeout(1000)

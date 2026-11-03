@@ -1456,7 +1456,12 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .account-text { white-space: normal; }
 /* An address has no spaces: let a long one break anywhere rather than run out of the sidebar (Ratchet fa0252c0). */
 .account-email { overflow-wrap: anywhere; }
-.account-zone { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; max-width: 11em; text-overflow: ellipsis; }
+/* The words are drawn at their own width and the select lies over them, unseen: a select sizes itself to its longest option, so a long list of zones would clip or stretch it. */
+.account-select { position: relative; display: inline-block; max-width: 100%; }
+.account-select:focus-within { outline: 2px solid var(--blue); outline-offset: 1px; border-radius: 2px; }
+.account-select-text { display: inline-flex; align-items: center; gap: 2px; }
+.account-select-text svg { flex: none; width: 12px; height: 12px; }
+.account-zone { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font: inherit; cursor: pointer; }
 .account-delete { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .account-delete input { height: 36px; padding: 0 8px; border: 1px solid var(--line, #ddd); border-radius: 6px; font: inherit; background: var(--bg-doc, #fff); color: var(--ink); }
 .account-delete .link.danger { color: var(--red); }
