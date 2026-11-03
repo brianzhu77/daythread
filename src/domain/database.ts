@@ -1,9 +1,10 @@
 // Databases (docs/design/databases-model.md): a database is a page with `database` (its properties and views); a row
 // is a child page with `values`. Values are read through their property, never trusted as stored, so a schema change
 // rewrites only the database page. Pure: the domain's commands and the browser's views share it.
+import { formulaProblem } from "./formula.ts";
 import type { LocalDate, Page, WeekStart, Workspace } from "./types.ts";
 
-export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url", "email", "phone", "createdTime", "editedTime", "id", "relation", "rollup"] as const;
+export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url", "email", "phone", "createdTime", "editedTime", "id", "relation", "rollup", "formula"] as const;
 export type PropertyType = (typeof propertyTypes)[number];
 export type NumberFormat = "plain" | "comma" | "percent" | "currency";
 export type StatusGroup = "todo" | "active" | "done";
@@ -33,6 +34,10 @@ export interface Property {
   limit?: 1;
   /** rollup: what it reads through which relation. Worked out when read (relations.ts), never stored. */
   rollup?: Rollup;
+  /** formula: its text, with properties by id. Stays when read: a column reads as the type it works out to, and this says it's a formula (formula.ts). */
+  formula?: string;
+  /** formula, as read, never stored: why the whole column reads Error. */
+  formulaError?: string;
   /** relation, as read (relations.ts), never stored: its target's name, and whether that's in Trash. */
   targetTitle?: string;
   targetTrashed?: true;
@@ -139,7 +144,7 @@ function localWall(iso: string): string {
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`;
 }
 export const databaseBlockType = "database";
-export const limits = { properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 200, hiddenGroups: 200, prefix: 20 } as const;
+export const limits = { formula: 10_000, properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 200, hiddenGroups: 200, prefix: 20 } as const;
 
 export const isDatabase = (p: Page | undefined | null): p is Page & { database: Database } => Boolean(p?.database);
 /** A row: a page whose parent is a database. */
@@ -211,6 +216,7 @@ export function readValue(property: Property, raw: unknown): CellValue {
     case "editedTime":
     case "id":
     case "rollup":
+    case "formula":
       return null;
     case "text":
     case "url":
@@ -266,6 +272,7 @@ export function storedValue(property: Property, input: unknown): Json | undefine
     case "editedTime":
     case "id":
     case "rollup":
+    case "formula":
       return refuse();
     case "relation": {
       if (!Array.isArray(input) || input.length > limits.multi) refuse();
@@ -399,6 +406,7 @@ export function conditionHolds(property: Property, condition: Condition, value: 
   switch (property.type) {
     // Read as the type it works out to (relations.ts), so a condition never meets it here.
     case "rollup":
+    case "formula":
       return null;
     case "text":
     case "url":
@@ -471,6 +479,7 @@ function compareValues(property: Property, a: CellValue, b: CellValue): number {
   const order = (id: unknown) => (property.options ?? []).findIndex((o) => o.id === id);
   switch (property.type) {
     case "rollup":
+    case "formula":
       return 0;
     case "text":
     case "url":
@@ -569,10 +578,10 @@ export function newRowValues(db: Database, view: View, context: ViewContext, gro
 
 /** The group of rows with no value. */
 export const noGroupKey = "none";
-const canGroup = (type: PropertyType): boolean => type !== "text" && type !== "id" && type !== "rollup";
+const canGroup = (type: PropertyType): boolean => type !== "text" && type !== "id" && type !== "rollup" && type !== "formula";
 const canMakeColumns = (type: PropertyType): boolean => type === "select" || type === "status" || type === "checkbox" || type === "relation";
 /** A rollup groups by what it works out to, whatever that is, though a card can't be dragged there, so it makes no board. */
-const groupsBy = (p: Property, layout: ViewLayout): boolean => (layout === "board" ? !p.rollup && canMakeColumns(p.type) : Boolean(p.rollup) || canGroup(p.type));
+const groupsBy = (p: Property, layout: ViewLayout): boolean => (layout === "board" ? !p.rollup && p.formula === undefined && canMakeColumns(p.type) : Boolean(p.rollup) || p.formula !== undefined || canGroup(p.type));
 /** What a view of this layout can group by: a board's columns need a value a card can be dragged to (design §7.2). */
 export function groupableProperties(db: Database, layout: ViewLayout): Property[] {
   if (layout === "calendar") return [];
@@ -723,11 +732,11 @@ export function groupValue(property: Property, key: string, raw: unknown, fromKe
 // ---------------------------------------------------------------- commands' inputs
 
 /** A property as `addProperty` sends it: options without ids get them; a Status with none gets the three groups. */
-export interface PropertyInput { id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup }
+export interface PropertyInput { id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
 /** One schema or view change: one write, the database page. */
 export type DatabaseChange =
   | { kind: "addProperty"; property: PropertyInput; /** the view it was added from: it shows there; other views list it too */ viewId?: string }
-  | { kind: "updateProperty"; propertyId: string; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup }
+  | { kind: "updateProperty"; propertyId: string; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
   /** "Show on Books": a relation's other side, made as a property of the target, or gone with null. */
   | { kind: "setMirror"; propertyId: string; mirror: { id: string; name: string } | null }
   | { kind: "removeProperty"; propertyId: string }
@@ -840,7 +849,7 @@ function cleanCalculations(db: Database, input: unknown): Record<string, CalcKin
   return out;
 }
 
-export const typeLabels: Record<PropertyType, string> = { text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", relation: "Relation", rollup: "Rollup", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
+export const typeLabels: Record<PropertyType, string> = { text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", relation: "Relation", rollup: "Rollup", formula: "Formula", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
 const hasOptions = (type: PropertyType): boolean => type === "select" || type === "multiSelect" || type === "status";
 
 function cleanName(value: unknown, what: string): string {
@@ -886,6 +895,7 @@ function checkLinks(ws: Workspace, db: Database, property: Property): void {
   const source = target.database.properties.find((p) => p.id === read);
   if (!source) throw new DatabaseError("Property not found");
   if (source.type === "rollup") throw new DatabaseError("A rollup can't read another rollup");
+  if (source.type === "formula") throw new DatabaseError("A rollup can't read a formula yet");
 }
 /**
  * A link's other end: this side's link written on that side, and a limit of 1 keeping to it. A two-way relation writes its
@@ -936,6 +946,13 @@ function cleanProperty(input: PropertyInput, db: Database, except?: string): Pro
     if (input.limit === 1) property.limit = 1;
   }
   if (input.type === "rollup") property.rollup = cleanRollup(input.rollup);
+  if (input.type === "formula") {
+    if (input.formula !== undefined && (typeof input.formula !== "string" || input.formula.length > limits.formula)) throw new DatabaseError("That formula is too long");
+    property.formula = input.formula ?? "";
+    // No text that doesn't work replaces one that does (formula design §4).
+    const problem = formulaProblem(property.formula, db, property.id);
+    if (problem) throw new DatabaseError(problem);
+  }
   if (input.prefix !== undefined) {
     const prefix = typeof input.prefix === "string" ? input.prefix.trim() : null;
     if (prefix === null || prefix.length > limits.prefix) throw new DatabaseError("Too long for a prefix");
@@ -1066,7 +1083,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       const old = property(change.propertyId);
       const type = change.type ?? old.type;
       if (old.mirror && type !== "relation") throw new DatabaseError("Turn off its other side first");
-      const next = cleanProperty({ id: old.id, name: change.name ?? old.name, type, options: change.options ?? old.options, format: change.format ?? old.format, withTime: change.withTime ?? old.withTime, prefix: change.prefix ?? old.prefix, target: change.target ?? old.target, limit: change.limit === null ? undefined : change.limit ?? old.limit, rollup: change.rollup ?? old.rollup }, db, old.id);
+      const next = cleanProperty({ id: old.id, name: change.name ?? old.name, type, options: change.options ?? old.options, format: change.format ?? old.format, withTime: change.withTime ?? old.withTime, prefix: change.prefix ?? old.prefix, target: change.target ?? old.target, limit: change.limit === null ? undefined : change.limit ?? old.limit, rollup: change.rollup ?? old.rollup, formula: change.formula ?? old.formula }, db, old.id);
       if (old.mirror) { if (next.target !== old.target) throw new DatabaseError("Turn off its other side first"); next.mirror = old.mirror; }
       checkLinks(ws, db, next);
       const notes: string[] = [];

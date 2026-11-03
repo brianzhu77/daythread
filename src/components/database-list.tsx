@@ -1,8 +1,9 @@
 // Databases R3: the List view (design §7.2): one line per row, its title and up to 3 properties; under the title on the
 // phone. A row opens as its page from anywhere on the line, as a card does. Groups fold as in a table, and rows drag by
 // their ⋮⋮ while the view isn't sorted, within a group or to another.
+import { formulaErrorOf } from '../domain/formula'
 import { Fragment, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { cellValue, databaseRows, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
+import { cellValue, databaseRows, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
 import { NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { todayIso } from './dates'
@@ -97,8 +98,8 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
         {columns.map(({ property }) => {
           const pending = pendingCells.get(pendingKey(row.id, property.id))
           const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
-          if (property.type === 'checkbox') return <span key={property.id} className="database-list-check"><PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />{!wide && property.name}</span>
-          return isEmptyValue(value) ? null : <span key={property.id} className="database-list-value"><PropertyCell property={property} value={value} today={today} /></span>
+          if (property.type === 'checkbox') return <span key={property.id} className="database-list-check"><PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} disabled={isReadOnly(property)} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />{!wide && property.name}</span>
+          return isEmptyValue(value) && !formulaErrorOf(row, property) ? null : <span key={property.id} className="database-list-value"><PropertyCell property={property} value={value} row={row} today={today} /></span>
         })}
         {unsaved && <span className="database-card-unsaved">Not saved</span>}
       </span>
