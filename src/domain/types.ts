@@ -95,6 +95,10 @@ export type Action =
   | { type: "ensure-day"; date: LocalDate }
   | { type: "add-task"; pageId: string; title: string; plannedOn?: LocalDate | null; attentionOn?: LocalDate | null; deadlineOn?: LocalDate | null }
   | { type: "task-status"; taskId: string; status: Task["status"]; today?: LocalDate }
+  /** New words for a to-do: its title and every line of it, on any page. */
+  | { type: "rename-task"; taskId: string; title: string }
+  /** Start and Deadline; a field left out stays as it is, null clears it. */
+  | { type: "set-task-dates"; taskId: string; attentionOn?: LocalDate | null; deadlineOn?: LocalDate | null }
   /** `from`: the day page the move is made from, with the browser's `today`; its row leaves unless that day is past. */
   | { type: "plan-task"; taskId: string; date: LocalDate; from?: LocalDate; today?: LocalDate }
   /** The morning card's Add / Add all and the review's Done: each task onto `date`, nested as on the previous page. */

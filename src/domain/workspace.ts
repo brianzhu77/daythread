@@ -506,6 +506,27 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       t.version++;
       return { message: action.status === "done" ? "Done" : action.status === "cancelled" ? "Cancelled" : "Reopened", entityId: t.id };
     }
+    case "rename-task": {
+      const t = task(state, action.taskId), title = text(action.title, 1000).trim();
+      if (!title) throw new DomainError("A to-do needs words");
+      t.title = title;
+      t.version++;
+      // Every page, Trash too: a page restored later shouldn't bring back the old words.
+      for (const p of state.pages) {
+        const doc = docOf(p);
+        let changed = false;
+        for (const n of flatNodes(doc)) if (rowTaskId(n) === t.id && inlineText(n.content, textDate(p)) !== title) { n.content = [textRun(title)]; changed = true; }
+        if (changed) setDocument(p, doc);
+      }
+      return { message: "Renamed", entityId: t.id };
+    }
+    case "set-task-dates": {
+      const t = task(state, action.taskId);
+      if (action.attentionOn !== undefined) t.attentionOn = action.attentionOn === null ? null : date(action.attentionOn);
+      if (action.deadlineOn !== undefined) t.deadlineOn = action.deadlineOn === null ? null : date(action.deadlineOn);
+      t.version++;
+      return { message: "Date set", entityId: t.id };
+    }
     case "plan-task": {
       const t = task(state, action.taskId);
       if (action.from) date(action.from);
