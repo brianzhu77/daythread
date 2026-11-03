@@ -12,13 +12,14 @@ const list = ws => ws.pages.find(p => p.id === 'list')
 const notices = page => page.locator('[role=alert], [role=status]').allInnerTexts().then(t => t.join(' | ').replace(/\s+/g, ' '))
 let failed = 0
 const scenario = async (name, act, options = { viewport: { width: 1280, height: 1000 } }) => {
+  if (process.env.ONLY && !new RegExp(process.env.ONLY).test(name)) return
   execSync(`rm -f ${storePath} && node tests/evidence/databases/seed-table.ts ${storePath}`, { stdio: 'ignore' })
   const context = await browser.newContext(options)
   const page = await context.newPage(), errors = []
   page.on('pageerror', e => errors.push(e.message))
   await page.goto(`${base}/pages?page=books`); await wait(2500)
   let r
-  try { r = await act(page) } catch (e) { r = { ok: false, threw: e.message.split('\n').slice(0, 3).join(' ') } }
+  try { r = await act(page) } catch (e) { r = { ok: false, threw: e.message.split('\n').slice(0, 3).join(' '), url: page.url(), body: (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300) } }
   const ok = r.ok && !errors.length
   if (!ok) failed++
   console.log(ok ? 'PASS' : 'FAIL', name, JSON.stringify({ ...r, errors }))
@@ -28,7 +29,8 @@ const scenario = async (name, act, options = { viewport: { width: 1280, height: 
 const makeLinked = async page => {
   await page.getByText('Before the table').click(); await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.press('ArrowDown'); await wait(200)
   await page.keyboard.press('Meta+c'); await wait(200)
-  await page.getByText('After the table').click(); await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.press('Enter')
+  // The editor reads a caret the browser moved a moment later: Enter straight after it would split the line.
+  await page.getByText('After the table').click(); await page.keyboard.press('Meta+ArrowRight'); await wait(150); await page.keyboard.press('Enter')
   await page.keyboard.press('Meta+v'); await wait(2000)
 }
 const second = page => page.locator('.database-block').nth(1)
@@ -39,7 +41,8 @@ await scenario('copy and paste makes a linked view, not a second database', asyn
   await makeLinked(page)
   const ws = store(), blocks = dbBlocks(ws)
   const r = { databases: ws.pages.filter(p => p.database).length - before, blocks: blocks.length, tables: await page.locator('.database-table').count(), source: await second(page).locator('.database-source').innerText(), home: list(ws).database.homeBlockId, view: Boolean(blocks[1]?.props.view) }
-  return { ...r, ok: r.databases === 0 && r.blocks === 2 && r.tables === 2 && /from Reading list · in Books/.test(r.source) && r.home === 'home' && r.view }
+  r.lineKept = JSON.stringify(JSON.parse(ws.pages.find(p => p.id === 'books').document)).includes('After the table')
+  return { ...r, ok: r.lineKept && r.databases === 0 && r.blocks === 2 && r.tables === 2 && /from Reading list · in Books/.test(r.source) && r.home === 'home' && r.view }
 })
 await scenario('rows and values are shared, both ways, without a reload', async page => {
   await makeLinked(page)
@@ -77,13 +80,37 @@ await scenario('Remove this view takes only the view, with Undo', async page => 
   r.afterUndo = dbBlocks(store()).length; r.tables = await page.locator('.database-table').count()
   return { ...r, ok: r.blocks === 1 && !r.trashed && r.rows === 3 && /View removed · Reading list is still in Books/.test(r.notice) && r.afterUndo === 2 && r.tables === 2 }
 })
-await scenario('Backspace, and Cmd-Z after making one, take only the view', async page => {
+await scenario('Cmd-Z after making one takes only the view', async page => {
   await makeLinked(page)
   await page.keyboard.press('Meta+z'); await wait(1800)
   const undone = store(), first = { blocks: dbBlocks(undone).length, trashed: Boolean(list(undone).trashedAt), rows: undone.pages.filter(p => p.parentId === 'list' && !p.trashedAt).length }
   await page.keyboard.press('Meta+Shift+z'); await wait(1500)
   const again = dbBlocks(store()).length
   return { first, again, ok: first.blocks === 1 && !first.trashed && first.rows === 3 && again === 2 }
+})
+// The linked view is the block right after the last line: the caret stops on it, selected, one arrow down.
+const selectLinked = async page => { await page.getByText('After the table').click(); await page.keyboard.press('Meta+ArrowRight'); await wait(150); await page.keyboard.press('ArrowDown'); await wait(200) }
+const onlyTheView = (r) => r.blocks === 1 && !r.trashed && r.rows === 3
+const afterRemoving = async page => { const ws = store(); return { blocks: dbBlocks(ws).length, trashed: Boolean(list(ws).trashedAt), rows: ws.pages.filter(p => p.parentId === 'list' && !p.trashedAt).length, notice: await notices(page) } }
+for (const [label, press] of [['Backspace', async page => { await page.keyboard.press('Backspace') }], ['Cmd-X', async page => { await page.keyboard.press('Meta+x') }]]) {
+  await scenario(`${label} on the selected view takes only the view, with Undo`, async page => {
+    await makeLinked(page)
+    await selectLinked(page)
+    await press(page); await wait(1800)
+    const r = await afterRemoving(page)
+    await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(1800)
+    r.afterUndo = dbBlocks(store()).length
+    return { ...r, ok: onlyTheView(r) && /View removed · Reading list is still in Books/.test(r.notice) && r.afterUndo === 2 }
+  })
+}
+await scenario('Cmd-V over the selected view replaces only the view', async page => {
+  await makeLinked(page)
+  await page.getByText('Before the table').click(); await page.keyboard.press('Meta+a'); await page.keyboard.press('Meta+c'); await wait(200)
+  await selectLinked(page)
+  await page.keyboard.press('Meta+v'); await wait(1800)
+  const r = await afterRemoving(page)
+  r.pasted = JSON.stringify(JSON.parse(store().pages.find(p => p.id === 'books').document).slice(-3)).includes('Before the table')
+  return { ...r, ok: onlyTheView(r) && r.pasted && /View removed · Reading list is still in Books/.test(r.notice) }
 })
 await scenario('the source in Trash: one line, nothing to edit, and Restore', async page => {
   await makeLinked(page)
