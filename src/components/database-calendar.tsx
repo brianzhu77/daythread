@@ -71,7 +71,7 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
 
   const wrap = useRef<HTMLDivElement>(null)
   useViewClipboard(wrap)
-  const addRow = useAddRow(db, view, context, pageId => requestAnimationFrame(() => setOpenCell({ blockId, databaseId: db.id, rowId: pageId, columnId: titleId })))
+  const addRow = useAddRow(db, view, context, blockId, pageId => requestAnimationFrame(() => setOpenCell({ blockId, databaseId: db.id, rowId: pageId, columnId: titleId })))
   const addOn = (day: LocalDate) => { setPlace({ chosen: day }); addRow(undefined, property && canSetDate ? { [property.id]: { start: day } as unknown as Json } : undefined) }
 
   /** A row's date moved, one change with one Undo; the notice says where, and if the filter then hides it. */
