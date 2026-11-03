@@ -33,7 +33,7 @@ function monthDays(month: string, weekStart: WeekStart): LocalDate[] {
   return Array.from({ length: count }, (_, i) => addDays(start, i))
 }
 
-export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
+export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true, linked }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
   const { latest } = useWorkspace()
   const commit = useCommitCell()
   const openRow = useOpenRow()
@@ -150,7 +150,7 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
   const weekdays = weekStart === 1 ? [...weekdayNames.slice(1), weekdayNames[0]!] : weekdayNames
 
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
-    <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addOn(place.chosen ?? today) }} />
+    <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addOn(place.chosen ?? today) }} />
     {!property && <p className="database-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'layout')}>Choose a date property</button></p>}
     <div className="database-calendar-head">
       <span className="database-calendar-month">{periodLabel}</span>

@@ -184,7 +184,7 @@ const scenarios = {
   async slashThenUndo() {
     const { page, context, errors } = await open()
     await page.getByText('After the table').click(); await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.press('Enter')
-    await page.keyboard.type('/database'); await wait(400); await page.keyboard.press('Enter'); await wait(1500)
+    await page.keyboard.type('/database'); await wait(400); await page.keyboard.press('Enter'); await wait(300); await page.keyboard.press('Enter'); await wait(1500)
     const made = store().pages.find(p => p.database && p.id !== 'list' && p.id !== 'films')
     await page.getByText('After the table').click(); await page.keyboard.press('Meta+z'); await wait(2000)
     const toast = await toasts(page), undone = store().pages.find(p => p.id === made?.id)
@@ -228,7 +228,7 @@ const scenarios = {
     const { page, context, errors } = await open()
     const before = store().pages.filter(p => p.database).map(p => p.id)
     await page.getByText('After the table').click(); await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.press('Enter')
-    await page.keyboard.type('/database'); await wait(400); await page.keyboard.press('Enter')
+    await page.keyboard.type('/database'); await wait(400); await page.keyboard.press('Enter'); await wait(300); await page.keyboard.press('Enter')
     await wait(60)
     await page.locator('.bn-editor').first().focus().catch(() => {})
     await page.keyboard.press('Meta+z'); await wait(3000)

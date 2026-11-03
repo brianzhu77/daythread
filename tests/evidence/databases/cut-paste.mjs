@@ -1,5 +1,5 @@
 // R1 copy and cut of a database block (Jazz §6.3.12, model §3 rules 6-7), fresh store (reseeded):
-// copy + paste makes a page card to the same database (no second database); cut on Books + paste on today's page
+// copy + paste makes a linked view of the same database (no second database); cut on Books + paste on today's page
 // moves the database there (its home is the pasted block, nothing trashed, parent today's page), straight away.
 // Usage: node tests/evidence/databases/cut-paste.mjs <base-url> <store-path> [chromium|webkit]  (the store is a throwaway SQLite file the dev server at <base-url> uses; both are required)
 import * as pw from '@playwright/test'
@@ -22,7 +22,7 @@ await page.getByText('After the table').click(); await page.keyboard.press('Meta
 await page.keyboard.press('Meta+v'); await page.waitForTimeout(2500)
 let ws = store()
 let books = JSON.parse(ws.pages.find(p => p.id === 'books').document)
-out.copy = { cards: books.filter(n => n.type === 'pageLink' && n.props.pageId === 'list').length, databases: ws.pages.filter(p => p.database).length, blocks: books.filter(n => n.type === 'database').length }
+out.copy = { views: books.filter(n => n.type === 'database' && n.props.pageId === 'list' && n.props.view).length, databases: ws.pages.filter(p => p.database).length, blocks: books.filter(n => n.type === 'database').length }
 // Cut, then paste on today's page at once.
 await selectBlock(); await page.keyboard.press('Meta+x'); await page.waitForTimeout(300)
 await page.goto(`${base}/`); await page.waitForTimeout(2500)
@@ -35,5 +35,5 @@ out.cut = { parent: host?.type, trashed: Boolean(list.trashedAt), homeInHost: JS
   leftInBooks: JSON.parse(ws.pages.find(p => p.id === 'books').document).filter(n => n.type === 'database').length }
 out.errors = errors
 console.log(JSON.stringify(out))
-const ok = out.copy.cards === 1 && out.copy.databases === 2 && out.copy.blocks === 1 && out.cut.parent === 'daily' && !out.cut.trashed && out.cut.homeInHost && out.cut.rows === 3 && out.cut.leftInBooks === 0 && !errors.length
+const ok = out.copy.views === 1 && out.copy.databases === 2 && out.copy.blocks === 2 && out.cut.parent === 'daily' && !out.cut.trashed && out.cut.homeInHost && out.cut.rows === 3 && out.cut.leftInBooks === 1 && !errors.length
 console.log(ok ? 'PASS' : 'FAIL'); await browser.close(); if (!ok) process.exit(1)
