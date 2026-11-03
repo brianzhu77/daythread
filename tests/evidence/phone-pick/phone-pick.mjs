@@ -94,6 +94,24 @@ if (wide) {
   await tap(bar.getByRole('button', { name: 'Done' })); await wait(300)
   await tap(name('emma')); await wait(1500)
   check(page.url().includes('page=emma'), 'after Done a tap opens a row again')
+  await page.goBack(); await wait(1800)
+
+  // All leaves out what's hidden: a group, then a sub-group.
+  const live = () => store().pages.filter(p => p.parentId === 'list' && !p.trashedAt)
+  const openGroup = async () => { await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('button', { name: 'Group' })); await wait(300) }
+  const pickAll = async () => { await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('menuitem', { name: 'Select rows' })); await wait(300); await tap(bar.getByRole('button', { name: 'All' })); await wait(200); const said = await bar.innerText(); await tap(bar.getByRole('button', { name: 'Done' })); await wait(300); return said }
+  await openGroup()
+  await menu.locator('label.database-menu-row', { hasText: 'Group by' }).first().locator('select').selectOption({ label: 'Status' }); await wait(800)
+  await tap(menu.locator('.database-group-list').first().getByLabel('Show Finished')); await wait(800); await closeMenu()
+  const open = live().filter(p => p.values?.status !== 'done')
+  let said = await pickAll()
+  check(said.includes(`${open.length} rows`), "All leaves out a hidden group's rows", [said, open.length])
+  await openGroup()
+  await menu.getByLabel('Sub-group', { exact: true }).selectOption({ label: 'Kind' }); await wait(800)
+  await tap(menu.locator('.database-group-list').last().getByLabel('Show Novel')); await wait(800); await closeMenu()
+  const notNovel = open.filter(p => p.values?.kind !== 'novel')
+  said = await pickAll()
+  check(said.includes(`${notNovel.length} row`), "and a hidden sub-group's", [said, notNovel.length])
 }
 check(errors.length === 0, 'no page errors', errors)
 console.log(fails ? `${fails} FAILED` : 'ALL PASS')

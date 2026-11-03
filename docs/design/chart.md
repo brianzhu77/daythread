@@ -31,7 +31,7 @@ Notion's five: **Vertical bar, Horizontal bar, Line, Donut, Number.** Number is 
 - **What can be charted,** following Notion: not Button, ID, Files, Rollup or a list-output Formula. A date axis groups by day, week (from his Week starts setting, R3-20), month or year, and shows empty periods as zero so a line doesn't lie about gaps.
 - **Same numbers as everywhere:** the view's filter applies, and Sum and the rest match column calculations (R3-8) on the same rows.
 
-## 4. Colour, which needs a decision
+## 4. Colour (Jazz's call, fb7d3274, reading only, not prototyped)
 
 His rule is black, white and grey (116a40ab), and options have no colour (`databases.md` §6.1). That's fine for a single series, which is most charts here. A grouped chart is where it pinches.
 
@@ -40,10 +40,12 @@ I ran the dataviz skill's palette validator on four greys, `#111111, #555555, #8
 - Adjacent pairs are distinguishable, including for colour-blind readers (worst ΔE 16.5, target 8).
 - It flags low contrast on the lightest (1.83:1), which obliges visible labels or a table. It also fails its lightness band and chroma floor, because those checks expect hues. That's the validator's standard, not a finding that greys don't work.
 
-**My proposal for Jazz:**
+**The rule:**
 
-- **Up to 4 greys,** assigned to a value and kept when a filter removes others, so a value never changes grey.
-- **Beyond 4 values:** the rest fold into "Other", which a tap opens, with the whole list in the table below. Nothing's missing, though Notion would draw up to 50.
+- **Up to 4 greys, from the app's tokens** (`--ink`, `--ink-2`, `--ink-3` and a lighter grey, not hex), so a chart follows the theme.
+- **A grey follows a value's order, not its size:** a Select or Status uses its option order, and other values their sorted order. A filter never repaints a value. A new value that sorts earlier can, among values with no options, and that's accepted.
+- **Beyond 4 values:** the rest fold into "Other", which a tap opens, with the whole list in the table below. It's drawn as an outline with no fill, not a fifth grey, so it can't be mistaken for a value. Nothing's missing, though Notion would draw up to 50.
+- **Tap to focus:** tapping a series or legend entry dims the rest, since greys are hardest to follow on a line chart.
 - **Always:** a legend for 2 or more series, direct labels where they fit, and a 2 px gap between fills. A donut's lightest slice needs its label outside.
 - **No two y-axes,** ever.
 - **If he later wants colour:** it's the per-option setting §6.1 already allows, and charts read it. No separate chart palette.

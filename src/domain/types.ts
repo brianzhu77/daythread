@@ -55,6 +55,8 @@ export interface Receipt {
   entityId?: string;
   /** save-editor: lines given a new id, because another page already holds the one they came with. */
   renamed?: Record<string, string>;
+  /** save-editor: synced blocks that changed elsewhere meanwhile, where his version went below them. */
+  conflicted?: string[];
   fingerprint?: string;
 }
 

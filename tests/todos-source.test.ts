@@ -5,7 +5,7 @@ import { cellValue, databaseRows, newRowValues, viewRows } from '../src/domain/d
 import { buildSearchIndex, search } from '../src/domain/search.ts'
 import { exportFiles } from '../src/domain/export.ts'
 import { listedPages } from '../src/domain/page-tree.ts'
-import { newTodo, todoChange, todoLine, todoRowId, todosDatabase, todosSourceId, withTodos } from '../src/domain/todos-source.ts'
+import { newTodo, todoChange, todoMoves, todoLine, todoRowId, todosDatabase, todosSourceId, withTodos } from '../src/domain/todos-source.ts'
 import type { Page } from '../src/domain/types.ts'
 import { draftView } from '../src/domain/day-draft.ts'
 import { dayId, harness, heading, nodesOf, todo, today, tomorrow } from './v2-helpers.ts'
@@ -116,4 +116,20 @@ test('R2-11: + New is today, or the day a view is pinned to', () => {
   assert.deepEqual(newTodo(pinned, { today, pageDate: tomorrow }), { date: tomorrow, visible: true })
   // Off a day page the rule is ignored (R2-4): today.
   assert.deepEqual(newTodo(pinned, context), { date: today, visible: true })
+})
+
+test('R3-13: a drag across Status and Planned sends only what a to-do can hold', () => {
+  const h = harness()
+  h.run({ type: 'ensure-day', date: '2026-11-03' })
+  h.run({ type: 'add-task', pageId: h.ws.pages.find(p => p.date === '2026-11-03')!.id, title: 'Open one', plannedOn: '2026-11-03' })
+  const task = h.ws.tasks.find(t => t.title === 'Open one')!
+  const status = (value: string) => ({ id: 'status', value }), day = { id: 'planned', value: { start: '2026-11-05' } }, noDay = { id: 'planned', value: undefined }
+  const ids = (moved: { id: string }[]) => todoMoves(h.ws, task.id, moved as never).map(m => m.id)
+  for (const to of ['paused', 'done', 'cancelled']) assert.deepEqual(ids([status(to), day]), ['status'], `${to} decides its own day`)
+  assert.deepEqual(ids([status('open'), day]), ['status', 'planned'], 'reopened, then planned')
+  assert.deepEqual(ids([day, status('open')]), ['status', 'planned'], 'whichever layer is which')
+  assert.deepEqual(ids([status('open'), noDay]), ['status'], 'no day to set')
+  assert.deepEqual(ids([{ id: 'deadline', value: { start: '2026-11-05' } }, status('done')]), ['deadline', 'status'], 'other columns are independent')
+  h.run({ type: 'not-today', taskId: task.id, date: '2026-11-03' })
+  assert.deepEqual(ids([status('open'), day]), ['planned'], 'planning a paused to-do opens it')
 })
