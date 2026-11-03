@@ -88,7 +88,7 @@ export function withLinks(ws: Workspace): Workspace {
     linked.set(p.id, { ...p.database, properties: p.database.properties.map(x => {
       if (x.type !== 'relation') return x
       const target = byId.get(x.target ?? '')
-      return { ...x, options: target && isDatabase(target) ? optionsFor(target) : [] }
+      return { ...x, options: target && isDatabase(target) ? optionsFor(target) : [], targetTitle: target?.title || 'Untitled', ...(target?.trashedAt ? { targetTrashed: true as const } : {}) }
     }) })
   }
   const pages = ws.pages.map(page => {

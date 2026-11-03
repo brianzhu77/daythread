@@ -33,6 +33,9 @@ export interface Property {
   limit?: 1;
   /** rollup: what it reads through which relation. Worked out when read (relations.ts), never stored. */
   rollup?: Rollup;
+  /** relation, as read (relations.ts), never stored: its target's name, and whether that's in Trash. */
+  targetTitle?: string;
+  targetTrashed?: true;
 }
 export interface DateValue { start: string; end?: string }
 export const rollupFunctions = ["original", "unique", "countAll", "countValues", "countUnique", "countEmpty", "countNotEmpty", "percentEmpty", "percentNotEmpty", "sum", "average", "median", "min", "max", "range", "earliest", "latest", "dateRange", "checked", "unchecked", "percentChecked", "percentUnchecked"] as const;
@@ -99,6 +102,8 @@ export const titleId = "title";
 const rowNumberKey = "@id";
 /** The types the app fills in: they can't be typed, pasted, or set by a filter's `+ New` (R3-9). */
 export const isReadOnlyType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime" || type === "id";
+/** Nothing can be typed here: the app's own columns, a rollup, To-dos' Page. */
+export const isReadOnly = (property: Property): boolean => isReadOnlyType(property.type) || Boolean(property.readOnly);
 export const isTimeType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime";
 const isTextType = (type: PropertyType): boolean => type === "text" || type === "url" || type === "email" || type === "phone";
 /** An ISO time as a wall clock on this device: what a date cell holds, so a created time reads in local time. */
@@ -508,7 +513,7 @@ export function newRowValues(db: Database, view: View, context: ViewContext, gro
   const any = Boolean(view.filterAny);
   if (!any || !rowMatches(db, probeOf("", {}), view.filter, context, true)) for (const c of view.filter) {
     const property = propertyOf(db, c.by);
-    if (!property || isReadOnlyType(property.type)) continue;
+    if (!property || isReadOnly(property)) continue;
     const want = c.value;
     let value: Json | undefined;
     if (isTextType(property.type)) { if (c.op === "is" && typeof want === "string") value = want; }
@@ -527,7 +532,7 @@ export function newRowValues(db: Database, view: View, context: ViewContext, gro
   // A row added under a group starts with that group's value, even where the filter wants another (then it's hidden, and the notice says so).
   const grouped = groupKey === undefined ? null : viewGroupBy(db, view);
   // A group by created time can't start a row off with a value: it lands in the group its own time says.
-  if (grouped && !isReadOnlyType(grouped.type)) {
+  if (grouped && !isReadOnly(grouped)) {
     const value = groupKey === noGroupKey ? undefined : storedValue(grouped, groupValue(grouped, groupKey!, undefined, undefined, context.today, view.groupDateBy, context.weekStart));
     if (value === undefined) delete values[grouped.id]; else values[grouped.id] = value;
   }

@@ -4,6 +4,7 @@
 import { inView, newRowValues, titleId, type Database, type DateValue, type Json, type Property, type View, type ViewContext } from './database.ts'
 import type { LineTarget } from './page-refs.ts'
 import type { Action, LocalDate, Page, Task, Workspace } from './types.ts'
+import { withLinks } from './relations.ts'
 import { canRenameTask, isBlankTask, plannedOn, taskRows } from './workspace.ts'
 
 export { canRenameTask }
@@ -72,7 +73,9 @@ export function withTodos(ws: Workspace): Workspace {
   return next
 }
 /** A block's database, To-dos included. */
-export const databaseSource = (ws: Workspace, pageId: string): Page | undefined => (pageId === todosSourceId ? withTodos(ws) : ws).pages.find(p => p.id === pageId)
+/** The workspace a block of this database reads: relations and rollups worked out (relations.ts), To-dos added where it's the source. */
+export const readingWorkspace = (ws: Workspace, pageId: string | undefined): Workspace => (pageId === todosSourceId ? withTodos(withLinks(ws)) : withLinks(ws))
+export const databaseSource = (ws: Workspace, pageId: string): Page | undefined => readingWorkspace(ws, pageId).pages.find(p => p.id === pageId)
 
 /** Where opening a to-do goes: its line, or null when no line of it is left. */
 export function todoLine(ws: Workspace, taskId: string): LineTarget | null {
