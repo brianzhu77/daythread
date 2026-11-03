@@ -433,6 +433,12 @@ test('a linked view reads its own settings, and a broken or empty one reads as t
   assert.equal(linkedViewOf(db, 'not json').id, db.views[0]!.id)
   assert.equal(linkedViewOf(db, JSON.stringify({ name: 'no id' })).id, db.views[0]!.id)
   const json = linkedViewJson(db.views[0]!, 'mine')
+  // Set on the source later, a group or a calculation isn't this view's: it was copied when it was made.
+  const later = { ...db, views: [{ ...db.views[0]!, groupBy: 'status', calculations: { title: 'countAll' as const }, boardCalculation: { by: 'title', kind: 'countAll' as const } }, ...db.views.slice(1)] }
+  const own = linkedViewOf(later, JSON.stringify({ ...JSON.parse(json) }))
+  assert.equal(own.groupBy, undefined)
+  assert.equal(own.calculations, undefined)
+  assert.equal(own.boardCalculation, undefined)
   const view = linkedViewOf(db, JSON.stringify({ ...JSON.parse(json), title: 'This week', filter: [{ by: 'title', op: 'contains', value: 'x' }], groupBy: 'status' }))
   assert.equal(view.id, 'mine')
   assert.equal(view.title, 'This week')

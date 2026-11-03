@@ -120,13 +120,14 @@ Untitled                                                                    ← 
   at a time with the same line. This keeps a day page fast on the phone, where every row is rendered inside the
   editor.
 - **Cell text** stays on one line with an ellipsis, and the full value is on the row page, unless the view wraps it.
-- **Wrap (R3-14), per view:** `⋯` → Properties → a property → **Wrap in this view**, **Wrap Name** in Properties, and **Wrap all** in Layout, at both widths. Number, Checkbox and ID don't offer it. The row grows to fit its longest wrapped cell, and a Text value's own line breaks show. With any column wrapped, cells start at the top of the row and fill it, so all of a tall cell still taps. Name stays pinned at 390, and sideways scroll and the page's place hold. Board and Gallery cards wrap their values the same way, and their titles already do. List stays one line per row, because its values share that line.
+- **Wrap (R3-14), per view:** `⋯` → Properties → a property → **Wrap in this view**, **Wrap Name** in Properties, and **Wrap all** in Layout, at both widths. Number, Checkbox and ID don't offer it. The row grows to fit its longest wrapped cell, and a Text value's own line breaks show. With any column wrapped, cells start at the top of the row and fill it, so all of a tall cell still taps. Name stays pinned at 390, and sideways scroll and the page's place hold. Board and Gallery cards wrap their values the same way, and their titles already do. A List's values stay on their one line, because they share it, but **Wrap Name** is offered there too, so a long title can be read without opening the row. On the phone a list's title always wraps, so the switch only changes 1280.
 
 ### 4.1a Column calculations (R3-8)
 
 - **Where:** a row at the table's foot, under its last row and above `Show 25 more` and `+ New`. Each group has its own,
-  above its `+ New`, with no second total, and a folded group hides its foot. Table only: other layouts keep the setting
+  above its `+ New`, with no second total, and a folded group hides its foot. A table's foot is the table's: other layouts keep the setting
   and draw it when they're a table again.
+- **On a Board (R3-24):** one per view, in every column's head where `· 3` sits, the same numbers a table's foot gives for those rows: `· Sum 712`. `⋯` → Calculate picks a property and what to work out; **Count of rows** goes back to the count. If its type no longer fits, the head goes back to the count too. List, Gallery and Calendar don't draw calculations.
 - **Nothing at rest:** a table with no calculation has no foot. `⋯` → **Calculate** lists Name and each shown column, at
   both widths. Once there's a foot, a tap on a cell opens the same panel; at 1280 the other columns read "Calculate" on
   hover, and at 390 they stay blank. The panel is the way in at 390 because there's no hover there, and a row of

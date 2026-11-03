@@ -3,7 +3,7 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
 import type { Page, Workspace } from '../domain/types'
 import { rollupFunctionsFor } from '../domain/relations'
@@ -152,7 +152,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     </div>
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
-    {view.layout === 'table' && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
+    {(view.layout === 'table' || view.layout === 'board') && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('templates')}>Templates<span className="database-menu-chevron">›</span></button>}
     <hr />
     {(inline || linked) && !db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); void navigate({ to: '/pages', search: { page: db.id } }) }}>Open as page</button>}
@@ -434,7 +434,7 @@ function PropertiesPanel({ db, view, go }: { db: DatabasePage; view: View; go: (
   return <>
     <Head title="Properties" back={() => go('root')} />
     <div className="database-property-line is-title"><span>Name</span><span className="database-menu-quiet">always shown</span></div>
-    {view.layout === 'table' && <label className="database-menu-row">Wrap Name
+    {(view.layout === 'table' || view.layout === 'list') && <label className="database-menu-row">Wrap Name
       <input type="checkbox" checked={Boolean(view.wrapName)} onChange={e => { const wrapName = e.target.checked; changeView(() => ({ wrapName })) }} />
     </label>}
     {ordered.map(p => <div key={p.id} className="database-property-line">
@@ -588,6 +588,29 @@ function TemplatePanel({ db, view, templateId, go, close }: { db: DatabasePage; 
 /** Each shown column's calculation at the table's foot, Name first (design §4.1a). */
 function CalculatePanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
   const changeView = useViewChange(db.id, view.id)
+  if (view.layout === 'board') {
+    // One per view, in every column's head: a count until he picks something else (R3-24).
+    const chosen = viewBoardCalculation(db.database, view)
+    const properties = [propertyOf(db.database, titleId)!, ...db.database.properties]
+    const of = chosen ? propertyOf(db.database, chosen.by) : null
+    return <>
+      <Head title="Calculate" back={back} />
+      <label className="database-menu-row">Property
+        <select aria-label="Property" value={chosen?.by ?? ''} onChange={e => {
+          const by = e.target.value, property = by ? propertyOf(db.database, by) : null
+          changeView(() => ({ boardCalculation: property ? { by, kind: property.type === 'number' ? 'sum' : calcChoices(property.type)[0]! } : null }))
+        }}>
+          <option value="">Count of rows</option>
+          {properties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+      </label>
+      {chosen && of && <label className="database-menu-row">Calculate
+        <select aria-label="Calculate" value={chosen.kind} onChange={e => { const kind = e.target.value as CalcKind; changeView(() => ({ boardCalculation: { by: chosen.by, kind } })) }}>
+          {calcChoices(of.type).map(kind => <option key={kind} value={kind}>{calcLabels[kind]}</option>)}
+        </select>
+      </label>}
+    </>
+  }
   const chosen = viewCalculations(db.database, view)
   const set = (columnId: string, kind: string) => changeView(current => {
     const { [columnId]: _old, ...rest } = current.calculations ?? {}

@@ -415,6 +415,11 @@ function createOption(run: ReturnType<typeof useWorkspace>['run'], db: Page & { 
 function linkHref(property: Property, text: string): string | null {
   return property.type === 'url' ? urlHref(text) : property.type === 'email' ? emailHref(text) : property.type === 'phone' ? phoneHref(text) : null
 }
+/** A cell's value as it shows now: what's still saving counts, in a calculation too. */
+export function shownValue(db: Database, row: Page, columnId: string): CellValue {
+  const pending = pendingCells.get(pendingKey(row.id, columnId)), property = propertyOf(db, columnId)
+  return pending && property ? readValue(property, pending.raw) : cellValue(db, row, columnId)
+}
 /** A row's value as it shows now: one on its way, or kept after a failed save, comes first. */
 export function shownRaw(row: Page, columnId: string): unknown {
   const pending = pendingCells.get(pendingKey(row.id, columnId))
@@ -879,10 +884,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const calculations = viewCalculations(db.database, view)
   const footColumns = [propertyOf(db.database, titleId)!, ...columns.map(c => c.property)]
   const hasFoot = footColumns.some(p => calculations[p.id])
-  const readShown = (row: Page, columnId: string) => {
-    const pending = pendingCells.get(pendingKey(row.id, columnId)), property = propertyOf(db.database, columnId)
-    return pending && property ? readValue(property, pending.raw) : cellValue(db.database, row, columnId)
-  }
+  const readShown = (row: Page, columnId: string) => shownValue(db.database, row, columnId)
   const footRow = (over: readonly Page[]) => <tr className="database-calc">
     {footColumns.map(property => {
       const kind = calculations[property.id]
