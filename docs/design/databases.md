@@ -502,6 +502,15 @@ Linked views come in R2, so in R1 (Bumblebee 120fdcd6):
 
 Every view type opens a row the same way (§5), and every view shows the filter line (§4.1).
 
+**Calendar: rows with no date (R3-1).** They stay in reach, in one quiet line under the month at both widths: **"No date · 3 ›"**. Tapping it opens the list in place, each row opening its page as usual. At 1280 a row in that list drags onto a day, which sets its date. With none, the line isn't there. `+ New` in that list isn't offered, since a calendar adds by day. A row whose date property is gone or empty is here, so nothing is silently missing.
+
+**Gallery: images (R3-3).** Nothing can be uploaded yet, and a page body holds an image only when one came in with pasted web content, as a link to the image where it lives. It isn't a copy of ours, so it can vanish. So:
+
+- **A card's image:** the first image block in the row's body with a working web address. It fills a 16:10 area at the card's top, cropped, with no border of its own.
+- **No image, or one that fails or can't load offline:** the card is just its title and properties, with no frame, placeholder or broken-image mark. Such a card is shorter, and cards align to the top of their grid row.
+- **No request of ours:** the browser loads the image only for cards on screen. Nothing is stored or fetched by the server.
+- **When Files ships (R3-11):** `⋯` → Layout gets "Card image: Page body, a Files property, or None", with Page body the default until then.
+
 ### 7.3 Filter, sort, group
 
 **All three open from `⋯`.** The menu leads with three tiles, **Filter · Sort · Group**, the same as Craft's. Each
@@ -517,8 +526,8 @@ opens a small sheet (390) or popover (1280).
   - checkbox: is checked, isn't;
   - relation: contains, is empty.
 - **Combining rules:** one line at the top switches between **all rules match** (the default) and **any rule
-  matches**. R1 ships "all" only, and the switch comes in R3 (§14). Nested groups aren't offered. One person's databases rarely need them, and a nested filter is the hardest
-  thing to read back from a chip line.
+  matches**. R1 ships "all" only, and the switch comes in R3 (§14). Nested groups wait in Later (§14): one person's databases rarely need them, and a nested filter is the hardest
+  thing to read back from a chip line, so they need a design of their own.
 - **"Only for me" vs "for everyone" doesn't exist.** A workspace is one person (Lead: Q5 drops).
 
 **Sort.** Several sorts, dragged into order. When a view is sorted, rows can't be dragged, and the `⋮⋮` handle
@@ -742,9 +751,9 @@ The estimates are Roadbuster's (`database-fit.md` §7) unless marked as mine.
 | **R1** | **Database itself:** `/` Database (new only), Pages' `+` → Database, inline and full page, Turn into page/inline, cut and paste, **Table** view, properties **Text, Number, Select, Multi-select, Status, Date, Checkbox, URL**, a row opening as a page, filter/sort (§7.3), properties shown and reordered, everything in §10, §12 and §13 except relation and formula. Roadbuster's "send only what changed" PR goes first, once Brian says yes (Lead 7b3b9664). | about 5.5–6 days (Roadbuster). It's the smallest version that's a real Notion-like database at both widths. |
 | **R2** | **Linked views** (`/` picker, copy/paste, "this page's day", templates) plus **To-dos as a source** (§11, option 1) plus **Board** and **Group** | This is where databases meet days and to-dos. Linked views are about 1 day and To-dos about 1 day (Roadbuster). Board with Group is about 1 day (Roadbuster's "later" list). |
 | **R3** | **Calendar, List, Gallery**; the filter's **"any rule matches"** switch; **Relation, Rollup**; Created/Edited time, ID, Email, Phone, Files (**needs file uploads, which don't exist anywhere yet: new
-  infrastructure**, Roadbuster 13301ca1); row **templates** (`+ New ⌄`); **sub-groups** (a second layer inside a group, Notion research §8; missed until now, Bumblebee); **wrap** per property; several rows selected on the phone | Ordered by his use after R2 |
-| **R4** | **Timeline, Formula**, repeating row templates, CSV export/import, pasting TSV, moving a row to another database, **side peek** at 1280 (only if he's seen opening many rows one after another) | the largest and least certain |
-| **Later, not yet ordered** | **Forms, Automations, Buttons, Place**, and **Chart** | These are in scope. They wait for a design pass of their own, and his use orders them, with nothing cut for lack of evidence (Brian 57deaed7, Bumblebee 3b04290d). |
+  infrastructure**, Roadbuster 13301ca1); row **templates** (`+ New ⌄`); **sub-groups** (a second layer inside a group, Notion research §8; missed until now, Bumblebee); **column calculations** and **two-way relations with a limit** (Notion research §7, §8; same); **wrap** per property; several rows selected on the phone | Ordered by his use after R2 |
+| **R4** | **Timeline, Formula**, **sub-items and dependencies** (Notion research §7; missed until now, Bumblebee), repeating row templates, CSV export/import, pasting TSV, moving a row to another database, **side peek** at 1280 (only if he's seen opening many rows one after another) | the largest and least certain |
+| **Later, not yet ordered** | **Forms, Automations, Buttons, Place**, **Chart**, and **Feed, Map, Dashboard, nested filter groups, page icons and covers** (missed until now, Bumblebee) | These are in scope. They wait for a design pass of their own, and his use orders them, with nothing cut for lack of evidence (Brian 57deaed7, Bumblebee 3b04290d). |
 | **Not planned** | Person, Created by, Edited by, permissions, "only for me" filters, several data sources in one database | Each needs more than one person in a workspace, or the Lead's frame dropped it (several data sources). |
 
 ## 15. How I'll check it (each release, before it goes live)
