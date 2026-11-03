@@ -19,7 +19,14 @@ export class FormulaPage {
   readonly row: Page
   constructor(row: Page) { this.row = row }
 }
-export type Value = number | string | boolean | null | FormulaDate | FormulaPage | Value[]
+/** Text that's been styled or linked. Anything else that reads it reads its words, so a filter and a sort see plain text (design §7). */
+export interface RichRun { text: string; b?: true; u?: true; i?: true; c?: true; s?: true; color?: string; background?: string; href?: string }
+export class FormulaRich {
+  readonly runs: readonly RichRun[]
+  constructor(runs: readonly RichRun[]) { this.runs = runs }
+  get text() { return this.runs.map(r => r.text).join('') }
+}
+export type Value = number | string | boolean | null | FormulaDate | FormulaPage | FormulaRich | Value[]
 /** `number`, `text`, `boolean`, `date`, `empty`, `any`, `page:<database>`, or `list:<item>`. */
 export type ValueType = string
 
@@ -65,7 +72,8 @@ export function unionType(a: ValueType, b: ValueType): ValueType {
   return isList(a) && isList(b) ? 'list:any' : 'any'
 }
 
-export const isEmpty = (v: Value) => v === null || v === 0 || v === '' || v === false || (Array.isArray(v) && v.length === 0)
+const plain = (v: Value): Value => (v instanceof FormulaRich ? v.text : v)
+export const isEmpty = (v: Value) => v === null || v === 0 || plain(v) === '' || v === false || (Array.isArray(v) && v.length === 0)
 const truthy = (v: Value) => !isEmpty(v)
 const clean = (n: number) => (n === 0 ? 0 : n)
 
@@ -170,17 +178,20 @@ export function format(v: Value): string {
   if (typeof v === 'string') return v
   if (typeof v === 'number' || typeof v === 'boolean') return String(v)
   if (Array.isArray(v)) return v.map(format).join(', ')
+  if (v instanceof FormulaRich) return v.text
   if (v instanceof FormulaPage) return v.row.title || 'Untitled'
   return v.end === undefined ? dateText(v.start, v.timed) : `${dateText(v.start, v.timed)} → ${dateText(v.end, v.timed)}`
 }
-function deepEqual(a: Value, b: Value): boolean {
+function deepEqual(x: Value, y: Value): boolean {
+  const a = plain(x), b = plain(y)
   if (a === null || b === null) return a === b || isEmpty(a) && isEmpty(b)
   if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => deepEqual(x, b[i]!))
   if (a instanceof FormulaDate && b instanceof FormulaDate) return a.start === b.start && a.end === b.end
   if (a instanceof FormulaPage && b instanceof FormulaPage) return a.row.id === b.row.id
   return a === b
 }
-function compare(a: Value, b: Value): number | null {
+function compare(x: Value, y: Value): number | null {
+  const a = plain(x), b = plain(y)
   if (a === null || b === null) return null
   if (typeof a === 'number' && typeof b === 'number') return a - b
   if (typeof a === 'string' && typeof b === 'string') return a < b ? -1 : a > b ? 1 : 0
@@ -227,10 +238,35 @@ function formatNumber(n: number, style: string, decimals: number | undefined): s
   throw new FormulaRowError(`"${style}" isn't a number format`)
 }
 
+// ---------------------------------------------------------------- styled text
+const runsOf = (v: Value): readonly RichRun[] => (v instanceof FormulaRich ? v.runs : [{ text: format(v) }])
+const textColours = new Set(['gray', 'brown', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'red'])
+const marks = new Set(['b', 'u', 'i', 'c', 's'])
+function restyled(run: RichRun, style: string): RichRun {
+  if (marks.has(style)) return { ...run, [style]: true }
+  if (textColours.has(style)) return { ...run, color: style }
+  const background = style.replace(/_background$/, '')
+  if (background !== style && textColours.has(background)) return { ...run, background }
+  throw new FormulaRowError(`"${style}" isn't a style`)
+}
+function unstyled({ text, href, ...rest }: RichRun, style: string | undefined): RichRun {
+  if (style === undefined) return { text, ...(href ? { href } : {}) }
+  const kept: RichRun = { text, ...(href ? { href } : {}), ...rest }
+  if (marks.has(style)) delete kept[style as 'b']
+  else if (style.endsWith('_background')) delete kept.background
+  else if (style === kept.color) delete kept.color
+  return kept
+}
+/** http and https only: anything else, `javascript:` above all, stays words (design §5). */
+function safeHref(url: string): string | null {
+  try { const { protocol } = new URL(url.trim()); return protocol === 'http:' || protocol === 'https:' ? url.trim() : null } catch { return null }
+}
+
 const addType = ([a, b]: ValueType[]): ValueType => (a === 'number' && b === 'number' ? 'number' : a === 'text' || b === 'text' ? 'text' : 'any')
 function add([a, b]: Value[]): Value {
   if (a === null) return b!
   if (b === null) return a
+  if (a instanceof FormulaRich || b instanceof FormulaRich) return new FormulaRich([...runsOf(a!), ...runsOf(b!)])
   return typeof a === 'number' && typeof b === 'number' ? a + b : format(a!) + format(b!)
 }
 
@@ -259,12 +295,16 @@ const table: FormulaFunction[] = [
     ctx.spend(1 + (size >> 4))
     return textOf(s!).repeat(times)
   }, doc: 'A text, that many times over.', example: 'repeat("0", 4)' },
-  { name: 'link', group: logic, takes: 'text text', gives: 'text', run: ([label]) => label!, doc: 'A link with this label. Only http and https become links.', example: 'link("Notion", "https://notion.so")' },
-  { name: 'style', group: logic, takes: 'text text...', gives: 'text', run: ([s]) => s!, doc: 'A text with styles and colours: b, u, i, c, s, and a colour or colour_background.', example: 'style("Notion", "b", "u")' },
-  { name: 'unstyle', group: logic, takes: 'text text?', gives: 'text', run: ([s]) => s!, doc: 'Removes styles, or just the one named.', example: 'unstyle("Text")' },
+  { name: 'link', group: logic, takes: 'rich text', gives: 'text', run: ([label, url]) => { const href = safeHref(textOf(url!)); return href ? new FormulaRich(runsOf(label!).map(r => ({ ...r, href }))) : label! }, doc: 'A link with this label. Only http and https become links.', example: 'link("Notion", "https://notion.so")' },
+  { name: 'style', group: logic, takes: 'rich text...', gives: 'text', run: ([s, ...styles]) => new FormulaRich(runsOf(s!).map(r => styles.reduce<RichRun>((run, style) => restyled(run, textOf(style)), r))), doc: 'A text with styles and colours: b, u, i, c, s, and a colour or colour_background.', example: 'style("Notion", "b", "u")' },
+  { name: 'unstyle', group: logic, takes: 'rich text?', gives: 'text', run: ([s, style]) => new FormulaRich(runsOf(s!).map(r => unstyled(r, style === undefined ? undefined : textOf(style)))), doc: 'Removes styles, or just the one named.', example: 'unstyle("Text")' },
   { name: 'format', group: logic, takes: 'any', gives: 'text', run: ([v], ctx) => { ctx.spend(1); return format(v!) }, doc: 'A value as text.', example: 'format(1234)' },
   { name: 'split', group: logic, takes: 'text text', gives: listOf('text'), run: ([s, by], ctx) => { spendOn(ctx, textOf(s!)); return textOf(s!).split(textOf(by!)) }, doc: 'A text, cut into a list at each separator.', example: 'split("apple,pear,orange", ",")' },
-  { name: 'join', group: logic, takes: 'list text', gives: 'text', run: ([l, by], ctx) => { ctx.spend(1 + listOfValues(l!).length); return listOfValues(l!).map(format).join(textOf(by!)) }, doc: 'A list as one text, with this between.', example: 'join(["a", "b", "c"], ", ")' },
+  { name: 'join', group: logic, takes: 'list text', gives: 'text', run: ([l, by], ctx) => {
+    const list = listOfValues(l!)
+    ctx.spend(1 + list.length)
+    return list.some(v => v instanceof FormulaRich) ? new FormulaRich(list.flatMap((v, i) => [...(i ? [{ text: textOf(by!) }] : []), ...runsOf(v)])) : list.map(format).join(textOf(by!))
+  }, doc: 'A list as one text, with this between.', example: 'join(["a", "b", "c"], ", ")' },
 
   { name: 'add', group: numbers, takes: 'any any', gives: addType, run: add, doc: 'Adds numbers, or puts text together.', example: 'add(5, 10)' },
   { name: 'subtract', group: numbers, takes: 'number number', gives: 'number', run: ([a, b]) => numberOf(a!) - numberOf(b!), doc: 'The difference.', example: 'subtract(5, 10)' },
@@ -326,7 +366,7 @@ const table: FormulaFunction[] = [
   { name: 'concat', group: lists, takes: 'any any...', gives: args => (args.every(t => t === 'text') ? 'text' : args.every(isList) ? args.reduce(unionType) : 'list:any'), run: (args, ctx) => {
     ctx.spend(1 + args.length)
     // Older Notion formulas join text with this.
-    if (args.every(a => !Array.isArray(a) && (typeof a === 'string' || a === null))) return args.map(format).join('')
+    if (args.every(a => !Array.isArray(a) && (typeof a === 'string' || a instanceof FormulaRich || a === null))) return args.some(a => a instanceof FormulaRich) ? new FormulaRich(args.flatMap(a => (a === null ? [] : runsOf(a)))) : args.map(format).join('')
     return args.flatMap(a => (Array.isArray(a) ? a : a === null ? [] : [a]))
   }, doc: 'Lists put together.', example: 'concat([1, 2], [3, 4])' },
   { name: 'sort', group: lists, takes: 'list', gives: ([l]) => l!, run: ([l], ctx) => { ctx.spend(1 + listOfValues(l!).length); return [...listOfValues(l!)].sort((a, b) => compare(a, b) ?? (a === null ? 1 : -1)) }, doc: 'A list in order.', example: 'sort([3, 1, 2])' },

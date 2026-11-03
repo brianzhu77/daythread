@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { cellValue, columnCalc, databaseRows, groupableProperties, isReadOnly, propertyOf, viewRows, type Database, type DatabaseChange } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { exportFiles } from '../src/domain/export.ts'
-import { clockIn, formulaErrorOf, storedFormula, worldOf } from '../src/domain/formula.ts'
+import { clockIn, formulaErrorOf, formulaRunsOf, storedFormula, worldOf } from '../src/domain/formula.ts'
 import { withLinks } from '../src/domain/relations.ts'
 import { todoRowId } from '../src/domain/todos-source.ts'
 import type { Page } from '../src/domain/types.ts'
@@ -285,4 +285,14 @@ test('To-dos through a relation: Status and the dates read, and a formula on the
   const read = withLinks(h.ws), db = read.pages.find(p => p.id === 'jobs')!.database!, row = read.pages.find(p => p.id === 'j1')!
   assert.equal(cellValue(db, row, 'named'), 'Book the flights')
   assert.equal(cellValue(db, row, 'open'), true)
+})
+
+test('a styled cell holds its words, for a filter, a sort and the export, with its look kept beside them', () => {
+  const s = shop()
+  s.addFormula('flag', 'Flag', 'style(Name, "b", "red")')
+  assert.equal(s.cell('r1', 'flag'), 'Pear')
+  assert.deepEqual(formulaRunsOf(s.rowOf('r1'), propertyOf(s.readDb(), 'flag')!), [{ text: 'Pear', b: true, color: 'red' }])
+  const view = { ...s.readDb().views[0]!, filter: [{ by: 'flag', op: 'contains' as const, value: 'pea' }] }
+  assert.deepEqual(viewRows(s.read(), 'shop', view, context).map(r => r.id), ['r1'])
+  assert.ok(exportFiles(s.h.ws, new Date(at)).some(f => f.path.endsWith('/Shop.md') && /\| Pear \|/.test(f.text)))
 })

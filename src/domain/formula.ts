@@ -1,6 +1,6 @@
 // Formulas (docs/design/formula.md): what's stored is the text with properties by id, and nothing else. Its type is checked against the
 // databases it reads before it's saved and again whenever it's read, as a property it reads can change; its value is worked out per row when read.
-import { formulaFunctions, FormulaDate, FormulaPage, FormulaRowError, FormulaTooLong, format, formatDate, isList, itemOf, notApplicable, pageTarget, unionType, validDateUnit, type Clock, type FormulaFunction, type RunContext, type Value, type ValueType } from './formula-functions.ts'
+import { formulaFunctions, FormulaDate, FormulaPage, FormulaRich, FormulaRowError, FormulaTooLong, format, formatDate, isList, itemOf, notApplicable, pageTarget, unionType, validDateUnit, type Clock, type FormulaFunction, type RichRun, type RunContext, type Value, type ValueType } from './formula-functions.ts'
 import { FormulaSyntaxError, parseFormula, rewriteRefs, type FormulaNames, type FormulaNode, type PropRef } from './formula-parse.ts'
 import { cellValue, isDatabase, readValue, titleId, type CellValue, type Database, type DateValue, type Json, type Property } from './database.ts'
 import { rollupType } from './relations.ts'
@@ -85,6 +85,7 @@ function accepts(wanted: string, t: ValueType): boolean {
   if (wanted === 'any' || t === 'any' || t === 'empty') return true
   if (wanted === 'list') return isList(t)
   if (wanted === 'page') return t.startsWith('page')
+  if (wanted === 'rich') return !isList(t)
   // A number or a date reads as text where text is wanted, as `"Score: " + 5` does, and a page as its title.
   if (wanted === 'text') return !isList(t)
   return wanted === t
@@ -389,6 +390,10 @@ function call(fn: FormulaFunction, args: FormulaNode[], vars: Vars, run: Run): V
 /** The value as this argument wants it; undefined if it's empty where nothing can stand in for it. */
 function coerce(value: Value, wanted: string[]): Value | undefined {
   if (wanted.includes('any')) return value
+  if (wanted.includes('rich')) {
+    if (Array.isArray(value)) throw new FormulaRowError('Expected text here')
+    return value instanceof FormulaRich ? value : format(value)
+  }
   if (value === null) {
     if (wanted.includes('text')) return ''
     if (wanted.includes('list')) return wanted.includes('number') ? null : []
@@ -400,6 +405,7 @@ function coerce(value: Value, wanted: string[]): Value | undefined {
   else if (typeof value === 'boolean') { if (wanted.includes('boolean')) return value; if (wanted.includes('text')) return format(value) }
   else if (typeof value === 'string') { if (wanted.includes('text')) return value }
   else if (value instanceof FormulaPage) { if (wanted.includes('page')) return value; if (wanted.includes('text')) return format(value) }
+  else if (value instanceof FormulaRich) { if (wanted.includes('text')) return format(value) }
   else { if (wanted.includes('date')) return value; if (wanted.includes('text')) return format(value) }
   throw new FormulaRowError(`Expected ${wanted.map(wordFor).join(' or ')} here`)
 }
@@ -439,6 +445,10 @@ const rowErrors = new WeakMap<Page, Record<string, string>>()
 export const formulaErrorOf = (row: Page | undefined, p: Property): string | null =>
   p.formulaError ?? (row ? rowErrors.get(row)?.[p.id] ?? null : null)
 export const noteRowErrors = (row: Page, errors: Record<string, string>) => { rowErrors.set(row, errors) }
+const rowRuns = new WeakMap<Page, Record<string, readonly RichRun[]>>()
+/** How a cell's words are styled, if they are. The cell holds the words, so nothing else has to know. */
+export const formulaRunsOf = (row: Page | undefined, p: Property) => (row ? rowRuns.get(row)?.[p.id] ?? null : null)
+export const noteRowRuns = (row: Page, runs: Record<string, readonly RichRun[]>) => { rowRuns.set(row, runs) }
 
 export interface CellSources {
   world: FormulaWorld
@@ -537,10 +547,10 @@ export class WorkedCells {
       throw error
     }
   }
-  columnCell(row: Page, db: Database, p: Property): { cell: Json | undefined; error?: string } {
+  columnCell(row: Page, db: Database, p: Property): { cell: Json | undefined; error?: string; runs?: readonly RichRun[] } {
     const { value, error } = this.column(row, db, p)
     if (error) return { cell: undefined, error }
-    return { cell: toCell(value, programOf(this.sources.world, row.parentId!, p.id).type) }
+    return { cell: toCell(value, programOf(this.sources.world, row.parentId!, p.id).type), ...(value instanceof FormulaRich ? { runs: value.runs } : {}) }
   }
 }
 

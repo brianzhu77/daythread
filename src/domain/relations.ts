@@ -2,8 +2,8 @@
 // its target's rows, so it reads, sorts and filters as a multi-select does; a rollup becomes a read-only column of the type it
 // works out to, with its value on each row, so its cell, sort and filter can't disagree. With neither, this is the workspace.
 import { isDatabase, isEmptyValue, propertyOf, titleId, todosSourceId, valueText, type CellValue, type Database, type DateValue, type Json, type Option, type Property, type Rollup, type RollupFunction } from './database.ts'
-import { clockIn, formulaShape, isFormula, noteRowErrors, usesClock, WorkedCells, worldOf } from './formula.ts'
-import type { Clock } from './formula-functions.ts'
+import { clockIn, formulaShape, isFormula, noteRowErrors, noteRowRuns, usesClock, WorkedCells, worldOf } from './formula.ts'
+import type { Clock, RichRun } from './formula-functions.ts'
 import { withTodos } from './todos-source.ts'
 import type { Page, Workspace } from './types.ts'
 
@@ -129,14 +129,16 @@ export function withLinks(ws: Workspace, clock?: Clock): Workspace {
     const worked = db?.properties.filter(p => p.rollup || isFormula(p))
     if (!db || !worked?.length) return row
     const values: Record<string, Json> = { ...row.values }
-    const errors: Record<string, string> = {}
+    const errors: Record<string, string> = {}, runs: Record<string, readonly RichRun[]> = {}
     for (const p of worked) {
-      const { cell, error } = isFormula(p) ? cells.columnCell(row, db, p) : { cell: cells.rollupColumn(row, db, p), error: undefined }
+      const { cell, error, runs: styled } = isFormula(p) ? cells.columnCell(row, db, p) : { cell: cells.rollupColumn(row, db, p), error: undefined, runs: undefined }
       if (cell === undefined) delete values[p.id]; else values[p.id] = cell
       if (error) errors[p.id] = error
+      if (styled) runs[p.id] = styled
     }
     const read = { ...row, values }
     if (Object.keys(errors).length) noteRowErrors(read, errors)
+    if (Object.keys(runs).length) noteRowRuns(read, runs)
     return read
   })
   if (!clock) projected.set(ws, { next, day: usesClock(world) ? localDay() : null })

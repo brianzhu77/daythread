@@ -1,7 +1,7 @@
 // Formulas (docs/design/formula.md): Notion's own examples as the expected results, then the language's edges and its limits.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { functionList, format, type Value } from '../src/domain/formula-functions.ts'
+import { functionList, format, FormulaRich, type Value } from '../src/domain/formula-functions.ts'
 import { clockIn, formulaProblem, shownFormula, storedFormula, WorkedCells, type FormulaWorld } from '../src/domain/formula.ts'
 import { LinearRegex, RegexError } from '../src/domain/formula-regex.ts'
 import type { Database, Property } from '../src/domain/database.ts'
@@ -169,6 +169,22 @@ test('a formula made to be slow runs out at its row, and the rest of the view is
   const r: Property = { id: 'f', name: 'F', type: 'formula', formula: backtrack }
   assert.equal(runRow([...properties, r], r).value, false)
   assert.ok(performance.now() - started < 200, `took ${performance.now() - started} ms`)
+})
+
+test('style and link keep their words for everything else, and only http and https become links', () => {
+  const rich = (typed: string) => run(typed) as unknown as FormulaRich
+  assert.deepEqual(rich('style("Notion", "b", "u")').runs, [{ text: 'Notion', b: true, u: true }])
+  assert.deepEqual(rich('style("Notion", "blue", "gray_background")').runs, [{ text: 'Notion', color: 'blue', background: 'gray' }])
+  assert.deepEqual(rich('"Notion".style("b").style("red")').runs, [{ text: 'Notion', b: true, color: 'red' }])
+  assert.deepEqual(rich('"Revenue: " + formatNumber(7, "usd", 0).style("green")').runs, [{ text: 'Revenue: ' }, { text: '$7', color: 'green' }])
+  assert.deepEqual(rich('unstyle(style("x", "b", "red"))').runs, [{ text: 'x' }])
+  assert.deepEqual(rich('unstyle(style("x", "b", "red"), "b")').runs, [{ text: 'x', color: 'red' }])
+  assert.deepEqual(rich('link("Notion", "https://notion.so")').runs, [{ text: 'Notion', href: 'https://notion.so' }])
+  assert.deepEqual(rich('join([style("a", "b"), "c"], "-")').runs, [{ text: 'a', b: true }, { text: '-' }, { text: 'c' }])
+  for (const unsafe of ['javascript:alert(1)', 'data:text/html,x', 'file:///etc/passwd', 'not a url', ' JaVaScRiPt:alert(1)']) assert.equal(run(`link("x", "${unsafe}")`), 'x', unsafe)
+  // Everything else reads the words.
+  for (const [typed, expected] of [['length(style("abc", "b"))', 3], ['upper(style("abc", "b"))', 'ABC'], ['style("a", "b") == "a"', true], ['style("b", "b") > "a"', true], ['contains(style("abc", "i"), "b")', true], ['empty(style("", "b"))', true], ['format(style("a", "b"))', 'a']] as const) assert.deepEqual(run(typed), expected, typed)
+  assert.match((run('style("a", "sparkle")') as Error).message, /"sparkle" isn't a style/)
 })
 
 test('dates read in the zone asked for, so the Worker and the browser agree', () => {

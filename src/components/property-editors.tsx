@@ -16,7 +16,8 @@ import {
   sameRaw, storedValue, type CellValue, type DateValue, type Json, type Option, type Property,
 } from '../domain/database.ts'
 import { mayRead, readDate } from '../domain/date-reading.ts'
-import { formulaErrorOf, tooLongError } from '../domain/formula'
+import { formulaErrorOf, formulaRunsOf, tooLongError } from '../domain/formula'
+import type { RichRun } from '../domain/formula-functions'
 import type { LocalDate, Page } from '../domain/types'
 import { addDays, todayIso } from './dates'
 import { pickerLabel, relativeDay } from './event-rows'
@@ -580,11 +581,20 @@ function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange(
 
 // ---------- Cells (§6.3.2) ----------
 
+/** A formula's styled words, the colours being ones he typed (formula design §7). */
+function FormulaRun({ run }: { run: RichRun }) {
+  const classes = [run.b && 'formula-b', run.u && 'formula-u', run.i && 'formula-i', run.c && 'formula-c', run.s && 'formula-s', run.color && `formula-color-${run.color}`, run.background && `formula-bg-${run.background}`].filter(Boolean).join(' ')
+  if (!run.href) return <span className={classes}>{run.text}</span>
+  return <a className={`cell-url ${classes}`} href={run.href} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{run.text}</a>
+}
+
 /** What a cell shows for its value. The cell itself (size, cursor, press, save states) is the table's. */
 export function PropertyCell({ property, value, row, today = todayIso(), wrap = false }: { property: Property; value: CellValue; row?: Page; today?: LocalDate; wrap?: boolean }) {
   const read = value
   const formulaError = property.formula !== undefined ? formulaErrorOf(row, property) : null
   if (formulaError) return <span className="cell-text cell-error" title={formulaError}>{formulaError === tooLongError ? 'Error · too long' : 'Error'}</span>
+  const runs = property.formula !== undefined ? formulaRunsOf(row, property) : null
+  if (runs) return <span className="cell-text">{runs.map((run, i) => <FormulaRun key={i} run={run} />)}</span>
   // A rollup with nothing linked (design §6.1).
   if (read === null) return property.rollup ? <span className="cell-text">—</span> : null
   switch (property.type) {
