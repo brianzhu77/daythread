@@ -439,13 +439,10 @@ const canGroup = (type: PropertyType): boolean => type !== "text";
 const canMakeColumns = (type: PropertyType): boolean => type === "select" || type === "status" || type === "checkbox";
 /** What a view of this layout can group by: a board's columns need a value a card can be dragged to (design §7.2). */
 export function groupableProperties(db: Database, layout: ViewLayout): Property[] {
-  if (layout === "gallery") return [];
   return db.properties.filter((p) => (layout === "board" ? canMakeColumns(p.type) : canGroup(p.type)));
 }
 /** The property a view groups by now; null when it was deleted or its type can't group any more. */
 export function viewGroupBy(db: Database, view: View): Property | null {
-  // A gallery doesn't group; its `groupBy` is kept unread, for switching back.
-  if (view.layout === "gallery") return null;
   const property = view.groupBy ? db.properties.find((p) => p.id === view.groupBy) : undefined;
   return property && (view.layout === "board" ? canMakeColumns(property.type) : canGroup(property.type)) ? property : null;
 }

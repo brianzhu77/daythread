@@ -138,7 +138,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     <div className="database-menu-tiles">
       <button type="button" onClick={() => go('filter')}>Filter</button>
       <button type="button" onClick={() => go('sort')}>Sort</button>
-      {view.layout !== 'gallery' && <button type="button" onClick={() => go('group')}>Group</button>}
+      <button type="button" onClick={() => go('group')}>Group</button>
     </div>
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>

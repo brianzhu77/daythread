@@ -109,7 +109,7 @@ for (const [id, block, title, layout] of [[boardId, boardBlock, 'Fixture board',
   await change({ kind: 'addProperty', property: { id: 'note', name: 'Note', type: 'text' } })
   await change({ kind: 'addProperty', property: { id: 'done', name: 'Done', type: 'checkbox' } })
   const view = ws.pages.find(p => p.id === id)!.database!.views[0]!
-  await change({ kind: 'updateView', viewId: view.id, layout, ...(layout === 'gallery' ? {} : { groupBy: 'state', hiddenGroups: ['old'] }), name: { board: 'Board', table: 'Table', list: 'List', gallery: 'Gallery' }[layout], ...(layout === 'table' ? {} : { columns: [{ id: 'note' }, { id: 'done' }] }) })
+  await change({ kind: 'updateView', viewId: view.id, layout, groupBy: 'state', hiddenGroups: ['old'], name: { board: 'Board', table: 'Table', list: 'List', gallery: 'Gallery' }[layout], ...(layout === 'table' ? {} : { columns: [{ id: 'note' }, { id: 'done' }] }) })
   for (let i = 0; i < 26; i++) ws = await run({ type: 'add-row', databaseId: id, pageId: crypto.randomUUID(), title: `Fixture row ${i + 1}`, values: { state: 'next', note: 'A note' }, at: new Date().toISOString() })
   ws = await run({ type: 'add-row', databaseId: id, pageId: crypto.randomUUID(), title: 'Fixture hidden row', values: { state: 'old' }, at: new Date().toISOString() })
 }

@@ -377,9 +377,9 @@ export function GroupName({ groups, group }: { groups: ViewGroups; group: ViewGr
   return <span>{group.name}</span>
 }
 /** "Hidden: Done (12)" at the end of a view (design §7.3): a tap shows that group again. */
-export function HiddenGroups({ groups, changeView }: { groups: ViewGroups; changeView: ChangeView }) {
+export function HiddenGroups({ groups, changeView, underCards }: { groups: ViewGroups; changeView: ChangeView; underCards?: boolean }) {
   if (!groups.hidden.length) return null
-  return <p className="database-hidden-groups">Hidden: {groups.hidden.map((g, i) => <span key={g.key}>{i > 0 && ' · '}<button type="button" className="app-link" onClick={() => changeView(current => ({ hiddenGroups: (current.hiddenGroups ?? []).filter(k => k !== g.key) }))}>{g.name} ({g.rows.length})</button></span>)}</p>
+  return <p className={`database-hidden-groups${underCards ? ' is-under-cards' : ''}`}>Hidden: {groups.hidden.map((g, i) => <span key={g.key}>{i > 0 && ' · '}<button type="button" className="app-link" onClick={() => changeView(current => ({ hiddenGroups: (current.hiddenGroups ?? []).filter(k => k !== g.key) }))}>{g.name} ({g.rows.length})</button></span>)}</p>
 }
 /** How many rows each group draws, for this tab: "Show 25 more" (design §13) under each group or column. */
 export function useGroupLimits(blockId: string, cap: number) {
