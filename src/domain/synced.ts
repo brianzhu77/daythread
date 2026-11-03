@@ -150,7 +150,8 @@ export function acceptSavedBlocks(state: Workspace, page: Page, nodes: EditorNod
  * place is written again from the record, its own roles kept, so one command never leaves two places apart.
  */
 export function settleSynced(state: Workspace): { linesRemovedFrom?: number } {
-  if (!hasRecords(state)) return {}
+  if (!hasRecords(state) && !state.pages.some(p => mentionsBlock(p.document))) return {}
+  state.synced ??= []
   let linesRemovedFrom: number | undefined
   // Measured against the record as it was, so the places that haven't changed don't change it back.
   const was = new Map(state.synced!.map(r => [r.id, recordKey(r)]))
@@ -159,7 +160,8 @@ export function settleSynced(state: Workspace): { linesRemovedFrom?: number } {
     walk(pageNodes(page), n => {
       if (!isBlock(n) || !n.children?.length) return
       const record = state.synced!.find(r => r.id === n.props?.syncId)
-      if (!record) return
+      // Made outside a save, on a new page from a template: its own, starting here.
+      if (!record) { state.synced!.push({ id: String(n.props?.syncId), lines: JSON.stringify(unplaced(n)), rev: 1, original: n.id }); return }
       const lines = unplaced(n)
       if (linesKey(lines) !== was.get(record.id)) {
         // Fewer lines than it had, on a block shown elsewhere too.
@@ -169,7 +171,7 @@ export function settleSynced(state: Workspace): { linesRemovedFrom?: number } {
       }
     })
   }
-  for (const record of state.synced!) if (recordKey(record) !== was.get(record.id)) record.rev++
+  for (const record of state.synced!) if (was.has(record.id) && recordKey(record) !== was.get(record.id)) record.rev++
   dropUnheldRecords(state)
   for (const page of state.pages) {
     if (!mentionsBlock(page.document)) continue
@@ -193,6 +195,20 @@ export function syncedPlaces(ws: Pick<Workspace, 'pages'>, syncId: string): { pa
     walk(pageNodes(page), n => { if (isBlock(n) && n.props?.syncId === syncId) out.push({ page, block: n }) })
   }
   return out
+}
+export const isSyncedBlock = isBlock
+/** The block a record was made as: on a template or a duplicated row it makes its own block; any other place stays connected (design §7). */
+export const isOriginalBlock = (ws: Pick<Workspace, 'synced'>, n: EditorNode): boolean => ws.synced?.find(r => r.id === n.props?.syncId)?.original === n.id
+/**
+ * Where a block counts when it counts once (states §7): Search under the original, or the oldest live place if that's in Trash;
+ * Tags under its earliest day, or that same place if no day page shows it. Templates and hidden pages don't count.
+ */
+export function syncedHome(ws: Pick<Workspace, 'pages' | 'synced'>, syncId: string, by: 'original' | 'day', counts: (p: Page) => boolean): string | null {
+  const places = syncedPlaces(ws, syncId).filter(p => counts(p.page))
+  if (!places.length) return null
+  if (by === 'day') { const days = places.filter(p => p.page.date).sort((a, b) => a.page.date!.localeCompare(b.page.date!)); if (days.length) return days[0]!.block.id }
+  const original = ws.synced?.find(r => r.id === syncId)?.original
+  return (places.find(p => p.block.id === original) ?? places[0]!).block.id
 }
 /** Once no place is left anywhere, the record goes: a deleted note isn't kept behind his back (Undo's copy still has it). */
 function dropUnheldRecords(state: Workspace): void {

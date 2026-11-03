@@ -9,6 +9,7 @@ import { eligibleTask, planningRange, type DraftItem } from '../../domain/day-dr
 import { isBlankTask, plannedOn, previousDayPage } from '../../domain/workspace.ts'
 import type { LocalDate, Page, Task, Workspace } from '../../domain/types.ts'
 import { callStructured, type ModelConfig } from './openrouter.ts'
+import { isSyncedBlock } from '../../domain/synced.ts'
 
 export const dayDraftSchema = {
   name: 'day_draft', strict: true,
@@ -56,8 +57,11 @@ export function buildDayDraftRequest(ws: Workspace, page: Page): DayDraftRequest
   const blocks = new Map<string, EditorNode>(), lines = new Map<string, EditorNode>(), tasks = new Map<string, Task>()
   // Only the planning part gets ids: the model can't anchor anything in his reflection or notes.
   // A database view on the page isn't his writing, and nothing can be anchored to it (R2-6).
+  const shownBlocks = new Set<unknown>()
   const pageRows = doc.flatMap((n, i) => {
     if (n.type === 'database') return []
+    // A synced block's lines are the day's context, once however many times it's shown, and nothing is anchored inside it.
+    if (isSyncedBlock(n)) { if (shownBlocks.has(n.props?.syncId)) return []; shownBlocks.add(n.props?.syncId); return (n.children ?? []).map(line => `   ${describe(line, day)}`) }
     if (i < start || i >= end) return [`   ${describe(n, day)}`]
     const id = `P${blocks.size + 1}`; blocks.set(id, n); return [`${id} ${describe(n, day)}`]
   })

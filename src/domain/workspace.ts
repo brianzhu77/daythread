@@ -8,7 +8,7 @@ import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./pa
 import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
-import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, settleSynced, unsyncBlock } from "./synced.ts";
+import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, unsyncBlock } from "./synced.ts";
 
 export class DomainError extends Error {}
 export function createEmptyWorkspace(timezone = "America/Vancouver"): Workspace {
@@ -142,6 +142,13 @@ export function carryAncestors(from: Page | undefined, taskId: string): string[]
 function removeNodes(list: EditorNode[], ids: ReadonlySet<string>): EditorNode[] {
   const out: EditorNode[] = [];
   for (const n of list) {
+    // Planning never edits a synced block: a row there only becomes a reference here, and the line stays on every page (design §3).
+    if (isSyncedBlock(n)) {
+      const held = structuredClone(n);
+      for (const line of flatNodes(held.children ?? [])) if (ids.has(line.id)) line.props = { ...line.props, role: "reference", planDate: "" };
+      out.push(held);
+      continue;
+    }
     const children = removeNodes(n.children ?? [], ids);
     if (ids.has(n.id)) out.push(...children);
     else out.push(children.length || n.children ? { ...n, children } : n);
@@ -245,7 +252,7 @@ function ensureDay(state: Workspace, day: string): Page {
     for (let n = 2; state.pages.some((x) => x.id === id && x.type === "daily" && isTrashed(x)); n++) id = `day:${day}:${n}`;
     if (state.pages.some((x) => x.id === id)) throw new DomainError("Page id already in use");
     const template = defaultTemplate(state, dayPagesTarget);
-    p = { id, type: "daily", date: day, title: day, document: JSON.stringify(template ? pageFromTemplate(template, day) : templateDocument(id, day)) };
+    p = { id, type: "daily", date: day, title: day, document: JSON.stringify(template ? pageFromTemplate(template, day, undefined, (n) => isOriginalBlock(state, n)) : templateDocument(id, day)) };
     state.pages.push(p);
   }
   return p;
@@ -430,6 +437,9 @@ function placeDatabases(state: Workspace, p: Page, before: EditorNode[], after: 
 /** A duplicated row's body: fresh block ids, and its to-dos as new tasks of the copy (same state), so ticking one never ticks the other. */
 function copiedBody(state: Workspace, from: Page, to: Page, on: string): EditorNode[] {
   const visit = (n: EditorNode): EditorNode => {
+    // A synced block in a duplicated row, as on a template (design §7): its own if it's the original here, else still connected.
+    if (isSyncedBlock(n) && !isOriginalBlock(state, n)) return { id: newId(), type: n.type, props: { syncId: String(n.props?.syncId), roles: "" }, children: [] };
+    if (isSyncedBlock(n)) return { id: newId(), type: n.type, props: { syncId: newId(), roles: "" }, children: (n.children ?? []).map(visit) };
     const copy: EditorNode = { ...structuredClone(n), id: newId(), children: (n.children ?? []).map(visit) };
     const taskId = rowTaskId(n), t = taskId ? state.tasks.find((x) => x.id === taskId) : undefined;
     if (t) {
@@ -669,7 +679,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       // B70 (Lead 80555761): a new page with an empty body starts from the nearest default, however it was made; its
       // title isn't copied. Only a page made with words keeps them and gets no template.
       const template = !body ? newPageTemplate(state, parent) : undefined;
-      const nodes = template ? pageFromTemplate(template, null) : [line];
+      const nodes = template ? pageFromTemplate(template, null, undefined, (n) => isOriginalBlock(state, n)) : [line];
       state.pages.push({ id, type: "document", date: null, title: text(action.title, 1000), ...(action.parentId ? { parentId: action.parentId } : {}), document: JSON.stringify(nodes) });
       return { message: "Page saved", entityId: id };
     }
@@ -948,7 +958,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
           if (!words) return emptyTaskRow(null);
           const task = createTask(state, words, row, localDay(state, at));
           return { id: newId(), type: "task", props: { taskId: task.id, role: "reference", planDate: "" }, content: structuredClone(n.content), children: [] };
-        }));
+        }, (n) => isOriginalBlock(state, n)));
       }
       numberNewRow(db.database, row);
       // A new row's links show on their other side, a copy's too.
