@@ -6,7 +6,7 @@ import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as histor
 import { type BlockNoteEditor, BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, editorHasBlockWithType, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
 import { en } from '@blocknote/core/locales'
-import { toast } from '@heroui/react'
+import { Button, toast } from '@heroui/react'
 import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, LinkToolbarController, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useEditorState, useExtensionState, usePortalElement, useUIMode } from '@blocknote/react'
 import { BlockNoteView, ShadCNDefaultComponents } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
@@ -14,7 +14,7 @@ import { suggestionMenuMiddleware } from './suggestion-menu-placement'
 import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
-import { blockPlace, editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, sectionRange, withBlockBack, type BlockPlace, type EditorNode } from '../domain/editor-document'
+import { blockPlace, editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, rowTaskId, sectionRange, withBlockBack, type BlockPlace, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
 import { announceSave, changedBy, claim, clearOwn, landedSave, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn, type DraftSlot } from './draft-slots'
 import { applyCommand, plannedOn, taskRows as rowsOfTask, urlOwner } from '../domain/workspace'
@@ -159,6 +159,20 @@ function LineTypeSelect({ isRoleHeading, canHoldHeading }: { isRoleHeading: (blo
   return <Components.FormattingToolbar.Select className="bn-select" items={selectItems} isDisabled={blocks.some(b => isRoleHeading(b.id))} portalElement={portalElement} preventFocusOnOpen={uiMode === 'mobile'} />
 }
 const clipboardType = 'application/x-daythread-blocks'
+/**
+ * The last blocks copied here, kept with their words: a phone may not carry our clipboard type (B22-10, untested until the
+ * native run), and a paste with these same words is this copy, not a plain line.
+ */
+const lastCopyKey = 'daythread:last-copy'
+function rememberCopy(blocks: EditorNode[]) {
+  try { localStorage.setItem(lastCopyKey, JSON.stringify({ text: blocks.map(n => inlineText(n.content)).join('\n'), blocks })) } catch { /* the clipboard's own type still works */ }
+}
+function rememberedCopy(text: string): string {
+  try {
+    const kept = JSON.parse(localStorage.getItem(lastCopyKey) ?? 'null') as { text: string; blocks: EditorNode[] } | null
+    return kept && text.trim() && kept.text === text ? JSON.stringify({ blocks: kept.blocks, cut: false, token: '' }) : ''
+  } catch { return '' }
+}
 const cutTokens = new Set<string>()
 const deepNodes = (nodes: readonly EditorNode[]): EditorNode[] => nodes.flatMap(n => [n, ...deepNodes(n.children ?? [])])
 const checklistIds = (nodes: readonly EditorNode[]): string[] => deepNodes(nodes).filter(n => n.type === 'sourceChecklist' && n.props?.checked !== true).map(n => n.id)
@@ -193,7 +207,7 @@ function EditorTask({ blockId, taskId, role, planDate, contentRef }: { blockId: 
     {role === 'plan' && seen?.status === 'open' && planned && planDate && planned !== planDate && <span contentEditable={false} className="editor-reference-tag">Moved to {shortLabel(planned)}</span>}
     {/* A done or cancelled task keeps the button's space, hidden, so a long title doesn't reflow when it's ticked (#9). */}
     {role === 'reference' && t && <button className="editor-plan-action" contentEditable={false} {...(seen?.status === 'open' ? { onClick: () => void run({ type: 'plan-task', taskId, date: todayIso(), today: todayIso() }, r => ({ text: 'Planned for today', undoOperationId: r.operationId })) } : { disabled: true, tabIndex: -1, 'aria-hidden': true, style: { visibility: 'hidden' as const } })}>Plan for today</button>}
-    {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={[...menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent)), ...(copy ? [{ items: [{ label: 'Copy link to line', onSelect: copy }] }] : [])]} onEscape={() => rows!.focusRow(blockId)} /></span>}
+    {model && <span contentEditable={false} className="editor-row-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${t!.title}`} triggerClass="editor-row-more" groups={[...menuGroups(model, rows!.today, intent => rows!.act(blockId, t!, intent)), { items: [{ label: 'Copy', onSelect: () => rows!.copyRow(blockId) }, ...(copy ? [{ label: 'Copy link to line', onSelect: copy }] : [])] }]} onEscape={() => rows!.focusRow(blockId)} /></span>}
     {seen && seen.status === 'open' && hasDateFacts(seen) && <span contentEditable={false} className="editor-date-tag"><DateTag task={seen} today={todayIso()} pageDate={planDate || todayIso()} /></span>}
   </div>
 }
@@ -453,7 +467,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       view.dispatch(tr.setSelection(TextSelection.create(tr.doc, from + node.nodeSize + (next && /\s/.test(next) ? 0 : 1))).scrollIntoView())
       return true
     }
-    const internal = data.getData(clipboardType)
+    // Plain words alone, as a row's Copy leaves them if a phone drops our type; a text selection also carries HTML.
+    const internal = data.getData(clipboardType) || (data.getData('text/html') ? '' : rememberedCopy(data.getData('text/plain')))
     if (internal) {
       try {
         const payload = JSON.parse(internal)
@@ -465,8 +480,24 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const freshContent = (node: EditorNode): unknown => !Array.isArray(node.content) ? node.content : (node.content as { type?: string; props?: Record<string, string> }[]).map(c => c?.type === 'dateMention' ? (moving ? c : { ...c, props: { ...c.props, eventId: crypto.randomUUID() } }) : c?.type !== 'pageRef' ? c
           : node.type === 'task' ? { type: 'text', text: c.props?.lineId ? lineRefView(latestWorkspace.current, { pageId: c.props.pageId ?? '', lineId: c.props.lineId, ...(c.props.taskId ? { taskId: c.props.taskId } : {}) }).resolved?.words ?? '' : pageRefView(latestWorkspace.current, c.props?.pageId ?? '', c.props?.newTitle || undefined).label, styles: {} }
           : moving ? c : { ...c, props: { ...c.props, refId: crypto.randomUUID() } })
+        // B22: a copied to-do pasted on another page is the same task, a reference row to it, so a tick reaches it everywhere.
+        // On a page already showing it, a second row would only read as two tasks, so there it's a new one, as is a blank or
+        // unknown row. A template's rows hold no task, and a cut still moves its row.
+        const showing = new Set(deepNodes(editor.document as unknown as EditorNode[]).map(n => rowTaskId(n)))
+        const sameTask = (node: EditorNode) => {
+          if (moving || onTemplate || node.type !== 'task') return null
+          const task = latestWorkspace.current.tasks.find(t => t.id === node.props?.taskId)
+          return task && task.title.trim() && !showing.has(task.id) ? task : null
+        }
+        const sameTaskRows: string[] = []
         const fresh = (node: EditorNode): EditorNode => {
           const id = crypto.randomUUID()
+          const task = sameTask(node)
+          if (task) {
+            sameTaskRows.push(id); showing.add(task.id)
+            // Its words are the task's now, not the copy's, or pasting an old copy would rename it.
+            return { ...node, id, content: [{ type: 'text', text: task.title, styles: {} }], props: { taskId: task.id, role: 'reference', planDate: '' }, ...(node.children?.length ? { children: node.children.map(fresh) } : {}) }
+          }
           // A database block (R1, Jazz §6.3.12): a cut moves the database here (this save makes the block its home); a
           // copy pastes a page card to it, never a second database. Linked views come with R2.
           if (node.type === 'database') {
@@ -476,7 +507,18 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           }
           return { ...node, id, content: freshContent(node), ...(node.type === 'task' ? { props: moving && latestWorkspace.current.tasks.some(t => t.id === node.props?.taskId) ? node.props : { taskId: `editor-task:${id}`, role: 'reference', planDate: '' } } : {}), ...(node.children ? { children: node.children.map(fresh) } : {}) }
         }
-        insert(payload.blocks.map(fresh))
+        // With the caret in a to-do with words, whole rows go below it. Fitted in at the caret, they'd split it, and its second
+        // half would be another row of the same task (Bumblebee).
+        const at = editor.getTextCursorPosition().block
+        if (at.type === 'task' && inlineText(at.content).trim() && editor.prosemirrorState.selection.empty) editor.insertBlocks(payload.blocks.map(fresh) as never, at.id, 'after')
+        else insert(payload.blocks.map(fresh))
+        if (sameTaskRows.length) {
+          const n = sameTaskRows.length
+          setNotice({ text: n === 1 ? 'Pasted as the same task' : 'Pasted as the same tasks', fingerprint: JSON.stringify(editor.document), extra: { label: n === 1 ? 'Make a copy' : 'Make copies', run: () => {
+            for (const id of sameTaskRows) if (editor.getBlock(id)) editor.updateBlock(id, { props: { taskId: `editor-task:${id}`, role: 'reference', planDate: '' } } as never)
+            setNotice({ text: n === 1 ? 'Made a copy' : `Made ${n} copies`, fingerprint: JSON.stringify(editor.document) })
+          } } })
+        }
         if (payload.cut) { cutTokens.delete(payload.token); localStorage.removeItem(`daythread:cut:${payload.token}`) }
         return true
       } catch { setStatus('Could not paste these blocks · clipboard kept'); return true }
@@ -672,10 +714,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // one the notice describes; any later edit retires the notice.
   const notice = useRef<{ key: string; fingerprint: string } | null>(null)
   const closeNotice = () => { if (notice.current) toast.close(notice.current.key); notice.current = null }
-  const setNotice = ({ text, fingerprint }: { text: string; fingerprint: string }) => {
+  const setNotice = ({ text, fingerprint, extra }: { text: string; fingerprint: string; extra?: { label: string; run: () => void } }) => {
     closeNotice()
     const key = toast(text, {
       timeout: 8000,
+      // A toast has one action button; a second sits under the text, as in the workspace's own notices.
+      description: extra && <Button size="sm" variant="ghost" className="toast-extra" onPress={() => { if (notice.current?.key === key && fingerprint === JSON.stringify(editor.document)) extra.run(); else closeNotice() }}>{extra.label}</Button>,
       actionProps: { children: 'Undo', onPress: () => { if (notice.current?.key === key && fingerprint === JSON.stringify(editor.document)) void performHistory('undo'); closeNotice() } },
       onClose: () => { if (notice.current?.key === key) notice.current = null },
     })
@@ -2062,7 +2106,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const choose = (intent: RowIntent) => { selected.current = []; setSelectionLabel(''); void rowAct(id, t, intent) }
     const keep = (e: { preventDefault(): void }) => e.preventDefault()
     const [tomorrow, ...rest] = model.primary[0]?.label === 'Tomorrow' ? model.primary : [null, ...model.primary]
-    const more = [...menuGroups(model, todayIso(), choose).filter(g => g.title !== 'Another day').map(g => ({ ...g, items: g.items.filter(i => !model.primary.some(p => p.label === i.label) && !i.label.startsWith('Tomorrow')) })).filter(g => g.items.length), ...(lineLinkTarget(id) ? [{ items: [{ label: 'Copy link to line', onSelect: () => { selected.current = []; setSelectionLabel(''); copyLineLink(id) } }] }] : []), { items: [{ label: 'Delete line', danger: true, onSelect: deleteSelected }] }]
+    const more = [...menuGroups(model, todayIso(), choose).filter(g => g.title !== 'Another day').map(g => ({ ...g, items: g.items.filter(i => !model.primary.some(p => p.label === i.label) && !i.label.startsWith('Tomorrow')) })).filter(g => g.items.length), { items: [{ label: 'Copy', onSelect: () => { selected.current = []; setSelectionLabel(''); copyRow(id) } }, ...(lineLinkTarget(id) ? [{ label: 'Copy link to line', onSelect: () => { selected.current = []; setSelectionLabel(''); copyLineLink(id) } }] : [])] }, { items: [{ label: 'Delete line', danger: true, onSelect: deleteSelected }] }]
     return <div className="editor-selection-bar is-row-actions" onPointerDown={keep}>
       {tomorrow && <button type="button" onClick={() => choose(tomorrow.intent)}>{tomorrow.label}</button>}
       {model.anotherDay && <RowMenu label="Another day" triggerClass="editor-bar-button" trigger="Another day" groups={menuGroups({ ...model, groups: model.groups.filter(g => g.title === 'Another day') }, todayIso(), choose)} />}
@@ -2101,6 +2145,27 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (!navigator.clipboard?.writeText) { notice(false); return }
     navigator.clipboard.writeText(url).then(() => notice(true), () => notice(false))
   }
+  /** B22: Copy on a to-do's ⋯, the phone's way to copy a whole row. A paste finds it by its words if iOS dropped our type. */
+  const copyRow = (blockId: string) => {
+    const block = deepNodes(nodes()).find(n => n.id === blockId)
+    if (!block) return
+    const blocks = [block]
+    rememberCopy(blocks)
+    const text = inlineText(block.content)
+    let wrote = false
+    const onCopy = (e: ClipboardEvent) => {
+      if (!e.clipboardData) return
+      e.preventDefault(); e.stopImmediatePropagation()
+      e.clipboardData.setData(clipboardType, JSON.stringify({ blocks, cut: false, token: crypto.randomUUID() })); e.clipboardData.setData('text/plain', text)
+      wrote = true
+    }
+    document.addEventListener('copy', onCopy, true)
+    try { document.execCommand('copy') } catch { /* not supported: the text below */ } finally { document.removeEventListener('copy', onCopy, true) }
+    const notice = (ok: boolean) => toast(ok ? 'Copied' : "Couldn't copy", { timeout: 4000 })
+    if (wrote) { notice(true); return }
+    if (!navigator.clipboard?.writeText) { notice(false); return }
+    navigator.clipboard.writeText(text).then(() => notice(true), () => notice(false))
+  }
   /** ⌘/ on a line with no ⋯ (any line but an open task on a day page): a menu with Copy link to line (Jazz §1). */
   const [lineMenu, setLineMenu] = useState<{ blockId: string; anchor: { top: number; bottom: number; left: number } } | null>(null)
   const closeLineMenu = (refocus: boolean) => {
@@ -2120,6 +2185,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const rowActions: RowActions = {
     pageDate: page.date ?? null, today: todayIso(), rowsOnly: onTemplate, act: (id, t, intent) => void rowAct(id, t, intent),
     copyLink: id => lineLinkTarget(id) ? () => copyLineLink(id) : null,
+    copyRow,
     focusRow: id => {
       if (!editor.getBlock(id)) return
       const back = menuReturn.current; menuReturn.current = null
@@ -2416,7 +2482,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     {dock && createPortal(<>
       {/* B38: no role; the header's status line already announces each change. */}
       {unsaved && !saveLineVisible && <div className="editor-unsaved-line"><span className="editor-unsaved-dot" aria-hidden="true" />{unsavedText}</div>}
-      {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span>{selected.current.length === 1 && lineLinkTarget(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyLineLink(id) }}>Copy link</button>}<button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
+      {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span>{selected.current.length === 1 && editor.getBlock(selected.current[0]!)?.type === 'task' && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyRow(id) }}>Copy</button>}{selected.current.length === 1 && lineLinkTarget(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyLineLink(id) }}>Copy link</button>}<button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
       {lineMenu && <LineMenu anchor={lineMenu.anchor} onClose={closeLineMenu} onCopy={() => { const id = lineMenu.blockId; closeLineMenu(true); copyLineLink(id) }} />}
     {pastedChecklistIds.length > 0 && <div className="editor-paste-notice" role="status">{pastedChecklistIds.length} checklist {pastedChecklistIds.length === 1 ? 'line' : 'lines'} · <button onClick={() => {
       let count = 0, planned = 0
