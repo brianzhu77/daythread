@@ -5,6 +5,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { calcChoices, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
+import { databaseSource } from '../domain/todos-source'
 import { blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange } from './database-block'
 import { ChevronDownIcon } from './icons'
 import { useSaveOnHide, useWide } from './property-editors'
@@ -85,7 +86,7 @@ export function DatabaseMenuHost() {
     window.getSelection()?.removeAllRanges()
   }, [opened, wide])
   useShownViews()
-  const db = open ? workspace?.pages.find(p => p.id === open.databaseId) : undefined
+  const db = open && workspace ? databaseSource(workspace, open.databaseId) : undefined
   if (!open || !at || !isDatabase(db) || db.trashedAt) return null
   const view = shownView(db.database, open.blockId)
   const go = (panel: Panel) => setOpenMenu({ ...open, panel })
@@ -149,10 +150,10 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
     {view.layout === 'table' && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
     <hr />
-    {(inline || linked) && <button type="button" role="menuitem" onClick={() => { close(); void navigate({ to: '/pages', search: { page: db.id } }) }}>Open as page</button>}
+    {(inline || linked) && !db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); void navigate({ to: '/pages', search: { page: db.id } }) }}>Open as page</button>}
     {(inline || linked) && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.duplicate(blockId) }}>Duplicate</button>}
     {inline && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.turnIntoPage(blockId, db.id) }}>Turn into page</button>}
-    <button type="button" role="menuitem" onClick={copyLink}>Copy link</button>
+    {!db.database.fixed && <button type="button" role="menuitem" onClick={copyLink}>Copy link</button>}
     <hr />
     {linked
       ? <button type="button" role="menuitem" className="is-danger" onClick={() => { close(); actions?.remove(blockId) }}>Remove this view</button>
@@ -418,11 +419,13 @@ function PropertiesPanel({ db, view, go }: { db: DatabasePage; view: View; go: (
     <div className="database-property-line is-title"><span>Name</span><span className="database-menu-quiet">always shown</span></div>
     {ordered.map(p => <div key={p.id} className="database-property-line">
       <label className="database-property-switch"><input type="checkbox" checked={shown.has(p.id)} onChange={() => toggle(p)} aria-label={`Show ${p.name}`} /></label>
-      <button type="button" className="database-property-name" onClick={() => go({ property: p.id })}>{p.name}<span className="database-menu-quiet"> · {typeLabels[p.type]}</span></button>
+      {db.database.fixed
+        ? <span className="database-property-name">{p.name}<span className="database-menu-quiet"> · {typeLabels[p.type]}</span></span>
+        : <button type="button" className="database-property-name" onClick={() => go({ property: p.id })}>{p.name}<span className="database-menu-quiet"> · {typeLabels[p.type]}</span></button>}
       {shown.has(p.id) && view.columns[0]?.id !== p.id && <button type="button" aria-label={`Move ${p.name} left`} onClick={() => shift(p, -1)}>↑</button>}
       {shown.has(p.id) && view.columns.at(-1)?.id !== p.id && <button type="button" aria-label={`Move ${p.name} right`} onClick={() => shift(p, 1)}>↓</button>}
     </div>)}
-    <button type="button" role="menuitem" onClick={() => go('new-property')}>+ Add property</button>
+    {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('new-property')}>+ Add property</button>}
   </>
 }
 

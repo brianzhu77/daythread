@@ -34,6 +34,8 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("ensure-day"), date: day }),
   z.object({ type: z.literal("add-task"), pageId: id, title: title.min(1), plannedOn: day.nullable().optional(), attentionOn: day.nullable().optional(), deadlineOn: day.nullable().optional() }),
   z.object({ type: z.literal("task-status"), taskId: id, status, today: day.optional() }),
+  z.object({ type: z.literal("rename-task"), taskId: id, title: z.string().max(1000) }),
+  z.object({ type: z.literal("set-task-dates"), taskId: id, attentionOn: day.nullable().optional(), deadlineOn: day.nullable().optional() }),
   z.object({ type: z.literal("plan-task"), taskId: id, date: day, from: day.optional(), today: day.optional() }),
   z.object({ type: z.literal("plan-tasks"), date: day, items: z.array(z.object({ taskId: id })).min(1).max(100) }),
   z.object({ type: z.literal("not-today"), taskId: id, date: day, onlyThisDay: z.literal(true).optional() }),

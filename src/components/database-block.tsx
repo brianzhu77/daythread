@@ -13,7 +13,10 @@ import { ChevronRightIcon } from './icons'
 import { holdKeyboard } from './keyboard'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide } from './property-editors'
 import { calcText, emailHref, phoneHref, urlHref } from './property-values'
-import { useWorkspace } from './use-day'
+import { useTaskTick, useWorkspace } from './use-day'
+import { announceSave } from './draft-slots'
+import { taskRows } from '../domain/workspace'
+import { newTodo, newTodoRowId, taskIdOfRow, todoChange, todoLine, todoRowId, todosSourceId, withTodos } from '../domain/todos-source'
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
 import { DatabaseGallery } from './database-gallery'
@@ -119,8 +122,9 @@ export const blockActions = new Map<string, BlockActions>()
 
 export function DatabaseBlock({ blockId, pageId, viewJson, hostDate, actions }: { blockId: string; pageId: string; viewJson: string; hostDate: string | null; actions?: BlockActions | null }) {
   useLayoutEffect(() => { if (!actions) return; blockActions.set(blockId, actions); return () => { if (blockActions.get(blockId) === actions) blockActions.delete(blockId) } }, [blockId, actions])
-  const { workspace } = useWorkspace()
+  const { workspace: stored } = useWorkspace()
   usePendingDatabases()
+  const workspace = stored && pageId === todosSourceId ? withTodos(stored) : stored
   const db = workspace?.pages.find(p => p.id === pageId)
   const pending = db ? undefined : pendingDatabases.get(pageId)
   if (pending) return <div className="database-block is-pending" contentEditable={false} {...isolate}>
@@ -203,6 +207,24 @@ export function useCommitCell() {
   const { run, refresh, latest } = useWorkspace()
   const commit = (db: Page & { database: Database }, row: Page, columnId: string, raw: Json | undefined, notice?: string, onSaved?: () => void, beforeId?: string | null) => {
     const key = pendingKey(row.id, columnId)
+    const taskId = taskIdOfRow(row.id)
+    // A to-do: the task's own command and notice, with no check of its own (those commands have none), never a row's set-values.
+    if (taskId) {
+      const ws = latest()
+      const change = ws ? todoChange(ws, taskId, columnId, raw, todayIso()) : null
+      if (!change) { onSaved?.(); return }
+      if ('refused' in change) { toast(change.refused, { timeout: 6000 }); return }
+      const pendingTodo = (failed: boolean): PendingCell => ({ databaseId: db.id, rowId: row.id, columnId, raw, failed, retry: () => { setPendingCell(key, null); commit(db, row, columnId, raw, notice, onSaved) }, discard: () => { setPendingCell(key, null); onSaved?.() } })
+      setPendingCell(key, pendingTodo(false))
+      void run(change.action, r => ({ text: notice ?? change.notice, undoOperationId: r.operationId }), newId(), { quiet: true }).then(r => {
+        setPendingCell(key, r ? null : pendingTodo(true))
+        if (!r) return
+        // New words change lines on their pages: a tab open on one should read that as this browser, not another device.
+        if (change.action.type === 'rename-task') for (const { page } of taskRows(latest() ?? ws!, taskId)) announceSave(page.id)
+        onSaved?.()
+      })
+      return
+    }
     // A value still on its way is what this change will find when it lands, so it's built on that (Lead's review, 7).
     const inFlight = pendingCells.get(key)
     const expected = ((inFlight && !inFlight.failed ? inFlight.raw : rawOf(row, columnId)) ?? null) as Json
@@ -314,15 +336,20 @@ function useRecoverDrafts(commit: ReturnType<typeof useCommitCell>) {
 
 /** Mounted once (app shell): the editor of the open cell, under its cell, or as a sheet on the phone. */
 export function DatabaseCellEditor() {
-  const { workspace, run } = useWorkspace()
+  const { workspace: stored, run } = useWorkspace()
   const cell = useOpenCell()
   const commit = useCommitCell()
+  const addTodo = useAddTodo()
   useRecoverDrafts(commit)
+  const workspace = stored && cell?.databaseId === todosSourceId ? withTodos(stored) : stored
   const db = cell ? workspace?.pages.find(p => p.id === cell.databaseId) : undefined
-  const row = cell ? workspace?.pages.find(p => p.id === cell.rowId) : undefined
+  const isNewTodo = cell?.rowId === newTodoRowId
+  const row = isNewTodo ? ({ id: newTodoRowId, type: 'document', date: null, title: '', document: '[]' } as Page) : cell ? workspace?.pages.find(p => p.id === cell.rowId) : undefined
   const property = cell && isDatabase(db) ? (cell.columnId === titleId ? titleProperty : propertyOf(db.database, cell.columnId)) : null
   // The cell itself, found again whenever the block is drawn again, so the popover stays under it.
-  const find = () => cell ? document.querySelector<HTMLElement>(`[data-cell="${CSS.escape(cellKey(cell))}"]`) : null
+  const find = () => !cell ? null : isNewTodo
+    ? document.querySelector<HTMLElement>(`[data-id="${CSS.escape(cell.blockId)}"] .database-new`) ?? document.querySelector<HTMLElement>(`[data-id="${CSS.escape(cell.blockId)}"]`)
+    : document.querySelector<HTMLElement>(`[data-cell="${CSS.escape(cellKey(cell))}"]`)
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   useLayoutEffect(() => {
     // Forgotten when it closes: a cell drawn again since would leave the next editor placed against nothing, at the screen's corner.
@@ -332,11 +359,11 @@ export function DatabaseCellEditor() {
     check()
     return () => cancelAnimationFrame(frame)
   }, [cell]) // eslint-disable-line react-hooks/exhaustive-deps
-  if (!cell || !isDatabase(db) || !row || row.trashedAt || !property || !anchor) return null
+  if (!cell || !isDatabase(db) || !row || row.trashedAt || !property || property.readOnly || !anchor) return null
   // A value still on its way is the cell's value: the editor opens on it, not on the copy from before it.
   const inFlight = pendingCells.get(pendingKey(row.id, cell.columnId))
   const expected = ((inFlight ? inFlight.raw : rawOf(row, cell.columnId)) ?? (cell.columnId === titleId ? '' : null)) as Json
-  const keeps = property.type === 'text' || property.type === 'url' || property.type === 'email' || property.type === 'phone'
+  const keeps = !db.database.fixed && (property.type === 'text' || property.type === 'url' || property.type === 'email' || property.type === 'phone')
 
   const value = cell.columnId === titleId ? ((inFlight ? String(inFlight.raw ?? '') : row.title) || null) : inFlight ? readValue(property, inFlight.raw) : cellValue(db.database, row, cell.columnId)
   return <PropertyEditor key={cellKey(cell)}
@@ -344,11 +371,12 @@ export function DatabaseCellEditor() {
     onDraft={keeps ? text => keepDraft({ databaseId: db.id, rowId: row.id, columnId: cell.columnId, value: text, expected }) : undefined}
     onCommit={(raw, info) => {
       setOpenCell(null)
+      if (isNewTodo) { addTodo(typeof raw === 'string' ? raw : ''); return }
       const sent = typeof raw === 'string' ? raw : ''
       commit(db, row, cell.columnId, cell.columnId === titleId ? (raw ?? '') : raw, info?.notice, keeps ? () => dropDraft(row.id, cell.columnId, sent) : undefined)
     }}
     onCancel={() => { setOpenCell(null); if (keeps) dropDraft(row.id, cell.columnId) }}
-    onCreateOption={name => createOption(run, db, property, name)} />
+    onCreateOption={db.database.fixed ? undefined : name => createOption(run, db, property, name)} />
 }
 
 /** What a pasted line means in a cell: undefined when it means nothing there. An option is found by its name; a new one isn't made by a paste. */
@@ -434,7 +462,8 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
   const { run, latest } = useWorkspace()
   const commit = useCommitCell()
   return (rowId: string, from: string | null, to: string | null, before: string | null, shown: readonly Page[]) => {
-    const ws = latest()
+    const stored = latest()
+    const ws = stored && db.database.fixed ? withTodos(stored) : stored
     const row = ws?.pages.find(p => p.id === rowId)
     if (!ws || !row || row.trashedAt) return
     // Sorted, a card's place comes from the sort: only its value changes.
@@ -446,6 +475,8 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
     const end = groups ? (last ? rest[rest.indexOf(rest.find(r => r.id === last.id)!) + 1]?.id ?? null : undefined) : null
     const beforeId = sorted ? undefined : before ?? end
     if (from === to) {
+      // To-dos have no order of their own to keep.
+      if (db.database.fixed) return
       // Dropped where it already is, as he sees it: nothing to send.
       const here = groups ? groups.shown.find(g => g.key === to)?.rows ?? [] : shown
       const next = here[here.findIndex(r => r.id === rowId) + 1]?.id ?? null
@@ -463,10 +494,31 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
   }
 }
 
+/** A to-do's box, on its row in any layout: the same tick as on its line (R2-9). A cancelled one's stays disabled, as on his rows. */
+export function TodoTick({ row }: { row: Page }) {
+  const taskId = taskIdOfRow(row.id)
+  return taskId ? <TodoBox taskId={taskId} title={displayPageTitle(row)} /> : null
+}
+function TodoBox({ taskId, title }: { taskId: string; title: string }) {
+  const tick = useTaskTick(taskId)
+  return <PropertyCheckbox checked={tick.status === 'done'} disabled={tick.status === 'cancelled'} label={`Done: ${title}`}
+    onToggle={() => tick.toggle((to, r) => ({ text: to === 'done' ? 'Done' : 'Reopened', undoOperationId: r.operationId }))} />
+}
+
 /** Opening a row remembers it, so Back tints it for a second where he left it (design §5). */
 export function useOpenRow() {
   const navigate = useNavigate()
-  return (rowId: string, focus?: 'title') => { try { sessionStorage.setItem(returnKey, rowId) } catch { /* private mode */ } void navigate({ to: '/pages', search: { page: rowId, ...(focus ? { focus } : {}) } }) }
+  const { latest } = useWorkspace()
+  return (rowId: string, focus?: 'title') => {
+    // A to-do has no page of its own: it opens on its line (design §11).
+    const taskId = taskIdOfRow(rowId), ws = latest()
+    if (taskId) {
+      const line = ws ? todoLine(ws, taskId) : null
+      if (line) void navigate({ to: '/pages', search: { page: line.pageId, block: line.lineId } })
+      else toast("This to-do's line is gone", { timeout: 6000 })
+      return
+    }
+    try { sessionStorage.setItem(returnKey, rowId) } catch { /* private mode */ } void navigate({ to: '/pages', search: { page: rowId, ...(focus ? { focus } : {}) } }) }
 }
 /** The row he's just come back from, for a second. */
 export function useReturnedRow(rows: readonly Page[]): string | null {
@@ -482,11 +534,30 @@ export function useReturnedRow(rows: readonly Page[]): string | null {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   return returned
 }
+/** What `+ New` in To-dos was tapped in, while its words are typed. */
+let newTodoDraft: { view: View; context: ViewContext; group: string | undefined; values: Record<string, Json> | undefined } | null = null
+/** `+ New` in To-dos, once it has words (design §11, R2-11): a task on the day's page, made from his template if it isn't there yet. */
+function useAddTodo() {
+  const { run, latest } = useWorkspace()
+  const openRow = useOpenRow()
+  return async (words: string) => {
+    const draft = newTodoDraft, title = words.trim()
+    newTodoDraft = null
+    if (!draft || !title) return
+    const { date, attentionOn, deadlineOn, status, visible } = newTodo(draft.view, draft.context, draft.group, draft.values)
+    if (!await run({ type: 'ensure-day', date }, null, newId(), { quiet: true })) return
+    const made = await run({ type: 'add-task', pageId: `day:${date}`, title, plannedOn: date, ...(attentionOn ? { attentionOn } : {}), ...(deadlineOn ? { deadlineOn } : {}) },
+      r => ({ text: visible ? 'Added' : "Added · hidden by this view's filter", extra: { label: 'Open', run: () => openRow(todoRowId(r.entityId ?? '')) } }))
+    const ws = latest()
+    const change = made?.entityId && status && ws ? todoChange(ws, made.entityId, 'status', status, todayIso()) : null
+    if (change && 'action' in change) void run(change.action, r => ({ text: change.notice, undoOperationId: r.operationId }))
+  }
+}
 /**
  * `+ New` (design §3.1, §7.4), under a view or a group: with the values that keep it in sight, and the notice when none
  * do. On the phone it opens as its page with the caret in its title; at 1280 its Name opens to be typed, once it's drawn.
  */
-export function useAddRow(db: Page & { database: Database }, view: View, context: ViewContext, reveal: (rowId: string, group: string | undefined) => void) {
+export function useAddRow(db: Page & { database: Database }, view: View, context: ViewContext, blockId: string, reveal: (rowId: string, group: string | undefined) => void) {
   const { run } = useWorkspace()
   const navigate = useNavigate()
   const openRow = useOpenRow()
@@ -495,6 +566,12 @@ export function useAddRow(db: Page & { database: Database }, view: View, context
   return (group?: string, values?: Record<string, Json>) => {
     // Raise the keyboard inside this tap, for the row's page.
     if (!wide) holdKeyboard()
+    // A to-do needs its words first: a blank one isn't a row, and shouldn't exist (B69).
+    if (db.database.fixed) {
+      newTodoDraft = { view, context, group, values }
+      setOpenCell({ blockId, databaseId: db.id, rowId: newTodoRowId, columnId: titleId })
+      return
+    }
     const prefill = newRowValues(db.database, view, context, group)
     if (values) {
       Object.assign(prefill.values, values)
@@ -685,7 +762,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   }, [reveal, rows, limit])
   const key = (rowId: string, columnId: string, group?: string) => cellKey({ blockId, databaseId: db.id, rowId, columnId, ...(group !== undefined ? { group } : {}) })
 
-  const addRow = useAddRow(db, view, context, (pageId, group) => {
+  const addRow = useAddRow(db, view, context, blockId, (pageId, group) => {
     // Past the rows shown, the new row is drawn all the same, and brought into view (Lead's review, 5).
     const ws = latest(), now = ws ? viewRows(ws, db.id, view, context) : []
     if (group === undefined) { const at = now.findIndex(x => x.id === pageId); if (at >= limit) setLimit(at + 1) }
@@ -807,11 +884,12 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const rowLine = (row: Page, index: number, group?: string) => <tr key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})} className={`database-row${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
             <td className="database-td is-title"><div className="database-title-inner">
               {wide && <span className="database-pin-strip" />}
-              {wide && <span className="database-row-gutter">
+              {wide && !db.database.fixed && <span className="database-row-gutter">
                 {!view.sort.length && <span className="database-row-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
                 <input type="checkbox" className="database-row-pick" aria-label={`Select ${displayPageTitle(row)}`} checked={picked.includes(row.id)} onChange={() => undefined} onClick={e => pick(row.id, e.shiftKey)} />
               </span>}
               {/* A row opens as a page, from Name, at both widths (design §5). */}
+              <TodoTick row={row} />
               <button type="button" className="database-title-cell" data-cell={key(row.id, titleId, group)} data-nav={`${index}:0`} onClick={() => openRow(row.id)}>
                 <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
               </button>
@@ -842,7 +920,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
             })}
             <td className="database-td is-add" />
           </tr>
-  return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
+  return <div className={`database-table-wrap${db.database.fixed ? ' is-todos' : ''}`} ref={wrap} onKeyDown={onKeyDown}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
       <table className="database-table">
@@ -850,7 +928,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
           <tr>
             <th scope="col" className="database-th is-title" data-type="title">{wide && <span className="database-pin-strip" />}Name</th>
             {columns.map(c => <th key={c.property.id} scope="col" className="database-th" data-type={c.property.type} style={{ width: c.width ?? defaultWidth(c.property) }}>{c.property.name}</th>)}
-            <th scope="col" className="database-th is-add"><button type="button" aria-label="Add property" onClick={addProperty}>+</button></th>
+            {!db.database.fixed && <th scope="col" className="database-th is-add"><button type="button" aria-label="Add property" onClick={addProperty}>+</button></th>}
           </tr>
         </thead>
         <tbody ref={tbody} className={!groups && drag && drag.before === null ? 'is-drop-end' : undefined}>
