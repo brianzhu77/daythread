@@ -39,6 +39,8 @@ const firstView: View = {
 }
 export const todosDatabase: Database = { homeBlockId: null, properties, views: [firstView], fixed: true }
 
+// Noon, so the day doesn't move with the time zone.
+const dayLabel = (d: LocalDate) => new Date(`${d}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 const statusOf = (t: Task): string => (t.status === 'done' ? todoStatus.done : t.status === 'cancelled' ? todoStatus.cancelled : t.paused ? todoStatus.paused : todoStatus.open)
 const day = (d: LocalDate | null | undefined): DateValue | undefined => (d ? { start: d } : undefined)
 
@@ -54,7 +56,7 @@ function rowOf(ws: Workspace, t: Task): Page {
   set(planned, day(plannedOn(ws, t.id)))
   set(start, day(t.attentionOn))
   set(deadline, day(t.deadlineOn))
-  const label = home ? home.date ?? home.title : ''
+  const label = home ? (home.date ? dayLabel(home.date) : home.title) : ''
   if (label) values[page] = label
   return { id: todoRowId(t.id), type: 'document', date: null, title: t.title, document: '[]', parentId: todosSourceId, values } as Page
 }

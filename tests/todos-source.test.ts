@@ -7,7 +7,8 @@ import { exportFiles } from '../src/domain/export.ts'
 import { listedPages } from '../src/domain/page-tree.ts'
 import { newTodo, todoChange, todoLine, todoRowId, todosDatabase, todosSourceId, withTodos } from '../src/domain/todos-source.ts'
 import type { Page } from '../src/domain/types.ts'
-import { dayId, harness, todo, today, tomorrow } from './v2-helpers.ts'
+import { draftView } from '../src/domain/day-draft.ts'
+import { dayId, harness, heading, nodesOf, todo, today, tomorrow } from './v2-helpers.ts'
 
 const context = { today, pageDate: null }
 function tasks() {
@@ -36,7 +37,7 @@ test('R2-8: each task with words is one row; a blank line and a deleted task are
   assert.equal(read(h, id('Call the vet'), 'status'), 'cancelled')
   assert.equal(read(h, id('Fix the gate'), 'status'), 'paused')
   assert.deepEqual(read(h, id('Book the flights'), 'planned'), { start: today })
-  assert.equal(read(h, id('Book the flights'), 'page'), today)
+  assert.equal(read(h, id('Book the flights'), 'page'), 'Oct 22')
 })
 
 test('R2-15: the source is only in what the layouts read: Pages, search and the export never see it', () => {
@@ -84,6 +85,22 @@ test('R2-10: opening goes to its line; with no line left there is nowhere to go'
   assert.deepEqual(todoLine(h.ws, open), { pageId: dayId(today), lineId: 'r1', taskId: open })
   h.save(dayId(today), d => d.filter(n => n.id !== 'r1'))
   assert.equal(todoLine(h.ws, open), null)
+})
+
+test('R2-11: a to-do added to a day with an unapplied draft leaves the draft valid', () => {
+  const h = harness()
+  h.day(today)
+  h.save(dayId(today), d => [...d, todo('r1', 'Book the flights')])
+  const book = h.task('Book the flights').id
+  h.run({ type: 'create-template', title: 'Day', pageId: 'tpl', dayPage: true })
+  h.save('tpl', () => [heading('t', 'Top 3'), todo('s1', '', 'reference', ''), todo('s2', '', 'reference', '')])
+  const day = h.day(tomorrow), slot = nodesOf(day)[1]!.id
+  h.run({ type: 'set-draft', pageId: dayId(tomorrow), status: 'ready', moreOpen: [], allowedTaskIds: [book], items: [{ id: 'i0', anchor: slot, place: 'fill', taskId: book, source: 'model', state: 'open' }] })
+  h.run({ type: 'add-task', pageId: dayId(tomorrow), title: 'From To-dos', plannedOn: tomorrow })
+  assert.equal(draftView(h.ws, h.page(dayId(tomorrow)))!.items.length, 1)
+  const r = h.run({ type: 'apply-draft', pageId: dayId(tomorrow), itemIds: ['i0'], today: tomorrow })
+  assert.equal(r.receipt.message, 'Applied')
+  assert.ok(nodesOf(h.page(dayId(tomorrow))).some(n => n.props?.taskId === book))
 })
 
 test('R2-11: + New is today, or the day a view is pinned to', () => {

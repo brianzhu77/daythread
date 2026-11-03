@@ -457,7 +457,8 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
   const { run, latest } = useWorkspace()
   const commit = useCommitCell()
   return (rowId: string, from: string | null, to: string | null, before: string | null, shown: readonly Page[]) => {
-    const ws = latest()
+    const stored = latest()
+    const ws = stored && db.database.fixed ? withTodos(stored) : stored
     const row = ws?.pages.find(p => p.id === rowId)
     if (!ws || !row || row.trashedAt) return
     // Sorted, a card's place comes from the sort: only its value changes.

@@ -111,6 +111,63 @@ await scenario('R2-11: + New asks for words, lands on today, planned, with Added
   const r = { none, made: Boolean(task), onToday: Boolean(day?.document.includes(task?.id)), notice: await notices(page), shown: task ? await rowOf(page, task.id).count() : 0, open: await page.getByRole('button', { name: 'Open' }).count() }
   return { ...r, ok: none === 0 && r.made && r.onToday && /Added/.test(r.notice) && r.shown === 1 && r.open >= 1 }
 })
+await scenario('R2-9: Deadline and Planned through their cells are the task; Undo puts them back', async page => {
+  await makeView(page)
+  const task = openTasks(store())[0]
+  const set = async column => { await rowOf(page, task.id).locator('.database-td.is-date').nth(column).click(); await wait(300); const field = page.locator('.property-editor input, .database-date-input, [role=dialog] input').first(); await field.fill('2026-12-15'); await page.keyboard.press('Enter'); await wait(1500) }
+  await set(2)
+  const r = { deadline: store().tasks.find(t => t.id === task.id).deadlineOn, notice: await notices(page) }
+  await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(1500)
+  r.afterUndo = store().tasks.find(t => t.id === task.id).deadlineOn
+  await set(0)
+  const ws = store()
+  r.onDay = ws.pages.find(p => p.date === '2026-12-15')?.document.includes(task.id) ?? false
+  return { ...r, ok: r.deadline === '2026-12-15' && /Deadline set/.test(r.notice) && r.afterUndo === null && r.onDay }
+})
+await scenario('R2-9: a Board by Status: a card moved to Paused is Not today; no way to add a column', async page => {
+  await makeView(page)
+  const task = openTasks(store())[0]
+  await view(page).locator('.database-more-button').click(); await wait(200)
+  await page.locator('.database-menu').getByRole('menuitem', { name: 'Layout' }).click(); await wait(200)
+  await page.locator('.database-menu').getByText('Board', { exact: true }).click(); await wait(400)
+  const ask = page.locator('.database-menu').getByRole('menuitem', { name: /^Status/ }); if (await ask.count()) await ask.first().click()
+  await wait(1500); await page.keyboard.press('Escape'); await wait(400)
+  const r = { columns: await view(page).locator('[data-column]').evaluateAll(e => e.map(x => x.getAttribute('data-column'))), addColumn: await view(page).locator('.database-column.is-add').count() }
+  const a = await view(page).locator(`[data-card="todo:${task.id}"]`).boundingBox(), b = await view(page).locator('[data-column="paused"]').boundingBox()
+  await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2); await page.mouse.down(); await page.mouse.move(a.x + a.width / 2 + 8, a.y + a.height / 2 + 8, { steps: 3 }); await wait(80)
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height * 0.5, { steps: 8 }); await wait(150); await page.mouse.up(); await wait(1800)
+  r.paused = store().tasks.find(t => t.id === task.id).paused; r.notice = await notices(page)
+  return { ...r, ok: r.addColumn === 0 && r.paused === true && /Paused|Not today/.test(r.notice) }
+})
+await scenario('R2-3: Remove this view and Duplicate touch no task', async page => {
+  await makeView(page)
+  const tasks = JSON.stringify(store().tasks)
+  await view(page).locator('.database-more-button').click(); await wait(200)
+  const items = await page.locator('.database-menu [role=menuitem]').allInnerTexts()
+  await page.locator('.database-menu').getByRole('menuitem', { name: 'Duplicate' }).click(); await wait(1800)
+  const views = await page.locator('.database-block').filter({ hasText: 'from To-dos' }).count()
+  await view(page).locator('.database-more-button').click(); await wait(200)
+  await page.locator('.database-menu').getByRole('menuitem', { name: 'Remove this view' }).click(); await wait(1800)
+  const r = { items: items.map(t => t.replace(/\s+/g, ' ')), views, after: await page.locator('.database-block').filter({ hasText: 'from To-dos' }).count(), notice: await notices(page), same: JSON.stringify(store().tasks) === tasks }
+  return { ...r, ok: r.views === 2 && r.after === 1 && /View removed · To-dos is still in Tasks/.test(r.notice) && r.same && !items.some(t => /Open as page|Copy link|Turn into|Delete database/.test(t)) }
+})
+await scenario('R2-11: in a view pinned to this page\'s day, + New lands on that day, not today', async page => {
+  const date = '2026-12-20'
+  await page.goto(`${base}/day/${date}`); await wait(2000)
+  await page.getByRole('button', { name: 'Create page' }).click(); await wait(2500)
+  await page.locator('.bn-inline-content').last().click(); await page.keyboard.press('Meta+ArrowRight'); await wait(150); await page.keyboard.press('Enter'); await page.keyboard.type('/database'); await wait(400); await page.keyboard.press('Enter'); await wait(500)
+  await page.locator('.database-picker [role=menuitem]', { hasText: 'To-dos' }).click(); await wait(1800)
+  await view(page).locator('.database-more-button').click(); await wait(200)
+  await page.locator('.database-menu').getByRole('button', { name: 'Filter' }).click(); await page.locator('.database-menu').getByText('+ Add filter').click(); await wait(400)
+  await page.locator('.database-rule select[aria-label=Property]').last().selectOption({ label: 'Planned' }); await wait(300)
+  await page.locator('.database-rule select[aria-label=Condition]').last().selectOption('is'); await wait(300)
+  await page.locator('.database-rule select[aria-label=Day]').last().selectOption('pageDate'); await wait(800)
+  await page.keyboard.press('Escape'); await wait(1500)
+  await view(page).locator('.database-new').click(); await wait(400); await page.keyboard.type('On that day'); await page.keyboard.press('Enter'); await wait(2500)
+  const ws = store(), task = ws.tasks.find(t => t.title === 'On that day'), day = ws.pages.find(p => p.date === date), now = ws.pages.find(p => p.date === today)
+  const r = { made: Boolean(task), onThatDay: Boolean(day?.document.includes(task?.id)), onToday: Boolean(now?.document.includes(task?.id)), shown: task ? await rowOf(page, task.id).count() : 0 }
+  return { ...r, ok: r.made && r.onThatDay && !r.onToday && r.shown === 1 }
+})
 await scenario('at 390: it draws, + New takes words, nothing overflows', async page => {
   await makeView(page)
   const r = { overflow: await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), rows: await view(page).locator('.database-row').count() }
