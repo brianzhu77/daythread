@@ -240,9 +240,12 @@ export function useCommitCell() {
       retry: () => { const now = latest()?.pages.find(p => p.id === row.id); show(null); if (now && !now.trashedAt) commit(db, { ...now, ...(columnId === titleId ? { title: String(expected ?? '') } : { values: { ...now.values, [columnId]: expected } }) } as Page, columnId, raw, notice, onSaved, beforeId) },
       discard: () => { show(null); onSaved?.() },
     })
+    const named = (Array.isArray(raw) ? raw : []).flatMap(id => namedTodos.get(String(id)) ?? [])
+    const newTodos = named.map(todo => ({ ...todo, on: todayIso() }))
+    const said = notice ?? (named.length ? (named.length === 1 ? 'To-do added' : `${named.length} to-dos added`) : undefined)
     const send = () => run(
-      { type: 'set-values', pageId: row.id, values, expected: { [columnId]: expected }, ...(beforeId !== undefined ? { beforeId } : {}), at: new Date().toISOString() },
-      notice ? r => ({ text: notice, undoOperationId: r.operationId }) : null, newId(),
+      { type: 'set-values', pageId: row.id, values, expected: { [columnId]: expected }, ...(beforeId !== undefined ? { beforeId } : {}), ...(newTodos.length ? { newTodos } : {}), at: new Date().toISOString() },
+      said ? r => ({ text: said, undoOperationId: r.operationId }) : null, newId(),
       { inlineRefusal: /Saved elsewhere|Changed elsewhere/, onRefused: () => { refused = true; void again() }, quiet: true })
     const settle = (r: unknown) => {
       if (r) { show(null); onSaved?.(); return }
@@ -377,7 +380,7 @@ export function DatabaseCellEditor() {
       commit(db, row, cell.columnId, cell.columnId === titleId ? (raw ?? '') : raw, info?.notice, keeps ? () => dropDraft(row.id, cell.columnId, sent) : undefined)
     }}
     onCancel={() => { setOpenCell(null); if (keeps) dropDraft(row.id, cell.columnId) }}
-    onCreateOption={db.database.fixed || property.target === todosSourceId ? undefined : name => createOption(run, db, property, name)}
+    onCreateOption={db.database.fixed ? undefined : property.target === todosSourceId ? namedTodo : name => createOption(run, db, property, name)}
     onRestoreTarget={property.target ? () => void run({ type: 'restore-page', pageId: property.target! }) : undefined} />
 }
 
@@ -395,6 +398,13 @@ function pastedValue(db: Database, property: Property, line: string): Json | und
   return undefined
 }
 
+/** To-dos named in a relation's pick list: nothing until the cell saves, in that one command, so one Undo takes both and one unticked first is never made (R3-25). */
+const namedTodos = new Map<string, { id: string; title: string }>()
+function namedTodo(title: string): string {
+  const id = newId(), rowId = todoRowId(id)
+  namedTodos.set(rowId, { id, title })
+  return rowId
+}
 function createOption(run: ReturnType<typeof useWorkspace>['run'], db: Page & { database: Database }, property: Property, name: string): string {
   const id = newId()
   // A relation's "New row in Books…": a row of its target, which the pick then links.
@@ -1014,7 +1024,7 @@ function EditPickedButton({ db, rowIds }: { db: Page & { database: Database }; r
     </span>}
     {property && property.type !== 'checkbox' && rows[0] && <PropertyEditor property={property} value={null} rowTitle={rows.length === 1 ? displayPageTitle(rows[0]) : `${rows.length} rows`} anchor={anchor.current}
       onCommit={raw => apply(raw)} onCancel={() => setProperty(null)}
-      onCreateOption={name => createOption(run, db, property, name)} />}
+      onCreateOption={property.target === todosSourceId ? undefined : name => createOption(run, db, property, name)} />}
   </>
 }
 

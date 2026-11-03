@@ -64,7 +64,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("create-database"), pageId: id, parentId: id.nullable().optional(), homeBlockId: id.nullable(), title }),
   z.object({ type: z.literal("change-database"), pageId: id, change }),
   z.object({ type: z.literal("add-row"), databaseId: id, pageId: id, title, values: values.optional(), beforeId: id.nullable().optional(), copyOf: id.optional(), template: id.optional(), at }),
-  z.object({ type: z.literal("set-values"), ...rowEdit.shape, beforeId: id.nullable().optional(), at }),
+  z.object({ type: z.literal("set-values"), ...rowEdit.shape, beforeId: id.nullable().optional(), newTodos: z.array(z.object({ id, title: title.min(1), on: day })).max(100).optional(), at }),
   z.object({ type: z.literal("set-values-many"), items: z.array(rowEdit).min(1).max(200), at }),
   z.object({ type: z.literal("delete-pages"), pageIds: z.array(id).min(1).max(200), at }),
   z.object({ type: z.literal("set-timezone"), timezone: z.string().min(1).max(100) }),

@@ -249,6 +249,21 @@ function ensureDay(state: Workspace, day: string): Page {
   }
   return p;
 }
+/** A task and its row on the page: planned on `plannedOn` if that's this day's, in the place to-dos go. */
+function addTask(state: Workspace, p: Page, action: { title: string; plannedOn?: string | null; attentionOn?: string | null; deadlineOn?: string | null; id?: string }): Task {
+  const on = action.plannedOn ?? p.date ?? new Date().toISOString().slice(0, 10);
+  const t = createTask(state, action.title, p, on, action.id);
+  if (action.deadlineOn) t.deadlineOn = date(action.deadlineOn);
+  if (action.attentionOn) t.attentionOn = date(action.attentionOn);
+  const plannedHere = Boolean(action.plannedOn && p.type === "daily" && p.date === action.plannedOn);
+  const doc = docOf(p);
+  const row = plannedHere ? planRow(t, p.date!) : { ...planRow(t, ""), props: { taskId: t.id, role: "reference", planDate: "" } };
+  const insertAt = p.type === "daily" ? dayRowInsertIndex : rowInsertIndex;
+  doc.splice(insertAt(doc, new Set(state.tasks.map((x) => x.id))), 0, row);
+  setDocument(p, doc);
+  if (action.plannedOn && !plannedHere) planOn(state, t, date(action.plannedOn));
+  return t;
+}
 /**
  * A day page coming back to a date that has a new page (B16): it takes the date back, and what the new page holds joins
  * it, below its own lines, so nothing is lost. A new page with nothing written just goes.
@@ -527,18 +542,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       return { message: "Day opened", entityId: p.id };
     }
     case "add-task": {
-      const p = ordinaryPage(state, action.pageId);
-      const on = action.plannedOn ?? p.date ?? new Date().toISOString().slice(0, 10);
-      const t = createTask(state, action.title, p, on);
-      if (action.deadlineOn) t.deadlineOn = date(action.deadlineOn);
-      if (action.attentionOn) t.attentionOn = date(action.attentionOn);
-      const plannedHere = Boolean(action.plannedOn && p.type === "daily" && p.date === action.plannedOn);
-      const doc = docOf(p);
-      const row = plannedHere ? planRow(t, p.date!) : { ...planRow(t, ""), props: { taskId: t.id, role: "reference", planDate: "" } };
-      const insertAt = p.type === "daily" ? dayRowInsertIndex : rowInsertIndex;
-      doc.splice(insertAt(doc, new Set(state.tasks.map((x) => x.id))), 0, row);
-      setDocument(p, doc);
-      if (action.plannedOn && !plannedHere) planOn(state, t, date(action.plannedOn));
+      const t = addTask(state, ordinaryPage(state, action.pageId), action);
       return { message: "Task added", entityId: t.id };
     }
     case "task-status": {
@@ -939,6 +943,10 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       return { message: source ? "Row duplicated" : "Row added", entityId: row.id };
     }
     case "set-values": {
+      // On that day's page, made from his template if need be, as `+ New` in To-dos does (R2-11). A resend finds it made already.
+      for (const todo of action.newTodos ?? []) {
+        if (!state.tasks.some((t) => t.id === todo.id)) addTask(state, ensureDay(state, todo.on), { title: todo.title, plannedOn: todo.on, id: todo.id });
+      }
       rowEdit(state, action, isoTime(action.at));
       if (action.beforeId !== undefined) {
         const row = page(state, action.pageId);
