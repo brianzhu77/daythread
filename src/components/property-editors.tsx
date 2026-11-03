@@ -8,6 +8,7 @@ import {
 import { Calendar, Modal } from '@heroui/react'
 import { parseDate } from '@internationalized/date'
 import { Link } from '@tanstack/react-router'
+import { taskIdOfRow, todoLine } from '../domain/todos-source'
 import { PagesIcon } from './icons'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import {
@@ -604,7 +605,7 @@ export function PropertyCell({ property, value, today = todayIso() }: { property
       const chosen = (read as string[]).map(id => property.options?.find(o => o.id === id)).filter((o): o is Option => Boolean(o))
       // Titles as page refs, our `[[` look: each opens its row, and the rest of the cell opens the picker.
       return <span className={`cell-relation${property.targetTrashed ? ' is-trashed' : ''}`}>
-        {chosen.map(o => <Link key={o.id} to="/pages" search={{ page: o.id }} className="cell-relation-ref" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}><PagesIcon />{o.name}</Link>)}
+        {chosen.map(o => <RelationRef key={o.id} id={o.id} name={o.name} />)}
         {property.targetTrashed && chosen.length > 0 && <span>(in Trash)</span>}
       </span>
     }
@@ -615,6 +616,15 @@ export function PropertyCell({ property, value, today = todayIso() }: { property
     case 'date': return <span className="cell-text">{dateLabel(read as DateValue, today)}</span>
     case 'checkbox': return null
   }
+}
+
+/** A linked title, our `[[` look. A row opens as its page; a to-do on its line, as To-dos does (R3-23). */
+function RelationRef({ id, name }: { id: string; name: string }) {
+  const { latest } = useWorkspace()
+  const taskId = taskIdOfRow(id)
+  const line = () => { const ws = latest(); return taskId && ws ? todoLine(ws, taskId) : null }
+  const target = taskId ? line() : null
+  return <Link to="/pages" search={taskId ? (target ? { page: target.pageId, block: target.lineId } : {}) : { page: id }} className="cell-relation-ref" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}><PagesIcon />{name}</Link>
 }
 
 /**

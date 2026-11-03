@@ -6,7 +6,7 @@ import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExtern
 import { calcChoices, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { rollupFunctionsFor } from '../domain/relations'
-import { databaseSource } from '../domain/todos-source'
+import { databaseSource, todosSourceId, todosTitle } from '../domain/todos-source'
 import { blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange } from './database-block'
 import { ChevronDownIcon } from './icons'
 import { useSaveOnHide, useWide } from './property-editors'
@@ -447,6 +447,7 @@ function LinkSettings({ db, property, update, change }: { db: DatabasePage; prop
   const { workspace } = useWorkspace()
   if (property.type === 'relation') {
     const targets = linkableDatabases(workspace)
+    const toTodos = property.target === todosSourceId
     const target = targets.find(p => p.id === property.target)
     const shows = () => {
       if (property.mirror) { change({ kind: 'setMirror', propertyId: property.id, mirror: null }, true); return }
@@ -459,6 +460,7 @@ function LinkSettings({ db, property, update, change }: { db: DatabasePage; prop
       <label className="database-menu-row">Related to
         <select value={property.target} disabled={Boolean(property.mirror)} onChange={e => update({ target: e.target.value })}>
           {targets.map(p => <option key={p.id} value={p.id}>{p.title || 'Untitled'}</option>)}
+          <option value={todosSourceId}>{todosTitle}</option>
         </select>
       </label>
       <label className="database-menu-row">Limit
@@ -466,6 +468,7 @@ function LinkSettings({ db, property, update, change }: { db: DatabasePage; prop
           <option value="none">No limit</option><option value="1">1 page</option>
         </select>
       </label>
+      {toTodos && <p className="database-menu-quiet">One way: to-dos can't have extra properties.</p>}
       {target && <label className="database-menu-row">{target.id === db.id ? 'Two separate properties' : `Show on ${target.title || 'Untitled'}`}
         <input type="checkbox" checked={Boolean(property.mirror)} onChange={shows} />
       </label>}
@@ -475,7 +478,7 @@ function LinkSettings({ db, property, update, change }: { db: DatabasePage; prop
   if (!rollup) return null
   const relations = db.database.properties.filter(p => p.type === 'relation')
   const through = relations.find(p => p.id === rollup.relation)
-  const target = through && workspace?.pages.find(p => p.id === through.target)
+  const target = through && workspace ? databaseSource(workspace, through.target!) : undefined
   const readable = isDatabase(target) ? target.database.properties.filter(p => p.type !== 'rollup') : []
   const read = readable.find(p => p.id === rollup.property)
   const fns = rollupFunctionsFor(read?.type ?? 'title')

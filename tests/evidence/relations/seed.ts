@@ -16,6 +16,15 @@ await run({ type: 'add-row', databaseId: 'authors', pageId: 'herbert', title: 'H
 await run({ type: 'add-row', databaseId: 'authors', pageId: 'austen', title: 'Austen', values: { age: 41 }, at })
 await run({ type: 'add-row', databaseId: 'books', pageId: 'dune', title: 'Dune', at })
 await run({ type: 'add-row', databaseId: 'books', pageId: 'emma', title: 'Emma', at })
+if (process.argv[3] === 'todos') {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: ws.timezone })
+  await run({ type: 'ensure-day', date: today })
+  const day = ws.pages.find(p => p.date === today)!
+  await run({ type: 'add-task', pageId: day.id, title: 'Book the flights', plannedOn: today })
+  await run({ type: 'add-task', pageId: day.id, title: 'Buy a dog bed', plannedOn: today })
+  await change('books', { kind: 'addProperty', property: { id: 'jobs', name: 'Jobs', type: 'relation', target: 'source:tasks' } })
+  await change('books', { kind: 'addProperty', property: { id: 'jobCount', name: 'Count', type: 'rollup', rollup: { relation: 'jobs', property: 'status', fn: 'countAll' } } })
+}
 if (process.argv[3] === 'linked') {
   await change('books', { kind: 'addProperty', property: { id: 'by', name: 'By', type: 'relation', target: 'authors' } })
   await change('books', { kind: 'setMirror', propertyId: 'by', mirror: { id: 'wrote', name: 'Wrote' } })

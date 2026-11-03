@@ -16,7 +16,7 @@ import { calcText, emailHref, phoneHref, urlHref } from './property-values'
 import { useTaskTick, useWorkspace } from './use-day'
 import { announceSave } from './draft-slots'
 import { taskRows } from '../domain/workspace'
-import { newTodo, newTodoRowId, taskIdOfRow, todoChange, todoLine, todoRowId, readingWorkspace, withTodos } from '../domain/todos-source'
+import { newTodo, newTodoRowId, taskIdOfRow, todoChange, todoLine, todoRowId, todosSourceId, readingWorkspace, withTodos } from '../domain/todos-source'
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
 import { DatabaseGallery } from './database-gallery'
@@ -376,7 +376,7 @@ export function DatabaseCellEditor() {
       commit(db, row, cell.columnId, cell.columnId === titleId ? (raw ?? '') : raw, info?.notice, keeps ? () => dropDraft(row.id, cell.columnId, sent) : undefined)
     }}
     onCancel={() => { setOpenCell(null); if (keeps) dropDraft(row.id, cell.columnId) }}
-    onCreateOption={db.database.fixed ? undefined : name => createOption(run, db, property, name)}
+    onCreateOption={db.database.fixed || property.target === todosSourceId ? undefined : name => createOption(run, db, property, name)}
     onRestoreTarget={property.target ? () => void run({ type: 'restore-page', pageId: property.target! }) : undefined} />
 }
 
