@@ -15,7 +15,6 @@ const scenario = async (name, act, options = { viewport: { width: 1280, height: 
   if (process.env.ONLY && !new RegExp(process.env.ONLY).test(name)) return
   execSync(`rm -f ${storePath} ${storePath}-wal ${storePath}-shm && node --no-warnings tests/evidence/b29/seed.ts ${storePath}`, { stdio: 'ignore' })
   const context = await browser.newContext(options)
-  await context.grantPermissions?.(['clipboard-read', 'clipboard-write']).catch(() => {})
   const page = await context.newPage(), errors = []
   page.on('pageerror', e => { if (!/ResizeObserver loop/.test(e.message)) errors.push(e.message) })
   let r
@@ -104,10 +103,29 @@ await scenario('Deleting a line inside a block shown elsewhere says so, with Und
   const r = { notice: await notices(page), record: JSON.parse(store().synced[0].lines).map(n => n.content?.[0]?.text) }
   return { ...r, ok: /Removed from 2 pages/.test(r.notice) && r.record.join() === 'Second of A' }
 })
-await scenario('at 390: Sync in the bar, Copy from the label, a paste arrives synced', async page => {
+await scenario('at 390: Sync in the bar, Copy from the label, a paste arrives synced, Delete from the label with Undo', async page => {
   await open(page, 'a')
   const r = { overflow: await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) }
-  return { ...r, ok: r.overflow <= 0 }
+  await line(page, 'Second of A').tap(); await wait(500)
+  await page.locator('.editor-touch-handle').first().tap(); await wait(500)
+  r.bar = (await page.locator('.editor-selection-bar').innerText()).replace(/\s+/g, ' ')
+  await page.locator('.editor-selection-bar').getByRole('button', { name: 'Sync' }).tap(); await wait(2400)
+  r.types = types('a')
+  await line(page, 'Second of A').tap(); await wait(400)
+  await page.locator('.synced-label-button').first().tap(); await wait(300)
+  await page.getByRole('menuitem', { name: 'Copy', exact: true }).tap(); await wait(400)
+  const payload = await page.evaluate(() => { const k = JSON.parse(localStorage.getItem('daythread:last-copy')); return JSON.stringify({ blocks: k.blocks, cut: false, token: 'x' }) })
+  await open(page, 'b'); await line(page, 'Only line of B').tap(); await page.keyboard.press('Enter'); await wait(300)
+  await page.evaluate(p => { const data = new DataTransfer(); data.setData('application/x-daythread-blocks', p); data.setData('text/plain', ''); document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })) }, payload); await wait(2400)
+  r.typesB = types('b'); r.label = await labels(page)
+  await line(page, 'Second of A').tap(); await wait(400)
+  await page.locator('.synced-label-button').first().tap(); await wait(300)
+  await page.getByRole('menuitem', { name: 'Delete', exact: true }).tap(); await wait(2400)
+  r.afterDelete = types('b'); r.notice = await notices(page)
+  // The notice's own, not the Undo on the phone's keyboard bar.
+  await page.locator('.toast__action', { hasText: 'Undo' }).first().tap(); await wait(2400)
+  r.afterUndo = types('b')
+  return { ...r, ok: r.overflow <= 0 && /Sync/.test(r.bar) && r.types.includes('syncedBlock') && r.typesB.includes('syncedBlock') && /2 pages/.test(r.label[0]) && !r.afterDelete.includes('syncedBlock') && r.afterUndo.includes('syncedBlock') }
 }, { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
 await browser.close()
 console.log(failed ? `FAIL ${failed}` : 'PASS')
