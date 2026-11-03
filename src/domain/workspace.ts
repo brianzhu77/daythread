@@ -1093,7 +1093,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   let state = structuredClone(input);
   const { undo: _previousUndo, receipts: _receipts, ...rest } = input;
   const before = { ...structuredClone(rest), receipts: {} as Workspace["receipts"] };
-  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[] };
+  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number };
   if (command.action.type === "undo") {
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");
@@ -1102,7 +1102,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
     result = { message: "Previous operation restored" };
   } else {
     result = execute(state, command.action, command.operationId);
-    settleSynced(state);
+    result = { ...result, ...settleSynced(state) };
   }
   state.revision = input.revision + 1;
   const receipt = { operationId: command.operationId, ...result, fingerprint };

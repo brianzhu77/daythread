@@ -850,6 +850,15 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor .editor-task-title.task-done, .continuous-editor .editor-task-title.task-done * { color:var(--ink-3); text-decoration:var(--done-decoration); }
 /* B19: a nested line's text starts one step (24px) right of its parent's text. */
 .continuous-editor .bn-block-group .bn-block-group { margin-left:45px; }
+/* A synced block (states §3), a baseline for Jazz's look. Its own row takes no line, and its lines keep the column they'd have outside. */
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) { position: relative; margin: 8px 0 6px; outline: 1px solid var(--line); outline-offset: 2px; border-radius: 8px; }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]):hover,
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]):focus-within { outline-color: var(--ink-3); }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group { margin-left: 0; }
+.continuous-editor .bn-block-content[data-content-type="syncedBlock"] { height: 0; min-height: 0; padding: 0; overflow: visible; }
+.synced-label { position: absolute; top: -12px; right: 6px; z-index: 1; padding: 0 4px; background: var(--bg-doc); color: var(--ink-2); font-size: 12px; line-height: 18px; opacity: 0; }
+.continuous-editor .bn-block:hover > .react-renderer .synced-label, .continuous-editor .bn-block:focus-within > .react-renderer .synced-label, .synced-label:has([aria-expanded="true"]) { opacity: 1; }
+.synced-label-button { padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
 /* Deeper levels step by the same 24px: the top-level group's 45px already includes the dot column. */
 .continuous-editor .bn-block-group .bn-block-group .bn-block-group { margin-left:24px; }
 /* B39 (Jazz; Lead: Notion's convention): every nested block starts at its parent's text, so a nested to-do's checkbox

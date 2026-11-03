@@ -57,6 +57,8 @@ export interface Receipt {
   renamed?: Record<string, string>;
   /** save-editor: synced blocks that changed elsewhere meanwhile, where his version went below them. */
   conflicted?: string[];
+  /** save-editor: lines left a synced block shown on this many pages. */
+  linesRemovedFrom?: number;
   fingerprint?: string;
 }
 

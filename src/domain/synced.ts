@@ -122,7 +122,11 @@ export function acceptSavedBlocks(state: Workspace, page: Page, nodes: EditorNod
       if (!record && !n.children?.length) continue
       if (!record) { (state.synced ??= []).push({ id: syncId as string, lines: JSON.stringify(unplaced(n)), rev: 1, original: n.id }); continue }
       if (!here.has(n.id)) { n.children = []; continue }
-      if (Number(n.props?.rev) >= record.rev) continue
+      if (Number(n.props?.rev) >= record.rev) {
+        // Every line deleted: one empty line stays, and the block (states §5).
+        if (!n.children?.length) n.children = [{ id: `${pageContentKey({ document: `${n.id}|${record.rev}` })}`, type: 'paragraph', props: {}, content: [], children: [] }]
+        continue
+      }
       const changed = blockLinesKey(n) !== n.props?.key && Boolean(n.children?.length)
       if (changed) {
         const mine = (n.children ?? []).map(function fresh(line: EditorNode): EditorNode {
@@ -145,8 +149,9 @@ export function acceptSavedBlocks(state: Workspace, page: Page, nodes: EditorNod
  * After a command: a place whose lines differ from its record is where they changed, and the record takes them. Then every
  * place is written again from the record, its own roles kept, so one command never leaves two places apart.
  */
-export function settleSynced(state: Workspace): void {
-  if (!hasRecords(state)) return
+export function settleSynced(state: Workspace): { linesRemovedFrom?: number } {
+  if (!hasRecords(state)) return {}
+  let linesRemovedFrom: number | undefined
   // Measured against the record as it was, so the places that haven't changed don't change it back.
   const was = new Map(state.synced!.map(r => [r.id, recordKey(r)]))
   for (const page of state.pages) {
@@ -156,7 +161,12 @@ export function settleSynced(state: Workspace): void {
       const record = state.synced!.find(r => r.id === n.props?.syncId)
       if (!record) return
       const lines = unplaced(n)
-      if (linesKey(lines) !== was.get(record.id)) record.lines = JSON.stringify(lines)
+      if (linesKey(lines) !== was.get(record.id)) {
+        // Fewer lines than it had, on a block shown elsewhere too.
+        const count = (list: EditorNode[]): number => list.reduce((sum, l) => sum + 1 + count(l.children ?? []), 0)
+        if (count(lines) < count(pageNodes({ document: record.lines }))) { const pages = new Set(syncedPlaces(state, record.id).map(p => p.page.id)).size; if (pages > 1) linesRemovedFrom = pages }
+        record.lines = JSON.stringify(lines)
+      }
     })
   }
   for (const record of state.synced!) if (recordKey(record) !== was.get(record.id)) record.rev++
@@ -172,6 +182,7 @@ export function settleSynced(state: Workspace): void {
     })
     page.document = JSON.stringify(nodes)
   }
+  return linesRemovedFrom ? { linesRemovedFrom } : {}
 }
 
 /** Every place a record is shown, Trash included, with the page it's on, in the workspace's order. */
