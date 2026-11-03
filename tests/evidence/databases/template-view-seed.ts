@@ -21,8 +21,9 @@ const headings = doc.flatMap((n, i) => (n.type === 'heading' ? [i] : []))
 const out = [...doc]
 out.splice(headings.at(-1)! + 1, 0, view('tv2'))
 out.splice(headings[0]! + 1, 0, view('tv1'))
-await run({ type: 'save-editor', pageId: template.id, expectedContent: pageContentKey(template), document: JSON.stringify(out) })
-console.log('template has', out.filter(n => n.type === 'database').length, 'views')
+// `plain` leaves the template alone, for comparing a day with the views against one without (template-draft.ts).
+if (process.argv[3] !== 'plain') await run({ type: 'save-editor', pageId: template.id, expectedContent: pageContentKey(template), document: JSON.stringify(out) })
+console.log('template has', process.argv[3] === 'plain' ? 0 : out.filter(n => n.type === 'database').length, 'views')
 // Making a day is one operation, and makes nothing but the day (and any carried-over rows it always did).
 for (const date of ['2026-12-20', '2026-12-21']) {
   const databases = ws.pages.filter(p => p.database).length, tasks = ws.tasks.length, revision = ws.revision
