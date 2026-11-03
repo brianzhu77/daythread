@@ -19,6 +19,8 @@ export interface Property {
   format?: NumberFormat;
   /** date: whether a time is shown and asked for */
   withTime?: boolean;
+  /** To-dos' Page: shown, never edited. */
+  readOnly?: true;
 }
 export interface DateValue { start: string; end?: string }
 /** A fixed day, or one relative to today or to the day page the view is on, with an offset in days. */
@@ -63,6 +65,8 @@ export interface Database {
   properties: Property[];
   /** At least one. */
   views: View[];
+  /** To-dos: its properties and rows come from his tasks, so none can be added, changed or reordered here. Never stored. */
+  fixed?: true;
 }
 export type RawValues = Record<string, Json>;
 /** What a cell shows: the typed value, or null for empty (checkbox: false). */

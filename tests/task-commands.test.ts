@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { flatNodes, inlineText, pageNodes } from '../src/domain/editor-document.ts'
+import { canRenameTask } from '../src/domain/workspace.ts'
 import { dayId, harness, todo, today } from './v2-helpers.ts'
 
 const at = '2026-10-22T18:00:00.000Z'
@@ -43,6 +44,15 @@ test('rename-task: a page in Trash takes the new words too', () => {
   h.run({ type: 'delete-page', pageId: other, at })
   h.run({ type: 'rename-task', taskId: id, title: 'New words' })
   assert.deepEqual(words(h, other, id), ['New words'])
+})
+
+test('rename-task: a line with a chip or a link is refused, so it keeps them', () => {
+  const { h, id, day } = planOnFor(harness(), today)
+  h.save(day, d => d.map(n => n.id === 'r1' ? { ...n, content: [{ type: 'text', text: 'Book ', styles: {} }, { type: 'dateChip', props: { date: '2026-12-01' } }] } : n))
+  assert.equal(canRenameTask(h.ws, id), false)
+  const before = h.page(day).document
+  assert.throws(() => h.run({ type: 'rename-task', taskId: id, title: 'New words' }), /more than words/)
+  assert.equal(h.page(day).document, before)
 })
 
 test('set-task-dates: each field alone, null clears it, a bad day is refused, one Undo', () => {
