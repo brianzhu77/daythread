@@ -1,6 +1,6 @@
 # R3-15 native check
 
-Run on the iOS Simulator (iPhone 16 Pro size, JZ-55), in the app installed to the Home Screen, through Appium. Not a real iPhone.
+Run on the iOS Simulator (402 points wide), in the app installed to the Home Screen, through Appium. Not a real iPhone.
 
 - A real long-press on a row's Name picks that row, opens nothing, and shows no iOS callout or edit menu, and no text selected.
 - A swipe over the Names scrolls and starts nothing.
