@@ -33,7 +33,7 @@ Today a row opens by leaving the view: `useOpenRow` (`database-block.tsx:528`) n
 
 ## 3. How it behaves at 1280
 
-The peek holds what `pages-screen.tsx:59`-`:68` draws for a row now: the head with its `⋯`, title, Linked from, `RowProperties`, body and Subpages. That block becomes one component with two homes. A row template still opens on its own screen, as a full page.
+The peek holds what `pages-screen.tsx:58`-`:68` draws for a row now: the head with its `⋯`, title, Linked from, `RowProperties`, body and Subpages. That block becomes one component with two homes. A row template still opens on its own screen, as a full page.
 
 | Action | Result |
 | --- | --- |
