@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { filterOpList, limits, propertyTypes, viewLayouts, type Json } from "./database.ts";
+import { rollupFunctions, filterOpList, limits, propertyTypes, viewLayouts, type Json } from "./database.ts";
 const id = z.string().min(1).max(200);
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const title = z.string().max(1000);
@@ -10,7 +10,7 @@ const at = z.string().max(40);
 const values = z.record(z.string().min(1).max(200), json);
 const rowEdit = z.object({ pageId: id, values, expected: values });
 const option = z.object({ id, name: z.string().max(200), group: z.enum(["todo", "active", "done"]).optional() });
-const propertyFields = { name: z.string().max(200), type: z.enum(propertyTypes), options: z.array(option).max(200).optional(), format: z.enum(["plain", "comma", "percent", "currency"]).optional(), withTime: z.boolean().optional() };
+const propertyFields = { name: z.string().max(200), type: z.enum(propertyTypes), options: z.array(option).max(200).optional(), format: z.enum(["plain", "comma", "percent", "currency"]).optional(), withTime: z.boolean().optional(), target: id.optional(), limit: z.literal(1).nullable().optional(), rollup: z.object({ relation: id, property: id, fn: z.enum(rollupFunctions) }).optional() };
 const columns = z.array(z.object({ id, width: z.number().int().optional() })).max(100);
 const sort = z.array(z.object({ by: id, direction: z.enum(["asc", "desc"]) })).max(10);
 const filter = z.array(z.object({ by: id, op: z.enum(filterOpList), value: json.optional() })).max(20);
@@ -21,6 +21,7 @@ const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("addProperty"), property: z.object({ id, ...propertyFields }), viewId: id.optional() }),
   z.object({ kind: z.literal("updateProperty"), propertyId: id, ...propertyFields, name: propertyFields.name.optional(), type: propertyFields.type.optional() }),
   z.object({ kind: z.literal("removeProperty"), propertyId: id }),
+  z.object({ kind: z.literal("setMirror"), propertyId: id, mirror: z.object({ id, name: z.string().max(200) }).nullable() }),
   z.object({ kind: z.literal("moveProperty"), propertyId: id, beforeId: id.nullable() }),
   z.object({ kind: z.literal("addView"), view }),
   z.object({ kind: z.literal("updateView"), viewId: id, name: z.string().max(200).optional(), columns: columns.optional(), sort: sort.optional(), filter: filter.optional(), layout: z.enum(viewLayouts).optional(), groupBy: id.nullable().optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").nullable().optional(), filterAny: z.boolean().optional() }),

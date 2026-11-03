@@ -174,7 +174,9 @@ export function opsFor(type: PropertyType): FilterOp[] {
     case 'id': return ['eq', 'ne', 'gt', 'lt']
     case 'createdTime': case 'editedTime': return ['is', 'before', 'after', 'within']
     case 'select': case 'status': return ['isAnyOf', 'isNoneOf', 'isEmpty']
-    case 'multiSelect': return ['contains', 'doesNotContain', 'isEmpty']
+    case 'relation': case 'multiSelect': return ['contains', 'doesNotContain', 'isEmpty']
+    // Read as the type it works out to (relations.ts), so it never gets here.
+    case 'rollup': return []
     case 'date': return ['is', 'before', 'after', 'within', 'isEmpty']
     case 'checkbox': return ['is']
   }

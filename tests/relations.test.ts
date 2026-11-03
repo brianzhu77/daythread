@@ -1,0 +1,203 @@
+// Relations and rollups (design §6, R3-5, R3-6, R3-7): links stored on rows, both sides in one operation, read through `withLinks`.
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { cellValue, databaseRows, viewRows, type Database, type DatabaseChange, type Rollup } from '../src/domain/database.ts'
+import { commandSchema } from '../src/domain/command-schema.ts'
+import { exportFiles } from '../src/domain/export.ts'
+import { listedPages } from '../src/domain/page-tree.ts'
+import { withLinks } from '../src/domain/relations.ts'
+import type { Page } from '../src/domain/types.ts'
+import { harness } from './v2-helpers.ts'
+
+const at = '2026-10-22T18:00:00.000Z', later = '2026-10-23T18:00:00.000Z'
+function books() {
+  const h = harness()
+  const database = (pageId: string, title: string) => h.run({ type: 'create-database', pageId, homeBlockId: null, title })
+  database('books', 'Books'); database('authors', 'Authors')
+  const change = (pageId: string, c: DatabaseChange) => h.run({ type: 'change-database', pageId, change: c })
+  const row = (databaseId: string, pageId: string, title: string, values = {}) => h.run({ type: 'add-row', databaseId, pageId, title, values, at })
+  change('authors', { kind: 'addProperty', property: { id: 'born', name: 'Born', type: 'date' } })
+  change('authors', { kind: 'addProperty', property: { id: 'age', name: 'Age', type: 'number' } })
+  change('authors', { kind: 'addProperty', property: { id: 'alive', name: 'Alive', type: 'checkbox' } })
+  row('authors', 'herbert', 'Herbert', { age: 65, born: { start: '1920-10-08' } })
+  row('authors', 'austen', 'Austen', { age: 41, born: { start: '1775-12-16' }, alive: true })
+  row('books', 'dune', 'Dune'); row('books', 'emma', 'Emma')
+  change('books', { kind: 'addProperty', property: { id: 'by', name: 'By', type: 'relation', target: 'authors' } })
+  return { h, change, row }
+}
+const db = (h: ReturnType<typeof harness>, id: string): Page & { database: Database } => withLinks(h.ws).pages.find(p => p.id === id) as Page & { database: Database }
+const links = (h: ReturnType<typeof harness>, id: string, prop: string) => { const p = h.ws.pages.find(x => x.id === id)!; return p.values?.[prop] ?? null }
+const read = (h: ReturnType<typeof harness>, dbId: string, rowId: string, prop: string) => cellValue(db(h, dbId).database, withLinks(h.ws).pages.find(p => p.id === rowId)!, prop)
+const set = (h: ReturnType<typeof harness>, pageId: string, values: object, expected: object = {}, when = later) => h.run({ type: 'set-values', pageId, values: values as never, expected: expected as never, at: when })
+const twoWay = (ctx: ReturnType<typeof books>) => ctx.change('books', { kind: 'setMirror', propertyId: 'by', mirror: { id: 'wrote', name: 'Wrote' } })
+
+test('a one-way relation reads the target rows; a row in Trash reads without it, and comes back with it', () => {
+  const { h } = books()
+  set(h, 'dune', { by: ['herbert', 'austen'] })
+  assert.deepEqual(read(h, 'books', 'dune', 'by'), ['herbert', 'austen'])
+  assert.equal(links(h, 'herbert', 'by'), null, 'one way: nothing written on the other side')
+  h.run({ type: 'delete-page', pageId: 'austen', at })
+  assert.deepEqual(read(h, 'books', 'dune', 'by'), ['herbert'])
+  assert.deepEqual(links(h, 'dune', 'by'), ['herbert', 'austen'], 'the stored link stays')
+  h.run({ type: 'restore-page', pageId: 'austen' })
+  assert.deepEqual(read(h, 'books', 'dune', 'by'), ['herbert', 'austen'])
+})
+
+test('two-way: "Show on" fills the other side; each edit writes both, moves Edited there, and one Undo takes both back', () => {
+  const ctx = books(), { h } = ctx
+  set(h, 'dune', { by: ['herbert'] })
+  twoWay(ctx)
+  assert.deepEqual(links(h, 'herbert', 'wrote'), ['dune'])
+  const r = set(h, 'emma', { by: ['austen'] }, {}, later)
+  assert.deepEqual(links(h, 'austen', 'wrote'), ['emma'])
+  assert.equal(h.ws.pages.find(p => p.id === 'austen')!.editedAt, later)
+  h.run({ type: 'undo', targetOperationId: r.receipt.operationId })
+  assert.equal(links(h, 'austen', 'wrote'), null)
+  assert.equal(links(h, 'emma', 'by'), null)
+  // From the other side too, and taking one off.
+  set(h, 'herbert', { wrote: ['dune', 'emma'] })
+  assert.deepEqual(links(h, 'emma', 'by'), ['herbert'])
+  set(h, 'herbert', { wrote: ['emma'] })
+  assert.equal(links(h, 'dune', 'by'), null)
+})
+
+test('two-way: a row deleted and restored keeps its links on both sides', () => {
+  const ctx = books(), { h } = ctx
+  twoWay(ctx)
+  set(h, 'dune', { by: ['herbert'] })
+  h.run({ type: 'delete-page', pageId: 'dune', at })
+  assert.equal(read(h, 'authors', 'herbert', 'wrote'), null)
+  assert.deepEqual(links(h, 'herbert', 'wrote'), ['dune'])
+  h.run({ type: 'restore-page', pageId: 'dune' })
+  assert.deepEqual(read(h, 'authors', 'herbert', 'wrote'), ['dune'])
+  assert.deepEqual(read(h, 'books', 'dune', 'by'), ['herbert'])
+})
+
+test('a new row and a duplicate write their back-links', () => {
+  const ctx = books(), { h, row } = ctx
+  twoWay(ctx)
+  row('books', 'ubik', 'Ubik', { by: ['herbert'] })
+  assert.deepEqual(links(h, 'herbert', 'wrote'), ['ubik'])
+  h.run({ type: 'add-row', databaseId: 'books', pageId: 'ubik2', copyOf: 'ubik', title: '', at })
+  assert.deepEqual(links(h, 'herbert', 'wrote'), ['ubik', 'ubik2'])
+})
+
+test('1 page: the newest pick stays, and a limit on the other side lets go of the old link', () => {
+  const ctx = books(), { h, change } = ctx
+  change('books', { kind: 'updateProperty', propertyId: 'by', limit: 1 })
+  set(h, 'dune', { by: ['herbert', 'austen'] })
+  assert.deepEqual(links(h, 'dune', 'by'), ['austen'])
+  change('books', { kind: 'updateProperty', propertyId: 'by', limit: null })
+  set(h, 'emma', { by: [] })
+  twoWay(ctx)
+  change('authors', { kind: 'updateProperty', propertyId: 'wrote', limit: 1 })
+  set(h, 'emma', { by: ['austen'] })
+  assert.deepEqual(links(h, 'austen', 'wrote'), ['emma'])
+  assert.equal(links(h, 'dune', 'by'), null, 'Austen held Dune: it lets go')
+})
+
+test('deleting one side removes both, says so, and one Undo brings back both with their links', () => {
+  const ctx = books(), { h, change } = ctx
+  twoWay(ctx)
+  set(h, 'dune', { by: ['herbert'] })
+  const r = change('authors', { kind: 'removeProperty', propertyId: 'wrote' })
+  assert.match(r.receipt.message, /Wrote and By on Books deleted/)
+  assert.ok(!db(h, 'books').database.properties.some(p => p.id === 'by'))
+  h.run({ type: 'undo', targetOperationId: r.receipt.operationId })
+  assert.deepEqual(read(h, 'books', 'dune', 'by'), ['herbert'])
+  assert.deepEqual(read(h, 'authors', 'herbert', 'wrote'), ['dune'])
+})
+
+test('a self-relation works both ways with one property; two-way makes two', () => {
+  const { h, change, row } = books()
+  change('books', { kind: 'addProperty', property: { id: 'see', name: 'See also', type: 'relation', target: 'books' } })
+  set(h, 'dune', { see: ['emma'] })
+  assert.deepEqual(links(h, 'emma', 'see'), ['dune'])
+  set(h, 'emma', { see: [] })
+  assert.equal(links(h, 'dune', 'see'), null)
+  // A row linking itself writes itself once.
+  set(h, 'dune', { see: ['dune'] })
+  assert.deepEqual(links(h, 'dune', 'see'), ['dune'])
+  row('books', 'ubik', 'Ubik')
+  change('books', { kind: 'addProperty', property: { id: 'next', name: 'Next', type: 'relation', target: 'books' } })
+  change('books', { kind: 'setMirror', propertyId: 'next', mirror: { id: 'prev', name: 'Previous' } })
+  set(h, 'dune', { next: ['ubik'] })
+  assert.deepEqual(links(h, 'ubik', 'prev'), ['dune'])
+  assert.equal(links(h, 'ubik', 'next'), null)
+})
+
+test('rollups: each function, "—" when nothing is linked, read-only, and filter and sort agree with what is shown', () => {
+  const { h, change } = books()
+  const add = (id: string, fn: Rollup['fn'], property = 'age') => change('books', { kind: 'addProperty', property: { id, name: id, type: 'rollup', rollup: { relation: 'by', property, fn } } })
+  for (const fn of ['countAll', 'sum', 'average', 'median', 'min', 'max', 'range', 'percentEmpty', 'countUnique'] as const) add(fn, fn)
+  add('first', 'earliest', 'born'); add('last', 'latest', 'born'); add('span', 'dateRange', 'born')
+  add('names', 'original', 'title'); add('done', 'checked', 'alive'); add('share', 'percentChecked', 'alive')
+  set(h, 'dune', { by: ['herbert', 'austen'] })
+  const value = (id: string, row = 'dune') => read(h, 'books', row, id)
+  assert.equal(value('countAll'), 2); assert.equal(value('sum'), 106); assert.equal(value('average'), 53); assert.equal(value('median'), 53)
+  assert.equal(value('min'), 41); assert.equal(value('max'), 65); assert.equal(value('range'), 24); assert.equal(value('percentEmpty'), 0); assert.equal(value('countUnique'), 2)
+  assert.deepEqual(value('first'), { start: '1775-12-16' }); assert.deepEqual(value('last'), { start: '1920-10-08' }); assert.equal(value('span'), '52891 days')
+  assert.equal(value('names'), 'Herbert, Austen'); assert.equal(value('done'), 1); assert.equal(value('share'), 50)
+  assert.equal(value('countAll', 'emma'), null, 'nothing linked')
+  assert.equal(value('sum', 'emma'), null)
+  const sum = db(h, 'books').database.properties.find(p => p.id === 'sum')!
+  assert.deepEqual([sum.type, sum.readOnly], ['number', true])
+  assert.throws(() => set(h, 'dune', { sum: 3 }))
+  // A change in a linked row shows at once.
+  set(h, 'austen', { age: 42 })
+  assert.equal(value('sum'), 107)
+  // Sort and filter read the same number.
+  const context = { today: '2026-11-02', pageDate: null }, view = db(h, 'books').database.views[0]!
+  const ws = withLinks(h.ws)
+  assert.deepEqual(viewRows(ws, 'books', { ...view, filter: [{ by: 'sum', op: 'gt', value: 100 }] }, context).map(r => r.id), ['dune'])
+  assert.deepEqual(viewRows(ws, 'books', { ...view, sort: [{ by: 'sum', direction: 'desc' }] }, context).map(r => r.id)[0], 'dune')
+})
+
+test('no loops: a rollup reads a relation of its database and a real property, never another rollup', () => {
+  const { h, change } = books()
+  const add = (id: string, relation: string, property: string) => change('books', { kind: 'addProperty', property: { id, name: id, type: 'rollup', rollup: { relation, property, fn: 'countAll' } } })
+  add('count', 'by', 'age')
+  assert.throws(() => add('bad1', 'nope', 'age'), /reads a relation/)
+  assert.throws(() => add('bad2', 'by', 'nope'), /not found/)
+  change('authors', { kind: 'addProperty', property: { id: 'wrote', name: 'Wrote', type: 'relation', target: 'books' } })
+  assert.throws(() => change('authors', { kind: 'addProperty', property: { id: 'loop', name: 'Loop', type: 'rollup', rollup: { relation: 'wrote', property: 'count', fn: 'countAll' } } }), /another rollup/)
+  // A property it reads, deleted since: nothing rather than a wrong number.
+  change('authors', { kind: 'removeProperty', propertyId: 'age' })
+  set(h, 'dune', { by: ['herbert'] })
+  assert.equal(read(h, 'books', 'dune', 'count'), null)
+})
+
+test('a target in Trash still reads its links, and with neither type the workspace is untouched', () => {
+  const { h } = books()
+  set(h, 'dune', { by: ['herbert'] })
+  h.run({ type: 'delete-page', pageId: 'authors', at })
+  assert.deepEqual(read(h, 'books', 'dune', 'by'), ['herbert'])
+  const plain = harness()
+  assert.equal(withLinks(plain.ws), plain.ws)
+})
+
+test('Pages and the export list each row once, and the export reads titles', () => {
+  const { h } = books()
+  const count = () => listedPages(h.ws).length
+  const before = count()
+  set(h, 'dune', { by: ['herbert'] })
+  assert.equal(count(), before)
+  const files = exportFiles(h.ws, new Date(at))
+  assert.equal(files.filter(f => f.path.endsWith('/pages/Dune.md')).length, 1)
+  assert.match(files.find(f => f.path.endsWith('/pages/Dune.md'))!.text, /"By": "Herbert"/)
+  assert.match(files.find(f => f.path.endsWith('/pages/Books.md'))!.text, /\| \[\[Dune\]\] \| Herbert \|/)
+  assert.equal(databaseRows(h.ws, 'books').length, 2)
+})
+
+test('the new changes pass the schema; To-dos is not a target', () => {
+  const { change } = books()
+  assert.throws(() => change('books', { kind: 'addProperty', property: { id: 'x', name: 'X', type: 'relation', target: 'source:tasks' } }), /isn't there/)
+  const changes: DatabaseChange[] = [
+    { kind: 'addProperty', property: { id: 'r', name: 'R', type: 'relation', target: 'books' } },
+    { kind: 'addProperty', property: { id: 'u', name: 'U', type: 'rollup', rollup: { relation: 'r', property: 'title', fn: 'countAll' } } },
+    { kind: 'updateProperty', propertyId: 'r', limit: null },
+    { kind: 'setMirror', propertyId: 'r', mirror: { id: 'm', name: 'M' } },
+    { kind: 'setMirror', propertyId: 'r', mirror: null },
+  ]
+  for (const c of changes) assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 0, action: { type: 'change-database', pageId: 'p', change: c } }).success, true, c.kind)
+})
