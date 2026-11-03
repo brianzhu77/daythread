@@ -1,7 +1,7 @@
 // Databases R3: the Calendar view (design §7.2, R3-1). A month of days at 1280, up to 3 row titles on each, then "+2"; on the
 // phone the month with dots, and the chosen day's rows under it. Rows with no date stay in reach in one line under the month.
 // A row drags to another day at 1280, moving its date and keeping its time and length. By a created or edited time, which no
-// one can set, rows don't drag, a day has no `+`, and there's no No date line (R3-21). The month or week showing is this
+// one can set, rows don't drag and a day has no `+` (R3-21). The month or week showing is this
 // device's, never a save, as a group's fold is: it comes back to where it was left.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { calendarRows, databaseRows, inView, isReadOnlyType, movedDate, startOfWeek, titleId, viewDateBy, viewRows, type Json, type View } from '../domain/database.ts'

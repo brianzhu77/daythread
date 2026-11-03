@@ -45,7 +45,16 @@ else {
   check(await block.locator('.database-day-list .database-new').count() === 0, 'the day has no + New')
 }
 check(await block.locator('.database-day-add').count() === 0, 'a day has no +')
-check(await block.locator('.database-undated').count() === 0, 'no No date line')
+check((await block.locator('.database-undated-head').innerText()).includes('No date · 1'), 'a row with no time stays in reach', await block.locator('.database-undated-head').innerText())
+await tap(block.locator('.database-undated-head')); await wait(300)
+const undatedTitle = block.locator('.database-undated .database-day-title')
+check((await undatedTitle.innerText()) === 'From before', 'it opens in place', await undatedTitle.innerText())
+if (wide) {
+  const was = JSON.stringify(row('legacy')), a = await undatedTitle.boundingBox(), to = await dayCell(janDay).boundingBox()
+  await page.mouse.move(a.x + 5, a.y + 5); await page.mouse.down(); await page.mouse.move(to.x + 20, to.y + 20, { steps: 8 }); await wait(150); await page.mouse.up(); await wait(700)
+  check(JSON.stringify(row('legacy')) === was, "it doesn't drag from there")
+}
+await tap(block.locator('.database-undated-head')); await wait(300)
 await shot('january')
 
 // It can't move.
@@ -80,7 +89,7 @@ check(await heading() === now, 'and is what stays', await heading())
 
 // Edited time, then a Date property keeps its + and its line.
 await openPanel('Layout'); await menu.locator('label.database-menu-row', { hasText: 'Show calendar by' }).locator('select').selectOption({ label: 'Changed' }); await wait(800); await closeMenu()
-check(dateByOf() === 'seen' && await block.locator('.database-day-add').count() === 0, 'Edited time is the same')
+check(dateByOf() === 'seen' && await block.locator('.database-day-add').count() === 0 && await block.locator('.database-undated').count() === 1, 'Edited time is the same')
 await shot('edited')
 await openPanel('Layout'); await menu.locator('label.database-menu-row', { hasText: 'Show calendar by' }).locator('select').selectOption({ label: 'Due' }); await wait(800); await closeMenu()
 check(dateByOf() === 'due' && await block.locator('.database-undated').count() === 1, 'a Date property keeps its No date line')
@@ -106,7 +115,7 @@ await menu.getByLabel('Value').last().fill('BK-33'); await page.keyboard.press('
 check(row('list').database.views[0].filter[0].value === 33, 'a filter takes it as it shows', row('list').database.views[0].filter[0].value)
 await closeMenu()
 const high = new Set(await block.locator('tr.database-row').evaluateAll(l => l.map(e => e.dataset.row)))
-check(high.size === 2 && high.has('old'), 'and filters by the number', [...high])
+check(high.size === 3 && high.has('old') && high.has('legacy'), 'and filters by the number', [...high])
 check((await block.locator('.database-chip-open').first().innerText()).includes('BK-33'), 'its line reads as it shows', await block.locator('.database-chip-open').first().innerText())
 await shot('prefix-filter')
 await page.goto(`${base}/pages?page=old`); await wait(2500)

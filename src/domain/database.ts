@@ -589,14 +589,14 @@ export function viewDateBy(db: Database, view: View): Property | null {
 export interface CalendarRows {
   /** Rows by the days they cover, for the days in `from`–`to`; a range is on each of its days. */
   days: Map<LocalDate, Page[]>;
-  /** Rows with no date, always in reach (design §7.2). None by a created or edited time, which no one can set. */
+  /** Rows with no date, always in reach (design §7.2), a row from before Created time was kept too. */
   undated: Page[];
 }
 export function calendarRows(property: Property | null, rows: readonly Page[], from: LocalDate, to: LocalDate, rawFor: (row: Page, columnId: string) => unknown = rawOf): CalendarRows {
   const days = new Map<LocalDate, Page[]>(), undated: Page[] = [];
   for (const row of rows) {
     const value = !property ? null : isTimeType(property.type) ? rowTime(property, row) : (readValue(property, rawFor(row, property.id)) as DateValue | null);
-    if (!value) { if (!property || !isTimeType(property.type)) undated.push(row); continue; }
+    if (!value) { undated.push(row); continue; }
     const start = value.start.slice(0, 10), end = (value.end ?? value.start).slice(0, 10);
     if (end < from || start > to) continue;
     for (let day = start < from ? from : start; day <= end && day <= to; day = addDays(day, 1)) {

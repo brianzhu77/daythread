@@ -496,7 +496,7 @@ test('a calendar can sit by a created or edited time', () => {
   h.change({ kind: 'updateProperty', propertyId: 'made', type: 'text' })
   assert.equal(viewDateBy(h.db(), h.db().views[0]!), null, 'not a date any more')
 })
-test('by a created time: rows on their day, and no No date line, a row from before them just not drawn', () => {
+test('by a created time: rows on their day, and a row from before them still in reach', () => {
   const h = typed()
   const made = h.db().properties.find(p => p.id === 'made')!
   const day = (cellValue(h.db(), h.page('dune'), 'made') as { start: string }).start.slice(0, 10)
@@ -504,7 +504,7 @@ test('by a created time: rows on their day, and no No date line, a row from befo
   delete h.page('blank').editedAt
   const { days, undated } = calendarRows(made, h.rows(view()), day, day)
   assert.deepEqual(days.get(day)?.map(r => r.id), ['dune', 'emma', 'ubik'])
-  assert.deepEqual(undated, [])
+  assert.deepEqual(undated.map(r => r.id), ['blank'])
   const by = calendarRows(h.db().properties.find(p => p.id === 'due')!, h.rows(view()), '2026-10-01', '2026-11-30')
   assert.deepEqual(by.undated.map(r => r.id), ['blank'], 'a Date property still has its line')
 })

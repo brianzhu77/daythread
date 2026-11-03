@@ -532,7 +532,7 @@ Linked views come in R2, so in R1 (Bumblebee 120fdcd6):
 
 Every view type opens a row the same way (§5), and every view shows the filter line (§4.1).
 
-**Calendar by a created or edited time (R3-21).** "Show calendar by" lists them with the Date properties. Nobody can set them, so on these calendars rows don't drag (Shift-arrows too), a day has no `+`, the phone's day has no `+ New`, and there's no "No date" line. A row from before these were kept doesn't draw here.
+**Calendar by a created or edited time (R3-21).** "Show calendar by" lists them with the Date properties. Nobody can set them, so on these calendars rows don't drag (Shift-arrows too), a day has no `+`, and the phone's day has no `+ New`. A row from before these were kept is on the same quiet line as any undated row, "No date · 3 ›", opening in place, which only appears if there are such rows; it doesn't drag from there either.
 
 **Calendar: where it was left (R3-21).** The month or week a calendar shows is kept on this device, per block and view, as a group's fold is, and isn't synced. It comes back to that place on a reload or a later visit, and `Today` is there when it isn't showing today. A calendar with nothing kept opens on its page's day, or today.
 
