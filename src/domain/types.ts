@@ -53,6 +53,8 @@ export interface Receipt {
   operationId: string;
   message: string;
   entityId?: string;
+  /** save-editor: lines given a new id, because another page already holds the one they came with. */
+  renamed?: Record<string, string>;
   fingerprint?: string;
 }
 
