@@ -2,7 +2,7 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
+import { sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
@@ -802,4 +802,97 @@ test('its heads give the same numbers as a table foot over the same group', () =
   const tabled = view({ groupBy: 'kind' })
   const inTable = viewGroups(h.db(), tabled, h.rows(tabled))!.shown
   assert.deepEqual(groups.map(g => columnCalc(h.db(), g.rows, 'pages', 'sum').value), inTable.map(g => columnCalc(h.db(), g.rows, 'pages', 'sum').value))
+})
+
+// ---------- R3-13: sub-groups
+
+const twoLayers = (fields: Partial<View> = {}) => view({ groupBy: 'kind', subGroupBy: 'owned', ...fields })
+test('a second layer sits inside each group, and needs a first', () => {
+  const h = reading()
+  const v = twoLayers()
+  assert.equal(viewSubGroupBy(h.db(), v)?.id, 'owned')
+  assert.equal(viewSubGroupBy(h.db(), view({ subGroupBy: 'owned' })), null, 'no group, no second layer')
+  assert.equal(viewSubGroupBy(h.db(), view({ groupBy: 'kind', subGroupBy: 'kind' })), null, 'not the same property twice')
+  assert.equal(viewSubGroupBy(h.db(), view({ groupBy: 'kind', subGroupBy: 'note' })), null, 'not what can\'t group')
+  const novels = viewGroups(h.db(), v, h.rows(v))!.shown.find(g => g.key === 'novel')!
+  assert.deepEqual(viewSubGroups(h.db(), v, novels.rows)!.shown.map(s => [s.key, s.rows.map(r => r.id)]), [['unchecked', ['emma']], ['checked', ['dune']]])
+  const flat = viewSections(h.db(), v, h.rows(v))!.shown
+  assert.deepEqual(flat.find(s => s.key === sectionKey('novel', 'checked'))?.rows.map(r => r.id), ['dune'])
+  assert.equal(flat.find(s => s.key === sectionKey('novel', 'checked'))?.name, 'Novel · Checked')
+  assert.deepEqual(viewSections(h.db(), view({ groupBy: 'kind' }), h.rows(view()))!.shown.map(s => s.key), ['novel', 'essay', noGroupKey], 'one layer: the groups')
+})
+test('a group with no rows keeps a section of its own, when the second layer has no options', () => {
+  const h = reading()
+  const v = view({ groupBy: 'status', subGroupBy: 'due', filter: [{ by: 'title', op: 'is', value: 'dune' }] })
+  const flat = viewSections(h.db(), v, h.rows(v))!.shown
+  const empty = viewGroups(h.db(), v, h.rows(v))!.shown.filter(g => !g.rows.length).map(g => g.key)
+  assert.ok(empty.length > 0)
+  for (const key of empty) assert.ok(flat.some(s => s.key === key), `${key} has its own`)
+  assert.equal(flat.some(s => empty.includes(splitSection(s.key).group) && splitSection(s.key).sub !== undefined), false)
+  // Its sub-groups all hidden, a group with rows keeps them hidden: it isn't empty.
+  const hid = view({ groupBy: 'kind', subGroupBy: 'owned', hiddenSubGroups: ['checked', 'unchecked'] })
+  assert.equal(viewSections(h.db(), hid, h.rows(hid))!.shown.some(s => s.key === 'novel'), false)
+})
+test("a board's cell is a place, though its group has no rows in that lane", () => {
+  const h = reading()
+  const v = view({ groupBy: 'kind', subGroupBy: 'due' })
+  const rows = h.rows(v)
+  const lanes = viewSubGroups(h.db(), v, rows)!.shown
+  const groups = viewGroups(h.db(), v, rows)!.shown
+  const key = groups.flatMap(g => lanes.map(l => sectionKey(g.key, l.key))).find(k => !viewSections(h.db(), v, rows)!.shown.some(s => s.key === k))
+  assert.ok(key, 'this view has a cell with no rows')
+  const cell = viewSection(h.db(), v, rows, key)!
+  assert.deepEqual(cell.rows, [])
+  assert.ok(cell.name.includes(' · '), 'named from both layers')
+  assert.equal(viewSection(h.db(), v, rows, sectionKey(groups[0]!.key, 'gone')), null, 'a lane no longer there is no place')
+  assert.equal(viewSection(h.db(), v, rows, 'gone'), null)
+  assert.equal(viewSection(h.db(), v, rows, groups[0]!.key)?.key, groups[0]!.key, "a group's own key")
+})
+test('sections keep their own keys apart, with no value too', () => {
+  assert.deepEqual(splitSection('novel'), { group: 'novel' })
+  assert.deepEqual(splitSection(sectionKey('novel', noGroupKey)), { group: 'novel', sub: noGroupKey })
+})
+test('hide empty covers both layers, and sub-groups hide on their own', () => {
+  const h = reading()
+  const v = twoLayers({ groupBy: 'kind', subGroupBy: 'status' })
+  const groupOf = (x: View, key: string) => viewGroups(h.db(), x, h.rows(x))!.shown.find(g => g.key === key)!
+  const all = viewSubGroups(h.db(), v, groupOf(v, 'novel').rows)!.shown.map(s => s.key)
+  assert.ok(all.length >= 3, 'a status offers each of its options')
+  const hiding = { ...v, hideEmptyGroups: true }
+  assert.equal(viewSubGroups(h.db(), hiding, groupOf(hiding, 'novel').rows)!.shown.every(s => s.rows.length > 0), true)
+  const first = all[0]!
+  const hid = { ...v, hiddenSubGroups: [first] }
+  const subs = viewSubGroups(h.db(), hid, h.rows(hid))!
+  assert.equal(subs.shown.some(s => s.key === first), false)
+  assert.equal(subs.hidden.some(s => s.key === first), true)
+  assert.equal(viewGroups(h.db(), hid, h.rows(hid))!.shown.length, viewGroups(h.db(), v, h.rows(v))!.shown.length, 'the groups are as they were')
+})
+test('+ New under a section starts with both values', () => {
+  const h = reading()
+  const v = twoLayers()
+  assert.deepEqual(newRowValues(h.db(), v, ctx, sectionKey('essay', 'checked')).values, { kind: 'essay', owned: true })
+  assert.deepEqual(newRowValues(h.db(), v, ctx, sectionKey(noGroupKey, 'unchecked')).values, {})
+  assert.deepEqual(newRowValues(h.db(), v, ctx, 'essay').values, { kind: 'essay' }, 'a group alone sets its own')
+})
+test('a view keeps its second layer, its date steps and what it hides; null clears', () => {
+  const h = reading()
+  const viewId = h.db().views[0]!.id, first = () => h.db().views[0]!
+  h.change({ kind: 'updateView', viewId, groupBy: 'kind', subGroupBy: 'due', subGroupDateBy: 'week', hiddenSubGroups: ['x'] })
+  assert.deepEqual([first().subGroupBy, first().subGroupDateBy, first().hiddenSubGroups], ['due', 'week', ['x']])
+  h.change({ kind: 'updateView', viewId, name: 'Renamed' })
+  assert.equal(first().subGroupBy, 'due', 'a rename keeps it')
+  h.change({ kind: 'updateView', viewId, subGroupBy: null, hiddenSubGroups: [] })
+  assert.equal('subGroupBy' in first(), false)
+  assert.equal('hiddenSubGroups' in first(), false)
+  assert.throws(() => h.change({ kind: 'updateView', viewId, subGroupBy: 'note' }), /Can't group/)
+  assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId, subGroupBy: null } } }).success, true)
+})
+test('one set-values moves both layers, with one Undo', () => {
+  const h = reading()
+  const r = h.run({ type: 'set-values', pageId: 'dune', values: { kind: 'essay', owned: null }, expected: { kind: 'novel', owned: true }, at } as never)
+  assert.equal(cellValue(h.db(), h.page('dune'), 'kind'), 'essay')
+  assert.equal(cellValue(h.db(), h.page('dune'), 'owned'), false)
+  h.run({ type: 'undo', targetOperationId: r.receipt.operationId } as never)
+  assert.equal(cellValue(h.db(), h.page('dune'), 'kind'), 'novel')
+  assert.equal(cellValue(h.db(), h.page('dune'), 'owned'), true)
 })
