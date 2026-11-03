@@ -1,3 +1,4 @@
+import { withLinks } from '../domain/relations'
 import { useRef, useState } from 'react'
 import { Navigate, useNavigate, useSearch } from '@tanstack/react-router'
 import { AccountRow } from './account-row'
@@ -60,8 +61,8 @@ export function PagesScreen() {
       {!isDatabase(p) && <LinkUrlRow page={p} />}
       <LinkedFrom page={p} workspace={workspace} />
     </div>
-    {isDatabase(p) ? <DatabasePage key={p.id} workspace={workspace} db={p} /> : <>
-      {rowOf && <RowProperties key={p.id} workspace={workspace} row={p} db={rowOf} />}
+    {isDatabase(p) ? <DatabasePage key={p.id} workspace={withLinks(workspace)} db={withLinks(workspace).pages.find(x => x.id === p.id) as typeof p} /> : <>
+      {rowOf && <RowProperties key={p.id} workspace={withLinks(workspace)} row={withLinks(workspace).pages.find(x => x.id === p.id) ?? p} db={(withLinks(workspace).pages.find(x => x.id === rowOf.id) ?? rowOf) as typeof rowOf} />}
       <ContinuousPage page={p} workspace={workspace} />
       <Subpages page={p} workspace={workspace} />
     </>}</div>

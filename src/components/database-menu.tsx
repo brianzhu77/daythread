@@ -3,10 +3,11 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { calcChoices, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { calcChoices, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
-import type { Page } from '../domain/types'
-import { databaseSource } from '../domain/todos-source'
+import type { Page, Workspace } from '../domain/types'
+import { rollupFunctionsFor } from '../domain/relations'
+import { databaseSource, todosSourceId, todosTitle } from '../domain/todos-source'
 import { blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange } from './database-block'
 import { ChevronDownIcon } from './icons'
 import { useSaveOnHide, useWide } from './property-editors'
@@ -180,7 +181,9 @@ export function opsFor(type: PropertyType): FilterOp[] {
     case 'id': return ['eq', 'ne', 'gt', 'lt']
     case 'createdTime': case 'editedTime': return ['is', 'before', 'after', 'within']
     case 'select': case 'status': return ['isAnyOf', 'isNoneOf', 'isEmpty']
-    case 'multiSelect': return ['contains', 'doesNotContain', 'isEmpty']
+    case 'relation': case 'multiSelect': return ['contains', 'doesNotContain', 'isEmpty']
+    // Read as the type it works out to (relations.ts), so it never gets here.
+    case 'rollup': return []
     case 'date': return ['is', 'before', 'after', 'within', 'isEmpty']
     case 'checkbox': return ['is']
   }
@@ -233,7 +236,7 @@ function RuleValue({ property, condition, onChange }: { property: Property; cond
       return <select aria-label="Value" value={value === false ? 'no' : 'yes'} onChange={e => onChange(e.target.value === 'yes')}>
         <option value="yes">checked</option><option value="no">unchecked</option>
       </select>
-    case 'select': case 'status': case 'multiSelect': {
+    case 'select': case 'status': case 'multiSelect': case 'relation': {
       const picked = new Set(Array.isArray(value) ? value.filter((x): x is string => typeof x === 'string') : [])
       return <div className="database-rule-options">{(property.options ?? []).map(o => <label key={o.id}>
         <input type="checkbox" checked={picked.has(o.id)} onChange={e => { const next = new Set(picked); if (e.target.checked) next.add(o.id); else next.delete(o.id); onChange(next.size ? [...next] : undefined) }} />{o.name}
@@ -425,8 +428,8 @@ function PropertiesPanel({ db, view, go }: { db: DatabasePage; view: View; go: (
     {ordered.map(p => <div key={p.id} className="database-property-line">
       <label className="database-property-switch"><input type="checkbox" checked={shown.has(p.id)} onChange={() => toggle(p)} aria-label={`Show ${p.name}`} /></label>
       {db.database.fixed
-        ? <span className="database-property-name">{p.name}<span className="database-menu-quiet"> · {typeLabels[p.type]}</span></span>
-        : <button type="button" className="database-property-name" onClick={() => go({ property: p.id })}>{p.name}<span className="database-menu-quiet"> · {typeLabels[p.type]}</span></button>}
+        ? <span className="database-property-name">{p.name}<span className="database-menu-quiet"> · {typeLabels[p.rollup ? 'rollup' : p.type]}</span></span>
+        : <button type="button" className="database-property-name" onClick={() => go({ property: p.id })}>{p.name}<span className="database-menu-quiet"> · {typeLabels[p.rollup ? 'rollup' : p.type]}</span></button>}
       {shown.has(p.id) && view.columns[0]?.id !== p.id && <button type="button" aria-label={`Move ${p.name} left`} onClick={() => shift(p, -1)}>↑</button>}
       {shown.has(p.id) && view.columns.at(-1)?.id !== p.id && <button type="button" aria-label={`Move ${p.name} right`} onClick={() => shift(p, 1)}>↓</button>}
     </div>)}
@@ -435,15 +438,84 @@ function PropertiesPanel({ db, view, go }: { db: DatabasePage; view: View; go: (
 }
 
 /** Add (design §6.2): a name, then a type; Enter makes a Text property. */
+/** What a new relation or rollup starts from, changed in its own panel: another database if there is one, its first relation and a count. */
+function linkFields(workspace: Workspace | null, db: DatabasePage, type: PropertyType): Pick<Property, 'target' | 'rollup'> {
+  if (type === 'relation') return { target: linkableDatabases(workspace).find(p => p.id !== db.id)?.id ?? db.id }
+  const relation = db.database.properties.find(p => p.type === 'relation')
+  return type === 'rollup' && relation ? { rollup: { relation: relation.id, property: titleId, fn: 'countAll' } } : {}
+}
+const linkableDatabases = (workspace: Workspace | null): DatabasePage[] => (workspace?.pages ?? []).filter((p): p is DatabasePage => isDatabase(p) && !p.trashedAt && !p.database.fixed)
+const rollupLabels: Record<RollupFunction, string> = { original: 'Show original', unique: 'Show unique values', countAll: 'Count all', countValues: 'Count values', countUnique: 'Count unique values', countEmpty: 'Count empty', countNotEmpty: 'Count not empty', percentEmpty: 'Percent empty', percentNotEmpty: 'Percent not empty', sum: 'Sum', average: 'Average', median: 'Median', min: 'Min', max: 'Max', range: 'Range', earliest: 'Earliest date', latest: 'Latest date', dateRange: 'Date range', checked: 'Checked', unchecked: 'Unchecked', percentChecked: 'Percent checked', percentUnchecked: 'Percent unchecked' }
+/** A relation's and a rollup's own settings (design §6.2, R3-5, R3-6, R3-7). */
+function LinkSettings({ db, property, update, change }: { db: DatabasePage; property: Property; update(fields: { target?: string; limit?: 1 | null; rollup?: Rollup }): void; change(c: DatabaseChange, withUndo?: boolean): void }) {
+  const { workspace } = useWorkspace()
+  if (property.type === 'relation') {
+    const targets = linkableDatabases(workspace)
+    const toTodos = property.target === todosSourceId
+    const target = targets.find(p => p.id === property.target)
+    const shows = () => {
+      if (property.mirror) { change({ kind: 'setMirror', propertyId: property.id, mirror: null }, true); return }
+      const taken = new Set(['name', ...(target?.database.properties ?? []).map(p => p.name.toLocaleLowerCase())]), base = db.title || 'Related'
+      let name = base
+      for (let n = 2; taken.has(name.toLocaleLowerCase()); n++) name = `${base} ${n}`
+      change({ kind: 'setMirror', propertyId: property.id, mirror: { id: crypto.randomUUID(), name } }, true)
+    }
+    return <>
+      <label className="database-menu-row">Related to
+        <select value={property.target} disabled={Boolean(property.mirror)} onChange={e => update({ target: e.target.value })}>
+          {targets.map(p => <option key={p.id} value={p.id}>{p.title || 'Untitled'}</option>)}
+          <option value={todosSourceId}>{todosTitle}</option>
+        </select>
+      </label>
+      <label className="database-menu-row">Limit
+        <select value={property.limit === 1 ? '1' : 'none'} onChange={e => update({ limit: e.target.value === '1' ? 1 : null })}>
+          <option value="none">No limit</option><option value="1">1 page</option>
+        </select>
+      </label>
+      {toTodos && <p className="database-menu-quiet">One way: to-dos can't have extra properties.</p>}
+      {target && <label className="database-menu-row">{target.id === db.id ? 'Two separate properties' : `Show on ${target.title || 'Untitled'}`}
+        <input type="checkbox" checked={Boolean(property.mirror)} onChange={shows} />
+      </label>}
+    </>
+  }
+  const rollup = property.rollup
+  if (!rollup) return null
+  const relations = db.database.properties.filter(p => p.type === 'relation')
+  const through = relations.find(p => p.id === rollup.relation)
+  const target = through && workspace ? databaseSource(workspace, through.target!) : undefined
+  const readable = isDatabase(target) ? target.database.properties.filter(p => p.type !== 'rollup') : []
+  const read = readable.find(p => p.id === rollup.property)
+  const fns = rollupFunctionsFor(read?.type ?? 'title')
+  return <>
+    <label className="database-menu-row">Relation
+      <select value={rollup.relation} onChange={e => update({ rollup: { relation: e.target.value, property: titleId, fn: 'countAll' } })}>
+        {relations.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </label>
+    <label className="database-menu-row">Property
+      <select value={rollup.property} onChange={e => { const next = readable.find(p => p.id === e.target.value); const can = rollupFunctionsFor(next?.type ?? 'title'); update({ rollup: { ...rollup, property: e.target.value, fn: can.includes(rollup.fn) ? rollup.fn : 'countAll' } }) }}>
+        <option value={titleId}>Name</option>
+        {readable.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </label>
+    <label className="database-menu-row">Calculate
+      <select value={rollup.fn} onChange={e => update({ rollup: { ...rollup, fn: e.target.value as RollupFunction } })}>
+        {fns.map(fn => <option key={fn} value={fn}>{rollupLabels[fn]}</option>)}
+      </select>
+    </label>
+  </>
+}
 function NewPropertyPanel({ db, view, go }: { db: DatabasePage; view: View; go: (p: Panel) => void }) {
   const change = useChange(db)
   const changeView = useViewChange(db.id, view.id)
   const blockId = useContext(MenuBlock) ?? ''
   const [name, setName] = useState('')
+  const { workspace } = useWorkspace()
+  const firstRelation = db.database.properties.some(p => p.type === 'relation')
   const make = (type: PropertyType) => {
     const id = newId()
     const linked = isLinkedBlock(blockId)
-    change({ kind: 'addProperty', property: { id, name: name.trim() || typeLabels[type], type }, ...(linked ? {} : { viewId: view.id }) })
+    change({ kind: 'addProperty', property: { id, name: name.trim() || typeLabels[type], type, ...linkFields(workspace, db, type) }, ...(linked ? {} : { viewId: view.id }) })
     if (linked) changeView(current => ({ columns: [...current.columns, { id }] }))
     go({ property: id })
   }
@@ -451,7 +523,7 @@ function NewPropertyPanel({ db, view, go }: { db: DatabasePage; view: View; go: 
     <Head title="New property" back={() => go('properties')} />
     <input className="database-menu-field" aria-label="Property name" placeholder="Name" autoFocus value={name} onChange={e => setName(e.target.value)}
       onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); make('text') } }} />
-    {propertyTypes.map(t => <button key={t} type="button" role="menuitem" onClick={() => make(t)}>{typeLabels[t]}</button>)}
+    {propertyTypes.map(t => <button key={t} type="button" role="menuitem" disabled={t === 'rollup' && !firstRelation} onClick={() => make(t)}>{typeLabels[t]}{t === 'rollup' && !firstRelation && <span className="database-menu-quiet"> · add a relation first</span>}</button>)}
   </>
 }
 
@@ -526,6 +598,7 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
   const changeView = useViewChange(db.id, view.id)
   const property = db.database.properties.find(p => p.id === propertyId)
   if (!property) return <><Head title="Property" back={() => go('properties')} /><p className="database-menu-quiet">Deleted</p></>
+  const { workspace } = useWorkspace()
   const update = (fields: Omit<Extract<DatabaseChange, { kind: 'updateProperty' }>, 'kind' | 'propertyId'>, withUndo = false) => change({ kind: 'updateProperty', propertyId, ...fields }, withUndo)
   const hasOptions = property.type === 'select' || property.type === 'multiSelect' || property.type === 'status'
   const options = property.options ?? []
@@ -537,11 +610,12 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
     <CommitInput key={property.name} ariaLabel="Name" initial={property.name} onCommit={v => { if (v.trim()) update({ name: v.trim() }) }} />
     <label className="database-menu-row">Type
       {/* Changing the type converts what it can and says how many it couldn't, with Undo (design §6.2). */}
-      <select value={property.type} onChange={e => update({ type: e.target.value as PropertyType }, true)}>
+      <select value={property.rollup ? 'rollup' : property.type} onChange={e => { const type = e.target.value as PropertyType; update({ type, ...linkFields(workspace, db, type) }, true) }}>
         {propertyTypes.map(t => <option key={t} value={t}>{typeLabels[t]}</option>)}
       </select>
     </label>
-    {property.type === 'number' && <label className="database-menu-row">Format
+    <LinkSettings db={db} property={property} update={fields => update(fields, true)} change={change} />
+    {property.type === 'number' && !property.rollup && <label className="database-menu-row">Format
       <select value={property.format ?? 'plain'} onChange={e => update({ format: e.target.value as Property['format'] })}>
         <option value="plain">Number</option><option value="comma">1,000</option><option value="percent">Percent</option><option value="currency">Currency</option>
       </select>
@@ -549,7 +623,7 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
     {property.type === 'id' && <label className="database-menu-row">Prefix
       <CommitInput key={property.prefix ?? ''} ariaLabel="Prefix" initial={property.prefix ?? ''} placeholder="None" onCommit={v => update({ prefix: v })} />
     </label>}
-    {property.type === 'date' && <label className="database-menu-row">Include time
+    {property.type === 'date' && !property.rollup && <label className="database-menu-row">Include time
       <input type="checkbox" checked={Boolean(property.withTime)} onChange={e => update({ withTime: e.target.checked })} />
     </label>}
     {hasOptions && <div className="database-options">
@@ -565,6 +639,7 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
     </div>}
     <hr />
     <button type="button" role="menuitem" onClick={() => changeView(({ columns }) => ({ columns: columns.some(c => c.id === propertyId) ? columns.filter(c => c.id !== propertyId) : [...columns, { id: propertyId }] }))}>{shown ? 'Hide in this view' : 'Show in this view'}</button>
+    {property.mirror && <p className="database-menu-quiet">Deleting it also deletes its other side.</p>}
     <button type="button" role="menuitem" className="is-danger" onClick={() => { change({ kind: 'removeProperty', propertyId }, true); go('properties') }}>Delete property</button>
   </>
 }

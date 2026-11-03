@@ -4,7 +4,7 @@
 // one can set, rows don't drag and a day has no `+` (R3-21). The month or week showing is this
 // device's, never a save, as a group's fold is: it comes back to where it was left.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { calendarRows, databaseRows, inView, isReadOnlyType, movedDate, startOfWeek, titleId, viewDateBy, viewRows, type Json, type View } from '../domain/database.ts'
+import { calendarRows, databaseRows, inView, isReadOnly, movedDate, startOfWeek, titleId, viewDateBy, viewRows, type Json, type View } from '../domain/database.ts'
 import type { LocalDate, Page, WeekStart } from '../domain/types'
 import { blockActions, cellKey, DatabaseHeader, pendingCells, setOpenCell, shownRaw, useAddRow, useCommitCell, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
@@ -51,7 +51,7 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
   usePendingCells()
   const returned = useReturnedRow(rows)
   const property = viewDateBy(db.database, view)
-  const canSetDate = Boolean(property && !isReadOnlyType(property.type))
+  const canSetDate = Boolean(property && !isReadOnly(property))
 
   const placeKey = `${blockId}|${view.id}`
   const [place, setPlaceState] = useState(() => {
