@@ -502,6 +502,8 @@ Linked views come in R2, so in R1 (Bumblebee 120fdcd6):
 
 Every view type opens a row the same way (§5), and every view shows the filter line (§4.1).
 
+**Calendar: which date, and its weeks (R3-1).** It's asked when the view is made, with "+ New Date property" offered, and with one date property it doesn't ask. `⋯` → Layout has "Rows sit by" to change it. Weeks start on Sunday, as the date picker's. A row dragged from the second day of a range moves the range by how far it went, keeping its length and time. Which month is showing and which day is chosen are this tab's, with no save.
+
 **Calendar: rows with no date (R3-1).** They stay in reach, in one quiet line under the month at both widths: **"No date · 3 ›"**. Tapping it opens the list in place, each row opening its page as usual. At 1280 a row in that list drags onto a day, which sets its date. With none, the line isn't there. `+ New` in that list isn't offered, since a calendar adds by day. A row whose date property is gone or empty is here, so nothing is silently missing.
 
 **Gallery: images (R3-3).** Nothing can be uploaded yet, and a page body holds an image only when one came in with pasted web content, as a link to the image where it lives. It isn't a copy of ours, so it can vanish. So:
