@@ -5,8 +5,8 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
-import { canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
-import type { Page, Workspace } from '../domain/types'
+import { sectionKey, splitSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
 import { ChevronDownIcon, ChevronRightIcon } from './icons'
@@ -435,6 +435,14 @@ export function withPendingMoves(rows: readonly Page[]): Page[] {
 }
 
 /** What a group's name reads as: a status with its dot, a number in its format. No value is quiet. */
+/** A sub-group's line (R3-13), set in one step under its group's, with its own fold and count. */
+export function SubGroupHead({ groups, group, isFolded, onToggle }: { groups: ViewGroups; group: ViewGroup; isFolded: boolean; onToggle: () => void }) {
+  return <div className="database-group-inner is-sub">
+    <button type="button" className="database-group-fold" aria-expanded={!isFolded} onClick={onToggle}>
+      <ChevronRightIcon /><GroupName groups={groups} group={group} /><span className="database-group-count">· {group.rows.length}</span>
+    </button>
+  </div>
+}
 export function GroupName({ groups, group }: { groups: ViewGroups; group: ViewGroup }) {
   if (group.key === noGroupKey) return <span className="database-group-none">{group.name}</span>
   const { property } = groups
@@ -442,6 +450,12 @@ export function GroupName({ groups, group }: { groups: ViewGroups; group: ViewGr
   return <span>{group.name}</span>
 }
 /** "Hidden: Done (12)" at the end of a view (design §7.3): a tap shows that group again. */
+/** The second layer's hidden ones, over every row of the view. */
+export function HiddenSubGroups({ db, view, rows, changeView, weekStart, underCards }: { db: Database; view: View; rows: readonly Page[]; changeView: ChangeView; weekStart: WeekStart; underCards?: boolean }) {
+  const subs = viewSubGroups(db, view, rows, shownRaw, weekStart)
+  if (!subs?.hidden.length) return null
+  return <p className={`database-hidden-groups${underCards ? ' is-under-cards' : ''}`}>Hidden: {subs.hidden.map((g, i) => <span key={g.key}>{i > 0 && ' · '}<button type="button" className="app-link" onClick={() => changeView(current => ({ hiddenSubGroups: (current.hiddenSubGroups ?? []).filter(k => k !== g.key) }))}>{g.name} ({g.rows.length})</button></span>)}</p>
+}
 export function HiddenGroups({ groups, changeView, underCards }: { groups: ViewGroups; changeView: ChangeView; underCards?: boolean }) {
   if (!groups.hidden.length) return null
   return <p className={`database-hidden-groups${underCards ? ' is-under-cards' : ''}`}>Hidden: {groups.hidden.map((g, i) => <span key={g.key}>{i > 0 && ' · '}<button type="button" className="app-link" onClick={() => changeView(current => ({ hiddenGroups: (current.hiddenGroups ?? []).filter(k => k !== g.key) }))}>{g.name} ({g.rows.length})</button></span>)}</p>
@@ -473,7 +487,8 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
     // Sorted, a card's place comes from the sort: only its value changes.
     const sorted = view.sort.length > 0
     const all = databaseRows(ws, db.id), rest = all.filter(r => r.id !== rowId)
-    const target = groups?.shown.find(g => g.key === to)
+    const sections = groups && viewSubGroupBy(db.database, view) ? viewSections(db.database, view, withPendingMoves(viewRows(ws, db.id, view, context)), shownRaw, context.weekStart) : groups
+    const target = sections?.shown.find(g => g.key === to)
     const last = target?.rows.filter(r => r.id !== rowId).at(-1)
     // The end of a group is just before whatever follows its last row; an empty group has no place to keep.
     const end = groups ? (last ? rest[rest.indexOf(rest.find(r => r.id === last.id)!) + 1]?.id ?? null : undefined) : null
@@ -482,19 +497,30 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
       // To-dos have no order of their own to keep.
       if (db.database.fixed) return
       // Dropped where it already is, as he sees it: nothing to send.
-      const here = groups ? groups.shown.find(g => g.key === to)?.rows ?? [] : shown
+      const here = sections ? sections.shown.find(g => g.key === to)?.rows ?? [] : shown
       const next = here[here.findIndex(r => r.id === rowId) + 1]?.id ?? null
       if (sorted || before === rowId || before === next || beforeId === undefined) return
       void run({ type: 'move-page', pageId: rowId, parentId: db.id, beforeId }, r => ({ text: 'Row moved', undoOperationId: r.operationId }))
       return
     }
     if (!groups || to === null || !target) return
-    if (isReadOnly(groups.property)) { toast(`${groups.property.name} can't be changed`, { timeout: 4000 }); return }
-    const value = groupValue(groups.property, to, shownRaw(row, groups.property.id), from ?? undefined, context.today, view.groupDateBy, context.weekStart)
-    const probe = { ...row, values: { ...row.values, ...(value === undefined ? {} : { [groups.property.id]: value }) } } as Page
-    if (value === undefined) delete probe.values![groups.property.id]
+    // Each layer the drop changed: a drag across both is one change with one Undo (R3-13).
+    const was = from === null ? null : splitSection(from), now = splitSection(to), subProperty = viewSubGroupBy(db.database, view)
+    const layers = [
+      ...(was?.group !== now.group ? [{ property: groups.property, key: now.group, fromKey: was?.group, by: view.groupDateBy }] : []),
+      ...(subProperty && now.sub !== undefined && was?.sub !== now.sub ? [{ property: subProperty, key: now.sub, fromKey: was?.sub, by: view.subGroupDateBy }] : []),
+    ]
+    const stuck = layers.find(l => isReadOnly(l.property))
+    if (stuck) { toast(`${stuck.property.name} can't be changed`, { timeout: 4000 }); return }
+    const moved = layers.map(l => ({ id: l.property.id, value: groupValue(l.property, l.key, shownRaw(row, l.property.id), l.fromKey, context.today, l.by, context.weekStart) }))
+    const probe = { ...row, values: { ...row.values } } as Page
+    for (const { id, value } of moved) { if (value === undefined) delete probe.values![id]; else probe.values![id] = value }
     const hidden = !inView(db.database, probe, view, context)
-    commit(db, row, groups.property.id, value, `Moved to ${target.name}${hidden ? " · hidden by this view's filter" : ''}`, undefined, beforeId)
+    const notice = `Moved to ${target.name}${hidden ? " · hidden by this view's filter" : ''}`
+    if (moved.length === 1) { commit(db, row, moved[0]!.id, moved[0]!.value, notice, undefined, beforeId); return }
+    // To-dos have a command per column, so there it's one each.
+    if (db.database.fixed) { for (const { id, value } of moved) commit(db, row, id, value); return }
+    void run({ type: 'set-values', pageId: row.id, values: Object.fromEntries(moved.map(m => [m.id, (m.value ?? null) as Json])), expected: Object.fromEntries(moved.map(m => [m.id, (rawOf(row, m.id) ?? null) as Json])), ...(beforeId !== undefined ? { beforeId } : {}), at: new Date().toISOString() }, r => ({ text: notice, undoOperationId: r.operationId }))
   }
 }
 
@@ -780,7 +806,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     // Past the rows shown, the new row is drawn all the same, and brought into view (Lead's review, 5).
     const ws = latest(), now = ws ? viewRows(ws, db.id, view, context) : []
     if (group === undefined) { const at = now.findIndex(x => x.id === pageId); if (at >= limit) setLimit(at + 1) }
-    else reach(group, ws ? viewGroups(db.database, view, now, undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0 : 0)
+    else reach(group, ws ? viewSections(db.database, view, now, undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0 : 0)
     setReveal(pageId)
     requestAnimationFrame(() => open(pageId, titleId, group))
   })
@@ -795,8 +821,12 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   }
 
   // What's drawn, in order: a Multi-select's row once in each of its groups, so a row's place is its index here.
-  const sections = groups?.shown.map(group => ({ group, rows: folded.has(group.key) ? [] : group.rows.slice(0, limitOf(group.key)) }))
-  const entries: { row: Page; group?: string }[] = sections ? sections.flatMap(({ group, rows: inGroup }) => inGroup.map(row => ({ row, group: group.key }))) : rows.slice(0, limit).map(row => ({ row }))
+  // Each group, with its sub-groups if the view has them; rows are drawn per section, under the section's key.
+  const layers = groups?.shown.map(group => ({ group, subs: viewSubGroups(db.database, view, group.rows, shownRaw, weekStart) }))
+  const drawn = (key: string, all: readonly Page[]) => (folded.has(key) ? [] : all.slice(0, limitOf(key)))
+  const entries: { row: Page; group?: string }[] = layers ? layers.flatMap(({ group, subs }) => folded.has(group.key) ? [] : subs
+    ? subs.shown.flatMap(sub => { const key = sectionKey(group.key, sub.key); return drawn(key, sub.rows).map(row => ({ row, group: key })) })
+    : drawn(group.key, group.rows).map(row => ({ row, group: group.key }))) : rows.slice(0, limit).map(row => ({ row }))
   const shown = entries.map(e => e.row)
   const undoKey = useUndoKey()
   /**
@@ -947,10 +977,22 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
           </tr>
         </thead>
         <tbody ref={tbody} className={!groups && drag && drag.before === null ? 'is-drop-end' : undefined}>
-          {sections ? sections.map(({ group, rows: inGroup }) => {
+          {layers ? layers.map(({ group, subs }) => {
             const isFolded = folded.has(group.key)
-            const start = entries.findIndex(e => e.group === group.key)
-            const more = !isFolded && group.rows.length > inGroup.length
+            const body = (key: string, all: readonly Page[]) => {
+              if (folded.has(key)) return null
+              const inGroup = drawn(key, all), start = entries.findIndex(e => e.group === key), more = all.length > inGroup.length
+              return <>
+                {inGroup.map((row, i) => rowLine(row, start + i, key))}
+                {hasFoot && footRow(all)}
+                <tr className={`database-group-foot${drag && drag.before === null && drag.group === key ? ' is-drop-end' : ''}`} data-group={key}><td colSpan={columns.length + 2}>
+                  <div className="database-group-inner">
+                    {more && <button type="button" className="database-more" onClick={() => showMore(key)}>Show 25 more</button>}
+                    <span className="database-new-row"><NewRow db={db} blockId={blockId} addRow={addRow} group={key} /></span>
+                  </div>
+                </td></tr>
+              </>
+            }
             return <Fragment key={group.key}>
               <tr className="database-group"><th scope="rowgroup" colSpan={columns.length + 2} className="database-group-head">
                 <div className="database-group-inner">
@@ -959,14 +1001,12 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
                   </button>
                 </div>
               </th></tr>
-              {inGroup.map((row, i) => rowLine(row, start + i, group.key))}
-              {!isFolded && hasFoot && footRow(group.rows)}
-              {!isFolded && <tr className={`database-group-foot${drag && drag.before === null && drag.group === group.key ? ' is-drop-end' : ''}`} data-group={group.key}><td colSpan={columns.length + 2}>
-                <div className="database-group-inner">
-                  {more && <button type="button" className="database-more" onClick={() => showMore(group.key)}>Show 25 more</button>}
-                  <span className="database-new-row"><NewRow db={db} blockId={blockId} addRow={addRow} group={group.key} /></span>
-                </div>
-              </td></tr>}
+              {!isFolded && (subs
+                ? subs.shown.map(sub => { const key = sectionKey(group.key, sub.key); return <Fragment key={key}>
+                    <tr className="database-group"><th scope="rowgroup" colSpan={columns.length + 2} className="database-group-head"><SubGroupHead groups={subs} group={sub} isFolded={folded.has(key)} onToggle={() => toggle(key)} /></th></tr>
+                    {body(key, sub.rows)}
+                  </Fragment> })
+                : body(group.key, group.rows))}
             </Fragment>
           }) : entries.map((e, i) => rowLine(e.row, i))}
         </tbody>
@@ -981,6 +1021,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
       <button type="button" className="app-link" onClick={() => setPicked([])}>Done</button>
     </div>}
     {groups && <HiddenGroups groups={groups} changeView={changeView} />}
+    {groups && <HiddenSubGroups db={db.database} view={view} rows={withPendingMoves(rows)} changeView={changeView} weekStart={weekStart} />}
     {!groups && rows.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
     {!groups && <NewRow db={db} blockId={blockId} addRow={addRow} />}
   </div>

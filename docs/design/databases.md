@@ -613,7 +613,7 @@ doesn't show.
 - **Moving between groups, the value:**
   - Multi-select swaps the group it left and keeps its others. To No value, it empties.
   - A date goes to today if today is in that group, else the group's first day, and keeps its time and length.
-- **Sub-groups** are R3: they'd be a second field on the view, and nothing here assumes one layer.
+- **Sub-groups (R3-13):** `⋯` → Group → **Sub-group by**, once there's a group, by any property a table can group by except the group's own. A second layer inside each group, in a table, list and gallery; on a board, a lane of the same columns across the board, with the column heads on the first open lane. **Hide empty groups** covers both layers, and each layer's values can be hidden on their own. Each section folds and has its own cap, `Show 25 more` and `+ New`, which starts with both values. A drag between sections changes what differs in one change with one Undo, or says "{name} can't be changed" if either can't. To-dos have a command per column, so a drag across both layers there is two Undos. A calendar doesn't group.
 
 **Board, as built in R2 (task #265).**
 

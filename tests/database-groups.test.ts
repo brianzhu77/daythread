@@ -2,7 +2,7 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
+import { sectionKey, splitSection, viewSections, viewSubGroupBy, viewSubGroups, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
@@ -774,4 +774,70 @@ test('a row template can\'t be made a page default', () => {
   assert.throws(() => h.run({ type: 'set-values', pageId: 'pages', values: {} } as never))
   assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'add-row', databaseId: 'list', pageId: 'p', title: '', template: 'tmpl', at } }).success, true)
   assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'create-template', databaseId: 'list', title: '' } }).success, true)
+})
+
+// ---------- R3-13: sub-groups
+
+const twoLayers = (fields: Partial<View> = {}) => view({ groupBy: 'kind', subGroupBy: 'owned', ...fields })
+test('a second layer sits inside each group, and needs a first', () => {
+  const h = reading()
+  const v = twoLayers()
+  assert.equal(viewSubGroupBy(h.db(), v)?.id, 'owned')
+  assert.equal(viewSubGroupBy(h.db(), view({ subGroupBy: 'owned' })), null, 'no group, no second layer')
+  assert.equal(viewSubGroupBy(h.db(), view({ groupBy: 'kind', subGroupBy: 'kind' })), null, 'not the same property twice')
+  assert.equal(viewSubGroupBy(h.db(), view({ groupBy: 'kind', subGroupBy: 'note' })), null, 'not what can\'t group')
+  const novels = viewGroups(h.db(), v, h.rows(v))!.shown.find(g => g.key === 'novel')!
+  assert.deepEqual(viewSubGroups(h.db(), v, novels.rows)!.shown.map(s => [s.key, s.rows.map(r => r.id)]), [['unchecked', ['emma']], ['checked', ['dune']]])
+  const flat = viewSections(h.db(), v, h.rows(v))!.shown
+  assert.deepEqual(flat.find(s => s.key === sectionKey('novel', 'checked'))?.rows.map(r => r.id), ['dune'])
+  assert.equal(flat.find(s => s.key === sectionKey('novel', 'checked'))?.name, 'Novel · Checked')
+  assert.deepEqual(viewSections(h.db(), view({ groupBy: 'kind' }), h.rows(view()))!.shown.map(s => s.key), ['novel', 'essay', noGroupKey], 'one layer: the groups')
+})
+test('sections keep their own keys apart, with no value too', () => {
+  assert.deepEqual(splitSection('novel'), { group: 'novel' })
+  assert.deepEqual(splitSection(sectionKey('novel', noGroupKey)), { group: 'novel', sub: noGroupKey })
+})
+test('hide empty covers both layers, and sub-groups hide on their own', () => {
+  const h = reading()
+  const v = twoLayers({ groupBy: 'kind', subGroupBy: 'status' })
+  const groupOf = (x: View, key: string) => viewGroups(h.db(), x, h.rows(x))!.shown.find(g => g.key === key)!
+  const all = viewSubGroups(h.db(), v, groupOf(v, 'novel').rows)!.shown.map(s => s.key)
+  assert.ok(all.length >= 3, 'a status offers each of its options')
+  const hiding = { ...v, hideEmptyGroups: true }
+  assert.equal(viewSubGroups(h.db(), hiding, groupOf(hiding, 'novel').rows)!.shown.every(s => s.rows.length > 0), true)
+  const first = all[0]!
+  const hid = { ...v, hiddenSubGroups: [first] }
+  const subs = viewSubGroups(h.db(), hid, h.rows(hid))!
+  assert.equal(subs.shown.some(s => s.key === first), false)
+  assert.equal(subs.hidden.some(s => s.key === first), true)
+  assert.equal(viewGroups(h.db(), hid, h.rows(hid))!.shown.length, viewGroups(h.db(), v, h.rows(v))!.shown.length, 'the groups are as they were')
+})
+test('+ New under a section starts with both values', () => {
+  const h = reading()
+  const v = twoLayers()
+  assert.deepEqual(newRowValues(h.db(), v, ctx, sectionKey('essay', 'checked')).values, { kind: 'essay', owned: true })
+  assert.deepEqual(newRowValues(h.db(), v, ctx, sectionKey(noGroupKey, 'unchecked')).values, {})
+  assert.deepEqual(newRowValues(h.db(), v, ctx, 'essay').values, { kind: 'essay' }, 'a group alone sets its own')
+})
+test('a view keeps its second layer, its date steps and what it hides; null clears', () => {
+  const h = reading()
+  const viewId = h.db().views[0]!.id, first = () => h.db().views[0]!
+  h.change({ kind: 'updateView', viewId, groupBy: 'kind', subGroupBy: 'due', subGroupDateBy: 'week', hiddenSubGroups: ['x'] })
+  assert.deepEqual([first().subGroupBy, first().subGroupDateBy, first().hiddenSubGroups], ['due', 'week', ['x']])
+  h.change({ kind: 'updateView', viewId, name: 'Renamed' })
+  assert.equal(first().subGroupBy, 'due', 'a rename keeps it')
+  h.change({ kind: 'updateView', viewId, subGroupBy: null, hiddenSubGroups: [] })
+  assert.equal('subGroupBy' in first(), false)
+  assert.equal('hiddenSubGroups' in first(), false)
+  assert.throws(() => h.change({ kind: 'updateView', viewId, subGroupBy: 'note' }), /Can't group/)
+  assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId, subGroupBy: null } } }).success, true)
+})
+test('one set-values moves both layers, with one Undo', () => {
+  const h = reading()
+  const r = h.run({ type: 'set-values', pageId: 'dune', values: { kind: 'essay', owned: null }, expected: { kind: 'novel', owned: true }, at } as never)
+  assert.equal(cellValue(h.db(), h.page('dune'), 'kind'), 'essay')
+  assert.equal(cellValue(h.db(), h.page('dune'), 'owned'), false)
+  h.run({ type: 'undo', targetOperationId: r.receipt.operationId } as never)
+  assert.equal(cellValue(h.db(), h.page('dune'), 'kind'), 'novel')
+  assert.equal(cellValue(h.db(), h.page('dune'), 'owned'), true)
 })
