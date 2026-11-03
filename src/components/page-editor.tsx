@@ -16,7 +16,8 @@ import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { linkedViewJson, linkedViewOf } from '../domain/linked-view'
-import { syncedBlockType } from '../domain/synced'
+import { blockUpdates, syncedBlockType, writtenDocument, type BlockUpdate } from '../domain/synced'
+import { syncedKeys } from './synced-keys'
 import { databaseSource, withTodos } from '../domain/todos-source'
 import { DatabasePicker } from './database-linked'
 import { holdKeyboard } from './keyboard'
@@ -86,7 +87,7 @@ const database = createReactBlockSpec({ type: 'database', propSchema: { pageId: 
 })()
 // A synced block (docs/design/synced-blocks.md): the lines shown in several places, as this block's children. Known to the
 // editor before anything can make one, so a build at the rollback floor keeps it whole (docs/plan/b21-sizing.md).
-const syncedBlock = createReactBlockSpec({ type: syncedBlockType, propSchema: { syncId: { default: '' }, rev: { default: 0 }, roles: { default: '' } }, content: 'none' }, {
+const syncedBlock = createReactBlockSpec({ type: syncedBlockType, propSchema: { syncId: { default: '' }, rev: { default: 0 }, key: { default: '' }, roles: { default: '' } }, content: 'none' }, {
   render: () => <span className="synced-block-mark" contentEditable={false} />,
 })()
 function DatabaseInPage({ blockId, pageId, viewJson }: { blockId: string; pageId: string; viewJson: string }) {
@@ -463,7 +464,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   rowsAnchor.current = rows.length ? eventsAnchor(pageNodes(page), new Set(workspace.tasks.map(t => t.id))) : undefined
   // separatorShortcut needs the editor it is part of; a ref breaks the type cycle of passing `editor` itself.
   const editorRef = useRef<BlockNoteEditor<any, any, any> | null>(null)
-  const editor = useCreateBlockNote({ schema, dictionary, disableExtensions: ['gapCursor', 'divider-block-shortcuts'], extensions: [databaseKeys(), separatorShortcut(() => editorRef.current!), tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), draftBands(() => groupsRef.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  const editor = useCreateBlockNote({ schema, dictionary, disableExtensions: ['gapCursor', 'divider-block-shortcuts'], extensions: [databaseKeys(), syncedKeys(), separatorShortcut(() => editorRef.current!), tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), draftBands(() => groupsRef.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
     pastingNow.current = true; setTimeout(() => { pastingNow.current = false }, 0)
@@ -938,16 +939,21 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       pendingSave.current=null; lastSaved.current = document
       debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
       // The server's answer when it gave a line a new id: another page holds the old one, which this tab may not have known (B29).
-      const savedPage = (result.renamed && latest()?.pages.find(p => p.id === page.id)) || preview.pages.find(p => p.id === page.id)!
+      const holdsBlock = document.includes(`"${syncedBlockType}"`)
+      const savedPage = ((result.renamed || holdsBlock) && latest()?.pages.find(p => p.id === page.id)) || preview.pages.find(p => p.id === page.id)!
       base.current = pageContentKey(savedPage); baseDoc.current = savedPage.document
       if (result.renamed) applyRenamedLines(editor.prosemirrorView, result.renamed)
+      // A synced block changed elsewhere and he'd changed it too: the block has the latest, and his version is below it, on the
+      // page as saved. Otherwise this save's facts: its revision, and this place's ids on any new lines.
+      if (result.conflicted?.length) { applyServerPage(savedPage, latest()!); toast('Changed elsewhere meanwhile · your version is below it', { timeout: 8000 }) }
+      else if (holdsBlock) applyBlockUpdates(blockUpdates(editor.document as never, savedPage.document, true))
       // The editor has closed meanwhile: leaving takes it from here (it needs only the new starting point).
       if (left.current) return
       deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
       cutIds.forEach(id => cutTasks.current.delete(id))
       flags.detachDatabaseIds?.forEach(id => databaseFlags.current.detach.delete(id))
       flags.adoptDatabaseBlocks?.forEach(a => databaseFlags.current.adopt.delete(a.pageId))
-      dirty.current = JSON.stringify(editor.document) !== (result.renamed ? renamedDocument(document, result.renamed) : document)
+      dirty.current = !result.conflicted?.length && writtenDocument(JSON.stringify(editor.document)) !== writtenDocument(result.renamed ? renamedDocument(document, result.renamed) : document)
       // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
       const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
       setFailed(false); setUnsaved(null); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
@@ -1067,6 +1073,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   useEffect(() => {
     if (historyPending.current || undoingPaste.current) return
     const next = pageContentKey(page)
+    // Another place's edit to a synced block doesn't change this page's key: a block he hasn't changed just follows.
+    if (!sending.current && page.document.includes(`"${syncedBlockType}"`)) {
+      const updates = blockUpdates(editor.document as never, page.document, false)
+      if (updates.length) queueMicrotask(() => { applyBlockUpdates(updates); if (!dirty.current) baseDoc.current = page.document })
+    }
     if (next === base.current) return
     // Our own save echoes back with the same document and sections projected from it. Anything else (Put back,
     // Keep from the morning hand-off, another tab) rewrote the page under us and the open editor must follow.
@@ -1086,6 +1097,23 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * of editor history (A12 §3), so ⌘Z never reverses a server change locally for the next save to write back; the
    * change's own notice offers its Undo.
    */
+  /** A synced block's latest, in place: outside his Undo, as it isn't an edit of his, and with his caret where it was. */
+  function applyBlockUpdates(updates: BlockUpdate[]) {
+    if (!updates.length) return
+    const selection = browserSelection()
+    suppress.current = true
+    editor.transact(tr => {
+      for (const u of updates) {
+        if (!editor.getBlock(u.id)) continue
+        editor.updateBlock(u.id, { props: { rev: u.rev, key: u.key }, ...(u.lines ? { children: u.lines } : {}) } as never)
+      }
+      tr.setMeta('addToHistory', false)
+    })
+    const rename = Object.assign({}, ...updates.map(u => u.rename)) as Record<string, string>
+    if (Object.keys(rename).length) applyRenamedLines(editor.prosemirrorView, rename)
+    restoreBrowserSelection(selection)
+    suppress.current = false
+  }
   function applyServerPage(p: Page, ws: Workspace) {
     const selection = browserSelection()
     suppress.current = true
