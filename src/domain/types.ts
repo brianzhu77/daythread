@@ -128,7 +128,7 @@ export type Action =
   | { type: "restore-batch"; trashId: string }
   /** The account's time zone (an IANA name), used for conversions and the export's date. */
   /** A new template under Templates; `dayPage`: a copy of the built-in day headings, made the day pages' default. */
-  | { type: "create-template"; title: string; pageId?: string; dayPage?: true }
+  | { type: "create-template"; /** A row template of this database (R3-12). */ databaseId?: string; title: string; pageId?: string; dayPage?: true }
   /** What a template is the default for (one template per target): "days", "day-subpages", a page id; null: nothing. */
   | { type: "set-template-target"; pageId: string; target: string | null }
   /** The template goes for good (no Trash); Undo brings it back. */
@@ -140,7 +140,7 @@ export type Action =
   | { type: "create-database"; pageId: string; parentId?: string | null; homeBlockId: string | null; title: string }
   | { type: "change-database"; pageId: string; change: import("./database.ts").DatabaseChange }
   /** A row, at the end or before `beforeId`; `copyOf`: Duplicate row, copying that row's values and body. */
-  | { type: "add-row"; databaseId: string; pageId: string; title: string; values?: Record<string, import("./database.ts").Json>; beforeId?: string | null; copyOf?: string; at: string }
+  | { type: "add-row"; databaseId: string; pageId: string; title: string; values?: Record<string, import("./database.ts").Json>; beforeId?: string | null; copyOf?: string; /** A template of this database: its values under `values`, its body, and its title if there's none. */ template?: string; at: string }
   /** `beforeId`: also moves the row, in one Undo (a card dragged to another column); null is the end. */
   | ({ type: "set-values"; at: string; beforeId?: string | null } & import("./database.ts").RowEdit)
   | { type: "set-values-many"; items: import("./database.ts").RowEdit[]; at: string }
