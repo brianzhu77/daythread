@@ -95,7 +95,8 @@ Notion's rule, on his Day template: **made on the template, each new day gets it
 - **Tags:** counted once (already decided, 8e998433).
 - **Search:** **once**, under the original, with the number of pages. This changes the old doc's "per page", because a template copy would otherwise fill search with one hit per day. Reading a day (review, draft) still sees it on that day.
 - **Linked from:** stays per page. A link inside counts once per place.
-- **Export and rollback:** every place as ordinary lines (unchanged). Export never loses text.
+- **Export:** every place as ordinary lines (unchanged). Export never loses text.
+- **Rollback (corrected 2026-11-03, sizing and PR #89):** with one shared record an older build can't draw a block. Below the floor a page holding one shows an error and loses nothing, as Roadbuster ran on SQLite. It no longer becomes ordinary lines. Checklist B21-16.
 - **To-dos source (R2):** one row per task, however many places (R2-8).
 
 ## 9. What changes in the earlier docs

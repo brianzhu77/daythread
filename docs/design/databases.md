@@ -120,13 +120,14 @@ Untitled                                                                    ← 
   at a time with the same line. This keeps a day page fast on the phone, where every row is rendered inside the
   editor.
 - **Cell text** stays on one line with an ellipsis, and the full value is on the row page, unless the view wraps it.
-- **Wrap (R3-14), per view:** `⋯` → Properties → a property → **Wrap in this view**, **Wrap Name** in Properties, and **Wrap all** in Layout, at both widths. Number, Checkbox and ID don't offer it. The row grows to fit its longest wrapped cell, and a Text value's own line breaks show. With any column wrapped, cells start at the top of the row and fill it, so all of a tall cell still taps. Name stays pinned at 390, and sideways scroll and the page's place hold. Board and Gallery cards wrap their values the same way, and their titles already do. List stays one line per row, because its values share that line.
+- **Wrap (R3-14), per view:** `⋯` → Properties → a property → **Wrap in this view**, **Wrap Name** in Properties, and **Wrap all** in Layout, at both widths. Number, Checkbox and ID don't offer it. The row grows to fit its longest wrapped cell, and a Text value's own line breaks show. With any column wrapped, cells start at the top of the row and fill it, so all of a tall cell still taps. Name stays pinned at 390, and sideways scroll and the page's place hold. Board and Gallery cards wrap their values the same way, and their titles already do. A List's values stay on their one line, because they share it, but **Wrap Name** is offered there too, so a long title can be read without opening the row. On the phone a list's title always wraps, so the switch only changes 1280.
 
 ### 4.1a Column calculations (R3-8)
 
 - **Where:** a row at the table's foot, under its last row and above `Show 25 more` and `+ New`. Each group has its own,
-  above its `+ New`, with no second total, and a folded group hides its foot. Table only: other layouts keep the setting
+  above its `+ New`, with no second total, and a folded group hides its foot. A table's foot is the table's: other layouts keep the setting
   and draw it when they're a table again.
+- **On a Board (R3-24):** one per view, in every column's head where `· 3` sits, the same numbers a table's foot gives for those rows: `· Sum 712`. `⋯` → Calculate picks a property and what to work out; **Count of rows** goes back to the count. If its type no longer fits, the head goes back to the count too. List, Gallery and Calendar don't draw calculations.
 - **Nothing at rest:** a table with no calculation has no foot. `⋯` → **Calculate** lists Name and each shown column, at
   both widths. Once there's a foot, a tap on a cell opens the same panel; at 1280 the other columns read "Calculate" on
   hover, and at 390 they stay blank. The panel is the way in at 390 because there's no hover there, and a row of
@@ -195,8 +196,7 @@ The Making of a Ma…     ○ To read     J. Zhuo
   shows on hover and when the Name cell is selected by keyboard. On the phone it's a tap on Name.
   - It reuses the page editor exactly, with no new surface.
   - Notion's phone and Craft's phone both do this.
-  - Notion's desktop side peek is the one thing given up. It's parked (§14) until real use shows him editing many rows
-    in a row.
+  - Notion's side and center peek come later, at 1280 (§14, checklist R4-11). Use sets their order, not whether they're in.
 - **Back** returns to the host page at the same scroll, and the row he opened is tinted with `--blue-soft` for 1 s, so
   he sees where he was. Browser Back, the header `‹`, and ⌘[ all do this.
 - **The row page:**
@@ -238,7 +238,7 @@ Editor = a popover under the cell at 1280, or a bottom sheet at 390. Both have t
 | **Checkbox** | **a plain square, not the task tick**: 16 px, `--radius-tight`, a 1.5 px `--check` border, and when ticked an `--ink` check mark with no blue fill. It ticks in place at both widths, and the tick doesn't move the caret or raise the keyboard (the B72 rule). | none | — |
 | **URL / Email / Phone** | the text, as a link | like Text. A tap on the link opens it, and the pencil next to it edits. | The value is kept as typed, and a non-link stays plain text. Nothing is refused. |
 | **Files** | the file name, or "2 files" | a list with Add, Remove, and Open | — |
-| **Relation** | titles of linked rows as page refs (`▢ Title`, our `[[` look) | the `[[`-style pick list, limited to the target database's rows, with checkmarks. The top line is "New row in Books…". | — |
+| **Relation** | titles of linked rows as page refs (`▢ Title`, our `[[` look) | the `[[`-style pick list, limited to the target database's rows, with checkmarks. The top line is "New row in Books…". A relation to To-dos offers **New to-do** instead, only for words that match none: it goes on today's page as `+ New` in To-dos does (R2-11), made with its link in one save, so one Undo takes both, and one unticked before closing is never made (R3-25). | — |
 | **Rollup** | the computed value | none (read-only). The property menu sets relation → property → function. | "—" when nothing is linked |
 | **Formula** | the computed value | none (read-only). The property menu has an expression field with a live preview of the current row. | an error shows as "Error" in `--red` in the cell, with the message in the property menu |
 | **Created time / Edited time** | `Oct 12, 9:14 AM`, in local time | none (read-only, §6.3.14) | empty for a row from before these were kept |
@@ -823,8 +823,8 @@ The estimates are Roadbuster's (`database-fit.md` §7) unless marked as mine.
 | **R2** | **Linked views** (`/` picker, copy/paste, "this page's day", templates) plus **To-dos as a source** (§11, option 1) plus **Board** and **Group** | This is where databases meet days and to-dos. Linked views are about 1 day and To-dos about 1 day (Roadbuster). Board with Group is about 1 day (Roadbuster's "later" list). |
 | **R3** | **Calendar, List, Gallery**; the filter's **"any rule matches"** switch; **Relation, Rollup**; Created/Edited time, ID, Email, Phone, Files (**needs file uploads, which don't exist anywhere yet: new
   infrastructure**, Roadbuster 13301ca1); row **templates** (`+ New ⌄`, with a default per view); **sub-groups** (a second layer inside a group, Notion research §8; missed until now, Bumblebee); **column calculations** and **two-way relations with a limit** (Notion research §7, §8; same); **wrap** per property; several rows selected on the phone | Ordered by his use after R2 |
-| **R4** | **Timeline, Formula**, **sub-items and dependencies** (Notion research §7; missed until now, Bumblebee), repeating row templates, CSV export/import, pasting TSV, moving a row to another database, **side peek** at 1280, **conditional colour** and **freeze columns** (Bumblebee; `first-version-checklist.md` D5) | the largest and least certain |
-| **Later, not yet ordered** | **Forms, Automations, Buttons, Place**, **Chart**, and **Feed, Map, Dashboard, nested filter groups, page icons and covers** (missed until now, Bumblebee) | These are in scope. They wait for a design pass of their own, and his use orders them, with nothing cut for lack of evidence (Brian 57deaed7, Bumblebee 3b04290d). Passes done, for review: `buttons.md`, `automations.md`, `chart.md`, `forms.md`, `place.md` (Place and Map), `feed.md`, `dashboard.md`, `filter-groups.md`, `icons-covers.md`. |
+| **R4** | **Timeline, Formula**, **sub-items and dependencies** (Notion research §7; missed until now, Bumblebee), repeating row templates, CSV export/import, pasting TSV, moving a row to another database, **side and center peek** at 1280, **conditional colour** and **freeze columns** (Bumblebee; `first-version-checklist.md` D5) | the largest and least certain |
+| **Later, not yet ordered** | **Forms, Automations, Buttons, Place**, **Chart**, and **Feed, Map, Dashboard, nested filter groups, page icons and covers** (missed until now, Bumblebee), and **Comments** on a line, page or row (Lead 4a1712e6), and **a dependency between two to-dos** (`sub-items.md` §4, for the Lead to confirm) | These are in scope. They wait for a design pass of their own, and his use orders them, with nothing cut for lack of evidence (Brian 57deaed7, Bumblebee 3b04290d). Passes done, for review: `buttons.md`, `automations.md`, `chart.md`, `forms.md`, `place.md` (Place and Map), `feed.md`, `dashboard.md`, `filter-groups.md`, `icons-covers.md`. |
 | **Not planned** | Person, Created by, Edited by, permissions, "only for me" filters, several data sources in one database | Each needs more than one person in a workspace, or the Lead's frame dropped it (several data sources). |
 
 ## 15. How I'll check it (each release, before it goes live)

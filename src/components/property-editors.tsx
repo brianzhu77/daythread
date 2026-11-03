@@ -11,6 +11,7 @@ import { Link } from '@tanstack/react-router'
 import { taskIdOfRow, todoLine } from '../domain/todos-source'
 import { PagesIcon } from './icons'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { todosSourceId } from '../domain/database.ts'
 import {
   sameRaw, storedValue, type CellValue, type DateValue, type Json, type Option, type Property,
 } from '../domain/database.ts'
@@ -339,6 +340,7 @@ function TargetInTrash(p: EditorProps) {
 function OptionsEditor(p: EditorProps) {
   const wide = useWide()
   const relation = p.property.type === 'relation'
+  const toTodos = p.property.target === todosSourceId
   const multi = p.property.type === 'multiSelect' || relation
   const status = p.property.type === 'status'
   // Options made while the editor is open, so a commit is checked against them before the caller's property catches up.
@@ -355,7 +357,8 @@ function OptionsEditor(p: EditorProps) {
       ? statusGroups.flatMap(g => matches.filter(o => (o.group ?? 'todo') === g.group)).map(option => ({ kind: 'option' as const, option }))
       : matches.map(option => ({ kind: 'option' as const, option }))
     // A relation always offers a new row, on top: an empty one only by a tap (below).
-    if (relation) return p.onCreateOption ? [{ kind: 'create', name: create ?? q.trim() }, ...list] : list
+    // To-dos: only with words, since a blank to-do isn't one (B69).
+    if (relation) return p.onCreateOption && (!toTodos || create) ? [{ kind: 'create', name: create ?? q.trim() }, ...list] : list
     return create ? [...list, { kind: 'create', name: create }] : list
   }
   const highlightFor = (list: Choice[], q: string): number => {
@@ -436,6 +439,7 @@ function OptionsEditor(p: EditorProps) {
                 onMouseDown={e => e.preventDefault()} onMouseEnter={() => wide && setActive(i)} onClick={() => choose(choice)}>
                 {choice.kind === 'option'
                   ? <OptionLabel option={choice.option} status={status} />
+                  : toTodos ? <span className="property-create">New to-do: <span className="property-chip">{choice.name}</span></span>
                   : relation ? <span className="property-create">New row in {p.property.targetTitle}{choice.name ? <>: <span className="property-chip">{choice.name}</span></> : '…'}</span>
                   : <span className="property-create">Create <span className="property-chip">{choice.name}</span></span>}
               </button>
