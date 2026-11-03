@@ -1,10 +1,10 @@
 # Conditional colour: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead and Jazz to review**. Not approved, not prototyped and not built. Task #287, checklist R4-12.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **§1 decided by the Lead (c3eb70ca); the rest for Jazz to review**. Not prototyped and not built. Task #287, checklist R4-12.
 - **Evidence, all weak:** I found no Notion help page for it. Two third-party guides are the source: [Thomas Frank][f] (undated, its images suggest August 2025) and [Matthias Frank][m] (undated, later). They disagree on property types (§2). A third, [sparxno][s], appears in search results saying a table can colour a whole row or one property. I couldn't open that page, so that claim comes from a search summary. I haven't used the feature.
 - **Brian's use:** no databases at the last read (Nov 3, rev 793).
 
-## 1. The decision: which colours
+## 1. Which colours: tints, each new rule starting grey (Lead c3eb70ca, not to Brian)
 
 Brian's rule is black, white and grey (116a40ab), and options have no colour here (`databases.md`, "No colour"). R4-12 says the look holds "outside the rule's own colour". A rule is colour Brian asked for on that view, like a page cover or a formula's `style`.
 
@@ -13,7 +13,7 @@ Brian's rule is black, white and grey (116a40ab), and options have no colour her
 | **A. Notion's palette, one tint per rule, with grey as the default (recommended)** | The point of the feature is telling states apart at a glance, and a Notion user expects red for overdue. No view changes until Brian makes a rule | Colour exists in the app's views |
 | B. Greys only | Keeps the rule without any exception | Two or three greys on tinted rows are hard to tell apart, the problem `chart.md` §4 already works around. It isn't the Notion feature |
 
-**With A:** a new rule starts grey, so choosing colour takes a deliberate tap. No view, template or default ever ships with a colour. I recommend the Lead settles this without asking Brian, as with icons and covers. It's reversible, since a rule's colour is one field.
+**With A:** a new rule starts grey, so choosing colour takes a deliberate tap. No view, template or default ever ships with a colour. It's reversible, since a rule's colour is one field, and no view changes until Brian acts.
 
 **Tints:** tokens per theme, `--tint-red` and so on, not hex (`tokens.md` rule 1), chosen by Jazz. Text stays `--ink`, at 4.5:1 on every tint in both themes, checked by script. Colour never replaces a value, because the value that matched is still in its cell.
 
@@ -55,7 +55,6 @@ Rules are evaluated per row per view, as filters are. **R2-7's budget gets a var
 
 ## 6. Open
 
-- **Lead:** option A or B (§1).
 - **Jazz:** the tints, and §4's stacking. Is the per-rule "whole row or only this property" worth having, given its weak source? I'd keep it, as it's the quieter choice on a black, white and grey page.
 
 [f]: https://thomasjfrank.com/notion-conditional-color-formatting-everything-you-need-to-know/

@@ -56,7 +56,7 @@ The file is **read and parsed in the browser,** so the preview costs the server 
 
 ## 5. The limit is the real unknown
 
-R4-8 asks for up to 10,000 rows as one change with one Undo. **That's a single command through the Worker and Postgres, plus whatever `operations` records to undo it.** I don't know that this fits, and it's the first thing for Roadbuster to measure, before building the preview. If it doesn't fit:
+R4-8 asks for up to 10,000 rows as one change with one Undo. **That's a single command through the Worker and Postgres, plus whatever `operations` records to undo it.** I don't know that this fits, and **Roadbuster measures it before building the preview (Lead c3eb70ca).** If it doesn't fit, the limit drops and the single Undo stays:
 
 - **First choice:** state a lower limit and refuse clearly above it, as the row allows.
 - **Not acceptable:** splitting into batches that break "one Undo", or a partial import that stops midway and leaves some rows.

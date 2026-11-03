@@ -67,7 +67,7 @@ The peek holds what `pages-screen.tsx:58`-`:68` draws for a row now: the head wi
 
 Black, white and grey (116a40ab), with `--line` on the seam and no shadow unless the center modal needs one. Side peek takes about half the window, and a drag to resize can wait until use asks for it, though Notion has one (from memory, not its page, so please check). Rows inside keep their columns, so the alignment gate needs **a peek as a required place at 1280, in both forms** (R4-16).
 
-## 6. Build order (my recommendation)
+## 6. Build order (Lead c3eb70ca: after B21's fixes, in this order)
 
 1. **The editor's scroller and document-wide lookups,** with no visible change, all gates passing. It's the risky part and ships safely alone.
 2. **Center peek,** because the view behind doesn't respond, so a cell can't change under the typing.
@@ -78,7 +78,7 @@ Black, white and grey (116a40ab), with `--line` on the seam and no shadow unless
 ## 7. Open
 
 - **Jazz:** the `?peek` URL, Esc's order, and the floor for narrow windows. Is it wrong to close a side peek on empty space, given that a mis-tap costs only a reopen?
-- **Roadbuster:** §2's bet, that the leaving save covers closing a peek as it is. And should #286 wait for the #96 fix, as §4 says?
+- **Roadbuster:** §2's bet, that the leaving save covers closing a peek as it is.
 - **Not known, needs Notion itself:** what Notion does on keys and on the phone. I haven't used it, and its pages don't say.
 
 [h]: https://www.notion.com/help/views-filters-and-sorts

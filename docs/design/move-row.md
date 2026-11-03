@@ -22,7 +22,7 @@ Several rows at once isn't in R4-10 or in R3-26's bar. It'd follow from this com
 | Value | Result |
 | --- | --- |
 | Same name and same type in the target (trimmed, ignoring case) | Comes along |
-| Select, Multi-select or Status, where the target lacks the option | **The option is added to the target,** in the same operation (my proposal), so nothing's lost for want of a word. Status joins its group, or To-do if the target has no such group. Undo removes it, unless another row has used it since |
+| Select, Multi-select or Status, where the target lacks the option | **The option is added to the target,** in the same operation (Lead c3eb70ca), so nothing's lost for want of a word. Status joins its group, or To-do if the target has no such group. Undo removes it, unless another row has used it since |
 | Relation to the same database | Comes along. A two-way partner updates |
 | Formula, Rollup, Created and Edited time | Not stored values. A Created time stays true, as the page's own |
 | ID | Takes the target's next number. The old one isn't reused |
@@ -55,7 +55,6 @@ Only what's actually affected, with names, not a general warning:
 
 ## 8. Open
 
-- **Lead:** adding a missing option to the target (§3), against leaving that value behind and counting it. I recommend adding it, since it loses nothing and Undo removes it.
 - **Roadbuster:** §7's old-tab case. And matching by name and type: is a name repeated in the target possible, and if so does the first win?
 - **Not known, needs Notion itself:** what Notion really does on a mismatch. Ours loses less than the sources suggest either way.
 
