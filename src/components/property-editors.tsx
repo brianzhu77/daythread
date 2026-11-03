@@ -7,6 +7,8 @@ import {
 } from '@floating-ui/react'
 import { Calendar, Modal } from '@heroui/react'
 import { parseDate } from '@internationalized/date'
+import { Link } from '@tanstack/react-router'
+import { PagesIcon } from './icons'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import {
   sameRaw, storedValue, type CellValue, type DateValue, type Json, type Option, type Property,
@@ -39,6 +41,8 @@ export interface EditorProps {
   onCancel(): void
   /** Select, Multi-select, Status: makes the option (Status: at the end of To do) and returns its id. */
   onCreateOption?(name: string): string
+  /** relation: restoring its target, when the picker has nothing else to offer. */
+  onRestoreTarget?(): void
   /** Text and URL: what's typed so far, on every change, so the caller can keep it on the device (R1-15). */
   onDraft?(text: string): void
   /** Tab / Shift-Tab in an in-cell field (≥ 900): called after the commit, to move the cell cursor along the row. */
@@ -73,7 +77,7 @@ export function PropertyEditor(props: EditorProps) {
     case 'number': return <NumberEditor {...props} />
     case 'select':
     case 'status':
-    case 'multiSelect': return <OptionsEditor {...props} />
+    case 'relation': case 'multiSelect': return props.property.targetTrashed ? <TargetInTrash {...props} /> : <OptionsEditor {...props} />
     case 'date': return <DateEditor {...props} />
     case 'checkbox': return null
   }
@@ -323,9 +327,18 @@ function NumberEditor(p: EditorProps) {
 
 type Choice = { kind: 'option'; option: Option } | { kind: 'create'; name: string }
 
+/** A relation whose database is in Trash has nothing to pick (design §13). */
+function TargetInTrash(p: EditorProps) {
+  const wide = useWide()
+  return <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onDismiss={p.onCancel}>
+    <p className="property-empty">{p.property.targetTitle} is in Trash · <button type="button" className="app-link" onClick={() => { p.onRestoreTarget?.(); p.onCancel() }}>Restore</button></p>
+  </EditorShell>
+}
+
 function OptionsEditor(p: EditorProps) {
   const wide = useWide()
-  const multi = p.property.type === 'multiSelect'
+  const relation = p.property.type === 'relation'
+  const multi = p.property.type === 'multiSelect' || relation
   const status = p.property.type === 'status'
   // Options made while the editor is open, so a commit is checked against them before the caller's property catches up.
   const [created, setCreated] = useState<Option[]>([])
@@ -340,11 +353,13 @@ function OptionsEditor(p: EditorProps) {
     const list: Choice[] = status
       ? statusGroups.flatMap(g => matches.filter(o => (o.group ?? 'todo') === g.group)).map(option => ({ kind: 'option' as const, option }))
       : matches.map(option => ({ kind: 'option' as const, option }))
+    // A relation always offers a new row, on top: an empty one only by a tap (below).
+    if (relation) return p.onCreateOption ? [{ kind: 'create', name: create ?? q.trim() }, ...list] : list
     return create ? [...list, { kind: 'create', name: create }] : list
   }
   const highlightFor = (list: Choice[], q: string): number => {
     const choice = enterChoice(options, q)
-    if (!choice) return 0
+    if (!choice) return relation && list.length > 1 ? 1 : 0
     return Math.max(0, list.findIndex(c => ('option' in choice ? c.kind === 'option' && c.option.id === choice.option.id : c.kind === 'create')))
   }
   const choices = listFor(query)
@@ -369,7 +384,8 @@ function OptionsEditor(p: EditorProps) {
     if (!option) return
     if (!multi) { finish(p, option.id, withOptions); return }
     const id = option.id
-    setPicked(list => (list.includes(id) && choice.kind === 'option' ? list.filter(x => x !== id) : [...new Set([...list, id])]))
+    const one = relation && p.property.limit === 1
+    setPicked(list => (list.includes(id) && choice.kind === 'option' ? list.filter(x => x !== id) : one ? [id] : [...new Set([...list, id])]))
     if (choice.kind === 'create') search('')
   }
   // Select and Status commit on the pick, so leaving changes nothing. Multi-select commits what's picked on any way out.
@@ -381,7 +397,8 @@ function OptionsEditor(p: EditorProps) {
     } else if (e.key === 'Enter' && !composing(e)) {
       e.preventDefault()
       const choice = choices[active]
-      if (choice) choose(choice)
+      // No words: Enter doesn't make a blank row.
+      if (choice && !(choice.kind === 'create' && !choice.name)) choose(choice)
     } else if (e.key === 'Backspace' && multi && wide && !query && picked.length) {
       setPicked(list => list.slice(0, -1))
     }
@@ -418,6 +435,7 @@ function OptionsEditor(p: EditorProps) {
                 onMouseDown={e => e.preventDefault()} onMouseEnter={() => wide && setActive(i)} onClick={() => choose(choice)}>
                 {choice.kind === 'option'
                   ? <OptionLabel option={choice.option} status={status} />
+                  : relation ? <span className="property-create">New row in {p.property.targetTitle}{choice.name ? <>: <span className="property-chip">{choice.name}</span></> : '…'}</span>
                   : <span className="property-create">Create <span className="property-chip">{choice.name}</span></span>}
               </button>
             </div>
@@ -559,7 +577,8 @@ function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange(
 /** What a cell shows for its value. The cell itself (size, cursor, press, save states) is the table's. */
 export function PropertyCell({ property, value, today = todayIso() }: { property: Property; value: CellValue; today?: LocalDate }) {
   const read = value
-  if (read === null) return null
+  // A rollup with nothing linked (design §6.1).
+  if (read === null) return property.rollup ? <span className="cell-text">—</span> : null
   switch (property.type) {
     case 'text': return <span className="cell-text">{String(read).replace(/\s*\n\s*/g, ' ')}</span>
     case 'email':
@@ -579,6 +598,15 @@ export function PropertyCell({ property, value, today = todayIso() }: { property
     case 'status': {
       const option = property.options?.find(o => o.id === read)
       return option ? <OptionLabel option={option} status /> : null
+    }
+    case 'rollup': return null
+    case 'relation': {
+      const chosen = (read as string[]).map(id => property.options?.find(o => o.id === id)).filter((o): o is Option => Boolean(o))
+      // Titles as page refs, our `[[` look: each opens its row, and the rest of the cell opens the picker.
+      return <span className={`cell-relation${property.targetTrashed ? ' is-trashed' : ''}`}>
+        {chosen.map(o => <Link key={o.id} to="/pages" search={{ page: o.id }} className="cell-relation-ref" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}><PagesIcon />{o.name}</Link>)}
+        {property.targetTrashed && chosen.length > 0 && <span>(in Trash)</span>}
+      </span>
     }
     case 'multiSelect': {
       const chosen = (read as string[]).map(id => property.options?.find(o => o.id === id)).filter((o): o is Option => Boolean(o))

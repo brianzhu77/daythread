@@ -5,7 +5,7 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
-import { cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnlyType, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -16,7 +16,7 @@ import { calcText, emailHref, phoneHref, urlHref } from './property-values'
 import { useTaskTick, useWorkspace } from './use-day'
 import { announceSave } from './draft-slots'
 import { taskRows } from '../domain/workspace'
-import { newTodo, newTodoRowId, taskIdOfRow, todoChange, todoLine, todoRowId, todosSourceId, withTodos } from '../domain/todos-source'
+import { newTodo, newTodoRowId, taskIdOfRow, todoChange, todoLine, todoRowId, readingWorkspace, withTodos } from '../domain/todos-source'
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
 import { DatabaseGallery } from './database-gallery'
@@ -124,7 +124,7 @@ export function DatabaseBlock({ blockId, pageId, viewJson, hostDate, actions }: 
   useLayoutEffect(() => { if (!actions) return; blockActions.set(blockId, actions); return () => { if (blockActions.get(blockId) === actions) blockActions.delete(blockId) } }, [blockId, actions])
   const { workspace: stored } = useWorkspace()
   usePendingDatabases()
-  const workspace = stored && pageId === todosSourceId ? withTodos(stored) : stored
+  const workspace = stored && readingWorkspace(stored, pageId)
   const db = workspace?.pages.find(p => p.id === pageId)
   const pending = db ? undefined : pendingDatabases.get(pageId)
   if (pending) return <div className="database-block is-pending" contentEditable={false} {...isolate}>
@@ -341,7 +341,7 @@ export function DatabaseCellEditor() {
   const commit = useCommitCell()
   const addTodo = useAddTodo()
   useRecoverDrafts(commit)
-  const workspace = stored && cell?.databaseId === todosSourceId ? withTodos(stored) : stored
+  const workspace = stored && readingWorkspace(stored, cell?.databaseId)
   const db = cell ? workspace?.pages.find(p => p.id === cell.databaseId) : undefined
   const isNewTodo = cell?.rowId === newTodoRowId
   const row = isNewTodo ? ({ id: newTodoRowId, type: 'document', date: null, title: '', document: '[]' } as Page) : cell ? workspace?.pages.find(p => p.id === cell.rowId) : undefined
@@ -376,7 +376,8 @@ export function DatabaseCellEditor() {
       commit(db, row, cell.columnId, cell.columnId === titleId ? (raw ?? '') : raw, info?.notice, keeps ? () => dropDraft(row.id, cell.columnId, sent) : undefined)
     }}
     onCancel={() => { setOpenCell(null); if (keeps) dropDraft(row.id, cell.columnId) }}
-    onCreateOption={db.database.fixed ? undefined : name => createOption(run, db, property, name)} />
+    onCreateOption={db.database.fixed ? undefined : name => createOption(run, db, property, name)}
+    onRestoreTarget={property.target ? () => void run({ type: 'restore-page', pageId: property.target! }) : undefined} />
 }
 
 /** What a pasted line means in a cell: undefined when it means nothing there. An option is found by its name; a new one isn't made by a paste. */
@@ -385,16 +386,18 @@ function pastedValue(db: Database, property: Property, line: string): Json | und
   if (line.length > 10_000) return undefined
   if (property.id === titleId || property.type === 'text') return line
   if (property.type === 'url' || property.type === 'email' || property.type === 'phone') return text
-  if (isReadOnlyType(property.type)) return undefined
+  if (isReadOnly(property)) return undefined
   if (property.type === 'number') { const n = Number(text.replace(/,/g, '')); return Number.isFinite(n) ? n : undefined }
   const option = (propertyOf(db, property.id)?.options ?? []).find(o => o.name.toLowerCase() === text.toLowerCase())
   if (property.type === 'select' || property.type === 'status') return option?.id
-  if (property.type === 'multiSelect') return option ? [option.id] : undefined
+  if (property.type === 'multiSelect' || property.type === 'relation') return option ? [option.id] : undefined
   return undefined
 }
 
 function createOption(run: ReturnType<typeof useWorkspace>['run'], db: Page & { database: Database }, property: Property, name: string): string {
   const id = newId()
+  // A relation's "New row in Books…": a row of its target, which the pick then links.
+  if (property.type === 'relation') { void run({ type: 'add-row', databaseId: property.target!, pageId: id, title: name, at: new Date().toISOString() }, null); return id }
   void run(ws => {
     const now = ws.pages.find(p => p.id === db.id)
     if (!isDatabase(now)) return null
@@ -485,7 +488,7 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
       return
     }
     if (!groups || to === null || !target) return
-    if (isReadOnlyType(groups.property.type)) { toast(`${groups.property.name} can't be changed`, { timeout: 4000 }); return }
+    if (isReadOnly(groups.property)) { toast(`${groups.property.name} can't be changed`, { timeout: 4000 }); return }
     const value = groupValue(groups.property, to, shownRaw(row, groups.property.id), from ?? undefined, context.today, view.groupDateBy, context.weekStart)
     const probe = { ...row, values: { ...row.values, ...(value === undefined ? {} : { [groups.property.id]: value }) } } as Page
     if (value === undefined) delete probe.values![groups.property.id]
@@ -821,7 +824,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     }
     else if ((e.key === 'Backspace' || e.key === 'Delete') && c > 0) {
       const row = shown[r], property = columns[c - 1]?.property
-      if (row && property && !isReadOnlyType(property.type) && !isEmptyValue(cellValue(db.database, row, property.id))) { e.preventDefault(); commit(db, row, property.id, undefined) }
+      if (row && property && !isReadOnly(property) && !isEmptyValue(cellValue(db.database, row, property.id))) { e.preventDefault(); commit(db, row, property.id, undefined) }
     }
   }
   /**
@@ -843,7 +846,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     const value = c === 0 ? (row.title || null) : cellValue(db.database, row, property.id)
     if (e.type !== 'paste') {
       e.clipboardData?.setData('text/plain', valueText(db.database, property.id, value))
-      if (e.type === 'cut' && c > 0 && !isReadOnlyType(property.type) && !isEmptyValue(value)) commit(db, row, property.id, undefined)
+      if (e.type === 'cut' && c > 0 && !isReadOnly(property) && !isEmptyValue(value)) commit(db, row, property.id, undefined)
       return
     }
     const lines = (e.clipboardData?.getData('text/plain') ?? '').replace(/\r?\n$/, '').split(/\r?\n/), first = lines[0]!
@@ -905,7 +908,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
                   ? <span data-nav={navId} tabIndex={0} className="database-check-cell" onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); commit(db, row, property.id, value === true ? undefined : true) } }}>
                       <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
                     </span>
-                  : isReadOnlyType(property.type)
+                  : isReadOnly(property)
                   ? <span data-nav={navId} tabIndex={0} className="database-cell is-read-only"><PropertyCell property={property} value={value} today={today} /></span>
                   : wide && typeof value === 'string' && linkHref(property, value)
                   // At 1280 a link opens from its text, and the pencil edits it (design §6.1, Jazz bf91cb72).
@@ -987,7 +990,7 @@ function EditPickedButton({ db, rowIds }: { db: Page & { database: Database }; r
     const items = rows.map(r => ({ pageId: r.id, values: { [p.id]: raw ?? null } as Record<string, Json>, expected: { [p.id]: (rawOf(r, p.id) ?? null) as Json } }))
     if (items.length) void run({ type: 'set-values-many', items, at: new Date().toISOString() }, r => ({ text: `${p.name} set on ${items.length === 1 ? '1 row' : `${items.length} rows`}`, undoOperationId: r.operationId }))
   }
-  const editable = db.database.properties.filter(p => !isReadOnlyType(p.type))
+  const editable = db.database.properties.filter(p => !isReadOnly(p))
   return <>
     <button type="button" ref={anchor} className="app-link" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>Edit property ▾</button>
     {open && <div className="app-menu database-picked-menu" role="menu">
@@ -1034,6 +1037,8 @@ function defaultWidth(property: Property): number {
     case 'number': return 90
     case 'date': return 110
     case 'select': case 'multiSelect': case 'status': return 140
+    case 'relation': return 180
+    case 'rollup': return 120
     case 'text': case 'url': case 'email': case 'phone': return 180
     case 'createdTime': case 'editedTime': return 150
     case 'id': return 70 + (property.prefix?.length ?? 0) * 8
@@ -1072,7 +1077,7 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
       const key = cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: property.id })
       return <div key={property.id} className={`row-property${pending?.failed ? ' is-unsaved' : ''}`}>
         <span className="row-property-name" data-type={property.type}>{property.name}</span>
-        {isReadOnlyType(property.type)
+        {isReadOnly(property)
           ? <span className="row-property-value is-read-only">{isEmptyValue(value) ? <span className="is-placeholder">Empty</span> : <PropertyCell property={property} value={value} today={today} />}</span>
           : property.type === 'checkbox'
           ? <span className="row-property-value"><PropertyCheckbox checked={value === true} label={property.name} onToggle={next => commit(db, row, property.id, next ? true : undefined)} /></span>
