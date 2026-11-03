@@ -2,7 +2,7 @@
 // turns the row back into its own task, and a row's stale words don't rename the task.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { plannedOn, taskRows } from '../src/domain/workspace.ts'
+import { getDayView, plannedOn, taskRows } from '../src/domain/workspace.ts'
 import type { EditorNode } from '../src/domain/editor-document.ts'
 import { harness, text, today, tomorrow, dayId } from './v2-helpers.ts'
 
@@ -59,4 +59,13 @@ test('deleting the pasted row leaves the task; deleting the original leaves it o
   again.save(dayId(today), d => d.filter(n => n.props?.taskId !== again.task))
   assert.equal(again.ws.tasks.length, 1)
   assert.deepEqual(taskRows(again.ws, again.task).map(r => r.page.id), ['trips'])
+})
+
+test('counted once: a day holds it once, and tomorrow neither plans nor carries a reference row', () => {
+  const h = pasted()
+  h.day(tomorrow)
+  h.save(dayId(tomorrow), d => [...d, row('r2', h.task, 'TRV')], { today })
+  assert.deepEqual(getDayView(h.ws, today).planned.map(t => t.id), [h.task])
+  assert.deepEqual(getDayView(h.ws, tomorrow).planned, [])
+  assert.equal(getDayView(h.ws, today).openPool.filter(t => t.id === h.task).length, 1)
 })

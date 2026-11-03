@@ -507,6 +507,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           }
           return { ...node, id, content: freshContent(node), ...(node.type === 'task' ? { props: moving && latestWorkspace.current.tasks.some(t => t.id === node.props?.taskId) ? node.props : { taskId: `editor-task:${id}`, role: 'reference', planDate: '' } } : {}), ...(node.children ? { children: node.children.map(fresh) } : {}) }
         }
+        // Into a to-do with words: its words only, as a link there is (B22-9). A task's title holds one line.
+        const at = editor.getTextCursorPosition().block
+        if (!moving && at.type === 'task' && inlineText(at.content).trim() && editor.prosemirrorState.selection.empty) {
+          const words = (payload.blocks as EditorNode[]).map(n => inlineText(n.content)).filter(Boolean).join(' ')
+          if (words) editor.insertInlineContent(words)
+          return true
+        }
         insert(payload.blocks.map(fresh))
         if (sameTaskRows.length) {
           const n = sameTaskRows.length

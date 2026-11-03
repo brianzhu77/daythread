@@ -25,20 +25,27 @@ const rowsOf = id => nodes(id).filter(n => n.type === 'task' && n.content?.lengt
 const copyRow = async title => {
   const row = page.locator('.editor-task', { hasText: title }).first()
   if (wide) { await row.hover(); await row.locator('.editor-row-more').click() }
-  else { await row.locator('.editor-task-title').tap(); await wait(500); await page.locator('.editor-selection-bar [aria-label], .editor-selection-bar button').last().tap() }
+  else {
+    // The phone: a tap on the row, its grip at the right edge, then the bar's ⋯ (A12 §2).
+    await row.locator('.editor-task-title').tap(); await wait(500)
+    await page.locator('.editor-touch-handle').first().tap(); await wait(500)
+    await page.getByRole('button', { name: 'More actions' }).tap()
+  }
   await wait(250)
-  await page.getByRole('menuitem', { name: 'Copy', exact: true }).first().click(); await wait(400)
+  const item = page.getByRole('menuitem', { name: 'Copy', exact: true }).first()
+  if (wide) await item.click(); else await item.tap()
+  await wait(400)
   return page.evaluate(() => { const k = JSON.parse(localStorage.getItem('daythread:last-copy')); return JSON.stringify({ blocks: k.blocks, cut: false, token: 'x' }) })
 }
 const pasteOn = async (url, text, payload) => {
   if (url) { await page.goto(`${base}${url}`); await wait(2500) }
   const el = text === null ? page.locator('.bn-inline-content').last() : page.locator('.bn-inline-content', { hasText: text }).first()
-  await el.click(); await wait(200)
+  await (wide ? el.click() : el.tap()); await wait(200)
   await page.evaluate(p => { const data = new DataTransfer(); data.setData('application/x-daythread-blocks', p); data.setData('text/plain', ''); document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })) }, payload)
   await wait(1500)
 }
 const notice = () => page.locator('[data-slot="toast"]').allInnerTexts()
-const tapBtn = name => page.locator('[data-slot="toast"]').getByRole('button', { name }).first().click()
+const tapBtn = name => { const b = page.locator('[data-slot="toast"]').getByRole('button', { name }).first(); return wide ? b.click() : b.tap() }
 
 // 1. Copied to another page: the same task, a reference row, with the notice.
 const wordsOf = b => (b.content ?? []).map(c => c.text).join('')
@@ -63,13 +70,13 @@ check(/Pasted as the same task/.test(said) && /Make a copy/.test(said) && /Undo/
 await shot('pasted')
 // A tick reaches it on its day page.
 await page.locator('[data-slot="toast-close"]').first().click({ force: true }).catch(() => {}); await wait(300)
-await page.locator('input[aria-label="Complete TRV"]').first().click(); await wait(1200)
+{ const b = page.locator('input[aria-label="Complete TRV"]').first(); await (wide ? b.click() : b.tap()) } await wait(1200)
 check(task('TRV')?.status === 'done', 'a tick on the pasted row ticks the one task', task('TRV')?.status)
 await page.goto(`${base}/day/${today}`); await wait(2500)
 check(await page.locator('.editor-task[data-status="done"]', { hasText: 'TRV' }).count() === 1, 'and it shows ticked on its day page')
 // A ticked task pastes as a ticked reference row (B22-6).
-await pasteOn('/pages?page=trips', null, one)
-check(tasks().length === 2 && await page.locator('.editor-task[data-status="done"]', { hasText: 'TRV' }).count() >= 1, 'a ticked task pastes ticked')
+await pasteOn('/pages?page=later', null, one)
+check(tasks().length === 2 && await page.locator('.editor-task[data-status="done"]', { hasText: 'TRV' }).count() === 1, 'a ticked task pastes ticked')
 
 // 2. Undo from the notice takes the row away and nothing else.
 await setup(); await pasteOn('/pages?page=trips', null, one)
@@ -90,7 +97,7 @@ await tapBtn('Make copies'); await wait(1500)
 check(tasks().length === 4, 'Make copies makes both', tasks().length)
 
 // 5. On a page already showing it: a new task, and no notice.
-await setup(); await pasteOn(null, 'Book the train', one)
+await setup(); await pasteOn(null, null, one)
 check(tasks().length === 3 && !/same task/.test((await notice()).join('|')), 'pasted on its own page: a separate task, as before', tasks().map(t => t.title))
 
 // 6. A copy with old words doesn't rename the task.
@@ -119,14 +126,15 @@ check(pastedDoc.some(n => n.type === 'paragraph' && JSON.stringify(n.content).in
 await setup()
 const beforeRows = rowsOf(`day:${today}`).length
 await pasteOn(null, 'Book the train', one)
-console.log('INTO A ROW', tasks().map(t => t.title), rowsOf(`day:${today}`).map(n => [n.props.role, (n.content ?? []).map(c => c.text).join('')]), beforeRows)
+check(tasks().length === 2 && rowsOf(`day:${today}`).length === beforeRows && Boolean(tasks().find(t => t.title.includes('Book the train') && t.title.includes('TRV'))), "into a to-do with words: its words only", tasks().map(t => t.title))
+// A template stays a template row with no task (B22-9), and a parent's own page is covered by step 5.
 
 // 11. If the phone drops our type: the same words alone are still this copy (B22-10).
 await fresh()
 await copyRow('TRV')
 const trvNow = task('TRV').id
 await page.goto(`${base}/pages?page=trips`); await wait(2500)
-await page.locator('.bn-inline-content').last().click(); await wait(200)
+{ const l = page.locator('.bn-inline-content').last(); await (wide ? l.click() : l.tap()) } await wait(200)
 await page.evaluate(() => { const data = new DataTransfer(); data.setData('text/plain', 'TRV'); document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })) }); await wait(1500)
 check(rowsOf('trips').some(n => n.props.taskId === trvNow) && tasks().length === 2, 'plain words from a row\'s Copy still paste as the same task', rowsOf('trips').map(n => n.props))
 check(errors.length === 0, 'no page errors', errors)
