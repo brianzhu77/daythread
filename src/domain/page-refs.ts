@@ -79,11 +79,26 @@ export function resolveLine(ws: Workspace, target: LineTarget): ResolvedLine {
     }
   }
   const page = ws.pages.find((p) => p.id === target.pageId)
+  const node = page && flatNodes(pageNodes(page)).find((n) => n.id === target.lineId)
+  if (page && node) {
+    const words = lineText(node.content, (ref) => liveTitle(ws, ref), textDate(page))
+    return { state: page.trashedAt ? 'trashed' : 'live', pageId: page.id, blockId: node.id, words }
+  }
+  // Not where it was: cut and pasted, a line keeps its id, and only one page holds an id (B29).
+  const moved = holderOf(ws, target.lineId)
+  if (moved) return { state: moved.page.trashedAt ? 'trashed' : 'moved', pageId: moved.page.id, blockId: moved.node.id, words: lineText(moved.node.content, (ref) => liveTitle(ws, ref), textDate(moved.page)) }
   if (!page) return { state: 'page-not-found', pageId: target.pageId, words: '' }
-  const node = flatNodes(pageNodes(page)).find((n) => n.id === target.lineId)
-  if (!node) return { state: page.trashedAt ? 'trashed' : 'line-not-found', pageId: page.id, words: '' }
-  const words = lineText(node.content, (ref) => liveTitle(ws, ref), textDate(page))
-  return { state: page.trashedAt ? 'trashed' : 'live', pageId: page.id, blockId: node.id, words }
+  return { state: page.trashedAt ? 'trashed' : 'line-not-found', pageId: page.id, words: '' }
+}
+function holderOf(ws: Workspace, lineId: string): { page: Page; node: EditorNode } | null {
+  let trashed: { page: Page; node: EditorNode } | null = null
+  for (const page of ws.pages) {
+    const node = flatNodes(pageNodes(page)).find((n) => n.id === lineId)
+    if (!node) continue
+    if (!page.trashedAt) return { page, node }
+    trashed ??= { page, node }
+  }
+  return trashed
 }
 
 /** The page a reference counts for (Linked from, the `[[` list): a line link's resolved page, else its page. */
