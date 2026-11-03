@@ -8,7 +8,7 @@ import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
 import type { Page, Workspace } from '../domain/types'
 import { rollupFunctionsFor } from '../domain/relations'
 import { databaseSource, todosSourceId, todosTitle } from '../domain/todos-source'
-import { blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange } from './database-block'
+import { startPicking, blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange } from './database-block'
 import { ChevronDownIcon } from './icons'
 import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
@@ -137,6 +137,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
   const inline = !blockId.startsWith('page:') && db.database.homeBlockId === blockId
   const linked = isLinkedBlock(blockId)
   const actions = blockActions.get(blockId)
+  const wide = useWide()
   const close = () => setOpenMenu(null)
   const remove = () => {
     close()
@@ -152,6 +153,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     </div>
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
+    {view.layout === 'table' && !wide && !db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}
     {(view.layout === 'table' || view.layout === 'board') && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('templates')}>Templates<span className="database-menu-chevron">›</span></button>}
     <hr />

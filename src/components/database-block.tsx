@@ -4,7 +4,7 @@
 // commit is one `set-values` with its per-cell check (model §5.2).
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
-import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
+import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
 import { sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
@@ -490,6 +490,9 @@ export function HiddenGroups({ groups, changeView, underCards }: { groups: ViewG
   if (!groups.hidden.length) return null
   return <p className={`database-hidden-groups${underCards ? ' is-under-cards' : ''}`}>Hidden: {groups.hidden.map((g, i) => <span key={g.key}>{i > 0 && ' · '}<button type="button" className="app-link" onClick={() => changeView(current => ({ hiddenGroups: (current.hiddenGroups ?? []).filter(k => k !== g.key) }))}>{g.name} ({g.rows.length})</button></span>)}</p>
 }
+/** The tables on screen, so `⋯` can start Select rows on one (R3-15). */
+const pickStarters = new Map<string, () => void>()
+export const startPicking = (blockId: string) => pickStarters.get(blockId)?.()
 /** How many rows each group draws, for this tab: "Show 25 more" (design §13) under each group or column. */
 export function useGroupLimits(blockId: string, cap: number) {
   const [limits, setLimits] = useState<Record<string, number>>(() => blockPlaces.get(blockId)?.groups ?? {})
@@ -791,7 +794,29 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const returned = useReturnedRow(rows)
   const [reveal, setReveal] = useState<string | null>(null)
   // Several rows at 1280 (design §12): a box on hover at each row's left, Shift for a range, then the bar.
+  // On the phone (R3-15) there's no hover: `⋯` → Select rows or a long-press on a Name starts it, and a tap then ticks a row.
   const [picked, setPicked] = useState<string[]>([])
+  const [picking, setPicking] = useState(false)
+  useEffect(() => { pickStarters.set(blockId, () => setPicking(true)); return () => { pickStarters.delete(blockId) } }, [blockId])
+  const stopPicking = () => { setPicking(false); setPicked([]) }
+  const held = useRef<{ timer: ReturnType<typeof setTimeout>; x: number; y: number } | null>(null)
+  // A long press that started picking mustn't then open the row it was on.
+  const justHeld = useRef(false)
+  const startHold = (e: ReactPointerEvent, rowId: string) => {
+    if (wide || picking || db.database.fixed || e.pointerType === 'mouse') return
+    const { clientX: x, clientY: y } = e
+    held.current = { x, y, timer: setTimeout(() => { held.current = null; justHeld.current = true; setPicking(true); setPicked([rowId]) }, 450) }
+  }
+  const moveHold = (e: ReactPointerEvent) => { if (held.current && Math.hypot(e.clientX - held.current.x, e.clientY - held.current.y) > 8) endHold() }
+  const endHold = () => { if (held.current) clearTimeout(held.current.timer); held.current = null }
+  const tapWhilePicking = (e: ReactMouseEvent) => {
+    if (justHeld.current) { justHeld.current = false; e.preventDefault(); e.stopPropagation(); return }
+    if (!picking) return
+    const rowId = (e.target as Element).closest<HTMLElement>('tr.database-row')?.dataset.row
+    if (!rowId) return
+    e.preventDefault(); e.stopPropagation()
+    setPicked(p => (p.includes(rowId) ? p.filter(x => x !== rowId) : [...p, rowId]))
+  }
   const lastPicked = useRef<string | null>(null)
   const pick = (rowId: string, shift: boolean) => {
     const ids = shown.map(r => r.id)
@@ -803,7 +828,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   }
   const deletePicked = () => {
     const ids = picked.filter(id => rows.some(r => r.id === id))
-    setPicked([])
+    setPicked([]); setPicking(false)
     if (ids.length) void run({ type: 'delete-pages', pageIds: ids, at: new Date().toISOString() }, r => ({ text: ids.length === 1 ? 'Row deleted' : `${ids.length} rows deleted`, undoOperationId: r.operationId }))
   }
   // Rows drag by their ⋮⋮ only while the view isn't sorted (design §7.2); the drop is a move-page among the rows.
@@ -865,6 +890,8 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     ? subs.shown.flatMap(sub => { const key = sectionKey(group.key, sub.key); return drawn(key, sub.rows).map(row => ({ row, group: key })) })
     : drawn(group.key, group.rows).map(row => ({ row, group: group.key }))) : rows.slice(0, limit).map(row => ({ row }))
   const shown = entries.map(e => e.row)
+  // What All picks: not the rows in a group he hid. A row in two groups counts once.
+  const pickable = [...new Set((layers ? layers.flatMap(({ group, subs }) => (subs && group.rows.length ? subs.shown.flatMap(sub => sub.rows) : group.rows)) : rows).map(r => r.id))]
   const undoKey = useUndoKey()
   /**
    * Keys in the table at 1280 (design §10): arrows move the cell cursor, Tab/Shift-Tab along a row, Enter opens the
@@ -967,8 +994,9 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
                 <input type="checkbox" className="database-row-pick" aria-label={`Select ${displayPageTitle(row)}`} checked={picked.includes(row.id)} onChange={() => undefined} onClick={e => pick(row.id, e.shiftKey)} />
               </span>}
               {/* A row opens as a page, from Name, at both widths (design §5). */}
+              {picking && <input type="checkbox" className="database-row-tick" tabIndex={-1} aria-label={`Select ${displayPageTitle(row)}`} checked={picked.includes(row.id)} readOnly />}
               <TodoTick row={row} />
-              <button type="button" className="database-title-cell" data-cell={key(row.id, titleId, group)} data-nav={`${index}:0`} onClick={() => openRow(row.id)}>
+              <button type="button" className="database-title-cell" data-cell={key(row.id, titleId, group)} data-nav={`${index}:0`} onPointerDown={e => startHold(e, row.id)} onPointerMove={moveHold} onPointerUp={endHold} onPointerCancel={endHold} onContextMenu={e => { if (!wide) e.preventDefault() }} onClick={() => openRow(row.id)}>
                 <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
               </button>
               <button type="button" className="database-open" onClick={() => openRow(row.id)}>Open</button>
@@ -1010,7 +1038,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
             {!db.database.fixed && <th scope="col" className="database-th is-add"><button type="button" aria-label="Add property" onClick={addProperty}>+</button></th>}
           </tr>
         </thead>
-        <tbody ref={tbody} className={!groups && drag && drag.before === null ? 'is-drop-end' : undefined}>
+        <tbody ref={tbody} className={!groups && drag && drag.before === null ? 'is-drop-end' : undefined} onPointerDownCapture={() => { justHeld.current = false }} onClickCapture={tapWhilePicking}>
           {layers ? layers.map(({ group, subs }) => {
             const isFolded = folded.has(group.key)
             const body = (key: string, all: readonly Page[]) => {
@@ -1048,11 +1076,12 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
       </table>
     </div>
     <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
-    {picked.length > 0 && <div className="database-picked-bar" role="toolbar" aria-label="Selected rows">
+    {(picked.length > 0 || picking) && <div className={`database-picked-bar${picking ? ' is-picking' : ''}`} role="toolbar" aria-label="Selected rows">
       <span>{picked.length === 1 ? '1 row' : `${picked.length} rows`}</span>
-      <EditPickedButton db={db} rowIds={picked} />
-      <button type="button" className="app-link is-danger" onClick={deletePicked}>Delete</button>
-      <button type="button" className="app-link" onClick={() => setPicked([])}>Done</button>
+      {picked.length > 0 && <EditPickedButton db={db} rowIds={picked} />}
+      {picked.length > 0 && <button type="button" className="app-link is-danger" onClick={deletePicked}>Delete</button>}
+      {picking && picked.length < pickable.length && <button type="button" className="app-link" onClick={() => setPicked(pickable)}>All</button>}
+      <button type="button" className="app-link" onClick={stopPicking}>Done</button>
     </div>}
     {groups && <HiddenGroups groups={groups} changeView={changeView} />}
     {groups && <HiddenSubGroups db={db.database} view={view} rows={withPendingMoves(rows)} changeView={changeView} weekStart={weekStart} />}
