@@ -315,7 +315,7 @@ function GroupPanel({ db, view, back }: { db: DatabasePage; view: View; back: ()
   if (view.layout === 'board' && !property) return <><Head title="Group" back={back} /><BoardGroupChoices db={db} onPick={groupBy => changeView(() => ({ groupBy }))} /></>
   const choices = groupableProperties(db.database, view.layout)
   // Every group, listed whatever's hidden now, so a hidden one can come back from here too.
-  const all = property && workspace ? viewGroups(db.database, { ...view, hideEmptyGroups: false, hiddenGroups: [] }, databaseRows(workspace, db.id))!.shown : []
+  const all = property && workspace ? viewGroups(db.database, { ...view, hideEmptyGroups: false, hiddenGroups: [] }, databaseRows(workspace, db.id), undefined, workspace.weekStart)!.shown : []
   const hidden = new Set(view.hiddenGroups ?? [])
   return <>
     <Head title="Group" back={back} />
@@ -371,6 +371,11 @@ function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
   return <>
     <Head title="Layout" back={back} />
     {(['table', 'board', 'list', 'gallery', 'calendar'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
+    {view.layout === 'calendar' && <label className="database-menu-row">Show as
+      <select aria-label="Show as" value={view.calendarSpan ?? 'month'} onChange={e => { const calendarSpan = e.target.value === 'week' ? 'week' as const : null; changeView(() => ({ calendarSpan })) }}>
+        <option value="month">Month</option><option value="week">Week</option>
+      </select>
+    </label>}
     {view.layout === 'calendar' && dateProperties(db.database).length > 0 && <label className="database-menu-row">Show calendar by
       <select value={viewDateBy(db.database, view)?.id ?? ''} onChange={e => { const dateBy = e.target.value; if (dateBy) changeView(() => ({ dateBy })) }}>
         {!viewDateBy(db.database, view) && <option value="">Choose…</option>}

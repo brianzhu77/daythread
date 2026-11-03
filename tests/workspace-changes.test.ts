@@ -35,6 +35,8 @@ function script(ws: () => Workspace): ((n: number) => Action)[] {
     () => ({ type: 'rename-page', pageId: 'dune', title: 'Dune (1965)' }),
     () => ({ type: 'delete-page', pageId: 'books', at: '2026-10-22T18:00:00Z' }),
     () => ({ type: 'restore-page', pageId: 'books' }),
+    () => ({ type: 'set-week-start', weekStart: 1 }),
+    () => ({ type: 'set-week-start', weekStart: 0 }),
     // Databases: the database page, rows (one placed before another), a value, the home block deleted (a batch to Trash), Undo.
     () => save('books', d => [...d, { id: 'home', type: 'database', props: { pageId: 'list', view: '' }, children: [] }]),
     () => ({ type: 'create-database', pageId: 'list', parentId: 'books', homeBlockId: 'home', title: 'Reading list' }),
