@@ -1,6 +1,6 @@
 // Board and Group: a disposable SQLite store (path as the argument, never his data) with a page "Books" holding a database
 // with one property of each type a view can group by, and rows; 30 rows in one status, for the cap.
-// Usage: node tests/evidence/board/seed-board.ts <store-path> [board]
+// Usage: node tests/evidence/board/seed-board.ts <store-path> [board|list]
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
 import { pageContentKey } from '../../../src/domain/editor-document.ts'
 import type { Action } from '../../../src/domain/types.ts'
@@ -28,7 +28,11 @@ await add('emma', 'Emma', { status: 'todo', kind: 'novel', tags: ['hist', 'sf'],
 await add('ubik', 'Ubik', { status: 'done', kind: 'essay', pages: 300 })
 await add('blank', 'No kind yet', { status: 'todo' })
 for (let i = 1; i <= 30; i++) await add(`f${i}`, `Finished ${i}`, { status: 'done', kind: 'essay' })
-// A second argument makes the first view a board by Status, with Owned on its cards.
+// A second argument makes the first view a board or a list by Status, with Owned on it.
+if (asBoard === 'list') {
+  const viewId = (ws.pages.find(p => p.id === 'list')!.database!).views[0]!.id
+  await change({ kind: 'updateView', viewId, layout: 'list', groupBy: 'status', name: 'List', columns: [{ id: 'kind' }, { id: 'owned' }] })
+}
 if (asBoard === 'board') {
   const viewId = (ws.pages.find(p => p.id === 'list')!.database!).views[0]!.id
   await change({ kind: 'updateView', viewId, layout: 'board', groupBy: 'status', name: 'Board', columns: [{ id: 'owned' }] })

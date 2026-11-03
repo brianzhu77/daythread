@@ -1975,3 +1975,31 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
   .database-block .database-board ~ .database-hidden-groups { padding-inline: 13px; }
   .database-card.is-ghost { width: 300px; }
 }
+
+/* Databases R3: a List (design §7.2): one line per row, the title on Name's edge and its properties quiet on the right; under the
+   title on the phone. The whole line opens the row, from its title's own button; a box and the handle sit above that. */
+.database-list-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 36px; padding: 0 8px; border-radius: var(--radius-control); font-size: var(--text-row); line-height: 24px; }
+@media (hover: hover) { .database-list-row:hover { background: var(--fill-soft); } }
+.database-list-row.is-returned { background: var(--blue-soft); transition: background .3s; }
+.database-list-row.is-dragging { opacity: .4; }
+.database-list-row.is-drop-before { box-shadow: inset 0 2px 0 var(--blue); }
+.database-list.is-drop-end, .database-list-foot.is-drop-end { box-shadow: inset 0 2px 0 var(--blue); }
+.database-list.is-drop-end { box-shadow: 0 2px 0 var(--blue); }
+.database-list-row .database-list-title { display: block; flex: 1; min-width: 0; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; cursor: pointer; }
+.database-list-title::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
+.database-list-title:focus-visible { outline: none; }
+.database-list-row:has(.database-list-title:focus-visible) { outline: 2px solid var(--blue); outline-offset: -2px; }
+.database-list-row .database-list-title.is-placeholder { color: var(--placeholder); }
+.database-list-values { flex: none; display: flex; align-items: center; gap: 12px; max-width: 60%; overflow: hidden; color: var(--ink-3); font-size: var(--text-meta); white-space: nowrap; }
+.database-list-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.database-list-check { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 6px; }
+.database-list-handle { position: absolute; z-index: 1; left: -22px; top: 50%; translate: 0 -50%; padding: 0 2px; color: var(--ink-3); font-size: 12px; letter-spacing: -2px; cursor: grab; opacity: 0; touch-action: none; user-select: none; }
+.database-list-row:hover .database-list-handle { opacity: 1; }
+.database-list-foot { display: flex; flex-direction: column; align-items: flex-start; }
+@media (max-width: 899px) {
+  .database-list-row { flex-direction: column; align-items: stretch; gap: 0; min-height: 44px; padding-block: 8px; }
+  .database-list-row .database-list-title { flex: none; white-space: normal; overflow-wrap: anywhere; }
+  .database-list-values { flex-wrap: wrap; column-gap: 12px; max-width: 100%; }
+  .database-list-values:empty { display: none; }
+}
+
