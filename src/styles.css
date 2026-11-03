@@ -1991,7 +1991,7 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 
 /* Databases R2: the Board (design §7.2): columns of cards, 260 px, or one at a time at 300 px on the phone. */
 .database-board { display: flex; align-items: flex-start; gap: 12px; max-width: 100%; padding-bottom: 4px; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
-.database-column > :not(.database-new, .database-new-more) { flex-basis: 100%; }
+.database-column > :not(.database-new, .database-new-more) { flex-basis: 100%; min-width: 0; max-width: 100%; }
 .database-column { flex: none; display: flex; flex-flow: row wrap; align-content: flex-start; gap: 6px; width: 260px; min-height: 64px; border-radius: var(--radius-control); }
 .database-column.is-drop { background: var(--fill-soft); box-shadow: 0 0 0 4px var(--fill-soft); }
 .database-block .database-column-head { display: flex; align-items: baseline; gap: 4px; min-height: 32px; margin: 0; padding: 4px 0; color: var(--ink-2); font-size: var(--text-small); line-height: 24px; font-weight: var(--weight-regular); }
@@ -2005,7 +2005,7 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 /* The whole card opens the row, from its title's own button, and stays inside the card. A box on it sits above. */
 /* Their words line up with a card's: its padding plus its border. */
 .database-column .database-new, .database-column .database-more { padding-inline: 11px; }
-.database-card .database-card-title { display: block; width: 100%; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: var(--weight-regular); text-align: left; overflow-wrap: anywhere; cursor: inherit; }
+.database-card .database-card-title { display: block; width: 100%; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: var(--weight-regular); text-align: left; overflow-wrap: anywhere; white-space: normal; cursor: inherit; }
 .database-card-title::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
 .database-card-title:focus-visible { outline: none; }
 .database-card:has(.database-card-title:focus-visible) { outline: 2px solid var(--blue); outline-offset: 1px; }
@@ -2077,6 +2077,10 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-gallery-card:has(.database-gallery-title:focus-visible) { outline: 2px solid var(--blue); outline-offset: 1px; }
 .database-gallery-image { display: block; width: 100%; aspect-ratio: 16 / 10; margin: 0; object-fit: cover; background: var(--fill-soft); }
 .database-gallery-words { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; }
+/* A to-do's box sits on its title's first line, as on the to-do's own line (Bumblebee's ask on R2-9). */
+.database-card > .property-checkbox, .database-gallery-words > .property-checkbox { position: relative; z-index: 1; margin-top: 3px; }
+.database-card:has(> .property-checkbox:first-child), .database-gallery-words:has(> .property-checkbox:first-child) { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: start; }
+.database-card:has(> .property-checkbox:first-child) > :not(.property-checkbox, .database-card-title), .database-gallery-words:has(> .property-checkbox:first-child) > :not(.property-checkbox, .database-gallery-title) { grid-column: 1 / -1; }
 .database-gallery-card .database-gallery-title { display: block; width: 100%; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .database-gallery-title::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
 .database-gallery-title:focus-visible { outline: none; }
