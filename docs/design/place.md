@@ -39,6 +39,8 @@ Both need outside services we don't have: **an address search and map images.** 
 
 ## 4. Search and map images, for the Lead
 
+**Decided (Lead b9af4ec7):** OpenFreeMap for map images, and a 20-place search test on public places only, against Photon, when this reaches the front of the queue. If Photon misses Chinese places he'd use, Mapbox goes to Brian as one choice, because it needs an account and probably a card, with numbers checked on Mapbox's own pricing page. Search sends what he types to an outside service, so the release note tells him that plainly.
+
 **Privacy first:** whatever he types in search, and roughly where he's looking, goes to the provider. Sending search through our Worker hides his address from them, but not what he types. Nothing else from the workspace goes.
 
 | | A. Open data | B. Mapbox |
@@ -64,9 +66,7 @@ All Mapbox numbers come from third-party comparison sites, so check [its pricing
 
 Seven searches can't decide it, but it suggests Vancouver is fine and Chinese places are the weak spot, and he writes in both.
 
-**What I recommend: A for map images, and an honest test of search before choosing.** Run the same 20 places he's likely to need, half in Chinese, against Photon and Mapbox. If Photon misses Chinese places he'd use, use Mapbox's search only, with a hard cap on our side so that it can't start billing. The choice is easy to change, since coordinates are stored with the value.
-
-**Running cost: none expected either way, but B adds an account and a key. Your call.**
+**The test:** 20 public places, half in Chinese. If Mapbox is chosen, it's for search only, with a hard cap on our side so that it can't start billing. The choice is easy to change, since coordinates are stored with the value.
 
 ## 5. For Roadbuster and Jazz
 
