@@ -405,6 +405,28 @@ test('a home block goes back where it sat, by its neighbours, wherever the page 
   assert.equal(blockPlace([line('a')], 'home'), null)
 })
 
+test('R2-15: views are not pages: Pages, search, the export and Trash count each database and row once', () => {
+  const h = reading()
+  const count = () => ({
+    listed: listedPages(h.ws).length,
+    files: exportFiles(h.ws, new Date(at)).length,
+    dune: search(buildSearchIndex(h.ws), 'Dune').pages.filter(x => x.page.id === 'dune').length,
+    list: search(buildSearchIndex(h.ws), 'Reading list').pages.filter(x => x.page.id === 'list').length,
+  })
+  h.run({ type: 'create-document', title: 'Other', body: '', pageId: 'other' })
+  const before = count()
+  assert.equal(before.dune, 1)
+  assert.equal(before.list, 1)
+  h.save('other', d => [...d, block('v1', 'list'), block('v2', 'list')])
+  h.save('books', d => [...d, block('v3', 'list')])
+  assert.deepEqual(count(), before)
+  // Trashing a page that only holds views takes neither the database nor its rows.
+  h.run({ type: 'delete-page', pageId: 'other', at })
+  assert.ok(!h.page('list').trashedAt)
+  assert.ok(!h.page('dune').trashedAt)
+  assert.equal(h.ws.pages.filter(p => p.parentId === 'other' && p.trashedAt).length, 0)
+})
+
 test('a linked view reads its own settings, and a broken or empty one reads as the source first view', () => {
   const db = newDatabase('home')
   assert.equal(linkedViewOf(db, '').id, db.views[0]!.id)

@@ -1,4 +1,4 @@
-// R2-1, R2-2, R2-3: a linked view shows the source's rows through its own settings, and removing it takes only itself.
+// R2-1, R2-2, R2-3, R2-14: a linked view shows the source's rows through its own settings, and removing it takes only itself.
 // Usage: node tests/evidence/databases/linked-views.mjs <base-url> <store-path> [chromium|webkit]  (a throwaway SQLite file, reseeded for each scenario)
 import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
@@ -131,6 +131,16 @@ await scenario('"this page\'s day" off a day page hides nothing, writes nothing 
   const stored = JSON.parse(dbBlocks(store())[1].props.view).filter
   const r = { view: view.filter.length, stored, rows: await second(page).locator('.database-row').count(), chip: await second(page).locator('.database-filter-chip').count() }
   return { ...r, ok: r.stored.length === 1 && r.stored[0].value?.relative === 'pageDate' && r.rows === 3 && r.chip === 1 }
+})
+await scenario('a new row its filter hides says so, and stays in the source (R2-14)', async page => {
+  await makeLinked(page)
+  await second(page).locator('.database-more-button').click()
+  await menu(page).getByRole('button', { name: 'Filter' }).click(); await menu(page).getByText('+ Add filter').click(); await wait(400)
+  await page.locator('.database-rule input').first().fill('Dune'); await page.keyboard.press('Enter'); await wait(400)
+  await page.keyboard.press('Escape'); await wait(1500)
+  await second(page).locator('.database-new').click(); await wait(1500)
+  const r = { notice: await notices(page), linked: await second(page).locator('.database-row').count(), home: await page.locator('.database-block').first().locator('.database-row').count(), show: await page.getByRole('button', { name: 'Show' }).count(), rows: store().pages.filter(p => p.parentId === 'list' && !p.trashedAt).length }
+  return { ...r, ok: /Added · hidden by this view's filter/.test(r.notice) && r.linked === 1 && r.home === 4 && r.show >= 1 && r.rows === 4 }
 })
 await scenario('Duplicate makes a linked view', async page => {
   await page.locator('.database-more-button').first().click()
