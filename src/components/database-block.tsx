@@ -936,7 +936,7 @@ function defaultWidth(property: Property): number {
     case 'select': case 'multiSelect': case 'status': return 140
     case 'text': case 'url': case 'email': case 'phone': return 180
     case 'createdTime': case 'editedTime': return 150
-    case 'id': return 70
+    case 'id': return 70 + (property.prefix?.length ?? 0) * 8
   }
 }
 /** "Property", "Property 2", …: never a name the database already has (or "Name"). */
@@ -1019,6 +1019,7 @@ function filterWords(c: Condition, property: Property | null): string {
     : v && typeof v === 'object' ? ('relative' in v ? (v.relative === 'today' ? 'today' : "this page's day") : String((v as { date?: string }).date ?? ''))
     : v === true ? 'checked' : v === false ? 'unchecked'
     : c.op === 'within' ? ({ thisWeek: 'this week', past7: 'the past 7 days', next7: 'the next 7 days' } as Record<string, string>)[String(v)] ?? ''
+    : property?.type === 'id' ? `${property.prefix ?? ''}${String(v)}`
     : String(v)
   // A rule still waiting for its value reads as unfinished, not broken (Jazz 72ba456b).
   return `${op} ${text || '…'}`

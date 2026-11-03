@@ -220,7 +220,8 @@ function RuleValue({ property, condition, onChange }: { property: Property; cond
     case 'text': case 'url': case 'email': case 'phone':
       return <CommitInput key={String(value ?? '')} initial={typeof value === 'string' ? value : ''} onCommit={v => onChange(v || undefined)} />
     case 'number': case 'id':
-      return <CommitInput key={String(value ?? '')} initial={typeof value === 'number' ? String(value) : ''} inputMode="decimal" onCommit={v => { const n = Number(v.replace(/,/g, '')); onChange(v.trim() && Number.isFinite(n) ? n : undefined) }} />
+      // An ID can be typed as it shows, "BK-12": the prefix isn't part of its number.
+      return <CommitInput key={String(value ?? '')} initial={typeof value === 'number' ? String(value) : ''} inputMode={property.prefix ? undefined : 'decimal'} onCommit={v => { const n = Number((property.prefix && v.trim().startsWith(property.prefix) ? v.trim().slice(property.prefix.length) : v).replace(/,/g, '')); onChange(v.trim() && Number.isFinite(n) ? n : undefined) }} />
     case 'checkbox':
       return <select aria-label="Value" value={value === false ? 'no' : 'yes'} onChange={e => onChange(e.target.value === 'yes')}>
         <option value="yes">checked</option><option value="no">unchecked</option>
@@ -469,6 +470,9 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
       <select value={property.format ?? 'plain'} onChange={e => update({ format: e.target.value as Property['format'] })}>
         <option value="plain">Number</option><option value="comma">1,000</option><option value="percent">Percent</option><option value="currency">Currency</option>
       </select>
+    </label>}
+    {property.type === 'id' && <label className="database-menu-row">Prefix
+      <CommitInput key={property.prefix ?? ''} ariaLabel="Prefix" initial={property.prefix ?? ''} placeholder="None" onCommit={v => update({ prefix: v })} />
     </label>}
     {property.type === 'date' && <label className="database-menu-row">Include time
       <input type="checkbox" checked={Boolean(property.withTime)} onChange={e => update({ withTime: e.target.checked })} />

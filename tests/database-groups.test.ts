@@ -2,7 +2,7 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { calendarRows, cellValue, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, viewGroupBy, viewGroups, viewRows, type Database, type View } from '../src/domain/database.ts'
+import { calendarRows, cellValue, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewGroups, viewRows, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
@@ -483,4 +483,49 @@ test('changing to a filled-in type counts what it hides; changing back gives it 
   h.change({ kind: 'updateProperty', propertyId: 'note', type: 'createdTime' })
   h.change({ kind: 'updateProperty', propertyId: 'note', type: 'text' })
   assert.equal(cellValue(h.db(), h.page('dune'), 'note'), 'keep')
+})
+
+// ---------- R3-21: calendar by a created or edited time; R3-9: an ID's prefix
+
+test('a calendar can sit by a created or edited time', () => {
+  const h = typed()
+  assert.deepEqual(dateProperties(h.db()).map(p => p.id), ['due', 'made', 'seen'])
+  const viewId = h.db().views[0]!.id
+  h.change({ kind: 'updateView', viewId, layout: 'calendar', dateBy: 'made' })
+  assert.equal(viewDateBy(h.db(), h.db().views[0]!)?.id, 'made')
+  h.change({ kind: 'updateProperty', propertyId: 'made', type: 'text' })
+  assert.equal(viewDateBy(h.db(), h.db().views[0]!), null, 'not a date any more')
+})
+test('by a created time: rows on their day, and no No date line, a row from before them just not drawn', () => {
+  const h = typed()
+  const made = h.db().properties.find(p => p.id === 'made')!
+  const day = (cellValue(h.db(), h.page('dune'), 'made') as { start: string }).start.slice(0, 10)
+  delete h.page('blank').createdAt
+  delete h.page('blank').editedAt
+  const { days, undated } = calendarRows(made, h.rows(view()), day, day)
+  assert.deepEqual(days.get(day)?.map(r => r.id), ['dune', 'emma', 'ubik'])
+  assert.deepEqual(undated, [])
+  const by = calendarRows(h.db().properties.find(p => p.id === 'due')!, h.rows(view()), '2026-10-01', '2026-11-30')
+  assert.deepEqual(by.undated.map(r => r.id), ['blank'], 'a Date property still has its line')
+})
+test('an ID prefix shows and copies, and changes no number', () => {
+  const h = typed()
+  h.change({ kind: 'addProperty', property: { id: 'num', name: 'No.', type: 'id' } })
+  const stored = () => h.order().map(id => h.page(id).values?.['@id'])
+  const before = stored(), next = h.db().nextRowNumber
+  h.change({ kind: 'updateProperty', propertyId: 'num', prefix: ' BK- ' })
+  const num = () => h.db().properties.find(p => p.id === 'num')!
+  assert.equal(num().prefix, 'BK-')
+  assert.deepEqual(stored(), before)
+  assert.equal(h.db().nextRowNumber, next)
+  assert.equal(cellValue(h.db(), h.page('dune'), 'num'), 1, 'filter and sort read the number')
+  assert.equal(valueText(h.db(), 'num', 1), 'BK-1')
+  assert.deepEqual(h.rows(view({ filter: [{ by: 'num', op: 'gt', value: 3 }] })).map(r => r.id), ['blank'])
+  h.change({ kind: 'updateProperty', propertyId: 'num', prefix: '' })
+  assert.equal('prefix' in num(), false, 'cleared')
+  assert.equal(valueText(h.db(), 'num', 1), '1')
+  assert.throws(() => h.change({ kind: 'updateProperty', propertyId: 'num', prefix: 'x'.repeat(21) }))
+  h.change({ kind: 'updateProperty', propertyId: 'num', prefix: 'A-' })
+  h.change({ kind: 'updateProperty', propertyId: 'num', name: 'Number' })
+  assert.equal(num().prefix, 'A-', 'a rename keeps it')
 })

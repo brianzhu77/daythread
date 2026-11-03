@@ -19,6 +19,8 @@ export interface Property {
   format?: NumberFormat;
   /** date: whether a time is shown and asked for */
   withTime?: boolean;
+  /** An ID's words before its number, "BK-" in BK-12: shown only, so changing it renumbers nothing (R3-9). */
+  prefix?: string;
 }
 export interface DateValue { start: string; end?: string }
 /** A fixed day, or one relative to today or to the day page the view is on, with an offset in days. */
@@ -82,13 +84,18 @@ const rowNumberKey = "@id";
 export const isReadOnlyType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime" || type === "id";
 export const isTimeType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime";
 const isTextType = (type: PropertyType): boolean => type === "text" || type === "url" || type === "email" || type === "phone";
+/** A row's Created or Edited time as a date value; none on a row from before they were kept. */
+function rowTime(property: Property, row: Page): DateValue | null {
+  const at = property.type === "editedTime" ? row.editedAt ?? row.createdAt : row.createdAt;
+  return at ? { start: localWall(at) } : null;
+}
 /** An ISO time as a wall clock on this device: what a date cell holds, so a created time reads in local time. */
 function localWall(iso: string): string {
   const d = new Date(iso), two = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`;
 }
 export const databaseBlockType = "database";
-export const limits = { properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 200, hiddenGroups: 200 } as const;
+export const limits = { properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 200, hiddenGroups: 200, prefix: 20 } as const;
 
 export const isDatabase = (p: Page | undefined | null): p is Page & { database: Database } => Boolean(p?.database);
 /** A row: a page whose parent is a database. */
@@ -266,10 +273,7 @@ export function cellValue(db: Database, row: Page, columnId: string): CellValue 
   const property = propertyOf(db, columnId);
   if (!property) return null;
   if (property.type === "id") { const n = row.values?.[rowNumberKey]; return typeof n === "number" ? n : null; }
-  if (isTimeType(property.type)) {
-    const at = property.type === "editedTime" ? row.editedAt ?? row.createdAt : row.createdAt;
-    return at ? { start: localWall(at) } : null;
-  }
+  if (isTimeType(property.type)) return rowTime(property, row);
   return readValue(property, rawOf(row, columnId));
 }
 
@@ -576,23 +580,23 @@ export function viewGroups(db: Database, view: View, rows: readonly Page[], rawF
   return { property, shown: groups.filter((g) => !hidden.has(g.key) && keep(g)), hidden: groups.filter((g) => hidden.has(g.key) && keep(g)) };
 }
 /** What a calendar can sit its rows by. */
-export const dateProperties = (db: Database): Property[] => db.properties.filter((p) => p.type === "date");
+export const dateProperties = (db: Database): Property[] => db.properties.filter((p) => p.type === "date" || isTimeType(p.type));
 /** The date property a calendar sits by now; null when it was deleted or isn't a date any more. */
 export function viewDateBy(db: Database, view: View): Property | null {
   const property = view.dateBy ? db.properties.find((p) => p.id === view.dateBy) : undefined;
-  return property?.type === "date" ? property : null;
+  return property && (property.type === "date" || isTimeType(property.type)) ? property : null;
 }
 export interface CalendarRows {
   /** Rows by the days they cover, for the days in `from`–`to`; a range is on each of its days. */
   days: Map<LocalDate, Page[]>;
-  /** Rows with no date, always in reach (design §7.2). */
+  /** Rows with no date, always in reach (design §7.2). None by a created or edited time, which no one can set. */
   undated: Page[];
 }
 export function calendarRows(property: Property | null, rows: readonly Page[], from: LocalDate, to: LocalDate, rawFor: (row: Page, columnId: string) => unknown = rawOf): CalendarRows {
   const days = new Map<LocalDate, Page[]>(), undated: Page[] = [];
   for (const row of rows) {
-    const value = property ? (readValue(property, rawFor(row, property.id)) as DateValue | null) : null;
-    if (!value) { undated.push(row); continue; }
+    const value = !property ? null : isTimeType(property.type) ? rowTime(property, row) : (readValue(property, rawFor(row, property.id)) as DateValue | null);
+    if (!value) { if (!property || !isTimeType(property.type)) undated.push(row); continue; }
     const start = value.start.slice(0, 10), end = (value.end ?? value.start).slice(0, 10);
     if (end < from || start > to) continue;
     for (let day = start < from ? from : start; day <= end && day <= to; day = addDays(day, 1)) {
@@ -641,11 +645,11 @@ export function groupValue(property: Property, key: string, raw: unknown, fromKe
 // ---------------------------------------------------------------- commands' inputs
 
 /** A property as `addProperty` sends it: options without ids get them; a Status with none gets the three groups. */
-export interface PropertyInput { id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean }
+export interface PropertyInput { id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string }
 /** One schema or view change: one write, the database page. */
 export type DatabaseChange =
   | { kind: "addProperty"; property: PropertyInput; /** the view it was added from: it shows there; other views list it too */ viewId?: string }
-  | { kind: "updateProperty"; propertyId: string; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean }
+  | { kind: "updateProperty"; propertyId: string; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string }
   | { kind: "removeProperty"; propertyId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
@@ -695,6 +699,11 @@ function cleanProperty(input: PropertyInput, db: Database, except?: string): Pro
   if (input.type === "status" && !property.options?.length) property.options = defaultStatusOptions();
   if (input.format !== undefined) { if (!numberFormats.has(input.format)) throw new DatabaseError("Unknown number format"); property.format = input.format; }
   if (input.withTime !== undefined) { if (typeof input.withTime !== "boolean") throw new DatabaseError("Invalid property"); if (input.withTime) property.withTime = true; }
+  if (input.prefix !== undefined) {
+    const prefix = typeof input.prefix === "string" ? input.prefix.trim() : null;
+    if (prefix === null || prefix.length > limits.prefix) throw new DatabaseError("Too long for a prefix");
+    if (prefix) property.prefix = prefix;
+  }
   return property;
 }
 const knownColumn = (db: Database, id: unknown): boolean => typeof id === "string" && (id === titleId || db.properties.some((p) => p.id === id));
@@ -812,7 +821,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     case "updateProperty": {
       const old = property(change.propertyId);
       const type = change.type ?? old.type;
-      const next = cleanProperty({ id: old.id, name: change.name ?? old.name, type, options: change.options ?? old.options, format: change.format ?? old.format, withTime: change.withTime ?? old.withTime }, db, old.id);
+      const next = cleanProperty({ id: old.id, name: change.name ?? old.name, type, options: change.options ?? old.options, format: change.format ?? old.format, withTime: change.withTime ?? old.withTime, prefix: change.prefix ?? old.prefix }, db, old.id);
       const notes: string[] = [];
       if (type !== old.type) {
         const lost = lostOnTypeChange(ws, page.id, old, type);
@@ -927,6 +936,7 @@ export function valueText(db: Database, columnId: string, value: CellValue): str
   const name = (id: string) => property?.options?.find(o => o.id === id)?.name ?? ''
   if (value === null || value === false) return ''
   if (property?.type === 'createdTime' || property?.type === 'editedTime') return (value as DateValue).start.replace('T', ' ')
+  if (property?.type === 'id') return `${property.prefix ?? ''}${value}`
   if (value === true) return 'Yes'
   if (Array.isArray(value)) return value.map(name).filter(Boolean).join(', ')
   if (typeof value === 'object') return value.end ? `${value.start} → ${value.end}` : value.start

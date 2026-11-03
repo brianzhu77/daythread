@@ -490,7 +490,10 @@ Linked views come in R2, so in R1 (Bumblebee 120fdcd6):
   Not board columns: a card couldn't be dragged.
 - **`+ New` under a rule on one of these** sets no value, and asks whether the view would show it from its real time and
   next number, so §7.4's notice is right.
-- **Calendar** still shows by a Date property only.
+- **Calendar** can show by a created or edited time (§7.2).
+- **ID prefix:** a Prefix field in the property's settings, up to 20 characters, shown before the number: `BK-12`. It's
+  display only, so numbers never change. A filter's value can be typed as it shows, and its line reads as it shows; copy
+  gives what's shown; sort is by number.
 
 #### 6.3.13 Accessibility
 
@@ -528,6 +531,10 @@ Linked views come in R2, so in R1 (Bumblebee 120fdcd6):
 | **Timeline** | bars from a start date to an end date on a week/month scale | a list grouped by week (bars don't fit on a phone) | `+` on the scale | a bar to move or resize it (1280 only) |
 
 Every view type opens a row the same way (§5), and every view shows the filter line (§4.1).
+
+**Calendar by a created or edited time (R3-21).** "Show calendar by" lists them with the Date properties. Nobody can set them, so on these calendars rows don't drag (Shift-arrows too), a day has no `+`, the phone's day has no `+ New`, and there's no "No date" line. A row from before these were kept doesn't draw here.
+
+**Calendar: where it was left (R3-21).** The month or week a calendar shows is kept on this device, per block and view, as a group's fold is, and isn't synced. It comes back to that place on a reload or a later visit, and `Today` is there when it isn't showing today. A calendar with nothing kept opens on its page's day, or today.
 
 **Calendar: which date, and its weeks (R3-1).** It's asked when the view is made, with "+ New Date property" offered, and with one date property it doesn't ask. `⋯` → Layout has "Show calendar by" to change it, and "Show as" Month or Week. A week shows every title on a day. **Weeks start on Sunday** in database views and the date pickers, unless he chooses "Week starts Monday" on the account line, which moves the calendar, the pickers, the filter's "this week" and group by week together (R3-20; Lead 39431a3e). It's saved with the workspace. The row menu's "Next week" stays as it is. A row dragged from the second day of a range moves the range by how far it went, keeping its length and time. Which month is showing and which day is chosen are this tab's, with no save.
 
