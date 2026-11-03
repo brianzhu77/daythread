@@ -20,7 +20,7 @@ One edit to an 8-line block, in-process only, on his copy of the data with his l
 | 100 | 901 KB | 0.9 KB | 3.7 ms |
 | 365 | 3.3 MB | 0.9 KB | 14 ms |
 
-- **CPU isn't the limit.** The bytes and the rows are: at 365 places, each pause in typing would send 3.3 MB and write 365 Postgres rows, then send those rows to the browser. My earlier concern about the domain was wrong.
+- **CPU isn't the limit.** The bytes and the rows are: at 365 places, each pause in typing would send 3.3 MB and write 365 Postgres rows, then send those rows to the browser.
 - **Not measured:** real Postgres or Worker time, or a phone connection. Those are where the cost lands, so the table only shows how it scales. A real number would take a throwaway Worker run, which I can do if you want it before deciding.
 
 ## How the shared record works
