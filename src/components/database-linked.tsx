@@ -14,7 +14,7 @@ type DatabasePage = Page & { database: Database }
 export function SourceLine({ workspace, db }: { workspace: Workspace; db: DatabasePage }) {
   const navigate = useNavigate()
   const host = db.parentId ? workspace.pages.find(p => p.id === db.parentId) : undefined
-  return <button type="button" className="database-source" onClick={() => void navigate({ to: '/pages', search: { page: db.id } })}>
+  return <button type="button" className="database-source" onClick={() => void (db.database.fixed ? navigate({ to: '/tasks', search: { view: 'open' } }) : navigate({ to: '/pages', search: { page: db.id } }))}>
     ↳ from {displayPageTitle(db)}{host ? ` · in ${displayPageTitle(host)}` : ''}
   </button>
 }
@@ -90,6 +90,7 @@ export function DatabasePicker({ workspace, at, allowNew, onNew, onPick, onClose
   </>
 }
 function hostName(ws: Workspace, db: DatabasePage): string {
+  if (db.database.fixed) return 'all your to-dos'
   const host = db.parentId ? ws.pages.find(p => p.id === db.parentId) : undefined
   return host ? `in ${displayPageTitle(host)}` : 'full page'
 }

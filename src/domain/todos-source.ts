@@ -1,7 +1,7 @@
 // To-dos as a source (design §11, model §7): a built-in database whose rows are his tasks. Nothing here is stored: the
 // layouts read a workspace with this database added (`withTodos`, only ever handed to them, so Pages, search and the
 // export never see it), and an edit becomes the task command the day page uses (`todoChange`).
-import { newRowValues, titleId, type Database, type DateValue, type Json, type Property, type View, type ViewContext } from './database.ts'
+import { newRowValues, rowMatches, titleId, type Database, type DateValue, type Json, type Property, type View, type ViewContext } from './database.ts'
 import type { LineTarget } from './page-refs.ts'
 import type { Action, LocalDate, Page, Task, Workspace } from './types.ts'
 import { canRenameTask, isBlankTask, plannedOn, taskRows } from './workspace.ts'
@@ -69,7 +69,8 @@ export function withTodos(ws: Workspace): Workspace {
   projected.set(ws, next)
   return next
 }
-export const isTodosDatabase = (db: { database?: Database } | undefined | null) => Boolean(db?.database?.fixed)
+/** A block's database, To-dos included. */
+export const databaseSource = (ws: Workspace, pageId: string): Page | undefined => (pageId === todosSourceId ? withTodos(ws) : ws).pages.find(p => p.id === pageId)
 
 /** Where opening a to-do goes: its line, or null when no line of it is left. */
 export function todoLine(ws: Workspace, taskId: string): LineTarget | null {
@@ -116,10 +117,14 @@ export function todoChange(ws: Workspace, taskId: string, columnId: string, raw:
 }
 
 /** `+ New` (§11, R2-11): today's page, planned for today; in a view pinned to this page's day, that day. Dates the view pins come along. */
-export function newTodo(view: View, context: ViewContext, group?: string): { date: LocalDate; attentionOn?: LocalDate; deadlineOn?: LocalDate; visible: boolean } {
-  const { values, visible } = newRowValues(todosDatabase, view, context, group)
+export function newTodo(view: View, context: ViewContext, group?: string, placed?: Record<string, Json>): { date: LocalDate; attentionOn?: LocalDate; deadlineOn?: LocalDate; status?: string; visible: boolean } {
+  const made = newRowValues(todosDatabase, view, context, group)
+  const values = { ...made.values, ...placed }
+  const visible = placed ? rowMatches(todosDatabase, { id: '', type: 'document', date: null, title: '', document: '[]', values } as Page, view.filter, context) : made.visible
   const pinned = (id: string) => dateOf(values[id]) ?? undefined
   const on = pinned(planned) ?? context.today
   const startOn = pinned(start), deadlineOn = pinned(deadline)
-  return { date: on, ...(startOn ? { attentionOn: startOn } : {}), ...(deadlineOn ? { deadlineOn } : {}), visible }
+  // `+ New` at the foot of a Done column, say: that status once it's made.
+  const status = typeof values[todoStatus.id] === 'string' && values[todoStatus.id] !== todoStatus.open ? String(values[todoStatus.id]) : undefined
+  return { date: on, ...(startOn ? { attentionOn: startOn } : {}), ...(deadlineOn ? { deadlineOn } : {}), ...(status ? { status } : {}), visible }
 }
