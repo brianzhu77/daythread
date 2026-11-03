@@ -3,7 +3,7 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewGroupBy, viewGroups, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { calcChoices, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { rollupFunctionsFor } from '../domain/relations'
 import { databaseSource } from '../domain/todos-source'
@@ -12,7 +12,7 @@ import { ChevronDownIcon } from './icons'
 import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
-type Panel = 'root' | 'filter' | 'sort' | 'group' | 'layout' | 'properties' | { property: string } | 'new-property' | 'views'
+type Panel = 'root' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | 'new-property' | 'views'
 interface OpenMenu { blockId: string; databaseId: string; panel: Panel }
 /** The views list opens under "Table ⌄" on the left; every other panel under the `⋯` on the right. */
 const anchorOf = (m: OpenMenu) => m.panel === 'views' ? `[data-database-views="${CSS.escape(m.blockId)}"]` : `[data-database-menu="${CSS.escape(m.blockId)}"]`
@@ -23,7 +23,7 @@ function useOpenMenu() { return useSyncExternalStore(l => { listeners.add(l); re
 const newId = (): string => crypto.randomUUID()
 
 /** Opens a table's menu on one of its panels (a filter chip opens Filter). */
-export function openDatabaseMenu(blockId: string, databaseId: string, panel: 'filter' | 'sort' | 'group' | 'layout' = 'filter') { setOpenMenu({ blockId, databaseId, panel }) }
+export function openDatabaseMenu(blockId: string, databaseId: string, panel: 'filter' | 'sort' | 'group' | 'layout' | 'calculate' = 'filter') { setOpenMenu({ blockId, databaseId, panel }) }
 
 /** The `⋯` on a table (inline or full page): opens its menu under it. */
 export function DatabaseMenuButton({ blockId, databaseId }: { blockId: string; databaseId: string }) {
@@ -102,6 +102,7 @@ export function DatabaseMenuHost() {
     {open.panel === 'root' && <RootPanel db={db} view={view} blockId={open.blockId} go={go} />}
     {open.panel === 'group' && <GroupPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'layout' && <LayoutPanel db={db} view={view} back={() => go('root')} />}
+    {open.panel === 'calculate' && <CalculatePanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'filter' && <FilterPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'sort' && <SortPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'properties' && <PropertiesPanel db={db} view={view} go={go} />}
@@ -148,6 +149,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     </div>
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
+    {view.layout === 'table' && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
     <hr />
     {(inline || linked) && !db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); void navigate({ to: '/pages', search: { page: db.id } }) }}>Open as page</button>}
     {(inline || linked) && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.duplicate(blockId) }}>Duplicate</button>}
@@ -224,7 +226,8 @@ function RuleValue({ property, condition, onChange }: { property: Property; cond
     case 'text': case 'url': case 'email': case 'phone':
       return <CommitInput key={String(value ?? '')} initial={typeof value === 'string' ? value : ''} onCommit={v => onChange(v || undefined)} />
     case 'number': case 'id':
-      return <CommitInput key={String(value ?? '')} initial={typeof value === 'number' ? String(value) : ''} inputMode="decimal" onCommit={v => { const n = Number(v.replace(/,/g, '')); onChange(v.trim() && Number.isFinite(n) ? n : undefined) }} />
+      // An ID can be typed as it shows, "BK-12": the prefix isn't part of its number.
+      return <CommitInput key={String(value ?? '')} initial={typeof value === 'number' ? String(value) : ''} inputMode={property.prefix ? undefined : 'decimal'} onCommit={v => { const n = Number((property.prefix && v.trim().startsWith(property.prefix) ? v.trim().slice(property.prefix.length) : v).replace(/,/g, '')); onChange(v.trim() && Number.isFinite(n) ? n : undefined) }} />
     case 'checkbox':
       return <select aria-label="Value" value={value === false ? 'no' : 'yes'} onChange={e => onChange(e.target.value === 'yes')}>
         <option value="yes">checked</option><option value="no">unchecked</option>
@@ -517,6 +520,26 @@ function NewPropertyPanel({ db, view, go }: { db: DatabasePage; view: View; go: 
   </>
 }
 
+/** Each shown column's calculation at the table's foot, Name first (design §4.1a). */
+function CalculatePanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
+  const changeView = useViewChange(db.id, view.id)
+  const chosen = viewCalculations(db.database, view)
+  const set = (columnId: string, kind: string) => changeView(current => {
+    const { [columnId]: _old, ...rest } = current.calculations ?? {}
+    return { calculations: kind ? { ...rest, [columnId]: kind as CalcKind } : rest }
+  })
+  const shown = [propertyOf(db.database, titleId)!, ...viewColumns(db.database, view).map(c => c.property)]
+  return <>
+    <Head title="Calculate" back={back} />
+    {shown.map(p => <label key={p.id} className="database-menu-row">{p.name}
+      <select aria-label={p.name} value={chosen[p.id] ?? ''} onChange={e => set(p.id, e.target.value)}>
+        <option value="">None</option>
+        {calcChoices(p.type).map(kind => <option key={kind} value={kind}>{calcLabels[kind]}</option>)}
+      </select>
+    </label>)}
+  </>
+}
+
 function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: View; propertyId: string; go: (p: Panel) => void }) {
   const change = useChange(db)
   const changeView = useViewChange(db.id, view.id)
@@ -543,6 +566,9 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
       <select value={property.format ?? 'plain'} onChange={e => update({ format: e.target.value as Property['format'] })}>
         <option value="plain">Number</option><option value="comma">1,000</option><option value="percent">Percent</option><option value="currency">Currency</option>
       </select>
+    </label>}
+    {property.type === 'id' && <label className="database-menu-row">Prefix
+      <CommitInput key={property.prefix ?? ''} ariaLabel="Prefix" initial={property.prefix ?? ''} placeholder="None" onCommit={v => update({ prefix: v })} />
     </label>}
     {property.type === 'date' && !property.rollup && <label className="database-menu-row">Include time
       <input type="checkbox" checked={Boolean(property.withTime)} onChange={e => update({ withTime: e.target.checked })} />

@@ -1,9 +1,23 @@
 // What the database's cells show and what their editors read from typing (design §6.3). Pure, so the rules are tested
 // without a browser; the editors in property-editors.tsx only call these.
-import { limits, type DateValue, type NumberFormat, type Option, type StatusGroup } from '../domain/database.ts'
+import { limits, type CalcKind, type CalcResult, type DateValue, type NumberFormat, type Option, type StatusGroup } from '../domain/database.ts'
 import type { LocalDate } from '../domain/types'
 import { fromIso } from './dates.ts'
 
+/** A foot cell's two parts: a short word, and what it comes to. Nothing to reckon reads "—". */
+export function calcText(kind: CalcKind, result: CalcResult, format: NumberFormat | undefined, today: LocalDate, prefix = ''): { label: string; value: string } {
+  const label = calcWords[kind]
+  switch (result.type) {
+    case 'count': return { label, value: result.value.toLocaleString('en-US') }
+    case 'percent': return { label, value: result.value === null ? '—' : `${Math.round(result.value * 10) / 10}%` }
+    case 'number': return { label, value: result.value === null ? '—' : `${prefix}${numberLabel(kind === 'average' ? Math.round(result.value * 100) / 100 : result.value, format)}` }
+    case 'date': return { label, value: result.value === null ? '—' : dateLabel({ start: result.value }, today) }
+    case 'days': return { label, value: result.value === null ? '—' : result.value === 1 ? '1 day' : `${result.value.toLocaleString('en-US')} days` }
+    case 'groups': return { label, value: result.value.map(g => `${statusDots[g.group]} ${Math.round(g.count * 10) / 10}${result.percent ? '%' : ''}`).join('  ') }
+  }
+}
+const statusDots: Record<StatusGroup, string> = { todo: '○', active: '◐', done: '●' }
+const calcWords: Record<CalcKind, string> = { countAll: 'Count', countValues: 'Values', countUnique: 'Unique', countEmpty: 'Empty', countNotEmpty: 'Not empty', percentEmpty: 'Empty', percentNotEmpty: 'Not empty', sum: 'Sum', average: 'Average', median: 'Median', min: 'Min', max: 'Max', range: 'Range', earliest: 'Earliest', latest: 'Latest', dateRange: 'Range', checked: 'Checked', unchecked: 'Unchecked', percentChecked: 'Checked', percentUnchecked: 'Unchecked', countPerGroup: '', percentPerGroup: '' }
 /** A mail link for what looks like an address; null for anything else, which stays plain text (R3-10). */
 export const emailHref = (text: string): string | null => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text.trim()) ? `mailto:${text.trim()}` : null
 /** A dialler link for what looks like a phone number: at least 3 digits, and only what numbers are written with. */
