@@ -14,6 +14,8 @@ import { holdKeyboard } from './keyboard'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide } from './property-editors'
 import { urlHref } from './property-values'
 import { useTaskTick, useWorkspace } from './use-day'
+import { announceSave } from './draft-slots'
+import { taskRows } from '../domain/workspace'
 import { newTodo, newTodoRowId, taskIdOfRow, todoChange, todoLine, todoRowId, todosSourceId, withTodos } from '../domain/todos-source'
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
@@ -216,7 +218,10 @@ export function useCommitCell() {
       setPendingCell(key, pendingTodo(false))
       void run(change.action, r => ({ text: notice ?? change.notice, undoOperationId: r.operationId }), newId(), { quiet: true }).then(r => {
         setPendingCell(key, r ? null : pendingTodo(true))
-        if (r) onSaved?.()
+        if (!r) return
+        // New words change lines on their pages: a tab open on one should read that as this browser, not another device.
+        if (change.action.type === 'rename-task') for (const { page } of taskRows(latest() ?? ws!, taskId)) announceSave(page.id)
+        onSaved?.()
       })
       return
     }
