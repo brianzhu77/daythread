@@ -121,6 +121,10 @@ check(await page.locator('.database-list.wraps-name').count() === 1 && wrappedHe
 const listGeometry = await listRow.evaluate(row => { const t = document.createRange(); t.selectNodeContents(row.querySelector('.database-list-title')); const v = row.querySelector('.database-list-value'), r = row.getBoundingClientRect(); return { fits: row.querySelector('.database-list-title').scrollWidth <= row.querySelector('.database-list-title').clientWidth + 1, overRow: t.getBoundingClientRect().bottom <= r.bottom + 1, valueTop: v ? v.getBoundingClientRect().top - r.top : null } })
 check(listGeometry.fits && listGeometry.overRow, 'all of the title shows', listGeometry)
 await shot('list-name')
+if (wide) {
+  const chip = await page.locator('.database-list-row[data-row="dune"] .database-list-value:has(.property-chip)').first().evaluate(e => ({ width: e.getBoundingClientRect().width, right: e.getBoundingClientRect().right, edge: e.closest('.database-list-values').getBoundingClientRect().right, chip: e.querySelector('.property-chip').getBoundingClientRect().width }))
+  check(chip.right <= chip.edge + 0.5 && chip.width >= chip.chip - 0.5, "a long value doesn't cut the chip beside it", chip)
+}
 await openPanel('Properties'); await tap(menu.getByLabel('Wrap Name')); await wait(800); await closeMenu()
 const cutAgain = await listRow.locator('.database-list-title').evaluate(e => e.scrollWidth > e.clientWidth)
 if (wide) check(await page.locator('.database-list.wraps-name').count() === 0 && (await listRow.boundingBox()).height < wrappedHeight && cutAgain, 'and can stop: the title is cut again', [wrappedHeight, (await listRow.boundingBox()).height, cutAgain])
