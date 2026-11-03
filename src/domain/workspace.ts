@@ -460,7 +460,7 @@ function claimLineIds(state: Workspace, p: Page, nodes: readonly EditorNode[]): 
 
 // ---------------------------------------------------------------- commands
 
-function execute(state: Workspace, action: Action, operationId: string): { message: string; entityId?: string; renamed?: Record<string, string> } {
+function execute(state: Workspace, action: Action, operationId: string): { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[] } {
   switch (action.type) {
     case "save-editor": {
       const p = page(state, action.pageId);
@@ -474,7 +474,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const ids = new Set<string>();
       for (const n of all) { if (!n || typeof n.id !== "string" || !n.id || typeof n.type !== "string" || ids.has(n.id)) throw new DomainError("Duplicate editor block identity"); ids.add(n.id); }
       const renamed = claimLineIds(state, p, all);
-      acceptSavedBlocks(state, p, nodes, (message) => { throw new DomainError(message); });
+      const conflicted = acceptSavedBlocks(state, p, nodes, (message) => { throw new DomainError(message); });
       if (isTemplate(p)) { setDocument(p, templateRows(nodes)); return { message: "Template saved" }; }
       const before = flatNodes(pageNodes(p));
       const on = action.today ?? p.date ?? new Date().toISOString().slice(0, 10);
@@ -522,7 +522,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const trashed = placeDatabases(state, p, before, all, action, operationId);
       // The wording he sees (checklist R1-15): "Reading list and its 3 rows moved to Trash".
       if (trashed) return { message: `${trashed.title.trim() || "Untitled"}${trashed.rows ? ` and its ${trashed.rows} row${trashed.rows === 1 ? "" : "s"}` : ""} moved to Trash`, entityId: trashed.id };
-      return { message: "Page saved", ...(renamed ? { renamed } : {}) };
+      return { message: "Page saved", ...(renamed ? { renamed } : {}), ...(conflicted.length ? { conflicted } : {}) };
     }
     case "ensure-day": {
       const p = ensureDay(state, action.date);
@@ -1069,7 +1069,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   let state = structuredClone(input);
   const { undo: _previousUndo, receipts: _receipts, ...rest } = input;
   const before = { ...structuredClone(rest), receipts: {} as Workspace["receipts"] };
-  let result: { message: string; entityId?: string; renamed?: Record<string, string> };
+  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[] };
   if (command.action.type === "undo") {
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");
