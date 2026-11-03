@@ -20,7 +20,7 @@
 | **Image link** (cover or icon) | A pasted URL. Stored as a link, not a copy, like images in a body (R3-3): it may vanish | First. A failed one leaves no cover, with no frame, and the words stay where they'd be |
 | **Upload** | Files (R3-11), the same store and limits. Icons small, covers wide | After R3-11 |
 | **Gallery of covers** | Images we'd host, or ones we pick | With upload. A small set of plain greys and textures suits his look, at no real cost |
-| **Unsplash** | Its API, with a key and required attribution | **For the Lead:** a new outside service, sending his search terms there. No running cost that I know of, but I haven't checked its terms. I'd leave it until he asks |
+| **Unsplash** | Its API, with a key and required attribution | **In scope and last (Lead 4a1712e6).** A new outside service that would see what Brian searches, so at the front of the queue it goes to Brian as one choice. Its terms must be checked by then: not checked yet, and no running cost that I know of |
 | **Our own icon set** ("native icons") | A set in our greys, with SVG | Second. Small and in keeping with his look |
 
 ## 3. Rules
