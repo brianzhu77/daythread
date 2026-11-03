@@ -142,7 +142,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     <div className="database-menu-tiles">
       <button type="button" onClick={() => go('filter')}>Filter</button>
       <button type="button" onClick={() => go('sort')}>Sort</button>
-      <button type="button" onClick={() => go('group')}>Group</button>
+      {view.layout !== 'gallery' && <button type="button" onClick={() => go('group')}>Group</button>}
     </div>
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
@@ -279,7 +279,7 @@ function SortPanel({ db, view, back }: { db: DatabasePage; view: View; back: () 
 
 // ---------------------------------------------------------------- group and layout (design §7.2, §7.3)
 
-const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board' }
+const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery' }
 /** "Status", "Status 2", …: never a name the database already has. */
 function newStatusName(db: Database): string {
   const taken = new Set(['name', ...db.properties.map(p => p.name.toLocaleLowerCase())])
@@ -313,7 +313,7 @@ function GroupPanel({ db, view, back }: { db: DatabasePage; view: View; back: ()
     <Head title="Group" back={back} />
     <label className="database-menu-row">Group by
       <select value={property?.id ?? ''} onChange={e => { const groupBy = e.target.value || null; changeView(() => ({ groupBy, hiddenGroups: [] })) }}>
-        {view.layout === 'table' && <option value="">None</option>}
+        {view.layout !== 'board' && <option value="">None</option>}
         {choices.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
     </label>
@@ -345,7 +345,7 @@ function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
   const toBoard = (groupBy: string) => { setAsking(false); changeView(current => ({ layout: 'board', groupBy, ...renamedFor(current, 'board') })) }
   const pick = (layout: View['layout']) => {
     if (layout === view.layout) return
-    if (layout === 'table') { changeView(current => ({ layout: 'table', ...renamedFor(current, 'table') })); return }
+    if (layout !== 'board') { changeView(current => ({ layout, ...renamedFor(current, layout) })); return }
     // Grouped already by what a board can use: those are its columns.
     const kept = viewGroupBy(db.database, { ...view, layout: 'board' })
     const only = groupableProperties(db.database, 'board')
@@ -354,7 +354,7 @@ function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
   if (asking) return <><Head title="Board" back={() => setAsking(false)} /><BoardGroupChoices db={db} onPick={toBoard} /></>
   return <>
     <Head title="Layout" back={back} />
-    {(['table', 'board'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
+    {(['table', 'board', 'list', 'gallery'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
   </>
 }
 
@@ -461,11 +461,11 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
   const [adding, setAdding] = useState<null | 'type' | 'board'>(null)
   const views = db.database.views
   const pick = (id: string) => { setShownView(blockId, id); setOpenMenu(null) }
-  const add = (from?: View, groupBy?: string) => {
+  const add = (from?: View, groupBy?: string, layout: 'table' | 'list' | 'gallery' = 'table') => {
     const id = newId()
-    // A new view is named after its type, with the name ready to rename (design §7.1); Duplicate copies one. A new board's
-    // cards start as titles alone: Properties adds what he wants on them (§7.5).
-    const view: View = from ? { ...structuredClone(from), id, name: `${from.name} (copy)` } : { id, name: groupBy ? 'Board' : 'Table', layout: groupBy ? 'board' : 'table', columns: groupBy ? [] : current.columns, sort: [], filter: [], ...(groupBy ? { groupBy } : {}) }
+    // A new view is named after its type, with the name ready to rename (design §7.1); Duplicate copies one. A new board's or
+    // gallery's cards start as titles alone: Properties adds what he wants on them (§7.5).
+    const view: View = from ? { ...structuredClone(from), id, name: `${from.name} (copy)` } : { id, name: groupBy ? 'Board' : layoutLabels[layout], layout: groupBy ? 'board' : layout, columns: groupBy || layout === 'gallery' ? [] : current.columns, sort: [], filter: [], ...(groupBy ? { groupBy } : {}) }
     change({ kind: 'addView', view })
     setShownView(blockId, id)
     setActions(null); setAdding(null); setRenaming(id)
@@ -476,6 +476,8 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
     <Head title="New view" back={() => setAdding(null)} />
     <button type="button" role="menuitem" onClick={() => add()}>Table</button>
     <button type="button" role="menuitem" onClick={addBoard}>Board</button>
+    <button type="button" role="menuitem" onClick={() => add(undefined, undefined, 'list')}>List</button>
+    <button type="button" role="menuitem" onClick={() => add(undefined, undefined, 'gallery')}>Gallery</button>
   </>
   return <>
     <Head title="Views" />
