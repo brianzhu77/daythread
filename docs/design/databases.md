@@ -119,7 +119,8 @@ Untitled                                                                    ← 
 - **Long tables:** inline shows **the first 25 rows**, then **"Show 25 more · Open as page"**. A full page shows 100
   at a time with the same line. This keeps a day page fast on the phone, where every row is rendered inside the
   editor.
-- **Cell text** stays on one line with an ellipsis. The full value is on the row page. (Wrap per property: later, §14.)
+- **Cell text** stays on one line with an ellipsis, and the full value is on the row page, unless the view wraps it.
+- **Wrap (R3-14), per view:** `⋯` → Properties → a property → **Wrap in this view**, **Wrap Name** in Properties, and **Wrap all** in Layout, at both widths. Number, Checkbox and ID don't offer it. The row grows to fit its longest wrapped cell, and a Text value's own line breaks show. With any column wrapped, cells start at the top of the row and fill it, so all of a tall cell still taps. Name stays pinned at 390, and sideways scroll and the page's place hold. Board and Gallery cards wrap their values the same way, and their titles already do. List stays one line per row, because its values share that line.
 
 ### 4.1a Column calculations (R3-8)
 
