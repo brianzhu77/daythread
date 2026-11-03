@@ -189,18 +189,12 @@ test('a card dropped in another column: value and place in one change, one Undo'
   assert.ok(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'set-values', pageId: 'a', values: {}, expected: {}, beforeId: null, at } }).success)
 })
 
-test('a gallery has no groups, and keeps its groupBy unread for switching back', () => {
+test('a gallery groups as a list does', () => {
   const h = reading()
   const v = view({ layout: 'gallery', groupBy: 'kind' })
-  assert.deepEqual(groupableProperties(h.db(), 'gallery'), [])
-  assert.equal(viewGroupBy(h.db(), v), null)
-  assert.equal(viewGroups(h.db(), v, h.rows(v)), null)
-  const id = h.db().views[0]!.id
-  h.change({ kind: 'updateView', viewId: id, groupBy: 'kind' })
-  h.change({ kind: 'updateView', viewId: id, layout: 'gallery' })
-  assert.equal(h.db().views[0]!.groupBy, 'kind')
-  h.change({ kind: 'updateView', viewId: id, layout: 'table' })
-  assert.equal(viewGroupBy(h.db(), h.db().views[0]!)?.id, 'kind')
+  assert.deepEqual(groupableProperties(h.db(), 'gallery'), groupableProperties(h.db(), 'table'))
+  assert.equal(viewGroupBy(h.db(), v)?.id, 'kind')
+  assert.deepEqual(shape(h, v), [['Novel', ['dune', 'emma']], ['Essay', ['ubik']], ['No value', ['blank']]])
 })
 
 test("a card's image: the first with a web address in the row's body", () => {

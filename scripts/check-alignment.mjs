@@ -193,11 +193,13 @@ function measure() {
         const box = card?.querySelector('.property-checkbox')?.getBoundingClientRect()
         row.gallery = {
           "card's edge on the title": card ? card.getBoundingClientRect().left - title.getBoundingClientRect().left : null,
-          "+ New on a card's words": gap(words(content.querySelector('.database-gallery ~ .database-new')), name),
-          "Show 25 more on a card's words": gap(words(content.querySelector('.database-gallery ~ .database-more')), name),
+          "+ New on a card's words": gap(words(content.querySelector('.database-new.is-under-cards')), name),
+          "Show 25 more on a card's words": gap(words(content.querySelector('.database-gallery + .database-more, .database-more.is-under-cards')), name),
           "a value on a card's words": gap(words(card?.querySelector('.database-card-value')), name),
           "a checkbox on a card's words": box && name ? box.left - name.left : null,
           'a checkbox centred on its name': mid(box, words(card?.querySelector('.database-card-check')?.lastChild)),
+          "group's chevron on the title": content.querySelector('.database-group-fold') ? content.querySelector('.database-group-fold').getBoundingClientRect().left - title.getBoundingClientRect().left : null,
+          "Hidden on a card's words": gap(words(content.querySelector('.database-hidden-groups')), name),
         }
       }
       const list = content.querySelector('.database-list')
@@ -217,7 +219,7 @@ function measure() {
           "group's chevron on the title": list.querySelector('.database-group-fold') ? list.querySelector('.database-group-fold').getBoundingClientRect().left - title.getBoundingClientRect().left : null,
         }
       }
-      const fold = list ? null : content.querySelector('.database-group-fold')
+      const fold = list || gallery ? null : content.querySelector('.database-group-fold')
       if (fold) {
         const label = fold.querySelector('svg + *'), nameText = words(content.querySelector('.database-title-cell > span'))
         row.group = {

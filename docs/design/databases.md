@@ -537,7 +537,7 @@ doesn't show.
 
 **Group.**
 
-- Group by any property except Text. Groups are collapsible headers in a table or list, and columns in a board.
+- Group by any property except Text. Groups are collapsible headers in a table, list or gallery, and columns in a board.
 - **Hide empty groups** is a switch.
 - Each group can be hidden, and hidden groups are listed at the end as "Hidden: Done (12)".
 
