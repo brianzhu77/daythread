@@ -182,6 +182,15 @@ test('blockUpdates: own save sets the facts; another place\'s edit updates a blo
   assert.deepEqual(blockUpdates(b(), h.page('b').document, false), [])
 })
 
+test('two places on one page changed differently in one save: the first is the edit, and the other goes below, so no words go', () => {
+  const h = shown()
+  h.save('b', d => [...d, block('sb2', 's1')])
+  const r = h.save('b', d => d.map(n => n.id === 'sb' ? { ...n, children: [line('l1:sb', 'First words')] } : n.id === 'sb2' ? { ...n, children: [line('l1:sb2', 'Second words')] } : n))
+  assert.deepEqual(r.receipt.conflicted, ['sb2'])
+  assert.deepEqual(lines(h.page('c')), ['First words'])
+  assert.deepEqual(lines(h.page('b')), ['Kept', 'First words', 'First words', 'Second words'])
+})
+
 test('the reply to the browser carries the record and no lines, and applying it gives the same workspace', () => {
   const h = shown()
   const before = h.ws

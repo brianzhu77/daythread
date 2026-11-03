@@ -103,6 +103,48 @@ await scenario('Deleting a line inside a block shown elsewhere says so, with Und
   const r = { notice: await notices(page), record: JSON.parse(store().synced[0].lines).map(n => n.content?.[0]?.text) }
   return { ...r, ok: /Removed from 2 pages/.test(r.notice) && r.record.join() === 'Second of A' }
 })
+await scenario('a new block from /: words typed during its first save stay', async page => {
+  if (engine === 'webkit') return { ok: true, skipped: 'page.route' }
+  await open(page, 'b'); await line(page, 'Only line of B').click(); await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.press('Enter'); await wait(200)
+  await page.route('**/_serverFn/**', async r => { if (r.request().method() === 'POST') await wait(1500); await r.continue().catch(() => {}) })
+  await page.keyboard.type('/Synced'); await wait(500); await page.keyboard.press('Enter'); await wait(300)
+  const req = page.waitForRequest(r => r.url().includes('_serverFn') && r.method() === 'POST', { timeout: 8000 })
+  await page.keyboard.type('first'); await req; await wait(150)
+  await page.keyboard.type(' second'); await wait(7000)
+  const t = (await page.locator('.bn-inline-content').allInnerTexts()).filter(x => /first|second/.test(x)), rec = JSON.parse(store().synced?.[0]?.lines ?? '[]').map(n => n.content?.[0]?.text)
+  return { t, rec, notice: await notices(page), ok: t.join() === 'first second' && rec.join() === 'first second' }
+})
+await scenario('Sync, then typing during its first save stays', async page => {
+  if (engine === 'webkit') return { ok: true, skipped: 'page.route' }
+  await open(page, 'a'); await page.route('**/_serverFn/**', async r => { if (r.request().method() === 'POST') await wait(1500); await r.continue().catch(() => {}) })
+  await selectLine(page, 'Second of A'); await page.locator('.editor-selection-bar').getByRole('button', { name: 'Sync' }).click(); await wait(300)
+  await line(page, 'Second of A').click(); await page.keyboard.press('Meta+ArrowRight'); await wait(100); await page.keyboard.type(' more'); await wait(7000)
+  const t = (await page.locator('.bn-inline-content').allInnerTexts()).filter(x => /Second/.test(x)), rec = JSON.parse(store().synced?.[0]?.lines ?? '[]').map(n => n.content?.[0]?.text)
+  return { t, rec, ok: t.join() === 'Second of A more' && rec.join() === 'Second of A more' }
+})
+await scenario('two places on one page: an edit reaches the other, and a later save does not undo it', async page => {
+  await open(page, 'a'); await sync(page, 'Second of A'); await copyBlock(page); await pasteAfter(page, 'Fourth of A')
+  const both = page.locator('.bn-inline-content', { hasText: 'Second of A' }), n = await both.count()
+  await both.first().click(); await page.keyboard.press('Meta+ArrowRight'); await wait(150); await page.keyboard.type(' one'); await wait(2600)
+  const shown = (await page.locator('.bn-inline-content').allInnerTexts()).filter(x => /Second of A/.test(x)), rec1 = JSON.parse(store().synced[0].lines).map(l => l.content?.[0]?.text)
+  await line(page, 'First of A').click(); await page.keyboard.press('Meta+ArrowRight'); await wait(150); await page.keyboard.type('x'); await wait(2600)
+  const rec2 = JSON.parse(store().synced[0].lines).map(l => l.content?.[0]?.text), shown2 = (await page.locator('.bn-inline-content').allInnerTexts()).filter(x => /Second of A/.test(x))
+  await open(page, 'a'); const fresh = (await page.locator('.bn-inline-content').allInnerTexts()).filter(x => /Second of A/.test(x))
+  return { n, shown, rec1, rec2, shown2, fresh, notice: await notices(page), ok: n === 2 && rec1.join() === 'Second of A one' && rec2.join() === 'Second of A one' && shown.every(x => x === 'Second of A one') && fresh.every(x => x === 'Second of A one') }
+})
+await scenario('two places on one page update as he types, with the caret kept; typing in one then the other within a save keeps both', async page => {
+  await open(page, 'a'); await sync(page, 'Second of A'); await copyBlock(page); await pasteAfter(page, 'Fourth of A')
+  const both = () => page.locator('.bn-inline-content', { hasText: 'Second of A' })
+  await both().first().click(); await page.keyboard.press('Meta+ArrowRight'); await wait(150); await page.keyboard.type(' x')
+  await wait(60)
+  const asHeTypes = (await page.locator('.bn-inline-content').allInnerTexts()).filter(t => /Second of A/.test(t))
+  await page.keyboard.type('y'); await wait(150)
+  const r = { asHeTypes, caretStays: (await page.locator('.bn-inline-content').allInnerTexts()).filter(t => /Second of A x/.test(t)) }
+  // Now the other one, straight away, inside the same save.
+  await both().last().click(); await page.keyboard.press('Meta+ArrowRight'); await wait(40); await page.keyboard.type('z'); await wait(2800)
+  r.record = JSON.parse(store().synced[0].lines).map(n => n.content?.[0]?.text); r.shown = (await page.locator('.bn-inline-content').allInnerTexts()).filter(t => /Second of A/.test(t)); r.notice = await notices(page)
+  return { ...r, ok: asHeTypes.length === 2 && asHeTypes.every(t => t === 'Second of A x') && r.caretStays.every(t => t === 'Second of A xy') && r.record.join() === 'Second of A xyz' && r.shown.every(t => t === 'Second of A xyz') && !/Changed |another (tab|device)/i.test(r.notice) }
+})
 await scenario('at 390: Sync in the bar, Copy from the label, a paste arrives synced, Delete from the label with Undo', async page => {
   await open(page, 'a')
   const r = { overflow: await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) }

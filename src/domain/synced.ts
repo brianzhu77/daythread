@@ -114,7 +114,7 @@ export function strippedWorkspace(ws: Workspace): Workspace {
  */
 export function acceptSavedBlocks(state: Workspace, page: Page, nodes: EditorNode[], refuse: (message: string) => never): string[] {
   if (!nodes.length || !JSON.stringify(nodes).includes(`"${syncedBlockType}"`)) return []
-  const here = new Set<string>(), conflicts: string[] = []
+  const here = new Set<string>(), conflicts: string[] = [], editedHere = new Map<string, string>()
   walk(pageNodes(page), n => { if (isBlock(n)) here.add(n.id) })
   const visit = (list: EditorNode[]) => {
     for (let i = 0; i < list.length; i++) {
@@ -127,12 +127,16 @@ export function acceptSavedBlocks(state: Workspace, page: Page, nodes: EditorNod
       if (!record && !n.children?.length) continue
       if (!record) { (state.synced ??= []).push({ id: syncId as string, lines: JSON.stringify(unplaced(n)), rev: 1, original: n.id }); continue }
       if (!here.has(n.id)) { n.children = []; continue }
+      let changed = false
       if (Number(n.props?.rev) >= record.rev) {
         // Every line deleted: one empty line stays, and the block (states §5).
-        if (!n.children?.length) n.children = [{ id: `${pageContentKey({ document: `${n.id}|${record.rev}` })}`, type: 'paragraph', props: {}, content: [], children: [] }]
-        continue
-      }
-      const changed = blockLinesKey(n) !== n.props?.key && Boolean(n.children?.length)
+        if (!n.children?.length) n.children = [{ id: derivedId(`${n.id}|${record.rev}`), type: 'paragraph', props: {}, content: [], children: [] }]
+        // Two places on this page changed differently in one save: the first is the edit, and the other's words go below it, not away.
+        const key = blockLinesKey(n), first = editedHere.get(record.id)
+        if (key === recordKey(record)) continue
+        if (first === undefined || first === key) { editedHere.set(record.id, key); continue }
+        changed = true
+      } else changed = blockLinesKey(n) !== n.props?.key && Boolean(n.children?.length)
       if (changed) {
         const mine = (n.children ?? []).map(function fresh(line: EditorNode): EditorNode {
           const { id, ...rest } = line
@@ -191,6 +195,13 @@ export function settleSynced(state: Workspace): { linesRemovedFrom?: number } {
   return linesRemovedFrom ? { linesRemovedFrom } : {}
 }
 
+/** A place's lines as another place on the page shows them: its ids, its rows' roles. For two copies on one page, as he types (B21-3). */
+export function mirroredLines(source: EditorNode, target: EditorNode, record: SyncedRecord | undefined): EditorNode[] {
+  const roles: Roles = {}
+  unplaced(target, roles)
+  const lines = unplaced(source)
+  return placed(target, record ?? { id: '', lines: '[]', rev: 0, original: '' }, roles, lines)
+}
 /** Every place a record is shown, Trash included, with the page it's on, in the workspace's order. */
 export function syncedPlaces(ws: Pick<Workspace, 'pages'>, syncId: string): { page: Page; block: EditorNode }[] {
   const out: { page: Page; block: EditorNode }[] = []
@@ -273,17 +284,20 @@ export function blockUpdates(editorNodes: EditorNode[], saved: string, own: bool
     const e = isBlock(s) ? held.get(s.id) : undefined
     if (!e) return
     const rev = Number(s.props?.rev), key = String(s.props?.key ?? ''), mine = blockLinesKey(e)
-    // A copy just pasted hasn't read the record yet: the block has the record's lines, whatever came with it.
-    if (!Number(e.props?.rev)) { out.push({ id: e.id, rev, key, lines: s.children ?? [], rename: {} }); return }
+    // A copy just pasted hasn't read the record yet, and takes its lines. Its `key` says what it was pasted with, so words he's typed
+    // since stay his; a block he's just made has no key, and goes on below (Lead's review of #96).
+    if (!Number(e.props?.rev) && mine === e.props?.key) { out.push({ id: e.id, rev, key, lines: s.children ?? [], rename: {} }); return }
     if (mine === key) {
       // The same lines: only what's new here takes this place's ids.
       const rename: Record<string, string> = {}, ids = new Set<string>()
       walk(s.children ?? [], n => ids.add(n.id))
       walk(e.children ?? [], n => { if (!ids.has(n.id) && ids.has(`${n.id}${separator}${e.id}`)) rename[n.id] = `${n.id}${separator}${e.id}` })
       if (rev !== Number(e.props?.rev) || e.props?.key !== key || Object.keys(rename).length) out.push({ id: e.id, rev, key, lines: null, rename })
+    // Unchanged since it last read: it follows, whoever saved. That has to come first: another place on this page keeps its old lines
+    // otherwise, and the next save sends them back as an edit (Lead's review of #96).
+    } else if (mine === e.props?.key) out.push({ id: e.id, rev, key, lines: s.children ?? [], rename: {} })
     // His own save, and he's typed since: it starts from what was saved, so what he's typed still reads as changed, and saves.
-    } else if (own) out.push({ id: e.id, rev, key, lines: null, rename: {} })
-    else if (mine === e.props?.key) out.push({ id: e.id, rev, key, lines: s.children ?? [], rename: {} })
+    else if (own) out.push({ id: e.id, rev, key, lines: null, rename: {} })
   })
   return out
 }
