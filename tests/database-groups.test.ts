@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { groupableProperties, groupValue, newRowValues, noGroupKey, viewGroupBy, viewGroups, viewRows, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
+import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
 import { harness, today } from './v2-helpers.ts'
 
@@ -142,7 +143,7 @@ test('the view fields: checked, stored, and kept by every other change', () => {
   h.change({ kind: 'addView', view: view({ id: 'b', name: 'Board', layout: 'board', groupBy: 'status' }) })
   assert.equal(h.db().views[1]!.groupBy, 'status')
   assert.ok(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId: 'b', groupBy: null, hiddenGroups: [], layout: 'board', groupDateBy: 'day' } } }).success)
-  assert.ok(!commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId: 'b', layout: 'gallery' } } }).success)
+  assert.ok(!commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId: 'b', layout: 'nonsense' } } }).success)
 })
 
 test('a deleted group property is dropped quietly and kept unread; a duplicate of that view works', () => {
@@ -187,3 +188,28 @@ test('a card dropped in another column: value and place in one change, one Undo'
   assert.deepEqual(h.order(), ['ubik', 'blank', 'dune', 'emma'])
   assert.ok(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'set-values', pageId: 'a', values: {}, expected: {}, beforeId: null, at } }).success)
 })
+
+test('a gallery has no groups, and keeps its groupBy unread for switching back', () => {
+  const h = reading()
+  const v = view({ layout: 'gallery', groupBy: 'kind' })
+  assert.deepEqual(groupableProperties(h.db(), 'gallery'), [])
+  assert.equal(viewGroupBy(h.db(), v), null)
+  assert.equal(viewGroups(h.db(), v, h.rows(v)), null)
+  const id = h.db().views[0]!.id
+  h.change({ kind: 'updateView', viewId: id, groupBy: 'kind' })
+  h.change({ kind: 'updateView', viewId: id, layout: 'gallery' })
+  assert.equal(h.db().views[0]!.groupBy, 'kind')
+  h.change({ kind: 'updateView', viewId: id, layout: 'table' })
+  assert.equal(viewGroupBy(h.db(), h.db().views[0]!)?.id, 'kind')
+})
+
+test("a card's image: the first with a web address in the row's body", () => {
+  const image = (id: string, url: string) => ({ id, type: 'image', props: { url }, children: [] })
+  const doc = (...n: unknown[]) => ({ document: JSON.stringify(n) })
+  assert.equal(firstImageUrl(doc()), null)
+  assert.equal(firstImageUrl(doc({ id: 'p', type: 'paragraph', props: {}, content: [], children: [] })), null)
+  assert.equal(firstImageUrl(doc(image('a', 'https://x.test/a.png'), image('b', 'https://x.test/b.png'))), 'https://x.test/a.png')
+  assert.equal(firstImageUrl(doc(image('a', 'javascript:alert(1)'), image('b', 'data:image/png;base64,AA'), image('c', 'http://x.test/c.png'))), 'http://x.test/c.png')
+  assert.equal(firstImageUrl(doc({ id: 'p', type: 'bulletListItem', props: {}, content: [], children: [image('n', 'https://x.test/nested.png')] })), 'https://x.test/nested.png')
+})
+

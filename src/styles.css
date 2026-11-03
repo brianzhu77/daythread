@@ -2003,3 +2003,20 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
   .database-list-values:empty { display: none; }
 }
 
+/* Databases R3: a Gallery (design §7.2): 3 across, 2 on the phone. A card with no image is just its words, and shorter. The whole
+   card opens the row, from its title's own button; a box sits above that. */
+.database-gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 10px; padding-block: 4px; }
+.database-gallery-card { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--bg-doc); color: var(--ink); font-size: var(--text-small); line-height: 20px; }
+@media (hover: hover) { .database-gallery-card:hover { background: var(--fill-soft); } }
+.database-gallery-card.is-returned { background: var(--blue-soft); transition: background .3s; }
+.database-gallery-card:has(.database-gallery-title:focus-visible) { outline: 2px solid var(--blue); outline-offset: 1px; }
+.database-gallery-image { display: block; width: 100%; aspect-ratio: 16 / 10; margin: 0; object-fit: cover; background: var(--fill-soft); }
+.database-gallery-words { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; }
+.database-gallery-card .database-gallery-title { display: block; width: 100%; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.database-gallery-title::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
+.database-gallery-title:focus-visible { outline: none; }
+.database-gallery-card .database-gallery-title.is-placeholder { color: var(--placeholder); }
+/* Their words line up with a card's: its padding plus its border. */
+.database-gallery ~ .database-new, .database-gallery ~ .database-more { padding-inline: 11px; }
+@media (max-width: 899px) { .database-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+

@@ -15,6 +15,7 @@ import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide 
 import { urlHref } from './property-values'
 import { useWorkspace } from './use-day'
 import { DatabaseBoard } from './database-board'
+import { DatabaseGallery } from './database-gallery'
 import { DatabaseList } from './database-list'
 import { DatabaseMenuButton, DatabaseViewsButton, openDatabaseMenu } from './database-menu'
 
@@ -535,6 +536,7 @@ function DatabaseView(props: DatabaseViewProps) {
   const changeView = useViewChange(props.db.id, view.id)
   if (view.layout === 'board') return <DatabaseBoard {...props} view={view} changeView={changeView} />
   if (view.layout === 'list') return <DatabaseList {...props} view={view} changeView={changeView} />
+  if (view.layout === 'gallery') return <DatabaseGallery {...props} view={view} changeView={changeView} />
   return <DatabaseTable {...props} view={view} changeView={changeView} />
 }
 

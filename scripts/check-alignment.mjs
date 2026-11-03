@@ -36,7 +36,7 @@ if (!base) { console.error('usage: node scripts/check-alignment.mjs <base url> [
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
-const REQUIRED = ['board', 'grouped table', 'list', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
+const REQUIRED = ['board', 'grouped table', 'list', 'gallery', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
 
 /** What a table cell or a row page's value draws: its box when it's a checkbox, else its first line of text, else a chip or dot. */
 function drawnCentres() {
@@ -168,6 +168,19 @@ function measure() {
           "a checkbox on a card's words": box && name ? box.left - name.left : null,
           'a checkbox centred on its name': mid(box, words(card?.querySelector('.database-card-check')?.lastChild)),
           "Hidden on a card's words": gap(hidden, name),
+        }
+      }
+      const gallery = content.querySelector('.database-gallery')
+      if (gallery) {
+        const card = gallery.querySelector('.database-gallery-card'), name = words(card?.querySelector('.database-gallery-title'))
+        const box = card?.querySelector('.property-checkbox')?.getBoundingClientRect()
+        row.gallery = {
+          "card's edge on the title": card ? card.getBoundingClientRect().left - title.getBoundingClientRect().left : null,
+          "+ New on a card's words": gap(words(content.querySelector('.database-gallery ~ .database-new')), name),
+          "Show 25 more on a card's words": gap(words(content.querySelector('.database-gallery ~ .database-more')), name),
+          "a value on a card's words": gap(words(card?.querySelector('.database-card-value')), name),
+          "a checkbox on a card's words": box && name ? box.left - name.left : null,
+          'a checkbox centred on its name': mid(box, words(card?.querySelector('.database-card-check')?.lastChild)),
         }
       }
       const list = content.querySelector('.database-list')
@@ -368,9 +381,9 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
       results.push({ at, check: `${r.kind} title not clipped: "${r.label}"`, ok: !r.clipped, detail: r.clipped ?? 'wraps' })
     // The database block's own columns (design §15).
     for (const r of rows.filter(r => r.kind === 'database table')) {
-      const parts = r.board ?? r.list ?? r.group, name = r.board ? 'board' : r.list ? 'list' : 'group'
+      const parts = r.board ?? r.list ?? r.gallery ?? r.group, name = r.board ? 'board' : r.list ? 'list' : r.gallery ? 'gallery' : 'group'
       if (parts) {
-        seen.get(width).add(r.board ? 'board' : r.list ? 'list' : 'grouped table')
+        seen.get(width).add(r.board ? 'board' : r.list ? 'list' : r.gallery ? 'gallery' : 'grouped table')
         for (const [what, off] of Object.entries(parts)) results.push(off == null
           ? { at, check: `${name} ${what}: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
           : { at, check: `${name} ${what}: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
@@ -379,7 +392,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
         ? { at, check: `database view chevron: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
         : { at, check: `database view chevron centred on its word: "${r.label}"`, ok: Math.abs(r.viewChevron) <= TOLERANCE, detail: `${r.viewChevron >= 0 ? '+' : ''}${fmt(r.viewChevron)}px` })
       // A board or list has no Name column: its + New is measured against a card's or row's words, above.
-      if (!r.board && !r.list) results.push(r.newOnName == null
+      if (!r.board && !r.list && !r.gallery) results.push(r.newOnName == null
         ? { at, check: `database + New: "${r.label}"`, ok: 'missing', detail: 'no row or no + New, so not measured' }
         : { at, check: `database + New on Name's text: "${r.label}"`, ok: Math.abs(r.newOnName) <= TOLERANCE, detail: `${r.newOnName >= 0 ? '+' : ''}${fmt(r.newOnName)}px` })
     }
