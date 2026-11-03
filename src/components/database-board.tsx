@@ -233,8 +233,8 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(columns[0]!.key === allKey ? undefined : columns[0]!.key) }} />
     {!groups && <p className="database-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'group')}>Group by</button></p>}
     <div className={`database-board${subs ? ' has-lanes' : ''}${drag ? ' is-dragging' : ''}`} ref={scroller} onScroll={onScroll}>
-      {subs && <div className="database-lane-heads">{columns.map(c => <div key={c.key} className="database-lane-head-cell"><h3 className="database-column-head"><GroupName groups={groups!} group={c} /><span className="database-group-count">· {headOf(c.rows)}</span></h3></div>)}</div>}
-      {(subs ? subs.shown : [null]).map((lane, laneIndex) => {
+      {subs && <div className="database-lane-heads">{columns.map(c => <div key={c.key} className="database-lane-head-cell"><h3 className="database-column-head"><GroupName groups={groups!} group={c} /><span className="database-group-count">· {headOf(c.rows)}</span></h3></div>)}{canAddColumn && <AddColumn run={run} db={db} propertyId={groups!.property.id} />}</div>}
+      {(subs ? subs.shown : [null]).map(lane => {
         const laneColumns = lane ? columns.map(c => ({ ...c, head: c, key: sectionKey(c.key, lane.key), rows: c.rows.filter(r => lane.rows.includes(r)) })) : columns.map(c => ({ ...c, head: c }))
         const laneKey = lane ? sectionKey('lane', lane.key) : ''
         const body = laneColumns.map(group => {
@@ -253,7 +253,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
           <NewRow db={db} blockId={blockId} addRow={addRow} {...(group.key === allKey ? {} : { group: group.key })} />
         </section>
         })
-        const adding = laneIndex === 0 && canAddColumn && <AddColumn run={run} db={db} propertyId={groups!.property.id} />
+        const adding = !subs && canAddColumn && <AddColumn run={run} db={db} propertyId={groups!.property.id} />
         if (!lane || !subs) return <Fragment key="all">{body}{adding}</Fragment>
         return <div key={laneKey} className="database-lane">
           <SubGroupHead lane groups={subs} group={lane} isFolded={folded.has(laneKey)} onToggle={() => toggle(laneKey)} />
