@@ -2,6 +2,7 @@ import { editorSeed, inlineText, pageNodes, type EditorNode } from './editor-doc
 import type { Page, Workspace } from './types.ts'
 import { isTemplate } from './day-template.ts'
 import { isDraft } from './day-draft.ts'
+import { withLinks } from './relations.ts'
 import { cellValue, databaseOfRow, databaseRows, isDatabase, isEmptyValue, valueText, type Database } from './database.ts'
 
 /**
@@ -12,7 +13,8 @@ export const exportFormatVersion = 2
 
 export interface ExportFile { path: string; text: string }
 
-export function exportFiles(ws: Workspace, now: Date): ExportFile[] {
+export function exportFiles(stored: Workspace, now: Date): ExportFile[] {
+  const ws = withLinks(stored)
   const day = now.toLocaleDateString('en-CA', { timeZone: ws.timezone })
   const root = `daythread-export-${day}`
   const names = fileNames(ws)

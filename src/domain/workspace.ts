@@ -5,7 +5,7 @@ import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget } from "./day-template.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
-import { changeDatabase, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow } from "./database.ts";
+import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
 
@@ -332,7 +332,11 @@ function pageParent(state: Workspace, id: string): Page {
 function rowEdit(state: Workspace, edit: RowEdit, at: string): void {
   if (!edit || typeof edit.pageId !== "string") throw new DomainError("Invalid row");
   const { row, db } = rowPage(state, edit.pageId);
+  const links = (id: string) => { const raw = row.values?.[id]; return Array.isArray(raw) ? (raw as string[]) : []; };
+  const relations = db.database.properties.filter((p) => p.type === "relation" && edit.values && p.id in edit.values);
+  const before = relations.map((p) => links(p.id));
   try { editRow(db.database, row, edit, at); } catch (error) { throw new DomainError((error as Error).message); }
+  relations.forEach((p, i) => syncMirror(state, p, row.id, before[i]!, links(p.id), at));
 }
 /** The local day of an ISO time in the workspace's zone. */
 const localDay = (state: Workspace, at: string): string => new Date(at).toLocaleDateString("en-CA", { timeZone: state.timezone });
@@ -423,9 +427,37 @@ function copiedBody(state: Workspace, from: Page, to: Page, on: string): EditorN
   return pageNodes(from).map(visit);
 }
 
+/** The same answer every time, so a client that misses a rename and sends the old id again gets the same one (B29). */
+function derivedLineId(id: string, pageId: string): string {
+  const hex = cyrb128(`${id}|${pageId}`).padEnd(32, "0");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-8${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+/**
+ * One page holds a line's id (B29), so a link to it can follow it there. A line new to this page, with an id another page
+ * already has (Trash too), gets a new one: the first to save keeps it, and a link stays with that line.
+ */
+function claimLineIds(state: Workspace, p: Page, nodes: readonly EditorNode[]): Record<string, string> | undefined {
+  const here = new Set(flatNodes(pageNodes(p)).map((n) => n.id));
+  const fresh = nodes.filter((n) => !here.has(n.id));
+  if (!fresh.length) return undefined;
+  const elsewhere = new Set<string>();
+  for (const other of state.pages) if (other.id !== p.id) for (const n of flatNodes(pageNodes(other))) elsewhere.add(n.id);
+  const inUse = new Set(nodes.map((n) => n.id));
+  let renamed: Record<string, string> | undefined;
+  for (const n of fresh) {
+    if (!elsewhere.has(n.id)) continue;
+    let id = derivedLineId(n.id, p.id);
+    while (elsewhere.has(id) || inUse.has(id)) id = derivedLineId(id, p.id);
+    (renamed ??= {})[n.id] = id;
+    inUse.add(id);
+    n.id = id;
+  }
+  return renamed;
+}
+
 // ---------------------------------------------------------------- commands
 
-function execute(state: Workspace, action: Action, operationId: string): { message: string; entityId?: string } {
+function execute(state: Workspace, action: Action, operationId: string): { message: string; entityId?: string; renamed?: Record<string, string> } {
   switch (action.type) {
     case "save-editor": {
       const p = page(state, action.pageId);
@@ -438,6 +470,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       cleanRuns(nodes);
       const ids = new Set<string>();
       for (const n of all) { if (!n || typeof n.id !== "string" || !n.id || typeof n.type !== "string" || ids.has(n.id)) throw new DomainError("Duplicate editor block identity"); ids.add(n.id); }
+      const renamed = claimLineIds(state, p, all);
       if (isTemplate(p)) { setDocument(p, templateRows(nodes)); return { message: "Template saved" }; }
       const before = flatNodes(pageNodes(p));
       const on = action.today ?? p.date ?? new Date().toISOString().slice(0, 10);
@@ -485,7 +518,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const trashed = placeDatabases(state, p, before, all, action, operationId);
       // The wording he sees (checklist R1-15): "Reading list and its 3 rows moved to Trash".
       if (trashed) return { message: `${trashed.title.trim() || "Untitled"}${trashed.rows ? ` and its ${trashed.rows} row${trashed.rows === 1 ? "" : "s"}` : ""} moved to Trash`, entityId: trashed.id };
-      return { message: "Page saved" };
+      return { message: "Page saved", ...(renamed ? { renamed } : {}) };
     }
     case "ensure-day": {
       const p = ensureDay(state, action.date);
@@ -864,6 +897,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const row: Page = { id: action.pageId, type: "document", date: null, title: source ? `${source.row.title} (copy)`.trim() : text(action.title, 1000).trim(), parentId: db.id, document: JSON.stringify([emptyLine("paragraph")]), ...(values ? { values } : {}), createdAt: at, editedAt: at };
       if (source) row.document = JSON.stringify(copiedBody(state, source.row, row, localDay(state, at)));
       numberNewRow(db.database, row);
+      // A new row's links show on their other side, a copy's too.
+      for (const p of db.database.properties) { const raw = row.values?.[p.id]; if (p.type === "relation" && Array.isArray(raw)) syncMirror(state, p, row.id, [], raw as string[], at); }
       // Rows keep page order: before `beforeId`, after the row it copies, or at the end.
       const rows = databaseRows(state, db.id);
       const before = action.beforeId ? rows.find((r) => r.id === action.beforeId) : source ? rows[rows.indexOf(source.row) + 1] : undefined;
@@ -1000,7 +1035,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   let state = structuredClone(input);
   const { undo: _previousUndo, receipts: _receipts, ...rest } = input;
   const before = { ...structuredClone(rest), receipts: {} as Workspace["receipts"] };
-  let result: { message: string; entityId?: string };
+  let result: { message: string; entityId?: string; renamed?: Record<string, string> };
   if (command.action.type === "undo") {
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");

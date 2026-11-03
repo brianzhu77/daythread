@@ -3,7 +3,7 @@
 // rewrites only the database page. Pure: the domain's commands and the browser's views share it.
 import type { LocalDate, Page, WeekStart, Workspace } from "./types.ts";
 
-export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url", "email", "phone", "createdTime", "editedTime", "id"] as const;
+export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url", "email", "phone", "createdTime", "editedTime", "id", "relation", "rollup"] as const;
 export type PropertyType = (typeof propertyTypes)[number];
 export type NumberFormat = "plain" | "comma" | "percent" | "currency";
 export type StatusGroup = "todo" | "active" | "done";
@@ -25,10 +25,24 @@ export interface Property {
   dayOnly?: true;
   /** What clearing this means, where it's more than emptying a cell. */
   clearLabel?: string;
+  /** relation: the database its rows point into (may be this one). */
+  target?: string;
+  /** relation: its other side, a relation on the target pointing back, kept in step by every write ("Show on Books"). */
+  mirror?: string;
+  /** relation: at most this many rows. Only 1 is offered, against no limit. */
+  limit?: 1;
+  /** rollup: what it reads through which relation. Worked out when read (relations.ts), never stored. */
+  rollup?: Rollup;
+  /** relation, as read (relations.ts), never stored: its target's name, and whether that's in Trash. */
+  targetTitle?: string;
+  targetTrashed?: true;
   /** An ID's words before its number, "BK-" in BK-12: shown only, so changing it renumbers nothing (R3-9). */
   prefix?: string;
 }
 export interface DateValue { start: string; end?: string }
+export const rollupFunctions = ["original", "unique", "countAll", "countValues", "countUnique", "countEmpty", "countNotEmpty", "percentEmpty", "percentNotEmpty", "sum", "average", "median", "min", "max", "range", "earliest", "latest", "dateRange", "checked", "unchecked", "percentChecked", "percentUnchecked"] as const;
+export type RollupFunction = (typeof rollupFunctions)[number];
+export interface Rollup { relation: string; property: string; fn: RollupFunction }
 /** A fixed day, or one relative to today or to the day page the view is on, with an offset in days. */
 export type DateRef = { date: LocalDate } | { relative: "today" | "pageDate"; offset?: number };
 export const filterOpList = [
@@ -92,10 +106,14 @@ export type CellValue = string | number | string[] | DateValue | boolean | null;
 
 /** The column id of a row's title, in views, sorts, filters and `set-values`. */
 export const titleId = "title";
+/** The `pageId` of a block showing To-dos, and a relation's target when it links tasks. No real page has it. */
+export const todosSourceId = "source:tasks";
 /** Where a row keeps its number, among its values: under no property, so changing a property's type never touches it. */
 const rowNumberKey = "@id";
 /** The types the app fills in: they can't be typed, pasted, or set by a filter's `+ New` (R3-9). */
 export const isReadOnlyType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime" || type === "id";
+/** Nothing can be typed here: the app's own columns, a rollup, To-dos' Page. */
+export const isReadOnly = (property: Property): boolean => isReadOnlyType(property.type) || Boolean(property.readOnly);
 export const isTimeType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime";
 const isTextType = (type: PropertyType): boolean => type === "text" || type === "url" || type === "email" || type === "phone";
 /** A row's Created or Edited time as a date value; none on a row from before they were kept. */
@@ -153,7 +171,14 @@ export function validDateText(value: unknown): value is string {
   const [h, m] = value.slice(11).split(":").map(Number);
   return validDay(value.slice(0, 10)) && h! < 24 && m! < 60;
 }
-const optionIds = (p: Property): Set<string> => new Set((p.options ?? []).map((o) => o.id));
+const optionIdSets = new WeakMap<Option[], Set<string>>();
+/** Kept per list: a relation's options are every row of its target, and this runs for each cell. */
+function optionIds(p: Property): Set<string> {
+  if (!p.options) return new Set();
+  let ids = optionIdSets.get(p.options);
+  if (!ids) { ids = new Set(p.options.map((o) => o.id)); optionIdSets.set(p.options, ids); }
+  return ids;
+}
 function parseNumber(value: string): number | null {
   const s = value.trim().replace(/,/g, "");
   if (!s) return null;
@@ -173,6 +198,7 @@ export function readValue(property: Property, raw: unknown): CellValue {
     case "createdTime":
     case "editedTime":
     case "id":
+    case "rollup":
       return null;
     case "text":
     case "url":
@@ -193,6 +219,8 @@ export function readValue(property: Property, raw: unknown): CellValue {
       if (picked === null && property.type === "status") return property.options?.find((o) => o.group === "todo")?.id ?? property.options?.[0]?.id ?? null;
       return picked;
     }
+    // A relation's options are its target's rows (`withLinks`), so a link to a row that's gone reads without it, and comes back with it.
+    case "relation":
     case "multiSelect": {
       const list = typeof raw === "string" ? [raw] : Array.isArray(raw) ? raw : [];
       const picked = [...new Set(list.filter((x): x is string => typeof x === "string" && ids.has(x)))];
@@ -225,7 +253,16 @@ export function storedValue(property: Property, input: unknown): Json | undefine
     case "createdTime":
     case "editedTime":
     case "id":
+    case "rollup":
       return refuse();
+    case "relation": {
+      if (!Array.isArray(input) || input.length > limits.multi) refuse();
+      const list = [...new Set(input as unknown[])];
+      if (!list.every((x) => typeof x === "string" && x.length <= 200)) refuse();
+      // "1 page": the newest pick.
+      const kept = property.limit === 1 ? list.slice(-1) : list;
+      return kept.length ? (kept as string[]) : undefined;
+    }
     case "text":
     case "url":
     case "email":
@@ -348,6 +385,9 @@ export function conditionHolds(property: Property, condition: Condition, value: 
   if (op === "isEmpty") return isEmptyValue(value);
   if (op === "isNotEmpty") return !isEmptyValue(value);
   switch (property.type) {
+    // Read as the type it works out to (relations.ts), so a condition never meets it here.
+    case "rollup":
+      return null;
     case "text":
     case "url":
     case "email":
@@ -369,6 +409,7 @@ export function conditionHolds(property: Property, condition: Condition, value: 
     }
     case "select":
     case "status":
+    case "relation":
     case "multiSelect": {
       const ids = strings(want);
       if (!ids.length) return null;
@@ -417,6 +458,8 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "bas
 function compareValues(property: Property, a: CellValue, b: CellValue): number {
   const order = (id: unknown) => (property.options ?? []).findIndex((o) => o.id === id);
   switch (property.type) {
+    case "rollup":
+      return 0;
     case "text":
     case "url":
     case "email":
@@ -428,6 +471,7 @@ function compareValues(property: Property, a: CellValue, b: CellValue): number {
     case "select":
     case "status":
       return order(a) - order(b);
+    case "relation":
     case "multiSelect": {
       const x = (a as string[]).map(order).sort((p, q) => p - q), y = (b as string[]).map(order).sort((p, q) => p - q);
       for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i]! - y[i]!;
@@ -483,13 +527,13 @@ export function newRowValues(db: Database, view: View, context: ViewContext, gro
   const any = Boolean(view.filterAny);
   if (!any || !rowMatches(db, probeOf("", {}), view.filter, context, true)) for (const c of view.filter) {
     const property = propertyOf(db, c.by);
-    if (!property || isReadOnlyType(property.type)) continue;
+    if (!property || isReadOnly(property)) continue;
     const want = c.value;
     let value: Json | undefined;
     if (isTextType(property.type)) { if (c.op === "is" && typeof want === "string") value = want; }
     else if (property.type === "number") { if (c.op === "eq" && typeof want === "number") value = want; }
     else if (property.type === "select" || property.type === "status") { const ids = strings(want); if (["isAnyOf", "is"].includes(c.op) && ids.length === 1) value = ids[0]; }
-    else if (property.type === "multiSelect") { const ids = strings(want); if (["isAnyOf", "contains"].includes(c.op) && ids.length === 1) value = [ids[0]]; }
+    else if (property.type === "multiSelect" || property.type === "relation") { const ids = strings(want); if (["isAnyOf", "contains"].includes(c.op) && ids.length === 1) value = [ids[0]]; }
     else if (property.type === "checkbox") { if (c.op === "is" && want === true) value = true; }
     else if (property.type === "date") { const day = c.op === "is" ? resolveDateRef(want, context) : null; if (day) value = { start: day }; }
     if (value === undefined) continue;
@@ -502,7 +546,7 @@ export function newRowValues(db: Database, view: View, context: ViewContext, gro
   // A row added under a group starts with that group's value, even where the filter wants another (then it's hidden, and the notice says so).
   const grouped = groupKey === undefined ? null : viewGroupBy(db, view);
   // A group by created time can't start a row off with a value: it lands in the group its own time says.
-  if (grouped && !isReadOnlyType(grouped.type)) {
+  if (grouped && !isReadOnly(grouped)) {
     const value = groupKey === noGroupKey ? undefined : storedValue(grouped, groupValue(grouped, groupKey!, undefined, undefined, context.today, view.groupDateBy, context.weekStart));
     if (value === undefined) delete values[grouped.id]; else values[grouped.id] = value;
   }
@@ -513,19 +557,21 @@ export function newRowValues(db: Database, view: View, context: ViewContext, gro
 
 /** The group of rows with no value. */
 export const noGroupKey = "none";
-const canGroup = (type: PropertyType): boolean => type !== "text" && type !== "id";
-const canMakeColumns = (type: PropertyType): boolean => type === "select" || type === "status" || type === "checkbox";
+const canGroup = (type: PropertyType): boolean => type !== "text" && type !== "id" && type !== "rollup";
+const canMakeColumns = (type: PropertyType): boolean => type === "select" || type === "status" || type === "checkbox" || type === "relation";
+/** A rollup groups by what it works out to, whatever that is, though a card can't be dragged there, so it makes no board. */
+const groupsBy = (p: Property, layout: ViewLayout): boolean => (layout === "board" ? !p.rollup && canMakeColumns(p.type) : Boolean(p.rollup) || canGroup(p.type));
 /** What a view of this layout can group by: a board's columns need a value a card can be dragged to (design §7.2). */
 export function groupableProperties(db: Database, layout: ViewLayout): Property[] {
   if (layout === "calendar") return [];
-  return db.properties.filter((p) => (layout === "board" ? canMakeColumns(p.type) : canGroup(p.type)));
+  return db.properties.filter((p) => groupsBy(p, layout));
 }
 /** The property a view groups by now; null when it was deleted or its type can't group any more. */
 export function viewGroupBy(db: Database, view: View): Property | null {
   // A calendar doesn't group; its `groupBy` is kept unread, for switching back.
   if (view.layout === "calendar") return null;
   const property = view.groupBy ? db.properties.find((p) => p.id === view.groupBy) : undefined;
-  return property && (view.layout === "board" ? canMakeColumns(property.type) : canGroup(property.type)) ? property : null;
+  return property && groupsBy(property, view.layout) ? property : null;
 }
 const statusOrder: StatusGroup[] = ["todo", "active", "done"];
 /** Options in the order groups show them: a status's by To do, In progress, Done, as its editor lists them. */
@@ -553,7 +599,7 @@ export function newRowProbe(db: Database, title: string, values: Page["values"])
 function groupKeys(property: Property, value: CellValue, by: GroupDateBy, weekStart: WeekStart): string[] {
   if (property.type === "checkbox") return [value === true ? "checked" : "unchecked"];
   if (isEmptyValue(value)) return [noGroupKey];
-  if (property.type === "multiSelect") return value as string[];
+  if (property.type === "multiSelect" || property.type === "relation") return value as string[];
   if (property.type === "date" || isTimeType(property.type)) return [dateGroupKey((value as DateValue).start, by, weekStart)];
   return [String(value)];
 }
@@ -581,7 +627,10 @@ export function viewGroups(db: Database, view: View, rows: readonly Page[], rawF
   const group = (key: string, name: string): ViewGroup => ({ key, name, rows: found.get(key) ?? [] });
   const groups: ViewGroup[] = [];
   if (property.type === "checkbox") groups.push(group("unchecked", "Unchecked"), group("checked", "Checked"));
-  else if (hasOptions(property.type)) {
+  else if (property.type === "relation") {
+    // Its options are every row of its target: a group only for those linked here, in the target's order.
+    groups.push(...groupOptions(property).filter((o) => found.has(o.id)).map((o) => group(o.id, o.name)), group(noGroupKey, "No value"));
+  } else if (hasOptions(property.type)) {
     groups.push(...groupOptions(property).map((o) => group(o.id, o.name)));
     // A status always has a value (design §6.1), so it has no group for none.
     if (property.type !== "status") groups.push(group(noGroupKey, "No value"));
@@ -641,6 +690,7 @@ export function groupValue(property: Property, key: string, raw: unknown, fromKe
   switch (property.type) {
     case "checkbox": return key === "checked" ? true : undefined;
     case "number": return Number(key);
+    case "relation":
     case "multiSelect": {
       const had = readValue(property, raw);
       const kept = Array.isArray(had) ? (had as string[]).filter((id) => id !== fromKey && id !== key) : [];
@@ -661,11 +711,13 @@ export function groupValue(property: Property, key: string, raw: unknown, fromKe
 // ---------------------------------------------------------------- commands' inputs
 
 /** A property as `addProperty` sends it: options without ids get them; a Status with none gets the three groups. */
-export interface PropertyInput { id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string }
+export interface PropertyInput { id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup }
 /** One schema or view change: one write, the database page. */
 export type DatabaseChange =
   | { kind: "addProperty"; property: PropertyInput; /** the view it was added from: it shows there; other views list it too */ viewId?: string }
-  | { kind: "updateProperty"; propertyId: string; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string }
+  | { kind: "updateProperty"; propertyId: string; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup }
+  /** "Show on Books": a relation's other side, made as a property of the target, or gone with null. */
+  | { kind: "setMirror"; propertyId: string; mirror: { id: string; name: string } | null }
   | { kind: "removeProperty"; propertyId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
@@ -765,7 +817,7 @@ function cleanCalculations(db: Database, input: unknown): Record<string, CalcKin
   return out;
 }
 
-export const typeLabels: Record<PropertyType, string> = { text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
+export const typeLabels: Record<PropertyType, string> = { text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", relation: "Relation", rollup: "Rollup", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
 const hasOptions = (type: PropertyType): boolean => type === "select" || type === "multiSelect" || type === "status";
 
 function cleanName(value: unknown, what: string): string {
@@ -792,6 +844,61 @@ function cleanOptions(input: unknown, type: PropertyType): Option[] {
 function uniqueName(db: Database, name: string, except?: string): void {
   if (fold(name) === fold(titleProperty.name) || db.properties.some((p) => p.id !== except && fold(p.name) === fold(name))) throw new DatabaseError(`There's already a property "${name}"`);
 }
+function cleanRollup(input: Rollup | undefined): Rollup {
+  if (!input || typeof input.relation !== "string" || typeof input.property !== "string" || !(rollupFunctions as readonly string[]).includes(input.fn)) throw new DatabaseError("Invalid rollup");
+  return { relation: input.relation, property: input.property, fn: input.fn };
+}
+/** A relation's target is a live database. A rollup reads a relation of this database, and a property of its target, never another rollup: no loop can form. */
+function checkLinks(ws: Workspace, db: Database, property: Property): void {
+  if (property.type === "relation" && property.target !== todosSourceId && !isDatabase(ws.pages.find((p) => p.id === property.target))) throw new DatabaseError("That database isn't there");
+  if (property.type !== "rollup") return;
+  const { relation, property: read } = property.rollup!;
+  const through = db.properties.find((p) => p.id === relation);
+  if (!through || through.type !== "relation") throw new DatabaseError("A rollup reads a relation");
+  // To-dos' fixed columns, read through its own rows (relations.ts).
+  if (through.target === todosSourceId) return;
+  const target = ws.pages.find((p) => p.id === through.target);
+  if (!isDatabase(target)) throw new DatabaseError("That database isn't there");
+  if (read === titleId) return;
+  const source = target.database.properties.find((p) => p.id === read);
+  if (!source) throw new DatabaseError("Property not found");
+  if (source.type === "rollup") throw new DatabaseError("A rollup can't read another rollup");
+}
+/**
+ * A link's other end: this side's link written on that side, and a limit of 1 keeping to it. A two-way relation writes its
+ * mirror. A relation of a database to itself, with no mirror, is its own other side: adding B to A also shows A on B, as in Notion.
+ */
+export function syncMirror(ws: Workspace, property: Property, rowId: string, before: readonly string[], after: readonly string[], at?: string): void {
+  const target = ws.pages.find((p) => p.id === property.target);
+  if (!isDatabase(target)) return;
+  const own = !property.mirror && ws.pages.find((p) => p.id === rowId)?.parentId === target.id;
+  const mirror = own ? property : target.database.properties.find((p) => p.id === property.mirror);
+  if (!mirror) return;
+  const linksOf = (row: Page, id: string): string[] => { const raw = row.values?.[id]; return Array.isArray(raw) ? (raw as string[]) : []; };
+  const write = (row: Page, id: string, list: readonly string[]) => {
+    const values: RawValues = { ...(row.values ?? {}) };
+    if (list.length) values[id] = [...list]; else delete values[id];
+    if (Object.keys(values).length) row.values = values; else delete row.values;
+    // Its value changed, so it counts as edited.
+    if (at) row.editedAt = at;
+  };
+  const rowOf = (id: string) => ws.pages.find((p) => p.id === id && p.parentId === target!.id);
+  for (const id of before) {
+    if (after.includes(id) || id === rowId) continue;
+    const other = rowOf(id);
+    if (other) write(other, mirror.id, linksOf(other, mirror.id).filter((x) => x !== rowId));
+  }
+  for (const id of after) {
+    if (before.includes(id) || id === rowId) continue;
+    const other = rowOf(id);
+    if (!other) continue;
+    const held = linksOf(other, mirror.id);
+    if (held.includes(rowId)) continue;
+    // Its other side holds one row: the one it held lets go of it.
+    if (mirror.limit === 1) for (const was of held) { const old = ws.pages.find((p) => p.id === was); if (old) write(old, property.id, linksOf(old, property.id).filter((x) => x !== id)); }
+    write(other, mirror.id, mirror.limit === 1 ? [rowId] : [...held, rowId]);
+  }
+}
 function cleanProperty(input: PropertyInput, db: Database, except?: string): Property {
   if (!input || !(propertyTypes as readonly string[]).includes(input.type)) throw new DatabaseError("Unknown property type");
   const property: Property = { id: checkId(input.id), name: cleanName(input.name, "A property"), type: input.type };
@@ -800,6 +907,12 @@ function cleanProperty(input: PropertyInput, db: Database, except?: string): Pro
   if (input.type === "status" && !property.options?.length) property.options = defaultStatusOptions();
   if (input.format !== undefined) { if (!numberFormats.has(input.format)) throw new DatabaseError("Unknown number format"); property.format = input.format; }
   if (input.withTime !== undefined) { if (typeof input.withTime !== "boolean") throw new DatabaseError("Invalid property"); if (input.withTime) property.withTime = true; }
+  if (input.type === "relation") {
+    if (typeof input.target !== "string") throw new DatabaseError("A relation needs a database");
+    property.target = input.target;
+    if (input.limit === 1) property.limit = 1;
+  }
+  if (input.type === "rollup") property.rollup = cleanRollup(input.rollup);
   if (input.prefix !== undefined) {
     const prefix = typeof input.prefix === "string" ? input.prefix.trim() : null;
     if (prefix === null || prefix.length > limits.prefix) throw new DatabaseError("Too long for a prefix");
@@ -904,6 +1017,11 @@ export function keepRowNumbers(before: Workspace, after: Workspace): void {
 }
 
 /** Applies one change to the database page in place; returns the receipt's message. */
+function mirrorOf(ws: Workspace, property: Property): { db: Database; property: Property; title: string } | null {
+  const target = ws.pages.find((p) => p.id === property.target);
+  const other = isDatabase(target) ? target.database.properties.find((p) => p.id === property.mirror) : undefined;
+  return other ? { db: target!.database!, property: other, title: target!.title.trim() || "Untitled" } : null;
+}
 export function changeDatabase(ws: Workspace, page: Page & { database: Database }, change: DatabaseChange): string {
   const db = page.database;
   const property = (id: string): Property => { const p = db.properties.find((x) => x.id === id); if (!p) throw new DatabaseError("Property not found"); return p; };
@@ -915,6 +1033,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       const added = cleanProperty(change.property, db);
       if (change.viewId !== undefined) view(change.viewId);
       db.properties.push(added);
+      checkLinks(ws, db, added);
       if (added.type === "id") numberRows(ws, page);
       // A new property shows in every view, at the end (Notion shows it where it was made; one person rarely needs it hidden elsewhere).
       for (const v of db.views) v.columns.push({ id: added.id });
@@ -923,7 +1042,10 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     case "updateProperty": {
       const old = property(change.propertyId);
       const type = change.type ?? old.type;
-      const next = cleanProperty({ id: old.id, name: change.name ?? old.name, type, options: change.options ?? old.options, format: change.format ?? old.format, withTime: change.withTime ?? old.withTime, prefix: change.prefix ?? old.prefix }, db, old.id);
+      if (old.mirror && type !== "relation") throw new DatabaseError("Turn off its other side first");
+      const next = cleanProperty({ id: old.id, name: change.name ?? old.name, type, options: change.options ?? old.options, format: change.format ?? old.format, withTime: change.withTime ?? old.withTime, prefix: change.prefix ?? old.prefix, target: change.target ?? old.target, limit: change.limit === null ? undefined : change.limit ?? old.limit, rollup: change.rollup ?? old.rollup }, db, old.id);
+      if (old.mirror) { if (next.target !== old.target) throw new DatabaseError("Turn off its other side first"); next.mirror = old.mirror; }
+      checkLinks(ws, db, next);
       const notes: string[] = [];
       if (type !== old.type) {
         const lost = lostOnTypeChange(ws, page.id, old, type);
@@ -942,7 +1064,43 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       // Its values stay on the rows, unread, so Undo brings them back with it.
       db.properties = db.properties.filter((p) => p !== old);
       for (const v of db.views) v.columns = v.columns.filter((c) => c.id !== old.id);
+      // Its other side goes with it: half a two-way relation would stop being kept in step.
+      const other = old.mirror ? mirrorOf(ws, old) : null;
+      if (other) {
+        other.db.properties = other.db.properties.filter((p) => p !== other.property);
+        for (const v of other.db.views) v.columns = v.columns.filter((c) => c.id !== other.property.id);
+        return `${old.name} and ${other.property.name} on ${other.title} deleted`;
+      }
       return `${old.name} deleted`;
+    }
+    case "setMirror": {
+      const old = property(change.propertyId);
+      if (old.type !== "relation") throw new DatabaseError("Not a relation");
+      if (change.mirror === null) {
+        const other = mirrorOf(ws, old);
+        delete old.mirror;
+        if (other) {
+          other.db.properties = other.db.properties.filter((p) => p !== other.property);
+          for (const v of other.db.views) v.columns = v.columns.filter((c) => c.id !== other.property.id);
+          return `${other.property.name} removed from ${other.title}`;
+        }
+        return `${old.name} no longer shows on the other side`;
+      }
+      if (old.mirror) throw new DatabaseError("Already shown there");
+      // To-dos can't have extra properties (design §11): one way only.
+      if (old.target === todosSourceId) throw new DatabaseError("To-dos can't show it");
+      const target = ws.pages.find((p) => p.id === old.target);
+      if (!isDatabase(target)) throw new DatabaseError("That database isn't there");
+      if (target.database.properties.length >= limits.properties) throw new DatabaseError("Too many properties");
+      if (target.database.properties.some((p) => p.id === change.mirror!.id)) throw new DatabaseError("Invalid id");
+      const added = cleanProperty({ id: change.mirror.id, name: change.mirror.name, type: "relation", target: page.id }, target.database);
+      added.mirror = old.id;
+      target.database.properties.push(added);
+      for (const v of target.database.views) v.columns.push({ id: added.id });
+      old.mirror = added.id;
+      // What this side already links shows on the other.
+      for (const row of databaseRows(ws, page.id)) { const raw = row.values?.[old.id]; if (Array.isArray(raw)) syncMirror(ws, old, row.id, [], raw as string[]); }
+      return `Shown on ${target.title.trim() || "Untitled"}`;
     }
     case "moveProperty":
       db.properties = move(db.properties, change.propertyId, change.beforeId);
