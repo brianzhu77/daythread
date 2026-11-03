@@ -3,6 +3,7 @@ import { mkdirSync, openSync, closeSync, readFileSync, existsSync } from 'node:f
 import { dirname, resolve } from 'node:path'
 import { applyCommand, createEmptyWorkspace } from '../domain/workspace.ts'
 import { changesBetween, type WorkspaceChanges } from '../domain/workspace-changes.ts'
+import { expandedWorkspace, strippedWorkspace } from '../domain/synced.ts'
 import { upgradeWorkspace } from '../domain/convert-v1.ts'
 import type { Command, CommandResult, Workspace } from '../domain/types.ts'
 import { todayIn, type ServerRepository } from './repository.ts'
@@ -79,10 +80,13 @@ export class SqliteWorkspaceRepository implements ServerRepository {
   private read(db: DatabaseSync): Workspace {
     const row = db.prepare('SELECT data FROM workspace WHERE id = 1').get() as { data: string } | undefined
     if (!row) throw new Error('Workspace missing')
-    return upgradeWorkspace(JSON.parse(row.data), this.today)
+    return expandedWorkspace(upgradeWorkspace(JSON.parse(row.data), this.today))
   }
   private write(db: DatabaseSync, workspace: Workspace): void {
-    db.prepare('UPDATE workspace SET revision = ?, data = ? WHERE id = 1').run(workspace.revision, JSON.stringify(workspace))
+    // Stored as Postgres stores it: a synced block's lines only in its record (synced.ts), in Undo's copy too.
+    const stored = strippedWorkspace(workspace)
+    const undo = stored.undo?.before ? { ...stored.undo, before: strippedWorkspace(stored.undo.before as Workspace) } : stored.undo
+    db.prepare('UPDATE workspace SET revision = ?, data = ? WHERE id = 1').run(workspace.revision, JSON.stringify({ ...stored, ...(undo ? { undo } : {}) }))
   }
   async load(): Promise<Workspace> {
     const started = performance.now(), operationId = logOperationId() ?? crypto.randomUUID(); let db: DatabaseSync | undefined

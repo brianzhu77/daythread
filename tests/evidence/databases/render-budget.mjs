@@ -24,6 +24,9 @@ const measure = async (variant) => {
   times.sort((a, b) => a - b)
   return { median: times[Math.floor(times.length / 2)], min: times[0], max: times.at(-1) }
 }
-const plain = await measure('plain'), table = await measure('table'), linked = await measure('linked'), todos = await measure('todos')
-console.log(JSON.stringify({ runs, plain, table, linked, todos, extra: table.median - plain.median, extraLinked: linked.median - plain.median, extraTodos: todos.median - plain.median }))
+// BUDGET_VARIANTS=relation,todos measures only those, against plain.
+const variants = (process.env.BUDGET_VARIANTS ?? 'table,linked,todos,relation').split(',')
+const plain = await measure('plain'), out = { runs, plain }
+for (const v of variants) { out[v] = await measure(v); out[`extra_${v}`] = out[v].median - plain.median }
+console.log(JSON.stringify(out))
 await browser.close()

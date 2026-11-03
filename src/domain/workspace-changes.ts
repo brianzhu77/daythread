@@ -1,6 +1,7 @@
 // What a command changed, as the browser needs it: the pages and tasks that differ, by id, instead of the whole
 // workspace (docs/research/database-fit.md §5: every response carried all of it, ~0.85 MB per 1,000 pages). Pure, shared
 // by the server, which makes it, and the browser, which applies it to the copy the command was sent from.
+import { expandedWorkspace, strippedWorkspace, type SyncedRecord } from './synced.ts'
 import type { Page, Task, Workspace } from './types.ts'
 
 export interface ListChanges<T> {
@@ -21,6 +22,8 @@ export interface WorkspaceChanges {
   tasks: ListChanges<Task>
   /** The tombstones whole when they changed (at most `tombstoneLimit`); absent when unchanged. */
   deletedTasks?: Task[]
+  /** Synced blocks' records, whole, when any changed. Pages travel without their lines: the browser expands them from these. */
+  synced?: SyncedRecord[]
 }
 
 /** Existing entries replaced where they are, removed ones dropped, new ones appended in the new list's order. */
@@ -46,9 +49,10 @@ const undoMarker = (ws: Workspace): WorkspaceChanges['undo'] => (ws.undo ? { ope
 
 export function changesBetween(before: Workspace, after: Workspace): WorkspaceChanges {
   const deleted = JSON.stringify(before.deletedTasks) === JSON.stringify(after.deletedTasks) ? {} : { deletedTasks: after.deletedTasks }
+  const synced = JSON.stringify(before.synced ?? []) === JSON.stringify(after.synced ?? []) ? {} : { synced: after.synced ?? [] }
   return {
     from: before.revision, revision: after.revision, timezone: after.timezone, ...(after.weekStart === 1 ? { weekStart: 1 as const } : {}), undo: undoMarker(after),
-    pages: listChanges(before.pages, after.pages), tasks: listChanges(before.tasks, after.tasks), ...deleted,
+    pages: listChanges(strippedWorkspace(before).pages, strippedWorkspace(after).pages), tasks: listChanges(before.tasks, after.tasks), ...deleted, ...synced,
   }
 }
 
@@ -64,11 +68,13 @@ function applyList<T extends { id: string }>(before: readonly T[], changes: List
 export function applyChanges(ws: Workspace, changes: WorkspaceChanges): Workspace | null {
   if (ws.revision !== changes.from) return null
   const pages = applyList(ws.pages, changes.pages), tasks = applyList(ws.tasks, changes.tasks)
+  const synced = changes.synced ?? ws.synced
   if (!pages || !tasks) return null
   const { undo: _undo, weekStart: _weekStart, ...rest } = ws
-  return {
+  return expandedWorkspace({
     ...rest, revision: changes.revision, timezone: changes.timezone, ...(changes.weekStart === 1 ? { weekStart: 1 as const } : {}), pages, tasks,
     deletedTasks: changes.deletedTasks ?? ws.deletedTasks, receipts: {},
+    ...(synced ? { synced } : {}),
     ...(changes.undo ? { undo: changes.undo } : {}),
-  }
+  })
 }
