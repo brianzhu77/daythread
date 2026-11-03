@@ -4,6 +4,7 @@ import { harness, dayId, today, tomorrow, text, todo, bullet, para, heading, nod
 import { inlineText, type EditorNode } from '../src/domain/editor-document.ts'
 import { draftOf, draftPageId, draftView, moreOpenAfterIndex, planningEndIndex, planningRange, type DraftItem } from '../src/domain/day-draft.ts'
 import { plannedOn } from '../src/domain/workspace.ts'
+import { buildDayDraftRequest } from '../src/server/model/day-draft.ts'
 import { childPages, visiblePages } from '../src/domain/page-tree.ts'
 import { buildSearchIndex } from '../src/domain/search.ts'
 import { exportFiles } from '../src/domain/export.ts'
@@ -211,4 +212,45 @@ test('draft: a failed draft can be retried until his first Apply or Skip, then i
   h.run({ type: 'skip-draft', pageId: dayId(tomorrow), itemIds: [`x-${dog}-failed`] })
   assert.equal(draftView(h.ws, page())!.status, 'ready', 'after a choice, no more Retry')
   assert.throws(() => set(book, 'ready'), /already has its draft/)
+})
+
+test('R2-6: a database view in the template changes nothing about the draft', () => {
+  const view: EditorNode = { id: 'v1', type: 'database', props: { pageId: 'list', view: '' }, children: [] }
+  const withView = (nodes: EditorNode[]) => {
+    // One under Events, one under the reflection's Progress, as in his Morning Planning and Raw Notes.
+    const out = [...nodes]
+    out.splice(out.findIndex(n => n.id === 'ev') + 1, 0, view)
+    out.splice(out.findIndex(n => n.id === 'pr') + 1, 0, { ...view, id: 'v2' })
+    return out
+  }
+  const plain = harness(), viewed = harness()
+  for (const [h, build] of [[plain, template], [viewed, () => withView(template())]] as const) {
+    h.day(today)
+    h.save(dayId(today), d => under(d, 'TODO', todo('r1', 'Book the flights')))
+    h.run({ type: 'create-template', title: 'Day', pageId: 'tpl', dayPage: true })
+    h.save('tpl', () => build())
+    h.day(tomorrow)
+  }
+  const page = (h: typeof plain) => h.page(dayId(tomorrow))
+  assert.equal(nodesOf(page(viewed)).filter(n => n.type === 'database').length, 2)
+  // Tasks and the page's new rows match: a view makes nothing.
+  assert.equal(viewed.ws.tasks.length, plain.ws.tasks.length)
+  // The model is sent the same words, with the same anchors: no id on a view, and none of its rows.
+  const sent = (h: typeof plain) => buildDayDraftRequest(h.ws, page(h))
+  const anyIds = (s: string) => s.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, 'ID')
+  assert.equal(anyIds(JSON.stringify(sent(viewed).messages)), anyIds(JSON.stringify(sent(plain).messages)))
+  assert.ok([...sent(viewed).blocks.values()].every(n => n.type !== 'database'))
+  // Planning ends where it did, counted past the view, and an empty slot's position is found the same way.
+  const types = (h: typeof plain) => { const d = nodesOf(page(h)), r = planningRange(d); return d.slice(r.start, r.end).filter(n => n.type !== 'database').map(n => n.type) }
+  assert.deepEqual(types(viewed), types(plain))
+})
+
+test('a page holding only a database block is not a blank page to fill in', () => {
+  const h = harness()
+  h.run({ type: 'create-document', title: 'Holder', body: '', pageId: 'p' })
+  h.save('p', () => [{ id: 'v', type: 'database', props: { pageId: 'none', view: '' }, children: [] }])
+  const before = h.page('p').document
+  h.run({ type: 'apply-link-preview', pageId: 'p', title: 'From the web', description: 'A description' } as never)
+  assert.equal(h.page('p').document, before)
+  assert.notEqual(h.page('p').title, 'From the web')
 })

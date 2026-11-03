@@ -15,6 +15,8 @@ await page.getByText('After the table').click()
 await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.press('Enter')
 await page.keyboard.type('/database'); await page.waitForTimeout(400)
 await page.keyboard.press('Enter')
+// The seed has databases, so the picker opens: Enter takes New database (design §3.1).
+await page.waitForTimeout(300); await page.keyboard.press('Enter')
 await page.waitForTimeout(1500)
 const focused = await page.evaluate(() => document.activeElement?.className)
 await page.keyboard.type('Films to see'); await page.keyboard.press('Enter')

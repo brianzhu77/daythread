@@ -3,7 +3,7 @@
 // A row drags to another day at 1280, moving its date and keeping its time and length. Which month is showing is this tab's,
 // never a save, like which view is showing.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { calendarRows, databaseRows, movedDate, rowMatches, startOfWeek, titleId, viewDateBy, viewRows, type Json, type View } from '../domain/database.ts'
+import { calendarRows, databaseRows, inView, movedDate, startOfWeek, titleId, viewDateBy, viewRows, type Json, type View } from '../domain/database.ts'
 import type { LocalDate, Page, WeekStart } from '../domain/types'
 import { blockActions, cellKey, DatabaseHeader, pendingCells, setOpenCell, shownRaw, useAddRow, useCommitCell, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
@@ -33,7 +33,7 @@ function monthDays(month: string, weekStart: WeekStart): LocalDate[] {
   return Array.from({ length: count }, (_, i) => addDays(start, i))
 }
 
-export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
+export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true, linked }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
   const { latest } = useWorkspace()
   const commit = useCommitCell()
   const openRow = useOpenRow()
@@ -66,7 +66,7 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
   const moveTo = (row: Page, from: LocalDate | null, to: LocalDate) => {
     if (!property || from === to) return
     const value = movedDate(property, shownRaw(row, property.id), from, to)
-    const hidden = !rowMatches(db.database, { ...row, values: { ...row.values, [property.id]: value as unknown as Json } } as Page, view.filter, context)
+    const hidden = !inView(db.database, { ...row, values: { ...row.values, [property.id]: value as unknown as Json } } as Page, view, context)
     commit(db, row, property.id, value as unknown as Json, `Moved to ${longLabel(to)}${hidden ? " · hidden by this view's filter" : ''}`)
   }
 
@@ -150,7 +150,7 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
   const weekdays = weekStart === 1 ? [...weekdayNames.slice(1), weekdayNames[0]!] : weekdayNames
 
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
-    <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addOn(place.chosen ?? today) }} />
+    <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addOn(place.chosen ?? today) }} />
     {!property && <p className="database-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'layout')}>Choose a date property</button></p>}
     <div className="database-calendar-head">
       <span className="database-calendar-month">{periodLabel}</span>

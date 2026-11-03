@@ -2,7 +2,7 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { calendarRows, conditionHolds, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, viewGroupBy, viewGroups, viewRows, type Database, type View } from '../src/domain/database.ts'
+import { calendarRows, conditionHolds, inView, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, viewGroupBy, viewGroups, viewRows, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
@@ -290,5 +290,47 @@ test('a calendar by week is stored on the view, and back to a month clears it', 
   h.change({ kind: 'updateView', viewId: id, calendarSpan: null })
   assert.equal(h.db().views[0]!.calendarSpan, undefined)
   assert.ok(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId: id, calendarSpan: null } } }).success)
+})
+
+test('any rule matches: a row in if one holds, and rules that cannot be read do not count (R3-4)', () => {
+  const h = reading()
+  const novels = { by: 'kind', op: 'isAnyOf', value: ['novel'] } as const
+  const long = { by: 'pages', op: 'gt', value: 350 } as const
+  const titles = (v: View) => h.rows(v).map(r => r.id)
+  assert.deepEqual(titles(view({ filter: [novels, long] })), ['dune'])
+  assert.deepEqual(titles(view({ filter: [{ by: 'kind', op: 'isAnyOf', value: ['essay'] }, long], filterAny: true })), ['dune', 'ubik'])
+  // A deleted property's rule, or one with no value yet, doesn't count: it neither lets everything in nor hides everything.
+  const gone = { by: 'gone', op: 'isEmpty' } as const, unfinished = { by: 'note', op: 'contains' } as const
+  assert.deepEqual(titles(view({ filter: [gone, long], filterAny: true })), ['dune'])
+  assert.deepEqual(titles(view({ filter: [unfinished, long], filterAny: true })), ['dune'])
+  assert.equal(titles(view({ filter: [gone, unfinished], filterAny: true })).length, 4)
+  assert.equal(inView(h.db(), h.page('blank'), view({ filter: [novels], filterAny: true }), ctx), false)
+})
+
+test('a new row under any rule takes one value that shows it, or none and the notice (R3-4, §7.4)', () => {
+  const h = reading()
+  const novels = { by: 'kind', op: 'isAnyOf', value: ['novel'] } as const, sf = { by: 'tags', op: 'contains', value: ['sf'] } as const
+  assert.deepEqual(newRowValues(h.db(), view({ filter: [novels, sf], filterAny: true }), ctx), { title: '', values: { kind: 'novel' }, visible: true })
+  // All rules: every value it can take.
+  assert.deepEqual(newRowValues(h.db(), view({ filter: [novels, sf] }), ctx).values, { kind: 'novel', tags: ['sf'] })
+  // The first gives no single value; the second does.
+  assert.deepEqual(newRowValues(h.db(), view({ filter: [{ by: 'pages', op: 'gt', value: 1 }, novels], filterAny: true }), ctx).values, { kind: 'novel' })
+  // No rule gives one: no values, and it's hidden.
+  assert.deepEqual(newRowValues(h.db(), view({ filter: [{ by: 'pages', op: 'gt', value: 1 }, { by: 'note', op: 'contains', value: 'x' }], filterAny: true }), ctx), { title: '', values: {}, visible: false })
+  // Already shown with nothing set: nothing's added.
+  assert.deepEqual(newRowValues(h.db(), view({ filter: [{ by: 'kind', op: 'isEmpty' }, novels], filterAny: true }), ctx), { title: '', values: {}, visible: true })
+})
+
+test('any is stored on the view, kept by other changes, and off again', () => {
+  const h = reading()
+  const id = h.db().views[0]!.id
+  h.change({ kind: 'updateView', viewId: id, filterAny: true, filter: [{ by: 'kind', op: 'isEmpty' }] })
+  assert.equal(h.db().views[0]!.filterAny, true)
+  h.change({ kind: 'updateView', viewId: id, name: 'Still' })
+  assert.equal(h.db().views[0]!.filterAny, true)
+  h.change({ kind: 'updateView', viewId: id, filterAny: false })
+  assert.equal(h.db().views[0]!.filterAny, undefined)
+  h.change({ kind: 'addView', view: view({ id: 'c', filterAny: true }) })
+  assert.equal(h.db().views.at(-1)!.filterAny, true)
 })
 

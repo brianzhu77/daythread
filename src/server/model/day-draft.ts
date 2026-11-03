@@ -55,9 +55,11 @@ export function buildDayDraftRequest(ws: Workspace, page: Page): DayDraftRequest
   const doc = pageNodes(page), { start, end } = planningRange(doc)
   const blocks = new Map<string, EditorNode>(), lines = new Map<string, EditorNode>(), tasks = new Map<string, Task>()
   // Only the planning part gets ids: the model can't anchor anything in his reflection or notes.
-  const pageRows = doc.map((n, i) => {
-    if (i < start || i >= end) return `   ${describe(n, day)}`
-    const id = `P${blocks.size + 1}`; blocks.set(id, n); return `${id} ${describe(n, day)}`
+  // A database view on the page isn't his writing, and nothing can be anchored to it (R2-6).
+  const pageRows = doc.flatMap((n, i) => {
+    if (n.type === 'database') return []
+    if (i < start || i >= end) return [`   ${describe(n, day)}`]
+    const id = `P${blocks.size + 1}`; blocks.set(id, n); return [`${id} ${describe(n, day)}`]
   })
   const yesterday = previousDayPage(ws, day)
   const yest = yesterday ? flatNodes(pageNodes(yesterday)).filter(n => n.type !== 'divider' && inlineText(n.content).trim()).map(n => {

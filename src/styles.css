@@ -1976,6 +1976,13 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
   .database-card.is-ghost { width: 300px; }
 }
 
+/* Linked views (design §9.2), a baseline. */
+.database-source { display: block; min-height: 0; padding: 0 0 4px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: var(--text-meta); text-align: left; cursor: pointer; }
+.database-source:hover { color: var(--ink-2); }
+.database-title.is-static { display: block; }
+.database-view-name.is-static { color: var(--ink-3); font-size: var(--text-meta); }
+.database-picker .is-active { background: var(--hover-dim); }
+
 /* Databases R3: a List (design §7.2): one line per row, the title on Name's edge and its properties quiet on the right; under the
    title on the phone. The whole line opens the row, from its title's own button; a box and the handle sit above that. */
 .database-list-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 36px; padding: 0 8px; border-radius: var(--radius-control); font-size: var(--text-row); line-height: 24px; }
@@ -2063,3 +2070,4 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
   .database-day-list .database-day-title, .database-undated .database-day-title { min-height: 44px; padding-block: 10px; }
   .database-undated .database-undated-head { min-height: 44px; }
 }
+.database-filter-or { color: var(--ink-3); font-size: var(--text-meta); }

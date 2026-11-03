@@ -14,7 +14,7 @@ import { useWorkspace } from './use-day'
 /** How many properties a line shows (design §7.2): the view's first ones. Properties orders them. */
 const shownProperties = 3
 
-export function DatabaseList({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
+export function DatabaseList({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true, linked }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
   const { latest } = useWorkspace()
   const commit = useCommitCell()
   const openRow = useOpenRow()
@@ -105,7 +105,7 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
   }
 
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
-    <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(groups?.shown[0]?.key) }} />
+    <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(groups?.shown[0]?.key) }} />
     <div className={`database-list${!groups && drag && drag.before === null ? ' is-drop-end' : ''}`} ref={body}>
       {groups ? groups.shown.map(group => {
         const isFolded = folded.has(group.key)

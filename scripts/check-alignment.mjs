@@ -135,7 +135,9 @@ function measure() {
       if (!title) return
       Object.assign(row, { kind: 'database table', label: (title.value || '(untitled)').slice(0, 24), ...firstLine(title) })
       const view = content.querySelector('.database-view-name'), chevron = view?.querySelector('svg')
-      if (view && chevron && visible(chevron)) {
+      // A linked view shows its view's name with nothing to open, so no chevron to measure.
+      if (view?.classList.contains('is-static')) row.viewChevron = 'none'
+      else if (view && chevron && visible(chevron)) {
         const range = document.createRange(); range.selectNodeContents(view.firstChild ?? view)
         const word = [...range.getClientRects()].find(r => r.width > 0)
         if (word) row.viewChevron = cy(chevron.getBoundingClientRect()) - cy(word)
@@ -407,7 +409,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
           ? { at, check: `${name} ${what}: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
           : { at, check: `${name} ${what}: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
       }
-      results.push(r.viewChevron == null
+      if (r.viewChevron !== 'none') results.push(r.viewChevron == null
         ? { at, check: `database view chevron: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
         : { at, check: `database view chevron centred on its word: "${r.label}"`, ok: Math.abs(r.viewChevron) <= TOLERANCE, detail: `${r.viewChevron >= 0 ? '+' : ''}${fmt(r.viewChevron)}px` })
       // A board or list has no Name column: its + New is measured against a card's or row's words, above.

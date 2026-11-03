@@ -57,7 +57,8 @@ export function isUntouchedCopy(template: Page, nodes: readonly EditorNode[]): b
 }
 
 // B74: dividers, toggles and code blocks are his structure too (his Day template's two dividers were dropped).
-const copiedTypes = new Set(['heading', 'paragraph', 'bulletListItem', 'numberedListItem', 'quote', 'task', 'checkListItem', 'divider', 'toggleListItem', 'codeBlock'])
+// A database block: with a fresh id, it's a linked view on each new page, with the same filter (design §9.4).
+const copiedTypes = new Set(['heading', 'paragraph', 'bulletListItem', 'numberedListItem', 'quote', 'task', 'checkListItem', 'divider', 'toggleListItem', 'codeBlock', 'database'])
 
 /** A line's inline content with fresh identities: a `[[` link gets its own refId, a `@date` chip its own event. */
 function freshInline(content: unknown): unknown {
