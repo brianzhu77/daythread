@@ -5,7 +5,7 @@
 import { applyCommand, createEmptyWorkspace } from '../domain/workspace.ts'
 import { changesBetween, type WorkspaceChanges } from '../domain/workspace-changes.ts'
 import { upgradeWorkspace } from '../domain/convert-v1.ts'
-import type { Command, CommandResult, Receipt, Workspace } from '../domain/types.ts'
+import type { Command, CommandResult, Receipt, WeekStart, Workspace } from '../domain/types.ts'
 import { todayIn, type ServerRepository } from './repository.ts'
 import type { SqlClient } from './db/sql.ts'
 import { commandLogFields, debugLog } from './debug-log.ts'
@@ -17,7 +17,7 @@ export function schemaName(value = process.env.DAYTHREAD_PG_SCHEMA ?? 'daythread
   return value
 }
 
-export interface WorkspaceInfo { id: string; timezone: string; revision: number }
+export interface WorkspaceInfo { id: string; timezone: string; weekStart: WeekStart; revision: number }
 
 /** An operation is kept this long for replay (a lost response needs seconds; this is generous); the newest is always kept, it carries the Undo marker. */
 export const operationKeepMs = 30 * 24 * 3600_000
@@ -52,14 +52,14 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     const tables = async (sql: SqlClient) => (await sql.query<{ relname: string }>(
       `select c.relname from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
         where n.nspname = $1 and c.relkind = 'r' and c.relrowsecurity`, [this.schema])).map(r => r.relname)
-    const pageColumnsHave = async (sql: SqlClient) => (await sql.query<{ attname: string }>(
+    const columnsOf = async (sql: SqlClient, table: string) => (await sql.query<{ attname: string }>(
       `select a.attname from pg_catalog.pg_attribute a join pg_catalog.pg_class c on c.oid = a.attrelid join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-        where n.nspname = $1 and c.relname = 'pages' and a.attnum > 0 and not a.attisdropped`, [this.schema])).map(r => r.attname)
+        where n.nspname = $1 and c.relname = $2 and a.attnum > 0 and not a.attisdropped`, [this.schema, table])).map(r => r.attname)
     const complete = async (sql: SqlClient) => {
       const have = await tables(sql)
       if (!['workspaces', 'pages', 'tasks', 'deleted_tasks', 'operations'].every(t => have.includes(t)) || have.includes('workspace')) return false
-      const columns = await pageColumnsHave(sql)
-      return addedPageColumns.every(c => columns.includes(c))
+      const columns = await columnsOf(sql, 'pages')
+      return addedPageColumns.every(c => columns.includes(c)) && (await columnsOf(sql, 'workspaces')).includes('week_start')
     }
     this.ready ??= complete(this.sql).then(async ok => {
       if (ok) return
@@ -107,6 +107,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
           create index if not exists operations_revision on ${s}.operations (workspace_id, revision desc);
           create index if not exists operations_created on ${s}.operations (workspace_id, created_at);
           alter table ${s}.operations enable row level security;
+          alter table ${s}.workspaces add column if not exists week_start smallint not null default 0;
           ${addedPageColumns.map(c => `alter table ${s}.pages add column if not exists ${c} text;`).join('\n          ')}`)
         if ((await tables(tx)).includes('workspace')) await this.migrateShot1(tx)
       })
@@ -151,7 +152,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
 
   async workspaceOf(userId: string, sql: SqlClient = this.sql): Promise<WorkspaceInfo | null> {
     await this.init()
-    const [row] = await sql.query<WorkspaceInfo>(`select id::text as id, timezone, revision from ${this.t('workspaces')} where user_id = $1::uuid`, [userId])
+    const [row] = await sql.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", revision from ${this.t('workspaces')} where user_id = $1::uuid`, [userId])
     return row ?? null
   }
   async timezoneOf(userId: string): Promise<string | null> { return (await this.workspaceOf(userId))?.timezone ?? null }
@@ -178,7 +179,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
   /** One workspace by id, for background work on every account (reminders): no owner scope, no Undo marker. */
   async loadWorkspace(id: string): Promise<Workspace | null> {
     await this.init()
-    const [info] = await this.sql.query<WorkspaceInfo>(`select id::text as id, timezone, revision from ${this.t('workspaces')} where id = $1::uuid`, [id])
+    const [info] = await this.sql.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", revision from ${this.t('workspaces')} where id = $1::uuid`, [id])
     return info ? workspaceOf(await this.readRows(this.sql, { ...info, userId: null })) : null
   }
   /** Every row of the account's workspace goes (the tables cascade). */
@@ -194,13 +195,13 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     const owner = currentOwner() ?? null
     const forUpdate = lock ? ' for update' : ''
     if (owner === null) {
-      const [local] = await tx.query<WorkspaceInfo>(`select id::text as id, timezone, revision from ${this.t('workspaces')} where user_id is null${forUpdate}`)
+      const [local] = await tx.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", revision from ${this.t('workspaces')} where user_id is null${forUpdate}`)
       if (local) return { ...local, userId: null }
       const id = await this.createWorkspaceIn(tx, null, 'America/Vancouver')
-      const [made] = await tx.query<WorkspaceInfo>(`select id::text as id, timezone, revision from ${this.t('workspaces')} where id = $1::uuid${forUpdate}`, [id])
+      const [made] = await tx.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", revision from ${this.t('workspaces')} where id = $1::uuid${forUpdate}`, [id])
       return { ...made!, userId: null }
     }
-    const [row] = await tx.query<WorkspaceInfo>(`select id::text as id, timezone, revision from ${this.t('workspaces')} where user_id = $1::uuid${forUpdate}`, [owner])
+    const [row] = await tx.query<WorkspaceInfo>(`select id::text as id, timezone, week_start as "weekStart", revision from ${this.t('workspaces')} where user_id = $1::uuid${forUpdate}`, [owner])
     if (!row) throw new Error('No workspace for this account')
     return { ...row, userId: owner }
   }
@@ -210,7 +211,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
       tx.query<TaskRow>(`select ${taskColumns.join(', ')} from ${this.t('tasks')} where workspace_id = $1::uuid order by position`, [scope.id]),
       tx.query<DeletedRow>(`select id, position, data::text as data from ${this.t('deleted_tasks')} where workspace_id = $1::uuid order by position`, [scope.id]),
     ])
-    return { revision: scope.revision, timezone: scope.timezone, pages, tasks, deleted }
+    return { revision: scope.revision, timezone: scope.timezone, weekStart: scope.weekStart, pages, tasks, deleted }
   }
   /** The Undo marker: the newest operation, when it has an inverse and nothing came after it. */
   private async undoMarker(tx: SqlClient, scope: Scope): Promise<Workspace['undo']> {
@@ -269,7 +270,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
       if (after.revision !== workspace.revision) {
         const { write, inverse } = planWrites(rows, after)
         await this.writeDiff(tx, scope.id, write)
-        await tx.query(`update ${this.t('workspaces')} set revision = $2, timezone = $3 where id = $1::uuid`, [scope.id, after.revision, after.timezone])
+        await tx.query(`update ${this.t('workspaces')} set revision = $2, timezone = $3, week_start = $4 where id = $1::uuid`, [scope.id, after.revision, after.timezone, after.weekStart ?? 0])
         await this.writeOperation(tx, scope.id, result.receipt, after.revision, command.action.type, after.undo?.operationId === command.operationId ? inverse : null)
         if (after.revision % pruneEvery === 0) await this.pruneOperations(tx, scope.id, new Date())
       }

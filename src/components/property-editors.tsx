@@ -15,6 +15,7 @@ import { mayRead, readDate } from '../domain/date-reading.ts'
 import type { LocalDate } from '../domain/types'
 import { addDays, todayIso } from './dates'
 import { pickerLabel, relativeDay } from './event-rows'
+import { useWorkspace } from './use-day'
 import {
   changedNotice, dateLabel, enterChoice, flipSign, hasTime, joinDate, matchOptions, numberDraft, numberLabel,
   orderedDate, popoverMinWidth, readNumberInput, readingLabel, splitDate, statusDot, statusGroups, tooLong,
@@ -428,6 +429,7 @@ function OptionLabel({ option, status }: { option: Option; status: boolean }) {
 // ---------- Date (§6.3.9) ----------
 
 function DateEditor(p: EditorProps) {
+  const weekStart = useWorkspace().workspace?.weekStart
   const wide = useWide()
   const today = todayIso()
   const initial = p.value && typeof p.value === 'object' && !Array.isArray(p.value) ? p.value as DateValue : null
@@ -507,7 +509,7 @@ function DateEditor(p: EditorProps) {
         <button type="button" className="property-row" aria-expanded={calendar} onMouseDown={e => e.preventDefault()} onClick={() => setCalendar(open => !open)}>Pick on calendar…</button>
       </div>
       {calendar && (
-        <Calendar className="day-picker property-calendar" aria-label={which === 'end' ? 'End date' : 'Date'}
+        <Calendar className="day-picker property-calendar" aria-label={which === 'end' ? 'End date' : 'Date'} firstDayOfWeek={weekStart === 1 ? 'mon' : 'sun'}
           value={dayOf(current) ? parseDate(dayOf(current)!) : undefined} onChange={d => setDay(d.toString())}>
           <Calendar.Header>
             <Calendar.Heading />

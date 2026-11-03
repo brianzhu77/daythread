@@ -21,11 +21,12 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
   const undoKey = useUndoKey()
   const wide = useWide()
   const today = todayIso()
-  const context = useMemo(() => ({ today, pageDate }), [today, pageDate])
+  const weekStart = workspace.weekStart ?? 0
+  const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
   usePendingCells()
   const ordered = withPendingMoves(rows)
-  const groups = viewGroups(db.database, view, ordered, shownRaw)
+  const groups = viewGroups(db.database, view, ordered, shownRaw, weekStart)
   const placeKey = `${blockId}|${view.id}`
   const { limitOf, showMore, reach } = useGroupLimits(placeKey, cap)
   const { folded, toggle } = useFolds(blockId, view.id)
@@ -41,7 +42,7 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
   const addRow = useAddRow(db, view, context, (pageId, group) => {
     const ws = latest(), now = ws ? viewRows(ws, db.id, view, context) : []
     if (group === undefined) { const at = now.findIndex(r => r.id === pageId); if (at >= limit) setLimit(at + 1) }
-    else reach(group, viewGroups(db.database, view, now)?.shown.find(g => g.key === group)?.rows.length ?? 0)
+    else reach(group, viewGroups(db.database, view, now, undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0)
     requestAnimationFrame(() => open(pageId, group))
   })
 
