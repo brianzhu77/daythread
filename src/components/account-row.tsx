@@ -18,7 +18,7 @@ type Account = { email: string | null; timezone: string | null; timezones: strin
  * picked here; Delete account asks for the password and removes everything.
  */
 export function AccountRow({ className }: { className: string }) {
-  const { refresh, run } = useWorkspace()
+  const { refresh, run, workspace } = useWorkspace()
   const navigate = useNavigate()
   const [account, setAccount] = useState<Account | null>(null)
   const [exporting, setExporting] = useState<'idle' | 'busy' | 'failed' | 'unsaved'>('idle')
@@ -72,6 +72,14 @@ export function AccountRow({ className }: { className: string }) {
           <AccountItem>
             <select className="account-zone" aria-label="Time zone" value={account.timezone} onChange={e => void pickZone(e.target.value)}>
               {(account.timezones.includes(account.timezone) ? account.timezones : [account.timezone, ...account.timezones]).map(z => <option key={z} value={z}>{z.replace(/_/g, ' ')}</option>)}
+            </select>
+          </AccountItem>
+        )}
+        {/* R3-20: moves the date pickers and database views together. */}
+        {workspace && (
+          <AccountItem>
+            <select className="account-zone" aria-label="Week starts on" value={workspace?.weekStart ?? 0} onChange={e => { const weekStart = Number(e.target.value) as 0 | 1; void run({ type: 'set-week-start', weekStart }, r => ({ text: r.message })) }}>
+              <option value={0}>Week starts Sunday</option><option value={1}>Week starts Monday</option>
             </select>
           </AccountItem>
         )}

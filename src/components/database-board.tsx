@@ -26,11 +26,12 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   const openRow = useOpenRow()
   const undoKey = useUndoKey()
   const today = todayIso()
-  const context = useMemo(() => ({ today, pageDate }), [today, pageDate])
+  const weekStart = workspace.weekStart ?? 0
+  const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
   usePendingCells()
   const ordered = withPendingMoves(rows)
-  const groups: ViewGroups | null = viewGroups(db.database, view, ordered, shownRaw)
+  const groups: ViewGroups | null = viewGroups(db.database, view, ordered, shownRaw, weekStart)
   const columns: ViewGroup[] = groups ? groups.shown : [{ key: allKey, name: '', rows: ordered }]
   // Each view of a block keeps its own place: a board doesn't open where a table was scrolled to.
   const placeKey = `${blockId}|${view.id}`
@@ -42,7 +43,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   const open = (rowId: string, group: string) => setOpenCell({ blockId, databaseId: db.id, rowId, columnId: titleId, group })
   const addRow = useAddRow(db, view, context, (pageId, group) => {
     const ws = latest()
-    if (ws && group !== undefined) reach(group, viewGroups(db.database, view, viewRows(ws, db.id, view, context))?.shown.find(g => g.key === group)?.rows.length ?? 0)
+    if (ws && group !== undefined) reach(group, viewGroups(db.database, view, viewRows(ws, db.id, view, context), undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0)
     if (group !== undefined) requestAnimationFrame(() => open(pageId, group))
   })
 

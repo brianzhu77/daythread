@@ -14,6 +14,8 @@ export interface WorkspaceChanges {
   from: number
   revision: number
   timezone: string
+  /** Absent: Sunday. */
+  weekStart?: 1
   undo: { operationId: string; revision: number } | null
   pages: ListChanges<Page>
   tasks: ListChanges<Task>
@@ -45,7 +47,7 @@ const undoMarker = (ws: Workspace): WorkspaceChanges['undo'] => (ws.undo ? { ope
 export function changesBetween(before: Workspace, after: Workspace): WorkspaceChanges {
   const deleted = JSON.stringify(before.deletedTasks) === JSON.stringify(after.deletedTasks) ? {} : { deletedTasks: after.deletedTasks }
   return {
-    from: before.revision, revision: after.revision, timezone: after.timezone, undo: undoMarker(after),
+    from: before.revision, revision: after.revision, timezone: after.timezone, ...(after.weekStart === 1 ? { weekStart: 1 as const } : {}), undo: undoMarker(after),
     pages: listChanges(before.pages, after.pages), tasks: listChanges(before.tasks, after.tasks), ...deleted,
   }
 }
@@ -63,9 +65,9 @@ export function applyChanges(ws: Workspace, changes: WorkspaceChanges): Workspac
   if (ws.revision !== changes.from) return null
   const pages = applyList(ws.pages, changes.pages), tasks = applyList(ws.tasks, changes.tasks)
   if (!pages || !tasks) return null
-  const { undo: _undo, ...rest } = ws
+  const { undo: _undo, weekStart: _weekStart, ...rest } = ws
   return {
-    ...rest, revision: changes.revision, timezone: changes.timezone, pages, tasks,
+    ...rest, revision: changes.revision, timezone: changes.timezone, ...(changes.weekStart === 1 ? { weekStart: 1 as const } : {}), pages, tasks,
     deletedTasks: changes.deletedTasks ?? ws.deletedTasks, receipts: {},
     ...(changes.undo ? { undo: changes.undo } : {}),
   }

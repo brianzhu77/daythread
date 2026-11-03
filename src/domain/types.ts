@@ -56,10 +56,13 @@ export interface Receipt {
   fingerprint?: string;
 }
 
+export type WeekStart = 0 | 1;
 export interface Workspace {
   schemaVersion: 2;
   revision: number;
   timezone: string;
+  /** 1: weeks start on Monday, in the date pickers and database views (R3-20). Sunday when absent. */
+  weekStart?: WeekStart;
   pages: Page[];
   tasks: Task[];
   /** Tasks deleted with their last line (newest last, at most `tombstoneLimit`), so ⌘Z brings one back whole. */
@@ -138,6 +141,7 @@ export type Action =
   /** Several pages to the trash as one batch and one Undo (rows selected together). */
   | { type: "delete-pages"; pageIds: string[]; at: string }
   | { type: "set-timezone"; timezone: string }
+  | { type: "set-week-start"; weekStart: WeekStart }
   | { type: "undo"; targetOperationId: string };
 
 export interface Command {

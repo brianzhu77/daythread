@@ -422,7 +422,7 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
       return
     }
     if (!groups || to === null || !target) return
-    const value = groupValue(groups.property, to, shownRaw(row, groups.property.id), from ?? undefined, context.today, view.groupDateBy)
+    const value = groupValue(groups.property, to, shownRaw(row, groups.property.id), from ?? undefined, context.today, view.groupDateBy, context.weekStart)
     const probe = { ...row, values: { ...row.values, ...(value === undefined ? {} : { [groups.property.id]: value }) } } as Page
     if (value === undefined) delete probe.values![groups.property.id]
     const hidden = !rowMatches(db.database, probe, view.filter, context)
@@ -572,7 +572,8 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const navigate = useNavigate()
   const commit = useCommitCell()
   const today = todayIso()
-  const context = useMemo(() => ({ today, pageDate }), [today, pageDate])
+  const weekStart = workspace.weekStart ?? 0
+  const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
   const columns = viewColumns(db.database, view)
   const place = blockPlaces.get(blockId)
@@ -584,7 +585,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const open = (rowId: string, columnId: string, group?: string) => setOpenCell({ blockId, databaseId: db.id, rowId, columnId, ...(group !== undefined ? { group } : {}) })
   usePendingCells()
   // Rows in their groups, with a change on its way already in its new group (R2-13).
-  const groups = viewGroups(db.database, view, withPendingMoves(rows), shownRaw)
+  const groups = viewGroups(db.database, view, withPendingMoves(rows), shownRaw, weekStart)
   const { limitOf, showMore, reach } = useGroupLimits(`${blockId}|${view.id}`, cap)
   const { folded, toggle } = useFolds(blockId, view.id)
   const moveRow = useMoveRow(db, view, context, groups)
@@ -645,7 +646,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     // Past the rows shown, the new row is drawn all the same, and brought into view (Lead's review, 5).
     const ws = latest(), now = ws ? viewRows(ws, db.id, view, context) : []
     if (group === undefined) { const at = now.findIndex(x => x.id === pageId); if (at >= limit) setLimit(at + 1) }
-    else reach(group, ws ? viewGroups(db.database, view, now)?.shown.find(g => g.key === group)?.rows.length ?? 0 : 0)
+    else reach(group, ws ? viewGroups(db.database, view, now, undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0 : 0)
     setReveal(pageId)
     requestAnimationFrame(() => open(pageId, titleId, group))
   })
