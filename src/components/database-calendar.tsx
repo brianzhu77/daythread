@@ -1,9 +1,10 @@
 // Databases R3: the Calendar view (design §7.2, R3-1). A month of days at 1280, up to 3 row titles on each, then "+2"; on the
 // phone the month with dots, and the chosen day's rows under it. Rows with no date stay in reach in one line under the month.
-// A row drags to another day at 1280, moving its date and keeping its time and length. Which month is showing is this tab's,
-// never a save, like which view is showing.
+// A row drags to another day at 1280, moving its date and keeping its time and length. By a created or edited time, which no
+// one can set, rows don't drag and a day has no `+` (R3-21). The month or week showing is this
+// device's, never a save, as a group's fold is: it comes back to where it was left.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
-import { calendarRows, databaseRows, inView, movedDate, startOfWeek, titleId, viewDateBy, viewRows, type Json, type View } from '../domain/database.ts'
+import { calendarRows, databaseRows, inView, isReadOnlyType, movedDate, startOfWeek, titleId, viewDateBy, viewRows, type Json, type View } from '../domain/database.ts'
 import type { LocalDate, Page, WeekStart } from '../domain/types'
 import { blockActions, cellKey, DatabaseHeader, pendingCells, setOpenCell, shownRaw, useAddRow, useCommitCell, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
@@ -18,6 +19,10 @@ const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 /** Where a block's calendar is, for this tab: BlockNote may draw a block again, which would otherwise send him back to this month. */
 const places = new Map<string, { anchor: LocalDate; chosen: LocalDate | null; undatedOpen: boolean }>()
 
+const anchorKey = (blockId: string, viewId: string) => `daythread.database-calendar.${blockId}.${viewId}`
+function savedAnchor(blockId: string, viewId: string): LocalDate | null {
+  try { const day = localStorage.getItem(anchorKey(blockId, viewId)); return day && /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null } catch { return null }
+}
 const monthOf = (day: LocalDate) => day.slice(0, 7)
 function shiftMonth(month: string, by: number): string {
   const [y, m] = month.split('-').map(Number) as [number, number]
@@ -46,10 +51,17 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
   usePendingCells()
   const returned = useReturnedRow(rows)
   const property = viewDateBy(db.database, view)
+  const canSetDate = Boolean(property && !isReadOnlyType(property.type))
 
   const placeKey = `${blockId}|${view.id}`
-  const [place, setPlaceState] = useState(() => places.get(placeKey) ?? { anchor: pageDate ?? today, chosen: wide ? null as LocalDate | null : pageDate ?? today, undatedOpen: false })
-  const setPlace = (next: Partial<typeof place>) => setPlaceState(now => { const merged = { ...now, ...next }; places.set(placeKey, merged); return merged })
+  const [place, setPlaceState] = useState(() => {
+    const anchor = savedAnchor(blockId, view.id) ?? pageDate ?? today
+    return places.get(placeKey) ?? { anchor, chosen: wide ? null as LocalDate | null : anchor, undatedOpen: false }
+  })
+  const setPlace = (next: Partial<typeof place>) => {
+    if (next.anchor) { try { localStorage.setItem(anchorKey(blockId, view.id), next.anchor) } catch { /* private mode: this tab only */ } }
+    setPlaceState(now => { const merged = { ...now, ...next }; places.set(placeKey, merged); return merged })
+  }
   // The month or week showing is `anchor`'s.
   const byWeek = view.calendarSpan === 'week'
   const month = monthOf(place.anchor)
@@ -60,11 +72,11 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
   const wrap = useRef<HTMLDivElement>(null)
   useViewClipboard(wrap)
   const addRow = useAddRow(db, view, context, blockId, pageId => requestAnimationFrame(() => setOpenCell({ blockId, databaseId: db.id, rowId: pageId, columnId: titleId })))
-  const addOn = (day: LocalDate) => { setPlace({ chosen: day }); addRow(undefined, property ? { [property.id]: { start: day } as unknown as Json } : undefined) }
+  const addOn = (day: LocalDate) => { setPlace({ chosen: day }); addRow(undefined, property && canSetDate ? { [property.id]: { start: day } as unknown as Json } : undefined) }
 
   /** A row's date moved, one change with one Undo; the notice says where, and if the filter then hides it. */
   const moveTo = (row: Page, from: LocalDate | null, to: LocalDate) => {
-    if (!property || from === to) return
+    if (!property || !canSetDate || from === to) return
     const value = movedDate(property, shownRaw(row, property.id), from, to)
     const hidden = !inView(db.database, { ...row, values: { ...row.values, [property.id]: value as unknown as Json } } as Page, view, context)
     commit(db, row, property.id, value as unknown as Json, `Moved to ${longLabel(to)}${hidden ? " · hidden by this view's filter" : ''}`)
@@ -74,7 +86,7 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
   const [drag, setDrag] = useState<{ rowId: string; over: LocalDate | null } | null>(null)
   const justDragged = useRef(false)
   const startDrag = (e: ReactPointerEvent, row: Page, from: LocalDate | null) => {
-    if (e.button !== 0 || e.pointerType !== 'mouse' || !property) return
+    if (e.button !== 0 || e.pointerType !== 'mouse' || !canSetDate) return
     const start = { x: e.clientX, y: e.clientY }
     let lifted = false
     const dayAt = (x: number, y: number) => document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-day]')?.dataset.day ?? null
@@ -119,6 +131,7 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
     // Shift-arrows move a row's date; arrows move between days.
     const chip = target.closest<HTMLElement>('[data-chip]')
     if (chip && e.shiftKey) {
+      if (!canSetDate) return
       const row = rows.find(r => r.id === chip.dataset.chip), from = chip.dataset.from
       if (row && from) { e.preventDefault(); const to = addDays(from, step); refocus.current = { rowId: row.id, day: to }; moveTo(row, from, to); if (!days.includes(to)) setPlace({ anchor: to }) }
       return
@@ -173,7 +186,7 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
             ? <>
                 {here.slice(0, limit).map(row => rowLine(row, day))}
                 {more > 0 && <button type="button" className="database-day-more" onClick={() => setPlace({ chosen: day })}>+{more}</button>}
-                <button type="button" className="database-day-add" aria-label={`New on ${longLabel(day)}`} onClick={() => addOn(day)}>+</button>
+                {(canSetDate || !property) && <button type="button" className="database-day-add" aria-label={`New on ${longLabel(day)}`} onClick={() => addOn(day)}>+</button>}
               </>
             : here.length > 0 && <span className="database-day-dot" aria-label={`${here.length} ${here.length === 1 ? 'row' : 'rows'}`} />}
         </div>
@@ -182,7 +195,7 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
     {showsChosen && <div className="database-day-list" aria-label={longLabel(place.chosen!)}>
       <div className="database-day-list-head">{longLabel(place.chosen!)}</div>
       {chosenRows.map(row => rowLine(row, place.chosen))}
-      {!wide && <button type="button" className="database-new" onClick={() => addOn(place.chosen!)}>+ New</button>}
+      {!wide && (canSetDate || !property) && <button type="button" className="database-new" onClick={() => addOn(place.chosen!)}>+ New</button>}
     </div>}
     {undated.length > 0 && <div className="database-undated" data-day-none>
       <button type="button" className="database-undated-head" aria-expanded={place.undatedOpen} onClick={() => setPlace({ undatedOpen: !place.undatedOpen })}>No date · {undated.length} ›</button>

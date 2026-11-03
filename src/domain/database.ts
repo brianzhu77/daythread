@@ -25,6 +25,8 @@ export interface Property {
   dayOnly?: true;
   /** What clearing this means, where it's more than emptying a cell. */
   clearLabel?: string;
+  /** An ID's words before its number, "BK-" in BK-12: shown only, so changing it renumbers nothing (R3-9). */
+  prefix?: string;
 }
 export interface DateValue { start: string; end?: string }
 /** A fixed day, or one relative to today or to the day page the view is on, with an offset in days. */
@@ -44,6 +46,8 @@ export interface Sort { by: string; direction: "asc" | "desc" }
 export type GroupDateBy = "day" | "week" | "month";
 export const viewLayouts = ["table", "board", "list", "gallery", "calendar"] as const;
 export type ViewLayout = (typeof viewLayouts)[number];
+export const calcKinds = ["countAll", "countValues", "countUnique", "countEmpty", "countNotEmpty", "percentEmpty", "percentNotEmpty", "sum", "average", "median", "min", "max", "range", "earliest", "latest", "dateRange", "checked", "unchecked", "percentChecked", "percentUnchecked", "countPerGroup", "percentPerGroup"] as const;
+export type CalcKind = (typeof calcKinds)[number];
 export interface View {
   id: string;
   name: string;
@@ -55,6 +59,8 @@ export interface View {
   filter: Condition[];
   /** "Any rule matches" (design §7.3, R3-4). */
   filterAny?: true;
+  /** A table's foot: what each column adds up to, by column id (design §4.1a, R3-8). */
+  calculations?: Record<string, CalcKind>;
   /** Table and list: their groups. Board: what makes its columns. Ignored while its property is deleted or can't group (design §13). */
   groupBy?: string;
   /** A date's groups; a month when absent. */
@@ -90,13 +96,18 @@ const rowNumberKey = "@id";
 export const isReadOnlyType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime" || type === "id";
 export const isTimeType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime";
 const isTextType = (type: PropertyType): boolean => type === "text" || type === "url" || type === "email" || type === "phone";
+/** A row's Created or Edited time as a date value; none on a row from before they were kept. */
+function rowTime(property: Property, row: Page): DateValue | null {
+  const at = property.type === "editedTime" ? row.editedAt ?? row.createdAt : row.createdAt;
+  return at ? { start: localWall(at) } : null;
+}
 /** An ISO time as a wall clock on this device: what a date cell holds, so a created time reads in local time. */
 function localWall(iso: string): string {
   const d = new Date(iso), two = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`;
 }
 export const databaseBlockType = "database";
-export const limits = { properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 200, hiddenGroups: 200 } as const;
+export const limits = { properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 200, hiddenGroups: 200, prefix: 20 } as const;
 
 export const isDatabase = (p: Page | undefined | null): p is Page & { database: Database } => Boolean(p?.database);
 /** A row: a page whose parent is a database. */
@@ -274,10 +285,7 @@ export function cellValue(db: Database, row: Page, columnId: string): CellValue 
   const property = propertyOf(db, columnId);
   if (!property) return null;
   if (property.type === "id") { const n = row.values?.[rowNumberKey]; return typeof n === "number" ? n : null; }
-  if (isTimeType(property.type)) {
-    const at = property.type === "editedTime" ? row.editedAt ?? row.createdAt : row.createdAt;
-    return at ? { start: localWall(at) } : null;
-  }
+  if (isTimeType(property.type)) return rowTime(property, row);
   return readValue(property, rawOf(row, columnId));
 }
 
@@ -584,22 +592,22 @@ export function viewGroups(db: Database, view: View, rows: readonly Page[], rawF
   return { property, shown: groups.filter((g) => !hidden.has(g.key) && keep(g)), hidden: groups.filter((g) => hidden.has(g.key) && keep(g)) };
 }
 /** What a calendar can sit its rows by. */
-export const dateProperties = (db: Database): Property[] => db.properties.filter((p) => p.type === "date");
+export const dateProperties = (db: Database): Property[] => db.properties.filter((p) => p.type === "date" || isTimeType(p.type));
 /** The date property a calendar sits by now; null when it was deleted or isn't a date any more. */
 export function viewDateBy(db: Database, view: View): Property | null {
   const property = view.dateBy ? db.properties.find((p) => p.id === view.dateBy) : undefined;
-  return property?.type === "date" ? property : null;
+  return property && (property.type === "date" || isTimeType(property.type)) ? property : null;
 }
 export interface CalendarRows {
   /** Rows by the days they cover, for the days in `from`–`to`; a range is on each of its days. */
   days: Map<LocalDate, Page[]>;
-  /** Rows with no date, always in reach (design §7.2). */
+  /** Rows with no date, always in reach (design §7.2), a row from before Created time was kept too. */
   undated: Page[];
 }
 export function calendarRows(property: Property | null, rows: readonly Page[], from: LocalDate, to: LocalDate, rawFor: (row: Page, columnId: string) => unknown = rawOf): CalendarRows {
   const days = new Map<LocalDate, Page[]>(), undated: Page[] = [];
   for (const row of rows) {
-    const value = property ? (readValue(property, rawFor(row, property.id)) as DateValue | null) : null;
+    const value = !property ? null : isTimeType(property.type) ? rowTime(property, row) : (readValue(property, rawFor(row, property.id)) as DateValue | null);
     if (!value) { undated.push(row); continue; }
     const start = value.start.slice(0, 10), end = (value.end ?? value.start).slice(0, 10);
     if (end < from || start > to) continue;
@@ -649,15 +657,15 @@ export function groupValue(property: Property, key: string, raw: unknown, fromKe
 // ---------------------------------------------------------------- commands' inputs
 
 /** A property as `addProperty` sends it: options without ids get them; a Status with none gets the three groups. */
-export interface PropertyInput { id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean }
+export interface PropertyInput { id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string }
 /** One schema or view change: one write, the database page. */
 export type DatabaseChange =
   | { kind: "addProperty"; property: PropertyInput; /** the view it was added from: it shows there; other views list it too */ viewId?: string }
-  | { kind: "updateProperty"; propertyId: string; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean }
+  | { kind: "updateProperty"; propertyId: string; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string }
   | { kind: "removeProperty"; propertyId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; filterAny?: boolean }
+  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; filterAny?: boolean; calculations?: Record<string, CalcKind> }
   | { kind: "removeView"; viewId: string }
   | { kind: "moveView"; viewId: string; beforeId: string | null };
 /** One row's edit: values by column id (`title` for the title), null clears; `expected`: those columns as the edit saw them. */
@@ -668,6 +676,91 @@ export interface RowEdit { pageId: string; values: Record<string, Json>; expecte
 const filterOps = new Set<string>(filterOpList);
 const statusGroups = new Set<StatusGroup>(["todo", "active", "done"]);
 const numberFormats = new Set<NumberFormat>(["plain", "comma", "percent", "currency"]);
+const everyCalc: CalcKind[] = ["countAll", "countValues", "countUnique", "countEmpty", "countNotEmpty", "percentEmpty", "percentNotEmpty"];
+/** What a column of this type can add up to, in the menu's order. */
+export function calcChoices(type: PropertyType): CalcKind[] {
+  switch (type) {
+    case "number": return [...everyCalc, "sum", "average", "median", "min", "max", "range"];
+    case "date":
+    case "createdTime":
+    case "editedTime": return [...everyCalc, "earliest", "latest", "dateRange"];
+    case "id": return [...everyCalc, "min", "max"];
+    case "checkbox": return ["countAll", "checked", "unchecked", "percentChecked", "percentUnchecked"];
+    case "status": return [...everyCalc, "countPerGroup", "percentPerGroup"];
+    default: return everyCalc;
+  }
+}
+export const calcLabels: Record<CalcKind, string> = { countAll: "Count all", countValues: "Count values", countUnique: "Count unique", countEmpty: "Count empty", countNotEmpty: "Count not empty", percentEmpty: "Percent empty", percentNotEmpty: "Percent not empty", sum: "Sum", average: "Average", median: "Median", min: "Min", max: "Max", range: "Range", earliest: "Earliest date", latest: "Latest date", dateRange: "Date range", checked: "Checked", unchecked: "Unchecked", percentChecked: "Percent checked", percentUnchecked: "Percent unchecked", countPerGroup: "Count per group", percentPerGroup: "Percent per group" };
+/** The view's calculations that still fit their column: a deleted column or a changed type just draws nothing, and comes back if it's changed back. */
+export function viewCalculations(db: Database, view: Pick<View, "calculations">): Record<string, CalcKind> {
+  const out: Record<string, CalcKind> = {};
+  for (const [id, kind] of Object.entries(view.calculations ?? {})) {
+    const property = propertyOf(db, id);
+    if (property && calcChoices(property.type).includes(kind)) out[id] = kind;
+  }
+  return out;
+}
+export type CalcResult =
+  | { type: "count"; value: number }
+  | { type: "percent"; value: number | null }
+  | { type: "number"; value: number | null }
+  | { type: "date"; value: string | null }
+  | { type: "days"; value: number | null }
+  | { type: "groups"; percent: boolean; value: { group: StatusGroup; count: number }[] };
+const clean = (n: number) => Math.round(n * 1e10) / 1e10;
+/**
+ * One column over these rows: the rows a view shows, or one group's, all of them whatever "Show more" has drawn.
+ * `read` lets a cell still saving count as it shows. No rows, or none with a value, has no average or date: null, not 0.
+ */
+export function columnCalc(db: Database, rows: readonly Page[], columnId: string, kind: CalcKind, read: (row: Page, columnId: string) => CellValue = (row, id) => cellValue(db, row, id)): CalcResult {
+  const values = rows.map((r) => read(r, columnId));
+  const filled = values.filter((v) => !isEmptyValue(v));
+  const percent = (n: number): CalcResult => ({ type: "percent", value: rows.length ? clean((n / rows.length) * 100) : null });
+  const numbers = filled.filter((v): v is number => typeof v === "number" && Number.isFinite(v)).sort((a, b) => a - b);
+  const number = (make: () => number): CalcResult => ({ type: "number", value: numbers.length ? clean(make()) : null });
+  const dates = filled.filter((v): v is DateValue => typeof v === "object" && !Array.isArray(v) && v !== null);
+  const earliest = dates.map((d) => d.start).sort()[0] ?? null, latest = dates.map((d) => d.end ?? d.start).sort().at(-1) ?? null;
+  const count = (value: number): CalcResult => ({ type: "count", value });
+  switch (kind) {
+    case "countAll": return count(rows.length);
+    case "countValues": return count(filled.reduce<number>((n, v) => n + (Array.isArray(v) ? v.length : 1), 0));
+    case "countUnique": return count(new Set(filled.flatMap((v) => (Array.isArray(v) ? v : [JSON.stringify(v)]))).size);
+    case "countEmpty": return count(rows.length - filled.length);
+    case "countNotEmpty": return count(filled.length);
+    case "percentEmpty": return percent(rows.length - filled.length);
+    case "percentNotEmpty": return percent(filled.length);
+    case "sum": return { type: "number", value: clean(numbers.reduce((n, v) => n + v, 0)) };
+    case "average": return number(() => numbers.reduce((n, v) => n + v, 0) / numbers.length);
+    case "median": return number(() => { const mid = numbers.length >> 1; return numbers.length % 2 ? numbers[mid]! : (numbers[mid - 1]! + numbers[mid]!) / 2; });
+    case "min": return number(() => numbers[0]!);
+    case "max": return number(() => numbers.at(-1)!);
+    case "range": return number(() => numbers.at(-1)! - numbers[0]!);
+    case "earliest": return { type: "date", value: earliest };
+    case "latest": return { type: "date", value: latest };
+    case "dateRange": return { type: "days", value: earliest && latest ? Math.round((Date.parse(`${latest.slice(0, 10)}T12:00:00Z`) - Date.parse(`${earliest.slice(0, 10)}T12:00:00Z`)) / 86_400_000) : null };
+    case "checked": return count(values.filter((v) => v === true).length);
+    case "unchecked": return count(values.filter((v) => v !== true).length);
+    case "percentChecked": return percent(values.filter((v) => v === true).length);
+    case "percentUnchecked": return percent(values.filter((v) => v !== true).length);
+    case "countPerGroup":
+    case "percentPerGroup": {
+      const options = propertyOf(db, columnId)?.options ?? [];
+      const inGroup = (group: StatusGroup) => values.filter((v) => options.find((o) => o.id === v) && (options.find((o) => o.id === v)!.group ?? "todo") === group).length;
+      const asPercent = kind === "percentPerGroup";
+      return { type: "groups", percent: asPercent, value: statusOrder.map((group) => ({ group, count: asPercent ? (rows.length ? clean((inGroup(group) / rows.length) * 100) : 0) : inGroup(group) })) };
+    }
+  }
+}
+function cleanCalculations(db: Database, input: unknown): Record<string, CalcKind> {
+  if (!input || typeof input !== "object") throw new DatabaseError("Can't calculate that");
+  const out: Record<string, CalcKind> = {};
+  for (const [id, kind] of Object.entries(input)) {
+    if (!(calcKinds as readonly unknown[]).includes(kind)) throw new DatabaseError("Can't calculate that");
+    if (propertyOf(db, id)) out[id] = kind as CalcKind;
+  }
+  return out;
+}
+
 export const typeLabels: Record<PropertyType, string> = { text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
 const hasOptions = (type: PropertyType): boolean => type === "select" || type === "multiSelect" || type === "status";
 
@@ -703,6 +796,11 @@ function cleanProperty(input: PropertyInput, db: Database, except?: string): Pro
   if (input.type === "status" && !property.options?.length) property.options = defaultStatusOptions();
   if (input.format !== undefined) { if (!numberFormats.has(input.format)) throw new DatabaseError("Unknown number format"); property.format = input.format; }
   if (input.withTime !== undefined) { if (typeof input.withTime !== "boolean") throw new DatabaseError("Invalid property"); if (input.withTime) property.withTime = true; }
+  if (input.prefix !== undefined) {
+    const prefix = typeof input.prefix === "string" ? input.prefix.trim() : null;
+    if (prefix === null || prefix.length > limits.prefix) throw new DatabaseError("Too long for a prefix");
+    if (prefix) property.prefix = prefix;
+  }
   return property;
 }
 const knownColumn = (db: Database, id: unknown): boolean => typeof id === "string" && (id === titleId || db.properties.some((p) => p.id === id));
@@ -766,7 +864,7 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
 function cleanView(db: Database, input: View): View {
   if (!input) throw new DatabaseError("Unknown view type");
   const layout = cleanLayout(input.layout);
-  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...cleanGroup(db, input, layout, input) };
+  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...cleanGroup(db, input, layout, input) };
 }
 function move<T extends { id: string }>(list: T[], id: string, beforeId: string | null): T[] {
   const item = list.find((x) => x.id === id);
@@ -820,7 +918,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     case "updateProperty": {
       const old = property(change.propertyId);
       const type = change.type ?? old.type;
-      const next = cleanProperty({ id: old.id, name: change.name ?? old.name, type, options: change.options ?? old.options, format: change.format ?? old.format, withTime: change.withTime ?? old.withTime }, db, old.id);
+      const next = cleanProperty({ id: old.id, name: change.name ?? old.name, type, options: change.options ?? old.options, format: change.format ?? old.format, withTime: change.withTime ?? old.withTime, prefix: change.prefix ?? old.prefix }, db, old.id);
       const notes: string[] = [];
       if (type !== old.type) {
         const lost = lostOnTypeChange(ws, page.id, old, type);
@@ -853,7 +951,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     }
     case "updateView": {
       const old = view(change.viewId);
-      const { filterAny: _filterAny, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, ...rest } = old;
+      const { filterAny: _filterAny, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, ...rest } = old;
       const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
       const group = cleanGroup(db, {
         groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
@@ -871,6 +969,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         ...(change.sort !== undefined ? { sort: cleanSort(db, change.sort, old.sort) } : {}),
         ...(change.filter !== undefined ? { filter: cleanFilter(db, change.filter, old.filter) } : {}),
         ...((change.filterAny ?? old.filterAny) ? { filterAny: true as const } : {}),
+        ...(() => { const calculations = change.calculations !== undefined ? cleanCalculations(db, change.calculations) : old.calculations; return calculations && Object.keys(calculations).length ? { calculations } : {}; })(),
         ...group,
       };
       db.views[db.views.indexOf(old)] = next;
@@ -935,6 +1034,7 @@ export function valueText(db: Database, columnId: string, value: CellValue): str
   const name = (id: string) => property?.options?.find(o => o.id === id)?.name ?? ''
   if (value === null || value === false) return ''
   if (property?.type === 'createdTime' || property?.type === 'editedTime') return (value as DateValue).start.replace('T', ' ')
+  if (property?.type === 'id') return `${property.prefix ?? ''}${value}`
   if (value === true) return 'Yes'
   if (Array.isArray(value)) return value.map(name).filter(Boolean).join(', ')
   if (typeof value === 'object') return value.end ? `${value.start} → ${value.end}` : value.start
