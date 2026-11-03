@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEve
 import { createPortal } from 'react-dom'
 import { cellValue, databaseRows, isDatabase, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -177,21 +177,8 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
     }
   }
 
-  // ⌘C, ⌘X and ⌘V on a card are about the board, never the page around it (design §10), as in a table: they stop at the
-  // window, before the page's clipboard handlers. Copy takes the card's title; a card isn't cut or pasted over.
   const wrap = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const handle = (e: ClipboardEvent) => {
-      const focused = document.activeElement
-      if (!wrap.current?.contains(focused)) return
-      e.stopPropagation()
-      if (focused instanceof HTMLInputElement || focused instanceof HTMLTextAreaElement) return
-      e.preventDefault()
-      if (e.type === 'copy' && focused?.closest('[data-card]')) e.clipboardData?.setData('text/plain', focused.textContent ?? '')
-    }
-    for (const type of ['copy', 'cut', 'paste'] as const) window.addEventListener(type, handle, true)
-    return () => { for (const type of ['copy', 'cut', 'paste'] as const) window.removeEventListener(type, handle, true) }
-  }, [])
+  useViewClipboard(wrap)
 
   // Sideways scroll comes back after a redraw, as in a table.
   const scroller = (el: HTMLDivElement | null) => { board.current = el; const left = blockPlaces.get(placeKey)?.scrollLeft; if (el && left && el.scrollLeft !== left) el.scrollLeft = left }

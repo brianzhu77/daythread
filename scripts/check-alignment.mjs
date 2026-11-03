@@ -36,7 +36,7 @@ if (!base) { console.error('usage: node scripts/check-alignment.mjs <base url> [
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
-const REQUIRED = ['board', 'grouped table', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
+const REQUIRED = ['board', 'grouped table', 'list', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
 
 /** What a table cell or a row page's value draws: its box when it's a checkbox, else its first line of text, else a chip or dot. */
 function drawnCentres() {
@@ -170,7 +170,24 @@ function measure() {
           "Hidden on a card's words": gap(hidden, name),
         }
       }
-      const fold = content.querySelector('.database-group-fold')
+      const list = content.querySelector('.database-list')
+      if (list) {
+        const name = words(list.querySelector('.database-list-title'))
+        const box = list.querySelector('.database-list-check .property-checkbox')?.getBoundingClientRect()
+        const value = list.querySelector('.database-list-value')
+        const narrow = innerWidth < 900
+        row.list = {
+          "+ New on a row's words": gap(words(list.querySelector('.database-list-foot .database-new')), name),
+          "Show 25 more on a row's words": gap(words(list.querySelector('.database-list-foot .database-more')), name),
+          "Hidden on a row's words": gap(hidden, name),
+          // On a line at 1280 they're centred on the title; under it on the phone they start on its edge.
+          [narrow ? "a value on a row's words" : 'a value centred on its title']: narrow ? gap(words(value), name) : mid(words(value), name),
+          // Beside a value on the phone's second line, so what it's measured against is its own name there.
+          [narrow ? 'a checkbox centred on its name' : 'a checkbox centred on its title']: !box || !name ? null : narrow ? mid(box, words(list.querySelector('.database-list-check')?.lastChild)) : cy(box) - cy(name),
+          "group's chevron on the title": list.querySelector('.database-group-fold') ? list.querySelector('.database-group-fold').getBoundingClientRect().left - title.getBoundingClientRect().left : null,
+        }
+      }
+      const fold = list ? null : content.querySelector('.database-group-fold')
       if (fold) {
         const label = fold.querySelector('svg + *'), nameText = words(content.querySelector('.database-title-cell > span'))
         row.group = {
@@ -351,18 +368,18 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
       results.push({ at, check: `${r.kind} title not clipped: "${r.label}"`, ok: !r.clipped, detail: r.clipped ?? 'wraps' })
     // The database block's own columns (design §15).
     for (const r of rows.filter(r => r.kind === 'database table')) {
-      const parts = r.board ?? r.group
+      const parts = r.board ?? r.list ?? r.group, name = r.board ? 'board' : r.list ? 'list' : 'group'
       if (parts) {
-        seen.get(width).add(r.board ? 'board' : 'grouped table')
+        seen.get(width).add(r.board ? 'board' : r.list ? 'list' : 'grouped table')
         for (const [what, off] of Object.entries(parts)) results.push(off == null
-          ? { at, check: `${r.board ? 'board' : 'group'} ${what}: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
-          : { at, check: `${r.board ? 'board' : 'group'} ${what}: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
+          ? { at, check: `${name} ${what}: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
+          : { at, check: `${name} ${what}: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
       }
       results.push(r.viewChevron == null
         ? { at, check: `database view chevron: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
         : { at, check: `database view chevron centred on its word: "${r.label}"`, ok: Math.abs(r.viewChevron) <= TOLERANCE, detail: `${r.viewChevron >= 0 ? '+' : ''}${fmt(r.viewChevron)}px` })
-      // A board has no Name column: its + New is measured against a card's words, above.
-      if (!r.board) results.push(r.newOnName == null
+      // A board or list has no Name column: its + New is measured against a card's or row's words, above.
+      if (!r.board && !r.list) results.push(r.newOnName == null
         ? { at, check: `database + New: "${r.label}"`, ok: 'missing', detail: 'no row or no + New, so not measured' }
         : { at, check: `database + New on Name's text: "${r.label}"`, ok: Math.abs(r.newOnName) <= TOLERANCE, detail: `${r.newOnName >= 0 ? '+' : ''}${fmt(r.newOnName)}px` })
     }
