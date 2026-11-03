@@ -61,7 +61,9 @@ export function DatabaseMenuHost() {
       // Under its button, moved up only as far as it takes to stay on screen: a table low on the page would leave it cut off.
       const top = Math.max(8, Math.min(r.bottom + 4, window.innerHeight - (ref.current?.offsetHeight ?? 0) - 8))
       // Moved left as far as it takes too, for the same reason: "Table ⌄" sits near the page's right edge.
-      const next = open.panel === 'views' ? { top, left: Math.max(8, Math.min(r.left, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) } : { top, right: Math.max(8, Math.min(window.innerWidth - r.right, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) }
+      // Formula's editor is too wide to hang left from `⋯` without covering the sidebar, so it starts at the block's edge.
+      const width = ref.current?.offsetWidth ?? 300, block = anchor.closest('.database-block')?.getBoundingClientRect()
+      const next = width > 320 && block && window.innerWidth >= 900 ? { top, left: Math.max(8, Math.min(block.left, window.innerWidth - width - 8)) } : open.panel === 'views' ? { top, left: Math.max(8, Math.min(r.left, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) } : { top, right: Math.max(8, Math.min(window.innerWidth - r.right, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) }
       setAt(a => (a && a.top === next.top && a.left === next.left && a.right === next.right ? a : next))
       frame = requestAnimationFrame(place)
     }
