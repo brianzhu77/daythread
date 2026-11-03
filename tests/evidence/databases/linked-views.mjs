@@ -11,9 +11,9 @@ const dbBlocks = ws => JSON.parse(ws.pages.find(p => p.id === 'books').document)
 const list = ws => ws.pages.find(p => p.id === 'list')
 const notices = page => page.locator('[role=alert], [role=status]').allInnerTexts().then(t => t.join(' | ').replace(/\s+/g, ' '))
 let failed = 0
-const scenario = async (name, act) => {
+const scenario = async (name, act, options = { viewport: { width: 1280, height: 1000 } }) => {
   execSync(`rm -f ${storePath} && node tests/evidence/databases/seed-table.ts ${storePath}`, { stdio: 'ignore' })
-  const context = await browser.newContext({ viewport: { width: 1280, height: 1000 } })
+  const context = await browser.newContext(options)
   const page = await context.newPage(), errors = []
   page.on('pageerror', e => errors.push(e.message))
   await page.goto(`${base}/pages?page=books`); await wait(2500)
@@ -148,6 +148,30 @@ await scenario('Duplicate makes a linked view', async page => {
   const ws = store(), r = { blocks: dbBlocks(ws).length, databases: ws.pages.filter(p => p.database).length, tables: await page.locator('.database-table').count() }
   return { ...r, ok: r.blocks === 2 && r.databases === 2 && r.tables === 2 }
 })
+const phone = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }
+await scenario('at 390: it draws, its source line opens the source, and its menu removes only the view', async page => {
+  await makeLinked(page)
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
+  const r = { overflow, rows: await second(page).locator('.database-row').count(), source: await second(page).locator('.database-source').innerText() }
+  await second(page).locator('.database-more-button').click(); await wait(300)
+  r.menu = await menu(page).getByRole('menuitem', { name: 'Remove this view' }).isVisible()
+  await menu(page).getByRole('menuitem', { name: 'Remove this view' }).click(); await wait(1800)
+  const ws = store()
+  r.blocks = dbBlocks(ws).length; r.trashed = Boolean(list(ws).trashedAt); r.notice = await notices(page)
+  await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(1800)
+  r.afterUndo = dbBlocks(store()).length
+  await second(page).locator('.database-source').click(); await wait(1500)
+  r.url = page.url()
+  return { ...r, ok: r.overflow <= 0 && r.rows === 3 && /from Reading list/.test(r.source) && r.menu && r.blocks === 1 && !r.trashed && /View removed/.test(r.notice) && r.afterUndo === 2 && /page=list/.test(r.url) }
+}, phone)
+await scenario('at 390: `/` Database lists what exists on screen, and picking one makes a linked view', async page => {
+  await page.getByText('After the table').click(); await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.press('Enter'); await page.keyboard.type('/database'); await wait(400); await page.keyboard.press('Enter'); await wait(500)
+  const box = await page.locator('.database-picker').boundingBox(), width = page.viewportSize().width
+  const r = { box, shown: await page.locator('.database-picker [role=menuitem]').count() }
+  await page.locator('.database-picker [role=menuitem]', { hasText: 'Reading list' }).click(); await wait(1800)
+  r.blocks = dbBlocks(store()).length
+  return { ...r, ok: box.x >= 0 && box.x + box.width <= width && r.shown >= 3 && r.blocks === 2 }
+}, phone)
 await browser.close()
 console.log(failed ? `FAIL ${failed}` : 'PASS')
 if (failed) process.exit(1)
