@@ -17,7 +17,8 @@ const filter = z.array(z.object({ by: id, op: z.enum(filterOpList), value: json.
 const groupDateBy = z.enum(["day", "week", "month"]);
 const hiddenGroups = z.array(z.string().max(200)).max(limits.hiddenGroups);
 const calculations = z.record(id, z.enum(calcKinds));
-const view = z.object({ id, name: z.string().max(200), layout: z.enum(viewLayouts), columns, sort, filter, groupBy: id.optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), subGroupBy: id.optional(), subGroupDateBy: groupDateBy.optional(), hiddenSubGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").optional(), filterAny: z.literal(true).optional(), wrapName: z.literal(true).optional(), calculations: calculations.optional(), defaultTemplate: id.optional() });
+const boardCalculation = z.object({ by: id, kind: z.enum(calcKinds) });
+const view = z.object({ id, name: z.string().max(200), layout: z.enum(viewLayouts), columns, sort, filter, groupBy: id.optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), subGroupBy: id.optional(), subGroupDateBy: groupDateBy.optional(), hiddenSubGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").optional(), filterAny: z.literal(true).optional(), wrapName: z.literal(true).optional(), calculations: calculations.optional(), boardCalculation: boardCalculation.optional(), defaultTemplate: id.optional() });
 const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("addProperty"), property: z.object({ id, ...propertyFields }), viewId: id.optional() }),
   z.object({ kind: z.literal("updateProperty"), propertyId: id, ...propertyFields, name: propertyFields.name.optional(), type: propertyFields.type.optional() }),
@@ -25,7 +26,7 @@ const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("setMirror"), propertyId: id, mirror: z.object({ id, name: z.string().max(200) }).nullable() }),
   z.object({ kind: z.literal("moveProperty"), propertyId: id, beforeId: id.nullable() }),
   z.object({ kind: z.literal("addView"), view }),
-  z.object({ kind: z.literal("updateView"), viewId: id, name: z.string().max(200).optional(), columns: columns.optional(), sort: sort.optional(), filter: filter.optional(), layout: z.enum(viewLayouts).optional(), groupBy: id.nullable().optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), subGroupBy: id.nullable().optional(), subGroupDateBy: groupDateBy.optional(), hiddenSubGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").nullable().optional(), filterAny: z.boolean().optional(), wrapName: z.boolean().optional(), calculations: calculations.optional(), defaultTemplate: id.nullable().optional() }),
+  z.object({ kind: z.literal("updateView"), viewId: id, name: z.string().max(200).optional(), columns: columns.optional(), sort: sort.optional(), filter: filter.optional(), layout: z.enum(viewLayouts).optional(), groupBy: id.nullable().optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), subGroupBy: id.nullable().optional(), subGroupDateBy: groupDateBy.optional(), hiddenSubGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").nullable().optional(), filterAny: z.boolean().optional(), wrapName: z.boolean().optional(), calculations: calculations.optional(), boardCalculation: boardCalculation.nullable().optional(), defaultTemplate: id.nullable().optional() }),
   z.object({ kind: z.literal("setDefaultTemplate"), templateId: id.nullable() }),
   z.object({ kind: z.literal("removeView"), viewId: id }),
   z.object({ kind: z.literal("moveView"), viewId: id, beforeId: id.nullable() }),
@@ -64,7 +65,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("create-database"), pageId: id, parentId: id.nullable().optional(), homeBlockId: id.nullable(), title }),
   z.object({ type: z.literal("change-database"), pageId: id, change }),
   z.object({ type: z.literal("add-row"), databaseId: id, pageId: id, title, values: values.optional(), beforeId: id.nullable().optional(), copyOf: id.optional(), template: id.optional(), at }),
-  z.object({ type: z.literal("set-values"), ...rowEdit.shape, beforeId: id.nullable().optional(), at }),
+  z.object({ type: z.literal("set-values"), ...rowEdit.shape, beforeId: id.nullable().optional(), newTodos: z.array(z.object({ id, title: title.min(1), on: day })).max(100).optional(), at }),
   z.object({ type: z.literal("set-values-many"), items: z.array(rowEdit).min(1).max(200), at }),
   z.object({ type: z.literal("delete-pages"), pageIds: z.array(id).min(1).max(200), at }),
   z.object({ type: z.literal("set-timezone"), timezone: z.string().min(1).max(100) }),

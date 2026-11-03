@@ -67,6 +67,7 @@ export function templateValues(template: Pick<Page, "values">): NonNullable<Page
 }
 export const calcKinds = ["countAll", "countValues", "countUnique", "countEmpty", "countNotEmpty", "percentEmpty", "percentNotEmpty", "sum", "average", "median", "min", "max", "range", "earliest", "latest", "dateRange", "checked", "unchecked", "percentChecked", "percentUnchecked", "countPerGroup", "percentPerGroup"] as const;
 export type CalcKind = (typeof calcKinds)[number];
+export interface BoardCalculation { by: string; kind: CalcKind }
 export interface View {
   id: string;
   name: string;
@@ -84,6 +85,8 @@ export interface View {
   defaultTemplate?: string;
   /** A table's foot: what each column adds up to, by column id (design §4.1a, R3-8). */
   calculations?: Record<string, CalcKind>;
+  /** What a board's column heads show instead of their count: one per view (R3-24). */
+  boardCalculation?: BoardCalculation;
   /** Table and list: their groups. Board: what makes its columns. Ignored while its property is deleted or can't group (design §13). */
   groupBy?: string;
   /** A date's groups; a month when absent. */
@@ -764,7 +767,7 @@ export type DatabaseChange =
   | { kind: "removeProperty"; propertyId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: none of its own */ defaultTemplate?: string | null }
+  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
   /** null: none */
   | { kind: "setDefaultTemplate"; templateId: string | null }
   | { kind: "removeView"; viewId: string }
@@ -800,6 +803,11 @@ export function viewCalculations(db: Database, view: Pick<View, "calculations">)
     if (property && calcChoices(property.type).includes(kind)) out[id] = kind;
   }
   return out;
+}
+/** A board's calculation while it still fits its property; otherwise its heads go back to the count. */
+export function viewBoardCalculation(db: Database, view: Pick<View, "boardCalculation">): BoardCalculation | null {
+  const chosen = view.boardCalculation, property = chosen ? propertyOf(db, chosen.by) : null;
+  return chosen && property && calcChoices(property.type).includes(chosen.kind) ? chosen : null;
 }
 export type CalcResult =
   | { type: "count"; value: number }
@@ -851,6 +859,10 @@ export function columnCalc(db: Database, rows: readonly Page[], columnId: string
       return { type: "groups", percent: asPercent, value: statusOrder.map((group) => ({ group, count: asPercent ? (rows.length ? clean((inGroup(group) / rows.length) * 100) : 0) : inGroup(group) })) };
     }
   }
+}
+function cleanBoardCalculation(db: Database, input: BoardCalculation): BoardCalculation {
+  if (!input || !propertyOf(db, input.by) || !(calcKinds as readonly unknown[]).includes(input.kind)) throw new DatabaseError("Can't calculate that");
+  return { by: input.by, kind: input.kind };
 }
 function cleanCalculations(db: Database, input: unknown): Record<string, CalcKind> {
   if (!input || typeof input !== "object") throw new DatabaseError("Can't calculate that");
@@ -1037,7 +1049,7 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
 function cleanView(db: Database, input: View): View {
   if (!input) throw new DatabaseError("Unknown view type");
   const layout = cleanLayout(input.layout);
-  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.wrapName ? { wrapName: true as const } : {}), ...(input.defaultTemplate ? { defaultTemplate: input.defaultTemplate } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...cleanGroup(db, input, layout, input) };
+  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.wrapName ? { wrapName: true as const } : {}), ...(input.boardCalculation ? { boardCalculation: cleanBoardCalculation(db, input.boardCalculation) } : {}), ...(input.defaultTemplate ? { defaultTemplate: input.defaultTemplate } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...cleanGroup(db, input, layout, input) };
 }
 function move<T extends { id: string }>(list: T[], id: string, beforeId: string | null): T[] {
   const item = list.find((x) => x.id === id);
@@ -1169,7 +1181,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     }
     case "updateView": {
       const old = view(change.viewId);
-      const { filterAny: _filterAny, wrapName: _wrapName, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, ...rest } = old;
+      const { filterAny: _filterAny, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, ...rest } = old;
       const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
       const group = cleanGroup(db, {
         groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
@@ -1191,6 +1203,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         ...(change.filter !== undefined ? { filter: cleanFilter(db, change.filter, old.filter) } : {}),
         ...((change.filterAny ?? old.filterAny) ? { filterAny: true as const } : {}),
         ...((change.wrapName ?? old.wrapName) ? { wrapName: true as const } : {}),
+        ...(() => { const chosen = change.boardCalculation === undefined ? old.boardCalculation : change.boardCalculation; return chosen ? { boardCalculation: cleanBoardCalculation(db, chosen) } : {}; })(),
         ...(() => { const template = change.defaultTemplate === undefined ? old.defaultTemplate : change.defaultTemplate; return template ? { defaultTemplate: template } : {}; })(),
         ...(() => { const calculations = change.calculations !== undefined ? cleanCalculations(db, change.calculations) : old.calculations; return calculations && Object.keys(calculations).length ? { calculations } : {}; })(),
         ...group,

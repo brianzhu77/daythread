@@ -1,6 +1,7 @@
 // What a command's reply makes of the tab's copy (perf/command-changes, Lead 6f528f6e).
 import type { Workspace } from '../domain/types.ts'
 import { applyChanges, type WorkspaceChanges } from '../domain/workspace-changes.ts'
+import { expandedWorkspace } from '../domain/synced.ts'
 
 export interface CommandReply { owner: string; workspace?: Workspace; changes?: WorkspaceChanges }
 
@@ -11,7 +12,7 @@ export interface CommandReply { owner: string; workspace?: Workspace; changes?: 
  * `ownerBefore`: whose workspace the copy is (null: not known yet). A whole workspace in the reply replaces the copy.
  */
 export function replyWorkspace(copy: Workspace, reply: CommandReply, ownerBefore: string | null): Workspace | null {
-  if (!reply.changes) return reply.workspace ?? null
+  if (!reply.changes) return reply.workspace ? expandedWorkspace(reply.workspace) : null
   if (reply.owner !== ownerBefore) return null
   return applyChanges(copy, reply.changes)
 }

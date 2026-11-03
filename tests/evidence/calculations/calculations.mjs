@@ -108,6 +108,34 @@ for (const name of ['Name', 'Pages', 'Owned', 'Due', 'Status', 'Tags']) { await 
 await closeMenu()
 check(await block.locator('tr.database-calc').count() === 0 && !('calculations' in store().pages.find(p => p.id === 'list').database.views[0]), 'all None: the foot and the field are gone')
 
+// A board: one calculation per view, in each column's head, the same numbers as a table's foot.
+const heads = async () => (await block.locator('.database-column-head').allInnerTexts()).map(t => t.replace(/\s+/g, ' ').trim())
+await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('menuitem', { name: 'Layout' })); await wait(300); await tap(menu.getByRole('menuitemradio', { name: 'Board' })); await wait(700)
+if (await menu.getByRole('menuitem', { name: 'Status' }).count()) { await tap(menu.getByRole('menuitem', { name: 'Status' }).first()); await wait(800) }
+await closeMenu()
+const counted = await heads()
+check(counted.some(h => h.endsWith('Finished · 31')), 'a board starts with its count', counted)
+await openCalculate()
+await menu.getByLabel('Property', { exact: true }).selectOption({ label: 'Pages' }); await wait(800)
+check(await menu.getByLabel('Calculate', { exact: true }).inputValue() === 'sum', 'a number starts on Sum')
+await shot('board-panel')
+await closeMenu()
+const summed = await heads()
+check(summed.some(h => h.endsWith('Finished · Sum 300')) && summed.some(h => h.endsWith('Reading · Sum 412')) && summed.some(h => h.endsWith('To read · Sum 300')), 'each column its own sum', summed)
+await shot('board')
+const onBoard = store().pages.find(p => p.id === 'list').database.views[0]
+check(onBoard.boardCalculation?.by === 'pages' && onBoard.boardCalculation?.kind === 'sum', 'saved on the view', onBoard.boardCalculation)
+await page.reload(); await wait(2500)
+check((await heads()).some(h => h.endsWith('Finished · Sum 300')), 'it stays after a reload')
+await openCalculate(); await menu.getByLabel('Calculate', { exact: true }).selectOption('average'); await wait(800); await closeMenu()
+check((await heads()).some(h => h.endsWith('Finished · Average 300')), 'another kind', await heads())
+await openCalculate(); await menu.getByLabel('Property', { exact: true }).selectOption(''); await wait(800); await closeMenu()
+check((await heads()).some(h => h.endsWith('Finished · 31')) && !('boardCalculation' in store().pages.find(p => p.id === 'list').database.views[0]), 'Count of rows goes back', await heads())
+await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('menuitem', { name: 'Layout' })); await wait(300); await tap(menu.getByRole('menuitemradio', { name: 'List' })); await wait(800); await closeMenu()
+await tap(block.locator('.database-more-button')); await wait(300)
+check(await menu.getByRole('menuitem', { name: 'Calculate' }).count() === 0, 'a list has no Calculate')
+await closeMenu()
+
 // A linked view keeps its own in its block.
 await page.goto(`${base}/pages?page=other`); await wait(2500)
 await openCalculate(); await menu.getByLabel('Pages', { exact: true }).selectOption('max'); await wait(900); await closeMenu(); await wait(1800)

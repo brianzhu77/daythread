@@ -107,7 +107,7 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
 
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(groups?.shown[0]?.key) }} />
-    <div className={`database-list${!groups && drag && drag.before === null ? ' is-drop-end' : ''}`} ref={body}>
+    <div className={`database-list${view.wrapName ? ' wraps-name' : ''}${!groups && drag && drag.before === null ? ' is-drop-end' : ''}`} ref={body}>
       {groups ? groups.shown.map(group => {
         const isFolded = folded.has(group.key)
         const subs = viewSubGroups(db.database, view, group.rows, shownRaw, weekStart)

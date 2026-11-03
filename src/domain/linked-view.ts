@@ -15,7 +15,8 @@ export function linkedViewOf(db: Database, json: unknown): LinkedView {
     const parsed = JSON.parse(json) as Partial<LinkedView>
     if (!parsed || typeof parsed !== 'object' || typeof parsed.id !== 'string') return first
     // Whatever else it carries stays: a later build's fields must survive this one's edits.
-    return { ...first, ...parsed, columns: Array.isArray(parsed.columns) ? parsed.columns : first.columns, sort: Array.isArray(parsed.sort) ? parsed.sort : [], filter: Array.isArray(parsed.filter) ? parsed.filter : [] }
+    // Only what every view must have falls back on the source's: a group or a calculation set there later isn't this view's (§9.1).
+    return { name: first.name, layout: first.layout, ...parsed, id: parsed.id, columns: Array.isArray(parsed.columns) ? parsed.columns : first.columns, sort: Array.isArray(parsed.sort) ? parsed.sort : [], filter: Array.isArray(parsed.filter) ? parsed.filter : [] }
   } catch { return first }
 }
 

@@ -114,7 +114,22 @@ const card = await page.locator('.database-gallery-card[data-row="dune"] .databa
 check(card.fits && card.text.includes('with more words after it'), 'a gallery card wraps', card)
 await shot('gallery')
 await openPanel('Layout'); await tap(menu.getByRole('menuitemradio', { name: 'List' })); await wait(900); await closeMenu()
-check(await page.locator('.database-list .is-wrapped').count() === 0, 'a list stays on its line')
+check(await page.locator('.database-list .is-wrapped').count() === 0, "a list's values stay on their line")
+const listRow = page.locator('.database-list-row[data-row="emma"]')
+const wrappedHeight = (await listRow.boundingBox()).height
+check(await page.locator('.database-list.wraps-name').count() === 1 && wrappedHeight > rowHeight + 1, 'a list wraps Name', wrappedHeight)
+const listGeometry = await listRow.evaluate(row => { const t = document.createRange(); t.selectNodeContents(row.querySelector('.database-list-title')); const v = row.querySelector('.database-list-value'), r = row.getBoundingClientRect(); return { fits: row.querySelector('.database-list-title').scrollWidth <= row.querySelector('.database-list-title').clientWidth + 1, overRow: t.getBoundingClientRect().bottom <= r.bottom + 1, valueTop: v ? v.getBoundingClientRect().top - r.top : null } })
+check(listGeometry.fits && listGeometry.overRow, 'all of the title shows', listGeometry)
+await shot('list-name')
+if (wide) {
+  const chip = await page.locator('.database-list-row[data-row="dune"] .database-list-value:has(.property-chip)').first().evaluate(e => ({ width: e.getBoundingClientRect().width, right: e.getBoundingClientRect().right, edge: e.closest('.database-list-values').getBoundingClientRect().right, chip: e.querySelector('.property-chip').getBoundingClientRect().width }))
+  check(chip.right <= chip.edge + 0.5 && chip.width >= chip.chip - 0.5, "a long value doesn't cut the chip beside it", chip)
+}
+await openPanel('Properties'); await tap(menu.getByLabel('Wrap Name')); await wait(800); await closeMenu()
+const cutAgain = await listRow.locator('.database-list-title').evaluate(e => e.scrollWidth > e.clientWidth)
+if (wide) check(await page.locator('.database-list.wraps-name').count() === 0 && (await listRow.boundingBox()).height < wrappedHeight && cutAgain, 'and can stop: the title is cut again', [wrappedHeight, (await listRow.boundingBox()).height, cutAgain])
+else check(await page.locator('.database-list.wraps-name').count() === 0 && !cutAgain && (await listRow.boundingBox()).height === wrappedHeight, "on the phone a list's title always wraps, so nothing moves", [wrappedHeight, (await listRow.boundingBox()).height])
+await openPanel('Properties'); await tap(menu.getByLabel('Wrap Name')); await wait(800); await closeMenu()
 await openPanel('Layout'); check(await menu.getByLabel('Wrap all').count() === 0, 'and offers no Wrap'); await tap(menu.getByRole('menuitemradio', { name: 'Table' })); await wait(900); await closeMenu()
 await openPanel('Layout'); await tap(menu.getByLabel('Wrap all')); await wait(800); await closeMenu()
 check(firstView().columns.every(c => !c.wrap) && !('wrapName' in firstView()) && await height('dune') <= rowHeight + 1, 'off goes back to one line', await height('dune'))

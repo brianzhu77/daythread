@@ -308,3 +308,33 @@ test('a row template: its relation links nothing back until a row is made from i
   h.run({ type: 'add-row', databaseId: 'books', pageId: 'later', title: '', template: 'tmpl', at: '2026-10-22T18:00:00.000Z' } as never)
   assert.deepEqual(h.page('later').values?.by, [first], 'a row in Trash since is dropped')
 })
+
+test('R3-25: a to-do named in the pick list: made with its link in one command, on today, with one Undo for both', () => {
+  const { h, change } = books()
+  change('books', { kind: 'addProperty', property: { id: 'jobs', name: 'Jobs', type: 'relation', target: todosSourceId } })
+  assert.equal(h.ws.pages.some(p => p.date === today), false, "no day page yet")
+  const id = crypto.randomUUID(), rowId = todoRowId(id)
+  const saved = h.run({ type: 'set-values', pageId: 'dune', values: { jobs: [rowId] }, expected: { jobs: null }, newTodos: [{ id, title: 'Call the printer', on: today }], at: later } as never)
+  const made = h.ws.tasks.find(t => t.id === id)
+  assert.equal(made?.title, 'Call the printer')
+  assert.deepEqual(links(h, 'dune', 'jobs'), [rowId])
+  const day = h.ws.pages.find(p => p.date === today)!
+  assert.ok(day, "today's page is made")
+  assert.ok(JSON.stringify(JSON.parse(day.document)).includes(id), 'its line is on that page')
+  assert.equal(read(h, 'books', 'dune', 'jobs') !== null, true)
+  h.run({ type: 'undo', targetOperationId: saved.receipt.operationId } as never)
+  assert.equal(h.ws.tasks.some(t => t.id === id), false, 'Undo takes the task')
+  assert.equal(links(h, 'dune', 'jobs'), null, 'and the link')
+})
+test('R3-25: a resend makes no second to-do, and a refused save makes none', () => {
+  const { h, change } = books()
+  change('books', { kind: 'addProperty', property: { id: 'jobs', name: 'Jobs', type: 'relation', target: todosSourceId } })
+  const id = crypto.randomUUID(), rowId = todoRowId(id)
+  const action = { type: 'set-values', pageId: 'dune', values: { jobs: [rowId] }, expected: { jobs: null }, newTodos: [{ id, title: 'Once', on: today }], at: later }
+  h.run(action as never)
+  h.run({ ...action, expected: { jobs: [rowId] } } as never)
+  assert.equal(h.ws.tasks.filter(t => t.title === 'Once').length, 1)
+  const other = crypto.randomUUID()
+  assert.throws(() => h.run({ ...action, expected: { jobs: null }, values: { jobs: [todoRowId(other)] }, newTodos: [{ id: other, title: 'Refused', on: today }] } as never))
+  assert.equal(h.ws.tasks.some(t => t.title === 'Refused'), false)
+})

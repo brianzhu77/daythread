@@ -4,9 +4,10 @@
 // would lose the pointer.
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type UIEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { sectionKey, viewSections, viewSubGroups, canWrap, cellValue, databaseRows, isDatabase, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
+import { sectionKey, viewSections, viewSubGroups, columnCalc, propertyOf, viewBoardCalculation, canWrap, cellValue, databaseRows, isDatabase, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { SubGroupHead, HiddenSubGroups, useFolds, NewRow, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { SubGroupHead, HiddenSubGroups, useFolds, NewRow, shownValue, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { calcText } from './property-values'
 import { openDatabaseMenu } from './database-menu'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -33,6 +34,14 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   const ordered = withPendingMoves(rows)
   const groups: ViewGroups | null = viewGroups(db.database, view, ordered, shownRaw, weekStart)
   const columns: ViewGroup[] = groups ? groups.shown : [{ key: allKey, name: '', rows: ordered }]
+  // A column's head: its count, or the view's calculation, the same number a table's foot gives for those rows (R3-24).
+  const calculation = viewBoardCalculation(db.database, view)
+  const headOf = (over: readonly Page[]) => {
+    const property = calculation && propertyOf(db.database, calculation.by)
+    if (!calculation || !property) return over.length
+    const { label, value } = calcText(calculation.kind, columnCalc(db.database, over, calculation.by, calculation.kind, (row, id) => shownValue(db.database, row, id)), property.format, today, property.prefix)
+    return label ? `${label} ${value}` : value
+  }
   // Each view of a block keeps its own place: a board doesn't open where a table was scrolled to.
   const placeKey = `${blockId}|${view.id}`
   const { limitOf, showMore, reach } = useGroupLimits(placeKey, cap)
@@ -231,7 +240,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
         const shown = group.rows.slice(0, limitOf(group.key))
         const over = drag?.over === group.key
         return <section key={group.key} className={`database-column${over && (sorted || drag!.from !== group.key) ? ' is-drop' : ''}`} data-column={group.key} aria-label={group.name ? `${group.name}, ${group.rows.length}` : 'All rows'}>
-          {groups && headsHere && <h3 className="database-column-head"><GroupName groups={groups} group={group.head} /><span className="database-group-count">· {group.head.rows.length}</span></h3>}
+          {groups && headsHere && <h3 className="database-column-head"><GroupName groups={groups} group={group.head} /><span className="database-group-count">· {headOf(group.head.rows)}</span></h3>}
           {shown.map(row => <article key={row.id} data-card={row.id}
             className={`database-card${returned === row.id ? ' is-returned' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}${over && !sorted && drag!.before === row.id && drag!.rowId !== row.id ? ' is-drop-before' : ''}`}
             // A mouse press selects no text: that would move the page's selection, and redraw this block under the drag.
