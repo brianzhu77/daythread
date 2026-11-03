@@ -20,7 +20,7 @@ function CardImage({ row }: { row: Page }) {
   return <img className="database-gallery-image" src={url} alt="" loading="lazy" referrerPolicy="no-referrer" draggable={false} onError={() => setFailed(url)} />
 }
 
-export function DatabaseGallery({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
+export function DatabaseGallery({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true, linked }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
   const { latest } = useWorkspace()
   const commit = useCommitCell()
   const openRow = useOpenRow()
@@ -86,7 +86,7 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
   }
 
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
-    <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
+    <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     {groups ? groups.shown.map(group => {
       const isFolded = folded.has(group.key)
       const shown = isFolded ? [] : group.rows.slice(0, limitOf(group.key))

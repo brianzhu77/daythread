@@ -14,6 +14,9 @@ import { suggestionMenuMiddleware } from './suggestion-menu-placement'
 import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
+import { linkedViewJson, linkedViewOf } from '../domain/linked-view'
+import { DatabasePicker } from './database-linked'
+import { holdKeyboard } from './keyboard'
 import { blockPlace, editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, rowTaskId, sectionRange, withBlockBack, type BlockPlace, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
 import { announceSave, changedBy, claim, clearOwn, landedSave, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn, type DraftSlot } from './draft-slots'
@@ -72,20 +75,29 @@ const pageLink = createReactBlockSpec({ type: 'pageLink', propSchema: { pageId: 
   render: ({ block }) => <PageCard pageId={block.props.pageId} cardId={block.id} url={block.props.url} line={block.props.line} />,
   toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Page</a></p>,
 })()
-// Databases (R1): a `database` block. Its database's home block draws the table; any other is a card to it (R2 makes
-// those linked views). Known to the editor since part 1, so a save always keeps it whole.
+// Databases: a `database` block. Its database's home block draws the table; any other is a linked view of it, its view
+// kept in the `view` prop. Known to the editor since R1 part 1, so a save always keeps it whole.
 const database = createReactBlockSpec({ type: 'database', propSchema: { pageId: { default: '' }, view: { default: '' } }, content: 'none' }, {
-  render: ({ block }) => <DatabaseInPage blockId={block.id} pageId={block.props.pageId} />,
+  render: ({ block }) => <DatabaseInPage blockId={block.id} pageId={block.props.pageId} viewJson={block.props.view} />,
   toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Database</a></p>,
 })()
-function DatabaseInPage({ blockId, pageId }: { blockId: string; pageId: string }) {
+function DatabaseInPage({ blockId, pageId, viewJson }: { blockId: string; pageId: string; viewJson: string }) {
   const actions = useContext(DatabaseEditorActions)
-  return <DatabaseBlock blockId={blockId} pageId={pageId} hostDate={useContext(ChipPageDate)} actions={actions} />
+  return <DatabaseBlock blockId={blockId} pageId={pageId} viewJson={viewJson} hostDate={useContext(ChipPageDate)} actions={actions} />
 }
 /** What a database block asks of the page editor it sits in (model §3): switch it to a card and back, take it out. */
 const DatabaseEditorActions = createContext<BlockActions | null>(null)
 /** The open editors, by page: a block put back after the page changed goes in through its editor, if it has one open. */
 const blockReceivers = new Map<string, (place: BlockPlace) => void>()
+/** The linked views a save removed, and where they sat: the database they showed is still there (design §9.3). */
+function removedViews(ws: Workspace, before: string, after: string, detached: readonly string[]): { place: BlockPlace; db: Page }[] {
+  const was = JSON.parse(before) as EditorNode[], now = new Set(deepNodes(JSON.parse(after) as EditorNode[]).map(n => n.id))
+  return deepNodes(was).flatMap(n => {
+    if (n.type !== 'database' || now.has(n.id) || detached.includes(String(n.props?.pageId))) return []
+    const db = ws.pages.find(p => p.id === n.props?.pageId), place = blockPlace(was, n.id)
+    return isDatabase(db) && !db.trashedAt && db.database.homeBlockId !== n.id && place ? [{ place, db }] : []
+  })
+}
 /** The home blocks a save removed, whose databases went to Trash with it, and where they sat. */
 function removedHomes(ws: Workspace, pageId: string, before: string, after: string): BlockPlace[] {
   const was = JSON.parse(before) as EditorNode[], now = new Set(deepNodes(JSON.parse(after) as EditorNode[]).map(n => n.id))
@@ -498,12 +510,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
             // Its words are the task's now, not the copy's, or pasting an old copy would rename it.
             return { ...node, id, content: [{ type: 'text', text: task.title, styles: {} }], props: { taskId: task.id, role: 'reference', planDate: '' }, ...(node.children?.length ? { children: node.children.map(fresh) } : {}) }
           }
-          // A database block (R1, Jazz §6.3.12): a cut moves the database here (this save makes the block its home); a
-          // copy pastes a page card to it, never a second database. Linked views come with R2.
+          // A database block: a cut home block moves the database here (this save makes the block its home); a cut linked
+          // view just moves; a copy pastes a linked view with its own settings, never a second database (design §9.1).
           if (node.type === 'database') {
             const pageId = String(node.props?.pageId ?? '')
-            if (moving) { databaseFlags.current.adopt.set(pageId, id); return { ...node, id } }
-            return { id, type: 'pageLink', props: { pageId }, children: [] }
+            if (moving) { if (!node.props?.view) databaseFlags.current.adopt.set(pageId, id); return { ...node, id } }
+            const source = latestWorkspace.current.pages.find(p => p.id === pageId)
+            return { id, type: 'database', props: { pageId, view: isDatabase(source) ? linkedViewJson(linkedViewOf(source.database, node.props?.view)) : '' }, children: [] }
           }
           return { ...node, id, content: freshContent(node), ...(node.type === 'task' ? { props: moving && latestWorkspace.current.tasks.some(t => t.id === node.props?.taskId) ? node.props : { taskId: `editor-task:${id}`, role: 'reference', planDate: '' } } : {}), ...(node.children ? { children: node.children.map(fresh) } : {}) }
         }
@@ -897,6 +910,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const places = removedHomes(latest()!, page.id, documentBefore, document)
         const key: string = toast(result.message, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); putHomesBack(page.id, places) } } })
       }
+      const views = removedViews(latest()!, documentBefore, document, flags.detachDatabaseIds ?? [])
+      if (views.length) {
+        const { db } = views[0]!, host = db.parentId ? latest()!.pages.find(p => p.id === db.parentId) : undefined
+        const key: string = toast(`View removed · ${displayPageTitle(db)} is still in ${host ? displayPageTitle(host) : 'Pages'}`, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); putHomesBack(page.id, views.map(v => v.place)) } } })
+      }
       pendingSave.current=null; lastSaved.current = document
       debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
       const savedPage = preview.pages.find(p => p.id === page.id)!
@@ -1167,19 +1185,30 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * database is made with that block as its home, retried like `/page`; the block shows "Creating…" until then and
    * "Not created · Retry" if every try fails. The caret then goes to its title.
    */
-  async function createDatabase() {
-    const pageId = crypto.randomUUID()
+  /** The block goes where the `/` was, with a line after it for the caret. */
+  function insertDatabaseBlock(props: { pageId: string; view?: string }): string {
     let blockId: string | undefined
     editor.transact(() => {
       const current = editor.getTextCursorPosition().block
-      const block = { type: 'database', props: { pageId } } as never
+      const block = { type: 'database', props } as never
       const [inserted] = inlineText(current.content).trim() && inlineText(current.content).trim() !== '/' ? editor.insertBlocks([block], current, 'after') : editor.replaceBlocks([current], [block]).insertedBlocks
       blockId = inserted!.id
       const [line] = editor.insertBlocks([{ type: 'paragraph' } as never], inserted!, 'after')
       editor.setTextCursorPosition(line!, 'start')
     })
+    return blockId!
+  }
+  async function createDatabase() {
+    const pageId = crypto.randomUUID()
+    const blockId = insertDatabaseBlock({ pageId })
     madeHere.current.add(pageId)
-    await confirmDatabase(pageId, blockId!)
+    await confirmDatabase(pageId, blockId)
+  }
+  /** `/` Database: the picker if he has a database to show, else straight to a new one (design §3.1). */
+  const chooseDatabase = () => {
+    if (!latestWorkspace.current.pages.some(p => isDatabase(p) && !p.trashedAt)) { void createDatabase(); return }
+    const line = editor.domElement?.querySelector(`[data-id="${CSS.escape(editor.getTextCursorPosition().block.id)}"]`)?.getBoundingClientRect()
+    setPicker({ top: Math.max(8, Math.min((line?.bottom ?? 80) + 4, window.innerHeight - 320)), left: Math.max(8, line?.left ?? 8) })
   }
   async function confirmDatabase(pageId: string, blockId: string) {
     const retry = () => void confirmDatabase(pageId, blockId)
@@ -1766,10 +1795,21 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       databaseFlags.current.detach.delete(pageId); databaseFlags.current.adopt.set(pageId, block!.id)
     },
     remove: blockId => editor.removeBlocks([blockId]),
+    updateLinkedView: (blockId, build) => {
+      const block = editor.getBlock(blockId)
+      if (block?.type === 'database') editor.updateBlock(blockId, { props: { view: build(block.props.view) } } as never)
+    },
+    duplicate: blockId => {
+      const block = editor.getBlock(blockId)
+      const source = block?.type === 'database' ? latestWorkspace.current.pages.find(p => p.id === block.props.pageId) : undefined
+      if (!block || !isDatabase(source)) return
+      editor.insertBlocks([{ type: 'database', props: { pageId: source.id, view: linkedViewJson(linkedViewOf(source.database, (block.props as { view?: string }).view)) } } as never], blockId, 'after')
+    },
     // Esc from the table: the block selected whole again, in the page editor (design §10).
     select: blockId => { if (editor.getBlock(blockId)) { editor.setTextCursorPosition(blockId); editor.focus() } },
   }), [editor, page.id])
   const [dock, setDock] = useState<HTMLElement | null>(null)
+  const [picker, setPicker] = useState<{ top: number; left: number } | null>(null)
   useEffect(() => setDock(document.getElementById('editor-dock')), [])
   useEffect(() => {
     const blocks = editor.document
@@ -2409,6 +2449,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     <RowActionsContext.Provider value={rowActions}>
     <ChipPageDate.Provider value={page.type === 'daily' ? page.date ?? null : null}>
     <DatabaseEditorActions.Provider value={databaseActions}>
+    {picker && createPortal(<DatabasePicker workspace={latestWorkspace.current} at={picker} allowNew={page.type !== 'template'}
+      onNew={() => { holdKeyboard(); setPicker(null); void createDatabase() }}
+      onPick={(db, view) => { setPicker(null); insertDatabaseBlock({ pageId: db.id, view }); editor.focus() }}
+      onClose={() => { setPicker(null); editor.focus() }} />, document.body)}
     <DraftBands draft={draft} workspace={workspace} groups={groups} fills={draftReady ? fillAnchors(draft, draftShown) : []} />
     {createPortal(<EventRows rows={rows} page={page} workspace={workspace} pageEnd={!rowsAnchor.current || rowsAnchor.current.labelled || (rowsAnchor.current.afterId !== null && !editor.getBlock(rowsAnchor.current.afterId))} />, rowsHost)}
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} shadCNComponents={doneInputs}>
@@ -2436,15 +2480,17 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           insertOrUpdateBlockForSlashMenu(editor, { ...(replaceCurrent ? {} : { id }), type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? page.date ?? '' : '' }, content: '' })
         } }
         const pageItem = { title: 'Page', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
-        const databaseItem = { title: 'Database', icon: <span className="slash-grid-icon" aria-hidden>▦</span>, aliases: ['database', 'table', 'db', '数据库', '表格'], group: 'Suggested', onItemClick: () => void createDatabase() }
+        const databaseItem = { title: 'Database', icon: <span className="slash-grid-icon" aria-hidden>▦</span>, aliases: ['database', 'table', 'db', '数据库', '表格'], group: 'Suggested', onItemClick: chooseDatabase }
         // A9a §3: the phone's way to `[[` (v0.3's toolbar button), through the same + menu.
         const linkItem = { title: 'Link to page', icon: <PagesIcon />, aliases: ['link', '[[', '链接', '引用'], group: 'Suggested', onItemClick: () => {
           if (!linkableLines.has(editor.getTextCursorPosition().block.type)) return
           setTimeout(() => editor.getExtension(SuggestionMenu)?.openSuggestionMenu('[[', { deleteTriggerCharacter: true }), 0)
         } }
         // Every item stays in the list; the menu scrolls past about 8 rows (F13). A cut hid Quote until its name was typed.
-        // Database sits after Page and Link to page (design §3.1); never in a template (linked views come with R2).
-        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, ...(onTemplate ? [] : [databaseItem]), ...first, ...rest], query)
+        // Database sits after Page and Link to page (design §3.1). In a template, only a linked view can be made, so it
+        // needs a database to show (§9.4).
+        const offerDatabase = !onTemplate || latestWorkspace.current.pages.some(p => isDatabase(p) && !p.trashedAt)
+        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, ...(offerDatabase ? [databaseItem] : []), ...first, ...rest], query)
       }} />
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}

@@ -20,7 +20,7 @@ const allKey = ''
 
 interface Drag { rowId: string; from: string; over: string; before: string | null }
 
-export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
+export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true, linked }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
   const { run, latest } = useWorkspace()
   const commit = useCommitCell()
   const openRow = useOpenRow()
@@ -211,7 +211,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   const canAddColumn = groups && (groups.property.type === 'select' || groups.property.type === 'status')
 
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
-    <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(columns[0]!.key === allKey ? undefined : columns[0]!.key) }} />
+    <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(columns[0]!.key === allKey ? undefined : columns[0]!.key) }} />
     {!groups && <p className="database-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'group')}>Group by</button></p>}
     <div className={`database-board${drag ? ' is-dragging' : ''}`} ref={scroller} onScroll={onScroll}>
       {columns.map(group => {

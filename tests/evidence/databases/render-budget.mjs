@@ -16,7 +16,7 @@ const measure = async (variant) => {
     const start = Date.now()
     await page.goto(`${base}/`)
     await page.getByText('Line 39 of the day').waitFor({ timeout: 60000 })
-    if (variant === 'table') await page.locator('.database-row').nth(24).waitFor({ timeout: 60000 })
+    if (variant !== 'plain') await page.locator('.database-row').nth(24).waitFor({ timeout: 60000 })
     const ms = Date.now() - start
     if (i > 0) times.push(ms) // the first load warms the dev server's module cache
     await page.close()
@@ -24,6 +24,6 @@ const measure = async (variant) => {
   times.sort((a, b) => a - b)
   return { median: times[Math.floor(times.length / 2)], min: times[0], max: times.at(-1) }
 }
-const plain = await measure('plain'), table = await measure('table')
-console.log(JSON.stringify({ runs, plain, table, extra: table.median - plain.median }))
+const plain = await measure('plain'), table = await measure('table'), linked = await measure('linked')
+console.log(JSON.stringify({ runs, plain, table, linked, extra: table.median - plain.median, extraLinked: linked.median - plain.median }))
 await browser.close()
