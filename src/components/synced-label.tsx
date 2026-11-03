@@ -12,12 +12,12 @@ export const SyncedEditorActions = createContext<SyncedActions | null>(null)
 const listLimit = 8
 
 export function SyncedLabel({ blockId, syncId }: { blockId: string; syncId: string }) {
-  const { workspace } = useWorkspace()
+  const { workspace, refresh } = useWorkspace()
   const navigate = useNavigate()
   const actions = useContext(SyncedEditorActions)
   if (!workspace) return null
   const record = workspace.synced?.find(r => r.id === syncId)
-  if (!record) return <span className="synced-label" contentEditable={false}>↻ Sync unavailable</span>
+  if (!record) return <span className="synced-unavailable" contentEditable={false}>↻ Sync unavailable<button type="button" className="app-link" onClick={() => void refresh()}>Retry</button></span>
   const places = syncedPlaces(workspace, syncId), live = places.filter(p => !p.page.trashedAt)
   const pages = new Set(live.map(p => p.page.id)).size
   const original = record.original === blockId

@@ -1,6 +1,6 @@
 import { createExtension } from '@blocknote/core'
 import { Plugin, TextSelection } from '@tiptap/pm/state'
-import type { EditorView } from '@tiptap/pm/view'
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 import type { Node as ProseNode, ResolvedPos } from '@tiptap/pm/model'
 import { syncedBlockType } from '../domain/synced'
 
@@ -62,6 +62,13 @@ export const syncedKeys = (onEmpty: (blockId: string) => void) => createExtensio
       const key = (event: KeyboardEvent) => { if (['Backspace', 'Delete', 'Tab'].includes(event.key) && syncedEdgeKey(view, event, onEmpty)) { event.preventDefault(); event.stopPropagation() } }
       view.dom.addEventListener('keydown', key, true)
       return { destroy: () => view.dom.removeEventListener('keydown', key, true) }
+    },
+    // The caret in it shows its label (states §3): focus stays on the editor, so `:focus-within` can't say so, and a phone has no hover.
+    props: {
+      decorations: ({ doc, selection: { $from } }) => {
+        for (let depth = $from.depth; depth > 0; depth--) if (isBlock($from.node(depth))) return DecorationSet.create(doc, [Decoration.node($from.before(depth), $from.after(depth), { class: 'has-caret' })])
+        return null
+      },
     },
   })],
 })
