@@ -613,7 +613,7 @@ doesn't show.
 - **Moving between groups, the value:**
   - Multi-select swaps the group it left and keeps its others. To No value, it empties.
   - A date goes to today if today is in that group, else the group's first day, and keeps its time and length.
-- **Sub-groups** are R3: they'd be a second field on the view, and nothing here assumes one layer.
+- **Sub-groups (R3-13):** `⋯` → Group → **Sub-group**, once there's a group, by any property a table can group by except the group's own. A second layer inside each group, in a table, list and gallery; on a board, a lane of the same columns across the board, with one row of column heads above all the lanes. A group with no rows has one section of its own, so it can still be added to and dropped on. **Hide empty groups** covers both layers, and each layer's values can be hidden on their own. Each section folds and has its own cap, `Show 25 more` and `+ New`, which starts with both values. A drag between sections changes what differs in one change with one Undo, or says "{name} can't be changed" if either can't. To-dos have a command per column, so a drag across both layers there is two changes, and Undo takes back the last one. Status and Planned aren't independent there: a paused to-do has no day and a finished one stays on the day it was finished, so a drop on Paused, Done or Cancelled in another day's lane sets the status alone and the to-do lands on the day it really has. A paused to-do dropped on Open in a day's lane is one change, since planning it opens it. A calendar doesn't group.
 
 **Board, as built in R2 (task #265).**
 
@@ -787,7 +787,7 @@ The Lead recommends **option 1**, so this is option 1's design, with the differe
 - **Restoring a row whose database is in Trash** also restores the database. Trash says **"Restores Reading list too"**
   under its Restore button.
 - **Several rows** (1280): a checkbox on hover at the left of each row, and Shift-click for a range. A bar then reads **"3
-  rows · Edit property ▾ · Delete"**, the same bar as "N blocks selected". On the phone: later.
+  rows · Edit property ▾ · Delete"**, the same bar as "N blocks selected". **On the phone (R3-15):** a table's `⋯` → **Select rows**, or a long-press of 450 ms on a row's Name, which picks that row; moving sooner stays a scroll. A box then shows on each row and a tap anywhere on a row ticks it. The bar stays above the toolbar and adds **All** and **Done**. Edit and Delete of several are one Undo. A table has no other long-press, and a board's is its drag, so they can't collide. To-dos have no bar, at either width. List, Board and Gallery have none at either width yet.
 
 ## 13. States
 

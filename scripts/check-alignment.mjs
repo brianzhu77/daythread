@@ -36,7 +36,7 @@ if (!base) { console.error('usage: node scripts/check-alignment.mjs <base url> [
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
-const REQUIRED = ['synced block', 'board', 'grouped table', 'list', 'gallery', 'calendar', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
+const REQUIRED = ['synced block', 'sub-groups', 'lanes', 'board', 'grouped table', 'list', 'gallery', 'calendar', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
 
 /** What a table cell or a row page's value draws: its box when it's a checkbox, else its first line of text, else a chip or dot. */
 function drawnCentres() {
@@ -156,7 +156,24 @@ function measure() {
       const words = el => { if (!el) return null; const t = document.createRange(); t.selectNodeContents(el); return [...t.getClientRects()].find(x => x.width > 0) ?? null }
       const gap = (a, b) => (a && b ? a.left - b.left : null), mid = (a, b) => (a && b ? cy(a) - cy(b) : null)
       const hidden = words(content.querySelector('.database-hidden-groups'))
-      const column = content.querySelector('.database-board .database-column')
+      // Sub-groups (R3-13): a second layer one step in from its group; on a board, lanes on the title's edge under one row of heads.
+      const firstSub = content.querySelector('.database-group-inner.is-sub .database-group-fold')
+      if (firstSub) {
+        const group = content.querySelector('.database-group-inner:not(.is-sub) .database-group-fold')
+        row.subGroups = { "sub-group's chevron one step in from its group's": group ? firstSub.getBoundingClientRect().left - group.getBoundingClientRect().left - 16 : null }
+      }
+      const lane = content.querySelector('.database-lane')
+      if (lane) {
+        const head = content.querySelector('.database-lane-head-cell .database-column-head'), card = lane.querySelector('.database-card')
+        row.lanes = {
+          "lane's chevron on the title": lane.querySelector('.database-group-fold').getBoundingClientRect().left - title.getBoundingClientRect().left,
+          'column head on the title': head ? head.getBoundingClientRect().left - title.getBoundingClientRect().left : null,
+          "card's edge on its column head": head && card ? card.getBoundingClientRect().left - head.getBoundingClientRect().left : null,
+        }
+      }
+      // These fixtures are small, with no cap or hidden group: only the rules above apply to them.
+      if (firstSub || lane) row.layered = true
+      const column = lane ? null : content.querySelector('.database-board .database-column')
       if (column) {
         const head = column.querySelector('.database-column-head'), card = column.querySelector('.database-card'), name = words(card?.querySelector('.database-card-title'))
         const capped = content.querySelector('.database-column:has(.database-more)')
@@ -439,18 +456,25 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     }
     // The database block's own columns (design §15).
     for (const r of rows.filter(r => r.kind === 'database table')) {
-      const parts = r.board ?? r.list ?? r.gallery ?? r.calendar ?? r.group, name = r.board ? 'board' : r.list ? 'list' : r.gallery ? 'gallery' : r.calendar ? 'calendar' : 'group'
+      const parts = r.layered ? null : r.board ?? r.list ?? r.gallery ?? r.calendar ?? r.group, name = r.board ? 'board' : r.list ? 'list' : r.gallery ? 'gallery' : r.calendar ? 'calendar' : 'group'
       if (parts) {
         seen.get(width).add(r.board ? 'board' : r.list ? 'list' : r.gallery ? 'gallery' : r.calendar ? 'calendar' : 'grouped table')
         for (const [what, off] of Object.entries(parts)) results.push(off == null
           ? { at, check: `${name} ${what}: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
           : { at, check: `${name} ${what}: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
       }
+      for (const [part, kind] of [[r.subGroups, 'sub-groups'], [r.lanes, 'lanes']]) {
+        if (!part) continue
+        seen.get(width).add(kind)
+        for (const [what, off] of Object.entries(part)) results.push(off == null
+          ? { at, check: `${kind} ${what}: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
+          : { at, check: `${kind} ${what}: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
+      }
       if (r.viewChevron !== 'none') results.push(r.viewChevron == null
         ? { at, check: `database view chevron: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
         : { at, check: `database view chevron centred on its word: "${r.label}"`, ok: Math.abs(r.viewChevron) <= TOLERANCE, detail: `${r.viewChevron >= 0 ? '+' : ''}${fmt(r.viewChevron)}px` })
       // A board or list has no Name column: its + New is measured against a card's or row's words, above.
-      if (!r.board && !r.list && !r.gallery && !r.calendar) results.push(r.newOnName == null
+      if (!r.board && !r.list && !r.gallery && !r.calendar && !r.layered) results.push(r.newOnName == null
         ? { at, check: `database + New: "${r.label}"`, ok: 'missing', detail: 'no row or no + New, so not measured' }
         : { at, check: `database + New on Name's text: "${r.label}"`, ok: Math.abs(r.newOnName) <= TOLERANCE, detail: `${r.newOnName >= 0 ? '+' : ''}${fmt(r.newOnName)}px` })
     }

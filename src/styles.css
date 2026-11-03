@@ -1998,6 +1998,13 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-row.is-picked > td { background: var(--blue-soft); }
 .database-picked-bar { display: flex; align-items: center; gap: 12px; padding: 6px 8px; font-size: var(--text-meta); color: var(--ink-2); position: relative; }
 .database-picked-menu { position: absolute; top: 100%; left: 60px; z-index: 30; min-width: 180px; }
+/* On the phone the bar stays in reach above the toolbar, whichever row he's on (R3-15). */
+.database-picked-bar.is-picking { position: fixed; z-index: 40; left: 12px; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom)); min-height: 44px; padding: 4px 14px; border-radius: var(--radius-control); background: var(--bg-doc); box-shadow: var(--shadow-float); }
+.database-picked-bar.is-picking .database-picked-menu { top: auto; bottom: 100%; left: 0; }
+.database-picked-bar.is-picking .app-link { min-height: 36px; }
+.database-row-tick { flex: none; width: 16px; height: 16px; margin: 0 0 0 8px; pointer-events: none; }
+/* A long press on a Name starts picking: no callout or text selection on top of it. */
+@media (max-width: 899px) { .database-title-cell { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; } }
 
 /* Databases R2: groups in a table (design §7.3). The name stays on Name's text while the columns slide under it. */
 .database-block .database-group-head { padding: 0; border: 0; background: none; vertical-align: middle; font-weight: var(--weight-regular); text-align: left; }
@@ -2007,6 +2014,13 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-new-more svg { width: 14px; height: 14px; }
 @media (hover: hover) { .database-new-more:hover { color: var(--ink); background: var(--hover-dim); } }
 @media (max-width: 899px) { .database-new-more { width: 44px; min-height: 44px; } }
+.database-group-inner.is-sub { padding-left: 16px; }
+/* Every lane as wide as the widest row, so a lane's name stays in sight to the end of the scroll. */
+.database-board.has-lanes { display: grid; grid-template-columns: max-content; align-items: start; }
+.database-lane-heads { display: flex; gap: 12px; }
+.database-lane-head-cell { flex: none; width: 260px; }
+.database-lane-heads .database-column.is-add { padding-top: 0; }
+.database-lane-columns { display: flex; align-items: flex-start; gap: 12px; }
 .database-group-inner { position: sticky; left: 0; display: flex; flex-direction: column; align-items: flex-start; width: max-content; }
 .database-group-fold { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; margin-top: 8px; padding: 0 8px 0 0; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--text-small); font-weight: var(--weight-regular); cursor: pointer; }
 .database-group-fold > svg { flex: none; width: 14px; height: 14px; color: var(--ink-3); transition: transform .12s; }
@@ -2055,7 +2069,7 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 @media (max-width: 899px) {
   .database-board { gap: 10px; scroll-snap-type: x mandatory; }
   .database-board.is-dragging { scroll-snap-type: none; }
-  .database-column { width: 300px; scroll-snap-align: start; }
+  .database-column, .database-lane-head-cell { width: 300px; scroll-snap-align: start; }
   .database-column.is-add { width: 300px; }
   .database-card { padding: 10px 12px; font-size: var(--text-ui); }
   .database-column .database-new, .database-column .database-more { padding-inline: 13px; }
