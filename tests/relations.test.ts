@@ -1,7 +1,7 @@
 // Relations and rollups (design §6, R3-5, R3-6, R3-7): links stored on rows, both sides in one operation, read through `withLinks`.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cellValue, databaseRows, viewRows, type Database, type DatabaseChange, type Rollup } from '../src/domain/database.ts'
+import { cellValue, databaseRows, groupableProperties, groupValue, isReadOnly, newRowValues, noGroupKey, propertyOf, viewGroups, viewRows, type Database, type DatabaseChange, type Rollup } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { exportFiles } from '../src/domain/export.ts'
 import { listedPages } from '../src/domain/page-tree.ts'
@@ -204,6 +204,44 @@ test('a type change follows §6.2: a relation read as text shows its titles, and
   // Two-way: its other side has to go first, so nothing is left half kept in step.
   change('books', { kind: 'setMirror', propertyId: 'by', mirror: { id: 'wrote', name: 'Wrote' } })
   assert.throws(() => change('books', { kind: 'updateProperty', propertyId: 'by', type: 'text' }), /other side/)
+})
+
+test('R3-22: Group and Board by a relation: a group per linked row, a row in each, No value last, and a move swaps that one link on both sides', () => {
+  const ctx = books(), { h } = ctx
+  twoWay(ctx)
+  set(h, 'dune', { by: ['herbert', 'austen'] })
+  const read2 = () => db(h, 'books').database, view = (layout: 'board' | 'table') => ({ ...read2().views[0]!, layout, groupBy: 'by' })
+  const context = { today: '2026-11-02', pageDate: null }
+  const groupsOf = (layout: 'board' | 'table') => { const ws = withLinks(h.ws); return viewGroups(read2(), view(layout), viewRows(ws, 'books', view(layout), context))!.shown.map(g => [g.name, g.rows.map(r => r.id)]) }
+  assert.deepEqual(groupsOf('board'), [['Herbert', ['dune']], ['Austen', ['dune']], ['No value', ['emma']]])
+  assert.deepEqual(groupsOf('table'), groupsOf('board'))
+  assert.ok(groupableProperties(read2(), 'board').some(p => p.id === 'by'))
+  // A move from Herbert to Austen's column: only that link changes.
+  const property = propertyOf(read2(), 'by')!
+  set(h, 'emma', { by: groupValue(property, 'herbert', links(h, 'emma', 'by'), noGroupKey, context.today) })
+  assert.deepEqual(links(h, 'herbert', 'wrote'), ['dune', 'emma'])
+  set(h, 'dune', { by: groupValue(property, 'austen', links(h, 'dune', 'by'), 'herbert', context.today) })
+  assert.deepEqual(links(h, 'dune', 'by'), ['austen'])
+  assert.deepEqual(links(h, 'herbert', 'wrote'), ['emma'])
+  // + New under a group starts linked to it.
+  assert.deepEqual(newRowValues(read2(), view('table'), context, 'herbert').values.by, ['herbert'])
+})
+
+test('R3-22: a rollup groups a table by what it works out to, read-only, and makes no board', () => {
+  const { h, change } = books()
+  change('books', { kind: 'addProperty', property: { id: 'sum', name: 'Sum', type: 'rollup', rollup: { relation: 'by', property: 'age', fn: 'sum' } } })
+  change('books', { kind: 'addProperty', property: { id: 'names', name: 'Names', type: 'rollup', rollup: { relation: 'by', property: 'title', fn: 'original' } } })
+  set(h, 'dune', { by: ['herbert'] })
+  const database = () => db(h, 'books').database, ws = () => withLinks(h.ws), context = { today: '2026-11-02', pageDate: null }
+  const groups = (by: string) => { const view = { ...database().views[0]!, layout: 'table' as const, groupBy: by }; return viewGroups(database(), view, viewRows(ws(), 'books', view, context))!.shown.map(g => [g.name, g.rows.map(r => r.id)]) }
+  assert.deepEqual(groups('sum'), [['65', ['dune']], ['No value', ['emma']]])
+  assert.deepEqual(groups('names'), [['Herbert', ['dune']], ['No value', ['emma']]])
+  const sum = propertyOf(database(), 'sum')!
+  assert.equal(isReadOnly(sum), true)
+  assert.ok(groupableProperties(database(), 'table').some(p => p.id === 'sum'))
+  assert.ok(!groupableProperties(database(), 'board').some(p => p.id === 'sum'))
+  // Nothing to prefill from a group it works out.
+  assert.equal(newRowValues(database(), { ...database().views[0]!, layout: 'table', groupBy: 'sum' }, context, '65').values.sum, undefined)
 })
 
 test('the new changes pass the schema; To-dos is not a target', () => {

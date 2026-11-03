@@ -543,19 +543,21 @@ export function newRowValues(db: Database, view: View, context: ViewContext, gro
 
 /** The group of rows with no value. */
 export const noGroupKey = "none";
-const canGroup = (type: PropertyType): boolean => type !== "text" && type !== "id" && type !== "relation" && type !== "rollup";
-const canMakeColumns = (type: PropertyType): boolean => type === "select" || type === "status" || type === "checkbox";
+const canGroup = (type: PropertyType): boolean => type !== "text" && type !== "id" && type !== "rollup";
+const canMakeColumns = (type: PropertyType): boolean => type === "select" || type === "status" || type === "checkbox" || type === "relation";
+/** A rollup groups by what it works out to, whatever that is, though a card can't be dragged there, so it makes no board. */
+const groupsBy = (p: Property, layout: ViewLayout): boolean => (layout === "board" ? !p.rollup && canMakeColumns(p.type) : Boolean(p.rollup) || canGroup(p.type));
 /** What a view of this layout can group by: a board's columns need a value a card can be dragged to (design §7.2). */
 export function groupableProperties(db: Database, layout: ViewLayout): Property[] {
   if (layout === "calendar") return [];
-  return db.properties.filter((p) => !p.rollup && (layout === "board" ? canMakeColumns(p.type) : canGroup(p.type)));
+  return db.properties.filter((p) => groupsBy(p, layout));
 }
 /** The property a view groups by now; null when it was deleted or its type can't group any more. */
 export function viewGroupBy(db: Database, view: View): Property | null {
   // A calendar doesn't group; its `groupBy` is kept unread, for switching back.
   if (view.layout === "calendar") return null;
   const property = view.groupBy ? db.properties.find((p) => p.id === view.groupBy) : undefined;
-  return property && (view.layout === "board" ? canMakeColumns(property.type) : canGroup(property.type)) ? property : null;
+  return property && groupsBy(property, view.layout) ? property : null;
 }
 const statusOrder: StatusGroup[] = ["todo", "active", "done"];
 /** Options in the order groups show them: a status's by To do, In progress, Done, as its editor lists them. */
@@ -583,7 +585,7 @@ export function newRowProbe(db: Database, title: string, values: Page["values"])
 function groupKeys(property: Property, value: CellValue, by: GroupDateBy, weekStart: WeekStart): string[] {
   if (property.type === "checkbox") return [value === true ? "checked" : "unchecked"];
   if (isEmptyValue(value)) return [noGroupKey];
-  if (property.type === "multiSelect") return value as string[];
+  if (property.type === "multiSelect" || property.type === "relation") return value as string[];
   if (property.type === "date" || isTimeType(property.type)) return [dateGroupKey((value as DateValue).start, by, weekStart)];
   return [String(value)];
 }
@@ -611,7 +613,10 @@ export function viewGroups(db: Database, view: View, rows: readonly Page[], rawF
   const group = (key: string, name: string): ViewGroup => ({ key, name, rows: found.get(key) ?? [] });
   const groups: ViewGroup[] = [];
   if (property.type === "checkbox") groups.push(group("unchecked", "Unchecked"), group("checked", "Checked"));
-  else if (hasOptions(property.type)) {
+  else if (property.type === "relation") {
+    // Its options are every row of its target: a group only for those linked here, in the target's order.
+    groups.push(...groupOptions(property).filter((o) => found.has(o.id)).map((o) => group(o.id, o.name)), group(noGroupKey, "No value"));
+  } else if (hasOptions(property.type)) {
     groups.push(...groupOptions(property).map((o) => group(o.id, o.name)));
     // A status always has a value (design §6.1), so it has no group for none.
     if (property.type !== "status") groups.push(group(noGroupKey, "No value"));
@@ -671,6 +676,7 @@ export function groupValue(property: Property, key: string, raw: unknown, fromKe
   switch (property.type) {
     case "checkbox": return key === "checked" ? true : undefined;
     case "number": return Number(key);
+    case "relation":
     case "multiSelect": {
       const had = readValue(property, raw);
       const kept = Array.isArray(had) ? (had as string[]).filter((id) => id !== fromKey && id !== key) : [];
