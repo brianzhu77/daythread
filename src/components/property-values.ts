@@ -5,12 +5,12 @@ import type { LocalDate } from '../domain/types'
 import { fromIso } from './dates.ts'
 
 /** A foot cell's two parts: a short word, and what it comes to. Nothing to reckon reads "—". */
-export function calcText(kind: CalcKind, result: CalcResult, format: NumberFormat | undefined, today: LocalDate): { label: string; value: string } {
+export function calcText(kind: CalcKind, result: CalcResult, format: NumberFormat | undefined, today: LocalDate, prefix = ''): { label: string; value: string } {
   const label = calcWords[kind]
   switch (result.type) {
     case 'count': return { label, value: result.value.toLocaleString('en-US') }
     case 'percent': return { label, value: result.value === null ? '—' : `${Math.round(result.value * 10) / 10}%` }
-    case 'number': return { label, value: result.value === null ? '—' : numberLabel(kind === 'average' ? Math.round(result.value * 100) / 100 : result.value, format) }
+    case 'number': return { label, value: result.value === null ? '—' : `${prefix}${numberLabel(kind === 'average' ? Math.round(result.value * 100) / 100 : result.value, format)}` }
     case 'date': return { label, value: result.value === null ? '—' : dateLabel({ start: result.value }, today) }
     case 'days': return { label, value: result.value === null ? '—' : result.value === 1 ? '1 day' : `${result.value.toLocaleString('en-US')} days` }
     case 'groups': return { label, value: result.value.map(g => `${statusDots[g.group]} ${Math.round(g.count * 10) / 10}${result.percent ? '%' : ''}`).join('  ') }

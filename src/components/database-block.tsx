@@ -872,7 +872,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const footRow = (over: readonly Page[]) => <tr className="database-calc">
     {footColumns.map(property => {
       const kind = calculations[property.id]
-      const text = kind ? calcText(kind, columnCalc(db.database, over, property.id, kind, readShown), property.format, today) : null
+      const text = kind ? calcText(kind, columnCalc(db.database, over, property.id, kind, readShown), property.format, today, property.prefix) : null
       return <td key={property.id} className={`database-td is-${property.id === titleId ? 'title' : property.type}`}>
         {(text || wide) && <button type="button" className="database-cell database-calc-cell" aria-label={text ? `${property.name}: ${text.label} ${text.value}` : `Calculate ${property.name}`} onClick={() => openDatabaseMenu(blockId, db.id, 'calculate')}>
           {text ? <span className="database-calc-text">{text.label && <span className="database-calc-label">{text.label}</span>}<span>{text.value}</span></span> : <span className="database-calc-empty">Calculate</span>}
@@ -1036,7 +1036,7 @@ function defaultWidth(property: Property): number {
     case 'select': case 'multiSelect': case 'status': return 140
     case 'text': case 'url': case 'email': case 'phone': return 180
     case 'createdTime': case 'editedTime': return 150
-    case 'id': return 70
+    case 'id': return 70 + (property.prefix?.length ?? 0) * 8
   }
 }
 /** "Property", "Property 2", …: never a name the database already has (or "Name"). */
@@ -1119,6 +1119,7 @@ function filterWords(c: Condition, property: Property | null): string {
     : v && typeof v === 'object' ? ('relative' in v ? (v.relative === 'today' ? 'today' : "this page's day") : String((v as { date?: string }).date ?? ''))
     : v === true ? 'checked' : v === false ? 'unchecked'
     : c.op === 'within' ? ({ thisWeek: 'this week', past7: 'the past 7 days', next7: 'the next 7 days' } as Record<string, string>)[String(v)] ?? ''
+    : property?.type === 'id' ? `${property.prefix ?? ''}${String(v)}`
     : String(v)
   // A rule still waiting for its value reads as unfinished, not broken (Jazz 72ba456b).
   return `${op} ${text || '…'}`
