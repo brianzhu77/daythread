@@ -5,7 +5,7 @@ import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget } from "./day-template.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
-import { changeDatabase, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit } from "./database.ts";
+import { changeDatabase, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
 
@@ -469,6 +469,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (n.type === "pageLink" && n.props?.at === undefined) n.props = { ...n.props, at };
         if (Array.isArray(n.content)) for (const c of n.content as { type?: string; props?: Record<string, unknown> }[]) if (c?.type === "pageRef" && c.props && c.props.at === undefined) c.props.at = at;
       }
+      // A row's body edited moves its Edited time; a save with nothing new, as on opening, doesn't (R3-9).
+      if (isRow(state, p) && JSON.stringify(nodes) !== JSON.stringify(pageNodes(p))) p.editedAt = isoTime(action.at);
       setDocument(p, nodes);
       for (const [id, rows] of gone) {
         const t = state.tasks.find((x) => x.id === id);
@@ -637,6 +639,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const p = page(state, action.pageId);
       if (p.type === "daily") throw new DomainError("Day pages are named by their date");
       p.title = text(action.title, 1000).trim();
+      if (isRow(state, p)) p.editedAt = isoTime(undefined);
       return { message: "Page renamed", entityId: p.id };
     }
     case "move-page": {
@@ -833,6 +836,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       try { values = source ? structuredClone(source.row.values) : newRowStored(db.database, action.values); } catch (error) { throw new DomainError((error as Error).message); }
       const row: Page = { id: action.pageId, type: "document", date: null, title: source ? `${source.row.title} (copy)`.trim() : text(action.title, 1000).trim(), parentId: db.id, document: JSON.stringify([emptyLine("paragraph")]), ...(values ? { values } : {}), createdAt: at, editedAt: at };
       if (source) row.document = JSON.stringify(copiedBody(state, source.row, row, localDay(state, at)));
+      numberNewRow(db.database, row);
       // Rows keep page order: before `beforeId`, after the row it copies, or at the end.
       const rows = databaseRows(state, db.id);
       const before = action.beforeId ? rows.find((r) => r.id === action.beforeId) : source ? rows[rows.indexOf(source.row) + 1] : undefined;
@@ -974,6 +978,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");
     state = { ...structuredClone(previous.before), revision: input.revision, receipts: structuredClone(input.receipts) };
+    keepRowNumbers(input, state);
     result = { message: "Previous operation restored" };
   } else result = execute(state, command.action, command.operationId);
   state.revision = input.revision + 1;

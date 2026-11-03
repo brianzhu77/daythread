@@ -2,11 +2,13 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { calendarRows, conditionHolds, inView, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, viewGroupBy, viewGroups, viewRows, type Database, type View } from '../src/domain/database.ts'
+import { calendarRows, cellValue, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, viewGroupBy, viewGroups, viewRows, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
 import { harness, today } from './v2-helpers.ts'
+import { pageContentKey } from '../src/domain/editor-document.ts'
+import { emailHref, phoneHref } from '../src/components/property-values.ts'
 
 const at = '2026-10-22T18:00:00.000Z'
 const ctx = { today, pageDate: null }
@@ -334,3 +336,151 @@ test('any is stored on the view, kept by other changes, and off again', () => {
   assert.equal(h.db().views.at(-1)!.filterAny, true)
 })
 
+
+// ---------- R3-9, R3-10: Created time, Edited time, ID, Email, Phone
+
+/** Three rows, and each of the new types as a property. */
+function typed() {
+  const h = reading()
+  h.change({ kind: 'addProperty', property: { id: 'mail', name: 'Mail', type: 'email' } })
+  h.change({ kind: 'addProperty', property: { id: 'tel', name: 'Tel', type: 'phone' } })
+  h.change({ kind: 'addProperty', property: { id: 'made', name: 'Made', type: 'createdTime' } })
+  h.change({ kind: 'addProperty', property: { id: 'seen', name: 'Seen', type: 'editedTime' } })
+  return h
+}
+const number = (h: ReturnType<typeof reading>, id: string) => cellValue(h.db(), h.page(id), 'num')
+const undoLast = (h: ReturnType<typeof reading>) => h.run({ type: 'undo', targetOperationId: h.ws.undo!.operationId })
+
+test('ID: rows are numbered in page order when the first ID property is made, and new rows go on from there', () => {
+  const h = typed()
+  assert.equal(h.db().nextRowNumber, undefined)
+  h.change({ kind: 'addProperty', property: { id: 'num', name: 'No.', type: 'id' } })
+  assert.deepEqual(h.order().map(id => number(h, id)), [1, 2, 3, 4])
+  h.run({ type: 'add-row', databaseId: 'list', pageId: 'new', title: 'New', at })
+  assert.equal(number(h, 'new'), 5)
+  h.run({ type: 'add-row', databaseId: 'list', pageId: 'twin', title: 'Twin', copyOf: 'dune', at } as never)
+  assert.equal(number(h, 'twin'), 6, 'a duplicate has its own')
+})
+test('ID: a number is never used twice, after a trashed row or an undone add', () => {
+  const h = typed()
+  h.change({ kind: 'addProperty', property: { id: 'num', name: 'No.', type: 'id' } })
+  h.run({ type: 'add-row', databaseId: 'list', pageId: 'new', title: 'New', at })
+  assert.equal(number(h, 'new'), 5)
+  undoLast(h)
+  assert.equal(h.ws.pages.some(p => p.id === 'new'), false)
+  h.run({ type: 'add-row', databaseId: 'list', pageId: 'next', title: 'Next', at })
+  assert.equal(number(h, 'next'), 6)
+})
+test('ID: undoing the property leaves no number to reuse, and a second ID property reads the same numbers', () => {
+  const h = typed()
+  h.change({ kind: 'addProperty', property: { id: 'num', name: 'No.', type: 'id' } })
+  undoLast(h)
+  assert.equal(h.db().nextRowNumber, 5)
+  h.change({ kind: 'addProperty', property: { id: 'num', name: 'No.', type: 'id' } })
+  assert.deepEqual(h.order().map(id => number(h, id)), [5, 6, 7, 8])
+  h.change({ kind: 'addProperty', property: { id: 'num2', name: 'Again', type: 'id' } })
+  assert.deepEqual(h.order().map(id => cellValue(h.db(), h.page(id), 'num2')), [5, 6, 7, 8])
+})
+test('ID: a type change makes numbers too, and leaves the old values where they were', () => {
+  const h = typed()
+  h.change({ kind: 'updateProperty', propertyId: 'note', type: 'id' })
+  assert.equal(cellValue(h.db(), h.page('dune'), 'note'), 1)
+  assert.equal(h.db().nextRowNumber, 5)
+})
+test('the app-filled types refuse any value, a value for the row number included', () => {
+  const h = typed()
+  h.change({ kind: 'addProperty', property: { id: 'num', name: 'No.', type: 'id' } })
+  for (const key of ['made', 'seen', 'num', '@id']) {
+    const before = JSON.stringify(h.page('dune').values)
+    assert.throws(() => h.run({ type: 'set-values', pageId: 'dune', values: { [key]: 9 } } as never), `${key} refused`)
+    assert.equal(JSON.stringify(h.page('dune').values), before)
+  }
+})
+test('Created time reads the row, in local time, and a row from before stays empty', () => {
+  const h = typed()
+  const made = cellValue(h.db(), h.page('dune'), 'made') as { start: string }
+  const d = new Date(at), two = (n: number) => String(n).padStart(2, '0')
+  assert.equal(made.start, `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`)
+  delete h.page('dune').createdAt
+  delete h.page('dune').editedAt
+  assert.equal(cellValue(h.db(), h.page('dune'), 'made'), null)
+  assert.equal(cellValue(h.db(), h.page('dune'), 'seen'), null)
+})
+test('Edited time moves on a value, a rename and a changed body, and not on a save with nothing new', () => {
+  const h = typed()
+  const edited = () => h.page('dune').editedAt
+  const stale = '2020-01-01T00:00:00.000Z'
+  h.page('dune').editedAt = stale
+  const same = h.page('dune').document
+  h.run({ type: 'save-editor', pageId: 'dune', expectedContent: pageContentKey(h.page('dune')), document: same } as never)
+  assert.equal(edited(), stale, 'nothing new')
+  h.run({ type: 'rename-page', pageId: 'dune', title: 'Dune 2' })
+  assert.notEqual(edited(), stale, 'rename')
+  h.page('dune').editedAt = stale
+  h.run({ type: 'save-editor', pageId: 'dune', expectedContent: pageContentKey(h.page('dune')), document: JSON.stringify([{ id: 'x', type: 'paragraph', props: {}, content: [{ type: 'text', text: 'Hi', styles: {} }], children: [] }]) } as never)
+  assert.notEqual(edited(), stale, 'body')
+  h.page('dune').editedAt = stale
+  h.run({ type: 'set-values', pageId: 'dune', values: { pages: 1 } } as never)
+  assert.notEqual(edited(), stale, 'value')
+})
+test('filter and sort: Email and Phone as text, ID as a number, the times as dates', () => {
+  const h = typed()
+  h.change({ kind: 'addProperty', property: { id: 'num', name: 'No.', type: 'id' } })
+  h.run({ type: 'set-values', pageId: 'dune', values: { mail: 'a@b.co', tel: 'not a number' } } as never)
+  const shown = (fields: Partial<View>) => h.rows(view(fields)).map(r => r.id)
+  assert.deepEqual(shown({ filter: [{ by: 'mail', op: 'contains', value: 'B.CO' }] }), ['dune'])
+  assert.deepEqual(shown({ filter: [{ by: 'tel', op: 'isNotEmpty' }] }), ['dune'])
+  assert.deepEqual(shown({ filter: [{ by: 'num', op: 'gt', value: 3 }] }), ['blank'])
+  assert.deepEqual(shown({ sort: [{ by: 'num', direction: 'desc' }] }), ['blank', 'ubik', 'emma', 'dune'])
+  const day = (cellValue(h.db(), h.page('dune'), 'made') as { start: string }).start.slice(0, 10)
+  assert.equal(shown({ filter: [{ by: 'made', op: 'is', value: { date: day } }] }).length, 4)
+  assert.equal(shown({ filter: [{ by: 'made', op: 'before', value: { date: day } }] }).length, 0)
+})
+test('grouping: by a time as dates, with + New setting nothing and shown; by Email by its words; never by ID', () => {
+  const h = typed()
+  h.change({ kind: 'addProperty', property: { id: 'num', name: 'No.', type: 'id' } })
+  assert.equal(groupableProperties(h.db(), 'table').some(p => p.id === 'num'), false)
+  assert.equal(groupableProperties(h.db(), 'board').some(p => p.id === 'made' || p.id === 'mail'), false)
+  const v = view({ groupBy: 'made', groupDateBy: 'month' })
+  const groups = viewGroups(h.db(), v, h.rows(v))!.shown
+  assert.equal(groups.length, 1)
+  assert.equal(groups[0]!.rows.length, 4)
+  const made = newRowValues(h.db(), v, ctx, groups[0]!.key)
+  assert.deepEqual(made.values, {})
+  h.run({ type: 'set-values', pageId: 'dune', values: { mail: 'a@b.co' } } as never)
+  const byMail = view({ groupBy: 'mail' })
+  assert.deepEqual(shape(h, byMail)?.find(g => g[0] === 'a@b.co')?.[1], ['dune'])
+  assert.deepEqual(newRowValues(h.db(), byMail, ctx, 'a@b.co').values, { mail: 'a@b.co' })
+})
+test('+ New under a rule on a filled-in type: no value to set, and shown when its own time or number fits', () => {
+  const h = typed()
+  h.change({ kind: 'addProperty', property: { id: 'num', name: 'No.', type: 'id' } })
+  const local = new Date(), two = (n: number) => String(n).padStart(2, '0')
+  const now = `${local.getFullYear()}-${two(local.getMonth() + 1)}-${two(local.getDate())}`
+  const on = newRowValues(h.db(), view({ filter: [{ by: 'made', op: 'is', value: { date: now } }] }), ctx)
+  assert.deepEqual([on.values, on.visible], [{}, true])
+  const off = newRowValues(h.db(), view({ filter: [{ by: 'num', op: 'lt', value: 2 }] }), ctx)
+  assert.deepEqual([off.values, off.visible], [{}, false])
+  const next = newRowValues(h.db(), view({ filter: [{ by: 'num', op: 'eq', value: 5 }] }), ctx)
+  assert.deepEqual([next.values, next.visible], [{}, true])
+})
+test('what links: an address and a number; anything else is just text and is kept', () => {
+  assert.equal(emailHref(' a.b@c.co '), 'mailto:a.b@c.co')
+  for (const no of ['', 'a@b', 'a b@c.co', 'call me']) assert.equal(emailHref(no), null)
+  assert.equal(phoneHref('+1 (415) 555-0100'), 'tel:+14155550100')
+  for (const no of ['', '12', 'call me', '415-CALL-NOW']) assert.equal(phoneHref(no), null)
+  const h = typed()
+  h.run({ type: 'set-values', pageId: 'dune', values: { mail: 'not an address', tel: 'ask at the desk' } } as never)
+  assert.equal(cellValue(h.db(), h.page('dune'), 'mail'), 'not an address')
+  assert.equal(cellValue(h.db(), h.page('dune'), 'tel'), 'ask at the desk')
+})
+test('changing to a filled-in type counts what it hides; changing back gives it back', () => {
+  const h = typed()
+  h.run({ type: 'set-values', pageId: 'dune', values: { note: 'keep' } } as never)
+  const note = h.db().properties.find(p => p.id === 'note')!
+  assert.equal(lostOnTypeChange(h.ws, 'list', note, 'createdTime'), 1)
+  assert.equal(lostOnTypeChange(h.ws, 'list', note, 'email'), 0)
+  h.change({ kind: 'updateProperty', propertyId: 'note', type: 'createdTime' })
+  h.change({ kind: 'updateProperty', propertyId: 'note', type: 'text' })
+  assert.equal(cellValue(h.db(), h.page('dune'), 'note'), 'keep')
+})
