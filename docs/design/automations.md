@@ -48,7 +48,9 @@ Notion runs these some time after the edit. **I'd run row and property triggers 
 3. **Typing speed:** a property edit isn't slowed noticeably. A database with no rules pays nothing, which is R1-18's bar. Measure with rules on.
 4. **A rename or delete of something a rule uses** shows the rule as broken at once, not on its next run.
 
-## 6. Scheduled rules, which need a decision
+## 6. Scheduled rules
+
+**Decided (Lead f5362d4f): A, catch-up on open, for scheduled rules and repeating templates.** A paid cron is looked at only if being on time matters in use, and then the Lead checks our plan and tells Brian. The comparison stays below as the reason.
 
 Today nothing runs on the server unless a request comes in: days are made by his open tab at midnight (`ensure-day`). So **"Every Monday" and repeating templates (R4-6) need a way to wake up.**
 
@@ -59,7 +61,7 @@ Today nothing runs on the server unless a request comes in: days are made by his
 | Mail, webhook or Slack at a set time | Not honest: it would send late | Works |
 | New failure mode | None beyond today's | A run with nobody watching, needing its own logging and alert |
 
-**Recommendation for the Lead: A first.** It uses the path his days already use, and it's enough for rows in his own databases, since he only sees them when he opens the app anyway. Move to B when a scheduled step reaches outside the app.
+**Why A:** it uses the path his days already use, and it's enough for rows in his own databases, since he only sees them when he opens the app anyway. Move to B when a scheduled step reaches outside the app.
 
 **With A:**
 
@@ -81,7 +83,7 @@ Today nothing runs on the server unless a request comes in: days are made by his
 ## 9. Release order, within Automations
 
 1. Row added and Property edited, with Edit property, Add row and Edit rows.
-2. Scheduled rules (§6, A or B per the Lead), together with R4-6.
+2. Scheduled rules (§6, catch-up on open), together with R4-6.
 3. To-dos as a source.
 4. Steps that reach outside, per `buttons.md` §7.
 
