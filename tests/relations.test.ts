@@ -290,3 +290,21 @@ test('the new changes pass the schema; a target must exist', () => {
   ]
   for (const c of changes) assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 0, action: { type: 'change-database', pageId: 'p', change: c } }).success, true, c.kind)
 })
+
+test('a row template: its relation links nothing back until a row is made from it, and one gone since is dropped', () => {
+  const ctx = books()
+  twoWay(ctx)
+  const { h } = ctx
+  const backlinks = (id: string) => h.page(id).values?.wrote
+  h.run({ type: 'create-template', databaseId: 'books', title: 'Review', pageId: 'tmpl' } as never)
+  const authors = h.ws.pages.filter(p => p.parentId === 'authors').map(p => p.id)
+  const [first, second] = authors as [string, string]
+  h.run({ type: 'set-values', pageId: 'tmpl', values: { by: [first, second] } } as never)
+  assert.deepEqual(h.page('tmpl').values?.by, [first, second])
+  assert.equal((backlinks(first) as string[] | undefined)?.includes('tmpl') ?? false, false, 'nothing links to a template')
+  h.run({ type: 'add-row', databaseId: 'books', pageId: 'made', title: '', template: 'tmpl', at: '2026-10-22T18:00:00.000Z' } as never)
+  assert.equal((backlinks(first) as string[]).includes('made'), true, 'the new row links back')
+  h.run({ type: 'delete-page', pageId: second, at: '2026-10-22T18:00:00.000Z' } as never)
+  h.run({ type: 'add-row', databaseId: 'books', pageId: 'later', title: '', template: 'tmpl', at: '2026-10-22T18:00:00.000Z' } as never)
+  assert.deepEqual(h.page('later').values?.by, [first], 'a row in Trash since is dropped')
+})
