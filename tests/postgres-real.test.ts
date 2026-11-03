@@ -54,3 +54,27 @@ test('real Postgres: two processes starting on a schema without the database col
     await Promise.all([a.end(), b.end()])
   }
 })
+
+test('real Postgres: a row number is never used twice, past an Undo', { skip }, async () => {
+  const schema = `daythread_test_ids_${process.pid}`
+  const a = connect()
+  try {
+    const r = new PostgresWorkspaceRepository(postgresClient(a), schema)
+    let ws = await r.load()
+    const run = async (operationId: string, action: never) => { const out = await r.execute({ operationId, expectedRevision: ws.revision, action }); ws = await r.load(); return out }
+    await run('i1', { type: 'create-database', pageId: 'list', homeBlockId: null, title: 'List' } as never)
+    await run('i2', { type: 'add-row', databaseId: 'list', pageId: 'one', title: 'One', at: '2026-10-22T18:00:00.000Z' } as never)
+    await run('i3', { type: 'change-database', pageId: 'list', change: { kind: 'addProperty', property: { id: 'num', name: 'No.', type: 'id' } } } as never)
+    await run('i4', { type: 'add-row', databaseId: 'list', pageId: 'two', title: 'Two', at: '2026-10-22T18:00:00.000Z' } as never)
+    assert.equal(ws.pages.find(p => p.id === 'two')!.values!['@id'], 2)
+    await run('i5', { type: 'undo', targetOperationId: 'i4' } as never)
+    assert.equal(ws.pages.some(p => p.id === 'two'), false)
+    assert.equal(ws.pages.find(p => p.id === 'list')!.database!.nextRowNumber, 3)
+    await run('i6', { type: 'add-row', databaseId: 'list', pageId: 'three', title: 'Three', at: '2026-10-22T18:00:00.000Z' } as never)
+    assert.equal(ws.pages.find(p => p.id === 'three')!.values!['@id'], 3)
+    assert.equal(ws.pages.find(p => p.id === 'one')!.values!['@id'], 1)
+  } finally {
+    await a.unsafe(`drop schema if exists ${schema} cascade`)
+    await a.end()
+  }
+})

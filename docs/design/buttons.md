@@ -60,12 +60,16 @@ There's no explanatory line anywhere (Daythread's rule, Brian 1ac6784b).
 5. **Copying:** a copied button is a separate button with the same steps, in a page, a template or a duplicate row's body. In a synced block it's one button (`synced-blocks.md`), and in another app it's its label as text.
 6. **A template doesn't run steps.** The button works on the day made from it. On the template itself a tap opens Edit.
 
-## 5. For Roadbuster to size
+## 5. Engineering answers (Roadbuster 6ef1eb57, from reading the code, not prototyped)
 
-- **Insert blocks with other steps.** Inserting happens in the open editor, with its own ⌘Z. Adding a row happens on the server. One Undo over both is the hard part of this design. I'd try a server command that also edits the document, under R2-9's rule for a page open in another tab, with no false "Changed in another tab". If that's too costly, the fallback is that a button with Insert blocks may not have other data steps, which we'd have to say in its editor and list as a limit. Please tell me which.
-- **Old tabs and the rollback floor.** `button` is a new block type, and a new property type. I expect an old tab can't draw the block, so this likely raises the floor, as the database block did. Please confirm.
-- **Where the steps live:** in the block's props and the property's settings, I'd expect. Ids in steps go stale, so point 4 reads them at the click.
-- **Automations (next doc):** should share these steps, so build them as one list.
+- **Insert blocks with other steps: one server command.** `run-button` does every step in one operation, including writing the inserted blocks into the document, so there's one Undo and no need for the fallback. `apply-draft` and `rename-task` already change a document and tasks together. About a day.
+- **Limits of that, which I accept for the product:**
+  - The open editor saves what's been typed before the click, so the command starts from what he sees.
+  - The way back is the notice's Undo, not ⌘Z in the editor, and it's refused after later changes, like any notice's Undo.
+  - A page open in another tab learns of it when he returns to that tab. Unsaved typing there gets the real conflict notice.
+- **Old tabs and the rollback floor:** the floor rises for the block, so it ships in two steps, as the database block did: first a release with the block spec and no way to make one, which becomes the floor, then the feature. The property type is confirmed by running it, as R3-17 asks.
+- **Where the steps live:** in the block's props and the property's settings, with ids read at the click (§4.4).
+- **Automations (`automations.md`):** one shared list of steps.
 
 ## 6. Open
 
@@ -75,7 +79,7 @@ There's no explanatory line anywhere (Daythread's rule, Brian 1ac6784b).
 
 ## 7. Release order, within Buttons
 
-1. Page button: Insert blocks, Add row, Edit rows, Open, Confirmation.
+1. A release with the block spec only, to set the floor (§5). Then the page button: Insert blocks, Add row, Edit rows, Open, Confirmation.
 2. Button property: Edit property, plus those that apply.
 3. Variables and formula values, after R4-3.
 4. Steps that reach outside, one at a time, once the Lead has decided each.

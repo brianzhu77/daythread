@@ -219,7 +219,8 @@ Editor = a popover under the cell at 1280, or a bottom sheet at 390. Both have t
 | **Relation** | titles of linked rows as page refs (`▢ Title`, our `[[` look) | the `[[`-style pick list, limited to the target database's rows, with checkmarks. The top line is "New row in Books…". | — |
 | **Rollup** | the computed value | none (read-only). The property menu sets relation → property → function. | "—" when nothing is linked |
 | **Formula** | the computed value | none (read-only). The property menu has an expression field with a live preview of the current row. | an error shows as "Error" in `--red` in the cell, with the message in the property menu |
-| **Created time / Edited time** | `Oct 12, 9:14` | none | — |
+| **Created time / Edited time** | `Oct 12, 9:14 AM`, in local time | none (read-only, §6.3.14) | empty for a row from before these were kept |
+| **ID** | the row's number, `12` | none (read-only, §6.3.14) | — |
 | **ID** | `12`, or `BK-12` with a prefix | none | — |
 
 - **Not offered:** **Person, Created by, Edited by** (a workspace is one person, the same reason the Lead dropped
@@ -443,6 +444,15 @@ The per-cell check, Undo and the save states (§13) stay with Roadbuster. This s
   **Open link ↗**, only when the value is a link. This refines §6.1 for 390.
 - **The value is kept exactly as typed.** Opening adds `https://` when there's no scheme.
 
+#### 6.3.10a Email and Phone (R3-10)
+
+- **Like URL:** blue when it's a link, with the pencil at ≥ 900; on the phone a tap opens the sheet, never the link. The
+  sheet says **Email ↗** or **Call ↗**, only when the value is a link. The value is kept as typed, and nothing is refused.
+- **A link:** an address with `@` and a dot in the domain opens mail. Only digits and `+ ( ) . -` with at least 3 digits
+  opens the dialler. Anything else is plain text in `--ink`.
+- **The field:** a text input with `inputmode="email"`, because `type="email"` strips what's typed and has no caret to
+  place; `type="tel"` for Phone.
+
 #### 6.3.11 While an editor is open
 
 - **The row is deleted elsewhere:** the editor closes, and the notice says "This row was deleted · Restore", the same
@@ -464,6 +474,23 @@ Linked views come in R2, so in R1 (Bumblebee 120fdcd6):
   icon. It's a real link, and it never makes a second database.
 - **Cut, then paste** moves the block, as in §9.1.
 - **Duplicate isn't in a database block's menu** in R1. It comes back in R2 as "make a linked view".
+
+#### 6.3.14 Created time, Edited time, ID (R3-9)
+
+- **Read-only everywhere.** The cell is focusable for arrows and copy but isn't a button: a tap opens nothing, typing and
+  Delete do nothing, and a paste skips it. On a row page the value shows without a hover or an editor. Bulk Edit doesn't
+  list them.
+- **Edited moves** on a value, a rename, or a changed body. Opening a row, or a save with nothing new, doesn't move it.
+- **ID belongs to the row, not the property.** The first ID property numbers every row in page order, trashed ones too;
+  after that each new row and each Duplicate takes the next. A number is never reused, past a delete or an Undo. Undoing
+  the property keeps the count, so a new one starts after the old numbers. A second ID property reads the same numbers.
+- **Filter:** times as dates, ID as a number; no Is empty on ID. **Sort:** the same.
+- **Group:** by a time, as dates (day, week, month). A drag to another group changes nothing and says "{name} can't be
+  changed", and `+ New` under a group sets nothing, so the row lands in the group its own time gives it. Never by ID.
+  Not board columns: a card couldn't be dragged.
+- **`+ New` under a rule on one of these** sets no value, and asks whether the view would show it from its real time and
+  next number, so §7.4's notice is right.
+- **Calendar** still shows by a Date property only.
 
 #### 6.3.13 Accessibility
 
@@ -683,7 +710,7 @@ The Lead recommends **option 1**, so this is option 1's design, with the differe
 - **To-dos is a built-in source.** It's listed in `/` Database → "Show an existing one". It shows every task as a row,
   with fixed properties:
   - **Name** (the title);
-  - **Status** (Open / Done / Paused);
+  - **Status** (Open / Paused / Done / Cancelled);
   - **Planned** (a day);
   - **Start**;
   - **Deadline**;
@@ -691,7 +718,9 @@ The Lead recommends **option 1**, so this is option 1's design, with the differe
 - **Views work as on any database:** filters, sorts and groups, plus board and calendar, which a calendar of
   deadlines needs.
 - **Edits go through the task commands he already uses:**
-  - the checkbox ticks exactly as on a day page, including its notice;
+  - the checkbox ticks exactly as on a day page, including its notice; a cancelled to-do's stays disabled;
+  - Name changes the title and every line of it. A line holding a chip or a link keeps them: Name refuses there with
+    "Open its line to change it", and renaming to nothing keeps the words;
   - a date is set with the same picker;
   - **a to-do can't get extra properties.** Neither `+` nor `+ Add property` is shown, and there's no explanatory
     line.
@@ -699,8 +728,9 @@ The Lead recommends **option 1**, so this is option 1's design, with the differe
   A to-do has no body of its own, so there's no row page.
 - **+ New** in a To-dos view makes a task on **today's page, planned for today, where carried and planned to-dos already go** (Roadbuster
   e1e7bffd: with the other to-dos under the outermost heading above the first to-do, which is Morning Planning on his
-  template; under the first heading if there are no to-dos yet; at the top if there's no heading). The
-  row appears at once, and the notice says **"Added · Open"**, where Open goes to its line.
+  template; under the first heading if there are no to-dos yet; at the top if there's no heading). It asks for the
+  words first, since a blank to-do isn't a row (B69), and nothing is made without them. The
+  row then appears at once, and the notice says **"Added · Open"**, where Open goes to its line.
 - **Option 2** (custom properties on to-dos): the same, but `+` is shown, and extra properties appear on the to-do's row
   in the table. They're edited in the table or popover only, since there's still no row page.
 - **Option 3** (to-dos become rows): opening a to-do opens a row page, and its body exists. On day pages, the task line
@@ -755,7 +785,7 @@ The estimates are Roadbuster's (`database-fit.md` §7) unless marked as mine.
 | **R3** | **Calendar, List, Gallery**; the filter's **"any rule matches"** switch; **Relation, Rollup**; Created/Edited time, ID, Email, Phone, Files (**needs file uploads, which don't exist anywhere yet: new
   infrastructure**, Roadbuster 13301ca1); row **templates** (`+ New ⌄`, with a default per view); **sub-groups** (a second layer inside a group, Notion research §8; missed until now, Bumblebee); **column calculations** and **two-way relations with a limit** (Notion research §7, §8; same); **wrap** per property; several rows selected on the phone | Ordered by his use after R2 |
 | **R4** | **Timeline, Formula**, **sub-items and dependencies** (Notion research §7; missed until now, Bumblebee), repeating row templates, CSV export/import, pasting TSV, moving a row to another database, **side peek** at 1280, **conditional colour** and **freeze columns** (Bumblebee; `first-version-checklist.md` D5) | the largest and least certain |
-| **Later, not yet ordered** | **Forms, Automations, Buttons, Place**, **Chart**, and **Feed, Map, Dashboard, nested filter groups, page icons and covers** (missed until now, Bumblebee) | These are in scope. They wait for a design pass of their own, and his use orders them, with nothing cut for lack of evidence (Brian 57deaed7, Bumblebee 3b04290d). Passes done, for review: `buttons.md`, `automations.md`, `chart.md`, `forms.md`, `place.md` (Place and Map). Feed, Dashboard, nested filter groups, and page icons and covers still wait for theirs. |
+| **Later, not yet ordered** | **Forms, Automations, Buttons, Place**, **Chart**, and **Feed, Map, Dashboard, nested filter groups, page icons and covers** (missed until now, Bumblebee) | These are in scope. They wait for a design pass of their own, and his use orders them, with nothing cut for lack of evidence (Brian 57deaed7, Bumblebee 3b04290d). Passes done, for review: `buttons.md`, `automations.md`, `chart.md`, `forms.md`, `place.md` (Place and Map), `feed.md`, `dashboard.md`, `filter-groups.md`, `icons-covers.md`. |
 | **Not planned** | Person, Created by, Edited by, permissions, "only for me" filters, several data sources in one database | Each needs more than one person in a workspace, or the Lead's frame dropped it (several data sources). |
 
 ## 15. How I'll check it (each release, before it goes live)

@@ -54,6 +54,8 @@ No Respondent property, since Person and Created by aren't planned. Every public
 
 ## 5. The public link, for the Lead
 
+**Decided (Lead b9af4ec7):** "Only me" first. The public link waits until the rest of Forms is out and Ratchet has reviewed its design. Before it's turned on, even for his account alone, the Lead asks Brian, because it's the first way a stranger can write into his workspace. The limits below are the bar.
+
 Today every write needs a signed-in session, and the app is invite-only. A public form adds **an endpoint that writes into a private workspace with no session.** It should be very narrow:
 
 - It takes only a form's unguessable id and answers to that form's questions. It returns only the form's questions, and never rows or other data.
@@ -68,7 +70,7 @@ Today every write needs a signed-in session, and the app is invite-only. A publi
 
 **Running cost:** none expected beyond Worker and database use, but abuse could raise both, which is what the cap is for.
 
-**What I recommend:** ship "Only me" first, since it needs no new endpoint. Don't start the public link until you've read this section and Ratchet has reviewed its design. Turn it on for Brian's account only at first, as the day draft model was, and then for invitees if it holds up.
+**Then:** on for Brian's account only at first, as the day draft model was, and for invitees if it holds up.
 
 ## 6. For Roadbuster and Jazz
 
@@ -79,8 +81,8 @@ Today every write needs a signed-in session, and the app is invite-only. A publi
 ## 7. Release order, within Forms
 
 1. Only me: questions, Required, submit screen, Responses.
-2. Anyone with the link, after §5.
-3. Conditional logic, and Files once R3-11 and uploads allow.
+2. Conditional logic, and Files once R3-11 allows it, on Only me.
+3. Anyone with the link, last, after §5's review and Brian's yes.
 
 ## 8. Checks before release
 

@@ -5,15 +5,18 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
-import { cellValue, databaseRows, groupValue, isDatabase, inView, isEmptyValue, noGroupKey, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { cellValue, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnlyType, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
 import { ChevronRightIcon } from './icons'
 import { holdKeyboard } from './keyboard'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide } from './property-editors'
-import { urlHref } from './property-values'
-import { useWorkspace } from './use-day'
+import { emailHref, phoneHref, urlHref } from './property-values'
+import { useTaskTick, useWorkspace } from './use-day'
+import { announceSave } from './draft-slots'
+import { taskRows } from '../domain/workspace'
+import { newTodo, newTodoRowId, taskIdOfRow, todoChange, todoLine, todoRowId, todosSourceId, withTodos } from '../domain/todos-source'
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
 import { DatabaseGallery } from './database-gallery'
@@ -119,8 +122,9 @@ export const blockActions = new Map<string, BlockActions>()
 
 export function DatabaseBlock({ blockId, pageId, viewJson, hostDate, actions }: { blockId: string; pageId: string; viewJson: string; hostDate: string | null; actions?: BlockActions | null }) {
   useLayoutEffect(() => { if (!actions) return; blockActions.set(blockId, actions); return () => { if (blockActions.get(blockId) === actions) blockActions.delete(blockId) } }, [blockId, actions])
-  const { workspace } = useWorkspace()
+  const { workspace: stored } = useWorkspace()
   usePendingDatabases()
+  const workspace = stored && pageId === todosSourceId ? withTodos(stored) : stored
   const db = workspace?.pages.find(p => p.id === pageId)
   const pending = db ? undefined : pendingDatabases.get(pageId)
   if (pending) return <div className="database-block is-pending" contentEditable={false} {...isolate}>
@@ -203,6 +207,24 @@ export function useCommitCell() {
   const { run, refresh, latest } = useWorkspace()
   const commit = (db: Page & { database: Database }, row: Page, columnId: string, raw: Json | undefined, notice?: string, onSaved?: () => void, beforeId?: string | null) => {
     const key = pendingKey(row.id, columnId)
+    const taskId = taskIdOfRow(row.id)
+    // A to-do: the task's own command and notice, with no check of its own (those commands have none), never a row's set-values.
+    if (taskId) {
+      const ws = latest()
+      const change = ws ? todoChange(ws, taskId, columnId, raw, todayIso()) : null
+      if (!change) { onSaved?.(); return }
+      if ('refused' in change) { toast(change.refused, { timeout: 6000 }); return }
+      const pendingTodo = (failed: boolean): PendingCell => ({ databaseId: db.id, rowId: row.id, columnId, raw, failed, retry: () => { setPendingCell(key, null); commit(db, row, columnId, raw, notice, onSaved) }, discard: () => { setPendingCell(key, null); onSaved?.() } })
+      setPendingCell(key, pendingTodo(false))
+      void run(change.action, r => ({ text: notice ?? change.notice, undoOperationId: r.operationId }), newId(), { quiet: true }).then(r => {
+        setPendingCell(key, r ? null : pendingTodo(true))
+        if (!r) return
+        // New words change lines on their pages: a tab open on one should read that as this browser, not another device.
+        if (change.action.type === 'rename-task') for (const { page } of taskRows(latest() ?? ws!, taskId)) announceSave(page.id)
+        onSaved?.()
+      })
+      return
+    }
     // A value still on its way is what this change will find when it lands, so it's built on that (Lead's review, 7).
     const inFlight = pendingCells.get(key)
     const expected = ((inFlight && !inFlight.failed ? inFlight.raw : rawOf(row, columnId)) ?? null) as Json
@@ -314,15 +336,20 @@ function useRecoverDrafts(commit: ReturnType<typeof useCommitCell>) {
 
 /** Mounted once (app shell): the editor of the open cell, under its cell, or as a sheet on the phone. */
 export function DatabaseCellEditor() {
-  const { workspace, run } = useWorkspace()
+  const { workspace: stored, run } = useWorkspace()
   const cell = useOpenCell()
   const commit = useCommitCell()
+  const addTodo = useAddTodo()
   useRecoverDrafts(commit)
+  const workspace = stored && cell?.databaseId === todosSourceId ? withTodos(stored) : stored
   const db = cell ? workspace?.pages.find(p => p.id === cell.databaseId) : undefined
-  const row = cell ? workspace?.pages.find(p => p.id === cell.rowId) : undefined
+  const isNewTodo = cell?.rowId === newTodoRowId
+  const row = isNewTodo ? ({ id: newTodoRowId, type: 'document', date: null, title: '', document: '[]' } as Page) : cell ? workspace?.pages.find(p => p.id === cell.rowId) : undefined
   const property = cell && isDatabase(db) ? (cell.columnId === titleId ? titleProperty : propertyOf(db.database, cell.columnId)) : null
   // The cell itself, found again whenever the block is drawn again, so the popover stays under it.
-  const find = () => cell ? document.querySelector<HTMLElement>(`[data-cell="${CSS.escape(cellKey(cell))}"]`) : null
+  const find = () => !cell ? null : isNewTodo
+    ? document.querySelector<HTMLElement>(`[data-id="${CSS.escape(cell.blockId)}"] .database-new`) ?? document.querySelector<HTMLElement>(`[data-id="${CSS.escape(cell.blockId)}"]`)
+    : document.querySelector<HTMLElement>(`[data-cell="${CSS.escape(cellKey(cell))}"]`)
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   useLayoutEffect(() => {
     // Forgotten when it closes: a cell drawn again since would leave the next editor placed against nothing, at the screen's corner.
@@ -332,11 +359,11 @@ export function DatabaseCellEditor() {
     check()
     return () => cancelAnimationFrame(frame)
   }, [cell]) // eslint-disable-line react-hooks/exhaustive-deps
-  if (!cell || !isDatabase(db) || !row || row.trashedAt || !property || !anchor) return null
+  if (!cell || !isDatabase(db) || !row || row.trashedAt || !property || property.readOnly || !anchor) return null
   // A value still on its way is the cell's value: the editor opens on it, not on the copy from before it.
   const inFlight = pendingCells.get(pendingKey(row.id, cell.columnId))
   const expected = ((inFlight ? inFlight.raw : rawOf(row, cell.columnId)) ?? (cell.columnId === titleId ? '' : null)) as Json
-  const keeps = property.type === 'text' || property.type === 'url'
+  const keeps = !db.database.fixed && (property.type === 'text' || property.type === 'url' || property.type === 'email' || property.type === 'phone')
 
   const value = cell.columnId === titleId ? ((inFlight ? String(inFlight.raw ?? '') : row.title) || null) : inFlight ? readValue(property, inFlight.raw) : cellValue(db.database, row, cell.columnId)
   return <PropertyEditor key={cellKey(cell)}
@@ -344,11 +371,12 @@ export function DatabaseCellEditor() {
     onDraft={keeps ? text => keepDraft({ databaseId: db.id, rowId: row.id, columnId: cell.columnId, value: text, expected }) : undefined}
     onCommit={(raw, info) => {
       setOpenCell(null)
+      if (isNewTodo) { addTodo(typeof raw === 'string' ? raw : ''); return }
       const sent = typeof raw === 'string' ? raw : ''
       commit(db, row, cell.columnId, cell.columnId === titleId ? (raw ?? '') : raw, info?.notice, keeps ? () => dropDraft(row.id, cell.columnId, sent) : undefined)
     }}
     onCancel={() => { setOpenCell(null); if (keeps) dropDraft(row.id, cell.columnId) }}
-    onCreateOption={name => createOption(run, db, property, name)} />
+    onCreateOption={db.database.fixed ? undefined : name => createOption(run, db, property, name)} />
 }
 
 /** What a pasted line means in a cell: undefined when it means nothing there. An option is found by its name; a new one isn't made by a paste. */
@@ -356,7 +384,8 @@ function pastedValue(db: Database, property: Property, line: string): Json | und
   const text = line.trim()
   if (line.length > 10_000) return undefined
   if (property.id === titleId || property.type === 'text') return line
-  if (property.type === 'url') return text
+  if (property.type === 'url' || property.type === 'email' || property.type === 'phone') return text
+  if (isReadOnlyType(property.type)) return undefined
   if (property.type === 'number') { const n = Number(text.replace(/,/g, '')); return Number.isFinite(n) ? n : undefined }
   const option = (propertyOf(db, property.id)?.options ?? []).find(o => o.name.toLowerCase() === text.toLowerCase())
   if (property.type === 'select' || property.type === 'status') return option?.id
@@ -378,6 +407,10 @@ function createOption(run: ReturnType<typeof useWorkspace>['run'], db: Page & { 
   return id
 }
 
+/** Where a URL, Email or Phone cell's words link to; null when they don't read as one, so they stay plain text. */
+function linkHref(property: Property, text: string): string | null {
+  return property.type === 'url' ? urlHref(text) : property.type === 'email' ? emailHref(text) : property.type === 'phone' ? phoneHref(text) : null
+}
 /** A row's value as it shows now: one on its way, or kept after a failed save, comes first. */
 export function shownRaw(row: Page, columnId: string): unknown {
   const pending = pendingCells.get(pendingKey(row.id, columnId))
@@ -429,7 +462,8 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
   const { run, latest } = useWorkspace()
   const commit = useCommitCell()
   return (rowId: string, from: string | null, to: string | null, before: string | null, shown: readonly Page[]) => {
-    const ws = latest()
+    const stored = latest()
+    const ws = stored && db.database.fixed ? withTodos(stored) : stored
     const row = ws?.pages.find(p => p.id === rowId)
     if (!ws || !row || row.trashedAt) return
     // Sorted, a card's place comes from the sort: only its value changes.
@@ -441,6 +475,8 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
     const end = groups ? (last ? rest[rest.indexOf(rest.find(r => r.id === last.id)!) + 1]?.id ?? null : undefined) : null
     const beforeId = sorted ? undefined : before ?? end
     if (from === to) {
+      // To-dos have no order of their own to keep.
+      if (db.database.fixed) return
       // Dropped where it already is, as he sees it: nothing to send.
       const here = groups ? groups.shown.find(g => g.key === to)?.rows ?? [] : shown
       const next = here[here.findIndex(r => r.id === rowId) + 1]?.id ?? null
@@ -449,6 +485,7 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
       return
     }
     if (!groups || to === null || !target) return
+    if (isReadOnlyType(groups.property.type)) { toast(`${groups.property.name} can't be changed`, { timeout: 4000 }); return }
     const value = groupValue(groups.property, to, shownRaw(row, groups.property.id), from ?? undefined, context.today, view.groupDateBy, context.weekStart)
     const probe = { ...row, values: { ...row.values, ...(value === undefined ? {} : { [groups.property.id]: value }) } } as Page
     if (value === undefined) delete probe.values![groups.property.id]
@@ -457,10 +494,31 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
   }
 }
 
+/** A to-do's box, on its row in any layout: the same tick as on its line (R2-9). A cancelled one's stays disabled, as on his rows. */
+export function TodoTick({ row }: { row: Page }) {
+  const taskId = taskIdOfRow(row.id)
+  return taskId ? <TodoBox taskId={taskId} title={displayPageTitle(row)} /> : null
+}
+function TodoBox({ taskId, title }: { taskId: string; title: string }) {
+  const tick = useTaskTick(taskId)
+  return <PropertyCheckbox checked={tick.status === 'done'} disabled={tick.status === 'cancelled'} label={`Done: ${title}`}
+    onToggle={() => tick.toggle((to, r) => ({ text: to === 'done' ? 'Done' : 'Reopened', undoOperationId: r.operationId }))} />
+}
+
 /** Opening a row remembers it, so Back tints it for a second where he left it (design §5). */
 export function useOpenRow() {
   const navigate = useNavigate()
-  return (rowId: string, focus?: 'title') => { try { sessionStorage.setItem(returnKey, rowId) } catch { /* private mode */ } void navigate({ to: '/pages', search: { page: rowId, ...(focus ? { focus } : {}) } }) }
+  const { latest } = useWorkspace()
+  return (rowId: string, focus?: 'title') => {
+    // A to-do has no page of its own: it opens on its line (design §11).
+    const taskId = taskIdOfRow(rowId), ws = latest()
+    if (taskId) {
+      const line = ws ? todoLine(ws, taskId) : null
+      if (line) void navigate({ to: '/pages', search: { page: line.pageId, block: line.lineId } })
+      else toast("This to-do's line is gone", { timeout: 6000 })
+      return
+    }
+    try { sessionStorage.setItem(returnKey, rowId) } catch { /* private mode */ } void navigate({ to: '/pages', search: { page: rowId, ...(focus ? { focus } : {}) } }) }
 }
 /** The row he's just come back from, for a second. */
 export function useReturnedRow(rows: readonly Page[]): string | null {
@@ -476,11 +534,30 @@ export function useReturnedRow(rows: readonly Page[]): string | null {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   return returned
 }
+/** What `+ New` in To-dos was tapped in, while its words are typed. */
+let newTodoDraft: { view: View; context: ViewContext; group: string | undefined; values: Record<string, Json> | undefined } | null = null
+/** `+ New` in To-dos, once it has words (design §11, R2-11): a task on the day's page, made from his template if it isn't there yet. */
+function useAddTodo() {
+  const { run, latest } = useWorkspace()
+  const openRow = useOpenRow()
+  return async (words: string) => {
+    const draft = newTodoDraft, title = words.trim()
+    newTodoDraft = null
+    if (!draft || !title) return
+    const { date, attentionOn, deadlineOn, status, visible } = newTodo(draft.view, draft.context, draft.group, draft.values)
+    if (!await run({ type: 'ensure-day', date }, null, newId(), { quiet: true })) return
+    const made = await run({ type: 'add-task', pageId: `day:${date}`, title, plannedOn: date, ...(attentionOn ? { attentionOn } : {}), ...(deadlineOn ? { deadlineOn } : {}) },
+      r => ({ text: visible ? 'Added' : "Added · hidden by this view's filter", extra: { label: 'Open', run: () => openRow(todoRowId(r.entityId ?? '')) } }))
+    const ws = latest()
+    const change = made?.entityId && status && ws ? todoChange(ws, made.entityId, 'status', status, todayIso()) : null
+    if (change && 'action' in change) void run(change.action, r => ({ text: change.notice, undoOperationId: r.operationId }))
+  }
+}
 /**
  * `+ New` (design §3.1, §7.4), under a view or a group: with the values that keep it in sight, and the notice when none
  * do. On the phone it opens as its page with the caret in its title; at 1280 its Name opens to be typed, once it's drawn.
  */
-export function useAddRow(db: Page & { database: Database }, view: View, context: ViewContext, reveal: (rowId: string, group: string | undefined) => void) {
+export function useAddRow(db: Page & { database: Database }, view: View, context: ViewContext, blockId: string, reveal: (rowId: string, group: string | undefined) => void) {
   const { run } = useWorkspace()
   const navigate = useNavigate()
   const openRow = useOpenRow()
@@ -489,10 +566,16 @@ export function useAddRow(db: Page & { database: Database }, view: View, context
   return (group?: string, values?: Record<string, Json>) => {
     // Raise the keyboard inside this tap, for the row's page.
     if (!wide) holdKeyboard()
+    // A to-do needs its words first: a blank one isn't a row, and shouldn't exist (B69).
+    if (db.database.fixed) {
+      newTodoDraft = { view, context, group, values }
+      setOpenCell({ blockId, databaseId: db.id, rowId: newTodoRowId, columnId: titleId })
+      return
+    }
     const prefill = newRowValues(db.database, view, context, group)
     if (values) {
       Object.assign(prefill.values, values)
-      prefill.visible = inView(db.database, { id: '', type: 'document', date: null, title: prefill.title, document: '[]', values: prefill.values } as Page, view, context)
+      prefill.visible = inView(db.database, newRowProbe(db.database, prefill.title, prefill.values), view, context)
     }
     const pageId = newId()
     void run({ type: 'add-row', databaseId: db.id, pageId, title: prefill.title, values: prefill.values, at: new Date().toISOString() },
@@ -679,7 +762,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   }, [reveal, rows, limit])
   const key = (rowId: string, columnId: string, group?: string) => cellKey({ blockId, databaseId: db.id, rowId, columnId, ...(group !== undefined ? { group } : {}) })
 
-  const addRow = useAddRow(db, view, context, (pageId, group) => {
+  const addRow = useAddRow(db, view, context, blockId, (pageId, group) => {
     // Past the rows shown, the new row is drawn all the same, and brought into view (Lead's review, 5).
     const ws = latest(), now = ws ? viewRows(ws, db.id, view, context) : []
     if (group === undefined) { const at = now.findIndex(x => x.id === pageId); if (at >= limit) setLimit(at + 1) }
@@ -730,7 +813,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     else if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
       // Typing on a text, number or URL cell (or Name) starts replacing its value (design §10).
       const row = shown[r], property = c === 0 ? titleProperty : columns[c - 1]?.property
-      if (!row || !property || !['text', 'number', 'url'].includes(property.type)) return
+      if (!row || !property || !['text', 'number', 'url', 'email', 'phone'].includes(property.type)) return
       e.preventDefault()
       open(row.id, property.id, entries[r]!.group)
       // Space opens the cell as it is; any other key starts replacing it.
@@ -738,7 +821,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     }
     else if ((e.key === 'Backspace' || e.key === 'Delete') && c > 0) {
       const row = shown[r], property = columns[c - 1]?.property
-      if (row && property && !isEmptyValue(cellValue(db.database, row, property.id))) { e.preventDefault(); commit(db, row, property.id, undefined) }
+      if (row && property && !isReadOnlyType(property.type) && !isEmptyValue(cellValue(db.database, row, property.id))) { e.preventDefault(); commit(db, row, property.id, undefined) }
     }
   }
   /**
@@ -760,7 +843,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     const value = c === 0 ? (row.title || null) : cellValue(db.database, row, property.id)
     if (e.type !== 'paste') {
       e.clipboardData?.setData('text/plain', valueText(db.database, property.id, value))
-      if (e.type === 'cut' && c > 0 && !isEmptyValue(value)) commit(db, row, property.id, undefined)
+      if (e.type === 'cut' && c > 0 && !isReadOnlyType(property.type) && !isEmptyValue(value)) commit(db, row, property.id, undefined)
       return
     }
     const lines = (e.clipboardData?.getData('text/plain') ?? '').replace(/\r?\n$/, '').split(/\r?\n/), first = lines[0]!
@@ -781,11 +864,12 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const rowLine = (row: Page, index: number, group?: string) => <tr key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})} className={`database-row${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
             <td className="database-td is-title"><div className="database-title-inner">
               {wide && <span className="database-pin-strip" />}
-              {wide && <span className="database-row-gutter">
+              {wide && !db.database.fixed && <span className="database-row-gutter">
                 {!view.sort.length && <span className="database-row-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
                 <input type="checkbox" className="database-row-pick" aria-label={`Select ${displayPageTitle(row)}`} checked={picked.includes(row.id)} onChange={() => undefined} onClick={e => pick(row.id, e.shiftKey)} />
               </span>}
               {/* A row opens as a page, from Name, at both widths (design §5). */}
+              <TodoTick row={row} />
               <button type="button" className="database-title-cell" data-cell={key(row.id, titleId, group)} data-nav={`${index}:0`} onClick={() => openRow(row.id)}>
                 <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
               </button>
@@ -801,10 +885,12 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
                   ? <span data-nav={navId} tabIndex={0} className="database-check-cell" onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); commit(db, row, property.id, value === true ? undefined : true) } }}>
                       <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
                     </span>
-                  : wide && property.type === 'url' && typeof value === 'string' && urlHref(value)
+                  : isReadOnlyType(property.type)
+                  ? <span data-nav={navId} tabIndex={0} className="database-cell is-read-only"><PropertyCell property={property} value={value} today={today} /></span>
+                  : wide && typeof value === 'string' && linkHref(property, value)
                   // At 1280 a link opens from its text, and the pencil edits it (design §6.1, Jazz bf91cb72).
                   ? <span className="database-url-cell">
-                      <a href={urlHref(value)!} target="_blank" rel="noreferrer" className="database-url-link"><PropertyCell property={property} value={value} today={today} /></a>
+                      <a href={linkHref(property, value)!} target="_blank" rel="noreferrer" className="database-url-link"><PropertyCell property={property} value={value} today={today} /></a>
                       <button type="button" className="database-url-edit" aria-label={`Edit ${property.name}`} data-cell={key(row.id, property.id, group)} data-nav={navId} onClick={() => open(row.id, property.id, group)}>✎</button>
                     </span>
                   : <button type="button" className="database-cell" data-cell={key(row.id, property.id, group)} data-nav={navId} onClick={() => open(row.id, property.id, group)}>
@@ -814,7 +900,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
             })}
             <td className="database-td is-add" />
           </tr>
-  return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
+  return <div className={`database-table-wrap${db.database.fixed ? ' is-todos' : ''}`} ref={wrap} onKeyDown={onKeyDown}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
       <table className="database-table">
@@ -822,7 +908,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
           <tr>
             <th scope="col" className="database-th is-title" data-type="title">{wide && <span className="database-pin-strip" />}Name</th>
             {columns.map(c => <th key={c.property.id} scope="col" className="database-th" data-type={c.property.type} style={{ width: c.width ?? defaultWidth(c.property) }}>{c.property.name}</th>)}
-            <th scope="col" className="database-th is-add"><button type="button" aria-label="Add property" onClick={addProperty}>+</button></th>
+            {!db.database.fixed && <th scope="col" className="database-th is-add"><button type="button" aria-label="Add property" onClick={addProperty}>+</button></th>}
           </tr>
         </thead>
         <tbody ref={tbody} className={!groups && drag && drag.before === null ? 'is-drop-end' : undefined}>
@@ -879,7 +965,7 @@ function EditPickedButton({ db, rowIds }: { db: Page & { database: Database }; r
     const items = rows.map(r => ({ pageId: r.id, values: { [p.id]: raw ?? null } as Record<string, Json>, expected: { [p.id]: (rawOf(r, p.id) ?? null) as Json } }))
     if (items.length) void run({ type: 'set-values-many', items, at: new Date().toISOString() }, r => ({ text: `${p.name} set on ${items.length === 1 ? '1 row' : `${items.length} rows`}`, undoOperationId: r.operationId }))
   }
-  const editable = db.database.properties
+  const editable = db.database.properties.filter(p => !isReadOnlyType(p.type))
   return <>
     <button type="button" ref={anchor} className="app-link" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>Edit property ▾</button>
     {open && <div className="app-menu database-picked-menu" role="menu">
@@ -926,7 +1012,9 @@ function defaultWidth(property: Property): number {
     case 'number': return 90
     case 'date': return 110
     case 'select': case 'multiSelect': case 'status': return 140
-    case 'text': case 'url': return 180
+    case 'text': case 'url': case 'email': case 'phone': return 180
+    case 'createdTime': case 'editedTime': return 150
+    case 'id': return 70
   }
 }
 /** "Property", "Property 2", …: never a name the database already has (or "Name"). */
@@ -962,7 +1050,9 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
       const key = cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: property.id })
       return <div key={property.id} className={`row-property${pending?.failed ? ' is-unsaved' : ''}`}>
         <span className="row-property-name" data-type={property.type}>{property.name}</span>
-        {property.type === 'checkbox'
+        {isReadOnlyType(property.type)
+          ? <span className="row-property-value is-read-only">{isEmptyValue(value) ? <span className="is-placeholder">Empty</span> : <PropertyCell property={property} value={value} today={today} />}</span>
+          : property.type === 'checkbox'
           ? <span className="row-property-value"><PropertyCheckbox checked={value === true} label={property.name} onToggle={next => commit(db, row, property.id, next ? true : undefined)} /></span>
           : <button type="button" className="row-property-value" data-cell={key} onClick={() => setOpenCell({ blockId, databaseId: db.id, rowId: row.id, columnId: property.id })}>
               {isEmptyValue(value) ? <span className="is-placeholder">Empty</span> : <PropertyCell property={property} value={value} today={today} />}

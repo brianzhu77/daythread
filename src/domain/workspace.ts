@@ -5,7 +5,7 @@ import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget } from "./day-template.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
-import { changeDatabase, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit } from "./database.ts";
+import { changeDatabase, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
 
@@ -111,6 +111,11 @@ function tasksOnDay(state: Workspace, day: string): Task[] {
 /** A task whose title is empty after trimming: an empty checkbox row left on a page. It stays there, but no list shows it. */
 export function isBlankTask(t: Task): boolean {
   return !t.title.trim();
+}
+/** Whether new words can replace a to-do's lines: one holding a chip or a link has more than words, and they'd be lost (R2-9). */
+export function canRenameTask(state: Workspace, taskId: string): boolean {
+  const plain = (content: unknown) => !Array.isArray(content) || content.every((i: { type?: string; styles?: object }) => i.type === "text" && !Object.keys(i.styles ?? {}).length);
+  return state.pages.every((p) => flatNodes(pageNodes(p)).every((n) => rowTaskId(n) !== taskId || plain(n.content)));
 }
 /** The most recent live day page before `day`. */
 export function previousDayPage(state: Workspace, day: string): Page | undefined {
@@ -498,6 +503,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (n.type === "pageLink" && n.props?.at === undefined) n.props = { ...n.props, at };
         if (Array.isArray(n.content)) for (const c of n.content as { type?: string; props?: Record<string, unknown> }[]) if (c?.type === "pageRef" && c.props && c.props.at === undefined) c.props.at = at;
       }
+      // A row's body edited moves its Edited time; a save with nothing new, as on opening, doesn't (R3-9).
+      if (isRow(state, p) && JSON.stringify(nodes) !== JSON.stringify(pageNodes(p))) p.editedAt = isoTime(action.at);
       setDocument(p, nodes);
       for (const [id, rows] of gone) {
         const t = state.tasks.find((x) => x.id === id);
@@ -534,6 +541,28 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       t.doneOn = action.status === "done" ? (action.today ? date(action.today) : null) : null;
       t.version++;
       return { message: action.status === "done" ? "Done" : action.status === "cancelled" ? "Cancelled" : "Reopened", entityId: t.id };
+    }
+    case "rename-task": {
+      const t = task(state, action.taskId), title = text(action.title, 1000).trim();
+      if (!title) throw new DomainError("A to-do needs words");
+      if (!canRenameTask(state, t.id)) throw new DomainError("This line has more than words");
+      t.title = title;
+      t.version++;
+      // Every page, Trash too: a page restored later shouldn't bring back the old words.
+      for (const p of state.pages) {
+        const doc = docOf(p);
+        let changed = false;
+        for (const n of flatNodes(doc)) if (rowTaskId(n) === t.id && inlineText(n.content, textDate(p)) !== title) { n.content = [textRun(title)]; changed = true; }
+        if (changed) setDocument(p, doc);
+      }
+      return { message: "Renamed", entityId: t.id };
+    }
+    case "set-task-dates": {
+      const t = task(state, action.taskId);
+      if (action.attentionOn !== undefined) t.attentionOn = action.attentionOn === null ? null : date(action.attentionOn);
+      if (action.deadlineOn !== undefined) t.deadlineOn = action.deadlineOn === null ? null : date(action.deadlineOn);
+      t.version++;
+      return { message: "Date set", entityId: t.id };
     }
     case "plan-task": {
       const t = task(state, action.taskId);
@@ -666,6 +695,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const p = page(state, action.pageId);
       if (p.type === "daily") throw new DomainError("Day pages are named by their date");
       p.title = text(action.title, 1000).trim();
+      if (isRow(state, p)) p.editedAt = isoTime(undefined);
       return { message: "Page renamed", entityId: p.id };
     }
     case "move-page": {
@@ -862,6 +892,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       try { values = source ? structuredClone(source.row.values) : newRowStored(db.database, action.values); } catch (error) { throw new DomainError((error as Error).message); }
       const row: Page = { id: action.pageId, type: "document", date: null, title: source ? `${source.row.title} (copy)`.trim() : text(action.title, 1000).trim(), parentId: db.id, document: JSON.stringify([emptyLine("paragraph")]), ...(values ? { values } : {}), createdAt: at, editedAt: at };
       if (source) row.document = JSON.stringify(copiedBody(state, source.row, row, localDay(state, at)));
+      numberNewRow(db.database, row);
       // Rows keep page order: before `beforeId`, after the row it copies, or at the end.
       const rows = databaseRows(state, db.id);
       const before = action.beforeId ? rows.find((r) => r.id === action.beforeId) : source ? rows[rows.indexOf(source.row) + 1] : undefined;
@@ -1003,6 +1034,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");
     state = { ...structuredClone(previous.before), revision: input.revision, receipts: structuredClone(input.receipts) };
+    keepRowNumbers(input, state);
     result = { message: "Previous operation restored" };
   } else result = execute(state, command.action, command.operationId);
   state.revision = input.revision + 1;

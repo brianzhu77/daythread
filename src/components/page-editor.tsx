@@ -16,6 +16,7 @@ import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { linkedViewJson, linkedViewOf } from '../domain/linked-view'
+import { databaseSource, withTodos } from '../domain/todos-source'
 import { DatabasePicker } from './database-linked'
 import { holdKeyboard } from './keyboard'
 import { blockPlace, editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, rowTaskId, sectionRange, withBlockBack, type BlockPlace, type EditorNode } from '../domain/editor-document'
@@ -103,7 +104,7 @@ function removedViews(ws: Workspace, before: string, after: string, detached: re
   const was = JSON.parse(before) as EditorNode[], now = new Set(deepNodes(JSON.parse(after) as EditorNode[]).map(n => n.id))
   return deepNodes(was).flatMap(n => {
     if (n.type !== 'database' || now.has(n.id) || detached.includes(String(n.props?.pageId))) return []
-    const db = ws.pages.find(p => p.id === n.props?.pageId), place = blockPlace(was, n.id)
+    const db = databaseSource(ws, String(n.props?.pageId)), place = blockPlace(was, n.id)
     return isDatabase(db) && !db.trashedAt && db.database.homeBlockId !== n.id && place ? [{ place, db }] : []
   })
 }
@@ -528,7 +529,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           if (node.type === 'database') {
             const pageId = String(node.props?.pageId ?? '')
             if (moving) { if (!node.props?.view) databaseFlags.current.adopt.set(pageId, id); return { ...node, id } }
-            const source = latestWorkspace.current.pages.find(p => p.id === pageId)
+            const source = databaseSource(latestWorkspace.current, pageId)
             return { id, type: 'database', props: { pageId, view: isDatabase(source) ? linkedViewJson(linkedViewOf(source.database, node.props?.view)) : '' }, children: [] }
           }
           return { ...node, id, content: freshContent(node), ...(node.type === 'task' ? { props: moving && latestWorkspace.current.tasks.some(t => t.id === node.props?.taskId) ? node.props : { taskId: `editor-task:${id}`, role: 'reference', planDate: '' } } : {}), ...(node.children ? { children: node.children.map(fresh) } : {}) }
@@ -926,7 +927,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const views = removedViews(latest()!, documentBefore, document, flags.detachDatabaseIds ?? [])
       if (views.length) {
         const { db } = views[0]!, host = db.parentId ? latest()!.pages.find(p => p.id === db.parentId) : undefined
-        const key: string = toast(`View removed · ${displayPageTitle(db)} is still in ${host ? displayPageTitle(host) : 'Pages'}`, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); putHomesBack(page.id, views.map(v => v.place)) } } })
+        const key: string = toast(`View removed · ${displayPageTitle(db)} is still in ${db.database?.fixed ? 'Tasks' : host ? displayPageTitle(host) : 'Pages'}`, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); putHomesBack(page.id, views.map(v => v.place)) } } })
       }
       pendingSave.current=null; lastSaved.current = document
       debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
@@ -1219,9 +1220,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     madeHere.current.add(pageId)
     await confirmDatabase(pageId, blockId)
   }
-  /** `/` Database: the picker if he has a database to show, else straight to a new one (design §3.1). */
+  /** `/` Database: the picker, as To-dos is always there to show (design §3.1, §11). */
   const chooseDatabase = () => {
-    if (!latestWorkspace.current.pages.some(p => isDatabase(p) && !p.trashedAt)) { void createDatabase(); return }
     const line = editor.domElement?.querySelector(`[data-id="${CSS.escape(editor.getTextCursorPosition().block.id)}"]`)?.getBoundingClientRect()
     setPicker({ top: Math.max(8, Math.min((line?.bottom ?? 80) + 4, window.innerHeight - 320)), left: Math.max(8, line?.left ?? 8) })
   }
@@ -1816,7 +1816,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     },
     duplicate: blockId => {
       const block = editor.getBlock(blockId)
-      const source = block?.type === 'database' ? latestWorkspace.current.pages.find(p => p.id === block.props.pageId) : undefined
+      const source = block?.type === 'database' ? databaseSource(latestWorkspace.current, block.props.pageId) : undefined
       if (!block || !isDatabase(source)) return
       editor.insertBlocks([{ type: 'database', props: { pageId: source.id, view: linkedViewJson(linkedViewOf(source.database, (block.props as { view?: string }).view)) } } as never], blockId, 'after')
     },
@@ -2466,7 +2466,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     <RowActionsContext.Provider value={rowActions}>
     <ChipPageDate.Provider value={page.type === 'daily' ? page.date ?? null : null}>
     <DatabaseEditorActions.Provider value={databaseActions}>
-    {picker && createPortal(<DatabasePicker workspace={latestWorkspace.current} at={picker} allowNew={page.type !== 'template'}
+    {picker && createPortal(<DatabasePicker workspace={withTodos(latestWorkspace.current)} at={picker} allowNew={page.type !== 'template'}
       onNew={() => { holdKeyboard(); setPicker(null); void createDatabase() }}
       onPick={(db, view) => { setPicker(null); insertDatabaseBlock({ pageId: db.id, view }); editor.focus() }}
       onClose={() => { setPicker(null); editor.focus() }} />, document.body)}
@@ -2506,8 +2506,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // Every item stays in the list; the menu scrolls past about 8 rows (F13). A cut hid Quote until its name was typed.
         // Database sits after Page and Link to page (design §3.1). In a template, only a linked view can be made, so it
         // needs a database to show (§9.4).
-        const offerDatabase = !onTemplate || latestWorkspace.current.pages.some(p => isDatabase(p) && !p.trashedAt)
-        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, ...(offerDatabase ? [databaseItem] : []), ...first, ...rest], query)
+        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, databaseItem, ...first, ...rest], query)
       }} />
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}
