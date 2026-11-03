@@ -2,7 +2,7 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { databaseRows, calcChoices, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
+import { databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
@@ -642,6 +642,29 @@ test('reading what a foot cell says', () => {
   assert.deepEqual(calcText('dateRange', { type: 'days', value: 1 }, undefined, on), { label: 'Range', value: '1 day' })
   assert.deepEqual(calcText('earliest', { type: 'date', value: '2026-10-20' }, undefined, on), { label: 'Earliest', value: 'Oct 20' })
   assert.deepEqual(calcText('countPerGroup', { type: 'groups', percent: false, value: [{ group: 'todo', count: 3 }, { group: 'done', count: 1 }] }, undefined, on), { label: '', value: '○ 3  ● 1' })
+})
+
+// ---------- R3-14: wrap per property
+
+test('a view keeps what it wraps, and it never touches another view or a row', () => {
+  const h = reading()
+  h.change({ kind: 'addView', view: view({ id: 'second', name: 'Second', columns: [{ id: 'note' }] }) })
+  const viewId = h.db().views[0]!.id
+  const columns = [{ id: 'note', width: 200, wrap: true as const }, { id: 'kind' }]
+  h.change({ kind: 'updateView', viewId, columns, wrapName: true })
+  assert.deepEqual(h.db().views[0]!.columns, columns)
+  assert.equal(h.db().views[0]!.wrapName, true)
+  assert.deepEqual(viewColumns(h.db(), h.db().views[0]!).map(c => [c.property.id, c.width, c.wrap]), [['note', 200, true], ['kind', undefined, undefined]])
+  assert.deepEqual(h.db().views.find(v => v.id === 'second')!.columns, [{ id: 'note' }], 'another view is its own')
+  h.change({ kind: 'updateView', viewId, name: 'Renamed' })
+  assert.equal(h.db().views[0]!.wrapName, true, 'a rename keeps it')
+  h.change({ kind: 'updateView', viewId, wrapName: false })
+  assert.equal('wrapName' in h.db().views[0]!, false)
+  assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId, columns: [{ id: 'note', wrap: 'yes' }] } } }).success, false)
+})
+test('what can wrap', () => {
+  assert.deepEqual(['text', 'url', 'email', 'phone', 'select', 'multiSelect', 'status', 'date', 'createdTime', 'editedTime'].filter(t => !canWrap(t as never)), [])
+  assert.deepEqual(['number', 'checkbox', 'id'].filter(t => canWrap(t as never)), [])
 })
 
 // ---------- R3-12: row templates

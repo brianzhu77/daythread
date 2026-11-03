@@ -4,7 +4,7 @@
 // would lose the pointer.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type UIEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { cellValue, databaseRows, isDatabase, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
+import { canWrap, cellValue, databaseRows, isDatabase, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
 import type { Page } from '../domain/types'
 import { NewRow, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
@@ -195,14 +195,14 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
         data-cell={interactive ? cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, group }) : undefined}
         data-nav={interactive && row.id === firstCard ? '0:0' : undefined}
         onClick={() => { if (!justDragged.current) openRow(row.id) }}>{row.title || 'Untitled'}</button>
-      {cardColumns.map(({ property }) => {
+      {cardColumns.map(({ property, wrap = false }) => {
         const pending = pendingCells.get(pendingKey(row.id, property.id))
         const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
         if (property.type === 'checkbox') return <span key={property.id} className="database-card-check">
           <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} disabled={!interactive} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />{property.name}
         </span>
         if (isEmptyValue(value)) return null
-        return <span key={property.id} className="database-card-value"><PropertyCell property={property} value={value} today={today} /></span>
+        return <span key={property.id} className={`database-card-value${wrap && canWrap(property.type) ? ' is-wrapped' : ''}`}><PropertyCell property={property} value={value} today={today} wrap={wrap && canWrap(property.type)} /></span>
       })}
       {unsaved && <span className="database-card-unsaved">Not saved</span>}
     </>

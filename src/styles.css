@@ -1711,7 +1711,8 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 }
 /* BlockNote's `.ProseMirror table` clips and sets width 100%; this one must not clip, or Name can't stay pinned inside
    .database-scroll. Two classes to outrank it. */
-.database-block .database-table { overflow: visible; border-collapse: collapse; table-layout: fixed; width: max-content; min-width: 100%; }
+/* The width is set on the table, from its columns: `max-content` would turn fixed layout off, and a long value would stretch its column. */
+.database-block .database-table { --database-name-width: 240px; overflow: visible; border-collapse: collapse; table-layout: fixed; min-width: 100%; }
 
 /* Header row: small and quiet, a type mark before each name; no vertical lines. */
 .database-th { height: 32px; padding: 4px 8px; border-block: 1px solid var(--line); color: var(--ink-3); font-size: var(--text-meta); line-height: 20px; font-weight: var(--weight-regular); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1730,7 +1731,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-th[data-type="createdTime"]::before, .database-th[data-type="editedTime"]::before { content: '◔'; }
 .database-th[data-type="id"]::before { content: '№'; font-size: 11px; }
 .database-th[data-type="number"] { text-align: right; }
-.database-th.is-title { position: sticky; left: 0; z-index: 2; width: 240px; background: var(--bg-doc); }
+.database-th.is-title { position: sticky; left: 0; z-index: 2; width: var(--database-name-width); background: var(--bg-doc); }
 /* The trailing column takes whatever width is left, so a short table keeps its columns' widths and its lines still run
    the full width; its + stays next to the last column. */
 .database-th.is-add { width: auto; min-width: 40px; padding: 0; }
@@ -1746,6 +1747,20 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-cell { display: flex; align-items: center; justify-content: flex-start; height: 34px; }
 .database-cell > * { min-width: 0; max-width: 100%; }
 .database-td.is-number .database-cell { justify-content: flex-end; text-align: right; }
+/* A wrapped column makes tall rows: every cell then starts at the top and fills its height, so all of it still taps (R3-14). */
+.database-table.has-wrap .database-td { vertical-align: top; }
+.database-table.has-wrap .database-cell, .database-table.has-wrap .database-title-inner { height: 100%; align-items: flex-start; }
+.database-td.is-wrapped .database-title-cell, .database-td.is-wrapped .database-cell { white-space: normal; overflow-wrap: anywhere; }
+.is-wrapped .cell-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.is-wrapped .cell-chips, .is-wrapped .cell-relation { flex-wrap: wrap; white-space: normal; }
+.is-wrapped .property-chip { height: auto; min-height: 22px; white-space: normal; }
+.is-wrapped .database-url-link { white-space: normal; overflow-wrap: anywhere; }
+.database-td.is-wrapped .database-url-cell { align-items: flex-start; padding-block: 5px; }
+.database-card-value.is-wrapped { white-space: normal; }
+.database-table.has-wrap .database-check-cell { min-height: 34px; }
+/* A chip is shorter than a line of text: this puts it on the first line of a top-aligned row. */
+.database-table.has-wrap .property-chip { margin-block: 1px; }
+.database-table.has-wrap .database-row-gutter { align-items: flex-start; padding-top: 10px; }
 /* The cell cursor (keys) and the press (touch); hover only where there's a pointer that hovers. */
 .database-title-cell:focus-visible, .database-cell:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
 .database-cell.is-read-only { cursor: default; background: none; }
@@ -1783,8 +1798,9 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 @media (max-width: 899px) {
   .database-td { height: 44px; }
   .database-title-cell, .database-cell { min-height: 42px; padding-block: 9px; }
+  .database-table.has-wrap .database-check-cell { min-height: 42px; }
   .database-cell { height: 42px; }
-  .database-th.is-title { width: 150px; }
+  .database-block .database-table { --database-name-width: 150px; }
   .database-new, .database-more { min-height: 44px; padding-block: 10px; }
 }
 

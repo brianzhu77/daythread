@@ -3,7 +3,7 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { calcChoices, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
 import type { Page, Workspace } from '../domain/types'
 import { rollupFunctionsFor } from '../domain/relations'
@@ -373,6 +373,7 @@ function GroupPanel({ db, view, back }: { db: DatabasePage; view: View; back: ()
 /** A view named after its type keeps following it; one he named keeps his name. */
 const renamedFor = (view: View, layout: View['layout']) => (view.name === layoutLabels[view.layout] ? { name: layoutLabels[layout] } : {})
 function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
+  const wrapsAll = view.columns.some(c => c.wrap) && viewColumns(db.database, view).every(c => c.wrap || !canWrap(c.property.type)) && (view.layout !== 'table' || Boolean(view.wrapName))
   const changeView = useViewChange(db.id, view.id)
   const [asking, setAsking] = useState(false)
   const [askingDate, setAskingDate] = useState(false)
@@ -396,6 +397,9 @@ function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
   return <>
     <Head title="Layout" back={back} />
     {(['table', 'board', 'list', 'gallery', 'calendar'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
+    {(view.layout === 'table' || view.layout === 'board' || view.layout === 'gallery') && <label className="database-menu-row">Wrap all
+      <input type="checkbox" checked={wrapsAll} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ wrapName: on, columns: columns.map(c => withWrap(c, on)) })) }} />
+    </label>}
     {view.layout === 'calendar' && <label className="database-menu-row">Show as
       <select aria-label="Show as" value={view.calendarSpan ?? 'month'} onChange={e => { const calendarSpan = e.target.value === 'week' ? 'week' as const : null; changeView(() => ({ calendarSpan })) }}>
         <option value="month">Month</option><option value="week">Week</option>
@@ -412,6 +416,11 @@ function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
 
 // ---------------------------------------------------------------- properties (design §7.5, §6.2)
 
+function withWrap(column: View['columns'][number], on: boolean): View['columns'][number] {
+  const { wrap: _wrap, ...rest } = column
+  return on ? { ...rest, wrap: true } : rest
+}
+
 function PropertiesPanel({ db, view, go }: { db: DatabasePage; view: View; go: (p: Panel) => void }) {
   const change = useChange(db)
   const shown = new Set(view.columns.map(c => c.id))
@@ -425,6 +434,9 @@ function PropertiesPanel({ db, view, go }: { db: DatabasePage; view: View; go: (
   return <>
     <Head title="Properties" back={() => go('root')} />
     <div className="database-property-line is-title"><span>Name</span><span className="database-menu-quiet">always shown</span></div>
+    {view.layout === 'table' && <label className="database-menu-row">Wrap Name
+      <input type="checkbox" checked={Boolean(view.wrapName)} onChange={e => { const wrapName = e.target.checked; changeView(() => ({ wrapName })) }} />
+    </label>}
     {ordered.map(p => <div key={p.id} className="database-property-line">
       <label className="database-property-switch"><input type="checkbox" checked={shown.has(p.id)} onChange={() => toggle(p)} aria-label={`Show ${p.name}`} /></label>
       {db.database.fixed
@@ -619,6 +631,9 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
       <select value={property.format ?? 'plain'} onChange={e => update({ format: e.target.value as Property['format'] })}>
         <option value="plain">Number</option><option value="comma">1,000</option><option value="percent">Percent</option><option value="currency">Currency</option>
       </select>
+    </label>}
+    {shown && canWrap(property.type) && <label className="database-menu-row">Wrap in this view
+      <input type="checkbox" checked={Boolean(view.columns.find(c => c.id === propertyId)?.wrap)} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ columns: columns.map(c => (c.id !== propertyId ? c : withWrap(c, on))) })) }} />
     </label>}
     {property.type === 'id' && <label className="database-menu-row">Prefix
       <CommitInput key={property.prefix ?? ''} ariaLabel="Prefix" initial={property.prefix ?? ''} placeholder="None" onCommit={v => update({ prefix: v })} />

@@ -4,7 +4,7 @@
 // a list, each with its own cards, `+ New` and cap.
 import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { firstImageUrl } from '../domain/editor-document'
-import { cellValue, databaseRows, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
+import { canWrap, cellValue, databaseRows, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
 import { NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { todayIso } from './dates'
@@ -57,11 +57,11 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
         <TodoTick row={row} />
         <button type="button" className={`database-gallery-title${row.title ? '' : ' is-placeholder'}`} data-nav={nav}
           data-cell={cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, ...(group !== undefined ? { group } : {}) })} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}</button>
-        {viewColumnsShown.map(({ property }) => {
+        {viewColumnsShown.map(({ property, wrap = false }) => {
           const pending = pendingCells.get(pendingKey(row.id, property.id))
           const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
           if (property.type === 'checkbox') return <span key={property.id} className="database-card-check"><PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />{property.name}</span>
-          return isEmptyValue(value) ? null : <span key={property.id} className="database-card-value"><PropertyCell property={property} value={value} today={today} /></span>
+          return isEmptyValue(value) ? null : <span key={property.id} className={`database-card-value${wrap && canWrap(property.type) ? ' is-wrapped' : ''}`}><PropertyCell property={property} value={value} today={today} wrap={wrap && canWrap(property.type)} /></span>
         })}
         {unsaved && <span className="database-card-unsaved">Not saved</span>}
       </div>

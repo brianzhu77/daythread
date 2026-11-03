@@ -72,7 +72,9 @@ export interface View {
   name: string;
   layout: ViewLayout;
   /** Shown properties, in order, with widths; one not listed is hidden. The title column is always shown first and is not listed. */
-  columns: { id: string; width?: number }[];
+  columns: { id: string; width?: number; /** Long values run on to more lines, and the row grows (R3-14). */ wrap?: true }[];
+  /** The same for Name, which is always shown and so isn't in `columns`. */
+  wrapName?: true;
   sort: Sort[];
   /** All must hold, or any with `filterAny`. */
   filter: Condition[];
@@ -516,8 +518,10 @@ export function viewRows(ws: Workspace, databaseId: string, view: View, context:
   return keyed.map((k) => k.row);
 }
 /** The view's shown properties, in order, after the title: listed ones that still exist. */
-export function viewColumns(db: Database, view: View): { property: Property; width?: number }[] {
-  return view.columns.flatMap((c) => { const property = db.properties.find((p) => p.id === c.id); return property ? [{ property, ...(c.width !== undefined ? { width: c.width } : {}) }] : []; });
+/** What can run long enough to wrap: not a number, a tick or an ID. */
+export const canWrap = (type: PropertyType): boolean => type !== "number" && type !== "checkbox" && type !== "id";
+export function viewColumns(db: Database, view: View): { property: Property; width?: number; wrap?: true }[] {
+  return view.columns.flatMap((c) => { const property = db.properties.find((p) => p.id === c.id); return property ? [{ property, ...(c.width !== undefined ? { width: c.width } : {}), ...(c.wrap ? { wrap: true as const } : {}) }] : []; });
 }
 
 /**
@@ -726,7 +730,7 @@ export type DatabaseChange =
   | { kind: "removeProperty"; propertyId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; filterAny?: boolean; calculations?: Record<string, CalcKind>; /** null: none of its own */ defaultTemplate?: string | null }
+  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: none of its own */ defaultTemplate?: string | null }
   /** null: none */
   | { kind: "setDefaultTemplate"; templateId: string | null }
   | { kind: "removeView"; viewId: string }
@@ -931,12 +935,13 @@ const knownColumn = (db: Database, id: unknown): boolean => typeof id === "strin
 function cleanColumns(db: Database, input: unknown): View["columns"] {
   if (!Array.isArray(input) || input.length > limits.properties) throw new DatabaseError("Invalid view");
   const seen = new Set<string>();
-  return input.map((c: { id: string; width?: number }) => {
+  return input.map((c: { id: string; width?: number; wrap?: unknown }) => {
     if (!c || !knownColumn(db, c.id) || c.id === titleId || seen.has(c.id)) throw new DatabaseError("Invalid view");
     seen.add(c.id);
-    if (c.width === undefined) return { id: c.id };
+    const wrap = c.wrap === true ? { wrap: true as const } : {};
+    if (c.width === undefined) return { id: c.id, ...wrap };
     if (!Number.isInteger(c.width) || c.width < 40 || c.width > 2000) throw new DatabaseError("Invalid view");
-    return { id: c.id, width: c.width };
+    return { id: c.id, width: c.width, ...wrap };
   });
 }
 /** Sorts and filters may still name a property deleted since (kept until he removes them); a new one must name a live one. */
@@ -988,7 +993,7 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
 function cleanView(db: Database, input: View): View {
   if (!input) throw new DatabaseError("Unknown view type");
   const layout = cleanLayout(input.layout);
-  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.defaultTemplate ? { defaultTemplate: input.defaultTemplate } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...cleanGroup(db, input, layout, input) };
+  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.wrapName ? { wrapName: true as const } : {}), ...(input.defaultTemplate ? { defaultTemplate: input.defaultTemplate } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...cleanGroup(db, input, layout, input) };
 }
 function move<T extends { id: string }>(list: T[], id: string, beforeId: string | null): T[] {
   const item = list.find((x) => x.id === id);
@@ -1120,7 +1125,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     }
     case "updateView": {
       const old = view(change.viewId);
-      const { filterAny: _filterAny, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, ...rest } = old;
+      const { filterAny: _filterAny, wrapName: _wrapName, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, ...rest } = old;
       const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
       const group = cleanGroup(db, {
         groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
@@ -1138,6 +1143,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         ...(change.sort !== undefined ? { sort: cleanSort(db, change.sort, old.sort) } : {}),
         ...(change.filter !== undefined ? { filter: cleanFilter(db, change.filter, old.filter) } : {}),
         ...((change.filterAny ?? old.filterAny) ? { filterAny: true as const } : {}),
+        ...((change.wrapName ?? old.wrapName) ? { wrapName: true as const } : {}),
         ...(() => { const template = change.defaultTemplate === undefined ? old.defaultTemplate : change.defaultTemplate; return template ? { defaultTemplate: template } : {}; })(),
         ...(() => { const calculations = change.calculations !== undefined ? cleanCalculations(db, change.calculations) : old.calculations; return calculations && Object.keys(calculations).length ? { calculations } : {}; })(),
         ...group,

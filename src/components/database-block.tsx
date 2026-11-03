@@ -5,7 +5,7 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
-import { cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -896,7 +896,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     <td className="database-td is-add" />
   </tr>
   const rowLine = (row: Page, index: number, group?: string) => <tr key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})} className={`database-row${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
-            <td className="database-td is-title"><div className="database-title-inner">
+            <td className={`database-td is-title${view.wrapName ? ' is-wrapped' : ''}`}><div className="database-title-inner">
               {wide && <span className="database-pin-strip" />}
               {wide && !db.database.fixed && <span className="database-row-gutter">
                 {!view.sort.length && <span className="database-row-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
@@ -909,12 +909,13 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
               </button>
               <button type="button" className="database-open" onClick={() => openRow(row.id)}>Open</button>
             </div></td>
-            {columns.map(({ property }, col) => {
+            {columns.map(({ property, wrap }, col) => {
+              const wraps = Boolean(wrap) && canWrap(property.type)
               const pending = pendingCells.get(pendingKey(row.id, property.id))
               // His value stays shown while it saves and after a failed save, never a silent revert (design §13).
               const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
               const navId = `${index}:${col + 1}`
-              return <td key={property.id} className={`database-td is-${property.type}${pending?.failed ? ' is-unsaved' : pending ? ' is-saving' : ''}`}>
+              return <td key={property.id} className={`database-td is-${property.type}${wraps ? ' is-wrapped' : ''}${pending?.failed ? ' is-unsaved' : pending ? ' is-saving' : ''}`}>
                 {property.type === 'checkbox'
                   ? <span data-nav={navId} tabIndex={0} className="database-check-cell" onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); commit(db, row, property.id, value === true ? undefined : true) } }}>
                       <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
@@ -924,11 +925,11 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
                   : wide && typeof value === 'string' && linkHref(property, value)
                   // At 1280 a link opens from its text, and the pencil edits it (design §6.1, Jazz bf91cb72).
                   ? <span className="database-url-cell">
-                      <a href={linkHref(property, value)!} target="_blank" rel="noreferrer" className="database-url-link"><PropertyCell property={property} value={value} today={today} /></a>
+                      <a href={linkHref(property, value)!} target="_blank" rel="noreferrer" className="database-url-link"><PropertyCell property={property} value={value} today={today} wrap={wraps} /></a>
                       <button type="button" className="database-url-edit" aria-label={`Edit ${property.name}`} data-cell={key(row.id, property.id, group)} data-nav={navId} onClick={() => open(row.id, property.id, group)}>✎</button>
                     </span>
                   : <button type="button" className="database-cell" data-cell={key(row.id, property.id, group)} data-nav={navId} onClick={() => open(row.id, property.id, group)}>
-                      <PropertyCell property={property} value={value} today={today} />
+                      <PropertyCell property={property} value={value} today={today} wrap={wraps} />
                     </button>}
               </td>
             })}
@@ -937,7 +938,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   return <div className={`database-table-wrap${db.database.fixed ? ' is-todos' : ''}`} ref={wrap} onKeyDown={onKeyDown}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
-      <table className="database-table">
+      <table className={`database-table${view.wrapName || columns.some(c => c.wrap && canWrap(c.property.type)) ? ' has-wrap' : ''}`} style={{ width: `calc(var(--database-name-width) + ${columns.reduce((sum, c) => sum + (c.width ?? defaultWidth(c.property)), addColumnWidth)}px)` }}>
         <thead>
           <tr>
             <th scope="col" className="database-th is-title" data-type="title">{wide && <span className="database-pin-strip" />}Name</th>
@@ -1042,6 +1043,8 @@ function typeInto(text: string) {
 }
 
 /** Column widths until he drags one (stored on the view), design §4.1. Name's width is in CSS: 240, or 150 on the phone. */
+/** The `+` column's share of a table's width; it takes whatever's left over past that. */
+const addColumnWidth = 40
 function defaultWidth(property: Property): number {
   switch (property.type) {
     case 'checkbox': return 60
