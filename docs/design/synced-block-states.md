@@ -180,16 +180,17 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
   with lines counts as a filled slot.
 - **To-dos as a source (R2):** one row per task, however many places.
 - **Export:** every place as ordinary lines. Export never loses text.
-- **Rollback (format down):** every place becomes ordinary lines with the content as it is at that moment. Nothing he
-  wrote is lost; only the syncing stops. The rollback check proves this on a copy of his data.
+- **Rollback (B21-16):** on a build at the floor or newer, nothing changes. Below the floor, a page holding a block shows
+  "Something went wrong!", and nothing is lost: going forward brings it back. It doesn't become ordinary lines, because pages
+  keep no copy of them.
 
 ## 8. Waiting and failure
 
 - **Loading:** the block's lines render with the page; there's no separate spinner.
-- **Its shared record is missing or unreadable:** each page keeps its own copy of the lines (b21 plan §1), so the
-  page **shows its last copy**, never an empty box. The lines are read-only while the record is missing, because an
-  edit would have nowhere to go. The label reads **"↻ Sync unavailable ⌄"**, and its menu offers Retry and **Unsync
-  here** (keeps these lines as ordinary, editable lines). The rest of the page works normally.
+- **Its shared record can't be read (B21-17):** pages keep no copy of the lines, so there's nothing to show. The block
+  stays where it is and reads **"↻ Sync unavailable"** with **Retry**, and no lines. It never disappears silently and no
+  save removes it, and the page's other lines work normally. Only a bug or a hand edit could cause this, since the record is
+  read in the same transaction as the pages (Roadbuster 884fd4b2).
 - **Save failed:** the editor's existing save-failed banner, nothing new.
 
 ## 9. Checks (copy of his data, 1280 and 390)
@@ -206,8 +207,8 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
    didn't move. Same the other way.
 3b. Two tabs, both edit the block before either refreshes → the second save shows the latest content in the block, its
    own version as plain lines below, and "Changed on {page} meanwhile · your version is below it". Nothing lost.
-3c. Record missing (on a copy) → the page shows its last copy read-only, "↻ Sync unavailable", and Unsync here makes
-   the lines editable.
+3c. Record missing (on a copy) → the block reads "↻ Sync unavailable" with Retry and no lines, the other lines still edit,
+   and a save leaves the block in place.
 4. A selection holding a synced block → Sync → the "can't go inside another" notice and no change. Holding a database, the
    same, until that's allowed.
 5. **Tasks unchanged:** count tasks before and after Sync, a paste, Unsync, Unsync all and a delete: the same each time.
@@ -227,7 +228,8 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
 9b. **Template:** made on the Day template → each new day its own, connected to nothing. A copy pasted into it → every new day
    connected, a to-do in it a reference row, and "On" stops at 8 with "and {n} more".
 10. A `[[` link inside → the linked page's Linked from lists both pages. Search shows it once, with the count.
-11. Rollback on a copy: every place becomes ordinary lines with the latest content.
+11. Rollback on a copy (B21-16): below the floor a page holding a block shows "Something went wrong!", and going forward
+    brings it back with its content.
 12. **Geometry:** "synced block" becomes a required row type in `check-alignment` (rows inside keep the columns they
     have outside; the outline stays in the margin; 8 px above / 6 px below; the label clears the first line's text
     and the line above, at 1280 and 390, shown by hover and by caret), and
@@ -238,9 +240,7 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
 - ~~**Roadbuster:** simultaneous edits~~ **Answered** by b21 plan 1f5f28a (§2 rule 3, §4 refresh on visible); design's
   recovery for the conflict is §5 above.
 - ~~**Bumblebee:** tags~~ **Decided:** a tag counts once (§7, Bumblebee `8e998433`).
-- **Roadbuster, when sizing:** §8's "shows its last copy" and the read-only state assume each page keeps its own copy of the
-  lines. If one shared record wins (`synced-blocks.md` §7), the page needs a local copy to show when the record can't be read,
-  or §8 becomes a short "Sync unavailable" with Retry and no lines. Tell me which, and I'll change §8. Rollback and export
-  in §7 depend on the same answer.
+- ~~**Roadbuster:** what shows when the record can't be read~~ **Answered** (Roadbuster 884fd4b2, Bumblebee c3fba8bc): §7 and
+  §8 above, per B21-16 and B21-17.
 - ~~**Lead:** discovery~~ **Decided (Lead `10e9e0f0`):** Brian is told once, in the release report ("select lines →
   Sync in the selection bar → copy the block to another page"), and nowhere in the app: no tip, no onboarding.
