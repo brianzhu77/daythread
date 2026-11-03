@@ -66,7 +66,7 @@ Today nothing runs on the server unless a request comes in: days are made by his
 **With A:**
 
 - **Each period runs once,** by a key of rule and period, as days are keyed by date, including two tabs, retries and a rollback.
-- **A missed period:** only the latest one runs, because five "Weekly review" rows at once on his return is clutter. A repeating template gets its own answer on R4-6, where a missed daily log may matter. **Open for Jazz.**
+- **A missed period:** only the latest one runs, because five "Weekly review" rows at once on his return is clutter. **A repeating template (R4-6), Jazz fb7d3274 and Bumblebee:** also only the latest, with a notice once, "Weekly review · 2 earlier weeks skipped", and no Undo needed, as missed day pages aren't backfilled. **Each template also has a "Make every missed one" switch in its first version,** off by default, because a log-style template would otherwise have gaps that Notion, running on its server, wouldn't. The period key already prevents duplicates, so it should be cheap; if it isn't, Roadbuster says so. Each row made this way dates itself to its period through `@today`-style values, with a true Created time, and a stated limit on how many it makes at once.
 - **What he sees:** the rule's line shows "Last ran" with its real time, and a row's Created time is true. No notice unless it failed.
 
 ## 7. To-dos as a source
