@@ -196,8 +196,7 @@ The Making of a Ma…     ○ To read     J. Zhuo
   shows on hover and when the Name cell is selected by keyboard. On the phone it's a tap on Name.
   - It reuses the page editor exactly, with no new surface.
   - Notion's phone and Craft's phone both do this.
-  - Notion's desktop side peek is the one thing given up. It's parked (§14) until real use shows him editing many rows
-    in a row.
+  - Notion's side and center peek come later, at 1280 (§14, checklist R4-11). Use sets their order, not whether they're in.
 - **Back** returns to the host page at the same scroll, and the row he opened is tinted with `--blue-soft` for 1 s, so
   he sees where he was. Browser Back, the header `‹`, and ⌘[ all do this.
 - **The row page:**
