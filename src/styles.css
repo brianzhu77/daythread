@@ -857,12 +857,15 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor .bn-block-outer.has-caret > .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]),
 .continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]):focus-within { outline-color: var(--ink-3); }
 .continuous-editor .bn-block-content[data-content-type="syncedBlock"] { height: 0; min-height: 0; padding: 0; overflow: visible; }
-.synced-label { position: absolute; top: -11px; right: 6px; z-index: 1; padding: 0 4px; background: var(--bg-doc); color: var(--ink-2); font-size: 12px; line-height: 16px; opacity: 0; pointer-events: none; }
+/* On the top edge, clear of the first line's text and the line above (Roadbuster: a taller box covered that line and took its clicks). */
+.continuous-editor .synced-label { position: absolute; top: -11px; right: 6px; left: auto; z-index: 1; display: block; height: 14px; padding: 0 4px; background: var(--bg-doc); color: var(--ink-2); font-size: 12px; line-height: 14px; opacity: 0; pointer-events: none; }
 .continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]):hover > .react-renderer .synced-label,
 .continuous-editor .bn-block-outer.has-caret > .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .react-renderer .synced-label,
 .continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]):focus-within > .react-renderer .synced-label,
-.synced-label:has([aria-expanded="true"]) { opacity: 1; pointer-events: auto; }
-.synced-label-button { padding: 0; border: 0; background: none; color: inherit; font: inherit; line-height: inherit; cursor: pointer; }
+.continuous-editor .synced-label:has([aria-expanded="true"]) { opacity: 1; pointer-events: auto; }
+.continuous-editor .synced-label .synced-label-button { position: relative; display: block; width: auto; height: 14px; min-width: 0; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; line-height: inherit; cursor: pointer; }
+/* A finger's reach, upward: over the space above the block, never down onto the first line's text. */
+@media (pointer: coarse) { .continuous-editor .synced-label .synced-label-button::after { content: ""; position: absolute; inset: -18px -6px -2px; } }
 /* Its record can't be read (states §8, B21-17): no lines, so this is what holds its place. */
 .continuous-editor .bn-block-content[data-content-type="syncedBlock"]:has(.synced-unavailable) { height: auto; }
 .synced-unavailable { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; color: var(--ink-2); font-size: var(--text-meta); }
@@ -892,6 +895,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* A synced block's lines keep the columns they have outside (states §3): undo the rules above that count its group as a level.
    Its first level reads as the page's, and each level under it as one nearer the page. */
 .continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group { margin-left: 0; }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer::before { display: none; }
 .continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer > .bn-block > .bn-block-group { margin-left: 45px; }
 .continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer > .bn-block > .react-renderer > .bn-block-content[data-content-type="task"] { margin-left: 0; }
 .continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer > .bn-block > .bn-block-content[data-content-type="bulletListItem"]::before {
@@ -1018,7 +1022,8 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 }
 
 /* The editor must not enlarge the mobile layout viewport through floating format controls. */
-@media(max-width:899px) { .continuous-editor { overflow-x:clip; } .editor-selection-bar { max-width:calc(100vw - 32px); } }
+/* The clip reaches 4px past the column, so a synced block's outline in the margin isn't cut. */
+@media(max-width:899px) { .continuous-editor { overflow-x:clip; margin-inline:-4px; padding-inline:4px; } .editor-save-line { right:4px; } .editor-selection-bar { max-width:calc(100vw - 32px); } }
 .editor-source-checklist { display:flex; gap:8px; align-items:baseline; }
 .editor-source-checklist > span:last-child { flex:1; min-width:0; }
 .editor-paste-notice { display:flex; align-items:center; gap:12px; max-width:min(90vw,600px); padding:8px 12px; border-radius:14px; background:var(--bg); color:var(--ink-2); box-shadow:var(--shadow-float); font-size:var(--text-meta); pointer-events:auto; }

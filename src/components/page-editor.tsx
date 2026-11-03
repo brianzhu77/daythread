@@ -16,7 +16,7 @@ import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { linkedViewJson, linkedViewOf } from '../domain/linked-view'
-import { blockUpdates, syncedBlockType, syncedPlaces, writtenDocument, type BlockUpdate } from '../domain/synced'
+import { blockLinesKey, blockUpdates, mirroredLines, syncedBlockType, syncedPlaces, writtenDocument, type BlockUpdate } from '../domain/synced'
 import { syncedKeys } from './synced-keys'
 import { SyncedEditorActions, SyncedLabel, type SyncedActions } from './synced-label'
 import { databaseSource, withTodos } from '../domain/todos-source'
@@ -538,7 +538,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const fresh = (node: EditorNode): EditorNode => {
           const id = node.type !== 'database' && keepsId(node) ? node.id : crypto.randomUUID()
           // A copy of a block: the same content, shown here too (states §4). The save reads it from the record.
-          if (node.type === syncedBlockType) return { id, type: syncedBlockType, props: { syncId: String(node.props?.syncId), rev: 0, key: '', roles: '' }, children: (node.children ?? []).map(function line(n: EditorNode): EditorNode { return { ...n, id: crypto.randomUUID(), children: (n.children ?? []).map(line) } }) }
+          if (node.type === syncedBlockType) {
+            const copy: EditorNode = { id, type: syncedBlockType, props: { syncId: String(node.props?.syncId), rev: 0, key: '', roles: '' }, children: (node.children ?? []).map(function line(n: EditorNode): EditorNode { return { ...n, id: crypto.randomUUID(), children: (n.children ?? []).map(line) } }) }
+            return { ...copy, props: { ...copy.props, key: blockLinesKey(copy) } }
+          }
           const task = sameTask(node)
           if (task) {
             sameTaskRows.push(id); showing.add(task.id)
@@ -1055,7 +1058,29 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const taskRows = useRef<Map<string, string> | null>(null)
   const readTaskRows = () => new Map(deepNodes(nodes()).filter(n => n.type === 'task').map(n => [n.id, String(n.props?.taskId)]))
   useEffect(() => { taskRows.current ??= readTaskRows() }, [])
+  /** What each synced block held when last seen, to tell which copy he's typing in. */
+  const blockKeys = useRef(new Map<string, string>())
+  /** Two copies on one page update as he types (B21-3). Only the other copy changes, outside his Undo, so his caret stays. */
+  const mirrorCopies = () => {
+    if (!JSON.stringify(editor.document).includes(`"${syncedBlockType}"`)) return
+    const blocks = deepNodes(nodes()).filter(n => n.type === syncedBlockType)
+    const was = blockKeys.current, keys = new Map(blocks.map(n => [n.id, blockLinesKey(n)]))
+    blockKeys.current = keys
+    if (suppress.current || composing.current) return
+    const updates: { id: string; lines: EditorNode[] }[] = []
+    for (const source of blocks) {
+      if (!was.has(source.id) || was.get(source.id) === keys.get(source.id)) continue
+      for (const target of blocks) if (target.id !== source.id && target.props?.syncId === source.props?.syncId && keys.get(target.id) !== keys.get(source.id)) updates.push({ id: target.id, lines: mirroredLines(source, target, latestWorkspace.current.synced?.find(r => r.id === source.props?.syncId)) })
+      break
+    }
+    if (!updates.length) return
+    suppress.current = true
+    editor.transact(tr => { for (const u of updates) editor.updateBlock(u.id, { children: u.lines } as never); tr.setMeta('addToHistory', false) })
+    suppress.current = false
+    blockKeys.current = new Map(deepNodes(nodes()).filter(n => n.type === syncedBlockType).map(n => [n.id, blockLinesKey(n)]))
+  }
   useEffect(() => editor.onChange(() => {
+    mirrorCopies()
     const before = taskRows.current, rows = readTaskRows()
     taskRows.current = rows
     if (suppress.current) return
