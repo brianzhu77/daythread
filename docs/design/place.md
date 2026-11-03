@@ -29,7 +29,7 @@ Both need outside services we don't have: **an address search and map images.** 
 - **Look:** a grey map style with black pins, matching 116a40ab. Attribution stays visible, since map data licences require it.
 - **Keys and block rules:** arrow keys pan once selected. Cut, paste and letters stay out of the page (R1-26).
 
-**The phone needs care.** A map inside a page fights with scrolling that page. **My proposal:** inline, one finger scrolls the page and two fingers move the map; a full-screen button gives one-finger use, as a full-page database does by default. Native check needed. It's the riskiest part of this layout.
+**The phone needs care.** A map inside a page fights with scrolling that page. **Jazz's call (fb7d3274), not prototyped:** inline, one finger scrolls the page. **A full-screen button is always visible at 390, as the real way to move the map,** as a full-page database does by default. A tap on a pin still shows its card. Two fingers moving the map is a bonus only if the map library gives it cheaply, since it's hidden and we don't write hints explaining gestures. Needs a real iPhone before building, as the Simulator can't judge two fingers. It's the riskiest part of this layout.
 
 | State | He sees |
 | --- | --- |

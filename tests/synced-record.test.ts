@@ -145,6 +145,8 @@ test('an edit made on an older revision: the block takes the latest, his version
   assert.deepEqual(lines(h.page('b')), ['Kept', 'Changed', 'Mine'])
   assert.deepEqual(lines(h.page('a')).slice(-1), ['Changed'])
   assert.deepEqual(lines(h.page('c')), ['Changed'], 'it stays on B')
+  // The ids of his lines there hold no place separator.
+  for (const n of pageNodes(h.page('b'))) if (n.type === 'paragraph') assert.ok(!n.id.includes(':') , n.id)
   // B's own lines there aren't in the block any more.
   assert.equal(blockOf(h.page('b')).children!.length, 1)
   const ids = h.ws.pages.flatMap(p => flatNodes(pageNodes(p)).map(n => n.id))
@@ -165,6 +167,9 @@ test('blockUpdates: own save sets the facts; another place\'s edit updates a blo
   const own = blockUpdates(typed, h.page('b').document, true)
   assert.equal(own[0]!.rev, 2)
   assert.equal(own[0]!.lines, null)
+  // It starts from what was saved, so the words typed since still read as his: nothing follows over them (Lead's review of #93).
+  const after = structuredClone(typed).map(n => n.type === syncedBlockType ? { ...n, props: { ...n.props, rev: own[0]!.rev, key: own[0]!.key } } : n)
+  assert.deepEqual(blockUpdates(after, h.page('b').document, false), [])
   // A new line typed on a copy takes this place's id once the save is back.
   const r = h.save('b', d => d.map(n => n.type === syncedBlockType ? { ...n, children: [...n.children!, line('n9', 'New here')] } : n))
   assert.equal(r.receipt.conflicted, undefined)
