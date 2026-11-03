@@ -98,6 +98,34 @@ await scenario('both changed it: the block has the latest, his version is right 
   const r = { record: recordText(), page: docOf('b').map(n => n.type + ':' + (n.content?.[0]?.text ?? '')), shown: await texts(page), notice: await notices(page) }
   return { ...r, ok: r.record.join('|') === 'Shared one|Shared two from A' && r.page.some(t => t.includes('Shared one from B')) && r.shown.includes('Shared one from B') && r.shown.includes('Shared two from A') }
 })
+// `page.route` doesn't see these requests in WebKit, so holding a save only works in Chromium; the domain's rule is one path in both.
+await scenario('words typed while a save is on its way all save, with no false notice', async page => {
+  if (engine === 'webkit') return { ok: true, skipped: 'page.route' }
+  await open(page, 'b')
+  await page.route('**/_serverFn/**', async route => { if (route.request().method() === 'POST') await wait(1500); await route.continue().catch(() => {}) })
+  await end(page, 'Shared one'); await page.keyboard.type(' first'); await wait(800)
+  await page.keyboard.type(' second'); await wait(5000)
+  const r = { record: recordText(), shown: await texts(page), notice: await notices(page) }
+  return { ...r, ok: r.record[0] === 'Shared one first second' && r.shown.includes('Shared one first second') && !/another|elsewhere/i.test(r.notice) }
+})
+await scenario('words typed during a save, another place edits, then his next save arrives behind: they go below the block, and nothing is lost', async (page, context) => {
+  if (engine === 'webkit') return { ok: true, skipped: 'page.route' }
+  await open(page, 'b')
+  let posts = 0, release
+  const held = new Promise(r => { release = r })
+  await page.route('**/_serverFn/**', async route => {
+    if (route.request().method() === 'POST' && ++posts === 2) await held
+    await route.continue().catch(() => {})
+  })
+  await end(page, 'Shared one'); await page.keyboard.type(' first'); await wait(1500)
+  await page.keyboard.type(' second'); await wait(1200)
+  const a = await context.browser().newContext({ viewport: { width: 1280, height: 900 } }); const pa = await a.newPage()
+  await open(pa, 'a'); await end(pa, 'Shared two'); await pa.keyboard.type(' from A'); await wait(2400); await a.close()
+  const before = recordText()
+  release(); await wait(4000)
+  const r = { posts, before, record: recordText(), page: docOf('b').map(n => n.type + ':' + (n.content?.[0]?.text ?? '')), shown: await texts(page), notice: await notices(page) }
+  return { ...r, ok: posts >= 2 && r.before[1] === 'Shared two from A' && r.record[1] === 'Shared two from A' && r.page.some(t => t.includes('Shared one first second')) && r.shown.includes('Shared one first second') }
+})
 await scenario('typed in a block, then the tab reloads: the kept draft saves, with the lines intact', async page => {
   await open(page, 'b'); await end(page, 'Shared two'); await page.keyboard.type(' kept'); await page.reload(); await wait(3500)
   const r = { record: recordText(), shown: await texts(page), notice: await notices(page) }
