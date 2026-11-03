@@ -1961,6 +1961,13 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-row.is-picked > td { background: var(--blue-soft); }
 .database-picked-bar { display: flex; align-items: center; gap: 12px; padding: 6px 8px; font-size: var(--text-meta); color: var(--ink-2); position: relative; }
 .database-picked-menu { position: absolute; top: 100%; left: 60px; z-index: 30; min-width: 180px; }
+/* On the phone the bar stays in reach above the toolbar, whichever row he's on (R3-15). */
+.database-picked-bar.is-picking { position: fixed; z-index: 40; left: 12px; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom)); min-height: 44px; padding: 4px 14px; border-radius: var(--radius-control); background: var(--bg-doc); box-shadow: var(--shadow-float); }
+.database-picked-bar.is-picking .database-picked-menu { top: auto; bottom: 100%; left: 0; }
+.database-picked-bar.is-picking .app-link { min-height: 36px; }
+.database-row-tick { flex: none; width: 16px; height: 16px; margin: 0 0 0 8px; pointer-events: none; }
+/* A long press on a Name starts picking: no callout or text selection on top of it. */
+@media (max-width: 899px) { .database-title-cell { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; } }
 
 /* Databases R2: groups in a table (design §7.3). The name stays on Name's text while the columns slide under it. */
 .database-block .database-group-head { padding: 0; border: 0; background: none; vertical-align: middle; font-weight: var(--weight-regular); text-align: left; }

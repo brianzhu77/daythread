@@ -787,7 +787,7 @@ The Lead recommends **option 1**, so this is option 1's design, with the differe
 - **Restoring a row whose database is in Trash** also restores the database. Trash says **"Restores Reading list too"**
   under its Restore button.
 - **Several rows** (1280): a checkbox on hover at the left of each row, and Shift-click for a range. A bar then reads **"3
-  rows · Edit property ▾ · Delete"**, the same bar as "N blocks selected". On the phone: later.
+  rows · Edit property ▾ · Delete"**, the same bar as "N blocks selected". **On the phone (R3-15):** a table's `⋯` → **Select rows**, or a long-press of 450 ms on a row's Name, which picks that row; moving sooner stays a scroll. A box then shows on each row and a tap anywhere on a row ticks it. The bar stays above the toolbar and adds **All** and **Done**. Edit and Delete of several are one Undo. A table has no other long-press, and a board's is its drag, so they can't collide. To-dos have no bar, at either width. List, Board and Gallery have none at either width yet.
 
 ## 13. States
 
