@@ -67,8 +67,14 @@ interface Property {
   format?: 'plain' | 'comma' | 'percent' | 'currency'
   /** date: whether a time is shown and asked for */
   withTime?: boolean
-  /** relation: the database its values point into (may be this one). One-way in the first version. */
+  /** relation: the database its values point into (may be this one). */
   target?: string
+  /** relation: its other side, a relation on the target pointing back; every write keeps both in step, in one operation. */
+  mirror?: string
+  /** relation: 1 page, against no limit. */
+  limit?: 1
+  /** rollup: worked out when read (`relations.ts`), never stored. No rollup of a rollup. */
+  rollup?: { relation: string; property: string; fn: RollupFunction }
 }
 interface Option { id: string; name: string; color: Color; /** status only */ group?: 'todo' | 'active' | 'done' }
 
