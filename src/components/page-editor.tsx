@@ -507,14 +507,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           }
           return { ...node, id, content: freshContent(node), ...(node.type === 'task' ? { props: moving && latestWorkspace.current.tasks.some(t => t.id === node.props?.taskId) ? node.props : { taskId: `editor-task:${id}`, role: 'reference', planDate: '' } } : {}), ...(node.children ? { children: node.children.map(fresh) } : {}) }
         }
-        // Into a to-do with words: its words only, as a link there is (B22-9). A task's title holds one line.
+        // With the caret in a to-do with words, whole rows go below it. Fitted in at the caret, they'd split it, and its second
+        // half would be another row of the same task (Bumblebee).
         const at = editor.getTextCursorPosition().block
-        if (!moving && at.type === 'task' && inlineText(at.content).trim() && editor.prosemirrorState.selection.empty) {
-          const words = (payload.blocks as EditorNode[]).map(n => inlineText(n.content)).filter(Boolean).join(' ')
-          if (words) editor.insertInlineContent(words)
-          return true
-        }
-        insert(payload.blocks.map(fresh))
+        if (at.type === 'task' && inlineText(at.content).trim() && editor.prosemirrorState.selection.empty) editor.insertBlocks(payload.blocks.map(fresh) as never, at.id, 'after')
+        else insert(payload.blocks.map(fresh))
         if (sameTaskRows.length) {
           const n = sameTaskRows.length
           setNotice({ text: n === 1 ? 'Pasted as the same task' : 'Pasted as the same tasks', fingerprint: JSON.stringify(editor.document), extra: { label: n === 1 ? 'Make a copy' : 'Make copies', run: () => {
@@ -2485,7 +2482,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     {dock && createPortal(<>
       {/* B38: no role; the header's status line already announces each change. */}
       {unsaved && !saveLineVisible && <div className="editor-unsaved-line"><span className="editor-unsaved-dot" aria-hidden="true" />{unsavedText}</div>}
-      {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span>{selected.current.length === 1 && lineLinkTarget(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyLineLink(id) }}>Copy link</button>}<button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
+      {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span>{selected.current.length === 1 && editor.getBlock(selected.current[0]!)?.type === 'task' && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyRow(id) }}>Copy</button>}{selected.current.length === 1 && lineLinkTarget(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyLineLink(id) }}>Copy link</button>}<button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
       {lineMenu && <LineMenu anchor={lineMenu.anchor} onClose={closeLineMenu} onCopy={() => { const id = lineMenu.blockId; closeLineMenu(true); copyLineLink(id) }} />}
     {pastedChecklistIds.length > 0 && <div className="editor-paste-notice" role="status">{pastedChecklistIds.length} checklist {pastedChecklistIds.length === 1 ? 'line' : 'lines'} · <button onClick={() => {
       let count = 0, planned = 0

@@ -16,4 +16,5 @@ const trips = ws.pages.find(p => p.id === 'trips')!
 const line = (id: string, text: string) => ({ id, type: 'paragraph', props: {}, content: text ? [{ type: 'text', text, styles: {} }] : [], children: [] })
 await run({ type: 'save-editor', pageId: 'trips', expectedContent: pageContentKey(trips), document: JSON.stringify([line('first', 'Trip notes'), line('here', '')]) })
 await run({ type: 'create-document', title: 'Later', body: '', pageId: 'later' })
+await run({ type: 'create-template', title: 'A template', pageId: 'tpl' })
 console.log('seeded')

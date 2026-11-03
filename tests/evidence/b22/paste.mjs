@@ -122,12 +122,20 @@ const pastedDoc = JSON.parse(pageOf('trips').document), parent = pastedDoc.find(
 check(tasks().length === 2 && parent?.children?.[0]?.props?.taskId === child.props.taskId && parent?.children?.[0]?.props?.role === 'reference', 'a parent and child stay linked to their own tasks, nested', parent?.children)
 check(pastedDoc.some(n => n.type === 'paragraph' && JSON.stringify(n.content).includes('A plain line')), 'a text line pastes as text')
 
-// 10. Into a task row with words (B22-9): nothing new is made as a reference there.
+// 10. Into a filled to-do (Lead's review, Bumblebee): whole rows go below it, whether the caret's at its end or in its middle.
 await setup()
-const beforeRows = rowsOf(`day:${today}`).length
-await pasteOn(null, 'Book the train', one)
-check(tasks().length === 2 && rowsOf(`day:${today}`).length === beforeRows && Boolean(tasks().find(t => t.title.includes('Book the train') && t.title.includes('TRV'))), "into a to-do with words: its words only", tasks().map(t => t.title))
-// A template stays a template row with no task (B22-9), and a parent's own page is covered by step 5.
+const bullets = JSON.stringify({ blocks: [1, 2].map(i => ({ id: `b${i}`, type: 'bulletListItem', props: {}, content: [{ type: 'text', text: `Bullet ${i}`, styles: {} }], children: [] })), cut: false, token: 'x' })
+const titleNow = () => task('Book the train')?.title
+const rowsBefore = rowsOf(`day:${today}`).length, blocksBefore = nodes(`day:${today}`).length
+await page.locator('.bn-inline-content', { hasText: 'Book the train' }).first().click(); await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowRight' : 'End'); await wait(200)
+const fire = p => page.evaluate(v => { const data = new DataTransfer(); data.setData('application/x-daythread-blocks', v); document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })) }, p)
+await fire(bullets); await wait(1500)
+check(titleNow() === 'Book the train' && nodes(`day:${today}`).length === blocksBefore + 2 && rowsOf(`day:${today}`).length === rowsBefore, 'two lines pasted at the end of a to-do: its title alone, two lines added', nodes(`day:${today}`).length - blocksBefore)
+await setup()
+await page.locator('.bn-inline-content', { hasText: 'Book the train' }).first().click(); await page.keyboard.press(process.platform === 'darwin' ? 'Meta+ArrowLeft' : 'Home'); for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowRight'); await wait(200)
+await fire(bullets); await wait(1500)
+const sameTaskRows = rowsOf(`day:${today}`).filter(n => n.props.taskId === task('Book the train')?.id)
+check(titleNow() === 'Book the train' && sameTaskRows.length === 1 && tasks().length === 2, 'with the caret in its middle: not split, and one row of the task', { rows: sameTaskRows.length, tasks: tasks().map(t => t.title) })
 
 // 11. If the phone drops our type: the same words alone are still this copy (B22-10).
 await fresh()
@@ -137,6 +145,22 @@ await page.goto(`${base}/pages?page=trips`); await wait(2500)
 { const l = page.locator('.bn-inline-content').last(); await (wide ? l.click() : l.tap()) } await wait(200)
 await page.evaluate(() => { const data = new DataTransfer(); data.setData('text/plain', 'TRV'); document.activeElement.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true })) }); await wait(1500)
 check(rowsOf('trips').some(n => n.props.taskId === trvNow) && tasks().length === 2, 'plain words from a row\'s Copy still paste as the same task', rowsOf('trips').map(n => n.props))
+// 13. On a template it stays a row with no task, and no notice (B22-9).
+await setup()
+await pasteOn('/pages?page=tpl', null, one)
+check(tasks().length === 2 && !/same/.test((await notice()).join('|')) && !JSON.stringify(pageOf('tpl').document).includes(trv), 'on a template: a row with no task, and no notice', tasks().length)
+
+// 12. On a phone, a ticked to-do has Copy on its plain bar (B22-6, B22-10).
+if (!wide) {
+  await setup()
+  await page.locator('input[aria-label="Complete TRV"]').first().tap(); await wait(1200)
+  const done = page.locator('.editor-task[data-status="done"]', { hasText: 'TRV' }).first()
+  await done.locator('.editor-task-title').tap(); await wait(500)
+  await page.locator('.editor-touch-handle').first().tap(); await wait(500)
+  await page.locator('.editor-selection-bar').getByRole('button', { name: 'Copy', exact: true }).tap(); await wait(500)
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('daythread:last-copy')))
+  check(kept.blocks[0].props.taskId === trv, "a ticked to-do's bar has Copy")
+}
 check(errors.length === 0, 'no page errors', errors)
 console.log(fails ? `${fails} FAILED` : 'ALL PASS')
 await browser.close()
