@@ -121,6 +121,27 @@ Untitled                                                                    ← 
   editor.
 - **Cell text** stays on one line with an ellipsis. The full value is on the row page. (Wrap per property: later, §14.)
 
+### 4.1a Column calculations (R3-8)
+
+- **Where:** a row at the table's foot, under its last row and above `Show 25 more` and `+ New`. Each group has its own,
+  above its `+ New`, with no second total, and a folded group hides its foot. Table only: other layouts keep the setting
+  and draw it when they're a table again.
+- **Nothing at rest:** a table with no calculation has no foot. `⋯` → **Calculate** lists Name and each shown column, at
+  both widths. Once there's a foot, a tap on a cell opens the same panel; at 1280 the other columns read "Calculate" on
+  hover, and at 390 they stay blank. The panel is the way in at 390 because there's no hover there, and a row of
+  "Calculate" on every phone table would be noise.
+- **It counts what the filter shows,** every row of it, whatever `Show 25 more` has drawn, and a cell still saving as it
+  shows. Hidden groups aren't drawn, so they aren't counted.
+- **Each type offers:** every type: Count all, Count values (each tag of a multi-select), Count unique, Count empty,
+  Count not empty, Percent empty, Percent not empty. Number: also Sum, Average, Median, Min, Max, Range. Date, Created
+  time and Edited time: also Earliest, Latest, Date range. ID: also Min, Max. Status: also Count per group and Percent per group (`○ 2 ◐ 1 ● 31`). Checkbox: only Count
+  all, Checked, Unchecked, Percent checked, Percent unchecked.
+- **The cell:** a short word in `--ink-3` and the value in `--ink`, at `--text-meta`, on its column's text: right-aligned
+  under a number. It takes the property's number format. Average rounds to 2 places and a percent to 1. Nothing to
+  reckon (an average of no numbers) reads `—`; a sum of none is 0.
+- **Saved on the view,** or in a linked view's block. A type that no longer fits, or a deleted column, draws nothing, and
+  comes back if the type does. The foot doesn't stick to the screen, so it can't sit under the phone's toolbar.
+
 ### 4.2 Inline, 390
 
 ```
@@ -490,7 +511,10 @@ Linked views come in R2, so in R1 (Bumblebee 120fdcd6):
   Not board columns: a card couldn't be dragged.
 - **`+ New` under a rule on one of these** sets no value, and asks whether the view would show it from its real time and
   next number, so §7.4's notice is right.
-- **Calendar** still shows by a Date property only.
+- **Calendar** can show by a created or edited time (§7.2).
+- **ID prefix:** a Prefix field in the property's settings, up to 20 characters, shown before the number: `BK-12`. It's
+  display only, so numbers never change. A filter's value can be typed as it shows, and its line reads as it shows; copy
+  gives what's shown, an ID's Min and Max at the table's foot read as they show, and sort is by number.
 
 #### 6.3.13 Accessibility
 
@@ -528,6 +552,10 @@ Linked views come in R2, so in R1 (Bumblebee 120fdcd6):
 | **Timeline** | bars from a start date to an end date on a week/month scale | a list grouped by week (bars don't fit on a phone) | `+` on the scale | a bar to move or resize it (1280 only) |
 
 Every view type opens a row the same way (§5), and every view shows the filter line (§4.1).
+
+**Calendar by a created or edited time (R3-21).** "Show calendar by" lists them with the Date properties. Nobody can set them, so on these calendars rows don't drag (Shift-arrows too), a day has no `+`, and the phone's day has no `+ New`. A row from before these were kept is on the same quiet line as any undated row, "No date · 3 ›", opening in place, which only appears if there are such rows; it doesn't drag from there either.
+
+**Calendar: where it was left (R3-21).** The month or week a calendar shows is kept on this device, per block and view, as a group's fold is, and isn't synced. It comes back to that place on a reload or a later visit, and `Today` is there when it isn't showing today. A calendar with nothing kept opens on its page's day, or today.
 
 **Calendar: which date, and its weeks (R3-1).** It's asked when the view is made, with "+ New Date property" offered, and with one date property it doesn't ask. `⋯` → Layout has "Show calendar by" to change it, and "Show as" Month or Week. A week shows every title on a day. **Weeks start on Sunday** in database views and the date pickers, unless he chooses "Week starts Monday" on the account line, which moves the calendar, the pickers, the filter's "this week" and group by week together (R3-20; Lead 39431a3e). It's saved with the workspace. The row menu's "Next week" stays as it is. A row dragged from the second day of a range moves the range by how far it went, keeping its length and time. Which month is showing and which day is chosen are this tab's, with no save.
 

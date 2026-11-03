@@ -584,7 +584,7 @@ export function PropertyCell({ property, value, today = todayIso() }: { property
     case 'email':
     case 'phone': return <span className={`cell-text${(property.type === 'email' ? emailHref : phoneHref)(String(read)) ? ' cell-url' : ''}`}>{String(read)}</span>
     case 'number': return <span className="cell-number">{numberLabel(read as number, property.format)}</span>
-    case 'id': return <span className="cell-number">{String(read)}</span>
+    case 'id': return <span className="cell-number">{property.prefix ?? ''}{String(read)}</span>
     case 'createdTime':
     case 'editedTime': return <span className="cell-text">{dateLabel(read as DateValue, today)}</span>
     case 'url': {

@@ -1950,6 +1950,11 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-group-none { color: var(--ink-3); }
 .database-group-count { color: var(--ink-3); font-weight: var(--weight-regular); }
 .database-block .database-group-foot > td { padding: 0; border: 0; }
+.database-calc-cell { font-size: var(--text-meta); color: var(--ink); }
+.database-calc-text { display: inline-flex; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.database-calc-label, .database-calc-empty { color: var(--ink-3); }
+.database-calc-empty { opacity: 0; }
+.database-calc:hover .database-calc-empty, .database-calc-cell:focus-visible .database-calc-empty { opacity: 1; }
 .database-group-foot.is-drop-end > td { box-shadow: inset 0 2px 0 var(--blue); }
 .database-block .database-hidden-groups { margin: 4px 0 0; padding: 0 8px; color: var(--ink-3); font-size: var(--text-meta); }
 /* On a board, on a card's words, as + New is. */
