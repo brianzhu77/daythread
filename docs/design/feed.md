@@ -35,7 +35,7 @@ A card's body isn't editable here, because a stack of live editors would be slow
 ## 4. What I'd leave out, for the Lead to confirm
 
 - **View counts.** With one person, they'd only count himself.
-- **Comments.** The app has no comments at all, on pages or rows, and `databases.md` §14 doesn't list them. Notion has them everywhere, so this is a wider gap than Feed: **either list Comments in §14 as its own later item, or list it under Not planned with the reason "needs more than one person".** Notes to himself can already go in the body. I lean to Not planned, but it's your call, so it isn't a quiet cut.
+- **Comments.** The app has none, on pages or rows. **Decided (Lead 4a1712e6): a later item in `databases.md` §14, not Not planned.** A note on a line or a row works with one person, and how Brian might use them only sets the order. A Feed's comment line waits for that item.
 
 ## 5. For Roadbuster and Jazz
 

@@ -42,7 +42,7 @@ In Notion a widget shows an existing view, and editing it can change that view e
 This is the most expensive thing a page could hold, so it has limits of its own:
 
 - Widgets off-screen load when scrolled to.
-- **On a day page or in his Day template,** R2-7's bar applies, and 12 widgets won't meet it. **My proposal:** a dashboard is only a full page, as Notion's main case, and a day page shows it as a page link. A day page can already hold several linked views. If he wants one inline, that's a later ask.
+- **On a day page or in his Day template,** R2-7's bar applies, and 12 widgets won't meet it. **Decided (Lead 4a1712e6), a budget limit, not a cut:** a dashboard is only a full page, as Notion's main case, and a day page shows it as a page link. A day page can already hold several linked views. If he wants one inline, that's a later ask.
 - A row cap per widget as in any view.
 
 ## 6. For Roadbuster and Jazz

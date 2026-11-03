@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PGlite } from '@electric-sql/pglite'
 import { flatNodes, pageContentKey, pageNodes, type EditorNode } from '../src/domain/editor-document.ts'
-import { expandedWorkspace, storedDocument, strippedWorkspace, syncedBlockType } from '../src/domain/synced.ts'
+import { blockUpdates, expandedWorkspace, storedDocument, strippedWorkspace, syncedBlockType } from '../src/domain/synced.ts'
 import { applyChanges, changesBetween } from '../src/domain/workspace-changes.ts'
 import { applyCommand } from '../src/domain/workspace.ts'
 import { planWrites, rowsOf, workspaceOf } from '../src/server/workspace-rows.ts'
@@ -129,15 +129,52 @@ test('a page\'s content key means one thing: stored or expanded, here or loaded,
   h.save('a', d => d.map(n => n.type === syncedBlockType ? { ...n, children: [line('l1', 'Changed')] } : n))
   assert.equal(pageContentKey(h.page('b')), key, 'B can still save what it has')
   // And B's own save, with a block on the older lines he didn't touch, takes the latest.
-  h.save('b', d => d.map(n => n.id === 'kept' ? para('kept', text('Kept and edited')) : n.type === syncedBlockType ? { ...n, props: { ...n.props, rev: 1 } } : n))
+  h.save('b', d => d.map(n => n.id === 'kept' ? para('kept', text('Kept and edited')) : n))
   assert.deepEqual(lines(h.page('b')), ['Kept and edited', 'Changed'])
   assert.deepEqual(lines(h.page('c')), ['Changed'])
 })
 
-test('an edit made on an older revision is refused, so nothing typed is lost', () => {
+test('an edit made on an older revision: the block takes the latest, his version goes right below it, and nothing goes', () => {
   const h = shown()
   h.save('a', d => d.map(n => n.type === syncedBlockType ? { ...n, children: [line('l1', 'Changed')] } : n))
-  assert.throws(() => h.save('b', d => d.map(n => n.type === syncedBlockType ? { ...n, props: { ...n.props, rev: 1, edited: true }, children: [line('l1:sb', 'Mine')] } : n)), /changed elsewhere/)
+  // B still holds what it read at revision 1: its key says so.
+  const was = { rev: 1, key: pageContentKey({ document: JSON.stringify([line('l1', 'First'), line('l2', 'Second')].map(n => ({ ...n, children: [] }))) }) }
+  const r = h.save('b', d => d.map(n => n.type === syncedBlockType ? { ...n, props: { ...n.props, ...was }, children: [line('l1:sb', 'Mine')] } : n))
+  assert.deepEqual(r.receipt.conflicted, ['sb'])
+  assert.deepEqual(lines(h.page('b')), ['Kept', 'Changed', 'Mine'])
+  assert.deepEqual(lines(h.page('a')).slice(-1), ['Changed'])
+  assert.deepEqual(lines(h.page('c')), ['Changed'], 'it stays on B')
+  // The ids of his lines there hold no place separator.
+  for (const n of pageNodes(h.page('b'))) if (n.type === 'paragraph') assert.ok(!n.id.includes(':') , n.id)
+  // B's own lines there aren't in the block any more.
+  assert.equal(blockOf(h.page('b')).children!.length, 1)
+  const ids = h.ws.pages.flatMap(p => flatNodes(pageNodes(p)).map(n => n.id))
+  assert.equal(new Set(ids).size, ids.length)
+})
+
+test('blockUpdates: own save sets the facts; another place\'s edit updates a block he has not changed, and leaves one he has', () => {
+  const h = shown()
+  const b = () => pageNodes(h.page('b'))
+  const held = structuredClone(b())
+  h.save('a', d => d.map(n => n.type === syncedBlockType ? { ...n, children: [line('l1', 'Changed')] } : n))
+  const follow = blockUpdates(held, h.page('b').document, false)
+  assert.equal(follow[0]!.rev, 2)
+  assert.deepEqual(follow[0]!.lines!.map(n => n.id), ['l1:sb'])
+  const typed = structuredClone(held).map(n => n.type === syncedBlockType ? { ...n, children: [line('l1:sb', 'Typing')] } : n)
+  assert.deepEqual(blockUpdates(typed, h.page('b').document, false), [])
+  // His own save, with more typed since: the facts move on, the lines stay.
+  const own = blockUpdates(typed, h.page('b').document, true)
+  assert.equal(own[0]!.rev, 2)
+  assert.equal(own[0]!.lines, null)
+  // It starts from what was saved, so the words typed since still read as his: nothing follows over them (Lead's review of #93).
+  const after = structuredClone(typed).map(n => n.type === syncedBlockType ? { ...n, props: { ...n.props, rev: own[0]!.rev, key: own[0]!.key } } : n)
+  assert.deepEqual(blockUpdates(after, h.page('b').document, false), [])
+  // A new line typed on a copy takes this place's id once the save is back.
+  const r = h.save('b', d => d.map(n => n.type === syncedBlockType ? { ...n, children: [...n.children!, line('n9', 'New here')] } : n))
+  assert.equal(r.receipt.conflicted, undefined)
+  const mine = structuredClone(b()).map(n => n.type === syncedBlockType ? { ...n, children: n.children!.map(c => c.id === 'n9:sb' ? { ...c, id: 'n9' } : c) } : n)
+  assert.deepEqual(blockUpdates(mine, h.page('b').document, true)[0]!.rename, { n9: 'n9:sb' })
+  assert.deepEqual(blockUpdates(b(), h.page('b').document, false), [])
 })
 
 test('the reply to the browser carries the record and no lines, and applying it gives the same workspace', () => {
@@ -172,6 +209,16 @@ test('a to-do row in a block has its role per place, and a rename reaches every 
   assert.match(JSON.stringify(row(dayPage).content), /New words/)
   assert.equal(row('b').props?.role, 'reference')
   assert.equal(row(dayPage).props?.role, 'plan')
+})
+
+test('a block whose record is missing stays as it is: no save removes it or makes an empty record', () => {
+  const h = shown()
+  const before = h.ws.synced!.length
+  h.save('b', d => [...d, block('sx', 'gone')])
+  assert.ok(pageNodes(h.page('b')).some(n => n.id === 'sx'))
+  assert.equal(h.ws.synced!.length, before)
+  h.save('b', d => d)
+  assert.ok(pageNodes(h.page('b')).some(n => n.id === 'sx'))
 })
 
 test('with no block nothing changes: the same objects, the same key', () => {
