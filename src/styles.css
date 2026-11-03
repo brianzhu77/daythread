@@ -1752,7 +1752,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-table.has-wrap .database-cell, .database-table.has-wrap .database-title-inner { height: 100%; align-items: flex-start; }
 .database-td.is-wrapped .database-title-cell, .database-td.is-wrapped .database-cell { white-space: normal; overflow-wrap: anywhere; }
 .is-wrapped .cell-text { white-space: pre-wrap; overflow-wrap: anywhere; }
-.is-wrapped .cell-chips { flex-wrap: wrap; }
+.is-wrapped .cell-chips, .is-wrapped .cell-relation { flex-wrap: wrap; white-space: normal; }
 .is-wrapped .property-chip { height: auto; min-height: 22px; white-space: normal; }
 .is-wrapped .database-url-link { white-space: normal; overflow-wrap: anywhere; }
 .database-td.is-wrapped .database-url-cell { align-items: flex-start; padding-block: 5px; }
