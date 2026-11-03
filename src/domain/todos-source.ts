@@ -1,7 +1,7 @@
 // To-dos as a source (design §11, model §7): a built-in database whose rows are his tasks. Nothing here is stored: the
 // layouts read a workspace with this database added (`withTodos`, only ever handed to them, so Pages, search and the
 // export never see it), and an edit becomes the task command the day page uses (`todoChange`).
-import { newRowValues, rowMatches, titleId, type Database, type DateValue, type Json, type Property, type View, type ViewContext } from './database.ts'
+import { inView, newRowValues, titleId, type Database, type DateValue, type Json, type Property, type View, type ViewContext } from './database.ts'
 import type { LineTarget } from './page-refs.ts'
 import type { Action, LocalDate, Page, Task, Workspace } from './types.ts'
 import { canRenameTask, isBlankTask, plannedOn, taskRows } from './workspace.ts'
@@ -122,7 +122,7 @@ export function todoChange(ws: Workspace, taskId: string, columnId: string, raw:
 export function newTodo(view: View, context: ViewContext, group?: string, placed?: Record<string, Json>): { date: LocalDate; attentionOn?: LocalDate; deadlineOn?: LocalDate; status?: string; visible: boolean } {
   const made = newRowValues(todosDatabase, view, context, group)
   const values = { ...made.values, ...placed }
-  const visible = placed ? rowMatches(todosDatabase, { id: '', type: 'document', date: null, title: '', document: '[]', values } as Page, view.filter, context) : made.visible
+  const visible = placed ? inView(todosDatabase, { id: '', type: 'document', date: null, title: '', document: '[]', values } as Page, view, context) : made.visible
   const pinned = (id: string) => dateOf(values[id]) ?? undefined
   const on = pinned(planned) ?? context.today
   const startOn = pinned(start), deadlineOn = pinned(deadline)

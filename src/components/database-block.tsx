@@ -892,7 +892,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
             })}
             <td className="database-td is-add" />
           </tr>
-  return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
+  return <div className={`database-table-wrap${db.database.fixed ? ' is-todos' : ''}`} ref={wrap} onKeyDown={onKeyDown}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
       <table className="database-table">
