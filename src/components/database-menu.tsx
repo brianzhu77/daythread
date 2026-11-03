@@ -360,14 +360,14 @@ function GroupPanel({ db, view, back }: { db: DatabasePage; view: View; back: ()
         <option value="day">Day</option><option value="week">Week</option><option value="month">Month</option>
       </select>
     </label>}
-    {property && <label className="database-menu-row">Sub-group by
-      <select aria-label="Sub-group by" value={subProperty?.id ?? ''} onChange={e => { const subGroupBy = e.target.value || null; changeView(() => ({ subGroupBy, hiddenSubGroups: [] })) }}>
+    {property && <label className="database-menu-row">Sub-group
+      <select aria-label="Sub-group" value={subProperty?.id ?? ''} onChange={e => { const subGroupBy = e.target.value || null; changeView(() => ({ subGroupBy, hiddenSubGroups: [] })) }}>
         <option value="">None</option>
         {subChoices.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
     </label>}
     {subProperty && (subProperty.type === 'date' || isTimeType(subProperty.type)) && <label className="database-menu-row">By
-      <select aria-label="Sub-group by date" value={view.subGroupDateBy ?? 'month'} onChange={e => { const subGroupDateBy = e.target.value as GroupDateBy; changeView(() => ({ subGroupDateBy, hiddenSubGroups: [] })) }}>
+      <select aria-label="Sub-group date step" value={view.subGroupDateBy ?? 'month'} onChange={e => { const subGroupDateBy = e.target.value as GroupDateBy; changeView(() => ({ subGroupDateBy, hiddenSubGroups: [] })) }}>
         <option value="day">Day</option><option value="week">Week</option><option value="month">Month</option>
       </select>
     </label>}
