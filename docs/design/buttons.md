@@ -89,4 +89,4 @@ No running cost until step 4.
 - A retry after a lost reply makes one row.
 - Each row in §3's notice table, and each broken target in §4.
 - A button in his Day template on a copy of his real data: new days copy it, the day draft doesn't treat it as a filled slot or an anchor (R2-6's bar), and day open stays within R2-7's bar.
-- Export writes a button's label, so nothing is silently dropped.
+- A page's export writes a button's label, so a page never silently loses a line.
