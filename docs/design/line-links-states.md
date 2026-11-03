@@ -1,10 +1,10 @@
 # A11 · Link to a line: states
 
 - Author: Jazz (Design) · 2026-10-21 · status: **design states for review**. Base main 48cfcaa.
-- **v1 scope (Lead 2026-10-22, A11 thread `#daythread:4685e651`):** no cross-page move identity. A paste always gets
-  fresh ids, as today; only task links follow their task. A plain line that is cut and pasted (to another page or
-  within the same page) or deleted reads "**Line not found · {page}**". Move identity is v2, triggered by Bumblebee's
-  usage-read count.
+- **B29 (2026-11-03, replacing v1's scope cut):** a whole line cut and pasted within 2 minutes, once, keeps its id, and a
+  link to it follows it ("moved" below, to another page or within one). The server keeps each id on one page: a line
+  arriving with an id another page holds gets a new one, so a pasted copy or a late Undo never takes the link. A line
+  partly cut, or pasted later, is new. A deleted line still reads "**Line not found · {page}**".
 - Inputs:
   - Brian `c5c9142e` #1 (Oct 18): "block-level query and reference like Notion";
   - Lead `4aa0a79b` (A11 next: Copy link to line in the row ⋯ menu and ⌘/, inline look next to a `[[` page link,
@@ -90,7 +90,7 @@ Three ways to reach the same action, all already on screen today:
 | **a task line whose task moved day** | its words · **the day it's planned for now**, not the history row left on the old day (Jazz `93497700`) | opens that day; the URL from other apps resolves the same way |
 | **a task line whose task has no plan day** (Not today, paused) | its words · the most recent page that still shows its row (Bumblebee `565cad22`) | opens that page |
 | **a task line whose task is done** | its words · the day it was completed on (Bumblebee) | opens that day |
-| **deleted, or cut and pasted** (to another page or within the same page; v1) | "**Line not found · {last page}**" in `--ink-3`, ↳ icon kept. Not "removed": in v1 the line may still exist with a new id | opens that page at the top, notice "**Couldn't find that line**" |
+| **deleted, or cut and pasted after more than 2 minutes** | "**Line not found · {last page}**" in `--ink-3`, ↳ icon kept. Not "removed": the line may still exist with a new id | opens that page at the top, notice "**Couldn't find that line**" |
 | **its page is in the trash** | its words · {page} in `--ink-3` with the bin icon, like a trashed page link | opens the trashed page (banner + Restore, A4), scrolled to the line |
 | **its page doesn't exist** | "**Page not found**" in `--ink-3` | nothing |
 

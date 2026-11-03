@@ -2,6 +2,7 @@ import { Fragment, Slice } from '@tiptap/pm/model'
 import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
 import { type ComponentProps, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
+import type { EditorView } from '@tiptap/pm/view'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
 import { type BlockNoteEditor, BlockNoteSchema, blockToNode, defaultBlockSpecs, defaultInlineContentSpecs, docToBlocks, editorHasBlockWithType, filterSuggestionItems, insertOrUpdateBlockForSlashMenu } from '@blocknote/core'
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
@@ -90,6 +91,14 @@ function DatabaseInPage({ blockId, pageId, viewJson }: { blockId: string; pageId
 const DatabaseEditorActions = createContext<BlockActions | null>(null)
 /** The open editors, by page: a block put back after the page changed goes in through its editor, if it has one open. */
 const blockReceivers = new Map<string, (place: BlockPlace) => void>()
+/** A line the server gave a new id takes it here too, outside his Undo, as it isn't an edit of his (B29). */
+function applyRenamedLines(view: EditorView | undefined, renamed: Record<string, string>) {
+  if (!view) return
+  const tr = view.state.tr
+  view.state.doc.descendants((node, pos) => { const id = renamed[String(node.attrs.id ?? '')]; if (id) tr.setNodeMarkup(pos, undefined, { ...node.attrs, id }) })
+  if (tr.docChanged) view.dispatch(tr.setMeta('addToHistory', false))
+}
+const renamedDocument = (document: string, renamed: Record<string, string>) => Object.entries(renamed).reduce((text, [from, to]) => text.replaceAll(`"id":"${from}"`, `"id":"${to}"`), document)
 /** The linked views a save removed, and where they sat: the database they showed is still there (design §9.3). */
 function removedViews(ws: Workspace, before: string, after: string, detached: readonly string[]): { place: BlockPlace; db: Page }[] {
   const was = JSON.parse(before) as EditorNode[], now = new Set(deepNodes(JSON.parse(after) as EditorNode[]).map(n => n.id))
@@ -187,6 +196,8 @@ function rememberedCopy(text: string): string {
   } catch { return '' }
 }
 const cutTokens = new Set<string>()
+/** How long a cut line keeps its id when pasted (A11 plan §4): later it's a copy of old words, not this move. */
+const cutKeepsIdMs = 2 * 60_000
 const deepNodes = (nodes: readonly EditorNode[]): EditorNode[] => nodes.flatMap(n => [n, ...deepNodes(n.children ?? [])])
 const checklistIds = (nodes: readonly EditorNode[]): string[] => deepNodes(nodes).filter(n => n.type === 'sourceChecklist' && n.props?.checked !== true).map(n => n.id)
 // A tick is only a tick (Jazz 5612c295, Bumblebee 8f23bd5e): the press's default would focus the editor around the box
@@ -487,6 +498,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const payload = JSON.parse(internal)
         if (!Array.isArray(payload.blocks)) return defaultPasteHandler()
         const moving = payload.cut && (cutTokens.has(payload.token) || localStorage.getItem(`daythread:cut:${payload.token}`) === JSON.stringify(payload.blocks))
+        // A whole line cut and soon pasted is the same line, so a link to it follows (B29). Otherwise it's new here.
+        const keepsId = (node: EditorNode) => moving && Date.now() - Number(payload.at) <= cutKeepsIdMs && !(payload.partial as string[] | undefined)?.includes(node.id) && !editor.getBlock(node.id)
         // A9a §1: a pasted copy's `[[` links are new references (new refIds); a cut-and-paste move keeps them. A task row
         // can't hold a link, so there it becomes the page's title as text.
         // B27: a pasted copy's `@date` chips are new events (new ids); a cut-and-paste move keeps them, as with links.
@@ -504,7 +517,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         }
         const sameTaskRows: string[] = []
         const fresh = (node: EditorNode): EditorNode => {
-          const id = crypto.randomUUID()
+          const id = node.type !== 'database' && keepsId(node) ? node.id : crypto.randomUUID()
           const task = sameTask(node)
           if (task) {
             sameTaskRows.push(id); showing.add(task.id)
@@ -918,15 +931,17 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       }
       pendingSave.current=null; lastSaved.current = document
       debugClient('editor.save.finish',{operationId,pageId:page.id,afterRevision:preview.revision,result:'saved'})
-      const savedPage = preview.pages.find(p => p.id === page.id)!
+      // The server's answer when it gave a line a new id: another page holds the old one, which this tab may not have known (B29).
+      const savedPage = (result.renamed && latest()?.pages.find(p => p.id === page.id)) || preview.pages.find(p => p.id === page.id)!
       base.current = pageContentKey(savedPage); baseDoc.current = savedPage.document
+      if (result.renamed) applyRenamedLines(editor.prosemirrorView, result.renamed)
       // The editor has closed meanwhile: leaving takes it from here (it needs only the new starting point).
       if (left.current) return
       deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
       cutIds.forEach(id => cutTasks.current.delete(id))
       flags.detachDatabaseIds?.forEach(id => databaseFlags.current.detach.delete(id))
       flags.adoptDatabaseBlocks?.forEach(a => databaseFlags.current.adopt.delete(a.pageId))
-      dirty.current = JSON.stringify(editor.document) !== document
+      dirty.current = JSON.stringify(editor.document) !== (result.renamed ? renamedDocument(document, result.renamed) : document)
       // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
       const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
       setFailed(false); setUnsaved(null); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
@@ -2037,7 +2052,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       return block.type === 'task' && (snapshot!.blockCutAtStart === block.id || snapshot!.blockCutAtEnd === block.id) ? { ...block, type: 'paragraph', props: {} } : block
     }) as unknown as EditorNode[]
     const token = crypto.randomUUID()
-    e.clipboardData.setData(clipboardType, JSON.stringify({ blocks, cut, token }))
+    const partial = snapshot ? [snapshot.blockCutAtStart, snapshot.blockCutAtEnd].filter(Boolean) : []
+    e.clipboardData.setData(clipboardType, JSON.stringify({ blocks, cut, token, at: Date.now(), partial }))
     e.clipboardData.setData('text/html', editor.blocksToHTMLLossy(blocks as never))
     e.clipboardData.setData('text/plain', blocks.map(n => inlineText(n.content)).join('\n'))
     e.preventDefault(); e.stopPropagation()
@@ -2052,7 +2068,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       for (const n of homes) { databaseFlags.current.detach.add(String(n.props!.pageId)); formerHomes.current.set(n.id, String(n.props!.pageId)) }
       // R1-5: he sees where it went, and how to put it back.
       for (const n of homes) { const db = latestWorkspace.current.pages.find(p => p.id === n.props?.pageId); if (db) toast(`${displayPageTitle(db)} is now its own page · paste to put it back`, { timeout: 8000 }) }
-      if (homes.length) setTimeout(() => { clearTimeout(timer.current); void flushRef.current() }, 0)
+      // This save goes at once, whatever was cut: the source then saves first, so the paste keeps the line's id (B29).
+      setTimeout(() => { clearTimeout(timer.current); void flushRef.current() }, 0)
       editor.transact(tr => { closeHistory(tr); if (chosen) editor.removeBlocks(chosen.map(n => n.id)); else tr.deleteSelection() })
       selected.current = []; setSelectionLabel('')
     }
