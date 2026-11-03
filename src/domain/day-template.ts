@@ -17,8 +17,21 @@ export const reservedTargets: ReadonlySet<string> = new Set([dayPagesTarget, day
 export type TemplateTarget = string
 
 export const isTemplate = (p: Pick<Page, 'type'>): boolean => p.type === 'template'
+// A row template (R3-12) is a template page too, so it's in no list, search, count or To-dos, and a save of it makes no task.
+// Its `parentId` says which database's `+ New ⌄` it's in, so it isn't a row of that database and no column is added.
+const rowTemplatePrefix = 'rows-of:'
+export const rowTemplateTarget = (databaseId: string): string => `${rowTemplatePrefix}${databaseId}`
+/** The database a row template belongs to; null for any other page. */
+export const rowTemplateDatabaseId = (p: Pick<Page, 'type' | 'parentId'>): string | null => isTemplate(p) && p.parentId?.startsWith(rowTemplatePrefix) ? p.parentId.slice(rowTemplatePrefix.length) : null
+/** A database's templates, in the order they were made. */
+export const rowTemplates = (ws: Workspace, databaseId: string): Page[] => ws.pages.filter(p => isTemplate(p) && p.parentId === rowTemplateTarget(databaseId))
+/** What `+ New` starts from: this view's default, else the database's. One deleted since is no default, and comes back with its Undo. */
+export function defaultRowTemplate(ws: Workspace, db: Pick<Page, 'id' | 'database'>, view: { defaultTemplate?: string | null }): Page | undefined {
+  const list = rowTemplates(ws, db.id)
+  return list.find(p => p.id === view.defaultTemplate) ?? list.find(p => p.id === db.database?.defaultTemplate)
+}
 /** The templates in the Templates list, in the workspace's order. */
-export const templates = (ws: Workspace): Page[] => ws.pages.filter(p => isTemplate(p) && !p.trashedAt)
+export const templates = (ws: Workspace): Page[] => ws.pages.filter(p => isTemplate(p) && !p.trashedAt && !rowTemplateDatabaseId(p))
 /** What the template is the default for, if anything. */
 export const templateTarget = (p: Page): TemplateTarget | null => p.parentId ?? null
 export const defaultTemplate = (ws: Workspace, target: TemplateTarget): Page | undefined => templates(ws).find(p => templateTarget(p) === target)
@@ -77,11 +90,11 @@ function freshInline(content: unknown): unknown {
  * (planned on `date` for a day page) with fresh task ids. Page cards and other blocks aren't copied: a card would point
  * every new page at the same page.
  */
-export function pageFromTemplate(template: Page, date: LocalDate | null): EditorNode[] {
+export function pageFromTemplate(template: Page, date: LocalDate | null, todo?: (row: EditorNode) => EditorNode): EditorNode[] {
   const copy = (n: EditorNode): EditorNode[] => {
     const children = (n.children ?? []).flatMap(copy)
     if (!copiedTypes.has(n.type)) return children
-    if (n.type === 'task' || n.type === 'checkListItem') return [{ ...emptyTaskRow(date), children }]
+    if (n.type === 'task' || n.type === 'checkListItem') return [{ ...(todo ? todo(n) : emptyTaskRow(date)), children }]
     return [{ id: crypto.randomUUID(), type: n.type, props: { ...n.props }, content: freshInline(structuredClone(n.content)), children }]
   }
   const out = pageNodes(template).flatMap(copy)

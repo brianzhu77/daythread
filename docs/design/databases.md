@@ -119,7 +119,8 @@ Untitled                                                                    ← 
 - **Long tables:** inline shows **the first 25 rows**, then **"Show 25 more · Open as page"**. A full page shows 100
   at a time with the same line. This keeps a day page fast on the phone, where every row is rendered inside the
   editor.
-- **Cell text** stays on one line with an ellipsis. The full value is on the row page. (Wrap per property: later, §14.)
+- **Cell text** stays on one line with an ellipsis, and the full value is on the row page, unless the view wraps it.
+- **Wrap (R3-14), per view:** `⋯` → Properties → a property → **Wrap in this view**, **Wrap Name** in Properties, and **Wrap all** in Layout, at both widths. Number, Checkbox and ID don't offer it. The row grows to fit its longest wrapped cell, and a Text value's own line breaks show. With any column wrapped, cells start at the top of the row and fill it, so all of a tall cell still taps. Name stays pinned at 390, and sideways scroll and the page's place hold. Board and Gallery cards wrap their values the same way, and their titles already do. List stays one line per row, because its values share that line.
 
 ### 4.1a Column calculations (R3-8)
 
@@ -633,6 +634,16 @@ doesn't show.
   with Status = Reading. A row added under the "Done" group starts with Done.
 - **When no single value fits** (for example "contains", or "after Oct 1"), the row is created and the notice says
   **"Added · hidden by this view's filter · Show"**. Show opens the row.
+
+### 7.4a Row templates (R3-12)
+
+- **Way in:** `+ New ⌄` at both widths, on a table, list, gallery, board column and each group. `⋯` → Templates reaches them from any layout, a calendar too, where a tap opens one to edit. To-dos have no templates: a to-do is made from its words.
+- **`⌄` lists** the templates, a `⋯` on each, and `+ New template`, which opens the new one to be named. **Empty** is there only when `+ New` would otherwise start from a default. Tapping a template makes a row in that place: in that group, with what the view's filter asks for.
+- **What a template is:** a page with a title, the database's properties and a body, reached by its database. It's not a row: it isn't in any view, count, calculation, search, tag, To-dos or the Templates list. A to-do in it makes no task, as in the day template (B70).
+- **A new row takes** its values, its title if the row has none of its own, and a copy of its body with fresh ids. **What the view's filter or group asks for wins over the template**, since that's what keeps the row where it was added. A row's number, Created time and Edited time are its own. A relation set on a template links nothing back to the template; each row made from it links back, and a target row gone since is left out.
+- **To-dos keep their words** and each row's are its own tasks, unticked. This differs from a day template, whose to-dos come empty: a day's list is written fresh, but a row template's to-dos are the checklist it's for. A blank to-do stays blank and makes no task.
+- **Default:** a template's `⋯` has **Default for this view** and **Default for all views**. A view's own wins over the database's, and choosing all views clears this view's own so that it takes effect. Every `+ New` and a calendar day's `+` start from the default.
+- **Deleting one** leaves its rows as they are and is undone like any template. Its default goes with it and comes back with the Undo. A row being made from one deleted in another tab is refused with "That template's gone".
 
 ### 7.5 Properties shown in a view
 

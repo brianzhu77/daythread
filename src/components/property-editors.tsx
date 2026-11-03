@@ -576,12 +576,12 @@ function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange(
 // ---------- Cells (§6.3.2) ----------
 
 /** What a cell shows for its value. The cell itself (size, cursor, press, save states) is the table's. */
-export function PropertyCell({ property, value, today = todayIso() }: { property: Property; value: CellValue; today?: LocalDate }) {
+export function PropertyCell({ property, value, today = todayIso(), wrap = false }: { property: Property; value: CellValue; today?: LocalDate; wrap?: boolean }) {
   const read = value
   // A rollup with nothing linked (design §6.1).
   if (read === null) return property.rollup ? <span className="cell-text">—</span> : null
   switch (property.type) {
-    case 'text': return <span className="cell-text">{String(read).replace(/\s*\n\s*/g, ' ')}</span>
+    case 'text': return <span className="cell-text">{wrap ? String(read) : String(read).replace(/\s*\n\s*/g, ' ')}</span>
     case 'email':
     case 'phone': return <span className={`cell-text${(property.type === 'email' ? emailHref : phoneHref)(String(read)) ? ' cell-url' : ''}`}>{String(read)}</span>
     case 'number': return <span className="cell-number">{numberLabel(read as number, property.format)}</span>

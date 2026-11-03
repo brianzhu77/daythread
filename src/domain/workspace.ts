@@ -3,9 +3,9 @@
 import { broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
-import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget } from "./day-template.ts";
+import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
-import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow } from "./database.ts";
+import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
 import { acceptSavedBlocks, expandedWorkspace, settleSynced } from "./synced.ts";
@@ -317,8 +317,9 @@ function databasePage(state: Workspace, id: string): Page & { database: NonNulla
   return p;
 }
 /** A live row of a live database. */
-function rowPage(state: Workspace, id: string): { row: Page; db: Page & { database: NonNullable<Page["database"]> } } {
-  const row = page(state, id), db = databaseOfRow(state, row);
+function rowPage(state: Workspace, id: string, orTemplate = false): { row: Page; db: Page & { database: NonNullable<Page["database"]> } } {
+  const row = page(state, id), templateOf = orTemplate ? rowTemplateDatabaseId(row) : null, owner = templateOf ? state.pages.find((p) => p.id === templateOf) : undefined;
+  const db = templateOf ? (isDatabase(owner) ? owner : null) : databaseOfRow(state, row);
   if (!db) throw new DomainError("Not a row");
   if (isTrashed(row) || isTrashed(db)) throw new DomainError("Page is in trash");
   return { row, db };
@@ -332,12 +333,13 @@ function pageParent(state: Workspace, id: string): Page {
 }
 function rowEdit(state: Workspace, edit: RowEdit, at: string): void {
   if (!edit || typeof edit.pageId !== "string") throw new DomainError("Invalid row");
-  const { row, db } = rowPage(state, edit.pageId);
+  const { row, db } = rowPage(state, edit.pageId, true);
   const links = (id: string) => { const raw = row.values?.[id]; return Array.isArray(raw) ? (raw as string[]) : []; };
   const relations = db.database.properties.filter((p) => p.type === "relation" && edit.values && p.id in edit.values);
   const before = relations.map((p) => links(p.id));
   try { editRow(db.database, row, edit, at); } catch (error) { throw new DomainError((error as Error).message); }
-  relations.forEach((p, i) => syncMirror(state, p, row.id, before[i]!, links(p.id), at));
+  // A template isn't a row, so nothing links back to it; the rows made from it do that.
+  if (!rowTemplateDatabaseId(row)) relations.forEach((p, i) => syncMirror(state, p, row.id, before[i]!, links(p.id), at));
 }
 /** The local day of an ISO time in the workspace's zone. */
 const localDay = (state: Workspace, at: string): string => new Date(at).toLocaleDateString("en-CA", { timeZone: state.timezone });
@@ -770,13 +772,19 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (existingDay) return { message: "Template saved", entityId: existingDay.id };
       const nodes = action.dayPage ? builtInDayNodes() : [emptyLine("paragraph")];
       const title = action.dayPage ? dayTemplateTitle : text(action.title, 1000).trim();
+      if (action.databaseId) {
+        const db = databasePage(state, action.databaseId);
+        if (db.database.fixed) throw new DomainError("To-dos don't have templates");
+        state.pages.push({ id, type: "template", date: null, title, parentId: rowTemplateTarget(db.id), document: JSON.stringify(nodes) });
+        return { message: "Template saved", entityId: id };
+      }
       if (action.dayPage) for (const t of state.pages) if (isTemplate(t) && t.parentId === dayPagesTarget) delete t.parentId;
       state.pages.push({ id, type: "template", date: null, title, ...(action.dayPage ? { parentId: dayPagesTarget } : {}), document: JSON.stringify(nodes) });
       return { message: "Template saved", entityId: id };
     }
     case "set-template-target": {
       const p = page(state, action.pageId);
-      if (!isTemplate(p)) throw new DomainError("Not a template");
+      if (!isTemplate(p) || rowTemplateDatabaseId(p)) throw new DomainError("Not a template");
       const target = action.target;
       let where = "";
       if (target === dayPagesTarget) where = "day pages";
@@ -894,10 +902,34 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (databaseRows(state, db.id).length >= 10_000) throw new DomainError("Too many rows");
       const source = action.copyOf ? rowPage(state, action.copyOf) : undefined;
       if (source && source.db.id !== db.id) throw new DomainError("Not a row");
+      const template = action.template ? state.pages.find((p) => p.id === action.template) : undefined;
+      if (action.template && (!template || rowTemplateDatabaseId(template) !== db.id)) throw new DomainError("That template's gone");
       let values: Page["values"];
       try { values = source ? structuredClone(source.row.values) : newRowStored(db.database, action.values); } catch (error) { throw new DomainError((error as Error).message); }
+      // What the view's filter or the group asks for wins: it's what keeps the row where he added it.
+      if (template) {
+        const merged = { ...structuredClone(templateValues(template)), ...values };
+        // A row linked from the template may have gone since.
+        for (const p of db.database.properties) {
+          const raw = merged[p.id];
+          if (p.type !== "relation" || !Array.isArray(raw)) continue;
+          const live = (raw as string[]).filter((id) => state.pages.some((x) => x.id === id && x.parentId === p.target && !isTrashed(x)));
+          if (live.length) merged[p.id] = live; else delete merged[p.id];
+        }
+        if (Object.keys(merged).length) values = merged;
+      }
       const row: Page = { id: action.pageId, type: "document", date: null, title: source ? `${source.row.title} (copy)`.trim() : text(action.title, 1000).trim(), parentId: db.id, document: JSON.stringify([emptyLine("paragraph")]), ...(values ? { values } : {}), createdAt: at, editedAt: at };
       if (source) row.document = JSON.stringify(copiedBody(state, source.row, row, localDay(state, at)));
+      if (template) {
+        if (!row.title) row.title = template.title;
+        // A template's to-dos are words until now; each new row's are its own tasks (R3-12).
+        row.document = JSON.stringify(pageFromTemplate(template, null, (n) => {
+          const words = inlineText(n.content).trim();
+          if (!words) return emptyTaskRow(null);
+          const task = createTask(state, words, row, localDay(state, at));
+          return { id: newId(), type: "task", props: { taskId: task.id, role: "reference", planDate: "" }, content: structuredClone(n.content), children: [] };
+        }));
+      }
       numberNewRow(db.database, row);
       // A new row's links show on their other side, a copy's too.
       for (const p of db.database.properties) { const raw = row.values?.[p.id]; if (p.type === "relation" && Array.isArray(raw)) syncMirror(state, p, row.id, [], raw as string[], at); }

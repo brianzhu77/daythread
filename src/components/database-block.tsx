@@ -5,14 +5,15 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
-import { cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
-import { ChevronRightIcon } from './icons'
+import { ChevronDownIcon, ChevronRightIcon } from './icons'
 import { holdKeyboard } from './keyboard'
 import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide } from './property-editors'
 import { calcText, emailHref, phoneHref, urlHref } from './property-values'
+import { defaultRowTemplate } from '../domain/day-template'
 import { useTaskTick, useWorkspace } from './use-day'
 import { announceSave } from './draft-slots'
 import { taskRows } from '../domain/workspace'
@@ -561,12 +562,12 @@ function useAddTodo() {
  * do. On the phone it opens as its page with the caret in its title; at 1280 its Name opens to be typed, once it's drawn.
  */
 export function useAddRow(db: Page & { database: Database }, view: View, context: ViewContext, blockId: string, reveal: (rowId: string, group: string | undefined) => void) {
-  const { run } = useWorkspace()
+  const { run, latest } = useWorkspace()
   const navigate = useNavigate()
   const openRow = useOpenRow()
   const wide = useWide()
-  /** `values`: what its place says, over what the view's filter asks: a calendar day's date. */
-  return (group?: string, values?: Record<string, Json>) => {
+  /** `values`: what its place says, over what the view's filter asks: a calendar day's date. `template`: one picked, or null for an empty row; else the default. */
+  return (group?: string, values?: Record<string, Json>, template?: string | null) => {
     // Raise the keyboard inside this tap, for the row's page.
     if (!wide) holdKeyboard()
     // A to-do needs its words first: a blank one isn't a row, and shouldn't exist (B69).
@@ -580,8 +581,11 @@ export function useAddRow(db: Page & { database: Database }, view: View, context
       Object.assign(prefill.values, values)
       prefill.visible = inView(db.database, newRowProbe(db.database, prefill.title, prefill.values), view, context)
     }
+    const ws = latest()
+    const from = template === null || !ws ? undefined : template ? ws.pages.find(p => p.id === template) : defaultRowTemplate(ws, db, view)
+    if (from) prefill.visible = inView(db.database, newRowProbe(db.database, prefill.title || from.title, { ...templateValues(from), ...prefill.values }), view, context)
     const pageId = newId()
-    void run({ type: 'add-row', databaseId: db.id, pageId, title: prefill.title, values: prefill.values, at: new Date().toISOString() },
+    void run({ type: 'add-row', databaseId: db.id, pageId, title: prefill.title, values: prefill.values, ...(from ? { template: from.id } : {}), at: new Date().toISOString() },
       r => prefill.visible ? null : { text: "Added · hidden by this view's filter", extra: { label: 'Show', run: () => void navigate({ to: '/pages', search: { page: r.entityId ?? pageId } }) } })
       .then(r => {
         if (!r) return
@@ -589,6 +593,13 @@ export function useAddRow(db: Page & { database: Database }, view: View, context
         if (prefill.visible) reveal(pageId, group)
       })
   }
+}
+/** `+ New`, and its `⌄` for the database's templates (R3-12). To-dos are made from words, so they have none. */
+export function NewRow({ db, blockId, addRow, group, className = 'database-new' }: { db: Page & { database: Database }; blockId: string; addRow: ReturnType<typeof useAddRow>; group?: string; className?: string }) {
+  return <>
+    <button type="button" className={className} onClick={() => addRow(group)}>+ New</button>
+    {!db.database.fixed && <button type="button" className="database-new-more" aria-label="New from a template" aria-haspopup="menu" onClick={() => openDatabaseMenu(blockId, db.id, 'templates', template => addRow(group, undefined, template))}><ChevronDownIcon /></button>}
+  </>
 }
 /** ⌘Z in a view: the last change, where the workspace's one Undo slot still holds it (design §10). True when it took the key. */
 export function useUndoKey() {
@@ -885,7 +896,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     <td className="database-td is-add" />
   </tr>
   const rowLine = (row: Page, index: number, group?: string) => <tr key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})} className={`database-row${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
-            <td className="database-td is-title"><div className="database-title-inner">
+            <td className={`database-td is-title${view.wrapName ? ' is-wrapped' : ''}`}><div className="database-title-inner">
               {wide && <span className="database-pin-strip" />}
               {wide && !db.database.fixed && <span className="database-row-gutter">
                 {!view.sort.length && <span className="database-row-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
@@ -898,12 +909,13 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
               </button>
               <button type="button" className="database-open" onClick={() => openRow(row.id)}>Open</button>
             </div></td>
-            {columns.map(({ property }, col) => {
+            {columns.map(({ property, wrap }, col) => {
+              const wraps = Boolean(wrap) && canWrap(property.type)
               const pending = pendingCells.get(pendingKey(row.id, property.id))
               // His value stays shown while it saves and after a failed save, never a silent revert (design §13).
               const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
               const navId = `${index}:${col + 1}`
-              return <td key={property.id} className={`database-td is-${property.type}${pending?.failed ? ' is-unsaved' : pending ? ' is-saving' : ''}`}>
+              return <td key={property.id} className={`database-td is-${property.type}${wraps ? ' is-wrapped' : ''}${pending?.failed ? ' is-unsaved' : pending ? ' is-saving' : ''}`}>
                 {property.type === 'checkbox'
                   ? <span data-nav={navId} tabIndex={0} className="database-check-cell" onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); commit(db, row, property.id, value === true ? undefined : true) } }}>
                       <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
@@ -913,11 +925,11 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
                   : wide && typeof value === 'string' && linkHref(property, value)
                   // At 1280 a link opens from its text, and the pencil edits it (design §6.1, Jazz bf91cb72).
                   ? <span className="database-url-cell">
-                      <a href={linkHref(property, value)!} target="_blank" rel="noreferrer" className="database-url-link"><PropertyCell property={property} value={value} today={today} /></a>
+                      <a href={linkHref(property, value)!} target="_blank" rel="noreferrer" className="database-url-link"><PropertyCell property={property} value={value} today={today} wrap={wraps} /></a>
                       <button type="button" className="database-url-edit" aria-label={`Edit ${property.name}`} data-cell={key(row.id, property.id, group)} data-nav={navId} onClick={() => open(row.id, property.id, group)}>✎</button>
                     </span>
                   : <button type="button" className="database-cell" data-cell={key(row.id, property.id, group)} data-nav={navId} onClick={() => open(row.id, property.id, group)}>
-                      <PropertyCell property={property} value={value} today={today} />
+                      <PropertyCell property={property} value={value} today={today} wrap={wraps} />
                     </button>}
               </td>
             })}
@@ -926,7 +938,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   return <div className={`database-table-wrap${db.database.fixed ? ' is-todos' : ''}`} ref={wrap} onKeyDown={onKeyDown}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
-      <table className="database-table">
+      <table className={`database-table${view.wrapName || columns.some(c => c.wrap && canWrap(c.property.type)) ? ' has-wrap' : ''}`} style={{ width: `calc(var(--database-name-width) + ${columns.reduce((sum, c) => sum + (c.width ?? defaultWidth(c.property)), addColumnWidth)}px)` }}>
         <thead>
           <tr>
             <th scope="col" className="database-th is-title" data-type="title">{wide && <span className="database-pin-strip" />}Name</th>
@@ -952,7 +964,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
               {!isFolded && <tr className={`database-group-foot${drag && drag.before === null && drag.group === group.key ? ' is-drop-end' : ''}`} data-group={group.key}><td colSpan={columns.length + 2}>
                 <div className="database-group-inner">
                   {more && <button type="button" className="database-more" onClick={() => showMore(group.key)}>Show 25 more</button>}
-                  <button type="button" className="database-new" onClick={() => addRow(group.key)}>+ New</button>
+                  <span className="database-new-row"><NewRow db={db} blockId={blockId} addRow={addRow} group={group.key} /></span>
                 </div>
               </td></tr>}
             </Fragment>
@@ -970,7 +982,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     </div>}
     {groups && <HiddenGroups groups={groups} changeView={changeView} />}
     {!groups && rows.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
-    {!groups && <button type="button" className="database-new" onClick={() => addRow()}>+ New</button>}
+    {!groups && <NewRow db={db} blockId={blockId} addRow={addRow} />}
   </div>
 }
 
@@ -1031,6 +1043,8 @@ function typeInto(text: string) {
 }
 
 /** Column widths until he drags one (stored on the view), design §4.1. Name's width is in CSS: 240, or 150 on the phone. */
+/** The `+` column's share of a table's width; it takes whatever's left over past that. */
+const addColumnWidth = 40
 function defaultWidth(property: Property): number {
   switch (property.type) {
     case 'checkbox': return 60

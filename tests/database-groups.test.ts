@@ -2,11 +2,13 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { calcChoices, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
+import { databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
 import { harness, today } from './v2-helpers.ts'
+import { defaultRowTemplate, newPageTemplate, rowTemplates, templates } from '../src/domain/day-template.ts'
+import { buildSearchIndex, search } from '../src/domain/search.ts'
 import { pageContentKey } from '../src/domain/editor-document.ts'
 import { calcText, emailHref, phoneHref } from '../src/components/property-values.ts'
 
@@ -640,4 +642,136 @@ test('reading what a foot cell says', () => {
   assert.deepEqual(calcText('dateRange', { type: 'days', value: 1 }, undefined, on), { label: 'Range', value: '1 day' })
   assert.deepEqual(calcText('earliest', { type: 'date', value: '2026-10-20' }, undefined, on), { label: 'Earliest', value: 'Oct 20' })
   assert.deepEqual(calcText('countPerGroup', { type: 'groups', percent: false, value: [{ group: 'todo', count: 3 }, { group: 'done', count: 1 }] }, undefined, on), { label: '', value: '○ 3  ● 1' })
+})
+
+// ---------- R3-14: wrap per property
+
+test('a view keeps what it wraps, and it never touches another view or a row', () => {
+  const h = reading()
+  h.change({ kind: 'addView', view: view({ id: 'second', name: 'Second', columns: [{ id: 'note' }] }) })
+  const viewId = h.db().views[0]!.id
+  const columns = [{ id: 'note', width: 200, wrap: true as const }, { id: 'kind' }]
+  h.change({ kind: 'updateView', viewId, columns, wrapName: true })
+  assert.deepEqual(h.db().views[0]!.columns, columns)
+  assert.equal(h.db().views[0]!.wrapName, true)
+  assert.deepEqual(viewColumns(h.db(), h.db().views[0]!).map(c => [c.property.id, c.width, c.wrap]), [['note', 200, true], ['kind', undefined, undefined]])
+  assert.deepEqual(h.db().views.find(v => v.id === 'second')!.columns, [{ id: 'note' }], 'another view is its own')
+  h.change({ kind: 'updateView', viewId, name: 'Renamed' })
+  assert.equal(h.db().views[0]!.wrapName, true, 'a rename keeps it')
+  h.change({ kind: 'updateView', viewId, wrapName: false })
+  assert.equal('wrapName' in h.db().views[0]!, false)
+  assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId, columns: [{ id: 'note', wrap: 'yes' }] } } }).success, false)
+})
+test('what can wrap', () => {
+  assert.deepEqual(['text', 'url', 'email', 'phone', 'select', 'multiSelect', 'status', 'date', 'createdTime', 'editedTime'].filter(t => !canWrap(t as never)), [])
+  assert.deepEqual(['number', 'checkbox', 'id'].filter(t => canWrap(t as never)), [])
+})
+
+// ---------- R3-12: row templates
+
+/** "Reading list" with a template: values, a body with words and to-dos. */
+function templated() {
+  const h = reading()
+  h.run({ type: 'create-template', databaseId: 'list', title: 'Review', pageId: 'tmpl' } as never)
+  h.run({ type: 'set-values', pageId: 'tmpl', values: { kind: 'essay', pages: 10 } } as never)
+  const doc = [
+    { id: 'l', type: 'paragraph', props: {}, content: [{ type: 'text', text: 'Notes', styles: {} }], children: [] },
+    { id: 'td', type: 'task', props: { taskId: '', role: 'reference', planDate: '' }, content: [{ type: 'text', text: 'Call the author', styles: {} }], children: [] },
+    { id: 'blank', type: 'task', props: { taskId: '', role: 'reference', planDate: '' }, content: [], children: [] },
+  ]
+  h.run({ type: 'save-editor', pageId: 'tmpl', expectedContent: pageContentKey(h.page('tmpl')), document: JSON.stringify(doc) } as never)
+  const fromIt = (pageId: string, values: Record<string, unknown> = {}, title = '') => h.run({ type: 'add-row', databaseId: 'list', pageId, title, values, template: 'tmpl', at } as never)
+  return Object.assign(h, { fromIt })
+}
+test('a template is no row: not in views, counts, search or To-dos, and its to-dos make no task', () => {
+  const h = templated()
+  assert.equal(h.ws.tasks.some(t => t.title === 'Call the author'), false, 'no task yet')
+  assert.equal(h.rows(view()).some(r => r.id === 'tmpl'), false)
+  assert.equal(databaseRows(h.ws, 'list').some(r => r.id === 'tmpl'), false)
+  assert.equal(templates(h.ws).some(p => p.id === 'tmpl'), false, 'nor the Templates list')
+  assert.deepEqual(rowTemplates(h.ws, 'list').map(p => p.id), ['tmpl'])
+  const found = (words: string) => search(buildSearchIndex(h.ws), words, today)
+  assert.equal(found('Call the author').lines.length, 0)
+  assert.equal(found('Review').pages.length, 0)
+  assert.equal(newPageTemplate(h.ws, h.page('list')), undefined, "it isn't a default for pages")
+})
+test('a new row takes the values, title and body, and its to-dos are its own', () => {
+  const h = templated()
+  h.fromIt('one')
+  h.fromIt('two')
+  const one = h.page('one'), two = h.page('two')
+  assert.equal(one.title, 'Review')
+  assert.deepEqual(one.values, { kind: 'essay', pages: 10 })
+  const nodes = (p: Page) => JSON.parse(p.document) as { id: string; type: string; props: { taskId?: string }; content: unknown }[]
+  assert.equal(nodes(one).length, 3)
+  assert.notEqual(nodes(one)[0]!.id, 'l', 'fresh ids')
+  const own = (p: Page) => nodes(p)[1]!.props.taskId!
+  const taskOf = (id: string) => h.ws.tasks.find(t => t.id === id)
+  assert.equal(taskOf(own(one))?.title, 'Call the author')
+  assert.notEqual(own(one), own(two), 'each its own task')
+  assert.equal(h.ws.tasks.filter(t => t.title === 'Call the author').length, 2)
+  assert.equal(taskOf(nodes(one)[2]!.props.taskId ?? ''), undefined, 'a blank to-do makes no task')
+  assert.equal(h.rows(view()).some(r => r.id === 'one'), true)
+})
+test('what the view asks wins over the template, and a title of its own too', () => {
+  const h = templated()
+  h.fromIt('here', { kind: 'novel' }, 'My title')
+  assert.equal(h.page('here').title, 'My title')
+  assert.deepEqual(h.page('here').values, { kind: 'novel', pages: 10 })
+})
+test('a template with no status leaves a new row with the same default', () => {
+  const h = templated()
+  h.fromIt('one')
+  const status = cellValue(h.db(), h.page('one'), 'status')
+  h.run({ type: 'add-row', databaseId: 'list', pageId: 'plain', title: '', at } as never)
+  assert.equal(status, cellValue(h.db(), h.page('plain'), 'status'))
+  const options = h.db().properties.find(p => p.id === 'status')!.options!
+  const done = options.find(o => o.group === 'done')!.id
+  h.run({ type: 'set-values', pageId: 'tmpl', values: { status: done } } as never)
+  h.fromIt('finished')
+  assert.equal(cellValue(h.db(), h.page('finished'), 'status'), done, 'and its status comes through')
+})
+test('a number is the row\'s own; a template has none to pass on', () => {
+  const h = templated()
+  h.change({ kind: 'addProperty', property: { id: 'num', name: 'No.', type: 'id' } })
+  h.fromIt('one')
+  assert.equal(h.page('one').values?.['@id'], 5)
+  assert.equal(h.page('tmpl').values?.['@id'], undefined)
+})
+test('defaults: the view\'s over the database\'s, and a deleted one is no default', () => {
+  const h = templated()
+  h.run({ type: 'create-template', databaseId: 'list', title: 'Other', pageId: 'other' } as never)
+  const viewId = h.db().views[0]!.id, first = () => h.db().views[0]!
+  assert.equal(defaultRowTemplate(h.ws, h.page('list'), first()), undefined)
+  h.change({ kind: 'setDefaultTemplate', templateId: 'tmpl' })
+  assert.equal(defaultRowTemplate(h.ws, h.page('list'), first())?.id, 'tmpl')
+  h.change({ kind: 'updateView', viewId, defaultTemplate: 'other' })
+  assert.equal(defaultRowTemplate(h.ws, h.page('list'), first())?.id, 'other')
+  h.change({ kind: 'updateView', viewId, defaultTemplate: null })
+  assert.equal('defaultTemplate' in first(), false)
+  assert.equal(defaultRowTemplate(h.ws, h.page('list'), first())?.id, 'tmpl')
+  const del = h.run({ type: 'delete-template', pageId: 'tmpl' } as never)
+  assert.equal(defaultRowTemplate(h.ws, h.page('list'), first()), undefined)
+  h.run({ type: 'undo', targetOperationId: del.receipt.operationId } as never)
+  assert.equal(defaultRowTemplate(h.ws, h.page('list'), first())?.id, 'tmpl', 'Undo brings it back')
+  h.change({ kind: 'setDefaultTemplate', templateId: null })
+  assert.equal('defaultTemplate' in h.db(), false)
+})
+test('a template deleted later leaves its rows alone; one from elsewhere is refused', () => {
+  const h = templated()
+  h.fromIt('one')
+  const before = JSON.stringify(h.page('one'))
+  h.run({ type: 'delete-template', pageId: 'tmpl' } as never)
+  assert.equal(JSON.stringify(h.page('one')), before)
+  assert.throws(() => h.fromIt('late'), /gone/)
+  h.run({ type: 'create-template', title: 'A page template', pageId: 'pages' } as never)
+  assert.throws(() => h.run({ type: 'add-row', databaseId: 'list', pageId: 'x', title: '', template: 'pages', at } as never), /gone/)
+  assert.throws(() => h.run({ type: 'set-template-target', pageId: 'tmpl2', target: null } as never))
+})
+test('a row template can\'t be made a page default', () => {
+  const h = templated()
+  assert.throws(() => h.run({ type: 'set-template-target', pageId: 'tmpl', target: 'days' } as never), /Not a template/)
+  assert.throws(() => h.run({ type: 'set-values', pageId: 'pages', values: {} } as never))
+  assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'add-row', databaseId: 'list', pageId: 'p', title: '', template: 'tmpl', at } }).success, true)
+  assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'create-template', databaseId: 'list', title: '' } }).success, true)
 })

@@ -3,7 +3,8 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { calcChoices, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
 import type { Page, Workspace } from '../domain/types'
 import { rollupFunctionsFor } from '../domain/relations'
 import { databaseSource, todosSourceId, todosTitle } from '../domain/todos-source'
@@ -12,8 +13,8 @@ import { ChevronDownIcon } from './icons'
 import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
-type Panel = 'root' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | 'new-property' | 'views'
-interface OpenMenu { blockId: string; databaseId: string; panel: Panel }
+type Panel = 'root' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | 'new-property' | 'views' | 'templates' | { template: string }
+interface OpenMenu { blockId: string; databaseId: string; panel: Panel; /** From `+ New ⌄`: a pick makes the row, in its place. */ pick?: (template: string | null) => void }
 /** The views list opens under "Table ⌄" on the left; every other panel under the `⋯` on the right. */
 const anchorOf = (m: OpenMenu) => m.panel === 'views' ? `[data-database-views="${CSS.escape(m.blockId)}"]` : `[data-database-menu="${CSS.escape(m.blockId)}"]`
 let openMenu: OpenMenu | null = null
@@ -23,7 +24,7 @@ function useOpenMenu() { return useSyncExternalStore(l => { listeners.add(l); re
 const newId = (): string => crypto.randomUUID()
 
 /** Opens a table's menu on one of its panels (a filter chip opens Filter). */
-export function openDatabaseMenu(blockId: string, databaseId: string, panel: 'filter' | 'sort' | 'group' | 'layout' | 'calculate' = 'filter') { setOpenMenu({ blockId, databaseId, panel }) }
+export function openDatabaseMenu(blockId: string, databaseId: string, panel: 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'templates' = 'filter', pick?: (template: string | null) => void) { setOpenMenu({ blockId, databaseId, panel, ...(pick ? { pick } : {}) }) }
 
 /** The `⋯` on a table (inline or full page): opens its menu under it. */
 export function DatabaseMenuButton({ blockId, databaseId }: { blockId: string; databaseId: string }) {
@@ -102,12 +103,14 @@ export function DatabaseMenuHost() {
     {open.panel === 'root' && <RootPanel db={db} view={view} blockId={open.blockId} go={go} />}
     {open.panel === 'group' && <GroupPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'layout' && <LayoutPanel db={db} view={view} back={() => go('root')} />}
+    {open.panel === 'templates' && <TemplatesPanel db={db} view={view} go={go} close={() => setOpenMenu(null)} {...(open.pick ? { pick: open.pick } : {})} />}
+    {typeof open.panel === 'object' && 'template' in open.panel && <TemplatePanel db={db} view={view} templateId={open.panel.template} go={go} close={() => setOpenMenu(null)} />}
     {open.panel === 'calculate' && <CalculatePanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'filter' && <FilterPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'sort' && <SortPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'properties' && <PropertiesPanel db={db} view={view} go={go} />}
     {open.panel === 'new-property' && <NewPropertyPanel db={db} view={view} go={go} />}
-    {typeof open.panel === 'object' && <PropertyPanel db={db} view={view} propertyId={open.panel.property} go={go} />}
+    {typeof open.panel === 'object' && 'property' in open.panel && <PropertyPanel db={db} view={view} propertyId={open.panel.property} go={go} />}
     </MenuBlock.Provider>
   </div>
   </>
@@ -150,6 +153,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
     {view.layout === 'table' && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
+    {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('templates')}>Templates<span className="database-menu-chevron">›</span></button>}
     <hr />
     {(inline || linked) && !db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); void navigate({ to: '/pages', search: { page: db.id } }) }}>Open as page</button>}
     {(inline || linked) && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.duplicate(blockId) }}>Duplicate</button>}
@@ -369,6 +373,7 @@ function GroupPanel({ db, view, back }: { db: DatabasePage; view: View; back: ()
 /** A view named after its type keeps following it; one he named keeps his name. */
 const renamedFor = (view: View, layout: View['layout']) => (view.name === layoutLabels[view.layout] ? { name: layoutLabels[layout] } : {})
 function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
+  const wrapsAll = view.columns.some(c => c.wrap) && viewColumns(db.database, view).every(c => c.wrap || !canWrap(c.property.type)) && (view.layout !== 'table' || Boolean(view.wrapName))
   const changeView = useViewChange(db.id, view.id)
   const [asking, setAsking] = useState(false)
   const [askingDate, setAskingDate] = useState(false)
@@ -392,6 +397,9 @@ function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
   return <>
     <Head title="Layout" back={back} />
     {(['table', 'board', 'list', 'gallery', 'calendar'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
+    {(view.layout === 'table' || view.layout === 'board' || view.layout === 'gallery') && <label className="database-menu-row">Wrap all
+      <input type="checkbox" checked={wrapsAll} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ wrapName: on, columns: columns.map(c => withWrap(c, on)) })) }} />
+    </label>}
     {view.layout === 'calendar' && <label className="database-menu-row">Show as
       <select aria-label="Show as" value={view.calendarSpan ?? 'month'} onChange={e => { const calendarSpan = e.target.value === 'week' ? 'week' as const : null; changeView(() => ({ calendarSpan })) }}>
         <option value="month">Month</option><option value="week">Week</option>
@@ -408,6 +416,11 @@ function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
 
 // ---------------------------------------------------------------- properties (design §7.5, §6.2)
 
+function withWrap(column: View['columns'][number], on: boolean): View['columns'][number] {
+  const { wrap: _wrap, ...rest } = column
+  return on ? { ...rest, wrap: true } : rest
+}
+
 function PropertiesPanel({ db, view, go }: { db: DatabasePage; view: View; go: (p: Panel) => void }) {
   const change = useChange(db)
   const shown = new Set(view.columns.map(c => c.id))
@@ -421,6 +434,9 @@ function PropertiesPanel({ db, view, go }: { db: DatabasePage; view: View; go: (
   return <>
     <Head title="Properties" back={() => go('root')} />
     <div className="database-property-line is-title"><span>Name</span><span className="database-menu-quiet">always shown</span></div>
+    {view.layout === 'table' && <label className="database-menu-row">Wrap Name
+      <input type="checkbox" checked={Boolean(view.wrapName)} onChange={e => { const wrapName = e.target.checked; changeView(() => ({ wrapName })) }} />
+    </label>}
     {ordered.map(p => <div key={p.id} className="database-property-line">
       <label className="database-property-switch"><input type="checkbox" checked={shown.has(p.id)} onChange={() => toggle(p)} aria-label={`Show ${p.name}`} /></label>
       {db.database.fixed
@@ -523,6 +539,52 @@ function NewPropertyPanel({ db, view, go }: { db: DatabasePage; view: View; go: 
   </>
 }
 
+/**
+ * A database's row templates (R3-12). From `+ New ⌄` a tap makes a row from one; from `⋯` it opens it to edit.
+ * Empty is only there when `+ New` would otherwise start from a default.
+ */
+function TemplatesPanel({ db, view, pick, go, close }: { db: DatabasePage; view: View; pick?: (template: string | null) => void; go: (p: Panel) => void; close: () => void }) {
+  const { workspace, run } = useWorkspace()
+  const navigate = useNavigate()
+  const list = workspace ? rowTemplates(workspace, db.id) : []
+  const current = workspace ? defaultRowTemplate(workspace, db, view) : undefined
+  const edit = (pageId: string, focus?: 'title') => { close(); void navigate({ to: '/pages', search: { page: pageId, ...(focus ? { focus } : {}) } }) }
+  const add = async () => {
+    const pageId = newId()
+    if (await run({ type: 'create-template', databaseId: db.id, title: '', pageId })) edit(pageId, 'title')
+  }
+  return <>
+    <Head title="Templates" {...(pick ? {} : { back: () => go('root') })} />
+    {pick && current && <button type="button" role="menuitem" onClick={() => { close(); pick(null) }}>Empty</button>}
+    {list.map(t => <div key={t.id} className="database-property-line">
+      <button type="button" className="database-property-name" onClick={() => { if (pick) { close(); pick(t.id) } else edit(t.id) }}>{t.title.trim() || 'Untitled'}{t.id === current?.id && <span className="database-menu-quiet"> · default</span>}</button>
+      <button type="button" aria-label={`${t.title.trim() || 'Untitled'} options`} onClick={() => go({ template: t.id })}>⋯</button>
+    </div>)}
+    <button type="button" role="menuitem" onClick={() => void add()}>+ New template</button>
+  </>
+}
+
+/** One template: edit it, make it the default here or everywhere, or delete it. Rows made from it stay as they are. */
+function TemplatePanel({ db, view, templateId, go, close }: { db: DatabasePage; view: View; templateId: string; go: (p: Panel) => void; close: () => void }) {
+  const { workspace, run } = useWorkspace()
+  const navigate = useNavigate()
+  const change = useChange(db)
+  const changeView = useViewChange(db.id, view.id)
+  const template = workspace?.pages.find(p => p.id === templateId)
+  if (!template) return <><Head title="Template" back={() => go('templates')} /><p className="database-menu-quiet">Deleted</p></>
+  const hereOn = view.defaultTemplate === templateId, allOn = db.database.defaultTemplate === templateId
+  // The view's own would hide a new default for every view, so that one goes.
+  const setAll = () => { if (!allOn && view.defaultTemplate) changeView(() => ({ defaultTemplate: null })); change({ kind: 'setDefaultTemplate', templateId: allOn ? null : templateId }) }
+  return <>
+    <Head title={template.title.trim() || 'Untitled'} back={() => go('templates')} />
+    <button type="button" role="menuitem" onClick={() => { close(); void navigate({ to: '/pages', search: { page: templateId } }) }}>Edit</button>
+    <button type="button" role="menuitemcheckbox" aria-checked={hereOn} onClick={() => changeView(() => ({ defaultTemplate: hereOn ? null : templateId }))}>Default for this view{hereOn && <span className="database-menu-chevron">✓</span>}</button>
+    <button type="button" role="menuitemcheckbox" aria-checked={allOn} onClick={setAll}>Default for all views{allOn && <span className="database-menu-chevron">✓</span>}</button>
+    <hr />
+    <button type="button" role="menuitem" className="is-danger" onClick={() => { go('templates'); void run({ type: 'delete-template', pageId: templateId }, r => ({ text: r.message, undoOperationId: r.operationId })) }}>Delete</button>
+  </>
+}
+
 /** Each shown column's calculation at the table's foot, Name first (design §4.1a). */
 function CalculatePanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
   const changeView = useViewChange(db.id, view.id)
@@ -569,6 +631,9 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
       <select value={property.format ?? 'plain'} onChange={e => update({ format: e.target.value as Property['format'] })}>
         <option value="plain">Number</option><option value="comma">1,000</option><option value="percent">Percent</option><option value="currency">Currency</option>
       </select>
+    </label>}
+    {shown && canWrap(property.type) && <label className="database-menu-row">Wrap in this view
+      <input type="checkbox" checked={Boolean(view.columns.find(c => c.id === propertyId)?.wrap)} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ columns: columns.map(c => (c.id !== propertyId ? c : withWrap(c, on))) })) }} />
     </label>}
     {property.type === 'id' && <label className="database-menu-row">Prefix
       <CommitInput key={property.prefix ?? ''} ariaLabel="Prefix" initial={property.prefix ?? ''} placeholder="None" onCommit={v => update({ prefix: v })} />

@@ -11,13 +11,13 @@ const values = z.record(z.string().min(1).max(200), json);
 const rowEdit = z.object({ pageId: id, values, expected: values });
 const option = z.object({ id, name: z.string().max(200), group: z.enum(["todo", "active", "done"]).optional() });
 const propertyFields = { name: z.string().max(200), type: z.enum(propertyTypes), options: z.array(option).max(200).optional(), format: z.enum(["plain", "comma", "percent", "currency"]).optional(), withTime: z.boolean().optional(), prefix: z.string().max(limits.prefix + 100).optional(), target: id.optional(), limit: z.literal(1).nullable().optional(), rollup: z.object({ relation: id, property: id, fn: z.enum(rollupFunctions) }).optional() };
-const columns = z.array(z.object({ id, width: z.number().int().optional() })).max(100);
+const columns = z.array(z.object({ id, width: z.number().int().optional(), wrap: z.literal(true).optional() })).max(100);
 const sort = z.array(z.object({ by: id, direction: z.enum(["asc", "desc"]) })).max(10);
 const filter = z.array(z.object({ by: id, op: z.enum(filterOpList), value: json.optional() })).max(20);
 const groupDateBy = z.enum(["day", "week", "month"]);
 const hiddenGroups = z.array(z.string().max(200)).max(limits.hiddenGroups);
 const calculations = z.record(id, z.enum(calcKinds));
-const view = z.object({ id, name: z.string().max(200), layout: z.enum(viewLayouts), columns, sort, filter, groupBy: id.optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").optional(), filterAny: z.literal(true).optional(), calculations: calculations.optional() });
+const view = z.object({ id, name: z.string().max(200), layout: z.enum(viewLayouts), columns, sort, filter, groupBy: id.optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").optional(), filterAny: z.literal(true).optional(), wrapName: z.literal(true).optional(), calculations: calculations.optional(), defaultTemplate: id.optional() });
 const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("addProperty"), property: z.object({ id, ...propertyFields }), viewId: id.optional() }),
   z.object({ kind: z.literal("updateProperty"), propertyId: id, ...propertyFields, name: propertyFields.name.optional(), type: propertyFields.type.optional() }),
@@ -25,7 +25,8 @@ const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("setMirror"), propertyId: id, mirror: z.object({ id, name: z.string().max(200) }).nullable() }),
   z.object({ kind: z.literal("moveProperty"), propertyId: id, beforeId: id.nullable() }),
   z.object({ kind: z.literal("addView"), view }),
-  z.object({ kind: z.literal("updateView"), viewId: id, name: z.string().max(200).optional(), columns: columns.optional(), sort: sort.optional(), filter: filter.optional(), layout: z.enum(viewLayouts).optional(), groupBy: id.nullable().optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").nullable().optional(), filterAny: z.boolean().optional(), calculations: calculations.optional() }),
+  z.object({ kind: z.literal("updateView"), viewId: id, name: z.string().max(200).optional(), columns: columns.optional(), sort: sort.optional(), filter: filter.optional(), layout: z.enum(viewLayouts).optional(), groupBy: id.nullable().optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").nullable().optional(), filterAny: z.boolean().optional(), wrapName: z.boolean().optional(), calculations: calculations.optional(), defaultTemplate: id.nullable().optional() }),
+  z.object({ kind: z.literal("setDefaultTemplate"), templateId: id.nullable() }),
   z.object({ kind: z.literal("removeView"), viewId: id }),
   z.object({ kind: z.literal("moveView"), viewId: id, beforeId: id.nullable() }),
 ]);
@@ -52,7 +53,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("delete-page"), pageId: id, at: z.string().max(40) }),
   z.object({ type: z.literal("restore-page"), pageId: id }),
   z.object({ type: z.literal("restore-batch"), trashId: id }),
-  z.object({ type: z.literal("create-template"), title: z.string().max(1000), pageId: z.string().min(1).max(200).optional(), dayPage: z.literal(true).optional() }),
+  z.object({ type: z.literal("create-template"), databaseId: id.optional(), title: z.string().max(1000), pageId: z.string().min(1).max(200).optional(), dayPage: z.literal(true).optional() }),
   z.object({ type: z.literal("set-template-target"), pageId: z.string().min(1).max(200), target: z.string().min(1).max(200).nullable() }),
   z.object({ type: z.literal("delete-template"), pageId: z.string().min(1).max(200) }),
   z.object({ type: z.literal("set-draft"), pageId: id, status: z.enum(["preparing", "ready", "failed"]), moreOpen: z.array(id).max(200), allowedTaskIds: z.array(id).max(500),
@@ -62,7 +63,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("skip-draft"), pageId: id, itemIds: z.array(z.string().min(1).max(100)).min(1).max(50) }),
   z.object({ type: z.literal("create-database"), pageId: id, parentId: id.nullable().optional(), homeBlockId: id.nullable(), title }),
   z.object({ type: z.literal("change-database"), pageId: id, change }),
-  z.object({ type: z.literal("add-row"), databaseId: id, pageId: id, title, values: values.optional(), beforeId: id.nullable().optional(), copyOf: id.optional(), at }),
+  z.object({ type: z.literal("add-row"), databaseId: id, pageId: id, title, values: values.optional(), beforeId: id.nullable().optional(), copyOf: id.optional(), template: id.optional(), at }),
   z.object({ type: z.literal("set-values"), ...rowEdit.shape, beforeId: id.nullable().optional(), at }),
   z.object({ type: z.literal("set-values-many"), items: z.array(rowEdit).min(1).max(200), at }),
   z.object({ type: z.literal("delete-pages"), pageIds: z.array(id).min(1).max(200), at }),
