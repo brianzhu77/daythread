@@ -523,8 +523,8 @@ function DateEditor(p: EditorProps) {
         </Calendar>
       )}
       <div className="property-switches">
-        <Toggle label="End date" on={endOn} onChange={on => { setEndOn(on); setWhich(on ? 'end' : 'start'); if (!on) setEnd(null) }} />
-        <Toggle label="Include time" on={timeOn} onChange={setTimeOn} />
+        {!p.property.dayOnly && <Toggle label="End date" on={endOn} onChange={on => { setEndOn(on); setWhich(on ? 'end' : 'start'); if (!on) setEnd(null) }} />}
+        {!p.property.dayOnly && <Toggle label="Include time" on={timeOn} onChange={setTimeOn} />}
         {timeOn && !endOn && (
           <input type="time" className="property-time" aria-label="Time" value={start ? splitDate(start).time ?? '' : ''} onChange={e => setTime('start', e.target.value)} />
         )}

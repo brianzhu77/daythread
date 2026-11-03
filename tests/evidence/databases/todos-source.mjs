@@ -115,14 +115,18 @@ await scenario('R2-9: Deadline and Planned through their cells are the task; Und
   await makeView(page)
   const task = openTasks(store())[0]
   const set = async column => { await rowOf(page, task.id).locator('.database-td.is-date').nth(column).click(); await wait(300); const field = page.locator('.property-editor input, .database-date-input, [role=dialog] input').first(); await field.fill('2026-12-15'); await page.keyboard.press('Enter'); await wait(1500) }
+  // A task's date is one day: no End date or Include time to offer (R2-9).
+  await rowOf(page, task.id).locator('.database-td.is-date').nth(2).click(); await wait(300)
+  const toggles = await page.getByText('End date').count() + await page.getByText('Include time').count()
+  await page.keyboard.press('Escape'); await wait(300)
   await set(2)
-  const r = { deadline: store().tasks.find(t => t.id === task.id).deadlineOn, notice: await notices(page) }
+  const r = { toggles, deadline: store().tasks.find(t => t.id === task.id).deadlineOn, notice: await notices(page) }
   await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(1500)
   r.afterUndo = store().tasks.find(t => t.id === task.id).deadlineOn
   await set(0)
   const ws = store()
   r.onDay = ws.pages.find(p => p.date === '2026-12-15')?.document.includes(task.id) ?? false
-  return { ...r, ok: r.deadline === '2026-12-15' && /Deadline set/.test(r.notice) && r.afterUndo === null && r.onDay }
+  return { ...r, ok: r.toggles === 0 && r.deadline === '2026-12-15' && /Deadline set/.test(r.notice) && r.afterUndo === null && r.onDay }
 })
 await scenario('R2-9: a Board by Status: a card moved to Paused is Not today; no way to add a column', async page => {
   await makeView(page)
@@ -167,6 +171,19 @@ await scenario('R2-11: in a view pinned to this page\'s day, + New lands on that
   const ws = store(), task = ws.tasks.find(t => t.title === 'On that day'), day = ws.pages.find(p => p.date === date), now = ws.pages.find(p => p.date === today)
   const r = { made: Boolean(task), onThatDay: Boolean(day?.document.includes(task?.id)), onToday: Boolean(now?.document.includes(task?.id)), shown: task ? await rowOf(page, task.id).count() : 0 }
   return { ...r, ok: r.made && r.onThatDay && !r.onToday && r.shown === 1 }
+})
+await scenario('R2-11: + New on a day with no page yet makes it from his template, never blank', async (page, context) => {
+  await makeView(page)
+  // A later today, with no page for it on this copy.
+  const later = '2026-12-28'
+  await context.clock.setFixedTime(new Date(`${later}T12:00:00`))
+  await page.reload(); await wait(3000)
+  const before = store()
+  await view(page).locator('.database-new').click(); await wait(400); await page.keyboard.type('On a new day'); await page.keyboard.press('Enter'); await wait(2500)
+  const ws = store(), task = ws.tasks.find(t => t.title === 'On a new day'), day = ws.pages.find(p => p.date === later)
+  const kinds = doc => JSON.parse(doc).filter(n => n.type === 'heading').map(n => n.content?.[0]?.text)
+  const r = { hadDay: before.pages.some(p => p.date === later), made: Boolean(task), onDay: Boolean(day?.document.includes(task?.id)), headings: day ? kinds(day.document) : [] }
+  return { ...r, ok: !r.hadDay && r.made && r.onDay && r.headings.includes('Morning Planning') }
 })
 await scenario('at 390: it draws, + New takes words, nothing overflows', async page => {
   await makeView(page)

@@ -26,9 +26,9 @@ const properties: Property[] = [
     { id: todoStatus.done, name: 'Done', group: 'done' },
     { id: todoStatus.cancelled, name: 'Cancelled', group: 'done' },
   ] },
-  { id: planned, name: 'Planned', type: 'date' },
-  { id: start, name: 'Start', type: 'date' },
-  { id: deadline, name: 'Deadline', type: 'date' },
+  { id: planned, name: 'Planned', type: 'date', dayOnly: true },
+  { id: start, name: 'Start', type: 'date', dayOnly: true },
+  { id: deadline, name: 'Deadline', type: 'date', dayOnly: true },
   { id: page, name: 'Page', type: 'text', readOnly: true },
 ]
 /** The first view: what's open, with the chip showing (Bumblebee, R2-8); the rest is a tap on the chip away. */

@@ -21,6 +21,8 @@ export interface Property {
   withTime?: boolean;
   /** To-dos' Page: shown, never edited. */
   readOnly?: true;
+  /** date, To-dos': one day, as a task's dates are: no end, no time. */
+  dayOnly?: true;
 }
 export interface DateValue { start: string; end?: string }
 /** A fixed day, or one relative to today or to the day page the view is on, with an offset in days. */

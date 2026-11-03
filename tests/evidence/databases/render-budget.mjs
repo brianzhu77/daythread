@@ -24,6 +24,6 @@ const measure = async (variant) => {
   times.sort((a, b) => a - b)
   return { median: times[Math.floor(times.length / 2)], min: times[0], max: times.at(-1) }
 }
-const plain = await measure('plain'), table = await measure('table'), linked = await measure('linked')
-console.log(JSON.stringify({ runs, plain, table, linked, extra: table.median - plain.median, extraLinked: linked.median - plain.median }))
+const plain = await measure('plain'), table = await measure('table'), linked = await measure('linked'), todos = await measure('todos')
+console.log(JSON.stringify({ runs, plain, table, linked, todos, extra: table.median - plain.median, extraLinked: linked.median - plain.median, extraTodos: todos.median - plain.median }))
 await browser.close()
