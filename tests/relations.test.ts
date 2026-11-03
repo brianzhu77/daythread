@@ -223,6 +223,11 @@ test('R3-22: Group and Board by a relation: a group per linked row, a row in eac
   set(h, 'dune', { by: groupValue(property, 'austen', links(h, 'dune', 'by'), 'herbert', context.today) })
   assert.deepEqual(links(h, 'dune', 'by'), ['austen'])
   assert.deepEqual(links(h, 'herbert', 'wrote'), ['emma'])
+  // "1 page": a move replaces it.
+  ctx.change('books', { kind: 'updateProperty', propertyId: 'by', limit: 1 })
+  set(h, 'emma', { by: groupValue(propertyOf(read2(), 'by')!, 'austen', links(h, 'emma', 'by'), 'herbert', context.today) })
+  assert.deepEqual(links(h, 'emma', 'by'), ['austen'])
+  ctx.change('books', { kind: 'updateProperty', propertyId: 'by', limit: null })
   // + New under a group starts linked to it.
   assert.deepEqual(newRowValues(read2(), view('table'), context, 'herbert').values.by, ['herbert'])
 })

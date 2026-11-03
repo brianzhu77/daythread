@@ -59,7 +59,13 @@ await scenario('a table grouped by a rollup: its value is the group, with no way
   await menu(page).locator('[role=menuitem], [role=menuitemradio]', { hasText: 'Ages' }).first().click({ timeout: 4000 }).catch(async () => { await menu(page).locator('select').first().selectOption({ label: 'Ages' }) }); await wait(1500)
   await page.keyboard.press('Escape'); await wait(300)
   const heads = (await page.locator('.database-group-inner').allInnerTexts()).map(t => t.replace(/\s+/g, ' '))
-  return { choices: choices.length, heads, ok: heads.some(t => t.includes('106')) && heads.some(t => t.includes('No value')) }
+  // A drag to another group can't set what it works out to: it says so, and nothing changes.
+  const before = JSON.stringify(pageOf('dune').values)
+  const handle = page.locator('.database-row[data-row="dune"] .database-row-handle')
+  await page.locator('.database-row[data-row="dune"]').hover(); await wait(150)
+  await drag(page, handle, page.locator('.database-row[data-row="emma"]'))
+  const notice = await notices(page), same = JSON.stringify(pageOf('dune').values) === before
+  return { choices: choices.length, heads, notice, same, ok: heads.some(t => t.includes('106')) && heads.some(t => t.includes('No value')) && /Ages can't be changed/.test(notice) && same }
 })
 await browser.close()
 console.log(failed ? `FAIL ${failed}` : 'PASS')
