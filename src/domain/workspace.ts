@@ -944,6 +944,24 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       state.pages.splice(before ? state.pages.indexOf(before) : state.pages.length, 0, row);
       return { message: source ? "Row duplicated" : "Row added", entityId: row.id };
     }
+    case "add-rows": {
+      // An import: every row in one operation, so one Undo takes them all (csv design §5).
+      const db = databasePage(state, action.databaseId);
+      const at = isoTime(action.at);
+      if (databaseRows(state, db.id).length + action.rows.length > 10_000) throw new DomainError("Too many rows");
+      const taken = new Set(state.pages.map((p) => p.id));
+      for (const { pageId, title, values: input } of action.rows) {
+        if (taken.has(pageId) || reservedTargets.has(pageId)) throw new DomainError("Page id already in use");
+        taken.add(pageId);
+        let values: Page["values"];
+        try { values = newRowStored(db.database, input); } catch (error) { throw new DomainError((error as Error).message); }
+        const row: Page = { id: pageId, type: "document", date: null, title: text(title, 1000).trim(), parentId: db.id, document: JSON.stringify([emptyLine("paragraph")]), ...(values ? { values } : {}), createdAt: at, editedAt: at };
+        numberNewRow(db.database, row);
+        for (const p of db.database.properties) { const raw = row.values?.[p.id]; if (p.type === "relation" && Array.isArray(raw)) syncMirror(state, p, row.id, [], raw as string[], at); }
+        state.pages.push(row);
+      }
+      return { message: `${action.rows.length} rows added`, entityId: db.id };
+    }
     case "set-values": {
       // On that day's page, made from his template if need be, as `+ New` in To-dos does (R2-11). A resend finds it made already.
       for (const todo of action.newTodos ?? []) {
