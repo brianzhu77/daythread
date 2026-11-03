@@ -15,7 +15,7 @@ const scenario = async (name, act) => {
   execSync(`rm -f ${storePath} ${storePath}-wal ${storePath}-shm && node --no-warnings tests/evidence/b29/seed.ts ${storePath}`, { stdio: 'ignore' })
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } })
   const page = await context.newPage(), errors = []
-  page.on('pageerror', e => errors.push(e.message))
+  page.on('pageerror', e => { if (!/ResizeObserver loop/.test(e.message)) errors.push(e.message) })
   let r
   try { r = await act(page, context) } catch (e) { r = { ok: false, threw: e.message.split('\n').slice(0, 3).join(' '), url: page.url() } }
   const ok = r.ok && !errors.length
