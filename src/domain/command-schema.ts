@@ -16,14 +16,14 @@ const sort = z.array(z.object({ by: id, direction: z.enum(["asc", "desc"]) })).m
 const filter = z.array(z.object({ by: id, op: z.enum(filterOpList), value: json.optional() })).max(20);
 const groupDateBy = z.enum(["day", "week", "month"]);
 const hiddenGroups = z.array(z.string().max(200)).max(limits.hiddenGroups);
-const view = z.object({ id, name: z.string().max(200), layout: z.enum(viewLayouts), columns, sort, filter, groupBy: id.optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), dateBy: id.optional() });
+const view = z.object({ id, name: z.string().max(200), layout: z.enum(viewLayouts), columns, sort, filter, groupBy: id.optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").optional(), filterAny: z.literal(true).optional() });
 const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("addProperty"), property: z.object({ id, ...propertyFields }), viewId: id.optional() }),
   z.object({ kind: z.literal("updateProperty"), propertyId: id, ...propertyFields, name: propertyFields.name.optional(), type: propertyFields.type.optional() }),
   z.object({ kind: z.literal("removeProperty"), propertyId: id }),
   z.object({ kind: z.literal("moveProperty"), propertyId: id, beforeId: id.nullable() }),
   z.object({ kind: z.literal("addView"), view }),
-  z.object({ kind: z.literal("updateView"), viewId: id, name: z.string().max(200).optional(), columns: columns.optional(), sort: sort.optional(), filter: filter.optional(), layout: z.enum(viewLayouts).optional(), groupBy: id.nullable().optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), dateBy: id.optional() }),
+  z.object({ kind: z.literal("updateView"), viewId: id, name: z.string().max(200).optional(), columns: columns.optional(), sort: sort.optional(), filter: filter.optional(), layout: z.enum(viewLayouts).optional(), groupBy: id.nullable().optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").nullable().optional(), filterAny: z.boolean().optional() }),
   z.object({ kind: z.literal("removeView"), viewId: id }),
   z.object({ kind: z.literal("moveView"), viewId: id, beforeId: id.nullable() }),
 ]);
@@ -63,6 +63,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("set-values-many"), items: z.array(rowEdit).min(1).max(200), at }),
   z.object({ type: z.literal("delete-pages"), pageIds: z.array(id).min(1).max(200), at }),
   z.object({ type: z.literal("set-timezone"), timezone: z.string().min(1).max(100) }),
+  z.object({ type: z.literal("set-week-start"), weekStart: z.union([z.literal(0), z.literal(1)]) }),
   z.object({ type: z.literal("undo"), targetOperationId: id }),
 ]);
 export const commandSchema = z.object({

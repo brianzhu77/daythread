@@ -2,7 +2,7 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { calendarRows, dateProperties, groupableProperties, groupValue, movedDate, viewDateBy, newRowValues, noGroupKey, viewGroupBy, viewGroups, viewRows, type Database, type View } from '../src/domain/database.ts'
+import { calendarRows, conditionHolds, inView, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, viewGroupBy, viewGroups, viewRows, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
@@ -73,7 +73,7 @@ test('number, url and date have groups only where a row has the value', () => {
   assert.deepEqual(shape(h, view({ groupBy: 'pages' })), [['300', ['emma', 'ubik']], ['412', ['dune']], ['No value', ['blank']]])
   assert.deepEqual(shape(h, view({ groupBy: 'link' })), [['a.com', ['emma']], ['b.com', ['dune']], ['No value', ['ubik', 'blank']]])
   assert.deepEqual(shape(h, view({ groupBy: 'due' })), [['October 2026', ['dune', 'emma']], ['November 2026', ['ubik']], ['No value', ['blank']]])
-  assert.deepEqual(shape(h, view({ groupBy: 'due', groupDateBy: 'week' })), [['Week of Oct 19, 2026', ['dune', 'emma']], ['Week of Nov 2, 2026', ['ubik']], ['No value', ['blank']]])
+  assert.deepEqual(shape(h, view({ groupBy: 'due', groupDateBy: 'week' })), [['Week of Oct 18, 2026', ['emma']], ['Week of Oct 25, 2026', ['dune']], ['Week of Nov 1, 2026', ['ubik']], ['No value', ['blank']]])
   assert.deepEqual(shape(h, view({ groupBy: 'due', groupDateBy: 'day' })), [['Oct 20, 2026', ['emma']], ['Oct 25, 2026', ['dune']], ['Nov 2, 2026', ['ubik']], ['No value', ['blank']]])
 })
 
@@ -109,8 +109,8 @@ test('what a row stores in a group', () => {
   // A date keeps its time and length; today if it's in the group, else the group's first day.
   assert.deepEqual(groupValue(p('due'), '2026-10', undefined, undefined, today), { start: today })
   assert.deepEqual(groupValue(p('due'), '2026-12', { start: '2026-10-20T09:30', end: '2026-10-22T10:00' }, '2026-10', today), { start: '2026-12-01T09:30', end: '2026-12-03T10:00' })
-  assert.deepEqual(groupValue(p('due'), '2026-11-02', undefined, undefined, today, 'week'), { start: '2026-11-02' })
-  assert.deepEqual(groupValue(p('due'), '2026-10-19', undefined, undefined, today, 'week'), { start: today })
+  assert.deepEqual(groupValue(p('due'), '2026-11-01', undefined, undefined, today, 'week'), { start: '2026-11-01' })
+  assert.deepEqual(groupValue(p('due'), '2026-10-18', undefined, undefined, today, 'week'), { start: today })
 })
 
 test('a new row under a group starts with its value, and the filter is told when they disagree (§7.4)', () => {
@@ -243,3 +243,94 @@ test('moving a row to another day keeps its time and length, from the day he too
   assert.deepEqual(movedDate(p, { start: '2026-11-02', end: '2026-11-04' }, '2026-11-03', '2026-11-04'), { start: '2026-11-03', end: '2026-11-05' })
   assert.deepEqual(movedDate(p, { start: '2026-10-31' }, '2026-10-31', '2026-11-01'), { start: '2026-11-01' })
 })
+
+test('one week rule: Sunday by default, and Monday moves all of it together (R3-20)', () => {
+  // Nov 1, 2026 is a Sunday; Nov 2 a Monday.
+  assert.equal(startOfWeek('2026-11-01'), '2026-11-01')
+  assert.equal(startOfWeek('2026-11-07'), '2026-11-01')
+  assert.equal(startOfWeek('2026-11-01', 1), '2026-10-26')
+  assert.equal(startOfWeek('2026-11-02', 1), '2026-11-02')
+  const h = reading()
+  const due = h.db().properties.find(p => p.id === 'due')!
+  const thisWeek = { by: 'due', op: 'within', value: 'thisWeek' } as const
+  const on = (day: string, weekStart?: 0 | 1) => conditionHolds(due, thisWeek, { start: day }, { today: '2026-11-01', pageDate: null, weekStart })
+  assert.equal(on('2026-11-07'), true)
+  assert.equal(on('2026-10-31'), false)
+  assert.equal(on('2026-10-31', 1), true)
+  assert.equal(on('2026-11-02', 1), false)
+  const v = view({ groupBy: 'due', groupDateBy: 'week' })
+  const names = (w?: 0 | 1) => viewGroups(h.db(), v, h.rows(v), undefined, w)!.shown.map(g => g.name)
+  assert.equal(names()[0], 'Week of Oct 18, 2026')
+  assert.equal(names(1)[0], 'Week of Oct 19, 2026')
+  assert.deepEqual(groupValue(due, '2026-11-02', undefined, undefined, today, 'week', 1), { start: '2026-11-02' })
+})
+
+test('the week setting is stored, sent with changes, and undone', () => {
+  const h = reading()
+  assert.equal(h.ws.weekStart, undefined)
+  const r = h.run({ type: 'set-week-start', weekStart: 1 })
+  assert.equal(h.ws.weekStart, 1)
+  assert.equal(r.receipt.message, 'Weeks start on Monday')
+  assert.ok(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'set-week-start', weekStart: 1 } }).success)
+  assert.ok(!commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'set-week-start', weekStart: 3 } }).success)
+  h.run({ type: 'undo', targetOperationId: r.receipt.operationId })
+  assert.equal(h.ws.weekStart, undefined)
+  h.run({ type: 'set-week-start', weekStart: 1 })
+  h.run({ type: 'set-week-start', weekStart: 0 })
+  assert.equal(h.ws.weekStart, undefined)
+})
+
+test('a calendar by week is stored on the view, and back to a month clears it', () => {
+  const h = reading()
+  const id = h.db().views[0]!.id
+  h.change({ kind: 'updateView', viewId: id, layout: 'calendar', dateBy: 'due', calendarSpan: 'week' })
+  assert.equal(h.db().views[0]!.calendarSpan, 'week')
+  h.change({ kind: 'updateView', viewId: id, name: 'Still' })
+  assert.equal(h.db().views[0]!.calendarSpan, 'week')
+  h.change({ kind: 'updateView', viewId: id, calendarSpan: null })
+  assert.equal(h.db().views[0]!.calendarSpan, undefined)
+  assert.ok(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId: id, calendarSpan: null } } }).success)
+})
+
+test('any rule matches: a row in if one holds, and rules that cannot be read do not count (R3-4)', () => {
+  const h = reading()
+  const novels = { by: 'kind', op: 'isAnyOf', value: ['novel'] } as const
+  const long = { by: 'pages', op: 'gt', value: 350 } as const
+  const titles = (v: View) => h.rows(v).map(r => r.id)
+  assert.deepEqual(titles(view({ filter: [novels, long] })), ['dune'])
+  assert.deepEqual(titles(view({ filter: [{ by: 'kind', op: 'isAnyOf', value: ['essay'] }, long], filterAny: true })), ['dune', 'ubik'])
+  // A deleted property's rule, or one with no value yet, doesn't count: it neither lets everything in nor hides everything.
+  const gone = { by: 'gone', op: 'isEmpty' } as const, unfinished = { by: 'note', op: 'contains' } as const
+  assert.deepEqual(titles(view({ filter: [gone, long], filterAny: true })), ['dune'])
+  assert.deepEqual(titles(view({ filter: [unfinished, long], filterAny: true })), ['dune'])
+  assert.equal(titles(view({ filter: [gone, unfinished], filterAny: true })).length, 4)
+  assert.equal(inView(h.db(), h.page('blank'), view({ filter: [novels], filterAny: true }), ctx), false)
+})
+
+test('a new row under any rule takes one value that shows it, or none and the notice (R3-4, §7.4)', () => {
+  const h = reading()
+  const novels = { by: 'kind', op: 'isAnyOf', value: ['novel'] } as const, sf = { by: 'tags', op: 'contains', value: ['sf'] } as const
+  assert.deepEqual(newRowValues(h.db(), view({ filter: [novels, sf], filterAny: true }), ctx), { title: '', values: { kind: 'novel' }, visible: true })
+  // All rules: every value it can take.
+  assert.deepEqual(newRowValues(h.db(), view({ filter: [novels, sf] }), ctx).values, { kind: 'novel', tags: ['sf'] })
+  // The first gives no single value; the second does.
+  assert.deepEqual(newRowValues(h.db(), view({ filter: [{ by: 'pages', op: 'gt', value: 1 }, novels], filterAny: true }), ctx).values, { kind: 'novel' })
+  // No rule gives one: no values, and it's hidden.
+  assert.deepEqual(newRowValues(h.db(), view({ filter: [{ by: 'pages', op: 'gt', value: 1 }, { by: 'note', op: 'contains', value: 'x' }], filterAny: true }), ctx), { title: '', values: {}, visible: false })
+  // Already shown with nothing set: nothing's added.
+  assert.deepEqual(newRowValues(h.db(), view({ filter: [{ by: 'kind', op: 'isEmpty' }, novels], filterAny: true }), ctx), { title: '', values: {}, visible: true })
+})
+
+test('any is stored on the view, kept by other changes, and off again', () => {
+  const h = reading()
+  const id = h.db().views[0]!.id
+  h.change({ kind: 'updateView', viewId: id, filterAny: true, filter: [{ by: 'kind', op: 'isEmpty' }] })
+  assert.equal(h.db().views[0]!.filterAny, true)
+  h.change({ kind: 'updateView', viewId: id, name: 'Still' })
+  assert.equal(h.db().views[0]!.filterAny, true)
+  h.change({ kind: 'updateView', viewId: id, filterAny: false })
+  assert.equal(h.db().views[0]!.filterAny, undefined)
+  h.change({ kind: 'addView', view: view({ id: 'c', filterAny: true }) })
+  assert.equal(h.db().views.at(-1)!.filterAny, true)
+})
+

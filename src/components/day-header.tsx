@@ -40,6 +40,7 @@ export function DayHeader({ date, today, menu }: { date: LocalDate; today: Local
             <Popover.Dialog aria-label="Choose a date">
               <Calendar
                 className="day-picker"
+                firstDayOfWeek={workspace?.weekStart === 1 ? 'mon' : 'sun'}
                 aria-label="Date"
                 value={parseDate(date)}
                 onChange={value => {

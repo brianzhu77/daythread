@@ -27,7 +27,8 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
   const undoKey = useUndoKey()
   const wide = useWide()
   const today = todayIso()
-  const context = useMemo(() => ({ today, pageDate }), [today, pageDate])
+  const weekStart = workspace.weekStart ?? 0
+  const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
   usePendingCells()
   const returned = useReturnedRow(rows)
@@ -35,13 +36,13 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
   const wrap = useRef<HTMLDivElement>(null)
   useViewClipboard(wrap)
   const [limit, setLimit] = useState(cap)
-  const groups = viewGroups(db.database, view, withPendingMoves(rows), shownRaw)
+  const groups = viewGroups(db.database, view, withPendingMoves(rows), shownRaw, weekStart)
   const { limitOf, showMore, reach } = useGroupLimits(`${blockId}|${view.id}`, cap)
   const { folded, toggle } = useFolds(blockId, view.id)
   const addRow = useAddRow(db, view, context, (pageId, group) => {
     const ws = latest(), now = ws ? viewRows(ws, db.id, view, context) : []
     if (group === undefined) { const at = now.findIndex(r => r.id === pageId); if (at >= limit) setLimit(at + 1) }
-    else reach(group, viewGroups(db.database, view, now)?.shown.find(g => g.key === group)?.rows.length ?? 0)
+    else reach(group, viewGroups(db.database, view, now, undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0)
     requestAnimationFrame(() => setOpenCell({ blockId, databaseId: db.id, rowId: pageId, columnId: titleId, ...(group !== undefined ? { group } : {}) }))
   })
 

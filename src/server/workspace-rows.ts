@@ -1,7 +1,7 @@
 // The workspace as rows (shot 2): what the Postgres store reads and writes. Pure: no SQL here. A loaded workspace is
 // its rows with their positions; a command's result is turned back into rows, and the difference is what gets written,
 // with the rows as they were as the operation's inverse (what Undo puts back). The domain never sees positions.
-import type { Page, Task, Workspace } from '../domain/types.ts'
+import type { Page, Task, Workspace, WeekStart } from '../domain/types.ts'
 
 export interface PageRow {
   id: string; position: number; type: Page['type']; date: string | null; title: string; url: string | null; parent_id: string | null
@@ -16,10 +16,10 @@ export interface TaskRow {
 /** A tombstone, kept as the task's exact JSON. */
 export interface DeletedRow { id: string; position: number; data: string }
 
-export interface Rows { revision: number; timezone: string; pages: PageRow[]; tasks: TaskRow[]; deleted: DeletedRow[] }
+export interface Rows { revision: number; timezone: string; /** Absent or 0: Sunday. */ weekStart?: WeekStart; pages: PageRow[]; tasks: TaskRow[]; deleted: DeletedRow[] }
 export interface RowSet<R extends { id: string }> { upsert: R[]; remove: string[] }
 /** What a save writes, or what an Undo puts back: rows whole, by id, plus the time zone when it changed. */
-export interface RowDiff { timezone?: string; pages: RowSet<PageRow>; tasks: RowSet<TaskRow>; deleted: RowSet<DeletedRow> }
+export interface RowDiff { timezone?: string; weekStart?: WeekStart; pages: RowSet<PageRow>; tasks: RowSet<TaskRow>; deleted: RowSet<DeletedRow> }
 
 /** A text column refuses U+0000; the domain drops it on the way in, and rows written from older data drop it here. */
 const clean = (s: string): string => s.includes('\u0000') ? s.replace(/\u0000/g, '') : s
@@ -53,7 +53,7 @@ const byPosition = <R extends { position: number }>(rows: R[]): R[] => [...rows]
 /** The workspace the domain works on, from its rows: receipts and the Undo marker are the store's to add. */
 export function workspaceOf(rows: Rows): Workspace {
   return {
-    schemaVersion: 2, revision: rows.revision, timezone: rows.timezone,
+    schemaVersion: 2, revision: rows.revision, timezone: rows.timezone, ...(rows.weekStart === 1 ? { weekStart: 1 as const } : {}),
     pages: byPosition(rows.pages).map(pageOf), tasks: byPosition(rows.tasks).map(taskOf),
     deletedTasks: byPosition(rows.deleted).map(r => JSON.parse(r.data) as Task), receipts: {},
   }
@@ -62,7 +62,7 @@ export function workspaceOf(rows: Rows): Workspace {
 /** Rows for a workspace with no history (a migration, a first import): positions are the indexes. */
 export function rowsOf(ws: Workspace): Rows {
   return {
-    revision: ws.revision, timezone: ws.timezone,
+    revision: ws.revision, timezone: ws.timezone, weekStart: ws.weekStart ?? 0,
     pages: ws.pages.map((p, i) => pageRow(p, i)), tasks: ws.tasks.map((t, i) => taskRow(t, i)), deleted: ws.deletedTasks.map((t, i) => deletedRow(t, i)),
   }
 }
@@ -107,14 +107,15 @@ export function planWrites(before: Rows, after: Workspace): { write: RowDiff; in
     return entities.map(e => row(e, next.get(e.id)!))
   }
   const rows: Rows = {
-    revision: after.revision, timezone: after.timezone,
+    revision: after.revision, timezone: after.timezone, weekStart: after.weekStart ?? 0,
     pages: positions(after.pages, before.pages, pageRow), tasks: positions(after.tasks, before.tasks, taskRow), deleted: positions(after.deletedTasks, before.deleted, deletedRow),
   }
   const pages = diffSet(before.pages, rows.pages), tasks = diffSet(before.tasks, rows.tasks), deleted = diffSet(before.deleted, rows.deleted)
   const timezone = before.timezone !== after.timezone
+  const weekStart = (before.weekStart ?? 0) !== (after.weekStart ?? 0)
   return {
-    write: { ...(timezone ? { timezone: after.timezone } : {}), pages: pages.write, tasks: tasks.write, deleted: deleted.write },
-    inverse: { ...(timezone ? { timezone: before.timezone } : {}), pages: pages.inverse, tasks: tasks.inverse, deleted: deleted.inverse },
+    write: { ...(timezone ? { timezone: after.timezone } : {}), ...(weekStart ? { weekStart: after.weekStart ?? 0 } : {}), pages: pages.write, tasks: tasks.write, deleted: deleted.write },
+    inverse: { ...(timezone ? { timezone: before.timezone } : {}), ...(weekStart ? { weekStart: before.weekStart ?? 0 } : {}), pages: pages.inverse, tasks: tasks.inverse, deleted: deleted.inverse },
     rows,
   }
 }
@@ -127,7 +128,7 @@ function applySet<R extends { id: string }>(rows: R[], set: RowSet<R>): R[] {
 /** The rows as they were before the operation whose inverse this is. */
 export function applyDiff(rows: Rows, diff: RowDiff): Rows {
   return {
-    revision: rows.revision, timezone: diff.timezone ?? rows.timezone,
+    revision: rows.revision, timezone: diff.timezone ?? rows.timezone, weekStart: diff.weekStart ?? rows.weekStart ?? 0,
     pages: applySet(rows.pages, diff.pages), tasks: applySet(rows.tasks, diff.tasks), deleted: applySet(rows.deleted, diff.deleted),
   }
 }

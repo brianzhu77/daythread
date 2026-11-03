@@ -1,7 +1,7 @@
 // Databases (docs/design/databases-model.md): a database is a page with `database` (its properties and views); a row
 // is a child page with `values`. Values are read through their property, never trusted as stored, so a schema change
 // rewrites only the database page. Pure: the domain's commands and the browser's views share it.
-import type { LocalDate, Page, Workspace } from "./types.ts";
+import type { LocalDate, Page, WeekStart, Workspace } from "./types.ts";
 
 export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url"] as const;
 export type PropertyType = (typeof propertyTypes)[number];
@@ -45,8 +45,10 @@ export interface View {
   /** Shown properties, in order, with widths; one not listed is hidden. The title column is always shown first and is not listed. */
   columns: { id: string; width?: number }[];
   sort: Sort[];
-  /** All must hold. */
+  /** All must hold, or any with `filterAny`. */
   filter: Condition[];
+  /** "Any rule matches" (design §7.3, R3-4). */
+  filterAny?: true;
   /** Table and list: their groups. Board: what makes its columns. Ignored while its property is deleted or can't group (design §13). */
   groupBy?: string;
   /** A date's groups; a month when absent. */
@@ -56,6 +58,8 @@ export interface View {
   hiddenGroups?: string[];
   /** Calendar: the date property its rows sit by. Ignored while it's deleted or no longer a date (design §13). */
   dateBy?: string;
+  /** Calendar: a week at a time; a month when absent (R3-20). */
+  calendarSpan?: "week";
 }
 export interface Database {
   /** The `database` block that is its place in its parent page; null: shown as a full page. */
@@ -255,7 +259,7 @@ export function rowsWithOption(ws: Workspace, databaseId: string, property: Prop
 
 // ---------------------------------------------------------------- views: filter and sort
 
-export interface ViewContext { today: LocalDate; /** The date of the day page the block is on; null elsewhere. */ pageDate: LocalDate | null }
+export interface ViewContext { today: LocalDate; /** The date of the day page the block is on; null elsewhere. */ pageDate: LocalDate | null; /** 1: weeks start on Monday. Sunday otherwise (R3-20). */ weekStart?: WeekStart }
 
 function addDays(day: LocalDate, days: number): LocalDate {
   const d = new Date(`${day}T12:00:00Z`);
@@ -271,11 +275,15 @@ export function resolveDateRef(ref: unknown, context: ViewContext): LocalDate | 
   const offset = "offset" in ref && Number.isInteger(ref.offset) ? (ref.offset as number) : 0;
   return base ? addDays(base, offset) : null;
 }
-/** The days `within` covers, both ends included. Weeks start on Monday. */
-function withinRange(within: unknown, today: LocalDate): [LocalDate, LocalDate] | null {
+/** The day a week starts, for the date it's in: Sunday, unless he's chosen Monday (R3-20). */
+export function startOfWeek(day: LocalDate, weekStart: WeekStart = 0): LocalDate {
+  return addDays(day, -((new Date(`${day}T12:00:00Z`).getUTCDay() - weekStart + 7) % 7));
+}
+/** The days `within` covers, both ends included. */
+function withinRange(within: unknown, today: LocalDate, weekStart: WeekStart = 0): [LocalDate, LocalDate] | null {
   if (within === "past7") return [addDays(today, -6), today];
   if (within === "next7") return [today, addDays(today, 6)];
-  if (within === "thisWeek") { const monday = addDays(today, -((new Date(`${today}T12:00:00Z`).getUTCDay() + 6) % 7)); return [monday, addDays(monday, 6)]; }
+  if (within === "thisWeek") { const first = startOfWeek(today, weekStart); return [first, addDays(first, 6)]; }
   return null;
 }
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((x): x is string => typeof x === "string") : typeof value === "string" ? [value] : [];
@@ -323,7 +331,7 @@ export function conditionHolds(property: Property, condition: Condition, value: 
       const start = value && typeof value === "object" && !Array.isArray(value) ? value.start.slice(0, 10) : null;
       const end = value && typeof value === "object" && !Array.isArray(value) ? (value.end ?? value.start).slice(0, 10) : null;
       if (op === "within") {
-        const range = withinRange(want, context.today);
+        const range = withinRange(want, context.today, context.weekStart);
         if (!range) return null;
         return start !== null && start <= range[1] && end! >= range[0];
       }
@@ -340,13 +348,14 @@ export function conditionHolds(property: Property, condition: Condition, value: 
     }
   }
 }
-export function rowMatches(db: Database, row: Page, filter: readonly Condition[], context: ViewContext): boolean {
-  return filter.every((c) => {
-    const property = propertyOf(db, c.by);
-    // A filter on a deleted property is shown struck through and ignored (design §13).
-    return !property || conditionHolds(property, c, cellValue(db, row, c.by), context) !== false;
-  });
+export function rowMatches(db: Database, row: Page, filter: readonly Condition[], context: ViewContext, any = false): boolean {
+  // A filter on a deleted property is shown struck through and ignored (design §13), as is one that can't be read.
+  const results = filter.map((c) => { const property = propertyOf(db, c.by); return property ? conditionHolds(property, c, cellValue(db, row, c.by), context) : null; }).filter((r) => r !== null);
+  // With nothing left to read, no rule hides a row, under either.
+  return any && results.length ? results.includes(true) : !results.includes(false);
 }
+/** Whether a row shows in this view, by its rules and how they combine. */
+export const inView = (db: Database, row: Page, view: Pick<View, "filter" | "filterAny">, context: ViewContext): boolean => rowMatches(db, row, view.filter, context, view.filterAny);
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 /** Sort keys compare within one type: text by collation, numbers and dates by value, options by their order. Empty is never compared. */
@@ -378,7 +387,7 @@ export function viewRows(ws: Workspace, databaseId: string, view: View, context:
   const page = ws.pages.find((p) => p.id === databaseId);
   if (!isDatabase(page)) return [];
   const db = page.database;
-  const rows = databaseRows(ws, databaseId).filter((r) => rowMatches(db, r, view.filter, context));
+  const rows = databaseRows(ws, databaseId).filter((r) => inView(db, r, view, context));
   // A sort on a deleted property is dropped quietly (design §13).
   const sorts = view.sort.map((s) => ({ ...s, property: propertyOf(db, s.by) })).filter((s): s is Sort & { property: Property } => s.property !== null);
   if (!sorts.length) return rows;
@@ -407,7 +416,10 @@ export function viewColumns(db: Database, view: View): { property: Property; wid
 export function newRowValues(db: Database, view: View, context: ViewContext, groupKey?: string): { title: string; values: RawValues; visible: boolean } {
   let title = "";
   const values: RawValues = {};
-  for (const c of view.filter) {
+  const probeOf = (t: string, v: RawValues) => ({ id: "", type: "document", date: null, title: t, document: "[]", values: v }) as Page;
+  // Under "any", one rule's value is enough, and only if it makes the row show; if it already shows, it needs none.
+  const any = Boolean(view.filterAny);
+  if (!any || !rowMatches(db, probeOf("", {}), view.filter, context, true)) for (const c of view.filter) {
     const property = propertyOf(db, c.by);
     if (!property) continue;
     const want = c.value;
@@ -421,16 +433,17 @@ export function newRowValues(db: Database, view: View, context: ViewContext, gro
     if (value === undefined) continue;
     try { value = storedValue(property, value); } catch { continue; }
     if (value === undefined) continue;
+    if (any && !rowMatches(db, property.id === titleId ? probeOf(value as string, {}) : probeOf("", { [property.id]: value }), view.filter, context, true)) continue;
     if (property.id === titleId) title = value as string; else values[property.id] = value;
+    if (any) break;
   }
   // A row added under a group starts with that group's value, even where the filter wants another (then it's hidden, and the notice says so).
   const grouped = groupKey === undefined ? null : viewGroupBy(db, view);
   if (grouped) {
-    const value = groupKey === noGroupKey ? undefined : storedValue(grouped, groupValue(grouped, groupKey!, undefined, undefined, context.today, view.groupDateBy));
+    const value = groupKey === noGroupKey ? undefined : storedValue(grouped, groupValue(grouped, groupKey!, undefined, undefined, context.today, view.groupDateBy, context.weekStart));
     if (value === undefined) delete values[grouped.id]; else values[grouped.id] = value;
   }
-  const probe = { id: "", type: "document", date: null, title, document: "[]", values } as Page;
-  return { title, values, visible: rowMatches(db, probe, view.filter, context) };
+  return { title, values, visible: inView(db, probeOf(title, values), view, context) };
 }
 
 // ---------------------------------------------------------------- views: groups (design §7.2, §7.3)
@@ -457,10 +470,9 @@ export function groupOptions(property: Property): Option[] {
   const options = property.options ?? [];
   return property.type === "status" ? statusOrder.flatMap((g) => options.filter((o) => (o.group ?? "todo") === g)) : options;
 }
-const startOfWeek = (day: LocalDate): LocalDate => addDays(day, -((new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7));
-function dateGroupKey(start: string, by: GroupDateBy): string {
+function dateGroupKey(start: string, by: GroupDateBy, weekStart: WeekStart): string {
   const day = start.slice(0, 10);
-  return by === "day" ? day : by === "week" ? startOfWeek(day) : day.slice(0, 7);
+  return by === "day" ? day : by === "week" ? startOfWeek(day, weekStart) : day.slice(0, 7);
 }
 const dayLabel = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const monthLabel = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
@@ -470,11 +482,11 @@ function dateGroupName(key: string, by: GroupDateBy): string {
   return by === "week" ? `Week of ${label}` : label;
 }
 /** The keys of the groups a value belongs to: several for a multi-select, the no-value group when empty. */
-function groupKeys(property: Property, value: CellValue, by: GroupDateBy): string[] {
+function groupKeys(property: Property, value: CellValue, by: GroupDateBy, weekStart: WeekStart): string[] {
   if (property.type === "checkbox") return [value === true ? "checked" : "unchecked"];
   if (isEmptyValue(value)) return [noGroupKey];
   if (property.type === "multiSelect") return value as string[];
-  if (property.type === "date") return [dateGroupKey((value as DateValue).start, by)];
+  if (property.type === "date") return [dateGroupKey((value as DateValue).start, by, weekStart)];
   return [String(value)];
 }
 export interface ViewGroup { key: string; name: string; rows: Page[] }
@@ -489,12 +501,12 @@ export interface ViewGroups {
  * column to drag to; other values only where a row has them. No value comes last. `rawFor` reads a row's value, so a
  * change on its way shows in its new group at once.
  */
-export function viewGroups(db: Database, view: View, rows: readonly Page[], rawFor: (row: Page, columnId: string) => unknown = rawOf): ViewGroups | null {
+export function viewGroups(db: Database, view: View, rows: readonly Page[], rawFor: (row: Page, columnId: string) => unknown = rawOf, weekStart: WeekStart = 0): ViewGroups | null {
   const property = viewGroupBy(db, view);
   if (!property) return null;
   const by = view.groupDateBy ?? "month";
   const found = new Map<string, Page[]>();
-  for (const row of rows) for (const key of groupKeys(property, readValue(property, rawFor(row, property.id)), by)) {
+  for (const row of rows) for (const key of groupKeys(property, readValue(property, rawFor(row, property.id)), by, weekStart)) {
     const list = found.get(key);
     if (list) list.push(row); else found.set(key, [row]);
   }
@@ -556,7 +568,7 @@ export function movedDate(property: Property, raw: unknown, from: LocalDate | nu
  * one and keeps its others. A date keeps its time and its length, moved to a day in the group: `today` if it's in that
  * group, else the group's first day.
  */
-export function groupValue(property: Property, key: string, raw: unknown, fromKey: string | undefined, today: LocalDate, by: GroupDateBy = "month"): Json | undefined {
+export function groupValue(property: Property, key: string, raw: unknown, fromKey: string | undefined, today: LocalDate, by: GroupDateBy = "month", weekStart: WeekStart = 0): Json | undefined {
   if (key === noGroupKey) return undefined;
   switch (property.type) {
     case "checkbox": return key === "checked" ? true : undefined;
@@ -567,7 +579,7 @@ export function groupValue(property: Property, key: string, raw: unknown, fromKe
       return [...kept, key];
     }
     case "date": {
-      const day = dateGroupKey(today, by) === key ? today : by === "month" ? `${key}-01` : key;
+      const day = dateGroupKey(today, by, weekStart) === key ? today : by === "month" ? `${key}-01` : key;
       const had = readValue(property, raw) as DateValue | null;
       if (!had) return { start: day };
       const shift = Math.round((Date.parse(`${day}T12:00:00Z`) - Date.parse(`${had.start.slice(0, 10)}T12:00:00Z`)) / 86_400_000);
@@ -589,7 +601,7 @@ export type DatabaseChange =
   | { kind: "removeProperty"; propertyId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; dateBy?: string }
+  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; filterAny?: boolean }
   | { kind: "removeView"; viewId: string }
   | { kind: "moveView"; viewId: string; beforeId: string | null };
 /** One row's edit: values by column id (`title` for the title), null clears; `expected`: those columns as the edit saw them. */
@@ -673,7 +685,7 @@ function cleanLayout(input: unknown): ViewLayout {
   return input as ViewLayout;
 }
 const dateBys = new Set<unknown>(["day", "week", "month"]);
-type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "dateBy">;
+type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "dateBy" | "calendarSpan">;
 /** A view's group fields, checked. A new `groupBy` must name a live property that can group; one it already holds may be deleted since, and is kept unread, so Undo or changing the type back reads it again. */
 function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before?: Pick<View, "groupBy" | "dateBy">): GroupFields {
   const out: GroupFields = {};
@@ -686,6 +698,7 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
     if (input.dateBy !== before?.dateBy && !dateProperties(db).some((p) => p.id === input.dateBy)) throw new DatabaseError("Can't place rows by that");
     out.dateBy = input.dateBy;
   }
+  if (input.calendarSpan === "week") out.calendarSpan = "week";
   if (input.groupDateBy !== undefined) { if (!dateBys.has(input.groupDateBy)) throw new DatabaseError("Invalid view"); out.groupDateBy = input.groupDateBy; }
   if (input.hideEmptyGroups) out.hideEmptyGroups = true;
   if (input.hiddenGroups !== undefined) {
@@ -697,7 +710,7 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
 function cleanView(db: Database, input: View): View {
   if (!input) throw new DatabaseError("Unknown view type");
   const layout = cleanLayout(input.layout);
-  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...cleanGroup(db, input, layout, input) };
+  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...cleanGroup(db, input, layout, input) };
 }
 function move<T extends { id: string }>(list: T[], id: string, beforeId: string | null): T[] {
   const item = list.find((x) => x.id === id);
@@ -760,7 +773,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     }
     case "updateView": {
       const old = view(change.viewId);
-      const { groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, dateBy: _dateBy, ...rest } = old;
+      const { filterAny: _filterAny, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, ...rest } = old;
       const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
       const group = cleanGroup(db, {
         groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
@@ -768,6 +781,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         hideEmptyGroups: change.hideEmptyGroups ?? old.hideEmptyGroups,
         hiddenGroups: change.hiddenGroups ?? old.hiddenGroups,
         dateBy: change.dateBy ?? old.dateBy,
+        ...(change.calendarSpan === null ? {} : { calendarSpan: change.calendarSpan ?? old.calendarSpan }),
       }, layout, old);
       const next: View = {
         ...rest,
@@ -776,6 +790,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         ...(change.columns !== undefined ? { columns: cleanColumns(db, change.columns) } : {}),
         ...(change.sort !== undefined ? { sort: cleanSort(db, change.sort, old.sort) } : {}),
         ...(change.filter !== undefined ? { filter: cleanFilter(db, change.filter, old.filter) } : {}),
+        ...((change.filterAny ?? old.filterAny) ? { filterAny: true as const } : {}),
         ...group,
       };
       db.views[db.views.indexOf(old)] = next;
