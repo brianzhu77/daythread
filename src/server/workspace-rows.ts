@@ -1,6 +1,7 @@
 // The workspace as rows (shot 2): what the Postgres store reads and writes. Pure: no SQL here. A loaded workspace is
 // its rows with their positions; a command's result is turned back into rows, and the difference is what gets written,
 // with the rows as they were as the operation's inverse (what Undo puts back). The domain never sees positions.
+import { expandedWorkspace, storedDocument, type SyncedRecord } from '../domain/synced.ts'
 import type { Page, Task, Workspace, WeekStart } from '../domain/types.ts'
 
 export interface PageRow {
@@ -25,7 +26,7 @@ export interface RowDiff { timezone?: string; weekStart?: WeekStart; pages: RowS
 const clean = (s: string): string => s.includes('\u0000') ? s.replace(/\u0000/g, '') : s
 export const pageRow = (p: Page, position: number): PageRow => ({
   id: p.id, position, type: p.type, date: p.date ?? null, title: clean(p.title), url: p.url ?? null, parent_id: p.parentId ?? null,
-  trashed_at: p.trashedAt ?? null, trash_id: p.trashId ?? null, document: p.document, handoff_done: Boolean(p.handoffDone), review_saved: Boolean(p.reviewSaved),
+  trashed_at: p.trashedAt ?? null, trash_id: p.trashId ?? null, document: storedDocument(p.document), handoff_done: Boolean(p.handoffDone), review_saved: Boolean(p.reviewSaved),
   database_json: p.database ? JSON.stringify(p.database) : null, row_values: p.values ? JSON.stringify(p.values) : null, created_at: p.createdAt ?? null, edited_at: p.editedAt ?? null,
 })
 /** The canonical page: optional facts present only when set, as the domain and the converter write them. */
@@ -52,18 +53,35 @@ const byPosition = <R extends { position: number }>(rows: R[]): R[] => [...rows]
 
 /** The workspace the domain works on, from its rows: receipts and the Undo marker are the store's to add. */
 export function workspaceOf(rows: Rows): Workspace {
-  return {
+  const sorted = byPosition(rows.pages), synced = sorted.filter(r => r.type === 'synced').map(recordOf)
+  return expandedWorkspace({
     schemaVersion: 2, revision: rows.revision, timezone: rows.timezone, ...(rows.weekStart === 1 ? { weekStart: 1 as const } : {}),
-    pages: byPosition(rows.pages).map(pageOf), tasks: byPosition(rows.tasks).map(taskOf),
+    ...(synced.length ? { synced } : {}),
+    pages: sorted.filter(r => r.type !== 'synced').map(pageOf), tasks: byPosition(rows.tasks).map(taskOf),
     deletedTasks: byPosition(rows.deleted).map(r => JSON.parse(r.data) as Task), receipts: {},
-  }
+  })
 }
+
+/** A synced block's lines take a page row, hidden from the domain: its one row is all an edit writes. */
+const recordRow = (r: SyncedRecord, position: number): PageRow => ({
+  id: `synced:${r.id}`, position, type: 'synced', date: null, title: '', url: null, parent_id: null, trashed_at: null, trash_id: null, document: r.lines,
+  handoff_done: false, review_saved: false, database_json: null, row_values: JSON.stringify({ rev: r.rev, original: r.original }), created_at: null, edited_at: null,
+})
+function recordOf(row: PageRow): SyncedRecord {
+  const { rev, original } = JSON.parse(row.row_values ?? '{}') as { rev: number; original: string }
+  return { id: row.id.slice('synced:'.length), lines: row.document, rev, original }
+}
+/** The pages' rows and the records', in that order: each record's row sits after every page. */
+const pageEntities = (ws: Workspace): { id: string; row(position: number): PageRow }[] => [
+  ...ws.pages.map(p => ({ id: p.id, row: (position: number) => pageRow(p, position) })),
+  ...(ws.synced ?? []).map(r => ({ id: `synced:${r.id}`, row: (position: number) => recordRow(r, position) })),
+]
 
 /** Rows for a workspace with no history (a migration, a first import): positions are the indexes. */
 export function rowsOf(ws: Workspace): Rows {
   return {
     revision: ws.revision, timezone: ws.timezone, weekStart: ws.weekStart ?? 0,
-    pages: ws.pages.map((p, i) => pageRow(p, i)), tasks: ws.tasks.map((t, i) => taskRow(t, i)), deleted: ws.deletedTasks.map((t, i) => deletedRow(t, i)),
+    pages: pageEntities(ws).map((e, i) => e.row(i)), tasks: ws.tasks.map((t, i) => taskRow(t, i)), deleted: ws.deletedTasks.map((t, i) => deletedRow(t, i)),
   }
 }
 
@@ -108,7 +126,7 @@ export function planWrites(before: Rows, after: Workspace): { write: RowDiff; in
   }
   const rows: Rows = {
     revision: after.revision, timezone: after.timezone, weekStart: after.weekStart ?? 0,
-    pages: positions(after.pages, before.pages, pageRow), tasks: positions(after.tasks, before.tasks, taskRow), deleted: positions(after.deletedTasks, before.deleted, deletedRow),
+    pages: positions(pageEntities(after), before.pages, (e, position) => e.row(position)), tasks: positions(after.tasks, before.tasks, taskRow), deleted: positions(after.deletedTasks, before.deleted, deletedRow),
   }
   const pages = diffSet(before.pages, rows.pages), tasks = diffSet(before.tasks, rows.tasks), deleted = diffSet(before.deleted, rows.deleted)
   const timezone = before.timezone !== after.timezone

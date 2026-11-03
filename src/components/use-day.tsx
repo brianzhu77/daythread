@@ -6,6 +6,7 @@ import type { Action, DayView, LocalDate, Receipt, Task, Workspace } from '../do
 import { getDayView } from '../domain/workspace'
 import { replyWorkspace } from './command-reply'
 import { loadWorkspace, runCommand } from '../server/functions'
+import { expandedWorkspace } from '../domain/synced'
 import { configureDebug, debugClient } from '../lib/debug'
 import { sampleActions } from './fixture'
 import { todayIso } from './dates'
@@ -34,8 +35,10 @@ const serverTransport: Transport = {
     const response=await loadWorkspace({data:{operationId,triggerOperationId}})
     configureDebug(response.debug)
     knownOwner = response.owner
-    void offlineCopy.remember(response.workspace, { owner: response.owner, startedAt })
-    return response.workspace
+    // Synced blocks' lines travel once, in their records (synced.ts).
+    const workspace = expandedWorkspace(response.workspace)
+    void offlineCopy.remember(workspace, { owner: response.owner, startedAt })
+    return workspace
   },
   // The reply carries what the command changed (workspace-changes.ts), applied to the copy it was sent from. When that
   // copy isn't the one the changes start from (a replay) or the reply is another account's, it is loaded whole.

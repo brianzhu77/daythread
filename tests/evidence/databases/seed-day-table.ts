@@ -1,13 +1,13 @@
 // Seeds a disposable SQLite store (path as the argument, never his data) for the render budget (R1-18): today's day page
 // with 40 lines and, unless the second argument is `plain`, an inline database of 25 rows with all 8 R1 types. `linked`: the
-// database's home is on another page and today shows a linked view of it, as a view from the Day template does (R2-7). `todos`: a To-dos view of 25 open tasks.
-// Usage: node tests/evidence/databases/seed-day-table.ts <store-path> [plain|linked|todos]
+// database's home is on another page and today shows a linked view of it, as a view from the Day template does (R2-7). `todos`: a To-dos view of 25 open tasks. `relation`: the table, with a relation and a rollup.
+// Usage: node tests/evidence/databases/seed-day-table.ts <store-path> [plain|linked|todos|relation]
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
 import { pageContentKey } from '../../../src/domain/editor-document.ts'
 import { todosSourceId } from '../../../src/domain/todos-source.ts'
 import type { Action } from '../../../src/domain/types.ts'
-if (!process.argv[2]) { console.error('Usage: node tests/evidence/databases/seed-day-table.ts <store-path> [plain|linked|todos]'); process.exit(2) }
-const plain = process.argv[3] === 'plain', linked = process.argv[3] === 'linked', todos = process.argv[3] === 'todos'
+if (!process.argv[2]) { console.error('Usage: node tests/evidence/databases/seed-day-table.ts <store-path> [plain|linked|todos|relation]'); process.exit(2) }
+const plain = process.argv[3] === 'plain', linked = process.argv[3] === 'linked', todos = process.argv[3] === 'todos', relation = process.argv[3] === 'relation'
 const repo = new SqliteWorkspaceRepository(process.argv[2], undefined, { allowMissingLegacy: true })
 let ws = await repo.load()
 const run = async (action: Action) => { ws = (await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: ws.revision, action })).workspace }
@@ -31,6 +31,14 @@ if (todos) {
   await prop('genre', 'Genre', 'select', { options: [{ id: 'novel', name: 'Novel' }, { id: 'essay', name: 'Essay' }] })
   await prop('tags', 'Tags', 'multiSelect', { options: [{ id: 'sf', name: 'SF' }, { id: 'hist', name: 'History' }] })
   await prop('due', 'Due', 'date'); await prop('owned', 'Owned', 'checkbox'); await prop('link', 'Link', 'url'); await prop('notes', 'Notes', 'text')
-  for (let i = 0; i < 25; i++) await run({ type: 'add-row', databaseId: 'list', pageId: `row${i}`, title: `Book ${i}`, values: { pages: 100 + i, genre: i % 2 ? 'novel' : 'essay', tags: ['sf'], due: { start: today }, owned: i % 3 === 0, link: `https://example.com/${i}`, notes: `Note ${i}` }, at })
+  // A relation and a rollup on the table (R2-7, R3-5, R3-7): every row linked to a row of another database.
+  if (relation) {
+    await run({ type: 'create-database', pageId: 'authors', homeBlockId: null, title: 'Authors' })
+    await run({ type: 'change-database', pageId: 'authors', change: { kind: 'addProperty', property: { id: 'age', name: 'Age', type: 'number' } } })
+    await run({ type: 'add-row', databaseId: 'authors', pageId: 'author', title: 'An author', values: { age: 40 }, at })
+    await run({ type: 'change-database', pageId: 'list', change: { kind: 'addProperty', property: { id: 'by', name: 'By', type: 'relation', target: 'authors' } } })
+    await run({ type: 'change-database', pageId: 'list', change: { kind: 'addProperty', property: { id: 'ages', name: 'Ages', type: 'rollup', rollup: { relation: 'by', property: 'age', fn: 'sum' } } } })
+  }
+  for (let i = 0; i < 25; i++) await run({ type: 'add-row', databaseId: 'list', pageId: `row${i}`, title: `Book ${i}`, values: { ...(relation ? { by: ['author'] } : {}), pages: 100 + i, genre: i % 2 ? 'novel' : 'essay', tags: ['sf'], due: { start: today }, owned: i % 3 === 0, link: `https://example.com/${i}`, notes: `Note ${i}` }, at })
 }
 console.log('seeded', process.argv[3] ?? 'table', today)
