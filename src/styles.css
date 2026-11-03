@@ -2017,7 +2017,8 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-gallery-title:focus-visible { outline: none; }
 .database-gallery-card .database-gallery-title.is-placeholder { color: var(--placeholder); }
 /* Their words line up with a card's: its padding plus its border. */
-.database-gallery ~ .database-new, .database-gallery ~ .database-more { padding-inline: 11px; }
+.database-new.is-under-cards, .database-more.is-under-cards, .database-gallery + .database-more { padding-inline: 11px; }
+.database-block .database-hidden-groups.is-under-cards { padding-inline: 11px; }
 @media (max-width: 899px) { .database-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* Databases R3: a Calendar (design §7.2): a month of days at 1280; on the phone the month with dots, and the chosen day's rows under it. */

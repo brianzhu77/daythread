@@ -1,5 +1,5 @@
 // R3-3 Gallery in the built app, on a fresh store from gallery/seed.ts: made from + Add view; 3 across, 2 on the phone; a card with
-// an image, one whose image fails, and one with none; opening a row; a tick; + New; the cap; no Group; keys and the clipboard.
+// an image, one whose image fails, and one with none; opening a row; a tick; + New; the cap; Group; keys and the clipboard.
 // Usage: node tests/evidence/gallery/gallery.mjs <base-url> <store-path> <1280|390> [chromium|webkit] [shots-dir]  (a throwaway store the server at <base-url> uses)
 import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
@@ -21,6 +21,7 @@ const block = page.locator('.database-block').first(), menu = page.locator('.dat
 const row = id => store().pages.find(p => p.id === id)
 const view = () => row('list').database.views.at(-1)
 const closeMenu = async () => { await page.keyboard.press('Escape'); await wait(250); if (await menu.count()) { await page.locator('.database-menu-scrim').click({ force: true }).catch(() => {}); await wait(250) } }
+const clearNotices = async () => { for (const c of await page.locator('[data-slot="toast-close"]').all()) await c.click({ force: true }).catch(() => {}); await wait(350) }
 const card = id => block.locator(`.database-gallery-card[data-row="${id}"]`)
 
 await page.goto(`${base}/pages?page=books`); await wait(2500)
@@ -53,7 +54,6 @@ check(await block.locator('.database-gallery-card.is-returned').count() === 1, '
 await wait(1000)
 // No Group; Properties put a box on the card, and it ticks in place.
 await tap(block.locator('.database-more-button')); await wait(300)
-check(await menu.getByRole('button', { name: 'Group' }).count() === 0, 'no Group on a gallery')
 await tap(menu.getByRole('menuitem', { name: /Properties/ })); await wait(200)
 await menu.getByLabel('Show Owned').click(); await wait(900); await closeMenu()
 await tap(card('emma').locator('.property-checkbox')); await wait(1100)
@@ -63,6 +63,32 @@ await page.locator('.database-table-wrap > .database-new').first().scrollIntoVie
 await tap(block.locator('.database-table-wrap > .database-new')); await wait(1300)
 if (wide) { await page.keyboard.type('A new card'); await page.keyboard.press('Enter'); await wait(1000); check(await card(store().pages.find(p => p.title === 'A new card')?.id).count() === 1, '+ New types its name') }
 else { const made = store().pages.filter(p => p.parentId === 'list').at(-1); check(page.url().includes(made.id), '+ New opens the row'); await page.goBack(); await wait(1500) }
+// Group, as in a list (R3-19).
+await clearNotices(); await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('button', { name: 'Group' })); await wait(200)
+await menu.getByLabel('Group by').selectOption({ label: 'Kind' }); await wait(900); await closeMenu()
+const folds = () => block.locator('.database-group-fold').allInnerTexts()
+check((await folds()).map(s => s.replace(/\s+/g, ' ').trim().replace(/ · \d+$/, '')).join() === 'Novel,Essay,No value', 'groups, in option order', await folds())
+await shot('grouped')
+check(await block.locator('.database-gallery').count() >= 2, 'each with its own cards')
+const across2 = new Set(await block.locator('.database-gallery').nth(1).locator('.database-gallery-card').evaluateAll(l => l.slice(0, 6).map(e => Math.round(e.getBoundingClientRect().x)))).size
+check(across2 === (wide ? 3 : 2), 'still across', across2)
+const rev2 = store().revision
+await tap(block.locator('.database-group-fold').nth(1)); await wait(300)
+check(await block.locator('.database-gallery').count() >= 1 && await card('ubik').count() === 0 && store().revision === rev2, 'a fold hides its cards and saves nothing')
+await tap(block.locator('.database-group-fold').nth(1)); await wait(300)
+check(await block.locator('.database-gallery').nth(1).locator('.database-gallery-card').count() === 25, 'each group follows the cap')
+await tap(block.locator('.database-more').first()); await wait(300)
+check(await block.locator('.database-gallery').nth(1).locator('.database-gallery-card').count() > 25, 'Show 25 more')
+await tap(block.locator('.database-group-fold').nth(0)); await wait(200); await tap(block.locator('.database-group-fold').nth(0)); await wait(200)
+await tap(block.locator('.database-new').first()); await wait(1300)
+if (wide) { await page.keyboard.type('In Novel'); await page.keyboard.press('Enter'); await wait(1000) } else { await page.goBack(); await wait(1500) }
+const added = store().pages.filter(p => p.parentId === 'list').at(-1)
+check(added.values?.kind === 'novel', '+ New under a group starts with its value', added.values)
+await clearNotices(); await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('button', { name: 'Group' })); await wait(200); await menu.getByLabel('Show Essay').click(); await wait(800); await closeMenu()
+check(/Hidden: Essay/.test(await block.locator('.database-hidden-groups').innerText()), 'a hidden group is listed')
+await tap(block.locator('.database-hidden-groups').getByRole('button')); await wait(700)
+await clearNotices(); await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('button', { name: 'Group' })); await wait(200); await menu.getByLabel('Group by').selectOption(''); await wait(900); await closeMenu()
+check(await block.locator('.database-group-fold').count() === 0, 'None takes the groups away')
 if (wide) {
   // Keys and the clipboard.
   const doc = () => row('books').document, doc0 = doc()
@@ -72,10 +98,8 @@ if (wide) {
   check(await page.evaluate(() => document.activeElement?.classList.contains('database-gallery-title')), 'Enter on the selected block comes to its first card')
   for (const key of ['Backspace', 'Delete', 'ControlOrMeta+x', 'ControlOrMeta+v', '/', 'z', 'ControlOrMeta+a']) { await card('dune').locator('.database-gallery-title').focus(); await page.keyboard.press(key); await wait(350) }
   check(doc() === doc0 && await block.locator('.database-gallery').count() === 1 && !row('dune').trashedAt, 'keys and the clipboard on a card leave the page and the block alone')
-  const named = () => store().pages.find(p => p.parentId === 'list' && p.title === 'A new card')
-  check(Boolean(named()), 'the new card is there to undo')
-  await card('dune').locator('.database-gallery-title').focus(); await page.keyboard.press('ControlOrMeta+z'); await wait(1000)
-  check(!named(), '⌘Z undoes the last change')
+  await card('dune').locator('.database-gallery-title').focus(); const before = JSON.stringify(view()); await page.keyboard.press('ControlOrMeta+z'); await wait(1000)
+  check(JSON.stringify(view()) !== before, '⌘Z undoes the last change')
 }
 check(errors.length === 0, 'no page errors', errors)
 console.log(fails ? `${fails} FAILED` : 'ALL PASS')
