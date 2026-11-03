@@ -108,6 +108,8 @@ for (const property of [
 ] as const) ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'addProperty', property: property as never } })
 ws = await run({ type: 'add-row', databaseId, pageId: crypto.randomUUID(), title: 'Fixture row', values: { text: 'A note', number: 412, select: 'novel', multi: ['sf'], date: { start: SCRATCH }, done: true, url: 'https://example.com/fixture', email: 'fixture@example.com', phone: '+1 415 555 0100' }, at: new Date().toISOString() })
 ws = await run({ type: 'add-row', databaseId, pageId: crypto.randomUUID(), title: 'Fixture row, unticked', values: {}, at: new Date().toISOString() })
+// Every kind of foot cell the gate measures: a count on Name, a number, a checkbox.
+ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'updateView', viewId: ws.pages.find(p => p.id === databaseId)!.database!.views[0]!.id, calculations: { title: 'countAll', number: 'sum', done: 'percentChecked' } } })
 for (const [id, block, title, layout] of [[boardId, boardBlock, 'Fixture board', 'board'], [groupedId, groupedBlock, 'Fixture grouped table', 'table'], [listId, listBlock, 'Fixture list', 'list'], [galleryId, galleryBlock, 'Fixture gallery', 'gallery'], [calendarId, calendarBlock, 'Fixture calendar', 'calendar']] as const) {
   ws = await run({ type: 'create-database', pageId: id, parentId: scratchId, homeBlockId: block, title })
   const change = async (c: unknown) => { ws = await run({ type: 'change-database', pageId: id, change: c as never }) }

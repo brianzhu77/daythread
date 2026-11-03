@@ -121,6 +121,27 @@ Untitled                                                                    ← 
   editor.
 - **Cell text** stays on one line with an ellipsis. The full value is on the row page. (Wrap per property: later, §14.)
 
+### 4.1a Column calculations (R3-8)
+
+- **Where:** a row at the table's foot, under its last row and above `Show 25 more` and `+ New`. Each group has its own,
+  above its `+ New`, with no second total, and a folded group hides its foot. Table only: other layouts keep the setting
+  and draw it when they're a table again.
+- **Nothing at rest:** a table with no calculation has no foot. `⋯` → **Calculate** lists Name and each shown column, at
+  both widths. Once there's a foot, a tap on a cell opens the same panel; at 1280 the other columns read "Calculate" on
+  hover, and at 390 they stay blank. The panel is the way in at 390 because there's no hover there, and a row of
+  "Calculate" on every phone table would be noise.
+- **It counts what the filter shows,** every row of it, whatever `Show 25 more` has drawn, and a cell still saving as it
+  shows. Hidden groups aren't drawn, so they aren't counted.
+- **Each type offers:** every type: Count all, Count values (each tag of a multi-select), Count unique, Count empty,
+  Count not empty, Percent empty, Percent not empty. Number: also Sum, Average, Median, Min, Max, Range. Date, Created
+  time and Edited time: also Earliest, Latest, Date range. ID: also Min, Max. Status: also Count per group and Percent per group (`○ 2 ◐ 1 ● 31`). Checkbox: only Count
+  all, Checked, Unchecked, Percent checked, Percent unchecked.
+- **The cell:** a short word in `--ink-3` and the value in `--ink`, at `--text-meta`, on its column's text: right-aligned
+  under a number. It takes the property's number format. Average rounds to 2 places and a percent to 1. Nothing to
+  reckon (an average of no numbers) reads `—`; a sum of none is 0.
+- **Saved on the view,** or in a linked view's block. A type that no longer fits, or a deleted column, draws nothing, and
+  comes back if the type does. The foot doesn't stick to the screen, so it can't sit under the phone's toolbar.
+
 ### 4.2 Inline, 390
 
 ```
@@ -493,7 +514,7 @@ Linked views come in R2, so in R1 (Bumblebee 120fdcd6):
 - **Calendar** can show by a created or edited time (§7.2).
 - **ID prefix:** a Prefix field in the property's settings, up to 20 characters, shown before the number: `BK-12`. It's
   display only, so numbers never change. A filter's value can be typed as it shows, and its line reads as it shows; copy
-  gives what's shown; sort is by number.
+  gives what's shown, an ID's Min and Max at the table's foot read as they show, and sort is by number.
 
 #### 6.3.13 Accessibility
 

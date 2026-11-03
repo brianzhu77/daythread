@@ -2,13 +2,13 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { calendarRows, cellValue, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewGroups, viewRows, type Database, type View } from '../src/domain/database.ts'
+import { calcChoices, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
 import { harness, today } from './v2-helpers.ts'
 import { pageContentKey } from '../src/domain/editor-document.ts'
-import { emailHref, phoneHref } from '../src/components/property-values.ts'
+import { calcText, emailHref, phoneHref } from '../src/components/property-values.ts'
 
 const at = '2026-10-22T18:00:00.000Z'
 const ctx = { today, pageDate: null }
@@ -528,4 +528,116 @@ test('an ID prefix shows and copies, and changes no number', () => {
   h.change({ kind: 'updateProperty', propertyId: 'num', prefix: 'A-' })
   h.change({ kind: 'updateProperty', propertyId: 'num', name: 'Number' })
   assert.equal(num().prefix, 'A-', 'a rename keeps it')
+})
+
+// ---------- R3-8: column calculations
+
+const calc = (h: ReturnType<typeof reading>, id: string, kind: CalcKind, rows = h.rows(view())) => columnCalc(h.db(), rows, id, kind)
+test('calculations: what each type offers', () => {
+  assert.ok(calcChoices('number').includes('sum') && !calcChoices('text').includes('sum'))
+  assert.ok(calcChoices('date').includes('dateRange') && !calcChoices('number').includes('dateRange'))
+  assert.deepEqual(calcChoices('checkbox'), ['countAll', 'checked', 'unchecked', 'percentChecked', 'percentUnchecked'])
+  assert.ok(calcChoices('status').includes('percentPerGroup') && !calcChoices('select').includes('percentPerGroup'))
+  assert.ok(calcChoices('createdTime').includes('earliest') && calcChoices('editedTime').includes('dateRange'))
+  assert.ok(calcChoices('id').includes('max') && !calcChoices('id').includes('sum'))
+  assert.ok(calcChoices('email').includes('countUnique') && !calcChoices('phone').includes('sum'))
+})
+test('calculations: counts, over a multi-select too', () => {
+  const h = reading()
+  assert.deepEqual(calc(h, 'title', 'countAll'), { type: 'count', value: 4 })
+  assert.deepEqual(calc(h, 'tags', 'countValues'), { type: 'count', value: 3 }, 'each value of each row')
+  assert.deepEqual(calc(h, 'tags', 'countUnique'), { type: 'count', value: 2 })
+  assert.deepEqual(calc(h, 'tags', 'countNotEmpty'), { type: 'count', value: 2 })
+  assert.deepEqual(calc(h, 'tags', 'countEmpty'), { type: 'count', value: 2 })
+  assert.deepEqual(calc(h, 'kind', 'percentNotEmpty'), { type: 'percent', value: 75 })
+  assert.deepEqual(calc(h, 'kind', 'percentEmpty'), { type: 'percent', value: 25 })
+  assert.deepEqual(calc(h, 'pages', 'countUnique'), { type: 'count', value: 2 })
+})
+test('calculations: numbers skip the empty ones, and none has no average', () => {
+  const h = reading()
+  assert.equal(calc(h, 'pages', 'sum').value, 1012)
+  assert.equal(calc(h, 'pages', 'average').value, 337.3333333333)
+  assert.equal(calc(h, 'pages', 'median').value, 300)
+  assert.equal(calc(h, 'pages', 'min').value, 300)
+  assert.equal(calc(h, 'pages', 'max').value, 412)
+  assert.equal(calc(h, 'pages', 'range').value, 112)
+  const none = h.rows(view()).filter(r => r.id === 'blank')
+  assert.equal(calc(h, 'pages', 'sum', none).value, 0)
+  for (const kind of ['average', 'median', 'min', 'max', 'range'] as const) assert.equal(calc(h, 'pages', kind, none).value, null, kind)
+  assert.equal(calc(h, 'pages', 'percentEmpty', []).value, null, 'no rows, no percent')
+  assert.equal(calc(h, 'pages', 'median', h.rows(view()).filter(r => r.id !== 'emma')).value, 356, 'an even count takes the middle two')
+})
+test('calculations: dates reach to a range\'s end; checkboxes count', () => {
+  const h = reading()
+  assert.equal(calc(h, 'due', 'earliest').value, '2026-10-20')
+  assert.equal(calc(h, 'due', 'latest').value, '2026-11-02T09:30')
+  assert.equal(calc(h, 'due', 'dateRange').value, 13)
+  assert.equal(calc(h, 'due', 'latest', h.rows(view()).filter(r => r.id === 'emma')).value, '2026-10-24')
+  assert.equal(calc(h, 'due', 'dateRange', h.rows(view()).filter(r => r.id === 'blank')).value, null)
+  assert.deepEqual([calc(h, 'owned', 'checked').value, calc(h, 'owned', 'unchecked').value, calc(h, 'owned', 'percentChecked').value, calc(h, 'owned', 'percentUnchecked').value], [1, 3, 25, 75])
+})
+test('calculations: a status per group', () => {
+  const h = reading()
+  const options = h.db().properties.find(p => p.id === 'status')!.options!
+  h.run({ type: 'set-values', pageId: 'dune', values: { status: options.find(o => o.group === 'done')!.id } } as never)
+  h.run({ type: 'set-values', pageId: 'emma', values: { status: options.find(o => o.group === 'active')!.id } } as never)
+  h.run({ type: 'set-values', pageId: 'ubik', values: { status: options.find(o => o.group === 'todo')!.id } } as never)
+  const counts = calc(h, 'status', 'countPerGroup')
+  assert.deepEqual(counts.type === 'groups' && counts.value.map(g => [g.group, g.count]), [['todo', 2], ['active', 1], ['done', 1]], 'a Status always has a value')
+  const percents = calc(h, 'status', 'percentPerGroup')
+  assert.deepEqual(percents.type === 'groups' && [percents.percent, percents.value.map(g => g.count)], [true, [50, 25, 25]])
+})
+test('calculations: read-only columns count like the rest', () => {
+  const h = typed()
+  h.change({ kind: 'addProperty', property: { id: 'num', name: 'No.', type: 'id' } })
+  assert.equal(calc(h, 'num', 'max').value, 4)
+  assert.equal(calc(h, 'num', 'min').value, 1)
+  assert.equal(calc(h, 'num', 'countUnique').value, 4)
+  assert.deepEqual(calc(h, 'made', 'dateRange'), { type: 'days', value: 0 })
+  assert.equal(calc(h, 'seen', 'countNotEmpty').value, 4)
+})
+test('calculations agree with the filter, and a group has its own', () => {
+  const h = reading()
+  const filtered = view({ filter: [{ by: 'kind', op: 'isAnyOf', value: ['novel'] }] })
+  assert.equal(calc(h, 'pages', 'sum', h.rows(filtered)).value, 712)
+  const grouped = view({ groupBy: 'kind' })
+  const groups = viewGroups(h.db(), grouped, h.rows(grouped))!.shown
+  assert.deepEqual(groups.map(g => [g.name, calc(h, 'pages', 'sum', g.rows).value]), [['Novel', 712], ['Essay', 300], ['No value', 0]])
+})
+test('a cell still saving counts as it shows', () => {
+  const h = reading()
+  const out = columnCalc(h.db(), h.rows(view()), 'pages', 'sum', (row, id) => row.id === 'dune' ? 1000 : cellValue(h.db(), row, id))
+  assert.equal(out.value, 1600)
+})
+test('a view keeps its calculations, with one Undo, and they stop drawing when they no longer fit', () => {
+  const h = reading()
+  const viewId = h.db().views[0]!.id
+  h.change({ kind: 'updateView', viewId, calculations: { pages: 'sum', title: 'countAll' } })
+  assert.deepEqual(h.db().views[0]!.calculations, { pages: 'sum', title: 'countAll' })
+  assert.deepEqual(viewCalculations(h.db(), h.db().views[0]!), { pages: 'sum', title: 'countAll' })
+  h.change({ kind: 'updateProperty', propertyId: 'pages', type: 'text' })
+  assert.deepEqual(viewCalculations(h.db(), h.db().views[0]!), { title: 'countAll' }, 'Sum on text draws nothing')
+  h.change({ kind: 'updateProperty', propertyId: 'pages', type: 'number' })
+  assert.deepEqual(viewCalculations(h.db(), h.db().views[0]!), { pages: 'sum', title: 'countAll' }, 'and is back with the type')
+  h.change({ kind: 'removeProperty', propertyId: 'pages' })
+  assert.deepEqual(viewCalculations(h.db(), h.db().views[0]!), { title: 'countAll' })
+  h.change({ kind: 'updateView', viewId, calculations: {} })
+  assert.equal('calculations' in h.db().views[0]!, false, 'none left: no field')
+  assert.throws(() => h.change({ kind: 'updateView', viewId, calculations: { title: 'nonsense' } } as never))
+  assert.equal(commandSchema.safeParse({ operationId: 'x', expectedRevision: 0, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId, calculations: { title: 'nonsense' } } } }).success, false)
+  // A rename keeps them.
+  h.change({ kind: 'updateView', viewId, calculations: { title: 'countAll' } })
+  h.change({ kind: 'updateView', viewId, name: 'Renamed' })
+  assert.deepEqual(h.db().views[0]!.calculations, { title: 'countAll' })
+})
+test('reading what a foot cell says', () => {
+  const on = '2026-11-02'
+  assert.deepEqual(calcText('max', { type: 'number', value: 36 }, undefined, on, 'BK-'), { label: 'Max', value: 'BK-36' })
+  assert.deepEqual(calcText('sum', { type: 'number', value: 1234.5 }, 'comma', on), { label: 'Sum', value: '1,234.5' })
+  assert.deepEqual(calcText('average', { type: 'number', value: 337.3333333333 }, undefined, on), { label: 'Average', value: '337.33' })
+  assert.deepEqual(calcText('average', { type: 'number', value: null }, undefined, on), { label: 'Average', value: '—' })
+  assert.deepEqual(calcText('percentChecked', { type: 'percent', value: 33.33333 }, undefined, on), { label: 'Checked', value: '33.3%' })
+  assert.deepEqual(calcText('dateRange', { type: 'days', value: 1 }, undefined, on), { label: 'Range', value: '1 day' })
+  assert.deepEqual(calcText('earliest', { type: 'date', value: '2026-10-20' }, undefined, on), { label: 'Earliest', value: 'Oct 20' })
+  assert.deepEqual(calcText('countPerGroup', { type: 'groups', percent: false, value: [{ group: 'todo', count: 3 }, { group: 'done', count: 1 }] }, undefined, on), { label: '', value: '○ 3  ● 1' })
 })
