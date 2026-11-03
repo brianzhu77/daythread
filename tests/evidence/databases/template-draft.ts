@@ -1,4 +1,4 @@
-// R2-6 on a copy of his data: the same day with and without views in his Day template. The model is sent the same words,
+// R2-6 on a copy of his data: the same day with and without views in his Day template, of a database and of To-dos. The model is sent the same words,
 // a draft lands in the same slots, and Apply, Undo and carry-over come out the same.
 // Usage: node tests/evidence/databases/template-draft.ts <copy-store-path> <scratch-dir>  (reads the copy, writes only in the scratch dir)
 import { copyFileSync } from 'node:fs'
@@ -13,12 +13,12 @@ const date = '2026-12-21', next = '2026-12-22'
 const anyIds = (s: string) => s.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, 'ID')
 const shape = (nodes: EditorNode[]) => nodes.filter(n => n.type !== 'database').map(n => `${n.type}:${inlineText(n.content).trim()}`)
 
-async function run(variant: 'plain' | 'viewed') {
+async function run(variant: 'plain' | 'viewed' | 'todos') {
   const path = `${scratch}/draft-${variant}.sqlite`
   execSync(`rm -f ${path} ${path}-wal ${path}-shm`)
   copyFileSync(copy, path)
   execSync(`node tests/evidence/databases/seed-table.ts ${path}`, { stdio: 'ignore' })
-  execSync(`node tests/evidence/databases/template-view-seed.ts ${path} ${variant === 'plain' ? 'plain' : ''}`, { stdio: 'ignore' })
+  execSync(`node tests/evidence/databases/template-view-seed.ts ${path} ${variant === 'viewed' ? '' : variant}`, { stdio: 'ignore' })
   const repo = new SqliteWorkspaceRepository(path)
   let ws = await repo.load()
   const exec = async (action: Action) => { const r = await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: ws.revision, action }); ws = r.workspace; return r.receipt }
@@ -43,7 +43,10 @@ async function run(variant: 'plain' | 'viewed') {
   return { views, messages: anyIds(JSON.stringify(request.messages)), anchorsAView: [...request.blocks.values()].some(b => b.type === 'database'), candidates: candidates.length, items: items.length, before, applied, undone, carried, tasksMade: ws.tasks.length - tasks, viewsNext: flatNodes(pageNodes(page(next))).filter(b => b.type === 'database').length }
 }
 
-const plain = await run('plain'), viewed = await run('viewed')
+const plain = await run('plain')
+let allOk = true
+for (const variant of ['viewed', 'todos'] as const) {
+const viewed = await run(variant)
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const checks = {
   viewsOnTheDay: viewed.views === 2 && plain.views === 0,
@@ -57,8 +60,10 @@ const checks = {
   draftChangedTheDay: viewed.items > 0 && !same(viewed.applied, viewed.before),
   viewsOnTheNextDay: viewed.viewsNext === 2,
 }
-console.log(JSON.stringify({ candidates: viewed.candidates, items: viewed.items, checks }))
+console.log(variant, JSON.stringify({ candidates: viewed.candidates, items: viewed.items, checks }))
 const ok = Object.values(checks).every(Boolean)
 if (!ok) for (const k of ['before', 'applied', 'undone', 'carried'] as const) if (!same(viewed[k], plain[k])) console.log(k, JSON.stringify(plain[k]).slice(0, 800), '\n', JSON.stringify(viewed[k]).slice(0, 800))
-console.log(ok ? 'PASS' : 'FAIL')
-process.exit(ok ? 0 : 1)
+allOk &&= ok
+}
+console.log(allOk ? 'PASS' : 'FAIL')
+process.exit(allOk ? 0 : 1)

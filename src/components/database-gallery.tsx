@@ -6,7 +6,7 @@ import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { firstImageUrl } from '../domain/editor-document'
 import { cellValue, databaseRows, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { todayIso } from './dates'
 import { ChevronRightIcon } from './icons'
 import { displayPageTitle } from './page-title'
@@ -39,7 +39,7 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
   const groups = viewGroups(db.database, view, withPendingMoves(rows), shownRaw, weekStart)
   const { limitOf, showMore, reach } = useGroupLimits(`${blockId}|${view.id}`, cap)
   const { folded, toggle } = useFolds(blockId, view.id)
-  const addRow = useAddRow(db, view, context, (pageId, group) => {
+  const addRow = useAddRow(db, view, context, blockId, (pageId, group) => {
     const ws = latest(), now = ws ? viewRows(ws, db.id, view, context) : []
     if (group === undefined) { const at = now.findIndex(r => r.id === pageId); if (at >= limit) setLimit(at + 1) }
     else reach(group, viewGroups(db.database, view, now, undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0)
@@ -54,6 +54,7 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
     return <article key={row.id} data-row={row.id} className={`database-gallery-card${returned === row.id ? ' is-returned' : ''}`}>
       <CardImage row={row} />
       <div className="database-gallery-words">
+        <TodoTick row={row} />
         <button type="button" className={`database-gallery-title${row.title ? '' : ' is-placeholder'}`} data-nav={nav}
           data-cell={cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, ...(group !== undefined ? { group } : {}) })} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}</button>
         {viewColumnsShown.map(({ property }) => {

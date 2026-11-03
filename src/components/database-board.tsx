@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEve
 import { createPortal } from 'react-dom'
 import { cellValue, databaseRows, isDatabase, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -41,7 +41,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   const sorted = view.sort.length > 0
 
   const open = (rowId: string, group: string) => setOpenCell({ blockId, databaseId: db.id, rowId, columnId: titleId, group })
-  const addRow = useAddRow(db, view, context, (pageId, group) => {
+  const addRow = useAddRow(db, view, context, blockId, (pageId, group) => {
     const ws = latest()
     if (ws && group !== undefined) reach(group, viewGroups(db.database, view, viewRows(ws, db.id, view, context), undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0)
     if (group !== undefined) requestAnimationFrame(() => open(pageId, group))
@@ -190,6 +190,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   const cardBody = (row: Page, group: string, interactive: boolean) => {
     const unsaved = [...pendingCells.values()].some(p => p.failed && p.rowId === row.id)
     return <>
+      <TodoTick row={row} />
       <button type="button" tabIndex={interactive ? 0 : -1} className={`database-card-title${row.title ? '' : ' is-placeholder'}`}
         data-cell={interactive ? cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, group }) : undefined}
         data-nav={interactive && row.id === firstCard ? '0:0' : undefined}
@@ -208,7 +209,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   }
   // Where Enter goes on the block selected whole (design §10), as a table's first cell.
   const firstCard = columns.find(g => g.rows.length)?.rows[0]?.id
-  const canAddColumn = groups && (groups.property.type === 'select' || groups.property.type === 'status')
+  const canAddColumn = !db.database.fixed && groups && (groups.property.type === 'select' || groups.property.type === 'status')
 
   return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(columns[0]!.key === allKey ? undefined : columns[0]!.key) }} />

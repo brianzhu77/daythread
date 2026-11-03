@@ -19,6 +19,12 @@ export interface Property {
   format?: NumberFormat;
   /** date: whether a time is shown and asked for */
   withTime?: boolean;
+  /** To-dos' Page: shown, never edited. */
+  readOnly?: true;
+  /** date, To-dos': one day, as a task's dates are: no end, no time. */
+  dayOnly?: true;
+  /** What clearing this means, where it's more than emptying a cell. */
+  clearLabel?: string;
 }
 export interface DateValue { start: string; end?: string }
 /** A fixed day, or one relative to today or to the day page the view is on, with an offset in days. */
@@ -67,6 +73,8 @@ export interface Database {
   properties: Property[];
   /** At least one. */
   views: View[];
+  /** To-dos: its properties and rows come from his tasks, so none can be added, changed or reordered here. Never stored. */
+  fixed?: true;
   /** The next row number, once an ID property has been made. It only goes up, past a delete or an undone add (R3-9). */
   nextRowNumber?: number;
 }
