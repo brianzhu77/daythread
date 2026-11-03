@@ -4,9 +4,9 @@
 // a list, each with its own cards, `+ New` and cap.
 import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { firstImageUrl } from '../domain/editor-document'
-import { canWrap, cellValue, databaseRows, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
+import { sectionKey, viewSections, viewSubGroups, canWrap, cellValue, databaseRows, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { SubGroupHead, HiddenSubGroups, NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { todayIso } from './dates'
 import { ChevronRightIcon } from './icons'
 import { displayPageTitle } from './page-title'
@@ -42,7 +42,7 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
   const addRow = useAddRow(db, view, context, blockId, (pageId, group) => {
     const ws = latest(), now = ws ? viewRows(ws, db.id, view, context) : []
     if (group === undefined) { const at = now.findIndex(r => r.id === pageId); if (at >= limit) setLimit(at + 1) }
-    else reach(group, viewGroups(db.database, view, now, undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0)
+    else reach(group, viewSections(db.database, view, now, undefined, weekStart)?.shown.find(g => g.key === group)?.rows.length ?? 0)
     requestAnimationFrame(() => setOpenCell({ blockId, databaseId: db.id, rowId: pageId, columnId: titleId, ...(group !== undefined ? { group } : {}) }))
   })
 
@@ -90,20 +90,30 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     {groups ? groups.shown.map(group => {
       const isFolded = folded.has(group.key)
-      const shown = isFolded ? [] : group.rows.slice(0, limitOf(group.key))
+      const subs = viewSubGroups(db.database, view, group.rows, shownRaw, weekStart)
+      const body = (key: string, all: readonly Page[]) => {
+        if (folded.has(key)) return null
+        const shown = all.slice(0, limitOf(key))
+        return <>
+          {shown.length > 0 && <div className="database-gallery">{shown.map(row => card(row, key))}</div>}
+          {all.length > shown.length && <button type="button" className="database-more" onClick={() => showMore(key)}>Show 25 more</button>}
+          <span className="database-new-row"><NewRow db={db} blockId={blockId} addRow={addRow} group={key} className="database-new is-under-cards" /></span>
+        </>
+      }
       return <Fragment key={group.key}>
         <div className="database-group-inner">
           <button type="button" className="database-group-fold" aria-expanded={!isFolded} onClick={() => toggle(group.key)}>
             <ChevronRightIcon /><GroupName groups={groups} group={group} /><span className="database-group-count">· {group.rows.length}</span>
           </button>
         </div>
-        {shown.length > 0 && <div className="database-gallery">{shown.map(row => card(row, group.key))}</div>}
-        {!isFolded && group.rows.length > shown.length && <button type="button" className="database-more" onClick={() => showMore(group.key)}>Show 25 more</button>}
-        {!isFolded && <span className="database-new-row"><NewRow db={db} blockId={blockId} addRow={addRow} group={group.key} className="database-new is-under-cards" /></span>}
+        {!isFolded && (subs && group.rows.length
+          ? subs.shown.map(sub => { const key = sectionKey(group.key, sub.key); return <Fragment key={key}><SubGroupHead groups={subs} group={sub} isFolded={folded.has(key)} onToggle={() => toggle(key)} />{body(key, sub.rows)}</Fragment> })
+          : body(group.key, group.rows))}
       </Fragment>
     }) : <div className="database-gallery">{rows.slice(0, limit).map(row => card(row))}</div>}
     <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
     {groups && <HiddenGroups groups={groups} changeView={changeView} underCards />}
+    {groups && <HiddenSubGroups db={db.database} view={view} rows={rows} changeView={changeView} weekStart={weekStart} underCards />}
     {!groups && rows.length > limit && <button type="button" className="database-more is-under-cards" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
     {!groups && <NewRow db={db} blockId={blockId} addRow={addRow} className="database-new is-under-cards" />}
   </div>

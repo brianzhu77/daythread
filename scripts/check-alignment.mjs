@@ -36,7 +36,7 @@ if (!base) { console.error('usage: node scripts/check-alignment.mjs <base url> [
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
-const REQUIRED = ['board', 'grouped table', 'list', 'gallery', 'calendar', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
+const REQUIRED = ['synced block', 'sub-groups', 'lanes', 'board', 'grouped table', 'list', 'gallery', 'calendar', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
 
 /** What a table cell or a row page's value draws: its box when it's a checkbox, else its first line of text, else a chip or dot. */
 function drawnCentres() {
@@ -85,7 +85,9 @@ function measure() {
     const lineTop = rect ? rect.top : box.top + parseFloat(style.paddingTop), lineBottom = rect ? rect.bottom : lineTop + lineHeight
     return { left: box.left + parseFloat(style.paddingLeft), cy: rect ? cy(rect) : lineTop + lineHeight / 2, lineTop, lineBottom }
   }
-  const depth = e => { let d = 0; for (let g = e.closest('.bn-block-group'); g; g = g.parentElement?.closest('.bn-block-group')) d++; return d - 1 }
+  // A synced block's own group is no level: its lines keep the columns they have outside (states §3).
+  const isSynced = block => block?.querySelector(':scope > .react-renderer > .bn-block-content[data-content-type="syncedBlock"]')
+  const depth = e => { let d = 0; for (let g = e.closest('.bn-block-group'); g; g = g.parentElement?.closest('.bn-block-group')) if (!isSynced(g.parentElement)) d++; return d - 1 }
   const editor = document.querySelector('.continuous-editor .bn-editor')
   const editorLeft = editor ? editor.getBoundingClientRect().left + parseFloat(getComputedStyle(editor).paddingLeft) : null
   const rows = []
@@ -96,7 +98,8 @@ function measure() {
     if (!content || !visible(content)) return
     const type = content.getAttribute('data-content-type'), d = depth(outer)
     const text = content.innerText.trim().split('\n')[0] ?? ''
-    const row = { index, depth: d, label: (text || '(empty)').slice(0, 24), parent: outers.indexOf(outer.parentElement?.closest('.bn-block-outer')), markers: {} }
+    const holder = outer.parentElement?.closest('.bn-block-outer')
+    const row = { index, depth: d, label: (text || '(empty)').slice(0, 24), parent: holder && isSynced(holder.querySelector(':scope > .bn-block')) ? -1 : outers.indexOf(holder), markers: {} }
     if (type === 'task') {
       const title = content.querySelector('.editor-task-title'), box = content.querySelector('.editor-task input')
       // The task's real state, set by the editor from the workspace (data-status), never inferred from styling.
@@ -153,7 +156,24 @@ function measure() {
       const words = el => { if (!el) return null; const t = document.createRange(); t.selectNodeContents(el); return [...t.getClientRects()].find(x => x.width > 0) ?? null }
       const gap = (a, b) => (a && b ? a.left - b.left : null), mid = (a, b) => (a && b ? cy(a) - cy(b) : null)
       const hidden = words(content.querySelector('.database-hidden-groups'))
-      const column = content.querySelector('.database-board .database-column')
+      // Sub-groups (R3-13): a second layer one step in from its group; on a board, lanes on the title's edge under one row of heads.
+      const firstSub = content.querySelector('.database-group-inner.is-sub .database-group-fold')
+      if (firstSub) {
+        const group = content.querySelector('.database-group-inner:not(.is-sub) .database-group-fold')
+        row.subGroups = { "sub-group's chevron one step in from its group's": group ? firstSub.getBoundingClientRect().left - group.getBoundingClientRect().left - 16 : null }
+      }
+      const lane = content.querySelector('.database-lane')
+      if (lane) {
+        const head = content.querySelector('.database-lane-head-cell .database-column-head'), card = lane.querySelector('.database-card')
+        row.lanes = {
+          "lane's chevron on the title": lane.querySelector('.database-group-fold').getBoundingClientRect().left - title.getBoundingClientRect().left,
+          'column head on the title': head ? head.getBoundingClientRect().left - title.getBoundingClientRect().left : null,
+          "card's edge on its column head": head && card ? card.getBoundingClientRect().left - head.getBoundingClientRect().left : null,
+        }
+      }
+      // These fixtures are small, with no cap or hidden group: only the rules above apply to them.
+      if (firstSub || lane) row.layered = true
+      const column = lane ? null : content.querySelector('.database-board .database-column')
       if (column) {
         const head = column.querySelector('.database-column-head'), card = column.querySelector('.database-card'), name = words(card?.querySelector('.database-card-title'))
         const capped = content.querySelector('.database-column:has(.database-more)')
@@ -257,7 +277,23 @@ function measure() {
     const baseline = !own ? null : beside ? own.bottom - beside.bottom : other ? inLine(own) - inLine(other) : null
     chips.push({ kind: chip.classList.contains('line-ref') ? 'line link' : 'page link', label: chip.textContent.trim().slice(0, 24), height: box.height, lineHeight, baseline, across: !beside && Boolean(other) })
   }
-  return { rows, editorLeft, chips }
+  // Synced blocks (states §3): room above and below, whether or not the label shows; the label, laid out while hidden, clears the
+  // first line's text and the line above; the outline stays on the screen. Their lines are measured as rows, above.
+  const textTop = e => { const c = e.querySelector('.bn-inline-content, .editor-task-title'); const range = document.createRange(); range.selectNodeContents(c); return [...range.getClientRects()].find(r => r.width > 0)?.top ?? c.getBoundingClientRect().top }
+  const textBottom = e => { const all = [...e.querySelectorAll('.bn-inline-content, .editor-task-title')], c = all.at(-1); if (!c) return e.getBoundingClientRect().bottom; const range = document.createRange(); range.selectNodeContents(c); return [...range.getClientRects()].filter(r => r.width > 0).at(-1)?.bottom ?? c.getBoundingClientRect().bottom }
+  const synced = [...document.querySelectorAll('.continuous-editor .bn-block-content[data-content-type="syncedBlock"]')].flatMap(content => {
+    const block = content.closest('.bn-block'), outer = block.closest('.bn-block-outer'), lines = block.querySelector(':scope > .bn-block-group'), label = content.querySelector('.synced-label')
+    const above = outer.previousElementSibling, below = outer.nextElementSibling
+    if (!lines || !label) return []
+    const box = lines.getBoundingClientRect(), tag = label.getBoundingClientRect(), offset = parseFloat(getComputedStyle(block).outlineOffset) + 1
+    return [{
+      label: lines.textContent.trim().slice(0, 24),
+      room: { 'room above its first line (8px)': above ? box.top - above.getBoundingClientRect().bottom - 8 : null, 'room below its last line (6px)': below ? below.getBoundingClientRect().top - box.bottom - 6 : null },
+      clear: { "label's gap to the first line's text": textTop(lines) - tag.bottom, "label's gap to the line above": above ? tag.top - textBottom(above) : null, "outline's left to the screen": box.left - offset, "outline's right to the screen": document.documentElement.clientWidth - box.right - offset },
+      outlineLeft: box.left - offset, editorLeft,
+    }]
+  })
+  return { rows, editorLeft, chips, synced }
 }
 
 const fmt = n => (Math.round(n * 10) / 10).toFixed(1)
@@ -320,7 +356,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
   for (const path of paths) {
     const page = await browser.newPage({ viewport: { width, height } })
     await page.goto(`${base}${path}`, { waitUntil: 'networkidle' }); await page.waitForTimeout(1000)
-    const { rows, editorLeft, chips } = await page.evaluate(measure)
+    const { rows, editorLeft, chips, synced } = await page.evaluate(measure)
     await drawPass(page, rows)
     const table = await page.evaluate(drawnCentres)
     // A row page lists the same values: the table's first row, opened read-only (a cell's key is block|row|column).
@@ -413,20 +449,32 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     }
     for (const r of rows) if (r.clipped !== undefined && !r.kind.startsWith('link'))
       results.push({ at, check: `${r.kind} title not clipped: "${r.label}"`, ok: !r.clipped, detail: r.clipped ?? 'wraps' })
+    for (const block of synced) {
+      seen.get(width).add('synced block')
+      for (const [what, off] of Object.entries(block.room)) if (off !== null) results.push({ at, check: `synced block ${what}: "${block.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
+      for (const [what, gap] of Object.entries(block.clear)) if (gap !== null) results.push({ at, check: `synced block ${what}: "${block.label}"`, ok: gap >= 0, detail: `${fmt(gap)}px` })
+    }
     // The database block's own columns (design §15).
     for (const r of rows.filter(r => r.kind === 'database table')) {
-      const parts = r.board ?? r.list ?? r.gallery ?? r.calendar ?? r.group, name = r.board ? 'board' : r.list ? 'list' : r.gallery ? 'gallery' : r.calendar ? 'calendar' : 'group'
+      const parts = r.layered ? null : r.board ?? r.list ?? r.gallery ?? r.calendar ?? r.group, name = r.board ? 'board' : r.list ? 'list' : r.gallery ? 'gallery' : r.calendar ? 'calendar' : 'group'
       if (parts) {
         seen.get(width).add(r.board ? 'board' : r.list ? 'list' : r.gallery ? 'gallery' : r.calendar ? 'calendar' : 'grouped table')
         for (const [what, off] of Object.entries(parts)) results.push(off == null
           ? { at, check: `${name} ${what}: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
           : { at, check: `${name} ${what}: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
       }
+      for (const [part, kind] of [[r.subGroups, 'sub-groups'], [r.lanes, 'lanes']]) {
+        if (!part) continue
+        seen.get(width).add(kind)
+        for (const [what, off] of Object.entries(part)) results.push(off == null
+          ? { at, check: `${kind} ${what}: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
+          : { at, check: `${kind} ${what}: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
+      }
       if (r.viewChevron !== 'none') results.push(r.viewChevron == null
         ? { at, check: `database view chevron: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
         : { at, check: `database view chevron centred on its word: "${r.label}"`, ok: Math.abs(r.viewChevron) <= TOLERANCE, detail: `${r.viewChevron >= 0 ? '+' : ''}${fmt(r.viewChevron)}px` })
       // A board or list has no Name column: its + New is measured against a card's or row's words, above.
-      if (!r.board && !r.list && !r.gallery && !r.calendar) results.push(r.newOnName == null
+      if (!r.board && !r.list && !r.gallery && !r.calendar && !r.layered) results.push(r.newOnName == null
         ? { at, check: `database + New: "${r.label}"`, ok: 'missing', detail: 'no row or no + New, so not measured' }
         : { at, check: `database + New on Name's text: "${r.label}"`, ok: Math.abs(r.newOnName) <= TOLERANCE, detail: `${r.newOnName >= 0 ? '+' : ''}${fmt(r.newOnName)}px` })
     }

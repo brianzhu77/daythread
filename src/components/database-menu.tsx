@@ -3,12 +3,12 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
-import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
 import type { Page, Workspace } from '../domain/types'
 import { rollupFunctionsFor } from '../domain/relations'
 import { databaseSource, todosSourceId, todosTitle } from '../domain/todos-source'
-import { blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange } from './database-block'
+import { startPicking, blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange } from './database-block'
 import { ChevronDownIcon } from './icons'
 import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
@@ -137,6 +137,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
   const inline = !blockId.startsWith('page:') && db.database.homeBlockId === blockId
   const linked = isLinkedBlock(blockId)
   const actions = blockActions.get(blockId)
+  const wide = useWide()
   const close = () => setOpenMenu(null)
   const remove = () => {
     close()
@@ -152,6 +153,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     </div>
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
+    {view.layout === 'table' && !wide && !db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}
     {(view.layout === 'table' || view.layout === 'board') && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('templates')}>Templates<span className="database-menu-chevron">›</span></button>}
     <hr />
@@ -342,6 +344,10 @@ function GroupPanel({ db, view, back }: { db: DatabasePage; view: View; back: ()
   // Every group, listed whatever's hidden now, so a hidden one can come back from here too.
   const all = property && workspace ? viewGroups(db.database, { ...view, hideEmptyGroups: false, hiddenGroups: [] }, databaseRows(workspace, db.id), undefined, workspace.weekStart)!.shown : []
   const hidden = new Set(view.hiddenGroups ?? [])
+  const subProperty = viewSubGroupBy(db.database, view)
+  const subChoices = groupableProperties(db.database, 'table').filter(p => p.id !== property?.id)
+  const allSubs = subProperty && workspace ? viewSubGroups(db.database, { ...view, hideEmptyGroups: false, hiddenSubGroups: [] }, databaseRows(workspace, db.id), undefined, workspace.weekStart)!.shown : []
+  const hiddenSubs = new Set(view.hiddenSubGroups ?? [])
   return <>
     <Head title="Group" back={back} />
     <label className="database-menu-row">Group by
@@ -356,6 +362,17 @@ function GroupPanel({ db, view, back }: { db: DatabasePage; view: View; back: ()
         <option value="day">Day</option><option value="week">Week</option><option value="month">Month</option>
       </select>
     </label>}
+    {property && <label className="database-menu-row">Sub-group
+      <select aria-label="Sub-group" value={subProperty?.id ?? ''} onChange={e => { const subGroupBy = e.target.value || null; changeView(() => ({ subGroupBy, hiddenSubGroups: [] })) }}>
+        <option value="">None</option>
+        {subChoices.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </label>}
+    {subProperty && (subProperty.type === 'date' || isTimeType(subProperty.type)) && <label className="database-menu-row">By
+      <select aria-label="Sub-group date step" value={view.subGroupDateBy ?? 'month'} onChange={e => { const subGroupDateBy = e.target.value as GroupDateBy; changeView(() => ({ subGroupDateBy, hiddenSubGroups: [] })) }}>
+        <option value="day">Day</option><option value="week">Week</option><option value="month">Month</option>
+      </select>
+    </label>}
     {property && <>
       <label className="database-menu-row">Hide empty groups
         <input type="checkbox" checked={Boolean(view.hideEmptyGroups)} onChange={e => { const hideEmptyGroups = e.target.checked; changeView(() => ({ hideEmptyGroups })) }} />
@@ -366,6 +383,11 @@ function GroupPanel({ db, view, back }: { db: DatabasePage; view: View; back: ()
           <input type="checkbox" aria-label={`Show ${g.name}`} checked={!hidden.has(g.key)} onChange={e => { const show = e.target.checked; changeView(current => ({ hiddenGroups: show ? (current.hiddenGroups ?? []).filter(k => k !== g.key) : [...(current.hiddenGroups ?? []), g.key] })) }} />
         </label>)}
       </div>
+      {allSubs.length > 0 && <><hr /><div className="database-group-list">
+        {allSubs.map(g => <label key={g.key} className="database-menu-row">{g.name}
+          <input type="checkbox" aria-label={`Show ${g.name}`} checked={!hiddenSubs.has(g.key)} onChange={e => { const show = e.target.checked; changeView(current => ({ hiddenSubGroups: show ? (current.hiddenSubGroups ?? []).filter(k => k !== g.key) : [...(current.hiddenSubGroups ?? []), g.key] })) }} />
+        </label>)}
+      </div></>}
     </>}
   </>
 }

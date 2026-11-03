@@ -61,6 +61,7 @@ const lineTarget = crypto.randomUUID()
 // Databases R1 (design §15): an inline table, so its title, `+ New` and view chevron are measured too.
 const databaseId = crypto.randomUUID(), databaseBlock = crypto.randomUUID()
 // R2: a board and a grouped table, each with a column or group past the row cap and a hidden one.
+const layered = (['table', 'list', 'gallery', 'board'] as const).map(layout => ({ layout, id: crypto.randomUUID(), block: crypto.randomUUID() }))
 const boardId = crypto.randomUUID(), boardBlock = crypto.randomUUID(), groupedId = crypto.randomUUID(), groupedBlock = crypto.randomUUID(), listId = crypto.randomUUID(), listBlock = crypto.randomUUID(), galleryId = crypto.randomUUID(), galleryBlock = crypto.randomUUID(), calendarId = crypto.randomUUID(), calendarBlock = crypto.randomUUID()
 const document: EditorNode[] = [
   headingNode('TODO'),
@@ -69,6 +70,9 @@ const document: EditorNode[] = [
   todo('Fixture cancelled to-do', 'plan'),
   // B39: a nested to-do's checkbox starts at its parent's text; two levels deep.
   todo('Fixture parent to-do', 'plan', [todo('Fixture child to-do', 'plan', [todo('Fixture grandchild to-do', 'plan')]), bullet('Fixture note under a to-do')]),
+  // A synced block (B21-18): its lines keep the columns they have outside, at each level, and the label clears what's around it.
+  { id: crypto.randomUUID(), type: 'syncedBlock', props: { syncId: crypto.randomUUID(), rev: 0, key: '', roles: '' }, children: [bullet('Fixture synced line', [bullet('Fixture synced nested', [bullet('Fixture synced level 3')])]), todo('Fixture synced to-do', 'reference', [todo('Fixture synced child to-do', 'reference')])] },
+  bullet('Fixture line below a synced block'),
   headingNode('Events'),
   bullet(''),
   headingNode('Good Stuffs'),
@@ -81,6 +85,7 @@ const document: EditorNode[] = [
   card(longId),
   { id: databaseBlock, type: 'database', props: { pageId: databaseId, view: '' }, children: [] },
   { id: boardBlock, type: 'database', props: { pageId: boardId, view: '' }, children: [] },
+  ...layered.map(l => ({ id: l.block, type: 'database', props: { pageId: l.id, view: '' }, children: [] })),
   { id: groupedBlock, type: 'database', props: { pageId: groupedId, view: '' }, children: [] },
   { id: listBlock, type: 'database', props: { pageId: listId, view: '' }, children: [] },
   { id: galleryBlock, type: 'database', props: { pageId: galleryId, view: '' }, children: [] },
@@ -119,6 +124,16 @@ ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'u
 {
   const first = ws.pages.find(p => p.id === databaseId)!.database!.views[0]!
   ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'updateView', viewId: first.id, columns: first.columns.map(c => (c.id === 'text' ? { ...c, wrap: true as const } : c)) } })
+}
+// Two layers on each layout that has them (R3-13): the gate measures a sub-group's chevron and a board's lanes.
+for (const { layout, id, block } of layered) {
+  ws = await run({ type: 'create-database', pageId: id, parentId: scratchId, homeBlockId: block, title: `Fixture two layers, ${layout}` })
+  const change = async (c: unknown) => { ws = await run({ type: 'change-database', pageId: id, change: c as never }) }
+  await change({ kind: 'addProperty', property: { id: 'state', name: 'State', type: 'status', options: [{ id: 'next', name: 'Next', group: 'todo' }, { id: 'now', name: 'Now', group: 'active' }] } })
+  await change({ kind: 'addProperty', property: { id: 'shelf', name: 'Shelf', type: 'select', options: [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }] } })
+  const view = ws.pages.find(p => p.id === id)!.database!.views[0]!
+  await change({ kind: 'updateView', viewId: view.id, layout, groupBy: 'state', subGroupBy: 'shelf', hideEmptyGroups: layout !== 'board' })
+  for (const [state, shelf] of [['next', 'a'], ['now', 'b']]) ws = await run({ type: 'add-row', databaseId: id, pageId: crypto.randomUUID(), title: `Fixture ${state} ${shelf}`, values: { state, shelf }, at: new Date().toISOString() })
 }
 for (const [id, block, title, layout] of [[boardId, boardBlock, 'Fixture board', 'board'], [groupedId, groupedBlock, 'Fixture grouped table', 'table'], [listId, listBlock, 'Fixture list', 'list'], [galleryId, galleryBlock, 'Fixture gallery', 'gallery'], [calendarId, calendarBlock, 'Fixture calendar', 'calendar']] as const) {
   ws = await run({ type: 'create-database', pageId: id, parentId: scratchId, homeBlockId: block, title })
