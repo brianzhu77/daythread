@@ -91,6 +91,37 @@ await scenario('R3-5, R3-6: a row in Trash reads without it, Restore brings it b
   const back = await row(), dune = pageOf('dune').values?.by
   return { stored, gone, back, dune, ok: stored?.includes('dune') && !/Dune/.test(gone) && /Dune/.test(back) && dune?.includes('herbert') }
 })
+await scenario('R3-5: Cmd-Z after a pick takes the link off both sides', 'linked', async page => {
+  await cell(page, 'emma', 0).click(); await wait(400)
+  await page.locator('.property-search input').fill('Herb'); await wait(150); await page.keyboard.press('Enter'); await wait(200); await page.keyboard.press('Escape'); await wait(1600)
+  const linked = { emma: pageOf('emma').values?.by, herbert: pageOf('herbert').values?.wrote }
+  await cell(page, 'emma', 0).focus().catch(() => {}); await page.locator('.database-row[data-row="emma"] .database-title-cell').focus(); await page.keyboard.press('Meta+z'); await wait(1600)
+  const undone = { emma: pageOf('emma').values?.by ?? null, herbert: pageOf('herbert').values?.wrote }
+  return { linked, undone, ok: linked.emma?.includes('herbert') && linked.herbert?.includes('emma') && undone.emma === null && !undone.herbert?.includes('emma') }
+})
+await scenario('R3-16: a filter on a relation from the menu; a rollup offers conditions; neither is offered for a Board', 'linked', async page => {
+  await page.locator('.database-more-button').first().click(); await wait(200)
+  await menu(page).getByRole('button', { name: 'Filter' }).click(); await menu(page).getByText('+ Add filter').click(); await wait(300)
+  await page.locator('.database-rule select[aria-label=Property]').last().selectOption({ label: 'By' }); await wait(300)
+  await page.locator('.database-rule-options label', { hasText: 'Herbert' }).locator('input').click(); await wait(1200)
+  const byFilter = await page.locator('.database-row').evaluateAll(e => e.map(x => x.getAttribute('data-row')))
+  await page.locator('.database-rule select[aria-label=Property]').last().selectOption({ label: 'Ages' }); await wait(300)
+  const ops = await page.locator('.database-rule select[aria-label=Condition]').last().locator('option').allInnerTexts()
+  await page.keyboard.press('Escape'); await wait(300)
+  await page.locator('.database-more-button').first().click(); await wait(200)
+  await menu(page).getByRole('menuitem', { name: 'Layout' }).click(); await wait(200)
+  await menu(page).getByText('Board', { exact: true }).click(); await wait(600)
+  const askBoard = await menu(page).getByRole('menuitem', { name: /^(By|Ages)/ }).count()
+  return { byFilter, ops: ops.length, askBoard, ok: byFilter.length === 1 && byFilter[0] === 'dune' && ops.length > 0 && askBoard === 0 }
+})
+await scenario('A linked view of a database with a relation reads it the same', 'linked', async page => {
+  await page.goto(`${base}/pages?page=herbert`); await wait(2000)
+  const r = { shows: (await page.locator('.row-property-value, .row-properties').first().innerText()).replace(/\s+/g, ' ') }
+  await page.locator('.bn-inline-content').first().click(); await page.keyboard.type('/database'); await wait(400); await page.keyboard.press('Enter'); await wait(500)
+  await page.locator('.database-picker [role=menuitem]', { hasText: 'Books' }).click(); await wait(2000)
+  r.row = (await page.locator('.database-block .database-row[data-row="dune"]').innerText()).replace(/\s+/g, ' ')
+  return { ...r, ok: /Herbert/.test(r.row) && /Austen/.test(r.row) && /106/.test(r.row) }
+})
 await scenario('at 390: a relation cell opens its sheet and a pick links it', 'linked', async page => {
   const r = { overflow: await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) }
   await page.locator('.database-row[data-row="emma"] .database-td.is-relation').click(); await wait(600)

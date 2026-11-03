@@ -189,6 +189,18 @@ test('Pages and the export list each row once, and the export reads titles', () 
   assert.equal(databaseRows(h.ws, 'books').length, 2)
 })
 
+test('a type change follows §6.2: a relation read as text shows its titles, and changing back brings the links back', () => {
+  const { h, change } = books()
+  set(h, 'dune', { by: ['herbert'] })
+  change('books', { kind: 'updateProperty', propertyId: 'by', type: 'text' })
+  assert.equal(links(h, 'dune', 'by')?.toString(), 'herbert', 'stored as it was')
+  change('books', { kind: 'updateProperty', propertyId: 'by', type: 'relation', target: 'authors' })
+  assert.deepEqual(read(h, 'books', 'dune', 'by'), ['herbert'])
+  // Two-way: its other side has to go first, so nothing is left half kept in step.
+  change('books', { kind: 'setMirror', propertyId: 'by', mirror: { id: 'wrote', name: 'Wrote' } })
+  assert.throws(() => change('books', { kind: 'updateProperty', propertyId: 'by', type: 'text' }), /other side/)
+})
+
 test('the new changes pass the schema; To-dos is not a target', () => {
   const { change } = books()
   assert.throws(() => change('books', { kind: 'addProperty', property: { id: 'x', name: 'X', type: 'relation', target: 'source:tasks' } }), /isn't there/)
