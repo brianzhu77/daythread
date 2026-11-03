@@ -48,8 +48,8 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   const { folded, toggle } = useFolds(blockId, view.id)
   // A second layer is a lane of the same columns across the board, their heads only on the first (R3-13).
   const laneGroups = groups ? viewSubGroups(db.database, view, ordered, shownRaw, weekStart) : null
-  // With no rows and no options there are no lanes to draw, so the columns stay in reach.
-  const subs = laneGroups?.shown.length ? laneGroups : null
+  // With no rows and no options there are no lanes to draw, so the columns stay in reach. Lanes he hid still keep their rows out of sight.
+  const subs = laneGroups?.shown.length || laneGroups?.hidden.length ? laneGroups : null
   const moveRow = useMoveRow(db, view, context, groups)
   const returned = useReturnedRow(rows)
   const sorted = view.sort.length > 0
