@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { functionList, format, type Value } from '../src/domain/formula-functions.ts'
-import { clockIn, formulaProblem, runRow, shownFormula, storedFormula } from '../src/domain/formula.ts'
+import { clockIn, formulaProblem, shownFormula, storedFormula, WorkedCells, type FormulaWorld } from '../src/domain/formula.ts'
 import { LinearRegex, RegexError } from '../src/domain/formula-regex.ts'
 import type { Database, Property } from '../src/domain/database.ts'
 import type { Page } from '../src/domain/types.ts'
@@ -22,15 +22,22 @@ const properties: Property[] = [
   { id: 'w', name: 'Due date', type: 'date' },
 ]
 const db = { properties, views: [] } as unknown as Database
+const worldWith = (list: Property[]): FormulaWorld => ({ databases: new Map([['db', { ...db, properties: list }]]), programs: new Map() })
+const world = worldWith(properties)
+function runRow(list: Property[], p: Property, at = row, reading = clock) {
+  const w = worldWith(list), inDb = w.databases.get('db')!
+  const cells = new WorkedCells({ world: w, pages: new Map(), databases: w.databases, clock: reading, rollup: () => undefined })
+  return cells.column({ ...at, parentId: 'db' } as Page, inDb, p)
+}
 const row = { id: 'row-1', title: 'A row', type: 'document', values: { n: 7, t: 'hello', c: true, s: '2022-09-07', e: '2023-09-07', r: { start: '2022-09-07', end: '2023-09-07' }, o: 'o2', m: ['m1', 'm2'], d: 3, z: 40, w: '2023-09-01' } } as unknown as Page
 
 function run(typed: string): Value | Error {
-  const stored = storedFormula(typed, db)
-  const problem = formulaProblem(stored, db, 'f')
+  const stored = storedFormula(typed, world, 'db')
+  const problem = formulaProblem(stored, world, 'db', 'f')
   if (problem) return new Error(problem)
   const p: Property = { id: 'f', name: 'F', type: 'formula', formula: stored }
-  const { worked, errors } = runRow({ ...db, properties: [...properties, p] }, [p], row, clock)
-  return errors.f ? new Error(errors.f) : worked.get('f') ?? null
+  const { value, error } = runRow([...properties, p], p)
+  return error ? new Error(error) : value
 }
 const shown = (v: Value | Error) => (v instanceof Error ? `Error: ${v.message}` : typeof v === 'object' && !Array.isArray(v) && v !== null ? format(v) : v)
 
@@ -122,54 +129,52 @@ test('a row that breaks a formula reads Error on that row only, and an empty dat
   assert.equal(shown(run('at(Tags, 5)')), null)
   assert.equal(shown(run('dateAdd(prop("Due date"), 1, "days").format()').valueOf() as Value), 'September 2, 2023')
   const empty = { ...row, values: {} } as Page
-  const p: Property = { id: 'f', name: 'F', type: 'formula', formula: storedFormula('dateAdd(prop("Due date"), 1, "days")', db) }
-  const { worked, errors } = runRow({ ...db, properties: [...properties, p] }, [p], empty, clock)
-  assert.equal(worked.get('f'), null)
-  assert.deepEqual(errors, {})
+  const p: Property = { id: 'f', name: 'F', type: 'formula', formula: storedFormula('dateAdd(prop("Due date"), 1, "days")', world, 'db') }
+  const { value, error } = runRow([...properties, p], p, empty)
+  assert.equal(value, null)
+  assert.equal(error, undefined)
   assert.match(String(shown(run('test("a", "(")'))), /missing a \)/)
   assert.match(String(shown(run('test("a", "(?=a)")'))), /aren't supported/)
   assert.match(String(shown(run('test("aa", "(a)\\\\1")'))), /aren't supported/)
 })
 
 test('what is stored names properties by id, spacing kept; a rename reads through, and a deleted one is named as such', () => {
-  const stored = storedFormula('Number  + prop("Text")', db)
+  const stored = storedFormula('Number  + prop("Text")', world, 'db')
   assert.equal(stored, 'prop("n")  + prop("t")')
-  const renamed = { ...db, properties: properties.map(p => (p.id === 'n' ? { ...p, name: 'Count' } : p)) }
-  assert.equal(shownFormula(stored, renamed), 'prop("Count")  + prop("Text")')
-  assert.equal(shownFormula(stored, { ...db, properties: properties.filter(p => p.id !== 'n') }), 'prop("Deleted property")  + prop("Text")')
-  assert.match(formulaProblem(stored, { ...db, properties: properties.filter(p => p.id !== 'n') }, 'f')!, /deleted/)
+  assert.equal(shownFormula(stored, worldWith(properties.map(p => (p.id === 'n' ? { ...p, name: 'Count' } : p))), 'db'), 'prop("Count")  + prop("Text")')
+  const without = worldWith(properties.filter(p => p.id !== 'n'))
+  assert.equal(shownFormula(stored, without, 'db'), 'prop("Deleted property")  + prop("Text")')
+  assert.match(formulaProblem(stored, without, 'db', 'f')!, /deleted/)
 })
 
 test('a loop is refused, and so is a chain past 15 layers; many paths to one formula cost one check', () => {
   const chain = (n: number): Property[] => Array.from({ length: n }, (_, i) => ({ id: `f${i}`, name: `F${i}`, type: 'formula' as const, formula: i ? `prop("f${i - 1}") + 1` : '1' }))
-  const looped = { ...db, properties: chain(3) }
-  assert.equal(formulaProblem('prop("f2")', looped, 'f0'), 'Cycle detected')
-  assert.equal(formulaProblem('prop("f0")', looped, 'f0'), 'Cycle detected')
-  assert.equal(formulaProblem('prop("f13") + 1', { ...db, properties: chain(14) }, 'next'), null)
-  assert.match(formulaProblem('prop("f14") + 1', { ...db, properties: chain(15) }, 'next')!, /more than 15/)
+  const looped = worldWith(chain(3))
+  assert.equal(formulaProblem('prop("f2")', looped, 'db', 'f0'), 'Cycle detected')
+  assert.equal(formulaProblem('prop("f0")', looped, 'db', 'f0'), 'Cycle detected')
+  assert.equal(formulaProblem('prop("f13") + 1', worldWith(chain(14)), 'db', 'next'), null)
+  assert.match(formulaProblem('prop("f14") + 1', worldWith(chain(15)), 'db', 'next')!, /more than 15/)
   const diamonds: Property[] = Array.from({ length: 14 }, (_, i) => ({ id: `d${i}`, name: `D${i}`, type: 'formula' as const, formula: i ? `prop("d${i - 1}") + prop("d${i - 1}")` : '1' }))
   const started = performance.now()
-  assert.equal(formulaProblem('prop("d13")', { ...db, properties: diamonds }, 'next'), null)
+  assert.equal(formulaProblem('prop("d13")', worldWith(diamonds), 'db', 'next'), null)
   assert.ok(performance.now() - started < 100)
 })
 
 test('a formula made to be slow runs out at its row, and the rest of the view is spared', () => {
-  const stored = storedFormula('map(split(repeat("x", 90000), ""), current + current).length()', db)
+  const stored = storedFormula('map(split(repeat("x", 90000), ""), current + current).length()', world, 'db')
   const p: Property = { id: 'f', name: 'F', type: 'formula', formula: stored }
-  const { errors } = runRow({ ...db, properties: [...properties, p] }, [p], row, clock)
-  assert.equal(errors.f, 'Too long')
+  assert.equal(runRow([...properties, p], p).error, 'Too long')
   const started = performance.now()
-  const backtrack = storedFormula(`test(repeat("a", 30) + "b", "^(a+)+$")`, db)
+  const backtrack = storedFormula(`test(repeat("a", 30) + "b", "^(a+)+$")`, world, 'db')
   const r: Property = { id: 'f', name: 'F', type: 'formula', formula: backtrack }
-  const done = runRow({ ...db, properties: [...properties, r] }, [r], row, clock)
-  assert.equal(done.worked.get('f'), false)
+  assert.equal(runRow([...properties, r], r).value, false)
   assert.ok(performance.now() - started < 200, `took ${performance.now() - started} ms`)
 })
 
 test('dates read in the zone asked for, so the Worker and the browser agree', () => {
   const vancouver = clockIn('America/Vancouver', Date.parse('2026-11-03T07:30:00Z'))
   const p: Property = { id: 'f', name: 'F', type: 'formula', formula: 'format(today())' }
-  assert.equal(runRow({ ...db, properties: [p] }, [p], row, vancouver).worked.get('f'), 'November 2, 2026')
+  assert.equal(runRow([p], p, row, vancouver).value, 'November 2, 2026')
   // Across a change of clocks: an instant and its wall clock turn back into each other.
   for (const at of [Date.parse('2026-03-08T09:59:00Z'), Date.parse('2026-03-08T10:01:00Z'), Date.parse('2026-11-01T08:59:00Z'), Date.parse('2026-11-01T10:01:00Z')]) assert.equal(vancouver.instant(vancouver.wall(at)), at)
 })

@@ -25,6 +25,17 @@ const scenario = async (name, seed, act, options = wide) => {
   await context.close()
 }
 const menu = page => page.locator('.database-menu')
+// Set by the scenario below: the page's clock has to be in place before the app loads.
+const r_midnight = async page => {
+  const r = {}
+  await page.clock.install({ time: new Date(2026, 10, 3, 23, 59, 30) })
+  await page.goto(`${base}/pages?page=shop`); await wait(2500)
+  r.before = await cells(page, 'pear')
+  await page.clock.fastForward(120_000); await wait(1500)
+  r.after = await cells(page, 'pear')
+  r.ok = r.before.includes('2026-11-03') && r.after.includes('2026-11-04')
+  return r
+}
 const tap = (page, locator) => (page.context()._options?.hasTouch ? locator.tap() : locator.click())
 const openProperties = async page => {
   await page.locator('.database-more-button').first().click(); await wait(250)
@@ -173,6 +184,70 @@ await scenario('390: the sheet, the list one tap away, nothing past the edge, 44
   r.ok = /Pear 6/.test(r.preview) && r.listHidden === 0 && r.sheet.x === 0 && r.sheet.right === 390 && r.listShown === 1 && r.itemHeight >= 44 && /prop\("Name"\)/.test(r.afterInsert) && r.listClosed === 0 && r.overflow <= 0 && r.stored === 'prop("price") * prop("qty")'
   return r
 }, phone)
+
+await scenario('Through a relation: the value, page refs that open their row, and a rollup that reads a formula, made in the menu', 'linked', async page => {
+  const r = {}
+  r.pear = await cells(page, 'pear')
+  const refs = page.locator('.database-row[data-row="pear"] .relation-ref, .database-row[data-row="pear"] .cell-relation a, .database-row[data-row="pear"] .cell-relation button')
+  r.refs = await refs.allInnerTexts()
+  await openProperties(page)
+  await menu(page).getByRole('menuitem', { name: '+ Add property' }).click(); await wait(200)
+  await menu(page).getByLabel('Property name').fill('Sum double')
+  await menu(page).getByRole('menuitem', { name: 'Rollup', exact: true }).click(); await wait(900)
+  const selects = menu(page).locator('select')
+  await selects.nth(2).selectOption({ label: 'Double' }); await wait(800)
+  await menu(page).locator('select').nth(3).selectOption({ label: 'Sum' }); await wait(1000)
+  await page.keyboard.press('Escape'); await wait(300)
+  r.after = await cells(page, 'pear')
+  r.ok = r.pear.includes('Bob') && r.pear.includes('100') && r.pear.includes('200') && r.refs.join() === 'Ann,Bob,Bob' && r.after.filter(c => c === '200').length === 2
+  return r
+})
+
+await scenario('A loop through two databases is refused in the field', 'linked', async page => {
+  const r = {}
+  await page.goto(`${base}/pages?page=makers`); await wait(1800)
+  await openEditor(page, 'Double')
+  await field(page).fill('Shops.first().Doubled'); await wait(150)
+  r.status = await status(page)
+  await done(page); await wait(300)
+  r.stillOpen = await field(page).isVisible()
+  await field(page).fill('Shops.first().Price'); await wait(150)
+  r.fine = await status(page)
+  r.ok = /Cycle detected/.test(r.status) && r.stillOpen && /Ann/.test(r.fine)
+  return r
+})
+
+await scenario('Pinyin: nothing reacts mid-composition, and the word lands', '', async page => {
+  if (engine !== 'chromium') return { ok: true, skipped: 'needs CDP' }
+  await addFormula(page, 'Note')
+  const cdp = await page.context().newCDPSession(page)
+  await field(page).fill('"'); await wait(120)
+  const before = await status(page)
+  await field(page).focus()
+  await cdp.send('Input.imeSetComposition', { text: 'jia', selectionStart: 3, selectionEnd: 3 }); await wait(120)
+  const during = await status(page), duringText = await field(page).inputValue()
+  await cdp.send('Input.insertText', { text: '价' }); await wait(120)
+  await page.keyboard.type('"'); await wait(150)
+  const after = await status(page)
+  return { before, during, duringText, after, ok: /closing/.test(before) && during === before && /jia/.test(duringText) && /Pear 价/.test(after) }
+})
+
+await scenario('A pathological pattern and repeat don\'t hang the tab, at 390', '', async page => {
+  await addFormula(page, 'Bad')
+  const r = {}
+  const started = Date.now()
+  await field(page).fill('test(repeat("a", 5000) + "b", "^(a+)+$")'); await wait(200)
+  r.regex = await status(page)
+  await field(page).fill('repeat("x", 1000000)'); await wait(200)
+  r.repeat = await status(page)
+  await field(page).fill('split(repeat("x", 800), "").map(split(repeat("y", 800), "").map(current + "z")).length()'); await wait(200)
+  r.nested = await status(page)
+  r.ms = Date.now() - started
+  r.ok = /Too long|false/.test(r.regex) && /Too long/.test(r.repeat) && /Too long/.test(r.nested) && r.ms < 4000
+  return r
+}, phone)
+
+await scenario('today() turns over at local midnight with no reload', 'clock', async page => r_midnight(page))
 
 await browser.close()
 console.log(failed ? `${failed} FAILED` : 'ALL PASS')

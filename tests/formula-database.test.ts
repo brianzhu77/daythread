@@ -4,8 +4,9 @@ import assert from 'node:assert/strict'
 import { cellValue, columnCalc, databaseRows, groupableProperties, isReadOnly, propertyOf, viewRows, type Database, type DatabaseChange } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { exportFiles } from '../src/domain/export.ts'
-import { clockIn, formulaErrorOf, storedFormula } from '../src/domain/formula.ts'
+import { clockIn, formulaErrorOf, storedFormula, worldOf } from '../src/domain/formula.ts'
 import { withLinks } from '../src/domain/relations.ts'
+import { todoRowId } from '../src/domain/todos-source.ts'
 import type { Page } from '../src/domain/types.ts'
 import { harness, today } from './v2-helpers.ts'
 
@@ -19,13 +20,12 @@ function shop() {
   h.run({ type: 'add-row', databaseId: 'shop', pageId: 'r1', title: 'Pear', values: { price: 2, qty: 3 }, at })
   h.run({ type: 'add-row', databaseId: 'shop', pageId: 'r2', title: 'Plum', values: { price: 5, qty: 1 }, at })
   h.run({ type: 'add-row', databaseId: 'shop', pageId: 'r3', title: 'Fig', values: { price: 1 }, at })
-  const db = () => h.ws.pages.find(p => p.id === 'shop')!.database!
-  const addFormula = (id: string, name: string, typed: string) => change({ kind: 'addProperty', property: { id, name, type: 'formula', formula: storedFormula(typed, db()) } })
+  const addFormula = (id: string, name: string, typed: string) => change({ kind: 'addProperty', property: { id, name, type: 'formula', formula: storedFormula(typed, worldOf(h.ws), 'shop') } })
   const read = () => withLinks(h.ws)
   const readDb = () => read().pages.find(p => p.id === 'shop')!.database as Database
   const rowOf = (id: string) => read().pages.find(p => p.id === id) as Page
   const cell = (rowId: string, id: string) => cellValue(readDb(), rowOf(rowId), id)
-  return { h, change, db, addFormula, read, readDb, rowOf, cell }
+  return { h, change, addFormula, read, readDb, rowOf, cell }
 }
 const context = { today, pageDate: null, weekStart: 0 as const }
 
@@ -143,4 +143,146 @@ test('too long is that row\'s Error, says so, and the column stops paying after 
   s.addFormula('slow', 'Slow', 'map(split(repeat("x", 90000), ""), current + current).length()')
   assert.equal(formulaErrorOf(s.rowOf('r1'), propertyOf(s.readDb(), 'slow')!), 'Too long')
   assert.equal(s.cell('r1', 'slow'), null)
+})
+
+// ---------------------------------------------------------------- step 2: across databases
+function library() {
+  const h = harness()
+  const make = (pageId: string, title: string) => h.run({ type: 'create-database', pageId, homeBlockId: null, title })
+  make('books', 'Books'); make('authors', 'Authors')
+  const change = (pageId: string, c: DatabaseChange) => h.run({ type: 'change-database', pageId, change: c })
+  const prop = (pageId: string, property: Parameters<typeof change>[1] extends { property: infer P } ? P : never) => change(pageId, { kind: 'addProperty', property } as DatabaseChange)
+  prop('authors', { id: 'age', name: 'Age', type: 'number' })
+  prop('authors', { id: 'state', name: 'Status', type: 'status' })
+  prop('books', { id: 'pages', name: 'Pages', type: 'number' })
+  prop('books', { id: 'by', name: 'By', type: 'relation', target: 'authors' })
+  change('books', { kind: 'setMirror', propertyId: 'by', mirror: { id: 'wrote', name: 'Sub-item' } })
+  h.run({ type: 'add-row', databaseId: 'authors', pageId: 'herbert', title: 'Herbert', values: { age: 65 }, at })
+  h.run({ type: 'add-row', databaseId: 'authors', pageId: 'austen', title: 'Austen', values: { age: 41 }, at })
+  h.run({ type: 'add-row', databaseId: 'books', pageId: 'dune', title: 'Dune', values: { pages: 412 }, at })
+  h.run({ type: 'add-row', databaseId: 'books', pageId: 'emma', title: 'Emma', values: { pages: 300 }, at })
+  h.run({ type: 'set-values', pageId: 'dune', values: { by: ['herbert', 'austen'] }, expected: {}, at })
+  const formula = (pageId: string, id: string, name: string, typed: string) => prop(pageId, { id, name, type: 'formula', formula: storedFormula(typed, worldOf(h.ws), pageId) })
+  const read = () => withLinks(h.ws)
+  const cell = (rowId: string, id: string) => { const row = read().pages.find(p => p.id === rowId)!; return cellValue(read().pages.find(p => p.id === row.parentId)!.database!, row, id) }
+  const column = (dbId: string, id: string) => propertyOf(read().pages.find(p => p.id === dbId)!.database!, id)!
+  return { h, change, prop, formula, read, cell, column }
+}
+
+test('walking a relation: length, a page\'s property, every, a flat walk, current, and let', () => {
+  const s = library()
+  s.formula('books', 'count', 'Count', 'By.length()')
+  s.formula('books', 'oldest', 'Oldest', 'By.first().Age')
+  s.formula('books', 'ages', 'Ages', 'sum(By.Age)')
+  s.formula('books', 'grown', 'Grown', 'By.every(current.Age > 40)')
+  s.formula('books', 'names', 'Names', 'By.map(current.Name).join(" & ")')
+  s.formula('books', 'via', 'Via', 'let(a, By.first(), a.Name + " " + a.prop("Age"))')
+  s.formula('authors', 'written', 'Written', 'Sub-item.Pages.sum()')
+  assert.equal(s.cell('dune', 'count'), 2)
+  assert.equal(s.cell('dune', 'oldest'), 65)
+  assert.equal(s.cell('dune', 'ages'), 106)
+  assert.equal(s.cell('dune', 'grown'), true)
+  assert.equal(s.cell('dune', 'names'), 'Herbert & Austen')
+  assert.equal(s.cell('dune', 'via'), 'Herbert 65')
+  assert.equal(s.cell('herbert', 'written'), 412)
+  // Nothing linked: nothing to read, with no Error.
+  assert.equal(s.cell('emma', 'count'), 0)
+  assert.equal(s.cell('emma', 'oldest'), null)
+  assert.equal(formulaErrorOf(s.read().pages.find(p => p.id === 'emma'), s.column('books', 'oldest')), null)
+})
+
+test('the design\'s own, pasted as text: a hyphen through a relation, and a date with a status', () => {
+  const h = harness()
+  h.run({ type: 'create-database', pageId: 'work', homeBlockId: null, title: 'Work' })
+  const change = (c: DatabaseChange) => h.run({ type: 'change-database', pageId: 'work', change: c })
+  change({ kind: 'addProperty', property: { id: 'state', name: 'Status', type: 'status' } })
+  change({ kind: 'addProperty', property: { id: 'due', name: 'Due', type: 'date' } })
+  change({ kind: 'addProperty', property: { id: 'parent', name: 'Parent', type: 'relation', target: 'work' } })
+  change({ kind: 'setMirror', propertyId: 'parent', mirror: { id: 'subs', name: 'Sub-item' } })
+  const options = h.ws.pages.find(p => p.id === 'work')!.database!.properties.find(p => p.id === 'state')!.options!
+  const doneId = options.find(o => o.group === 'done')!.id, openId = options.find(o => o.group === 'todo')!.id
+  h.run({ type: 'add-row', databaseId: 'work', pageId: 'top', title: 'Top', values: { due: '2020-01-01', state: openId }, at })
+  h.run({ type: 'add-row', databaseId: 'work', pageId: 'kid1', title: 'Kid 1', values: { state: doneId, parent: ['top'] }, at })
+  h.run({ type: 'add-row', databaseId: 'work', pageId: 'kid2', title: 'Kid 2', values: { state: openId, parent: ['top'] }, at })
+  const formula = (id: string, name: string, typed: string) => change({ kind: 'addProperty', property: { id, name, type: 'formula', formula: storedFormula(typed, worldOf(h.ws), 'work') } })
+  const doneName = options.find(o => o.group === 'done')!.name
+  formula('siblings', 'Siblings done', `Parent.Sub-item.every(current.Status == "${doneName}")`)
+  formula('late', 'Late', `if(and(now() > Due, Status != "${doneName}"), "Overdue", "")`)
+  const read = withLinks(h.ws), db = read.pages.find(p => p.id === 'work')!.database!
+  const cell = (rowId: string, id: string) => cellValue(db, read.pages.find(p => p.id === rowId)!, id)
+  assert.equal(cell('kid1', 'siblings'), false)
+  assert.equal(cell('top', 'late'), 'Overdue')
+  assert.equal(cell('kid1', 'late'), null)
+  h.run({ type: 'set-values', pageId: 'kid2', values: { state: doneId }, expected: {}, at })
+  const after = withLinks(h.ws)
+  assert.equal(cellValue(after.pages.find(p => p.id === 'work')!.database!, after.pages.find(p => p.id === 'kid1')!, 'siblings'), true)
+})
+
+test('a property read through a relation is kept by id, so a rename there reads through, and a delete there says so', () => {
+  const s = library()
+  s.formula('books', 'oldest', 'Oldest', 'By.first().Age')
+  const stored = () => s.h.ws.pages.find(p => p.id === 'books')!.database!.properties.find(p => p.id === 'oldest')!.formula
+  assert.equal(stored(), 'prop("by").first().prop("age")')
+  s.change('authors', { kind: 'updateProperty', propertyId: 'age', name: 'Years' })
+  assert.equal(s.cell('dune', 'oldest'), 65)
+  s.change('authors', { kind: 'removeProperty', propertyId: 'age' })
+  assert.match(s.column('books', 'oldest').formulaError!, /deleted/)
+})
+
+test('pages come out as a relation does, read-only, drawing their rows', () => {
+  const s = library()
+  s.formula('books', 'first', 'First', 'By.first()')
+  s.formula('books', 'grown', 'Grown', 'By.filter(current.Age > 50)')
+  assert.equal(s.column('books', 'grown').type, 'relation')
+  assert.ok(isReadOnly(s.column('books', 'grown')))
+  assert.deepEqual(s.column('books', 'grown').options!.map(o => o.name), ['Herbert', 'Austen'])
+  assert.deepEqual(s.cell('dune', 'grown'), ['herbert'])
+  assert.deepEqual(s.cell('dune', 'first'), ['herbert'])
+  assert.equal(s.cell('emma', 'first'), null)
+})
+
+test('a rollup reads a formula, a formula reads a rollup, and a loop between two databases is refused', () => {
+  const s = library()
+  s.formula('authors', 'double', 'Double', 'Age * 2')
+  s.prop('books', { id: 'sumDouble', name: 'Sum double', type: 'rollup', rollup: { relation: 'by', property: 'double', fn: 'sum' } })
+  assert.equal(s.cell('dune', 'sumDouble'), 212)
+  s.formula('books', 'half', 'Half', 'prop("Sum double") / 2')
+  assert.equal(s.cell('dune', 'half'), 106)
+  // authors.back reads books.half, which reads the rollup, which reads authors.double. Pointing double at back closes it.
+  s.formula('authors', 'back', 'Back', 'Sub-item.map(current.Half).first()')
+  assert.throws(() => s.change('authors', { kind: 'updateProperty', propertyId: 'double', formula: 'prop("back")' }), /Cycle detected/)
+  assert.equal(s.cell('dune', 'sumDouble'), 212)
+  assert.throws(() => s.prop('authors', { id: 'bad', name: 'Bad', type: 'formula', formula: 'prop("by")' }), /deleted/)
+})
+
+test('a chain across databases stops at 15', () => {
+  const h = harness()
+  const databases = ['a', 'b']
+  for (const d of databases) h.run({ type: 'create-database', pageId: d, homeBlockId: null, title: d })
+  const add = (pageId: string, property: object) => h.run({ type: 'change-database', pageId, change: { kind: 'addProperty', property } as DatabaseChange })
+  add('a', { id: 'toB', name: 'ToB', type: 'relation', target: 'b' })
+  add('b', { id: 'toA', name: 'ToA', type: 'relation', target: 'a' })
+  // Each formula reads the one before it, through the other database.
+  add('a', { id: 'f0', name: 'F0', type: 'formula', formula: '1' })
+  for (let i = 1; i < 15; i++) {
+    const here = i % 2 ? 'b' : 'a', link = i % 2 ? 'toA' : 'toB'
+    add(here, { id: `f${i}`, name: `F${i}`, type: 'formula', formula: `prop("${link}").first().prop("f${i - 1}")` })
+  }
+  assert.throws(() => add('b', { id: 'f15', name: 'F15', type: 'formula', formula: 'prop("toA").first().prop("f14")' }), /more than 15/)
+})
+
+test('To-dos through a relation: Status and the dates read, and a formula on them', () => {
+  const h = harness()
+  h.run({ type: 'create-database', pageId: 'jobs', homeBlockId: null, title: 'Jobs' })
+  h.run({ type: 'ensure-day', date: today })
+  h.run({ type: 'add-task', pageId: `day:${today}`, title: 'Book the flights', plannedOn: today })
+  const task = h.ws.tasks.find(t => t.title === 'Book the flights')!
+  h.run({ type: 'change-database', pageId: 'jobs', change: { kind: 'addProperty', property: { id: 'jobs', name: 'Jobs', type: 'relation', target: 'source:tasks' } } })
+  h.run({ type: 'add-row', databaseId: 'jobs', pageId: 'j1', title: 'One', values: { jobs: [todoRowId(task.id)] }, at })
+  const formula = (id: string, name: string, typed: string) => h.run({ type: 'change-database', pageId: 'jobs', change: { kind: 'addProperty', property: { id, name, type: 'formula', formula: storedFormula(typed, worldOf(h.ws), 'jobs') } } })
+  formula('open', 'Open', 'Jobs.every(current.Status == "Open")')
+  formula('named', 'Named', 'Jobs.first().Name')
+  const read = withLinks(h.ws), db = read.pages.find(p => p.id === 'jobs')!.database!, row = read.pages.find(p => p.id === 'j1')!
+  assert.equal(cellValue(db, row, 'named'), 'Book the flights')
+  assert.equal(cellValue(db, row, 'open'), true)
 })

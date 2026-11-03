@@ -8,6 +8,11 @@ export type FormulaNode =
   | { k: 'var'; name: string }
   | { k: 'call'; fn: string; args: FormulaNode[] }
   | { k: 'let'; name: string; value: FormulaNode; body: FormulaNode }
+  /**
+   * `object.name`, or `.name(args)`. Which of the two, a page's property or a function, takes knowing what `object` is, so the
+   * checker settles it: `reads` or `asCall`. `name` is a property's id in stored text, once `byProp`.
+   */
+  | { k: 'member'; object: FormulaNode; name: string; args: FormulaNode[] | null; byProp: boolean; ref: { from: number; to: number } | null; reads?: string; asCall?: FormulaNode }
 
 export class FormulaSyntaxError extends Error {}
 
@@ -15,6 +20,8 @@ export class FormulaSyntaxError extends Error {}
 export interface FormulaNames {
   /** Every property's name, for bare names. None for stored text, which only has `prop("id")`. */
   names: readonly string[]
+  /** Every database's property names: after a dot, `Sub-item` reads as one, whichever database it turns out to be in. */
+  memberNames: readonly string[]
   idOf(name: string): string | null
   stored: boolean
 }
@@ -38,6 +45,15 @@ const identStart = /^[\p{L}_]/u
 const identChar = /[\p{L}\p{N}_]/u
 const maxDepth = 100
 
+function longestAt(text: string, from: number, namesByLength: readonly string[]): string | null {
+  for (const name of namesByLength) {
+    if (!name || !text.startsWith(name, from)) continue
+    const next = text.codePointAt(from + name.length)
+    if (next === undefined || !identChar.test(String.fromCodePoint(next))) return name
+  }
+  return null
+}
+
 type Token = { kind: 'num' | 'str' | 'ident' | 'op' | 'end'; text: string; value?: number | string; from: number; to: number }
 
 class Parser {
@@ -47,12 +63,14 @@ class Parser {
   private scope: string[] = []
   refs: PropRef[] = []
   private readonly byLength: string[]
+  private readonly membersByLength: string[]
   private readonly text: string
   private readonly names: FormulaNames
   constructor(text: string, names: FormulaNames) {
     this.text = text
     this.names = names
     this.byLength = [...names.names].sort((a, b) => b.length - a.length)
+    this.membersByLength = [...names.memberNames].sort((a, b) => b.length - a.length)
   }
   parse(): FormulaNode | null {
     this.advance()
@@ -162,13 +180,34 @@ class Parser {
     let node = this.primary()
     while (this.isOp('.')) {
       this.advance()
-      if (this.token.kind !== 'ident') throw new FormulaSyntaxError(`Expected a function after ".", found ${this.shown()}`)
-      const fn = this.token.text
-      this.advance()
-      // `current.length`, as Notion's page writes it, is a call with nothing further to pass.
-      node = { k: 'call', fn, args: [node, ...(this.isOp('(') ? this.callArgs(fn, 0) : [])] }
+      node = this.member(node)
     }
     return node
+  }
+  private member(object: FormulaNode): FormulaNode {
+    const t = this.token
+    if (t.kind === 'ident' && t.text === 'prop' && this.opensCall(t.to)) {
+      this.advance()
+      this.expect('(', 'after prop')
+      if (this.token.kind !== 'str') throw new FormulaSyntaxError("prop takes a property's name in quotes")
+      const name = this.token.value as string
+      this.advance()
+      if (!this.isOp(')')) throw new FormulaSyntaxError(`Expected ) after prop, found ${this.shown()}`)
+      const to = this.token.to
+      this.advance()
+      return { k: 'member', object, name, args: null, byProp: true, ref: { from: t.from, to } }
+    }
+    const named = t.kind === 'ident' || t.kind === 'num' ? longestAt(this.text, t.from, this.membersByLength) : null
+    // A function's name with its parentheses is the function, even if a property goes by it too.
+    if (named && !(t.kind === 'ident' && named === t.text && this.opensCall(t.to))) {
+      this.at = t.from + named.length
+      this.advance()
+      return { k: 'member', object, name: named, args: null, byProp: false, ref: { from: t.from, to: t.from + named.length } }
+    }
+    if (t.kind !== 'ident') throw new FormulaSyntaxError(`Expected a function or a property after ".", found ${this.shown()}`)
+    this.advance()
+    // `current.length`, as Notion's page writes it, is a call with nothing further to pass.
+    return { k: 'member', object, name: t.text, args: this.isOp('(') ? this.callArgs(t.text, 0) : null, byProp: false, ref: null }
   }
   private afterSpace(from: number) {
     let i = from
@@ -217,12 +256,7 @@ class Parser {
   }
   /** The longest property name starting here, so `Sub-item` and `Due date` read as one. */
   private bareName(from: number): string | null {
-    for (const name of this.byLength) {
-      if (!name || !this.text.startsWith(name, from)) continue
-      const next = this.text.codePointAt(from + name.length)
-      if (next === undefined || !identChar.test(String.fromCodePoint(next))) return name
-    }
-    return null
+    return longestAt(this.text, from, this.byLength)
   }
   private takeBare(from: number, name: string): FormulaNode {
     this.at = from + name.length
