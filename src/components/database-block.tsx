@@ -5,7 +5,7 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
-import { cellValue, databaseRows, groupValue, isDatabase, isEmptyValue, noGroupKey, readValue, rowMatches, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { cellValue, databaseRows, groupValue, isDatabase, inView, isEmptyValue, noGroupKey, readValue, type Condition, newRowValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -425,7 +425,7 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
     const value = groupValue(groups.property, to, shownRaw(row, groups.property.id), from ?? undefined, context.today, view.groupDateBy, context.weekStart)
     const probe = { ...row, values: { ...row.values, ...(value === undefined ? {} : { [groups.property.id]: value }) } } as Page
     if (value === undefined) delete probe.values![groups.property.id]
-    const hidden = !rowMatches(db.database, probe, view.filter, context)
+    const hidden = !inView(db.database, probe, view, context)
     commit(db, row, groups.property.id, value, `Moved to ${target.name}${hidden ? " · hidden by this view's filter" : ''}`, undefined, beforeId)
   }
 }
@@ -465,7 +465,7 @@ export function useAddRow(db: Page & { database: Database }, view: View, context
     const prefill = newRowValues(db.database, view, context, group)
     if (values) {
       Object.assign(prefill.values, values)
-      prefill.visible = rowMatches(db.database, { id: '', type: 'document', date: null, title: prefill.title, document: '[]', values: prefill.values } as Page, view.filter, context)
+      prefill.visible = inView(db.database, { id: '', type: 'document', date: null, title: prefill.title, document: '[]', values: prefill.values } as Page, view, context)
     }
     const pageId = newId()
     void run({ type: 'add-row', databaseId: db.id, pageId, title: prefill.title, values: prefill.values, at: new Date().toISOString() },
@@ -944,10 +944,10 @@ function RulesLine({ db, view, blockId, databaseId, onChange }: { db: Database; 
   return <div className="database-filter-line">
     {view.filter.map((c, i) => {
       const property = propertyOf(db, c.by)
-      return <span key={`f${i}`} className={`database-filter-chip ${property ? '' : 'is-deleted'}`}>
+      return <Fragment key={`f${i}`}>{view.filterAny && i > 0 && <span className="database-filter-or">or</span>}<span className={`database-filter-chip ${property ? '' : 'is-deleted'}`}>
         <button type="button" className="database-chip-open" onClick={() => openDatabaseMenu(blockId, databaseId, 'filter')}>{property ? property.name : '(deleted)'} {filterWords(c, property)}</button>
         <button type="button" className="database-chip-remove" aria-label="Remove filter" onClick={() => onChange(current => ({ filter: current.filter.filter((_, j) => j !== i) }))}>×</button>
-      </span>
+      </span></Fragment>
     })}
     {view.sort.map((s, i) => {
       const property = propertyOf(db, s.by)

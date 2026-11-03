@@ -528,7 +528,7 @@ opens a small sheet (390) or popover (1280).
   - checkbox: is checked, isn't;
   - relation: contains, is empty.
 - **Combining rules:** one line at the top switches between **all rules match** (the default) and **any rule
-  matches**. R1 ships "all" only, and the switch comes in R3 (§14). Nested groups wait in Later (§14): one person's databases rarely need them, and a nested filter is the hardest
+  matches**. It shows once there are two rules, and the line of rules reads "or" between them under any. A rule that can't be read (its property deleted, or no value yet) doesn't count either way. A `+ New` under any takes the first single value that shows it (§7.4), and otherwise the notice. Nested groups wait in Later (§14): one person's databases rarely need them, and a nested filter is the hardest
   thing to read back from a chip line, so they need a design of their own.
 - **"Only for me" vs "for everyone" doesn't exist.** A workspace is one person (Lead: Q5 drops).
 

@@ -2063,3 +2063,4 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
   .database-day-list .database-day-title, .database-undated .database-day-title { min-height: 44px; padding-block: 10px; }
   .database-undated .database-undated-head { min-height: 44px; }
 }
+.database-filter-or { color: var(--ink-3); font-size: var(--text-meta); }

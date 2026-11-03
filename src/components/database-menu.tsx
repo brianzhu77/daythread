@@ -180,6 +180,11 @@ function FilterPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
   return <>
     <Head title="Filter" back={back} />
     {view.filter.length === 0 && <p className="database-menu-quiet">No filters</p>}
+    {view.filter.length > 1 && <label className="database-menu-row">Show rows where
+      <select aria-label="Show rows where" value={view.filterAny ? 'any' : 'all'} onChange={e => { const filterAny = e.target.value === 'any'; changeView(() => ({ filterAny })) }}>
+        <option value="all">all rules match</option><option value="any">any rule matches</option>
+      </select>
+    </label>}
     {view.filter.map((c, i) => {
       const property = propertyOf(db.database, c.by)
       return <div key={i} className="database-rule">
