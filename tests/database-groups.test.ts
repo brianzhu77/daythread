@@ -2,7 +2,7 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { groupableProperties, groupValue, newRowValues, noGroupKey, viewGroupBy, viewGroups, viewRows, type Database, type View } from '../src/domain/database.ts'
+import { calendarRows, dateProperties, groupableProperties, groupValue, movedDate, viewDateBy, newRowValues, noGroupKey, viewGroupBy, viewGroups, viewRows, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
@@ -189,18 +189,12 @@ test('a card dropped in another column: value and place in one change, one Undo'
   assert.ok(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'set-values', pageId: 'a', values: {}, expected: {}, beforeId: null, at } }).success)
 })
 
-test('a gallery has no groups, and keeps its groupBy unread for switching back', () => {
+test('a gallery groups as a list does', () => {
   const h = reading()
   const v = view({ layout: 'gallery', groupBy: 'kind' })
-  assert.deepEqual(groupableProperties(h.db(), 'gallery'), [])
-  assert.equal(viewGroupBy(h.db(), v), null)
-  assert.equal(viewGroups(h.db(), v, h.rows(v)), null)
-  const id = h.db().views[0]!.id
-  h.change({ kind: 'updateView', viewId: id, groupBy: 'kind' })
-  h.change({ kind: 'updateView', viewId: id, layout: 'gallery' })
-  assert.equal(h.db().views[0]!.groupBy, 'kind')
-  h.change({ kind: 'updateView', viewId: id, layout: 'table' })
-  assert.equal(viewGroupBy(h.db(), h.db().views[0]!)?.id, 'kind')
+  assert.deepEqual(groupableProperties(h.db(), 'gallery'), groupableProperties(h.db(), 'table'))
+  assert.equal(viewGroupBy(h.db(), v)?.id, 'kind')
+  assert.deepEqual(shape(h, v), [['Novel', ['dune', 'emma']], ['Essay', ['ubik']], ['No value', ['blank']]])
 })
 
 test("a card's image: the first with a web address in the row's body", () => {
@@ -213,3 +207,39 @@ test("a card's image: the first with a web address in the row's body", () => {
   assert.equal(firstImageUrl(doc({ id: 'p', type: 'bulletListItem', props: {}, content: [], children: [image('n', 'https://x.test/nested.png')] })), 'https://x.test/nested.png')
 })
 
+test('a calendar: rows by their days, a range on each, undated ones kept, and dateBy checked', () => {
+  const h = reading()
+  const due = h.db().properties.find(p => p.id === 'due')!
+  const v = view({ layout: 'calendar', dateBy: 'due' })
+  assert.deepEqual(dateProperties(h.db()).map(p => p.id), ['due'])
+  assert.equal(viewDateBy(h.db(), v)?.id, 'due')
+  assert.equal(viewDateBy(h.db(), view({ layout: 'calendar', dateBy: 'pages' })), null)
+  assert.equal(viewGroups(h.db(), view({ layout: 'calendar', groupBy: 'kind' }), h.rows(v)), null)
+  h.run({ type: 'set-values', pageId: 'emma', values: { due: { start: '2026-10-30', end: '2026-11-02' } }, expected: { due: { start: '2026-10-20', end: '2026-10-24' } }, at })
+  const { days, undated } = calendarRows(due, h.rows(v), '2026-10-25', '2026-11-01')
+  assert.deepEqual(days.get('2026-10-25')?.map(r => r.id), ['dune'])
+  assert.deepEqual(['2026-10-30', '2026-10-31', '2026-11-01'].map(d => days.get(d)?.map(r => r.id)), [['emma'], ['emma'], ['emma']])
+  assert.equal(days.get('2026-11-02'), undefined)
+  assert.deepEqual(undated.map(r => r.id), ['blank'])
+  assert.equal(days.has('2026-11-02'), false)
+  // No property: every row is undated, and none goes missing.
+  assert.equal(calendarRows(null, h.rows(v), '2026-10-25', '2026-11-01').undated.length, 4)
+  const id = h.db().views[0]!.id
+  assert.throws(() => h.change({ kind: 'updateView', viewId: id, dateBy: 'pages' }), /Can't place rows by that/)
+  h.change({ kind: 'updateView', viewId: id, layout: 'calendar', dateBy: 'due' })
+  assert.equal(h.db().views[0]!.dateBy, 'due')
+  h.change({ kind: 'removeProperty', propertyId: 'due' })
+  h.change({ kind: 'updateView', viewId: id, name: 'Still' })
+  assert.equal(h.db().views[0]!.dateBy, 'due')
+  assert.equal(viewDateBy(h.db(), h.db().views[0]!), null)
+})
+
+test('moving a row to another day keeps its time and length, from the day he took it', () => {
+  const p = { id: 'd', name: 'D', type: 'date' } as const
+  assert.deepEqual(movedDate(p, undefined, null, '2026-11-05'), { start: '2026-11-05' })
+  assert.deepEqual(movedDate(p, { start: '2026-11-02' }, '2026-11-02', '2026-11-05'), { start: '2026-11-05' })
+  assert.deepEqual(movedDate(p, { start: '2026-11-02T09:30' }, '2026-11-02', '2026-11-05'), { start: '2026-11-05T09:30' })
+  // Taken from the second day of a range, dropped a day later: the whole range moves one day.
+  assert.deepEqual(movedDate(p, { start: '2026-11-02', end: '2026-11-04' }, '2026-11-03', '2026-11-04'), { start: '2026-11-03', end: '2026-11-05' })
+  assert.deepEqual(movedDate(p, { start: '2026-10-31' }, '2026-10-31', '2026-11-01'), { start: '2026-11-01' })
+})

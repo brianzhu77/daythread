@@ -15,6 +15,7 @@ import { PropertyCell, PropertyCheckbox, PropertyEditor, useSaveOnHide, useWide 
 import { urlHref } from './property-values'
 import { useWorkspace } from './use-day'
 import { DatabaseBoard } from './database-board'
+import { DatabaseCalendar } from './database-calendar'
 import { DatabaseGallery } from './database-gallery'
 import { LinkedDatabase } from './database-linked'
 import { DatabaseList } from './database-list'
@@ -404,9 +405,9 @@ export function GroupName({ groups, group }: { groups: ViewGroups; group: ViewGr
   return <span>{group.name}</span>
 }
 /** "Hidden: Done (12)" at the end of a view (design §7.3): a tap shows that group again. */
-export function HiddenGroups({ groups, changeView }: { groups: ViewGroups; changeView: ChangeView }) {
+export function HiddenGroups({ groups, changeView, underCards }: { groups: ViewGroups; changeView: ChangeView; underCards?: boolean }) {
   if (!groups.hidden.length) return null
-  return <p className="database-hidden-groups">Hidden: {groups.hidden.map((g, i) => <span key={g.key}>{i > 0 && ' · '}<button type="button" className="app-link" onClick={() => changeView(current => ({ hiddenGroups: (current.hiddenGroups ?? []).filter(k => k !== g.key) }))}>{g.name} ({g.rows.length})</button></span>)}</p>
+  return <p className={`database-hidden-groups${underCards ? ' is-under-cards' : ''}`}>Hidden: {groups.hidden.map((g, i) => <span key={g.key}>{i > 0 && ' · '}<button type="button" className="app-link" onClick={() => changeView(current => ({ hiddenGroups: (current.hiddenGroups ?? []).filter(k => k !== g.key) }))}>{g.name} ({g.rows.length})</button></span>)}</p>
 }
 /** How many rows each group draws, for this tab: "Show 25 more" (design §13) under each group or column. */
 export function useGroupLimits(blockId: string, cap: number) {
@@ -484,10 +485,15 @@ export function useAddRow(db: Page & { database: Database }, view: View, context
   const navigate = useNavigate()
   const openRow = useOpenRow()
   const wide = useWide()
-  return (group?: string) => {
+  /** `values`: what its place says, over what the view's filter asks: a calendar day's date. */
+  return (group?: string, values?: Record<string, Json>) => {
     // Raise the keyboard inside this tap, for the row's page.
     if (!wide) holdKeyboard()
     const prefill = newRowValues(db.database, view, context, group)
+    if (values) {
+      Object.assign(prefill.values, values)
+      prefill.visible = rowMatches(db.database, { id: '', type: 'document', date: null, title: prefill.title, document: '[]', values: prefill.values } as Page, view.filter, context)
+    }
     const pageId = newId()
     void run({ type: 'add-row', databaseId: db.id, pageId, title: prefill.title, values: prefill.values, at: new Date().toISOString() },
       r => prefill.visible ? null : { text: "Added · hidden by this view's filter", extra: { label: 'Show', run: () => void navigate({ to: '/pages', search: { page: r.entityId ?? pageId } }) } })
@@ -570,6 +576,7 @@ export function LaidOutView(props: DatabaseViewProps & { view: View; changeView:
   if (props.view.layout === 'board') return <DatabaseBoard {...props} />
   if (props.view.layout === 'list') return <DatabaseList {...props} />
   if (props.view.layout === 'gallery') return <DatabaseGallery {...props} />
+  if (props.view.layout === 'calendar') return <DatabaseCalendar {...props} />
   return <DatabaseTable {...props} />
 }
 

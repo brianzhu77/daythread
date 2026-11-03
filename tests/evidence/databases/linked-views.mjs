@@ -146,13 +146,16 @@ await scenario('its layout and grouping are its own too (R2-16: they survive its
   const r = { layout: linked.layout, sourceSame: JSON.stringify(list(ws).database.views) === homeView, boards: await page.locator('.database-board').count(), tables: await page.locator('.database-table').count(), source: await second(page).locator('.database-source').count() }
   return { ...r, ok: r.layout === 'board' && r.sourceSame && r.boards === 1 && r.tables === 1 && r.source === 1 }
 })
-for (const [layout, drawn] of [['List', '.database-list'], ['Gallery', '.database-gallery']]) {
+for (const [layout, drawn] of [['List', '.database-list'], ['Gallery', '.database-gallery'], ['Calendar', '.database-calendar']]) {
   await scenario(`it can be a ${layout} of its own, keeping its name and source line`, async page => {
     await makeLinked(page)
     const homeView = JSON.stringify(list(store()).database.views)
     await second(page).locator('.database-more-button').click()
     await menu(page).getByRole('menuitem', { name: 'Layout' }).click(); await wait(200)
-    await menu(page).getByText(layout, { exact: true }).click(); await wait(1800)
+    await menu(page).getByText(layout, { exact: true }).click(); await wait(600)
+    // More than one date property: it asks which.
+    if (layout === 'Calendar' && await menu(page).getByRole('menuitem', { name: /^Due/ }).count()) await menu(page).getByRole('menuitem', { name: /^Due/ }).first().click()
+    await wait(1500)
     await page.keyboard.press('Escape'); await wait(200)
     const ws = store(), linked = JSON.parse(dbBlocks(ws)[1].props.view)
     const r = { layout: linked.layout, sourceSame: JSON.stringify(list(ws).database.views) === homeView, drawn: await second(page).locator(drawn).count(), source: await second(page).locator('.database-source').count(), homeTable: await page.locator('.database-block').first().locator('.database-table').count() }

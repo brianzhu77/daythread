@@ -36,7 +36,7 @@ export type Json = string | number | boolean | null | Json[] | { [key: string]: 
 export interface Condition { by: string; op: FilterOp; value?: Json }
 export interface Sort { by: string; direction: "asc" | "desc" }
 export type GroupDateBy = "day" | "week" | "month";
-export const viewLayouts = ["table", "board", "list", "gallery"] as const;
+export const viewLayouts = ["table", "board", "list", "gallery", "calendar"] as const;
 export type ViewLayout = (typeof viewLayouts)[number];
 export interface View {
   id: string;
@@ -54,6 +54,8 @@ export interface View {
   hideEmptyGroups?: boolean;
   /** Group keys listed at the end as "Hidden: Done (12)". */
   hiddenGroups?: string[];
+  /** Calendar: the date property its rows sit by. Ignored while it's deleted or no longer a date (design §13). */
+  dateBy?: string;
 }
 export interface Database {
   /** The `database` block that is its place in its parent page; null: shown as a full page. */
@@ -439,13 +441,13 @@ const canGroup = (type: PropertyType): boolean => type !== "text";
 const canMakeColumns = (type: PropertyType): boolean => type === "select" || type === "status" || type === "checkbox";
 /** What a view of this layout can group by: a board's columns need a value a card can be dragged to (design §7.2). */
 export function groupableProperties(db: Database, layout: ViewLayout): Property[] {
-  if (layout === "gallery") return [];
+  if (layout === "calendar") return [];
   return db.properties.filter((p) => (layout === "board" ? canMakeColumns(p.type) : canGroup(p.type)));
 }
 /** The property a view groups by now; null when it was deleted or its type can't group any more. */
 export function viewGroupBy(db: Database, view: View): Property | null {
-  // A gallery doesn't group; its `groupBy` is kept unread, for switching back.
-  if (view.layout === "gallery") return null;
+  // A calendar doesn't group; its `groupBy` is kept unread, for switching back.
+  if (view.layout === "calendar") return null;
   const property = view.groupBy ? db.properties.find((p) => p.id === view.groupBy) : undefined;
   return property && (view.layout === "board" ? canMakeColumns(property.type) : canGroup(property.type)) ? property : null;
 }
@@ -513,6 +515,42 @@ export function viewGroups(db: Database, view: View, rows: readonly Page[], rawF
   const keep = (g: ViewGroup) => !view.hideEmptyGroups || g.rows.length > 0;
   return { property, shown: groups.filter((g) => !hidden.has(g.key) && keep(g)), hidden: groups.filter((g) => hidden.has(g.key) && keep(g)) };
 }
+/** What a calendar can sit its rows by. */
+export const dateProperties = (db: Database): Property[] => db.properties.filter((p) => p.type === "date");
+/** The date property a calendar sits by now; null when it was deleted or isn't a date any more. */
+export function viewDateBy(db: Database, view: View): Property | null {
+  const property = view.dateBy ? db.properties.find((p) => p.id === view.dateBy) : undefined;
+  return property?.type === "date" ? property : null;
+}
+export interface CalendarRows {
+  /** Rows by the days they cover, for the days in `from`–`to`; a range is on each of its days. */
+  days: Map<LocalDate, Page[]>;
+  /** Rows with no date, always in reach (design §7.2). */
+  undated: Page[];
+}
+export function calendarRows(property: Property | null, rows: readonly Page[], from: LocalDate, to: LocalDate, rawFor: (row: Page, columnId: string) => unknown = rawOf): CalendarRows {
+  const days = new Map<LocalDate, Page[]>(), undated: Page[] = [];
+  for (const row of rows) {
+    const value = property ? (readValue(property, rawFor(row, property.id)) as DateValue | null) : null;
+    if (!value) { undated.push(row); continue; }
+    const start = value.start.slice(0, 10), end = (value.end ?? value.start).slice(0, 10);
+    if (end < from || start > to) continue;
+    for (let day = start < from ? from : start; day <= end && day <= to; day = addDays(day, 1)) {
+      const list = days.get(day);
+      if (list) list.push(row); else days.set(day, [row]);
+    }
+  }
+  return { days, undated };
+}
+/** A row's date moved by the days between where he took it from and where he dropped it: its length and time stay. An undated one gets that day. */
+export function movedDate(property: Property, raw: unknown, from: LocalDate | null, to: LocalDate): DateValue {
+  const had = readValue(property, raw) as DateValue | null;
+  if (!had || !from) return { start: to };
+  const shift = Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 86_400_000);
+  const moved = (text: string) => `${addDays(text.slice(0, 10), shift)}${text.slice(10)}`;
+  return { start: moved(had.start), ...(had.end ? { end: moved(had.end) } : {}) };
+}
+
 /**
  * What a row stores once it's in this group, given what it holds now. A multi-select swaps the group it left for this
  * one and keeps its others. A date keeps its time and its length, moved to a day in the group: `today` if it's in that
@@ -551,7 +589,7 @@ export type DatabaseChange =
   | { kind: "removeProperty"; propertyId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[] }
+  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; dateBy?: string }
   | { kind: "removeView"; viewId: string }
   | { kind: "moveView"; viewId: string; beforeId: string | null };
 /** One row's edit: values by column id (`title` for the title), null clears; `expected`: those columns as the edit saw them. */
@@ -635,13 +673,18 @@ function cleanLayout(input: unknown): ViewLayout {
   return input as ViewLayout;
 }
 const dateBys = new Set<unknown>(["day", "week", "month"]);
-type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups">;
+type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "dateBy">;
 /** A view's group fields, checked. A new `groupBy` must name a live property that can group; one it already holds may be deleted since, and is kept unread, so Undo or changing the type back reads it again. */
-function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before?: string): GroupFields {
+function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before?: Pick<View, "groupBy" | "dateBy">): GroupFields {
   const out: GroupFields = {};
   if (input.groupBy !== undefined) {
-    if (input.groupBy !== before && !groupableProperties(db, layout).some((p) => p.id === input.groupBy)) throw new DatabaseError("Can't group by that");
+    if (input.groupBy !== before?.groupBy && !groupableProperties(db, layout).some((p) => p.id === input.groupBy)) throw new DatabaseError("Can't group by that");
     out.groupBy = input.groupBy;
+  }
+  // Like `groupBy`: a new one must be a live date; the one it holds may be deleted since.
+  if (input.dateBy !== undefined) {
+    if (input.dateBy !== before?.dateBy && !dateProperties(db).some((p) => p.id === input.dateBy)) throw new DatabaseError("Can't place rows by that");
+    out.dateBy = input.dateBy;
   }
   if (input.groupDateBy !== undefined) { if (!dateBys.has(input.groupDateBy)) throw new DatabaseError("Invalid view"); out.groupDateBy = input.groupDateBy; }
   if (input.hideEmptyGroups) out.hideEmptyGroups = true;
@@ -654,7 +697,7 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
 function cleanView(db: Database, input: View): View {
   if (!input) throw new DatabaseError("Unknown view type");
   const layout = cleanLayout(input.layout);
-  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...cleanGroup(db, input, layout, input.groupBy && !viewGroupBy(db, { ...input, layout }) ? input.groupBy : undefined) };
+  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...cleanGroup(db, input, layout, input) };
 }
 function move<T extends { id: string }>(list: T[], id: string, beforeId: string | null): T[] {
   const item = list.find((x) => x.id === id);
@@ -717,14 +760,15 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     }
     case "updateView": {
       const old = view(change.viewId);
-      const { groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, ...rest } = old;
+      const { groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, dateBy: _dateBy, ...rest } = old;
       const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
       const group = cleanGroup(db, {
         groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
         groupDateBy: change.groupDateBy ?? old.groupDateBy,
         hideEmptyGroups: change.hideEmptyGroups ?? old.hideEmptyGroups,
         hiddenGroups: change.hiddenGroups ?? old.hiddenGroups,
-      }, layout, old.groupBy);
+        dateBy: change.dateBy ?? old.dateBy,
+      }, layout, old);
       const next: View = {
         ...rest,
         layout,
