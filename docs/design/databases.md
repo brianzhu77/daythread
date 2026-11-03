@@ -502,6 +502,15 @@ Linked views come in R2, so in R1 (Bumblebee 120fdcd6):
 
 Every view type opens a row the same way (§5), and every view shows the filter line (§4.1).
 
+**Calendar: rows with no date (R3-1).** They stay in reach, in one quiet line under the month at both widths: **"No date · 3 ›"**. Tapping it opens the list in place, each row opening its page as usual. At 1280 a row in that list drags onto a day, which sets its date. With none, the line isn't there. `+ New` in that list isn't offered, since a calendar adds by day. A row whose date property is gone or empty is here, so nothing is silently missing.
+
+**Gallery: images (R3-3).** Nothing can be uploaded yet, and a page body holds an image only when one came in with pasted web content, as a link to the image where it lives. It isn't a copy of ours, so it can vanish. So:
+
+- **A card's image:** the first image block in the row's body with a working web address. It fills a 16:10 area at the card's top, cropped, with no border of its own.
+- **No image, or one that fails or can't load offline:** the card is just its title and properties, with no frame, placeholder or broken-image mark. Such a card is shorter, and cards align to the top of their grid row.
+- **No request of ours:** the browser loads the image only for cards on screen. Nothing is stored or fetched by the server.
+- **When Files ships (R3-11):** `⋯` → Layout gets "Card image: Page body, a Files property, or None", with Page body the default until then.
+
 ### 7.3 Filter, sort, group
 
 **All three open from `⋯`.** The menu leads with three tiles, **Filter · Sort · Group**, the same as Craft's. Each

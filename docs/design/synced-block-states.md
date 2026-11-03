@@ -86,11 +86,10 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
 - **Copy, then paste** (Brian's words): select the whole synced block and ⌘C, or use Copy in its label menu or in the
   notice. Paste on an empty line on another page, or replacing whole lines → that page now shows the same block. No
   offer, no question; it simply arrives synced, as in Notion. The label on both pages now reads "2 pages".
-- **On the phone, Copy from the label has to arrive synced too. Not tested yet.** A block copy carries our own clipboard type,
-  set during a copy event, and the label's Copy is a tap, so iOS may drop that type (Bumblebee). The paste would then be plain
-  lines with nothing to show it isn't synced. Roadbuster tries this in the Home Screen app when sizing. If it fails, either the
-  app remembers the copied block and matches it at paste, or the menu offers an "Add to a page" picker. A plain-lines result
-  isn't acceptable.
+- **On the phone, Copy from the label has to arrive synced too.** A block copy carries our own clipboard type, written during a
+  copy event. B22's Copy on a to-do does this from a tap, and in the Home Screen app on a Simulator (iOS 26.4) the type reached
+  iOS's Paste on another page. It's untested on a real iPhone, and for this label. As a safety, B22 also matches words alone to the
+  last row copied, and this can do the same. A plain-lines result isn't acceptable.
 - **Copying text inside it** (part of a line, or some lines but not the whole block) is a **plain copy**, as today.
   Only the whole block copies as synced.
 - **Two copies on one page are allowed.** A paste on the page it's already on arrives synced, like any other. Typing in one
