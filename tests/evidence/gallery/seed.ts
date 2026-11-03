@@ -1,5 +1,5 @@
 // Gallery: a disposable SQLite store (path as the argument, never his data) with board/seed-board.ts's database, and images in three row bodies.
-// Usage: node tests/evidence/gallery/seed.ts <store-path> <base-url of the server, for an image that loads>
+// Usage: node tests/evidence/gallery/seed.ts <store-path> <base-url of the server, for an image that loads> [first]
 import { execSync } from 'node:child_process'
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
 import { pageContentKey } from '../../../src/domain/editor-document.ts'
@@ -16,4 +16,9 @@ const image = async (pageId: string, url: string) => {
 }
 await image('dune', `${base}/apple-touch-icon.png`)
 await image('emma', `${base}/this-image-is-gone.png`)
+// A third argument makes the first view this gallery, with Owned on its cards, for a native run.
+if (process.argv[4] === 'first') {
+  const viewId = ws.pages.find(p => p.id === 'list')!.database!.views[0]!.id
+  await run({ type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId, layout: 'gallery', name: 'Gallery', columns: [{ id: 'owned' }] } })
+}
 console.log('seeded')
