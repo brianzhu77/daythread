@@ -6,8 +6,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEve
 import { createPortal } from 'react-dom'
 import { columnCalc, propertyOf, viewBoardCalculation, canWrap, cellValue, databaseRows, isDatabase, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { shownValue, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
-import { calcText } from './property-values'
+import { NewRow, shownValue, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -237,7 +236,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
           </article>)}
           {over && !sorted && drag!.before === null && <div className="database-column-drop-end" />}
           {group.rows.length > shown.length && <button type="button" className="database-more" onClick={() => showMore(group.key)}>Show 25 more</button>}
-          <button type="button" className="database-new" onClick={() => addRow(group.key === allKey ? undefined : group.key)}>+ New</button>
+          <NewRow db={db} blockId={blockId} addRow={addRow} {...(group.key === allKey ? {} : { group: group.key })} />
         </section>
       })}
       {canAddColumn && <AddColumn run={run} db={db} propertyId={groups!.property.id} />}

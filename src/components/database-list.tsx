@@ -4,7 +4,7 @@
 import { Fragment, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { cellValue, databaseRows, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { todayIso } from './dates'
 import { ChevronRightIcon } from './icons'
 import { displayPageTitle } from './page-title'
@@ -120,7 +120,7 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
           {shown.map(row => rowLine(row, group.key))}
           {!isFolded && <div className={`database-list-foot${drag && drag.before === null && drag.group === group.key ? ' is-drop-end' : ''}`} data-group={group.key}>
             {group.rows.length > shown.length && <button type="button" className="database-more" onClick={() => showMore(group.key)}>Show 25 more</button>}
-            <button type="button" className="database-new" onClick={() => addRow(group.key)}>+ New</button>
+            <span className="database-new-row"><NewRow db={db} blockId={blockId} addRow={addRow} group={group.key} /></span>
           </div>}
         </Fragment>
       }) : ordered.slice(0, limit).map(row => rowLine(row))}
@@ -128,6 +128,6 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
     <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
     {groups && <HiddenGroups groups={groups} changeView={changeView} />}
     {!groups && ordered.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
-    {!groups && <button type="button" className="database-new" onClick={() => addRow()}>+ New</button>}
+    {!groups && <NewRow db={db} blockId={blockId} addRow={addRow} />}
   </div>
 }
