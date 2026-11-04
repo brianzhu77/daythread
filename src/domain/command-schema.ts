@@ -80,6 +80,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("add-row"), databaseId: id, pageId: id, title, values: values.optional(), beforeId: id.nullable().optional(), copyOf: id.optional(), template: id.optional(), at }),
   z.object({ type: z.literal("set-values"), ...rowEdit.shape, beforeId: id.nullable().optional(), newTodos: z.array(z.object({ id, title: title.min(1), on: day })).max(100).optional(), at }),
   z.object({ type: z.literal("set-values-many"), items: z.array(rowEdit).min(1).max(200), at }),
+  z.object({ type: z.literal("edit-todos"), items: z.array(z.object({ taskId: id, changes: z.array(z.object({ columnId: id, value: json })).min(1).max(4) })).min(1).max(200), today: day }),
   z.object({ type: z.literal("delete-pages"), pageIds: z.array(id).min(1).max(200), at }),
   z.object({ type: z.literal("set-timezone"), timezone: z.string().min(1).max(100) }),
   z.object({ type: z.literal("set-week-start"), weekStart: z.union([z.literal(0), z.literal(1)]) }),

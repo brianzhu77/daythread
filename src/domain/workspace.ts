@@ -11,6 +11,7 @@ import type { SubItems } from "./database.ts";
 import { applyRowMove, movesIntoItself, rowMoveTree } from "./move-row.ts";
 import { importRefusal } from "./csv.ts";
 import { dueRepeats, periodWord, repeatRowId } from "./repeats.ts";
+import { todoBarColumns, todoChange, todoMoves } from "./todos-source.ts";
 import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
@@ -1115,6 +1116,30 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (new Set(action.items.map((i) => i.pageId)).size !== action.items.length) throw new DomainError("Invalid rows");
       const shifted = action.items.flatMap((item) => rowEdit(state, item, at));
       return { message: `Saved ${action.items.length} rows`, ...(shifted.length ? { shifted: [...new Set(shifted)] } : {}) };
+    }
+    case "edit-todos": {
+      if (!Array.isArray(action.items) || !action.items.length || action.items.length > databaseLimits.rowsAtOnce) throw new DomainError("Invalid to-dos");
+      if (new Set(action.items.map((i) => i.taskId)).size !== action.items.length) throw new DomainError("Invalid to-dos");
+      const today = date(action.today);
+      let changed = 0, couldnt = 0, because: string | undefined;
+      for (const { taskId, changes } of action.items) {
+        if (!changes.length || changes.some((c) => !todoBarColumns.has(c.columnId))) throw new DomainError("Invalid to-dos");
+        // Gone since this tab read it: one that couldn't, not a reason to refuse the rest.
+        if (!state.tasks.some((t) => t.id === taskId)) { couldnt++; continue; }
+        let did = false, refused = false;
+        // Each reads what the last one left, as a single edit would: planning one that's just been reopened, say (#92).
+        for (const move of todoMoves(state, taskId, changes.map((c) => ({ id: c.columnId, value: c.value ?? undefined })))) {
+          const change = todoChange(state, taskId, move.id, move.value, today);
+          if (!change) continue;
+          if ("refused" in change) { refused = true; because ??= change.refused; continue; }
+          execute(state, change.action, operationId);
+          did = true;
+        }
+        if (did) changed++;
+        else if (refused) couldnt++;
+      }
+      if (!changed) throw new DomainError(because ?? (couldnt ? "Those to-dos are gone" : "Nothing to change"));
+      return { message: `${changed} to-do${changed === 1 ? "" : "s"} changed${couldnt ? ` · ${couldnt} couldn't` : ""}` };
     }
     case "delete-pages": {
       const at = isoTime(action.at);

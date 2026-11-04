@@ -164,6 +164,8 @@ export type Action =
   /** `newTodos`: to-dos named in a relation's pick list, made here so that one Undo takes them and their link (R3-25). */
   | ({ type: "set-values"; at: string; beforeId?: string | null; newTodos?: { id: string; title: string; on: LocalDate }[] } & import("./database.ts").RowEdit)
   | { type: "set-values-many"; items: import("./database.ts").RowEdit[]; at: string }
+  /** R4-17: several to-dos, or several columns of one, in one change with one Undo. Each ends as if it had been edited alone. */
+  | { type: "edit-todos"; items: Array<{ taskId: string; changes: Array<{ columnId: string; value: import("./database.ts").Json | null }> }>; today: LocalDate }
   /** Several pages to the trash as one batch and one Undo (rows selected together). */
   | { type: "delete-pages"; pageIds: string[]; at: string }
   | { type: "set-timezone"; timezone: string }
