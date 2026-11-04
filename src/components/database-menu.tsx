@@ -6,17 +6,20 @@ import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExtern
 import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
 import type { Page, Workspace } from '../domain/types'
+import { databaseSource, readingWorkspace, todosSourceId, todosTitle } from '../domain/todos-source'
 import { isFormula } from '../domain/formula'
 import { rollupFunctionsFor, withLinks } from '../domain/relations'
-import { databaseSource, todosSourceId, todosTitle } from '../domain/todos-source'
 import { FormulaEditor } from './formula-editor'
 import { startPicking, blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange } from './database-block'
+import { exportDatabase } from './database-export'
+import { todayIso } from './dates'
+import { flushAllEditors } from './editor-flush'
 import { ChevronDownIcon } from './icons'
 import { useKeyboardTop } from './keyboard'
 import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
-type Panel = 'root' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | { formula: string } | 'more' | 'new-property' | 'views' | 'templates' | { template: string }
+type Panel = 'root' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | { formula: string } | 'export' | 'more' | 'new-property' | 'views' | 'templates' | { template: string }
 interface OpenMenu { blockId: string; databaseId: string; panel: Panel; /** From `+ New ⌄`: a pick makes the row, in its place. */ pick?: (template: string | null) => void }
 /** The views list opens under "Table ⌄" on the left; every other panel under the `⋯` on the right. */
 const anchorOf = (m: OpenMenu) => m.panel === 'views' ? `[data-database-views="${CSS.escape(m.blockId)}"]` : `[data-database-menu="${CSS.escape(m.blockId)}"]`
@@ -115,6 +118,7 @@ export function DatabaseMenuHost() {
     {open.panel === 'filter' && <FilterPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'sort' && <SortPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'more' && <MoreSettingsPanel db={db} view={view} back={() => go('root')} />}
+    {open.panel === 'export' && <ExportPanel db={db} view={view} blockId={open.blockId} back={() => go('root')} close={() => setOpenMenu(null)} />}
     {open.panel === 'properties' && <PropertiesPanel db={db} view={view} go={go} />}
     {open.panel === 'new-property' && <NewPropertyPanel db={db} view={view} go={go} />}
     {typeof open.panel === 'object' && 'property' in open.panel && <PropertyPanel db={db} view={view} propertyId={open.panel.property} go={go} />}
@@ -173,6 +177,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     {(inline || linked) && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.duplicate(blockId) }}>Duplicate</button>}
     {inline && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.turnIntoPage(blockId, db.id) }}>Turn into page</button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={copyLink}>Copy link</button>}
+    <button type="button" role="menuitem" onClick={() => go('export')}>Export<span className="database-menu-chevron">›</span></button>
     <hr />
     {linked
       ? <button type="button" role="menuitem" className="is-danger" onClick={() => { close(); actions?.remove(blockId) }}>Remove this view</button>
@@ -206,8 +211,30 @@ function MoreSettingsPanel({ db, view, back }: { db: DatabasePage; view: View; b
     {on && <label className="database-menu-row">Rows
       <select aria-label="Which rows" value={view.subItemsShow ?? 'both'} onChange={e => { const subItemsShow = e.target.value as View['subItemsShow']; changeView(() => ({ subItemsShow })) }}>
         <option value="both">Parents and sub-items</option><option value="parents">Parents only</option><option value="subs">Sub-items only</option>
-      </select>
-    </label>}
+// ---------------------------------------------------------------- export (csv design §2)
+function ExportPanel({ db, view, blockId, back, close }: { db: DatabasePage; view: View; blockId: string; back: () => void; close: () => void }) {
+  const { workspace } = useWorkspace()
+  const [withBodies, setWithBodies] = useState(false)
+  const [state, setState] = useState<'idle' | 'busy' | 'unsaved' | 'failed'>('idle')
+  const take = async (whole: boolean) => {
+    if (!workspace || state === 'busy') return
+    setState('busy')
+    try {
+      // A body he just typed is part of it: open editors save first, as the whole export's do.
+      if (withBodies && !(await flushAllEditors())) { setState('unsaved'); return }
+      const hostPage = blockActions.get(blockId)?.hostPageId
+      const context = { today: todayIso(), pageDate: workspace.pages.find(p => p.id === hostPage)?.date ?? null, weekStart: workspace.weekStart ?? 0 }
+      const title = db.title.trim() || 'Untitled'
+      await exportDatabase(readingWorkspace(workspace, db.id), db, whole ? 'whole' : { view, context }, withBodies, whole ? title : `${title} - ${view.name}`)
+      close()
+    } catch { setState('failed') }
+    <Head title="Export" back={back} />
+    <button type="button" role="menuitem" disabled={state === 'busy'} onClick={() => void take(false)}>This view</button>
+    <button type="button" role="menuitem" disabled={state === 'busy'} onClick={() => void take(true)}>Whole database</button>
+    {!db.database.fixed && <label className="database-menu-row">Include page bodies
+      <input type="checkbox" checked={withBodies} onChange={e => setWithBodies(e.target.checked)} />
+    {state === 'unsaved' && <p className="database-menu-quiet is-error" role="status">No file came: a page hasn't saved yet. Try again in a moment.</p>}
+    {state === 'failed' && <p className="database-menu-quiet is-error" role="status">No file came. Try again.</p>}
   </>
 }
 

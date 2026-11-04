@@ -739,8 +739,8 @@ Restore brings back the database with its rows. Nothing else shows, and nothing 
   - **The rule he sees: ⌘Z undoes the last thing he did where his focus is.** Roadbuster to confirm the routing.
 - **Text cells save** on Enter, on blur, or after 1 s without typing. A cell edit is never sent per key.
 - **The block moves** by its `⋮⋮` like any block. It can't go into a synced block or a template (§3.1).
-- **Paste:** pasting text into a cell sets that cell. Pasting several lines or a table (TSV) into the table is later
-  (§14). Until then, only the first line goes in, and the notice says "Pasted the first line only".
+- **Paste:** pasting text into a cell sets that cell. Pasting several lines or a table (TSV) into the table fills across and down (R4-9, `csv.md` §3).
+  In a To-dos view, only the first line goes in, and the notice says "Pasted the first line only".
 
 ## 11. To-dos in a database (the one question for Brian)
 

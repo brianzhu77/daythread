@@ -190,7 +190,9 @@ export function defaultStatusOptions(): Option[] {
 const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
 const timePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
 function validDay(value: string): boolean {
-  return dayPattern.test(value) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
+  if (!dayPattern.test(value)) return false;
+  const day = new Date(`${value}T12:00:00Z`);
+  return !Number.isNaN(day.getTime()) && day.toISOString().slice(0, 10) === value;
 }
 /** `YYYY-MM-DD`, or `YYYY-MM-DDTHH:mm` local wall time in the workspace's zone (like `@date` chips). */
 export function validDateText(value: unknown): value is string {
