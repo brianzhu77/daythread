@@ -1261,6 +1261,7 @@ body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transpare
 .crumb { display: inline-flex; align-items: center; min-height: 44px; min-width: 0; max-width: 220px; padding: 0 6px; border: 0; border-radius: var(--radius-inline); background: none; color: var(--ink-2); font: inherit; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
 .crumb-words { overflow: hidden; text-overflow: ellipsis; }
 .crumbs-path > :first-child { margin-left: -6px; }
+.crumb-back-wrap { display: inline-flex; flex: none; }
 .crumb-back { flex: none; }
 .crumb-back svg { flex: none; width: 11px; height: 11px; margin-right: 3px; transform: rotate(180deg); }
 .crumb-divider { flex: none; width: 1px; height: 14px; margin: 0 6px; background: var(--line); }
