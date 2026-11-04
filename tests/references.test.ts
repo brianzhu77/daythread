@@ -83,6 +83,20 @@ test('a two-way relation, a sub-item and a dependency don\'t: the target already
   assert.deepEqual(sources(h, 'mid'), [], 'and its parent')
 })
 
+test('a value kept from before a change of type or target isn\'t a link, and doesn\'t break anything (Ratchet)', () => {
+  const h = linked()
+  const change = (c: never) => h.run({ type: 'change-database', pageId: 'work', change: c })
+  change({ kind: 'addProperty', property: { id: 'count', name: 'Count', type: 'number' } } as never)
+  h.run({ type: 'set-values', pageId: 'top', values: { count: 42 }, expected: {}, at })
+  change({ kind: 'updateProperty', propertyId: 'count', type: 'relation', target: 'people' } as never)
+  assert.deepEqual(sources(h, 'ann'), [], 'a number where a list would be')
+  assert.deepEqual(sources(h, 'other'), [])
+  h.run({ type: 'set-values', pageId: 'mid', values: { owner: ['ann'] }, expected: {}, at })
+  assert.deepEqual(sources(h, 'ann'), ['mid'])
+  change({ kind: 'updateProperty', propertyId: 'owner', target: 'work' } as never)
+  assert.deepEqual(sources(h, 'ann'), [], 'pointed at another database since')
+})
+
 test('a linked view shows its page on the database\'s page; the home block doesn\'t', () => {
   const h = linked()
   h.run({ type: 'create-document', title: 'Notes', body: '', pageId: 'notes' })
