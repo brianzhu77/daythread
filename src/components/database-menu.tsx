@@ -5,6 +5,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type Repeat, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
+import { nextDate } from '../domain/repeats'
 import type { Page, Workspace } from '../domain/types'
 import { databaseSource, readingWorkspace, todosSourceId, todosTitle } from '../domain/todos-source'
 import { isFormula } from '../domain/formula'
@@ -628,7 +629,7 @@ function TemplatesPanel({ db, view, pick, go, close }: { db: DatabasePage; view:
     <Head title="Templates" {...(pick ? {} : { back: () => go('root') })} />
     {pick && current && <button type="button" role="menuitem" onClick={() => { close(); pick(null) }}>Empty</button>}
     {list.map(t => <div key={t.id} className="database-property-line">
-      <button type="button" className="database-property-name" onClick={() => { if (pick) { close(); pick(t.id) } else edit(t.id) }}>{t.title.trim() || 'Untitled'}{t.id === current?.id && <span className="database-menu-quiet"> · default</span>}</button>
+      <button type="button" className="database-property-name" onClick={() => { if (pick) { close(); pick(t.id) } else edit(t.id) }}>{t.title.trim() || 'Untitled'}{t.id === current?.id && <span className="database-menu-quiet"> · default</span>}{db.database.repeats?.[t.id] && <span className="database-menu-quiet"> · {repeatSummary(db.database.repeats[t.id]!)}</span>}</button>
       <button type="button" aria-label={`${t.title.trim() || 'Untitled'} options`} onClick={() => go({ template: t.id })}>⋯</button>
     </div>)}
     <button type="button" role="menuitem" onClick={() => void add()}>+ New template</button>
@@ -658,10 +659,26 @@ function TemplatePanel({ db, view, templateId, go, close }: { db: DatabasePage; 
 }
 
 const repeatWords = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' } as const
+const periods = (repeat: Repeat) => `${repeat.every}${repeat.interval === 1 ? '' : 's'}`
+/** What a template's line in the list says about its repeat, so he needn't open each one to find out. */
+const repeatSummary = (repeat: Repeat) => repeat.paused ? 'Paused' : repeat.interval === 1 ? repeatWords[repeat.every] : `Every ${repeat.interval} ${periods(repeat)}`
+/** Lets the box be empty while he types, which a value held to 1–999 wouldn't: from 1, typing 2 would give 12. Empty or out of range on leaving goes back to what's stored. */
+function RepeatEvery({ repeat, set }: { repeat: Repeat; set: (next: Partial<Repeat>) => void }) {
+  const [draft, setDraft] = useState<string | null>(null)
+  return <input aria-label="Every how many" type="number" min={1} max={999} value={draft ?? repeat.interval}
+    onFocus={e => e.target.select()}
+    onBlur={() => setDraft(null)}
+    onChange={e => { const text = e.target.value, interval = Number(text); setDraft(text); if (Number.isInteger(interval) && interval >= 1 && interval <= 999) set({ interval }) }} />
+}
+const nextRowText = (date: string, time: string) => {
+  const when = new Date(`${date}T${time}`)
+  return when.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', ...(when.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' as const }), hour: 'numeric', minute: '2-digit' })
+}
 /** Repeat (R4-6): makes a row each period, from when he next opens the app. Off keeps every row it made. */
 function RepeatSettings({ db, templateId, change }: { db: DatabasePage; templateId: string; change: ReturnType<typeof useChange> }) {
   const repeat = db.database.repeats?.[templateId]
   const nowText = () => { const d = new Date(); return `${todayIso()}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
+  const nextRow = repeat && nextDate(repeat, nowText().slice(0, 10), nowText().slice(11))
   const set = (next: Partial<Repeat> | null) => {
     if (!next) { change({ kind: 'setRepeat', templateId, repeat: null }, true); return }
     const { last: _last, lastRan: _ran, ...kept } = { every: 'week' as const, interval: 1, start: todayIso(), time: '09:00', notBefore: nowText(), ...repeat, ...next }
@@ -669,28 +686,29 @@ function RepeatSettings({ db, templateId, change }: { db: DatabasePage; template
   }
   return <>
     <hr />
-    <label className="database-menu-row">Repeat
+    <label className="database-menu-row database-repeat-field">Repeat
       <select aria-label="Repeat" value={repeat?.every ?? 'off'} onChange={e => { const v = e.target.value; set(v === 'off' ? null : { every: v as Repeat['every'] }) }}>
         <option value="off">Off</option>
         {(Object.keys(repeatWords) as Array<keyof typeof repeatWords>).map(k => <option key={k} value={k}>{repeatWords[k]}</option>)}
       </select>
     </label>
     {repeat && <>
-      <label className="database-menu-row">Every
-        <input aria-label="Every how many" type="number" min={1} max={999} value={repeat.interval} onChange={e => { const interval = Number(e.target.value); if (Number.isInteger(interval) && interval >= 1 && interval <= 999) set({ interval }) }} />
+      <label className="database-menu-row database-repeat-field">Every
+        <span className="database-repeat-every"><RepeatEvery repeat={repeat} set={set} />{periods(repeat)}</span>
       </label>
-      <label className="database-menu-row">Starts
+      <label className="database-menu-row database-repeat-field">Starts
         <input aria-label="Starts" type="date" value={repeat.start} onChange={e => { if (e.target.value) set({ start: e.target.value, notBefore: nowText() }) }} />
       </label>
-      <label className="database-menu-row">At
+      <label className="database-menu-row database-repeat-field">At
         <input aria-label="At" type="time" value={repeat.time ?? '00:00'} onChange={e => { if (e.target.value) set({ time: e.target.value, notBefore: nowText() }) }} />
       </label>
       <label className="database-menu-row">Make every missed one
         <input type="checkbox" checked={Boolean(repeat.everyMissed)} onChange={e => { const { everyMissed: _off, ...rest } = repeat; change({ kind: 'setRepeat', templateId, repeat: { ...rest, ...(e.target.checked ? { everyMissed: true as const } : {}) } }, true) }} />
       </label>
       <label className="database-menu-row">Paused
-        <input type="checkbox" checked={Boolean(repeat.paused)} onChange={e => { const { paused: _off, ...rest } = repeat; change({ kind: 'setRepeat', templateId, repeat: { ...rest, ...(e.target.checked ? { paused: true as const } : {}) } }, true) }} />
+        <input type="checkbox" checked={Boolean(repeat.paused)} onChange={e => { const { paused: _off, ...rest } = repeat; change({ kind: 'setRepeat', templateId, repeat: { ...rest, ...(e.target.checked ? { paused: true as const } : { notBefore: nowText() }) } }, true) }} />
       </label>
+      {nextRow && <p className="database-menu-quiet">Next row {nextRowText(nextRow, repeat.time ?? '00:00')}, or when you next open Daythread</p>}
       {repeat.lastRan && <p className="database-menu-quiet">Last ran {new Date(repeat.lastRan).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>}
     </>}
   </>

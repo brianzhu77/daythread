@@ -29,6 +29,16 @@ export function dueDates(repeat: Repeat, today: string, time: string): string[] 
   }
   return out
 }
+/** The next date still to come, for the menu to say. Paused has none. */
+export function nextDate(repeat: Repeat, today: string, time: string): string | null {
+  if (repeat.paused) return null
+  const now = `${today}T${time}`, at = repeat.time ?? '00:00'
+  for (let n = 0; n < maxWalk; n++) {
+    const date = occurrence(repeat, n), when = `${date}T${at}`
+    if (when > now && (!repeat.last || date > repeat.last) && (!repeat.notBefore || when >= repeat.notBefore)) return date
+  }
+  return null
+}
 export interface DueRepeat { database: Page & { database: Database }; template: Page; dates: string[]; skipped: number }
 /** What's due across the workspace: the latest only, unless the template makes every missed one. */
 export function dueRepeats(ws: Workspace, today: string, time: string): DueRepeat[] {
