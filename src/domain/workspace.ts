@@ -741,7 +741,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
           const title = linkText && linkText !== url ? text(linkText, 1000) : defaultLinkTitle(url);
           // A link page has no words of its own either, so it starts from the default for pages made there (Lead 80555761).
           const template = newPageTemplate(state, parent);
-          state.pages.push({ id: item.pageId, type: "document", date: null, title, url, parentId: parent.id, document: JSON.stringify(template ? pageFromTemplate(template, null) : [emptyLine("paragraph")]) });
+          state.pages.push({ ...(action.at ? { createdAt: isoTime(action.at) } : {}), id: item.pageId, type: "document", date: null, title, url, parentId: parent.id, document: JSON.stringify(template ? pageFromTemplate(template, null) : [emptyLine("paragraph")]) });
           first ??= item.pageId;
         } else {
           if (isTrashed(owner.page)) restorePages(state, restoreSetOf(state, owner.page));

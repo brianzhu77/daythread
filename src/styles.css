@@ -195,7 +195,28 @@
 .bn-container { color-scheme: inherit; }
 /* B4 (F13): the / menu shows about 8 items and scrolls for the rest; the half row at the bottom says there is more.
    BlockNote's own cap (the room on screen, at most 600px) still applies inside it. */
-.bn-suggestion-menu { max-height: 460px; }
+/* The `/` menu, and the other lists typed into a line: the app's own menu, in black, white and grey. The row he's on is a soft fill
+   like the sidebar's, never a solid block of ink. Every icon sits in one column, so every title starts in one place. */
+#bn-suggestion-menu.bn-suggestion-menu { width: 280px; max-height: 420px; padding: 6px; border-radius: var(--radius-block); background: var(--bg); color: var(--ink); box-shadow: var(--shadow-float); --tw-ring-shadow: 0 0 #0000; border: 1px solid var(--line-soft); }
+#bn-suggestion-menu .bn-suggestion-menu-label { padding: 10px 8px 4px; color: var(--ink-3); font-size: var(--text-caption); font-weight: var(--weight-regular); }
+#bn-suggestion-menu .bn-suggestion-menu-label:first-child { padding-top: 4px; }
+#bn-suggestion-menu > .bn-suggestion-menu-item { gap: 10px; min-height: 34px; padding: 4px 8px; border-radius: var(--radius-row); background: none; color: var(--ink); font-size: var(--text-ui); cursor: pointer; }
+#bn-suggestion-menu > .bn-suggestion-menu-item[aria-selected="true"] { background: var(--hover-dim); color: var(--ink); }
+/* Not on a phone: where a tap last landed would stay lit, a second row beside the one he's on. */
+@media (hover: hover) { #bn-suggestion-menu > .bn-suggestion-menu-item:hover { background: var(--hover-dim); color: var(--ink); } }
+#bn-suggestion-menu > .bn-suggestion-menu-item > :first-child:has(svg, .slash-heading-icon) { display: inline-grid; flex: none; place-items: center; width: 20px; height: 20px; min-height: 0; padding: 0; color: var(--ink-2); }
+#bn-suggestion-menu > .bn-suggestion-menu-item svg { width: 18px; height: 18px; color: var(--ink-2); }
+#bn-suggestion-menu > .bn-suggestion-menu-item .text-base { font-size: var(--text-ui); line-height: 1.3; }
+#bn-suggestion-menu > .bn-suggestion-menu-item .text-xs:empty { display: none; }
+#bn-suggestion-menu > .bn-suggestion-menu-item .text-xs:not(:empty) { color: var(--ink-3); font-size: var(--text-caption); line-height: 1.3; }
+.slash-heading-icon { font-size: 11px; font-weight: var(--weight-semibold); letter-spacing: -.02em; line-height: 1; color: var(--ink-2); }
+/* A shortcut is a quiet word at the row's end, not a pill; a phone has no use for it. */
+#bn-suggestion-menu [data-slot="badge"] { border: 0; background: none; padding: 0; color: var(--ink-3); font-size: var(--text-caption); font-weight: var(--weight-regular); }
+@media (max-width: 899px) {
+  #bn-suggestion-menu.bn-suggestion-menu { width: min(280px, calc(100vw - 40px)); max-height: min(380px, 50vh); }
+  #bn-suggestion-menu > .bn-suggestion-menu-item { min-height: 44px; }
+  #bn-suggestion-menu [data-slot="badge"] { display: none; }
+}
 
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -1387,6 +1408,19 @@ body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transpare
 .trashed-page .subpage-row { color: var(--ink-2); }
 .trash-back { display: none; }
 .pages-trash-row { display: none; }
+/* Bookmarks: the title never cut to one line, the first words that say what it is, then where it came from. */
+.bookmark-list { display: flex; flex-direction: column; }
+.bookmark-row { display: flex; align-items: flex-start; gap: 8px; border-top: 1px solid var(--line-soft); }
+.bookmark-row:first-child { border-top: 0; }
+.bookmark-main { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 0; color: var(--ink); text-decoration: none; }
+.bookmark-title { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.bookmark-words { overflow: hidden; color: var(--ink-2); font-size: var(--text-meta); text-overflow: ellipsis; white-space: nowrap; }
+.bookmark-where { color: var(--ink-3); font-size: var(--text-meta); }
+/* As tall as the title's line and its padding, so ↗ sits on the title's first line; its right edge on the column's. */
+.bookmark-open { display: inline-flex; flex: none; align-items: center; justify-content: flex-end; width: 32px; height: 44px; color: var(--ink-3); }
+@media (hover: hover) { .bookmark-main:hover .bookmark-title { text-decoration: underline; text-decoration-color: var(--ink-3); text-underline-offset: 3px; } }
+.bookmark-open:hover { color: var(--ink); }
+.bookmark-open svg { width: 18px; height: 18px; }
 .trash-banner { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--radius-block); background: var(--fill); font-size: var(--text-small); color: var(--ink-2); }
 .trash-banner > svg { flex: none; width: 18px; height: 18px; color: var(--ink-3); }
 .trash-banner > span { flex: 1; min-width: 0; }
@@ -1408,6 +1442,9 @@ body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transpare
   .pages-trash-row { display: flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 6px; color: var(--ink-2); font-size: var(--text-ui); text-decoration: none; }
   .pages-trash-row > span { flex: 1; }
   .pages-trash-row svg { width: 18px; height: 18px; color: var(--ink-3); }
+  /* A way in, not a footnote like Trash: on the same columns and in the same words as the page rows under it. */
+  .pages-bookmarks-row { gap: 14px; margin: 0 0 6px; padding-inline: 8px 6px; color: var(--ink); font-size: var(--text-row); }
+  .bookmark-open { width: 44px; height: 44px; }
   .pages-trash-row > svg:last-child { width: 13px; height: 13px; }
 }
 
@@ -1862,7 +1899,6 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .row-property-more, .row-property-add { align-self: flex-start; min-height: 32px; padding: 0; border: 0; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
 .new-page-menu { position: relative; }
 .new-page-menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 160px; }
-.slash-grid-icon { display: inline-grid; place-items: center; width: 18px; }
 /* Databases: the table's ⋯ menu (design §7.3, §8, §6.2): the .app-menu surface at ≥ 900 px, a bottom sheet below. */
 .database-more-button { flex: none; display: inline-grid; place-items: center; width: 32px; height: 28px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
 @media (hover: hover) { .database-more-button:hover, .database-more-button[aria-expanded=true] { background: var(--hover-dim); color: var(--ink); } }
