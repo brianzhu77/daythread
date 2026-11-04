@@ -63,7 +63,7 @@
 ## 7. Release order, within Timeline
 
 1. Bars from one Date or a pair, moves and edges, Today, units, and the 390 list.
-2. The table beside it with calculations, arrows off-screen, Group.
+2. The table beside it with calculations, arrows off-screen, Group, **and Rollup and Formula dates as read-only bars (§3's last row),** which step 1 doesn't offer (Jazz c3ff1937).
 3. Sub-items and dependencies, when those ship.
 
 ## 8. Checks before release
