@@ -632,7 +632,7 @@ function TodoBox({ taskId, title }: { taskId: string; title: string }) {
 }
 
 /** Opening a row remembers it, so Back tints it for a second where he left it (design §5). */
-export function useOpenRow(view?: View, rows?: readonly Page[]) {
+export function useOpenRow(view?: View, rows?: readonly Page[], blockId?: string) {
   const navigate = useNavigate()
   const { latest } = useWorkspace()
   return (rowId: string, focus?: 'title') => {
@@ -645,7 +645,7 @@ export function useOpenRow(view?: View, rows?: readonly Page[]) {
       return
     }
     // The view's own setting, if the window has room for it (R4-11). The page behind already showing this row, nothing opens.
-    if (view?.openIn && !focus && window.innerWidth >= peekFloor) { openPeek(navigate, rowId, drawnRows(rowId) ?? rows?.map(r => r.id), view.openIn === 'side'); return }
+    if (view?.openIn && !focus && window.innerWidth >= peekFloor) { openPeek(navigate, rowId, (blockId ? drawnRows(blockId, rowId) : null) ?? rows?.map(r => r.id), view.openIn === 'side'); return }
     try { sessionStorage.setItem(returnKey, rowId) } catch { /* private mode */ } void navigate({ to: '/pages', search: { page: rowId, ...(focus ? { focus } : {}) } }) }
 }
 /** What a colour rule draws on a row or card (R4-12): a tint behind it, under whatever else is on it. */
@@ -872,7 +872,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const weekStart = workspace.weekStart ?? 0
   const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
-  const openRow = useOpenRow(view, rows)
+  const openRow = useOpenRow(view, rows, blockId)
   const wide = useWide()
   const wrap = useRef<HTMLDivElement>(null)
   const heads = useColumnHeads({ wide, blockId, databaseId: db.id, view, changeView, wrap })
