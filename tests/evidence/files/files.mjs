@@ -45,7 +45,7 @@ await scenario('Add two: each shows, they save on leaving, the bytes are stored,
   await choose(page, 'photo.png', 'notes.txt'); await wait(900)
   const r = { shown: await lines(page), beforeLeaving: held('one').length }
   await leave(page)
-  r.value = held('one').map(f => [f.name, f.size, f.type]); r.chips = await cell(page, 'one').locator('.property-chip').allInnerTexts(); r.stored = inFolder().length
+  r.value = held('one').map(f => [f.name, f.size, f.type]); r.chips = await cell(page, 'one').locator('.cell-file').allInnerTexts(); r.stored = inFolder().length
   const id = held('one').find(f => f.name === 'notes.txt').id
   const got = await context.request.get(`${base}/api/files/${id}?name=notes.txt`)
   r.back = await got.text(); r.disposition = got.headers()['content-disposition']

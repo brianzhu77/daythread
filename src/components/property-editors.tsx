@@ -9,7 +9,7 @@ import { Calendar, Modal } from '@heroui/react'
 import { parseDate } from '@internationalized/date'
 import { Link } from '@tanstack/react-router'
 import { taskIdOfRow, todoLine } from '../domain/todos-source'
-import { PagesIcon } from './icons'
+import { PagesIcon, PaperclipIcon } from './icons'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { fileLimits, todosSourceId, type FileValue } from '../domain/database.ts'
 import {
@@ -515,9 +515,9 @@ function FilesEditor(p: EditorProps) {
             {item.state === 'uploading' ? `${item.progress ?? 0}%` : item.state === 'failed' ? item.message : fileSizeLabel(item.value!.size)}
           </span>
           {item.state === 'failed' && item.file && <button type="button" onClick={() => start(item.key, item.file!)}>Retry</button>}
-          {item.state !== 'uploading' && <button type="button" aria-label={`Remove ${item.name}`} onClick={() => setItems(list => list.filter(i => i.key !== item.key))}>×</button>}
+          <button type="button" aria-label={`${item.state === 'uploading' ? 'Stop uploading' : 'Remove'} ${item.name}`} onClick={() => { running.current.get(item.key)?.(); running.current.delete(item.key); setItems(list => list.filter(i => i.key !== item.key)) }}>×</button>
         </div>)}
-        <label className="property-file-add">Add files<input type="file" multiple onChange={e => { add(e.target.files); e.target.value = '' }} /></label>
+        <label className="property-file-add">+ Add files<input type="file" multiple onChange={e => { add(e.target.files); e.target.value = '' }} /></label>
       </div>
     </EditorShell>
   )
@@ -679,7 +679,7 @@ export function PropertyCell({ property, value, row, today = todayIso(), wrap = 
     }
     case 'rollup':
     case 'formula': return null
-    case 'files': return <span className="cell-chips">{(read as FileValue[]).map(f => <span key={f.id} className="property-chip">{f.name}</span>)}</span>
+    case 'files': return <span className="cell-chips">{(read as FileValue[]).map(f => <span key={f.id} className="cell-file"><PaperclipIcon /><span>{f.name}</span></span>)}</span>
     case 'relation': {
       const chosen = (read as string[]).map(id => property.options?.find(o => o.id === id)).filter((o): o is Option => Boolean(o))
       // Titles as page refs, our `[[` look: each opens its row, and the rest of the cell opens the picker.
