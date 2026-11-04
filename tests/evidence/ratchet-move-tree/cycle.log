@@ -1,0 +1,3 @@
+MOVE ACCEPTED [{"id":"from"},{"id":"nested","parent":"kid"},{"id":"root","parent":"nested"},{"id":"kid","parent":"nested"}]
+CYCLE true
+UNDO [{"id":"from"},{"id":"root","parent":"from"},{"id":"kid","parent":"from"},{"id":"nested","parent":"kid"}]
