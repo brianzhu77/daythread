@@ -108,6 +108,18 @@ await head('First now').click(); await wait(300)
 await menu.getByRole('menuitem', { name: 'Delete property' }).click(); await wait(900); await closeMenu()
 check(order() === before, 'back to where it was', order())
 
+// The head's + and a row page's + Add property say so too, as Safari leaves no focus for ⌘Z after a click.
+await page.locator('.database-th.is-add button').click(); await wait(900)
+check(order() !== before && await page.getByRole('button', { name: 'Undo' }).count() > 0, 'the head\'s + has a notice with Undo', order())
+await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(900)
+check(order() === before, 'and its Undo takes the column away', order())
+await page.goto(`${base}/pages?page=dune`); await wait(1800)
+await page.locator('.row-property-add').click(); await wait(900)
+const addedFromRow = order().split(',').length
+await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(900)
+check(addedFromRow === before.split(',').length + 1 && order() === before, 'a row page\'s + Add property too', order())
+await page.goto(`${base}/pages?page=books`); await wait(2300)
+
 // Insert has a notice with Undo, and a closed menu leaves focus where ⌘Z reaches the table.
 await head('Pages').click(); await wait(300)
 await menu.getByRole('menuitem', { name: 'Insert left' }).click(); await wait(300)
