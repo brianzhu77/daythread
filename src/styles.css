@@ -201,7 +201,9 @@
 #bn-suggestion-menu .bn-suggestion-menu-label { padding: 10px 8px 4px; color: var(--ink-3); font-size: var(--text-caption); font-weight: var(--weight-regular); }
 #bn-suggestion-menu .bn-suggestion-menu-label:first-child { padding-top: 4px; }
 #bn-suggestion-menu > .bn-suggestion-menu-item { gap: 10px; min-height: 34px; padding: 4px 8px; border-radius: var(--radius-row); background: none; color: var(--ink); font-size: var(--text-ui); cursor: pointer; }
-#bn-suggestion-menu > .bn-suggestion-menu-item:hover, #bn-suggestion-menu > .bn-suggestion-menu-item[aria-selected="true"] { background: var(--hover-dim); color: var(--ink); }
+#bn-suggestion-menu > .bn-suggestion-menu-item[aria-selected="true"] { background: var(--hover-dim); color: var(--ink); }
+/* Not on a phone: where a tap last landed would stay lit, a second row beside the one he's on. */
+@media (hover: hover) { #bn-suggestion-menu > .bn-suggestion-menu-item:hover { background: var(--hover-dim); color: var(--ink); } }
 #bn-suggestion-menu > .bn-suggestion-menu-item > :first-child:has(svg, .slash-heading-icon) { display: inline-grid; flex: none; place-items: center; width: 20px; height: 20px; min-height: 0; padding: 0; color: var(--ink-2); }
 #bn-suggestion-menu > .bn-suggestion-menu-item svg { width: 18px; height: 18px; color: var(--ink-2); }
 #bn-suggestion-menu > .bn-suggestion-menu-item .text-base { font-size: var(--text-ui); line-height: 1.3; }
