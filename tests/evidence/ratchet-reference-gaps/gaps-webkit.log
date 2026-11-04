@@ -1,0 +1,19 @@
+PASS 1280: a one-way relation shows its row on the target "Linked from Something else"
+PASS 1280: and it opens that row "http://127.0.0.1:3699/pages?page=other"
+PASS 1280: a two-way relation doesn't: the target's own property names it ""
+PASS 1280: a linked view shows its page on the database, and the home isn't listed "Linked from Weekly plan"
+PASS 1280: a source in Trash doesn't take one of the first three places "Linked from Source s4 Source s3 Source s2 2 more"
+PASS 1280: it comes last, reading (removed) ["Source s4","Source s3","Source s2","Source s1","In the bin (removed)"]
+PASS 1280: and doesn't open 
+PASS 1280: a page with no references has no line 
+PASS 1280: no page errors []
+PASS 390: a one-way relation shows its row on the target "Linked from Something else"
+PASS 390: and it opens that row "http://127.0.0.1:3699/pages?page=other"
+PASS 390: a two-way relation doesn't: the target's own property names it ""
+PASS 390: a linked view shows its page on the database, and the home isn't listed "Linked from Weekly plan"
+PASS 390: a source in Trash doesn't take one of the first three places "Linked from Source s4 Source s3 Source s2 2 more"
+PASS 390: it comes last, reading (removed) ["Source s4","Source s3","Source s2","Source s1","In the bin (removed)"]
+PASS 390: and doesn't open 
+PASS 390: a page with no references has no line 
+PASS 390: no page errors []
+ALL PASS
