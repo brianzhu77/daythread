@@ -1,6 +1,6 @@
 # Timeline: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead, Roadbuster and Jazz to review**. Not approved and not built.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **steps 1 and 2 built and live** (#104, #108, 2026-11-04), except Rollup and Formula dates, now on R4-14. Checklist R4-1 and R4-2 say what differs.
 - Asked by the Lead (4a1712e6). Settles R4-1's open point. Nothing is cut for lack of evidence, and use only sets the order (Brian 57deaed7).
 - **Evidence:** Notion's help page on [timelines][t]. I read it; I haven't used Notion's timeline. It doesn't cover moving a bar along the scale, making a bar, Group, sub-items, rows with no dates or the phone, so those parts are my proposal.
 - **Brian's use:** no databases at the last read (Nov 3, rev 793), so examples are illustrations.
@@ -79,3 +79,23 @@ Add to R4-1 and R4-2 when built:
 - A copy of his real data at both widths (R3-18).
 
 [t]: https://www.notion.com/help/timelines
+
+## 9. As built, step 1 (Jazz, R4-1, R4-2, task #285)
+
+- **The unit** is a dropdown beside Today, and also in Layout. **End** in Layout picks a second date; "Same property" reads a range.
+- **Widths:** a day is 1152 px at Hours, 48 at Day, 24 at Week, 12 at Month, 4 at Quarter and 1.5 at Year. A bar is at least 10 px wide. A move or an edge snaps to an hour at Hours and a day at every other unit, so a date he didn't mean to change is never rounded.
+- **A bar off-screen** shows its name at the edge of its line with an arrow, and a tap goes to it. So a row is never a blank line while the table beside it isn't built.
+- **A date with a time** moves by hours at Hours and keeps its time elsewhere. One with no time moves by whole days at any unit.
+- **Scale:** it runs over the rows and today, and what's on screen stays on screen when a move changes where it starts. Today's line is the day's middle, or the time now at Hours.
+- **It opens** where it was left on this device, or on today. Only a view filtered to this page's day opens on that day.
+- **A rollup or formula date** isn't offered, as on a Calendar, so §3's last row doesn't arise yet.
+
+## 10. As built, step 2 (Jazz)
+
+- **The table:** `«` and `»` beside the scale, saved on the view. It shows Name and the view's properties, and it's pinned, so a row and its bar stay on one line and scroll as one. A tap on a cell edits it, as in a table.
+- **It takes at most 60% of the width,** so the bars keep room. Columns past that aren't drawn: the head says "· 3 more", which opens Properties. **Not as Notion:** its table scrolls on its own, and I didn't build that first.
+- **Calculations** sit at the table's foot, each group with its own, as a table's do. `⋯` → Calculate shows only while the table does.
+- **Rows up and down** drag by the table's handle when the view isn't sorted, across groups too. With the table closed there's no handle: a bar's drag is along the scale.
+- **Group** works as in a list: a section each, its fold, its cap and its `+ New`. Rows with no dates stay on the one "No date" line, not in their groups.
+- **A row with no dates:** a drag across its lane sets a range, and a click sets one day.
+- **Still to do:** Rollup and Formula dates (R4-14, with Calendar), and sub-items and dependencies when those ship.
