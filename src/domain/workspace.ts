@@ -537,7 +537,7 @@ function claimLineIds(state: Workspace, p: Page, nodes: readonly EditorNode[]): 
 
 // ---------------------------------------------------------------- commands
 
-function execute(state: Workspace, action: Action, operationId: string): { message: string; entityId?: string; skippedRepeats?: Array<{ title: string; earlier: string }>; renamed?: Record<string, string>; conflicted?: string[] } {
+function execute(state: Workspace, action: Action, operationId: string): { message: string; entityId?: string; skippedRepeats?: Array<{ title: string; earlier: string; full?: true }>; renamed?: Record<string, string>; conflicted?: string[] } {
   switch (action.type) {
     case "save-editor": {
       const p = page(state, action.pageId);
@@ -975,20 +975,25 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       try { return { message: changeDatabase(state, p, action.change), entityId: p.id }; } catch (error) { throw new DomainError((error as Error).message); }
     }
     case "run-repeats": {
-      const skipped: Array<{ title: string; earlier: string }> = [];
+      const skipped: Array<{ title: string; earlier: string; full?: true }> = [];
       let made = 0;
       for (const { database, template, dates, skipped: missed } of dueRepeats(state, action.today, action.time)) {
         const repeat = database.database.repeats![template.id]!;
+        let noRoom = 0;
         for (const date of dates.slice(0, databaseLimits.rowsAtOnce)) {
           const pageId = repeatRowId(template.id, date);
           // A row he's deleted since, or one another tab just made, stays as it is.
-          if (!state.pages.some((p) => p.id === pageId) && databaseRows(state, database.id).length < 10_000) {
-            execute(state, { type: "add-row", databaseId: database.id, pageId, title: template.title, template: template.id, at: action.at }, operationId);
-            made++;
+          if (!state.pages.some((p) => p.id === pageId)) {
+            if (databaseRows(state, database.id).length < 10_000) {
+              execute(state, { type: "add-row", databaseId: database.id, pageId, title: template.title, template: template.id, at: action.at }, operationId);
+              made++;
+            } else noRoom++;
           }
+          // On past a full database too, so its one notice doesn't come back on every open.
           repeat.last = date;
           repeat.lastRan = action.at;
         }
+        if (noRoom) skipped.push({ title: template.title.trim() || "Untitled", earlier: periodWord(repeat, noRoom, ""), full: true });
         if (missed) skipped.push({ title: template.title.trim() || "Untitled", earlier: periodWord(repeat, missed) });
       }
       return { message: made ? `${made} repeating row${made === 1 ? "" : "s"} made` : "Nothing due", ...(skipped.length ? { skippedRepeats: skipped } : {}) };
@@ -1224,7 +1229,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   let state = structuredClone(input);
   const { undo: _previousUndo, receipts: _receipts, ...rest } = input;
   const before = { ...structuredClone(rest), receipts: {} as Workspace["receipts"] };
-  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number; shifted?: string[]; skippedRepeats?: Array<{ title: string; earlier: string }> };
+  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number; shifted?: string[]; skippedRepeats?: Array<{ title: string; earlier: string; full?: true }> };
   if (command.action.type === "undo") {
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");

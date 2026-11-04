@@ -132,3 +132,13 @@ test('weekdays: only Weekly keeps them, a bad day is refused, and one weekday st
   s.set({ weekdays: [1] })
   assert.deepEqual(s.tick('2026-11-23').receipt.skippedRepeats, [{ title: 'Weekly review', earlier: '3 earlier weeks' }])
 })
+test('a full database: no row, one notice for the period it lost, and it doesn\'t come back on the next open', () => {
+  const s = setup({ every: 'day', start: '2026-11-02' })
+  const filler = Array.from({ length: 10_000 }, (_, n) => ({ id: `f${n}`, type: 'document' as const, date: null, title: '', parentId: 'log', document: '[]', createdAt: at, editedAt: at }))
+  s.h.ws.pages.push(...filler as never[])
+  const first = s.tick('2026-11-02')
+  assert.equal(s.rows().some(p => p.id === repeatRowId('weekly', '2026-11-02')), false)
+  assert.deepEqual(first.receipt.skippedRepeats, [{ title: 'Weekly review', earlier: '1 day', full: true }])
+  assert.equal(s.tick('2026-11-02').receipt.skippedRepeats, undefined, 'once')
+})
+

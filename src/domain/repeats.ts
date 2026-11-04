@@ -75,4 +75,4 @@ export function dueRepeats(ws: Workspace, today: string, time: string): DueRepea
 /** Stable for a template and a period: what keeps it to one row. */
 export const repeatRowId = (templateId: string, date: string) => `${templateId.slice(0, 100)}.${date}`
 /** With more than one weekday a week holds several rows, so it counts rows. */
-export const periodWord = (repeat: Repeat, n: number) => `${n} earlier ${(repeat.weekdays?.length ?? 0) > 1 ? 'row' : repeat.every}${n === 1 ? '' : 's'}`
+export const periodWord = (repeat: Repeat, n: number, earlier = 'earlier ') => `${n} ${earlier}${(repeat.weekdays?.length ?? 0) > 1 ? 'row' : repeat.every}${n === 1 ? '' : 's'}`

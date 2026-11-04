@@ -58,7 +58,7 @@ export interface Receipt {
   /** save-editor: synced blocks that changed elsewhere meanwhile, where his version went below them. */
   conflicted?: string[];
   /** run-repeats: what it left out, for one notice. */
-  skippedRepeats?: Array<{ title: string; earlier: string }>;
+  skippedRepeats?: Array<{ title: string; earlier: string; full?: true }>;
   /** save-editor: lines left a synced block shown on this many pages. */
   linesRemovedFrom?: number;
   /** A cell edit that moved the rows it blocks: which ones. */

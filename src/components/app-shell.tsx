@@ -1,4 +1,4 @@
-import { todayIso } from './dates'
+import { toIso } from './dates'
 import { dueRepeats } from '../domain/repeats'
 import { Toast } from '@heroui/react'
 import { usePreview } from './preview'
@@ -45,9 +45,9 @@ function RepeatingRows() {
     const opening = !opened.current
     opened.current = true
     if (!opening && Date.now() - lastInput.current < idleBeforeRepeats) return
-    const now = new Date(), today = todayIso(), time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    const now = new Date(), today = toIso(now), time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
     if (!dueRepeats(workspace, today, time).length) return
-    void run({ type: 'run-repeats', today, time, at: now.toISOString() }, r => (r.skippedRepeats?.length ? { text: r.skippedRepeats.map(s => `${s.title} · ${s.earlier} skipped`).join(' · ') } : null), undefined, { quiet: true, inlineRefusal: /Saved elsewhere/, onRefused: () => {} })
+    void run({ type: 'run-repeats', today, time, at: now.toISOString() }, r => (r.skippedRepeats?.length ? { text: r.skippedRepeats.map(s => `${s.title} · ${s.earlier} skipped${s.full ? ' · database full' : ''}`).join(' · ') } : null), undefined, { quiet: true, inlineRefusal: /Saved elsewhere/, onRefused: () => {} })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, revision])
   return null
