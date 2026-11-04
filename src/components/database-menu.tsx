@@ -21,7 +21,7 @@ import { useKeyboardTop } from './keyboard'
 import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
-type Panel = 'root' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | { formula: string } | 'export' | 'new-property' | 'views' | 'templates' | { template: string }
+type Panel = 'root' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | { formula: string } | 'export' | 'more' | 'new-property' | 'views' | 'templates' | { template: string }
 interface OpenMenu { blockId: string; databaseId: string; panel: Panel; /** From `+ New ⌄`: a pick makes the row, in its place. */ pick?: (template: string | null) => void }
 /** The views list opens under "Table ⌄" on the left; every other panel under the `⋯` on the right. */
 const anchorOf = (m: OpenMenu) => m.panel === 'views' ? `[data-database-views="${CSS.escape(m.blockId)}"]` : `[data-database-menu="${CSS.escape(m.blockId)}"]`
@@ -119,6 +119,7 @@ export function DatabaseMenuHost() {
     {open.panel === 'calculate' && <CalculatePanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'filter' && <FilterPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'sort' && <SortPanel db={db} view={view} back={() => go('root')} />}
+    {open.panel === 'more' && <MoreSettingsPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'export' && <ExportPanel db={db} view={view} blockId={open.blockId} back={() => go('root')} close={() => setOpenMenu(null)} />}
     {open.panel === 'properties' && <PropertiesPanel db={db} view={view} go={go} />}
     {open.panel === 'new-property' && <NewPropertyPanel db={db} view={view} go={go} />}
@@ -172,6 +173,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     {view.layout !== 'calendar' && view.layout !== 'timeline' && !wide && !db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}
     {(view.layout === 'table' || view.layout === 'board' || (view.layout === 'timeline' && view.timelineTable)) && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('templates')}>Templates<span className="database-menu-chevron">›</span></button>}
+    {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('more')}>More settings<span className="database-menu-chevron">›</span></button>}
     <hr />
     {(inline || linked) && !db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); void navigate({ to: '/pages', search: { page: db.id } }) }}>Open as page</button>}
     {(inline || linked) && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.duplicate(blockId) }}>Duplicate</button>}
@@ -183,6 +185,37 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     {linked
       ? <button type="button" role="menuitem" className="is-danger" onClick={() => { close(); actions?.remove(blockId) }}>Remove this view</button>
       : <button type="button" role="menuitem" className="is-danger" onClick={remove}>Delete database</button>}
+  </>
+}
+
+// ---------------------------------------------------------------- more settings (sub-items design §2)
+
+function MoreSettingsPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
+  const change = useChange(db)
+  const changeView = useViewChange(db.id, view.id)
+  const on = Boolean(db.database.subItems)
+  const nests = view.layout === 'table' || view.layout === 'list'
+  // Off, and back on, it picks up the same two relations and every link in them.
+  const toggle = (next: boolean) => {
+    if (!next) { change({ kind: 'setSubItems', on: null }, true); return }
+    const kept = db.database.properties.find(p => p.type === 'relation' && p.target === db.id && p.mirror && p.limit === 1)
+    change({ kind: 'setSubItems', on: kept ? { parent: kept.id, sub: kept.mirror!, using: true } : { parent: crypto.randomUUID(), sub: crypto.randomUUID() } }, true)
+  }
+  return <>
+    <Head title="More settings" back={back} />
+    <label className="database-menu-row">Sub-items
+      <input type="checkbox" checked={on} onChange={e => toggle(e.target.checked)} />
+    </label>
+    {on && nests && <label className="database-menu-row">Show
+      <select aria-label="Show sub-items" value={view.subItemsDisplay ?? 'nested'} onChange={e => { const subItemsDisplay = e.target.value as View['subItemsDisplay']; changeView(() => ({ subItemsDisplay })) }}>
+        <option value="nested">Nested in toggle</option><option value="flat">Flattened list</option>
+      </select>
+    </label>}
+    {on && <label className="database-menu-row">Rows
+      <select aria-label="Which rows" value={view.subItemsShow ?? 'both'} onChange={e => { const subItemsShow = e.target.value as View['subItemsShow']; changeView(() => ({ subItemsShow })) }}>
+        <option value="both">Parents and sub-items</option><option value="parents">Parents only</option><option value="subs">Sub-items only</option>
+      </select>
+    </label>}
   </>
 }
 
