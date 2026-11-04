@@ -68,6 +68,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("create-database"), pageId: id, parentId: id.nullable().optional(), homeBlockId: id.nullable(), title }),
   z.object({ type: z.literal("change-database"), pageId: id, change }),
   z.object({ type: z.literal("add-rows"), databaseId: id, rows: z.array(z.object({ pageId: id, title, values: values.optional() })).min(1).max(10_000), at }),
+  z.object({ type: z.literal("import-csv"), databaseId: id, create: z.object({ parentId: id.nullable().optional(), homeBlockId: id.nullable(), title }).optional(), changes: z.array(change).max(200), rows: z.array(z.object({ pageId: id, title, values: values.optional() })).max(10_000), at }),
   z.object({ type: z.literal("paste-cells"), databaseId: id, items: z.array(rowEdit).max(1000), rows: z.array(z.object({ pageId: id, title, values: values.optional() })).max(1000), at }),
   z.object({ type: z.literal("add-row"), databaseId: id, pageId: id, title, values: values.optional(), beforeId: id.nullable().optional(), copyOf: id.optional(), template: id.optional(), at }),
   z.object({ type: z.literal("set-values"), ...rowEdit.shape, beforeId: id.nullable().optional(), newTodos: z.array(z.object({ id, title: title.min(1), on: day })).max(100).optional(), at }),

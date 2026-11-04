@@ -3,6 +3,8 @@ import { PlusIcon } from './icons'
 import { holdKeyboard } from './keyboard'
 
 /** Pages' `+` (design §3.1): Page first (Enter takes it), then Database. */
+import { chooseCsv } from './csv-import'
+
 export function NewPageMenu({ onPage, onDatabase, className = 'round-add', children = <PlusIcon /> }: { onPage: () => void; onDatabase: () => void; className?: string; children?: ReactNode }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -19,6 +21,7 @@ export function NewPageMenu({ onPage, onDatabase, className = 'round-add', child
     {open && <div className="app-menu new-page-menu-list" role="menu" onKeyDown={e => { if (e.key === 'Escape') setOpen(false) }}>
       <button type="button" role="menuitem" autoFocus onClick={() => pick(onPage)}>Page</button>
       <button type="button" role="menuitem" onClick={() => pick(onDatabase)}>Database</button>
+      <button type="button" role="menuitem" onClick={() => { setOpen(false); chooseCsv({ kind: 'new' }) }}>Import CSV</button>
     </div>}
   </div>
 }

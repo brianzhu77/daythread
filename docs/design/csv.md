@@ -1,6 +1,6 @@
 # CSV export, CSV import and pasting TSV: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead and Roadbuster to review**. Not approved and not built. Task #289, checklist R4-7, R4-8, R4-9, whose rows hold the acceptance bar and the Notion sources. This doc adds only what they leave open.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **built and live** (R4-7 and R4-9 #102, R4-8 #103, 2026-11-04); the checklist rows say what differs. Task #289, checklist R4-7, R4-8, R4-9, whose rows hold the acceptance bar and the Notion sources. This doc adds only what they leave open.
 - **Evidence:** Notion's [export][e] and [import][i] pages, as read for those rows. Excel's and Numbers' behaviour below is from what I know and **needs one real file from each,** as no test has run. I read our code on main.
 
 ## 1. Recommended order
@@ -62,6 +62,26 @@ R4-8 asks for up to 10,000 rows as one change with one Undo. **That's a single c
 - **Not acceptable:** splitting into batches that break "one Undo", or a partial import that stops midway and leaves some rows.
 
 **Measured (Roadbuster f4d4ebd1):** 10,000 rows and 5 columns as one command fits: 640 ms on `wrangler dev` with local Postgres, and Undo works. But every command reads the whole workspace, so an ordinary save afterwards goes from 2 ms to about 100 ms. With Node's heap capped at 100 MB as a stand-in for the Worker's 128 MB, two imports worked and the third ran out of memory, and on the Worker that would likely stop the app loading. So R4-8 has **a workspace size limit as well as the row limit, about 10 MB (Lead 6934c378).** A deployed run confirms the ceiling if Roadbuster can get one. Brian's pages and tasks were 106 KB on Nov 3, after 13 days of day pages, about 8 KB a day, which is about 3 years to 10 MB at that rate. That's a small sample.
+
+**The known limit (Roadbuster, 2026-11-04):** every command reads the whole workspace, so what's stored sets what a Worker can hold, and that's the ceiling, not an import. Measured in Node with local Postgres: a save costs about 2 ms on a nearly empty workspace, about 100 ms at 10,000 rows and about 735 ms CPU at 20,000. With the heap capped at 100 MB, the third import of 10,000 ran out of memory. A deployed Worker didn't settle it: `wrangler deploy --temporary` runs on limits that give the same error, 1102, for CPU and memory, so the real ceiling is still unmeasured, and the 100 MB run is the evidence for 10 MB. `workspaceBytes` counts titles, bodies and values, with an allowance per page. It isn't a byte count of the JSON.
+
+**Nearly full:** past 8 MB, one toast per tab says so and refuses nothing. It looks when pages come or go, and on load.
+
+**The way back, if a workspace ever passes the ceiling and won't load.** Run on throwaway Postgres on Nov 4 with 150,000 rows put in directly: with the heap capped at 100 MB the load ran out of memory, and after these steps it loaded at 11 MB. Not run on the production schema. Take a backup first, and use the schema's real name for `daythread`:
+
+```sql
+-- 1. What's big, largest first.
+select coalesce(parent_id, '(top level)') as parent, count(*) as rows, pg_size_pretty(sum(length(title) + length(document) + coalesce(length(row_values::text), 0))) as size
+  from daythread.pages where workspace_id = $1 group by 1 order by sum(length(title) + length(document) + coalesce(length(row_values::text), 0)) desc limit 5;
+-- 2. Park that database's rows beside the table, so nothing is lost, and take them out of what's read.
+begin;
+create table daythread.parked_pages as select * from daythread.pages where workspace_id = $1 and parent_id = $2;
+delete from daythread.pages where workspace_id = $1 and parent_id = $2;
+update daythread.workspaces set revision = revision + 1 where id = $1;
+commit;
+```
+
+Bringing some back is `insert into daythread.pages select * from daythread.parked_pages where ...`, also run. The database stays, empty, with its properties. Its rows' sub-pages, if they have any, stay as pages whose parent's gone, so check for those first. Undo can't cross this step.
 
 ## 6. Open
 

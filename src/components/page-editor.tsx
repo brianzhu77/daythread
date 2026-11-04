@@ -16,6 +16,7 @@ import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { linkedViewJson, linkedViewOf } from '../domain/linked-view'
+import { chooseCsv } from './csv-import'
 import { blockLinesKey, blockUpdates, mirroredLines, ownLineIds, syncedBlockType, syncedPlaces, writtenDocument, type BlockUpdate } from '../domain/synced'
 import { syncedKeys } from './synced-keys'
 import { SyncedEditorActions, SyncedLabel, type SyncedActions } from './synced-label'
@@ -1322,6 +1323,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     setDatabasePending(pageId, null)
     requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`.database-title[data-database="${CSS.escape(pageId)}"]`)?.focus())
   }
+  /** An imported database's block goes in and saves first, so the import is the last change and one Undo can take it. */
+  async function placeImportedDatabase(pageId: string): Promise<string | null> {
+    const blockId = insertDatabaseBlock({ pageId })
+    madeHere.current.add(pageId)
+    setDatabasePending(pageId, { state: 'creating', retry: () => {} })
+    await flushRef.current()
+    setDatabasePending(pageId, null)
+    return blockId
+  }
   async function confirmSubpage(pageId: string, cardId: string | undefined, open: boolean) {
     const retry = () => void confirmSubpage(pageId, cardId, false)
     setPending(pageId, { state: 'creating', parentId: page.id, retry })
@@ -1850,7 +1860,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }), [editor])
   // Press-tint cleanup lives here, not in the side menu: BlockNote unmounts the side menu while a drag is in flight.
   useEffect(() => {
-    const clear = () => document.querySelectorAll('.is-picked').forEach(el => el.classList.remove('is-picked'))
+    const clear = () => document.querySelectorAll('[data-node-type="blockContainer"].is-picked').forEach(el => el.classList.remove('is-picked'))
     // ProseMirror doesn't redraw the browser selection while the editor is unfocused after a drop, so collapse both.
     // The picked ids survive the drop event itself: the editor's drop handler below reads them after this capture.
     const settle = () => { clear(); requestAnimationFrame(() => { const { state } = editor.prosemirrorView; if (!state.selection.empty) editor.prosemirrorView.dispatch(state.tr.setSelection(TextSelection.near(state.selection.$to, -1))); const dom = window.getSelection(); if (dom && !dom.isCollapsed && editor.prosemirrorView.dom.contains(dom.focusNode)) dom.collapseToEnd() }) }
@@ -2564,7 +2574,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           e.preventDefault(); e.stopPropagation()
           const first = selected.current[0]!
           selected.current = []; extendedIds.current = []; setSelectionLabel('')
-          document.querySelectorAll('.is-picked').forEach(el => el.classList.remove('is-picked'))
+          document.querySelectorAll('[data-node-type="blockContainer"].is-picked').forEach(el => el.classList.remove('is-picked'))
           if (editor.getBlock(first)) editor.setTextCursorPosition(first, 'end')
           editor.focus()
           return
@@ -2638,6 +2648,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           editor.setTextCursorPosition(lineId, 'start')
         } }
         const pageItem = { title: 'Page', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
+        // Pick the file, see the preview, and only then does a block appear (R4-8).
+        const csvItem = { title: 'CSV', icon: <span className="slash-grid-icon" aria-hidden>▦</span>, aliases: ['csv', 'import', 'tsv', '导入'], group: 'Other', onItemClick: () => chooseCsv({ kind: 'new', parentId: page.id, place: placeImportedDatabase }) }
         const databaseItem = { title: 'Database', icon: <span className="slash-grid-icon" aria-hidden>▦</span>, aliases: ['database', 'table', 'db', '数据库', '表格'], group: 'Suggested', onItemClick: chooseDatabase }
         // A9a §3: the phone's way to `[[` (v0.3's toolbar button), through the same + menu.
         const linkItem = { title: 'Link to page', icon: <PagesIcon />, aliases: ['link', '[[', '链接', '引用'], group: 'Suggested', onItemClick: () => {
@@ -2647,7 +2659,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // Every item stays in the list; the menu scrolls past about 8 rows (F13). A cut hid Quote until its name was typed.
         // Database sits after Page and Link to page (design §3.1). In a template, only a linked view can be made, so it
         // needs a database to show (§9.4).
-        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, databaseItem, syncedItem, ...first, ...rest], query)
+        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, databaseItem, syncedItem, ...first, ...rest, ...(onTemplate ? [] : [csvItem])], query)
       }} />
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}
@@ -2746,7 +2758,7 @@ function SectionSideMenu({ select, picked, extended, selectedIds }: { select(id:
       editor.prosemirrorState.doc.descendants((node, position) => { if (node.type.name === 'blockContainer' && node.attrs.id === block.id) pos = position })
       if (pos >= 0) editor.prosemirrorView.dispatch(editor.prosemirrorState.tr.setSelection(NodeSelection.create(editor.prosemirrorState.doc, pos)))
     }
-    document.querySelectorAll('.is-picked').forEach(el => el.classList.remove('is-picked'))
+    document.querySelectorAll('[data-node-type="blockContainer"].is-picked').forEach(el => el.classList.remove('is-picked'))
     for (const node of range)
       editor.domElement?.querySelector(`[data-node-type="blockContainer"][data-id="${CSS.escape(node.id)}"]`)?.classList.add('is-picked')
   }
