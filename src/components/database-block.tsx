@@ -9,7 +9,7 @@ import { type CSSProperties, createContext, Fragment, useContext, useEffect, use
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
 import { treeEntries, type TreeEntry } from '../domain/sub-items'
-import { rowColour, showsSubItemsOnCards, databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { limits as databaseLimits, rowColour, showsSubItemsOnCards, databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -21,7 +21,7 @@ import { defaultRowTemplate } from '../domain/day-template'
 import { useTaskTick, useWorkspace } from './use-day'
 import { announceSave } from './draft-slots'
 import { taskRows } from '../domain/workspace'
-import { newTodo, newTodoRowId, taskIdOfRow, todoChange, todoLine, todoMoves, todoRowId, todosSourceId, readingWorkspace, withTodos } from '../domain/todos-source'
+import { newTodo, newTodoRowId, taskIdOfRow, todoBarColumns, todoChange, todoLine, todoRowId, todosSourceId, readingWorkspace, withTodos } from '../domain/todos-source'
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
 import { DatabaseTimeline } from './database-timeline'
@@ -524,6 +524,7 @@ export function useGroupLimits(blockId: string, cap: number) {
 export function useMoveRow(db: Page & { database: Database }, view: View, context: ViewContext, groups: ViewGroups | null) {
   const { run, latest } = useWorkspace()
   const commit = useCommitCell()
+  const moveRows = useMoveRows(db, view, context, groups)
   return (rowId: string, from: string | null, to: string | null, before: string | null, shown: readonly Page[]) => {
     const stored = latest()
     const ws = stored && db.database.fixed ? withTodos(stored) : stored
@@ -553,13 +554,8 @@ export function useMoveRow(db: Page & { database: Database }, view: View, contex
     const { moved, hidden } = moves
     const notice = `Moved to ${target.name}${hidden ? " · hidden by this view's filter" : ''}`
     if (moved.length === 1) { commit(db, row, moved[0]!.id, moved[0]!.value, notice, undefined, beforeId); return }
-    // To-dos have a command per column, so there it's one each, each reading what the last one left.
-    if (db.database.fixed) {
-      const taskId = taskIdOfRow(row.id), sends = taskId ? todoMoves(ws, taskId, moved) : moved
-      const send = (i: number) => { const m = sends[i]; if (m) commit(db, row, m.id, m.value, undefined, () => send(i + 1)) }
-      send(0)
-      return
-    }
+    // To-dos: a finished one dropped on Open in a day is two changes to one task, and one Undo (#92's exception).
+    if (db.database.fixed) { moveRows([{ rowId, from }], to); return }
     commit(db, row, moved[0]!.id, moved[0]!.value, notice, undefined, beforeId, moved.slice(1).map(m => ({ columnId: m.id, raw: m.value })))
   }
 }
@@ -569,7 +565,7 @@ type CellMoves = { id: string; value: Json | undefined }[]
 export function useMoveRows(db: Page & { database: Database }, view: View, context: ViewContext, groups: ViewGroups | null) {
   const { run, latest } = useWorkspace()
   return (moving: readonly { rowId: string; from: string | null }[], to: string) => {
-    const ws = latest()
+    const stored = latest(), ws = stored && db.database.fixed ? withTodos(stored) : stored
     if (!ws || !groups) return
     const target = viewSection(db.database, view, withPendingMoves(viewRows(ws, db.id, view, context)), to, shownRaw, context.weekStart)
     if (!target) return
@@ -584,7 +580,10 @@ export function useMoveRows(db: Page & { database: Database }, view: View, conte
     if (!moves.length) return
     const expectedOf = (row: Page, id: string): Json => { const flying = pendingCells.get(pendingKey(row.id, id)); return ((flying && !flying.failed ? flying.raw : rawOf(row, id)) ?? null) as Json }
     const items = moves.map(({ row, moved }) => ({ pageId: row.id, values: Object.fromEntries(moved.map(m => [m.id, (m.value ?? null) as Json])), expected: Object.fromEntries(moved.map(m => [m.id, expectedOf(row, m.id)])) }))
-    const notice = `${moves.length === 1 ? '1 row' : `${moves.length} rows`} moved to ${target.name}${moves.some(m => m.hidden) ? " · hidden by this view's filter" : ''}`
+    const notice = `${moves.length === 1 ? (db.database.fixed ? '1 to-do' : '1 row') : `${moves.length} ${db.database.fixed ? 'to-dos' : 'rows'}`} moved to ${target.name}${moves.some(m => m.hidden) ? " · hidden by this view's filter" : ''}`
+    // To-dos: one command for all of them, each ending as if edited alone (R4-17). It says how many couldn't. Past its limit, nothing moves, and the bar has already said why.
+    const todoItems = db.database.fixed ? moves.flatMap(({ row, moved }) => { const taskId = taskIdOfRow(row.id); return taskId ? [{ taskId, changes: moved.map(m => ({ columnId: m.id, value: (m.value ?? null) as Json })) }] : [] }) : null
+    if (todoItems && todoItems.length > todosAtOnce) { toast(`${todosAtOnce} at most`, { timeout: 4000 }); return }
     // One failed save is one change to retry, so all but the first cell are parts of it.
     const show = (failed: boolean | null) => {
       let first = true
@@ -596,7 +595,7 @@ export function useMoveRows(db: Page & { database: Database }, view: View, conte
     }
     function send() {
       show(false)
-      void run({ type: 'set-values-many', items, at: new Date().toISOString() }, r => ({ text: notice, undoOperationId: r.operationId }), newId(), {
+      void run(todoItems ? { type: 'edit-todos', items: todoItems, today: todayIso() } : { type: 'set-values-many', items, at: new Date().toISOString() }, r => ({ text: /couldn't/.test(r.message) ? r.message : notice, undoOperationId: r.operationId }), newId(), {
         quiet: true, inlineRefusal: /Saved elsewhere|Changed elsewhere/, onRefused: () => { show(null); toast('A row changed elsewhere, so nothing moved', { timeout: 6000 }) },
       }).then(r => { if (r) show(null); else if ([...pendingCells.values()].some(p => p.databaseId === db.id && p.retry === send)) show(true) })
     }
@@ -1104,8 +1103,8 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const rowLine = (row: Page, index: number, group?: string, tint = rowTint(db.database, view, row, context)) => <tr key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})} {...(tint ? { style: tint.style } : {})} className={`database-row${tint && tint.rule.scope !== 'property' ? tint.className : ''}${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${treeOf.get(row.id)?.context ? ' is-context' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
             <td className={`database-td is-title${view.wrapName ? ' is-wrapped' : ''}${tint?.rule.scope === 'property' && tint.rule.rule.by === titleId ? ' has-tint' : ''}`}><div className="database-title-inner">
               {wide && <span className="database-pin-strip" />}
-              {wide && !db.database.fixed && <span className="database-row-gutter">
-                {!view.sort.length && !treeOf.get(row.id)?.depth && <span className="database-row-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
+              {wide && <span className="database-row-gutter">
+                {!db.database.fixed && !view.sort.length && !treeOf.get(row.id)?.depth && <span className="database-row-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
                 <input type="checkbox" className="database-row-pick" aria-label={`Select ${displayPageTitle(row)}`} checked={picked.includes(row.id)} onChange={() => undefined} onClick={e => pick(row.id, e.shiftKey)} />
               </span>}
               {/* A row opens as a page, from Name, at both widths (design §5). */}
@@ -1257,9 +1256,25 @@ export function useRowPicking(blockId: string, db: Page & { database: Database }
 type RowPicking = ReturnType<typeof useRowPicking>
 
 /** The bar for several rows. Where a view's rows run long it stays in sight (`floating`); on the phone, above the toolbar. */
+/** A press on the bar doesn't reach the editor: focus there can redraw the block under the press, so the click never lands, and brings up its toolbar over the bar on a phone. */
+const keepEditorFocus = (e: ReactMouseEvent) => e.preventDefault()
+
+/** To-dos go in one command, one Undo, and it takes so many at once. Here and nowhere else: past it the bar says so, rather than the command refusing. */
+const todosAtOnce = databaseLimits.rowsAtOnce
+
 export function PickedBar({ picks: { picked, setPicked, picking, stopPicking, deletePicked, pickable, editing, setEditing }, db, floating }: { picks: RowPicking; db: Page & { database: Database }; floating?: boolean }) {
   if (!picked.length && !picking) return null
-  return <div className={`database-picked-bar${picking ? ' is-picking' : floating ? ' is-floating' : ''}`} role="toolbar" aria-label="Selected rows">
+  // To-dos (R4-17): no Delete, as it would take lines off day pages not in view; a to-do can still be deleted from its line.
+  if (db.database.fixed) {
+    const over = picked.length > todosAtOnce
+    return <div className={`database-picked-bar${picking ? ' is-picking' : floating ? ' is-floating' : ''}`} role="toolbar" aria-label="Selected to-dos" onMouseDown={keepEditorFocus}>
+      <span>{picked.length === 1 ? '1 to-do' : `${picked.length} to-dos`}{picked.length >= todosAtOnce && ` · ${todosAtOnce} at most`}</span>
+      {picked.length > 0 && !over && <EditPickedButton db={db} rowIds={picked} editing={editing} setEditing={setEditing} />}
+      {picking && (() => { const all = pickable(); return picked.length < Math.min(all.length, todosAtOnce) && <button type="button" className="app-link" onClick={() => setPicked(all.slice(0, todosAtOnce))}>All</button> })()}
+      <button type="button" className="app-link" onClick={stopPicking}>Done</button>
+    </div>
+  }
+  return <div className={`database-picked-bar${picking ? ' is-picking' : floating ? ' is-floating' : ''}`} role="toolbar" aria-label="Selected rows" onMouseDown={keepEditorFocus}>
     <span>{picked.length === 1 ? '1 row' : `${picked.length} rows`}</span>
     {picked.length > 0 && <EditPickedButton db={db} rowIds={picked} editing={editing} setEditing={setEditing} />}
     {picked.length > 0 && <button type="button" className="app-link is-danger" onClick={deletePicked}>Delete</button>}
@@ -1282,14 +1297,14 @@ export function useCardPicking(picks: RowPicking, db: Page & { database: Databas
   const { setPicked, picking, pick } = picks
   const [box, setBox] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const onClickCapture = (e: ReactMouseEvent) => {
-    if (db.database.fixed || !(e.currentTarget as Element).contains(e.target as Node)) return
+    if (!(e.currentTarget as Element).contains(e.target as Node)) return
     const rowId = pickedRowAt(e.target)
     if (!rowId || !(picking || e.shiftKey || e.metaKey || e.ctrlKey)) return
     e.preventDefault(); e.stopPropagation()
     pick(rowId, !picking && e.shiftKey)
   }
   const onPointerDown = (e: ReactPointerEvent) => {
-    if (db.database.fixed || !wide || e.pointerType !== 'mouse' || e.button !== 0 || !onEmptySpace(e)) return
+    if (!wide || e.pointerType !== 'mouse' || e.button !== 0 || !onEmptySpace(e)) return
     const start = { x: e.clientX, y: e.clientY }, adding = e.shiftKey || e.metaKey || e.ctrlKey, before = adding ? picks.picked : []
     let lifted = false
     const move = (ev: PointerEvent) => {
@@ -1308,7 +1323,7 @@ export function useCardPicking(picks: RowPicking, db: Page & { database: Databas
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up)
   }
   // A press on empty space selects no text: that would move the page's selection under the box.
-  const onMouseDown = (e: ReactMouseEvent) => { if (!db.database.fixed && wide && onEmptySpace(e)) e.preventDefault() }
+  const onMouseDown = (e: ReactMouseEvent) => { if (wide && onEmptySpace(e)) e.preventDefault() }
   const boxDrawn = box ? createPortal(<div className="database-pick-box" style={box} aria-hidden="true" />, document.body) : null
   return { props: { onClickCapture, onPointerDown, onMouseDown }, boxDrawn }
 }
@@ -1319,13 +1334,19 @@ function EditPickedButton({ db, rowIds, editing, setEditing }: { db: Page & { da
   const property = editing ? db.database.properties.find(p => p.id === editing) ?? null : null
   const anchor = useRef<HTMLButtonElement>(null)
   const rows = (workspace?.pages ?? []).filter(p => rowIds.includes(p.id) && !p.trashedAt)
+  const todos = Boolean(db.database.fixed)
   const apply = (raw: Json | undefined) => {
     const p = property!
     setEditing(null)
+    if (todos) {
+      const items = rowIds.flatMap(id => { const taskId = taskIdOfRow(id); return taskId ? [{ taskId, changes: [{ columnId: p.id, value: (raw ?? null) as Json }] }] : [] })
+      if (items.length) void run({ type: 'edit-todos', items, today: todayIso() }, r => ({ text: r.message, undoOperationId: r.operationId }))
+      return
+    }
     const items = rows.map(r => ({ pageId: r.id, values: { [p.id]: raw ?? null } as Record<string, Json>, expected: { [p.id]: (rawOf(r, p.id) ?? null) as Json } }))
     if (items.length) void run({ type: 'set-values-many', items, at: new Date().toISOString() }, r => ({ text: `${p.name} set on ${items.length === 1 ? '1 row' : `${items.length} rows`}`, undoOperationId: r.operationId }))
   }
-  const editable = db.database.properties.filter(p => !isReadOnly(p))
+  const editable = db.database.properties.filter(p => (todos ? todoBarColumns.has(p.id) : !isReadOnly(p)))
   return <>
     <button type="button" ref={anchor} className="app-link" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>Edit property ▾</button>
     {open && <div className="app-menu database-picked-menu" role="menu">
@@ -1335,7 +1356,7 @@ function EditPickedButton({ db, rowIds, editing, setEditing }: { db: Page & { da
       <button type="button" className="app-link" onClick={() => apply(true)}>Check all</button>
       <button type="button" className="app-link" onClick={() => apply(undefined)}>Uncheck all</button>
     </span>}
-    {property && property.type !== 'checkbox' && rows[0] && <PropertyEditor property={property} value={null} rowTitle={rows.length === 1 ? displayPageTitle(rows[0]) : `${rows.length} rows`} anchor={anchor.current}
+    {property && property.type !== 'checkbox' && (todos || rows[0]) && <PropertyEditor property={property} value={null} rowTitle={todos ? (rowIds.length === 1 ? '1 to-do' : `${rowIds.length} to-dos`) : rows.length === 1 ? displayPageTitle(rows[0]!) : `${rows.length} rows`} anchor={anchor.current}
       onCommit={raw => apply(raw)} onCancel={() => setEditing(null)}
       onCreateOption={property.target === todosSourceId ? undefined : name => createOption(run, db, property, name)} />}
   </>
