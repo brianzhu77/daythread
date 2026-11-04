@@ -109,6 +109,8 @@ export interface View {
   calendarSpan?: "week";
   /** Timeline: a second date property its bars end on; a range in `dateBy` otherwise. */
   timelineEnd?: string;
+  /** Timeline: the table beside the scale is showing. */
+  timelineTable?: true;
   /** Timeline: the scale's unit; Day when absent. */
   timelineUnit?: "hours" | "day" | "week" | "month" | "quarter" | "year";
 }
@@ -600,7 +602,7 @@ const canMakeColumns = (type: PropertyType): boolean => type === "select" || typ
 const groupsBy = (p: Property, layout: ViewLayout): boolean => (layout === "board" ? !p.rollup && p.formula === undefined && canMakeColumns(p.type) : Boolean(p.rollup) || p.formula !== undefined || canGroup(p.type));
 /** What a view of this layout can group by: a board's columns need a value a card can be dragged to (design §7.2). */
 export function groupableProperties(db: Database, layout: ViewLayout): Property[] {
-  if (layout === "calendar" || layout === "timeline") return [];
+  if (layout === "calendar") return [];
   return db.properties.filter((p) => groupsBy(p, layout));
 }
 /** The property a view groups by now; null when it was deleted or its type can't group any more. */
@@ -638,8 +640,8 @@ export function viewSection(db: Database, view: View, rows: readonly Page[], key
   return second ? { key, name: `${first.name} · ${second.name}`, rows: first.rows.filter((r) => second.rows.includes(r)) } : null;
 }
 export function viewGroupBy(db: Database, view: View): Property | null {
-  // A calendar doesn't group, nor a timeline yet; its `groupBy` is kept unread, for switching back.
-  if (view.layout === "calendar" || view.layout === "timeline") return null;
+  // A calendar doesn't group; its `groupBy` is kept unread, for switching back.
+  if (view.layout === "calendar") return null;
   const property = view.groupBy ? db.properties.find((p) => p.id === view.groupBy) : undefined;
   return property && groupsBy(property, view.layout) ? property : null;
 }
@@ -791,7 +793,7 @@ export type DatabaseChange =
   | { kind: "removeProperty"; propertyId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
+  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
   /** null: none */
   | { kind: "setDefaultTemplate"; templateId: string | null }
   | { kind: "removeView"; viewId: string }
@@ -1050,7 +1052,7 @@ function cleanLayout(input: unknown): ViewLayout {
 }
 const dateBys = new Set<unknown>(["day", "week", "month"]);
 const timelineUnitSet = new Set<unknown>(["hours", "day", "week", "month", "quarter", "year"]);
-type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "subGroupBy" | "subGroupDateBy" | "hiddenSubGroups" | "dateBy" | "calendarSpan" | "timelineEnd" | "timelineUnit">;
+type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "subGroupBy" | "subGroupDateBy" | "hiddenSubGroups" | "dateBy" | "calendarSpan" | "timelineEnd" | "timelineUnit" | "timelineTable">;
 /** A view's group fields, checked. A new `groupBy` must name a live property that can group; one it already holds may be deleted since, and is kept unread, so Undo or changing the type back reads it again. */
 function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before?: Pick<View, "groupBy" | "subGroupBy" | "dateBy" | "timelineEnd">): GroupFields {
   const out: GroupFields = {};
@@ -1068,6 +1070,7 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
     if (input.timelineEnd !== before?.timelineEnd && !db.properties.some((p) => p.id === input.timelineEnd && p.type === "date")) throw new DatabaseError("Can't place rows by that");
     out.timelineEnd = input.timelineEnd;
   }
+  if (input.timelineTable === true) out.timelineTable = true;
   if (input.timelineUnit !== undefined) { if (!timelineUnitSet.has(input.timelineUnit)) throw new DatabaseError("Invalid view"); out.timelineUnit = input.timelineUnit; }
   if (input.groupDateBy !== undefined) { if (!dateBys.has(input.groupDateBy)) throw new DatabaseError("Invalid view"); out.groupDateBy = input.groupDateBy; }
   if (input.hideEmptyGroups) out.hideEmptyGroups = true;
@@ -1222,7 +1225,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     }
     case "updateView": {
       const old = view(change.viewId);
-      const { filterAny: _filterAny, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, ...rest } = old;
+      const { filterAny: _filterAny, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, ...rest } = old;
       const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
       const group = cleanGroup(db, {
         groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
@@ -1236,6 +1239,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         ...(change.calendarSpan === null ? {} : { calendarSpan: change.calendarSpan ?? old.calendarSpan }),
         ...(change.timelineEnd === null ? {} : { timelineEnd: change.timelineEnd ?? old.timelineEnd }),
         timelineUnit: change.timelineUnit ?? old.timelineUnit,
+        ...(change.timelineTable === null ? {} : { timelineTable: change.timelineTable ?? old.timelineTable }),
       }, layout, old);
       const next: View = {
         ...rest,
