@@ -487,9 +487,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
           ? { at, check: `${name} ${what}: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
           : { at, check: `${name} ${what}: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
       }
-      for (const [part, kind] of [[r.subGroups, 'sub-groups'], [r.lanes, 'lanes'], [r.subItems, 'sub-items']]) {
-      }
-      for (const [part, kind] of [[r.subGroups, 'sub-groups'], [r.lanes, 'lanes'], [r.timeline, 'timeline']]) {
+      for (const [part, kind] of [[r.subGroups, 'sub-groups'], [r.lanes, 'lanes'], [r.subItems, 'sub-items'], [r.timeline, 'timeline']]) {
         if (!part) continue
         seen.get(width).add(kind)
         for (const [what, off] of Object.entries(part)) results.push(off == null
