@@ -25,6 +25,7 @@ export const operationKeepMs = 30 * 24 * 3600_000
 export const pruneEvery = 25
 interface Scope extends WorkspaceInfo { userId: string | null }
 
+const upsertBatch = 500
 const pageColumns = ['id', 'position', 'type', 'date', 'title', 'url', 'parent_id', 'trashed_at', 'trash_id', 'document', 'handoff_done', 'review_saved', 'database_json', 'row_values', 'created_at', 'edited_at'] as const
 /** Columns added to `pages` after its first release (databases): added on start when missing, before any build writes them. */
 const addedPageColumns = ['database_json', 'row_values', 'created_at', 'edited_at'] as const
@@ -227,11 +228,12 @@ export class PostgresWorkspaceRepository implements ServerRepository {
   }
   private async writeDiff(tx: SqlClient, workspaceId: string, diff: Omit<RowDiff, 'timezone'>): Promise<void> {
     const upsert = async <R extends object>(table: string, columns: readonly string[], rows: R[]) => {
-      for (const r of rows) {
-        const values = columns.map(c => (r as Record<string, unknown>)[c])
-        const placeholders = columns.map((c, i) => c === 'data' ? `$${i + 2}::text::json` : `$${i + 2}`)
-        await tx.query(`insert into ${this.t(table)} (workspace_id, ${columns.join(', ')}) values ($1::uuid, ${placeholders.join(', ')})
-          on conflict (workspace_id, id) do update set ${columns.filter(c => c !== 'id').map(c => `${c} = excluded.${c}`).join(', ')}`, [workspaceId, ...values])
+      // In batches: at a real distance from the database, a statement a row would hold an import's transaction open for minutes.
+      for (let at = 0; at < rows.length; at += upsertBatch) {
+        const batch = rows.slice(at, at + upsertBatch), params: unknown[] = [workspaceId]
+        const tuples = batch.map(r => `($1::uuid, ${columns.map(c => { params.push((r as Record<string, unknown>)[c]); return c === 'data' ? `$${params.length}::text::json` : `$${params.length}` }).join(', ')})`)
+        await tx.query(`insert into ${this.t(table)} (workspace_id, ${columns.join(', ')}) values ${tuples.join(', ')}
+          on conflict (workspace_id, id) do update set ${columns.filter(c => c !== 'id').map(c => `${c} = excluded.${c}`).join(', ')}`, params)
       }
     }
     const remove = async (table: string, ids: string[]) => { if (ids.length) await tx.query(`delete from ${this.t(table)} where workspace_id = $1::uuid and id = any($2::text[])`, [workspaceId, ids]) }
