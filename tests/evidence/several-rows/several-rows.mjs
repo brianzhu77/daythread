@@ -93,7 +93,23 @@ for (const name of ['List', 'Board', 'Gallery']) {
     check(page.url().includes('page=emma'), `${name}: after Done a tap opens a row`)
     await page.goBack(); await wait(1800)
   }
-  // Edit property, one Undo.
+  // Edit property, from the bar, on the cards: it opens, saves on both, and one Undo takes back both.
+  const pagesOf = () => [pageOf('dune').values.pages, pageOf('ubik').values.pages]
+  const pagesBefore = pagesOf()
+  if (wide) { await titleOf('dune').click({ modifiers: ['Meta'] }); await titleOf('ubik').click({ modifiers: ['Meta'] }) }
+  else { await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('menuitem', { name: 'Select rows' })); await wait(300); await tap(titleOf('dune')); await wait(150); await tap(titleOf('ubik')) }
+  await wait(250)
+  await tap(bar.getByRole('button', { name: /Edit property/ })); await wait(200)
+  await tap(bar.getByRole('menuitem', { name: 'Pages' })); await wait(300)
+  check(await bar.count() === 1 && await page.locator('.property-field').count() === 1, `${name}: Edit property opens its editor, with the picks kept`, await bar.innerText().catch(() => 'no bar'))
+  await page.locator('.property-field').fill('7'); await wait(100)
+  if (wide) await page.keyboard.press('Enter'); else await page.getByText('Done', { exact: true }).last().tap()
+  await wait(1200)
+  check(pagesOf().every(v => v === 7), `${name}: it saves on both`, pagesOf())
+  await undo()
+  check(JSON.stringify(pagesOf()) === JSON.stringify(pagesBefore), `${name}: one Undo takes back both`, pagesOf())
+  await done()
+  // Delete, one Undo.
   const before = [pageOf('dune').values.kind, pageOf('ubik').values.kind]
   if (wide) { await titleOf('dune').click({ modifiers: ['Meta'] }); await titleOf('ubik').click({ modifiers: ['Meta'] }) }
   else { await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('menuitem', { name: 'Select rows' })); await wait(300); await tap(titleOf('dune')); await wait(150); await tap(titleOf('ubik')) }
@@ -110,6 +126,13 @@ if (wide) {
   await block.locator('tr.database-row[data-row="dune"]').hover(); await block.locator('tr.database-row[data-row="dune"] .database-row-gutter input').click(); await wait(150)
   await block.locator('tr.database-row[data-row="emma"]').hover(); await block.locator('tr.database-row[data-row="emma"] .database-row-gutter input').click(); await wait(150)
   check(await block.locator('tr.database-row.is-picked').count() === 2, "a table's two picked rows both stay marked", await block.locator('tr.database-row.is-picked').count())
+  // A block can be drawn again as focus goes to the bar's editor: its picks and the editor stay.
+  await tap(bar.getByRole('button', { name: /Edit property/ })); await wait(200)
+  await tap(bar.getByRole('menuitem', { name: 'Pages' })); await wait(300)
+  check(await bar.count() === 1 && await page.locator('.property-field').count() === 1, "a table's Edit property opens too")
+  await page.locator('.property-field').fill('9'); await page.keyboard.press('Enter'); await wait(1200)
+  check(pageOf('dune').values.pages === 9 && pageOf('emma').values.pages === 9, 'and saves on both')
+  await undo()
   await done()
 }
 

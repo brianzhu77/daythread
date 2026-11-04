@@ -1119,16 +1119,35 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
  * "Edit property ▾" on the selected rows' bar (design §12): pick a property, then its editor; the value goes to every
  * selected row as one change and one Undo (set-values-many), each row checked against what it held.
  */
+interface PickState { picked: string[]; picking: boolean; /** The property the bar's Edit is changing. */ editing: string | null }
+const noPicks: PickState = { picked: [], picking: false, editing: null }
+const pickStates = new Map<string, PickState>()
+const pickViews = new Map<string, number>()
 /**
  * Several rows (design §12, R3-15, R3-26): who's picked, how picking starts and ends, and what the bar acts on. One per view.
  * `drawn`: the rows on screen in order, for a Shift-click's range. All takes more than that, as the bar's count says, but not a group he hid.
  */
 export function useRowPicking(blockId: string, db: Page & { database: Database }, view: View, rows: readonly Page[], drawn: () => string[]) {
   const { run, workspace } = useWorkspace()
-  const [picked, setPicked] = useState<string[]>([])
-  const [picking, setPicking] = useState(false)
-  useEffect(() => { pickStarters.set(blockId, () => setPicking(true)); return () => { pickStarters.delete(blockId) } }, [blockId])
-  const stopPicking = () => { setPicking(false); setPicked([]) }
+  // BlockNote may draw a block again, as focus goes to the bar's editor, so the picks live outside it until the view is really gone.
+  const key = `${blockId}|${view.id}`
+  const [state, setState] = useState<PickState>(() => pickStates.get(key) ?? noPicks)
+  const update = (next: (now: PickState) => PickState) => setState(now => { const after = next(now); pickStates.set(key, after); return after })
+  const { picked, picking, editing } = state
+  const setPicked = (next: string[] | ((now: string[]) => string[])) => update(now => ({ ...now, picked: typeof next === 'function' ? next(now.picked) : next }))
+  const setPicking = (on: boolean) => update(now => ({ ...now, picking: on }))
+  const setEditing = (id: string | null) => update(now => ({ ...now, editing: id }))
+  useEffect(() => {
+    pickStarters.set(blockId, () => setPicking(true))
+    pickViews.set(key, (pickViews.get(key) ?? 0) + 1)
+    return () => {
+      pickStarters.delete(blockId)
+      pickViews.set(key, (pickViews.get(key) ?? 1) - 1)
+      setTimeout(() => { if (!pickViews.get(key)) { pickViews.delete(key); pickStates.delete(key) } }, 1000)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blockId, key])
+  const stopPicking = () => update(() => noPicks)
   const lastPicked = useRef<string | null>(null)
   const pick = (rowId: string, shift: boolean) => {
     const ids = drawn()
@@ -1140,30 +1159,32 @@ export function useRowPicking(blockId: string, db: Page & { database: Database }
   }
   const deletePicked = () => {
     const ids = picked.filter(id => rows.some(r => r.id === id))
-    setPicked([]); setPicking(false)
+    stopPicking()
     if (ids.length) void run({ type: 'delete-pages', pageIds: ids, at: new Date().toISOString() }, r => ({ text: ids.length === 1 ? 'Row deleted' : `${ids.length} rows deleted`, undoOperationId: r.operationId }))
   }
-  const sections = viewSections(db.database, view, withPendingMoves(rows), shownRaw, workspace?.weekStart ?? 0)
-  const pickable = [...new Set((sections ? sections.shown.flatMap(s => s.rows) : rows).map(r => r.id))]
-  return { picked, setPicked, picking, setPicking, stopPicking, pick, deletePicked, pickable }
+  // Only the bar's All needs this, so it's worked out only while picking.
+  const pickable = () => { const sections = viewSections(db.database, view, withPendingMoves(rows), shownRaw, workspace?.weekStart ?? 0); return [...new Set((sections ? sections.shown.flatMap(s => s.rows) : rows).map(r => r.id))] }
+  return { picked, setPicked, picking, setPicking, editing, setEditing, stopPicking, pick, deletePicked, pickable }
 }
 type RowPicking = ReturnType<typeof useRowPicking>
 
 /** The bar for several rows. Where a view's rows run long it stays in sight (`floating`); on the phone, above the toolbar. */
-export function PickedBar({ picks: { picked, setPicked, picking, stopPicking, deletePicked, pickable }, db, floating }: { picks: RowPicking; db: Page & { database: Database }; floating?: boolean }) {
+export function PickedBar({ picks: { picked, setPicked, picking, stopPicking, deletePicked, pickable, editing, setEditing }, db, floating }: { picks: RowPicking; db: Page & { database: Database }; floating?: boolean }) {
   if (!picked.length && !picking) return null
   return <div className={`database-picked-bar${picking ? ' is-picking' : floating ? ' is-floating' : ''}`} role="toolbar" aria-label="Selected rows">
     <span>{picked.length === 1 ? '1 row' : `${picked.length} rows`}</span>
-    {picked.length > 0 && <EditPickedButton db={db} rowIds={picked} />}
+    {picked.length > 0 && <EditPickedButton db={db} rowIds={picked} editing={editing} setEditing={setEditing} />}
     {picked.length > 0 && <button type="button" className="app-link is-danger" onClick={deletePicked}>Delete</button>}
-    {picking && picked.length < pickable.length && <button type="button" className="app-link" onClick={() => setPicked(pickable)}>All</button>}
+    {picking && (() => { const all = pickable(); return picked.length < all.length && <button type="button" className="app-link" onClick={() => setPicked(all)}>All</button> })()}
     <button type="button" className="app-link" onClick={stopPicking}>Done</button>
   </div>
 }
 
 const pickedRowAt = (target: EventTarget) => { const el = (target as Element).closest<HTMLElement>('[data-card], [data-row]'); return el?.dataset.card ?? el?.dataset.row ?? null }
 /** Pressing here starts a box only from empty space: nothing he could mean to press. */
-const pressable = '[data-card], [data-row], button, a, input, select, textarea, label, .database-title, .database-header'
+const pressable = '[data-card], [data-row], button, a, input, select, textarea, label, .database-title, .database-header, .database-picked-bar'
+/** An editor or menu from the bar is in a portal, but its events still come up through here: those aren't this view's empty space. */
+const onEmptySpace = (e: { target: EventTarget; currentTarget: EventTarget }) => (e.currentTarget as Element).contains(e.target as Node) && !(e.target as Element).closest(pressable)
 
 /**
  * R3-26: picking on a List, Board or Gallery, which have no boxes to tick. At 1280, Shift or ⌘-click, or a box dragged from empty
@@ -1173,14 +1194,14 @@ export function useCardPicking(picks: RowPicking, db: Page & { database: Databas
   const { setPicked, picking, pick } = picks
   const [box, setBox] = useState<{ left: number; top: number; width: number; height: number } | null>(null)
   const onClickCapture = (e: ReactMouseEvent) => {
-    if (db.database.fixed) return
+    if (db.database.fixed || !(e.currentTarget as Element).contains(e.target as Node)) return
     const rowId = pickedRowAt(e.target)
     if (!rowId || !(picking || e.shiftKey || e.metaKey || e.ctrlKey)) return
     e.preventDefault(); e.stopPropagation()
     pick(rowId, !picking && e.shiftKey)
   }
   const onPointerDown = (e: ReactPointerEvent) => {
-    if (db.database.fixed || !wide || e.pointerType !== 'mouse' || e.button !== 0 || (e.target as Element).closest(pressable)) return
+    if (db.database.fixed || !wide || e.pointerType !== 'mouse' || e.button !== 0 || !onEmptySpace(e)) return
     const start = { x: e.clientX, y: e.clientY }, adding = e.shiftKey || e.metaKey || e.ctrlKey, before = adding ? picks.picked : []
     let lifted = false
     const move = (ev: PointerEvent) => {
@@ -1199,20 +1220,20 @@ export function useCardPicking(picks: RowPicking, db: Page & { database: Databas
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', up)
   }
   // A press on empty space selects no text: that would move the page's selection under the box.
-  const onMouseDown = (e: ReactMouseEvent) => { if (!db.database.fixed && wide && !(e.target as Element).closest(pressable)) e.preventDefault() }
+  const onMouseDown = (e: ReactMouseEvent) => { if (!db.database.fixed && wide && onEmptySpace(e)) e.preventDefault() }
   const boxDrawn = box ? createPortal(<div className="database-pick-box" style={box} aria-hidden="true" />, document.body) : null
   return { props: { onClickCapture, onPointerDown, onMouseDown }, boxDrawn }
 }
 
-function EditPickedButton({ db, rowIds }: { db: Page & { database: Database }; rowIds: string[] }) {
+function EditPickedButton({ db, rowIds, editing, setEditing }: { db: Page & { database: Database }; rowIds: string[]; editing: string | null; setEditing(id: string | null): void }) {
   const { workspace, run } = useWorkspace()
   const [open, setOpen] = useState(false)
-  const [property, setProperty] = useState<Property | null>(null)
+  const property = editing ? db.database.properties.find(p => p.id === editing) ?? null : null
   const anchor = useRef<HTMLButtonElement>(null)
   const rows = (workspace?.pages ?? []).filter(p => rowIds.includes(p.id) && !p.trashedAt)
   const apply = (raw: Json | undefined) => {
     const p = property!
-    setProperty(null)
+    setEditing(null)
     const items = rows.map(r => ({ pageId: r.id, values: { [p.id]: raw ?? null } as Record<string, Json>, expected: { [p.id]: (rawOf(r, p.id) ?? null) as Json } }))
     if (items.length) void run({ type: 'set-values-many', items, at: new Date().toISOString() }, r => ({ text: `${p.name} set on ${items.length === 1 ? '1 row' : `${items.length} rows`}`, undoOperationId: r.operationId }))
   }
@@ -1220,14 +1241,14 @@ function EditPickedButton({ db, rowIds }: { db: Page & { database: Database }; r
   return <>
     <button type="button" ref={anchor} className="app-link" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(o => !o)}>Edit property ▾</button>
     {open && <div className="app-menu database-picked-menu" role="menu">
-      {editable.map(p => <button key={p.id} type="button" role="menuitem" onClick={() => { setOpen(false); setProperty(p) }}>{p.name}</button>)}
+      {editable.map(p => <button key={p.id} type="button" role="menuitem" onClick={() => { setOpen(false); setEditing(p.id) }}>{p.name}</button>)}
     </div>}
     {property && property.type === 'checkbox' && <span className="database-picked-check">
       <button type="button" className="app-link" onClick={() => apply(true)}>Check all</button>
       <button type="button" className="app-link" onClick={() => apply(undefined)}>Uncheck all</button>
     </span>}
     {property && property.type !== 'checkbox' && rows[0] && <PropertyEditor property={property} value={null} rowTitle={rows.length === 1 ? displayPageTitle(rows[0]) : `${rows.length} rows`} anchor={anchor.current}
-      onCommit={raw => apply(raw)} onCancel={() => setProperty(null)}
+      onCommit={raw => apply(raw)} onCancel={() => setEditing(null)}
       onCreateOption={property.target === todosSourceId ? undefined : name => createOption(run, db, property, name)} />}
   </>
 }
