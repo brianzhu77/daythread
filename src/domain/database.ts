@@ -112,6 +112,9 @@ export interface View {
   calendarSpan?: "week";
 }
 export interface SubItems { parent: string; sub: string }
+export type DependencyMode = "overlap" | "keep" | "none";
+/** Dependencies are on: the two relations, the date they go by (one Date, or a start and an end), and how a shift behaves (sub-items design §3). */
+export interface Dependencies { blockedBy: string; blocking: string; date: string; end?: string; mode: DependencyMode; avoidWeekends?: true }
 export type SubItemsDisplay = "nested" | "flat";
 export type SubItemsShow = "both" | "parents" | "subs";
 export interface Database {
@@ -126,6 +129,7 @@ export interface Database {
   defaultTemplate?: string;
   /** Sub-items are on: which two self-relations make the tree (sub-items design §1). Turning them off clears this and keeps both. */
   subItems?: SubItems;
+  dependencies?: Dependencies;
   /** The next row number, once an ID property has been made. It only goes up, past a delete or an undone add (R3-9). */
   nextRowNumber?: number;
 }
@@ -381,7 +385,7 @@ export function rowsWithOption(ws: Workspace, databaseId: string, property: Prop
 
 export interface ViewContext { today: LocalDate; /** The date of the day page the block is on; null elsewhere. */ pageDate: LocalDate | null; /** 1: weeks start on Monday. Sunday otherwise (R3-20). */ weekStart?: WeekStart }
 
-function addDays(day: LocalDate, days: number): LocalDate {
+export function addDays(day: LocalDate, days: number): LocalDate {
   const d = new Date(`${day}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
@@ -802,6 +806,7 @@ export type DatabaseChange =
   | { kind: "addProperty"; property: PropertyInput; /** the view it was added from: it shows there; other views list it too */ viewId?: string }
   | { kind: "updateProperty"; propertyId: string; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
   /** "Show on Books": a relation's other side, made as a property of the target, or gone with null. */
+  | { kind: "setDependencies"; on: { blockedBy: string; blocking: string; date: string; end?: string; mode: DependencyMode; avoidWeekends?: boolean; using?: boolean } | null }
   | { kind: "setSubItems"; on: { parent: string; sub: string; using?: boolean } | null }
   | { kind: "setMirror"; propertyId: string; mirror: { id: string; name: string } | null }
   | { kind: "removeProperty"; propertyId: string }
@@ -1177,6 +1182,26 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       if (next.type === "id") numberRows(ws, page);
       return notes.join(" · ") || (next.name !== old.name ? `Renamed to ${next.name}` : "Property saved");
     }
+    case "setDependencies": {
+      if (db.fixed) throw new DatabaseError("To-dos can't have dependencies");
+      if (!change.on) { delete db.dependencies; return "Dependencies off"; }
+      const { blockedBy, blocking, date, end, mode, avoidWeekends, using } = change.on;
+      const writable = (id: string | undefined) => { const p = id ? db.properties.find((x) => x.id === id) : undefined; if (!p || p.type !== "date") throw new DatabaseError("Dependencies need a Date property to go by"); };
+      writable(date);
+      if (end !== undefined) writable(end);
+      if (!(["overlap", "keep", "none"] as const).includes(mode)) throw new DatabaseError("Unknown mode");
+      if (using) {
+        const relation = property(blockedBy);
+        if (relation.type !== "relation" || relation.target !== page.id || relation.mirror !== blocking) throw new DatabaseError("Dependencies need a two-way relation to this database");
+      } else {
+        const free = (name: string) => { let next = name; for (let n = 2; db.properties.some((p) => fold(p.name) === fold(next)); n++) next = `${name} ${n}`; return next; };
+        changeDatabase(ws, page, { kind: "addProperty", property: { id: blockedBy, name: free("Blocked by"), type: "relation", target: page.id } });
+        changeDatabase(ws, page, { kind: "setMirror", propertyId: blockedBy, mirror: { id: blocking, name: free("Blocking") } });
+        for (const v of db.views) v.columns = v.columns.filter((c) => c.id !== blockedBy && c.id !== blocking);
+      }
+      db.dependencies = { blockedBy, blocking, date, ...(end ? { end } : {}), mode, ...(avoidWeekends ? { avoidWeekends: true as const } : {}) };
+      return "Dependencies on";
+    }
     case "setSubItems": {
       if (db.fixed) throw new DatabaseError("To-dos' nesting lives on their pages");
       if (!change.on) { delete db.subItems; return "Sub-items off"; }
@@ -1198,6 +1223,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     case "removeProperty": {
       const old = property(change.propertyId);
       if (db.subItems && (db.subItems.parent === old.id || db.subItems.sub === old.id)) delete db.subItems;
+      if (db.dependencies && [db.dependencies.blockedBy, db.dependencies.blocking, db.dependencies.date, db.dependencies.end].includes(old.id)) delete db.dependencies;
       // Its values stay on the rows, unread, so Undo brings them back with it.
       db.properties = db.properties.filter((p) => p !== old);
       for (const v of db.views) v.columns = v.columns.filter((c) => c.id !== old.id);

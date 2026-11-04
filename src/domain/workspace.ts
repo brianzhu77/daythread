@@ -5,6 +5,7 @@ import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
+import { hasDependencyLoop, shiftDependents, spanOf } from "./dependencies.ts";
 import { descendantsOf, hasLoop, parentIdOf } from "./sub-items.ts";
 import type { SubItems } from "./database.ts";
 import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
@@ -374,17 +375,21 @@ function pageParent(state: Workspace, id: string): Page {
   if (isTrashed(parent)) throw new DomainError("Page is in trash");
   return parent;
 }
-function rowEdit(state: Workspace, edit: RowEdit, at: string): void {
+function rowEdit(state: Workspace, edit: RowEdit, at: string): string[] {
   if (!edit || typeof edit.pageId !== "string") throw new DomainError("Invalid row");
   const { row, db } = rowPage(state, edit.pageId, true);
   const links = (id: string) => { const raw = row.values?.[id]; return Array.isArray(raw) ? (raw as string[]) : []; };
   const relations = db.database.properties.filter((p) => p.type === "relation" && edit.values && p.id in edit.values);
   const before = relations.map((p) => links(p.id));
+  const deps = db.database.dependencies, dateChanges = Boolean(deps && edit.values && (deps.date in edit.values || (deps.end && deps.end in edit.values))) && !rowTemplateDatabaseId(row);
+  const spanBefore = deps && dateChanges ? spanOf(db.database, deps, row) : null;
   try { editRow(db.database, row, edit, at); } catch (error) { throw new DomainError((error as Error).message); }
   // A template isn't a row, so nothing links back to it; the rows made from it do that.
   if (!rowTemplateDatabaseId(row)) relations.forEach((p, i) => syncMirror(state, p, row.id, before[i]!, links(p.id), at));
   const tree = db.database.subItems;
   if (tree && edit.values && (tree.parent in edit.values || tree.sub in edit.values) && !rowTemplateDatabaseId(row) && hasLoop(databaseRows(state, db.id), tree, row.id)) throw new DomainError("A row can't be its own ancestor");
+  if (deps && edit.values && (deps.blockedBy in edit.values || deps.blocking in edit.values) && !rowTemplateDatabaseId(row) && hasDependencyLoop(databaseRows(state, db.id), deps, row.id)) throw new DomainError("That would make a loop: a row can't end up blocking itself");
+  return deps && dateChanges ? shiftDependents(db.database, deps, databaseRows(state, db.id), row.id, spanBefore, spanOf(db.database, deps, row), at) : [];
 }
 function addRows(state: Workspace, db: ReturnType<typeof databasePage>, rows: Array<{ pageId: string; title: string; values?: Record<string, import("./database.ts").Json> }>, at: string): void {
   if (databaseRows(state, db.id).length + rows.length > 10_000) throw new DomainError("Too many rows");
@@ -1040,7 +1045,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       for (const todo of action.newTodos ?? []) {
         if (!state.tasks.some((t) => t.id === todo.id)) addTask(state, ensureDay(state, todo.on), { title: todo.title, plannedOn: todo.on, id: todo.id });
       }
-      rowEdit(state, action, isoTime(action.at));
+      const shifted = rowEdit(state, action, isoTime(action.at));
       if (action.beforeId !== undefined) {
         const row = page(state, action.pageId);
         // Before a row that's gone meanwhile: the end, as `move-page`'s drag does.
@@ -1048,14 +1053,14 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         state.pages.splice(state.pages.indexOf(row), 1);
         state.pages.splice(before ? state.pages.indexOf(before) : state.pages.length, 0, row);
       }
-      return { message: "Saved", entityId: action.pageId };
+      return { message: "Saved", entityId: action.pageId, ...(shifted.length ? { shifted } : {}) };
     }
     case "set-values-many": {
       const at = isoTime(action.at);
       if (!Array.isArray(action.items) || !action.items.length || action.items.length > databaseLimits.rowsAtOnce) throw new DomainError("Invalid rows");
       if (new Set(action.items.map((i) => i.pageId)).size !== action.items.length) throw new DomainError("Invalid rows");
-      for (const item of action.items) rowEdit(state, item, at);
-      return { message: `Saved ${action.items.length} rows` };
+      const shifted = action.items.flatMap((item) => rowEdit(state, item, at));
+      return { message: `Saved ${action.items.length} rows`, ...(shifted.length ? { shifted: [...new Set(shifted)] } : {}) };
     }
     case "delete-pages": {
       const at = isoTime(action.at);
@@ -1170,7 +1175,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   let state = structuredClone(input);
   const { undo: _previousUndo, receipts: _receipts, ...rest } = input;
   const before = { ...structuredClone(rest), receipts: {} as Workspace["receipts"] };
-  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number };
+  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number; shifted?: string[] };
   if (command.action.type === "undo") {
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");

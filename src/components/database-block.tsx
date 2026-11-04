@@ -262,7 +262,14 @@ export function useCommitCell() {
     const said = notice ?? (named.length ? (named.length === 1 ? 'To-do added' : `${named.length} to-dos added`) : undefined)
     const send = () => run(
       { type: 'set-values', pageId: row.id, values, expected: { [columnId]: expected, ...Object.fromEntries(alsoExpected.map(c => [c.columnId, c.expected])) }, ...(beforeId !== undefined ? { beforeId } : {}), ...(newTodos.length ? { newTodos } : {}), at: new Date().toISOString() },
-      said ? r => ({ text: said, undoOperationId: r.operationId }) : null, newId(),
+      // What moved with it, down a chain of dependencies: the notice says how many, and how many aren't in sight (sub-items design §3).
+      r => {
+        if (r.shifted?.length) {
+          const hidden = r.shifted.filter(id => !document.querySelector(`[data-row="${CSS.escape(id)}"]`)).length
+          return { text: `${r.shifted.length} row${r.shifted.length === 1 ? '' : 's'} moved${hidden ? ` · ${hidden} ${hidden === 1 ? 'is' : 'are'} hidden` : ''}`, undoOperationId: r.operationId }
+        }
+        return said ? { text: said, undoOperationId: r.operationId } : null
+      }, newId(),
       { inlineRefusal: /Saved elsewhere|Changed elsewhere/, onRefused: () => { refused = true; void again() }, quiet: true })
     const settle = (r: unknown) => {
       if (r) { show(null); onSaved?.(); return }
