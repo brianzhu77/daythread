@@ -1,6 +1,6 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
 import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
-import { type ComponentProps, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { type ComponentProps, type ReactElement, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import type { EditorView } from '@tiptap/pm/view'
 import { closeHistory, isHistoryTransaction, undo as historyUndo, redo as historyRedo } from '@tiptap/pm/history'
@@ -41,7 +41,7 @@ import { newOperationId, useTaskTick, useWorkspace } from './use-day'
 import { useKeyboardTop } from './keyboard'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HideKeyboardIcon, IndentIcon, LinkIcon, OutdentIcon, PagesIcon, PlusIcon, RedoIcon, UndoIcon } from './icons'
+import { BodyIcon, BulletListIcon, CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HeadingIcon, HideKeyboardIcon, ImportIcon, IndentIcon, LineLinkIcon, LinkIcon, NumberedListIcon, OutdentIcon, PagesIcon, PlusIcon, QuoteIcon, RedoIcon, SeparatorIcon, SyncedIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { DatabaseBlock, setDatabasePending, type BlockActions } from './database-block'
@@ -145,6 +145,11 @@ const dateMention = createReactInlineContentSpec({ type: 'dateMention', propSche
 })
 const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink, database, [syncedBlockType]: syncedBlock }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef, dateMention } })
 // B4 (F13): a plain line is "Body" and the divider is "Separator", in the / menu and the toolbar's line-type menu alike.
+/** The blocks the `/` menu offers from BlockNote's list, each with this app's icon. */
+const slashIcons: Record<string, ReactElement> = {
+  'Heading 1': <HeadingIcon level={1} />, 'Heading 2': <HeadingIcon level={2} />, 'Heading 3': <HeadingIcon level={3} />,
+  Body: <BodyIcon />, 'Bullet List': <BulletListIcon />, 'Numbered List': <NumberedListIcon />, Quote: <QuoteIcon />, Separator: <SeparatorIcon />,
+}
 const dictionary = { ...en, slash_menu: { ...en.slash_menu,
   paragraph: { ...en.slash_menu.paragraph, title: 'Body', aliases: [...en.slash_menu.paragraph.aliases, 'body', 'text', '正文'] },
   divider: { ...en.slash_menu.divider, title: 'Separator', aliases: [...en.slash_menu.divider.aliases, 'separator', '---', '分隔线'] },
@@ -278,7 +283,7 @@ function PageCard({ pageId, cardId, url = '', line = '' }: { pageId: string; car
   // its parent is the page the card is saved on, and the id is the card's own. A link card retries its paste.
   const savedOn = target || pendingPages.has(pageId) ? undefined : workspace?.pages.find(p => flatNodes(pageNodes(p)).some(n => n.id === cardId))
   const retrySaved = (on: Page) => link
-    ? run({ type: 'make-link-pages', parentPageId: on.id, items: [{ url: link, pageId }] })
+    ? run({ type: 'make-link-pages', parentPageId: on.id, items: [{ url: link, pageId }], at: new Date().toISOString() })
     : run({ type: 'create-document', title: '', body: '', pageId, parentId: on.id })
   const pending: PendingPage | undefined = target ? undefined : pendingPages.get(pageId)
     ?? (savedOn ? { state: 'failed', parentId: savedOn.id, retry: () => void retrySaved(savedOn) } : undefined)
@@ -1253,6 +1258,24 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }, [])
 
   // Read from the browser's caret, not editor state: ProseMirror picks up caret moves (Home, arrows) a moment later.
+  /**
+   * Backspace at the start of the first line, when it's a bullet, a number, a checkbox or a heading: it becomes a plain line, words kept,
+   * as in Notion and on any other line (Brian's note, Nov 3). Only a plain line goes on up into the title. A to-do lets go of its task.
+   */
+  function plainFirstLine(): boolean {
+    const block = editor.getTextCursorPosition().block
+    if (block.type === 'paragraph') return false
+    if (block.type === 'task') {
+      const taskId = (block.props as { taskId?: string }).taskId
+      semanticDeletes.current.add(block.id)
+      editor.updateBlock(block.id, { type: 'paragraph', props: {} } as never)
+      const deleting = goesWithLine(taskId, nodes()), elsewhere = stillElsewhere(taskId, nodes())
+      if (deleting || elsewhere) setNotice({ text: elsewhere ?? 'To-do deleted', fingerprint: JSON.stringify(editor.document) })
+      return true
+    }
+    editor.updateBlock(block.id, { type: 'paragraph', props: {} } as never)
+    return true
+  }
   function caretAtDocumentStart(): boolean {
     const sel = window.getSelection()
     if (!sel?.isCollapsed || !sel.anchorNode) return false
@@ -1434,7 +1457,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const [next] = editor.insertBlocks([{ type: lineType } as never], insertedBlocks.at(-1)!, 'after')
       editor.setTextCursorPosition(next!, 'start')
     })
-    const action: Extract<Action, { type: 'make-link-pages' }> = { type: 'make-link-pages', parentPageId: page.id, items: items.map(({ url, pageId, title }) => ({ url, pageId, ...(title ? { title } : {}) })) }
+    const action: Extract<Action, { type: 'make-link-pages' }> = { type: 'make-link-pages', parentPageId: page.id, items: items.map(({ url, pageId, title }) => ({ url, pageId, ...(title ? { title } : {}) })), at: new Date().toISOString() }
     const fresh = items.filter(it => !latestWorkspace.current.pages.some(p => p.id === it.pageId))
     const retry = () => void confirmLinks(action, items.map(it => it.cardBlockId), operationId, fresh.map(it => it.pageId))
     for (const it of fresh) setPending(it.pageId, { state: 'creating', parentId: page.id, retry })
@@ -2585,6 +2608,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.current.length) {
         e.preventDefault(); e.stopPropagation()
         deleteSelected()
+      } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && caretAtDocumentStart() && plainFirstLine()) {
+        e.preventDefault(); e.stopPropagation()
       } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && page.type === 'document' && caretAtDocumentStart()) {
         // Jazz's title spec: Backspace at the start of the first line goes up into the title, as in Notion.
         const title = document.querySelector<HTMLElement>('.page-title-field')
@@ -2631,7 +2656,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       <SuggestionMenuController triggerCharacter="/" floatingUIOptions={menuOptions} shouldOpen={() => !composing.current && editor.getTextCursorPosition().block.type !== 'task'} getItems={async query => {
         // The items Brian uses most come first. Titles only, no second line (Brian 1ac6784b: no descriptions).
         const suggested = ['Bullet List', 'Heading 2']
-        const library = getDefaultReactSlashMenuItems(editor).filter(item => ['Heading 1', 'Heading 2', 'Heading 3', 'Body', 'Bullet List', 'Numbered List', 'Quote', 'Separator'].includes(item.title)).map(item => ({ ...item, subtext: undefined }))
+        const library = getDefaultReactSlashMenuItems(editor).filter(item => item.title in slashIcons).map(item => ({ ...item, subtext: undefined, icon: slashIcons[item.title] }))
         const first = suggested.map(title => library.find(item => item.title === title)!).map(item => ({ ...item, group: 'Suggested' }))
         const rest = library.filter(item => !suggested.includes(item.title)).map(item => item.title === 'Separator' ? { ...item, onItemClick: () => { const line = editor.getTextCursorPosition().block; insertSeparator(editor, line, !inlineText(line.content) || inlineText(line.content) === '/') } } : item)
         const taskItem = { title: 'Task', icon: <CheckboxIcon />, aliases: ['todo', 'task', '任务'], group: 'Suggested', onItemClick: () => {
@@ -2642,17 +2667,17 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           const role = insertionRole(currentId)
           insertOrUpdateBlockForSlashMenu(editor, { ...(replaceCurrent ? {} : { id }), type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? page.date ?? '' : '' }, content: '' })
         } }
-        const syncedItem = { title: 'Synced block', icon: <span aria-hidden>↻</span>, aliases: ['synced', 'sync', '同步'], group: 'Suggested', onItemClick: () => {
+        const syncedItem = { title: 'Synced block', icon: <SyncedIcon />, aliases: ['synced', 'sync', '同步'], group: 'Suggested', onItemClick: () => {
           const lineId = crypto.randomUUID()
           insertOrUpdateBlockForSlashMenu(editor, { type: syncedBlockType, props: { syncId: crypto.randomUUID(), rev: 0, key: '', roles: '' }, children: [{ id: lineId, type: 'paragraph' }] } as never)
           editor.setTextCursorPosition(lineId, 'start')
         } }
         const pageItem = { title: 'Page', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
         // Pick the file, see the preview, and only then does a block appear (R4-8).
-        const csvItem = { title: 'CSV', icon: <span className="slash-grid-icon" aria-hidden>▦</span>, aliases: ['csv', 'import', 'tsv', '导入'], group: 'Other', onItemClick: () => chooseCsv({ kind: 'new', parentId: page.id, place: placeImportedDatabase }) }
-        const databaseItem = { title: 'Database', icon: <span className="slash-grid-icon" aria-hidden>▦</span>, aliases: ['database', 'table', 'db', '数据库', '表格'], group: 'Suggested', onItemClick: chooseDatabase }
+        const csvItem = { title: 'CSV', icon: <ImportIcon />, aliases: ['csv', 'import', 'tsv', '导入'], group: 'Other', onItemClick: () => chooseCsv({ kind: 'new', parentId: page.id, place: placeImportedDatabase }) }
+        const databaseItem = { title: 'Database', icon: <DatabaseIcon />, aliases: ['database', 'table', 'db', '数据库', '表格'], group: 'Suggested', onItemClick: chooseDatabase }
         // A9a §3: the phone's way to `[[` (v0.3's toolbar button), through the same + menu.
-        const linkItem = { title: 'Link to page', icon: <PagesIcon />, aliases: ['link', '[[', '链接', '引用'], group: 'Suggested', onItemClick: () => {
+        const linkItem = { title: 'Link to page', icon: <LineLinkIcon />, aliases: ['link', '[[', '链接', '引用'], group: 'Suggested', onItemClick: () => {
           if (!linkableLines.has(editor.getTextCursorPosition().block.type)) return
           setTimeout(() => editor.getExtension(SuggestionMenu)?.openSuggestionMenu('[[', { deleteTriggerCharacter: true }), 0)
         } }
