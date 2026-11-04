@@ -1,5 +1,6 @@
 // A disposable store for sub-items (R4-4): Work with rows; `on` turns sub-items on and nests some.
-// Usage: node tests/evidence/sub-items/seed.ts <store-path> [on]
+// `move` adds Archive, somewhere to move them to, and Nested, inside a sub-item.
+// Usage: node tests/evidence/sub-items/seed.ts <store-path> [on|move]
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
 import type { DatabaseChange } from '../../../src/domain/database.ts'
 import type { Action } from '../../../src/domain/types.ts'
@@ -12,8 +13,13 @@ const at = new Date().toISOString()
 await run({ type: 'create-database', pageId: 'work', homeBlockId: null, title: 'Work' })
 await change({ kind: 'addProperty', property: { id: 'n', name: 'N', type: 'number' } })
 for (const [id, n] of [['top', 1], ['kid', 2], ['grand', 3], ['great', 4], ['deep', 5], ['deeper', 6], ['kid2', 7], ['other', 8]] as const) await run({ type: 'add-row', databaseId: 'work', pageId: id, title: id, values: { n }, at })
-if (process.argv[3] === 'on') {
+if (process.argv[3] === 'on' || process.argv[3] === 'move') {
   await change({ kind: 'setSubItems', on: { parent: 'par', sub: 'sub' } })
   for (const [id, parent] of [['kid', 'top'], ['grand', 'kid'], ['great', 'grand'], ['deep', 'great'], ['deeper', 'deep'], ['kid2', 'top']] as const) await run({ type: 'set-values', pageId: id, values: { par: [parent] }, expected: {}, at })
+}
+if (process.argv[3] === 'move') {
+  await run({ type: 'create-database', pageId: 'archive', homeBlockId: null, title: 'Archive' })
+  await run({ type: 'change-database', pageId: 'archive', change: { kind: 'addProperty', property: { id: 'nThere', name: 'N', type: 'number' } } })
+  await run({ type: 'create-database', pageId: 'nested', parentId: 'kid', homeBlockId: null, title: 'Nested' })
 }
 console.log('seeded', process.argv[2])
