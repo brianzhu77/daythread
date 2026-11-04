@@ -1,6 +1,6 @@
 # Forms: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead and Jazz to review**. Not approved and not built. §5 updated from Ratchet's review; the public link stays off.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead and Jazz to review**. Not approved and not built. §5 updated from Ratchet's review and accepted by the Lead; the public link stays off.
 - Asked by the Lead (3f046122). Nothing is cut for lack of evidence, and his use only sets the order (Brian 57deaed7).
 - **Evidence:** Notion's help page on [forms](https://www.notion.com/help/forms), which I read but haven't used. His use: no databases at the last read (Nov 2), so the examples are illustrations.
 
@@ -68,7 +68,7 @@ Today every write needs a signed-in session, and the app is invite-only. A publi
 
 **Other people's answers are personal data in his workspace.** They go with his export and account deletion, and they must stay out of usage reads and logs, including request bodies and error reports. **The promise is narrowed after Ratchet's review:** the day draft model never reads a database's rows, but an answer Brian or his own rule copies onto a day is then text on that day, and the app won't track where it came from. I own the usage reads and will leave these rows out by database, counting them only.
 
-**Ratchet's review (`docs/reviews/public-forms-ratchet.md`, b417b7ce on `review/ratchet-forms`): the public link stays off until these hold.** Design only, nothing deployed. Only-me Forms isn't affected.
+**Ratchet's review (`docs/reviews/public-forms-ratchet.md`): the public link stays off until these hold; the Lead accepted them (ab07ea28).** Design only, nothing deployed. Only-me Forms isn't affected.
 
 1. **A stranger's answer does no more than add its row.** The server builds the row from the published questions. On a public submission, Row added automations and default-template effects don't run, which is narrower than §4 and Only me. A visitor can never name a database, property, template or action. If Brian wants a rule to run later, that's a separate decision with its own limits.
 2. **Limits are numbers, enforced in one shared place.** My starting point, for Roadbuster to measure on the Worker: 200 accepted answers a day per form, 500 across the workspace, 20 an hour per address, and 64 KB an answer, all inside the existing size ceiling. They count accepted rows, and exactly the remaining number can commit under a race. Bad or oversized requests are refused before the workspace loads. If the count can't be read, submitting is refused. Reset link doesn't reset the count, and Brian can reopen a form that hit its cap.

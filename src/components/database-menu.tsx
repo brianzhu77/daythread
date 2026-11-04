@@ -543,6 +543,11 @@ function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
     {(view.layout === 'table' || view.layout === 'board' || view.layout === 'gallery') && <label className="database-menu-row">Wrap all
       <input type="checkbox" checked={wrapsAll} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ wrapName: on, columns: columns.map(c => withWrap(c, on)) })) }} />
     </label>}
+    {!db.database.fixed && <label className="database-menu-row">Open pages in
+      <select aria-label="Open pages in" value={view.openIn ?? 'page'} onChange={e => { const openIn = e.target.value === 'center' ? 'center' as const : null; changeView(() => ({ openIn })) }}>
+        <option value="page">Full page</option><option value="center">Center peek</option>
+      </select>
+    </label>}
     {view.layout === 'calendar' && <label className="database-menu-row">Show as
       <select aria-label="Show as" value={view.calendarSpan ?? 'month'} onChange={e => { const calendarSpan = e.target.value === 'week' ? 'week' as const : null; changeView(() => ({ calendarSpan })) }}>
         <option value="month">Month</option><option value="week">Week</option>
