@@ -123,10 +123,30 @@ export function moveTargets(ws: Workspace, pageId: string): Page[] {
 
 export interface LinkedFromEntry { page: Page; isParent: boolean; removed: boolean }
 export interface PageReference { sourceId: string; key: string; at: number | undefined }
-/** Every reference to `pageId` from other pages: cards and `[[` links, on live and trashed pages. */
+/**
+ * A relation that only this side shows: nothing on its target names the row, so the reference is the only sign of it (B86 9).
+ * A two-way relation, a sub-item's or a dependency's already shows there as a property.
+ */
+function oneWayRelations(ws: Workspace): Map<string, { id: string; target: string | undefined }[]> {
+  const out = new Map<string, { id: string; target: string | undefined }[]>();
+  for (const db of ws.pages) {
+    if (!isDatabase(db)) continue;
+    const { subItems, dependencies, properties } = db.database;
+    const own = new Set([subItems?.parent, subItems?.sub, dependencies?.blockedBy, dependencies?.blocking]);
+    const relations = properties.filter((p) => p.type === "relation" && !p.mirror && !own.has(p.id)).map((p) => ({ id: p.id, target: p.target }));
+    if (relations.length) out.set(db.id, relations);
+  }
+  return out;
+}
+/** Every reference to `pageId` from other pages: cards, `[[` links, a linked view of it and a one-way relation to it, on live and trashed pages. */
 export function referencesTo(ws: Workspace, pageId: string): PageReference[] {
-  if (!ws.pages.some((p) => p.id === pageId)) return [];
+  const target = ws.pages.find((p) => p.id === pageId);
+  if (!target) return [];
+  const home = target.database?.homeBlockId, relations = oneWayRelations(ws);
   return ws.pages.flatMap((p) => p.id === pageId || isTemplate(p) || isDraft(p) ? [] : [
+    ...(target.database ? flatNodes(pageNodes(p)).filter((n) => n.type === "database" && n.props?.pageId === pageId && n.id !== home).map((n): PageReference => ({ sourceId: p.id, key: `${p.id}/${n.id}`, at: undefined })) : []),
+    // A value can outlive a change of type or target, kept so Undo brings it back: only a list, pointing into the relation's database as it is now, is a link.
+    ...(relations.get(p.parentId ?? "") ?? []).filter(({ id, target: to }) => { const value = p.values?.[id]; return to === target.parentId && Array.isArray(value) && value.includes(pageId) }).map(({ id }): PageReference => ({ sourceId: p.id, key: `${p.id}/${id}`, at: undefined })),
     ...flatNodes(pageNodes(p)).filter((n) => n.type === "pageLink" && n.props?.pageId === pageId).map((n): PageReference => ({ sourceId: p.id, key: `${p.id}/${n.id}`, at: typeof n.props?.at === "number" ? n.props.at : undefined })),
     ...refHolders(p).flatMap((h) => h.refs.filter((r) => refTargetPage(ws, r) === pageId).map((r): PageReference => ({ sourceId: p.id, key: `${p.id}/${h.id}/${r.refId}`, at: r.at }))),
   ]);
@@ -145,7 +165,9 @@ export function linkedFrom(ws: Workspace, pageId: string): LinkedFromEntry[] {
   const untimed = sources.filter((p) => newest.get(p.id) === undefined);
   const legacy = [...untimed.filter((p) => p.type === "daily").sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")), ...untimed.filter((p) => p.type !== "daily").reverse()];
   const timed = sources.filter((p) => newest.get(p.id) !== undefined).sort((a, b) => newest.get(b.id)! - newest.get(a.id)!);
-  return [...timed, ...legacy].map((page) => ({ page, isParent: page.id === parentId, removed: isTrashed(page) }));
+  const entries = [...timed, ...legacy].map((page) => ({ page, isParent: page.id === parentId, removed: isTrashed(page) }));
+  // A source in Trash goes last, so it doesn't take one of the first three places.
+  return [...entries.filter((e) => !e.removed), ...entries.filter((e) => e.removed)];
 }
 /** The empty `[[` list: pages by the newest reference to them, then days newest first, then the rest. */
 export function recentPages(ws: Workspace, currentId: string | null): Page[] {
