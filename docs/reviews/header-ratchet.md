@@ -18,3 +18,16 @@ Build and typecheck pass. Local suite: 713 passed, 0 failed, 5 skipped.
 The new memo intentionally follows saved workspace revision, so links typed but not yet saved need not appear immediately. No Worker, real Postgres browser, physical iPhone or Simulator Home Screen run was performed by this reviewer. The native Home Screen case remains owed before claiming Brian's full workflow verified.
 
 Scripts and logs: `tests/evidence/ratchet-header/`. No product code changes by this reviewer.
+
+## Retest on main 51104fc3, including return fix
+
+The reload-return finding is cleared in independently replayed Chromium and WebKit checks at 390: the same bookmark row is visible after reopening the list. This retest uses main `51104fc3`, not the earlier `9428e128`.
+
+Mobile Safari also passes on the **iPhone Simulator** (Ratchet-B4, iOS 26.4, 390 CSS px), using Appium/XCUITest with native web taps against the invented fixture on port 3699. The native run verifies:
+
+- Bookmarks opens the page with `‹ Bookmarks | Tue, Nov 3`, and no repeated parent day under Linked from.
+- Tapping the day lands on the highlighted card.
+- After reloading a far-down bookmark page, the return link restores that row in view (scroll 1610, row top 364, bottom 433, viewport height 699).
+- The sub-item path stops at the parent in Trash, and the long path folds without clipping.
+
+`navigator.standalone` was false: this was **Safari, not the Home Screen app**, and not a physical iPhone. Home Screen background suspension/relaunch remains untested. Native screenshots, scripts and results are in `tests/evidence/ratchet-header/`. A rebuilt local source tree matching main was used; no production or user-data writes occurred. Full unit/alignment gates were not repeated for this targeted fix retest.

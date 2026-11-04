@@ -1,0 +1,6 @@
+{"check": "bookmark header", "url": "http://127.0.0.1:3699/pages?page=dan&from=bookmarks", "crumbs": "Bookmarks\nTue, Nov 3", "linked": null, "width": 390, "standalone": false}
+{"check": "day lands on card", "url": "http://127.0.0.1:3699/day/2026-11-03", "flash": true, "cardVisible": true}
+{"check": "return after reload", "url": "http://127.0.0.1:3699/pages?view=bookmarks", "scroll": 1610, "top": 364, "bottom": 433, "height": 699, "rowVisible": true}
+{"check": "Trash parent", "crumbs": "Pages\nProjects\nWork\nMiddle row"}
+{"check": "long path", "crumbs": "Bookmarks\nPages\n\u2026\nR4 review", "overflow": false, "cut": false}
+ALL PASS
