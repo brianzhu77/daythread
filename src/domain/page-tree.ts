@@ -157,6 +157,25 @@ export function pagePreview(p: Page, lines = 2, max = 120): string {
   const joined = texts.join(" · ");
   return joined.length > max ? `${joined.slice(0, max - 1)}…` : joined;
 }
+/**
+ * Every bookmark page, newest first (bookmarks design §5): worked out from `url`, so nothing's stored and it can't drift. A page made before
+ * `createdAt` was set takes the end of the day above it; same day, the later one first; no date of either kind goes last.
+ */
+export function bookmarkPages(ws: Workspace): Page[] {
+  const byId = new Map(ws.pages.map((p) => [p.id, p]));
+  const dayAbove = (p: Page): string | null => {
+    const seen = new Set([p.id]);
+    for (let up = p.parentId ? byId.get(p.parentId) : undefined; up && !seen.has(up.id); up = up.parentId ? byId.get(up.parentId) : undefined) {
+      if (up.date) return `${up.date}T23:59:59.999Z`;
+      seen.add(up.id);
+    }
+    return null;
+  };
+  const position = new Map(ws.pages.map((p, i) => [p.id, i]));
+  return visiblePages(ws).filter((p) => p.url).map((p) => ({ p, when: p.createdAt ?? dayAbove(p) ?? "" }))
+    .sort((a, b) => (a.when === b.when ? position.get(b.p.id)! - position.get(a.p.id)! : a.when < b.when ? 1 : -1))
+    .map(({ p }) => p);
+}
 /** Something was written on the page: a to-do row with a task, or a line with words. */
 export function hasContent(page: Page): boolean {
   return flatNodes(pageNodes(page)).some((n) => (isTaskRow(n) && !String(n.props!.taskId).startsWith("editor-task:")) || (n.type !== "heading" && inlineText(n.content, textDate(page)).trim() !== ""));

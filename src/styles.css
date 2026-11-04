@@ -1387,6 +1387,17 @@ body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transpare
 .trashed-page .subpage-row { color: var(--ink-2); }
 .trash-back { display: none; }
 .pages-trash-row { display: none; }
+/* Bookmarks: the title never cut to one line, the first words that say what it is, then where it came from. */
+.bookmark-list { display: flex; flex-direction: column; }
+.bookmark-row { display: flex; align-items: flex-start; gap: 8px; border-top: 1px solid var(--line-soft); }
+.bookmark-row:first-child { border-top: 0; }
+.bookmark-main { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; padding: 10px 0; color: var(--ink); text-decoration: none; }
+.bookmark-title { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.bookmark-words { overflow: hidden; color: var(--ink-2); font-size: var(--text-meta); text-overflow: ellipsis; white-space: nowrap; }
+.bookmark-where { color: var(--ink-3); font-size: var(--text-meta); }
+.bookmark-open { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 32px; height: 40px; color: var(--ink-3); }
+.bookmark-open:hover { color: var(--ink); }
+.bookmark-open svg { width: 18px; height: 18px; }
 .trash-banner { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--radius-block); background: var(--fill); font-size: var(--text-small); color: var(--ink-2); }
 .trash-banner > svg { flex: none; width: 18px; height: 18px; color: var(--ink-3); }
 .trash-banner > span { flex: 1; min-width: 0; }
@@ -1408,6 +1419,8 @@ body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transpare
   .pages-trash-row { display: flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 6px; color: var(--ink-2); font-size: var(--text-ui); text-decoration: none; }
   .pages-trash-row > span { flex: 1; }
   .pages-trash-row svg { width: 18px; height: 18px; color: var(--ink-3); }
+  .pages-bookmarks-row { margin: 0 0 6px; }
+  .bookmark-open { width: 44px; height: 44px; }
   .pages-trash-row > svg:last-child { width: 13px; height: 13px; }
 }
 
