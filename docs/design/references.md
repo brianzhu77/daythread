@@ -77,7 +77,7 @@ because the ask is general (scope comes from all users, 57deaed7).
 | A source in Trash | "Oct 15 (removed)", doesn't open | Built. **Change:** list these last, so they don't take the first 3 |
 | A page in Trash | Its Trash view shows no line | Built, leave |
 | Moved page | New parent in the header; the old parent shows as a source while its card remains | Built |
-| A row in a peek | The line shows; the crumb doesn't, because the peek has no path | For Jazz |
+| A row in a peek | The line shows; the path goes in the peek's head (§8) | Prototype only |
 
 **Deliberately not in this:** the line of text around each reference, a count-only display, the Off setting, reference lists in
 Search or Export. Brian asked for none of them, and none is needed to get from a bookmark to its day.
@@ -115,6 +115,9 @@ No usage record can show this, so these are checks, with Brian's word as the out
 3. A bookmark saved on two days shows the first in the header and the second under Linked from.
 4. A one-way relation and a linked view each show on their target. A two-way relation doesn't appear twice.
 5. A page with no references has no line, and a source in Trash comes last and doesn't open.
+6. In a peek, tapping a crumb keeps what was just typed, and the head still fits ↑ ↓, the path, `⋯`, ↗ and × at side peek's narrowest.
+
+**Known limit:** once Brian taps through from the bookmark to its day and back into the card, `‹ Bookmarks` is gone, because the address no longer says it came from the list. The list is then in the sidebar at 1280, and in Pages at 390. I'd accept that rather than keep a history of where each page was opened from.
 
 ## 8. The interaction (Jazz, for the Lead's proposal; a prototype, not approved)
 
