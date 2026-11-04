@@ -130,11 +130,12 @@ ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'u
 // Sub-items (R4-4): the gate measures the toggle's column and one step of indent.
 {
   ws = await run({ type: 'create-database', pageId: treeId, parentId: scratchId, homeBlockId: treeBlock, title: 'Fixture sub-items' })
-  await run({ type: 'change-database', pageId: treeId, change: { kind: 'addProperty', property: { id: 'par', name: 'Parent', type: 'relation', target: treeId, twoWay: 'sub' } } as never })
   await run({ type: 'change-database', pageId: treeId, change: { kind: 'setSubItems', on: { parent: 'par', sub: 'sub' } } as never })
   const top = crypto.randomUUID()
   ws = await run({ type: 'add-row', databaseId: treeId, pageId: top, title: 'Fixture parent row', values: {}, at: new Date().toISOString() })
-  ws = await run({ type: 'add-row', databaseId: treeId, pageId: crypto.randomUUID(), title: 'Fixture sub-item', values: { par: [top] } as never, at: new Date().toISOString() })
+  const kid = crypto.randomUUID()
+  ws = await run({ type: 'add-row', databaseId: treeId, pageId: kid, title: 'Fixture sub-item', values: {}, at: new Date().toISOString() })
+  ws = await run({ type: 'set-values', pageId: kid, values: { par: [top] }, expected: {}, at: new Date().toISOString() })
 }
 // Two layers on each layout that has them (R3-13): the gate measures a sub-group's chevron and a board's lanes.
 for (const { layout, id, block } of layered) {
