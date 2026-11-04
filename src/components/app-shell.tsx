@@ -3,7 +3,7 @@ import { dueRepeats } from '../domain/repeats'
 import { Toast } from '@heroui/react'
 import { usePreview } from './preview'
 import { useRouterState } from '@tanstack/react-router'
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { Navigation } from './navigation'
 import { KeptDrafts } from './kept-drafts'
 import { GlobalSearch } from './search-dialog'
@@ -14,20 +14,36 @@ import { DatabaseMenuHost } from './database-menu'
 import { flushAllEditors } from './editor-flush'
 import { useMoveToNewBuild } from './new-build'
 
+const idleBeforeRepeats = 120_000
 /**
  * Repeating row templates catch up when he opens the app, and while it stays open (R4-6, automations design §6). Asked of the workspace
- * first, so a day with nothing due sends nothing. It says something only when it left periods out.
+ * first, so a day with nothing due sends nothing. It says something only when it left periods out. Making a row takes the Undo slot, so
+ * after opening it waits for a tab he can see and isn't working in: a tab in the background would take the Undo of the one he's using.
  */
 function RepeatingRows() {
   const { workspace, run } = useWorkspace()
   const [tick, setTick] = useState(0)
+  const opened = useRef(false), lastInput = useRef(0)
   useEffect(() => {
-    const timer = setInterval(() => setTick(n => n + 1), 60_000)
-    return () => clearInterval(timer)
+    const input = () => { lastInput.current = Date.now() }
+    const check = () => setTick(n => n + 1)
+    const timer = setInterval(check, 60_000)
+    window.addEventListener('keydown', input, true)
+    window.addEventListener('pointerdown', input, true)
+    document.addEventListener('visibilitychange', check)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('keydown', input, true)
+      window.removeEventListener('pointerdown', input, true)
+      document.removeEventListener('visibilitychange', check)
+    }
   }, [])
   const revision = workspace?.revision
   useEffect(() => {
-    if (!workspace) return
+    if (!workspace || document.visibilityState !== 'visible') return
+    const opening = !opened.current
+    opened.current = true
+    if (!opening && Date.now() - lastInput.current < idleBeforeRepeats) return
     const now = new Date(), today = todayIso(), time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
     if (!dueRepeats(workspace, today, time).length) return
     void run({ type: 'run-repeats', today, time, at: now.toISOString() }, r => (r.skippedRepeats?.length ? { text: r.skippedRepeats.map(s => `${s.title} · ${s.earlier} skipped`).join(' · ') } : null), undefined, { quiet: true, inlineRefusal: /Saved elsewhere/, onRefused: () => {} })

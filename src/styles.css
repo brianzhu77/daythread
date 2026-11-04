@@ -2009,6 +2009,15 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-repeat-field > select, .database-repeat-field > input, .database-repeat-every { flex: none; width: 164px; }
 .database-repeat-every { display: flex; align-items: center; gap: 8px; color: var(--ink-2); }
 .database-repeat-every input { width: 64px; flex: none; }
+.database-repeat-days { display: grid; flex: none; grid-template-columns: repeat(7, 30px); gap: 2px; }
+.database-menu .database-repeat-days button { display: flex; align-items: center; justify-content: center; min-height: 30px; padding: 0; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); cursor: pointer; }
+.database-menu .database-repeat-days button:hover { background: var(--hover-dim); }
+.database-menu .database-repeat-days button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.database-menu .database-repeat-days button:disabled { opacity: 1; cursor: default; }
+@media (max-width: 899px) {
+  .database-repeat-days { grid-template-columns: repeat(7, 38px); }
+  .database-menu .database-repeat-days button { min-height: 44px; }
+}
 /* A filter or sort rule: property → condition → value on one line when it fits, then wrapping. */
 .database-rule { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 6px 6px 10px; border-radius: var(--radius-row); }
 .database-rule + .database-rule { border-top: 1px solid var(--line-soft); }

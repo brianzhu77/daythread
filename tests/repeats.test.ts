@@ -31,6 +31,21 @@ test('a time holds it until then; what it has made and what came before it was s
   assert.deepEqual(dueDates(r({ notBefore: '2026-11-10T12:00' }), '2026-11-16', '00:00'), ['2026-11-16'])
   assert.deepEqual(dueDates(r({ paused: true }), '2026-11-16', '00:00'), [])
 })
+test('weekdays: each one in a week, the week holding the start first, and nothing before the start', () => {
+  // 2026-11-02 is a Monday.
+  const tueThu = r({ weekdays: [2, 4] })
+  assert.deepEqual(dueDates(tueThu, '2026-11-12', '12:00'), ['2026-11-03', '2026-11-05', '2026-11-10', '2026-11-12'])
+  assert.deepEqual(dueDates({ ...tueThu, start: '2026-11-04' }, '2026-11-10', '12:00'), ['2026-11-05', '2026-11-10'])
+  assert.equal(nextDate(tueThu, '2026-11-03', '12:00'), '2026-11-05')
+  assert.equal(nextDate(tueThu, '2026-11-05', '12:00'), '2026-11-10')
+  assert.deepEqual(dueDates(r({ weekdays: [] }), '2026-11-09', '12:00'), ['2026-11-02', '2026-11-09'], 'none means the start\'s weekday')
+})
+test('every 2 weeks on two days keeps a calendar week\'s days together, by the week start he chose', () => {
+  const sunMon = r({ interval: 2, start: '2026-11-01', weekdays: [0, 1] }) // A Sunday.
+  assert.deepEqual(dueDates(sunMon, '2026-11-16', '12:00', 0), ['2026-11-01', '2026-11-02', '2026-11-15', '2026-11-16'])
+  // With Monday first, that Sunday ends its week, so the Monday beside it is two weeks on.
+  assert.deepEqual(dueDates(sunMon, '2026-11-16', '12:00', 1), ['2026-11-01', '2026-11-09', '2026-11-15'])
+})
 function setup(repeat: Partial<Repeat> = {}) {
   const h = harness()
   h.run({ type: 'create-database', pageId: 'log', homeBlockId: null, title: 'Log' })
@@ -98,4 +113,22 @@ test('changing the schedule keeps what it made; turning it off clears it; bad va
   assert.throws(() => s.set({ time: '25:00' }), /time/)
   assert.ok(commandSchema.safeParse({ operationId: 'o', expectedRevision: 0, action: { type: 'run-repeats', today: '2026-11-04', time: '09:00', at } }).success)
   assert.ok(rowTemplates(s.h.ws, 'log').some(p => p.id === 'weekly'))
+})
+test('weekdays: one row a date, the skipped notice counts rows, and the workspace\'s week start decides', () => {
+  const s = setup({ start: '2026-11-02', weekdays: [4, 2, 2] })
+  assert.deepEqual(s.db().repeats!.weekly!.weekdays, [2, 4], 'sorted, without repeats')
+  const away = s.tick('2026-11-17')
+  assert.deepEqual(s.rows().map(p => p.id), [repeatRowId('weekly', '2026-11-17')])
+  assert.deepEqual(away.receipt.skippedRepeats, [{ title: 'Weekly review', earlier: '4 earlier rows' }])
+  assert.equal(s.tick('2026-11-17').receipt.message, 'Nothing due')
+  const again = s.tick('2026-11-19')
+  assert.equal(again.receipt.skippedRepeats, undefined)
+  assert.equal(s.rows().length, 2)
+})
+test('weekdays: only Weekly keeps them, a bad day is refused, and one weekday still counts weeks', () => {
+  const s = setup({ every: 'month', weekdays: [2] })
+  assert.equal(s.db().repeats!.weekly!.weekdays, undefined)
+  assert.throws(() => s.set({ weekdays: [7] }), /Invalid weekday/)
+  s.set({ weekdays: [1] })
+  assert.deepEqual(s.tick('2026-11-23').receipt.skippedRepeats, [{ title: 'Weekly review', earlier: '3 earlier weeks' }])
 })

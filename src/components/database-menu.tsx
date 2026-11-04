@@ -648,7 +648,7 @@ function TemplatesPanel({ db, view, pick, go, close }: { db: DatabasePage; view:
     <Head title="Templates" {...(pick ? {} : { back: () => go('root') })} />
     {pick && current && <button type="button" role="menuitem" onClick={() => { close(); pick(null) }}>Empty</button>}
     {list.map(t => <div key={t.id} className="database-property-line">
-      <button type="button" className="database-property-name" onClick={() => { if (pick) { close(); pick(t.id) } else edit(t.id) }}>{t.title.trim() || 'Untitled'}{t.id === current?.id && <span className="database-menu-quiet"> · default</span>}{db.database.repeats?.[t.id] && <span className="database-menu-quiet"> · {repeatSummary(db.database.repeats[t.id]!)}</span>}</button>
+      <button type="button" className="database-property-name" onClick={() => { if (pick) { close(); pick(t.id) } else edit(t.id) }}>{t.title.trim() || 'Untitled'}{t.id === current?.id && <span className="database-menu-quiet"> · default</span>}{db.database.repeats?.[t.id] && <span className="database-menu-quiet"> · {repeatSummary(db.database.repeats[t.id]!, workspace?.weekStart ?? 0)}</span>}</button>
       <button type="button" aria-label={`${t.title.trim() || 'Untitled'} options`} onClick={() => go({ template: t.id })}>⋯</button>
     </div>)}
     <button type="button" role="menuitem" onClick={() => void add()}>+ New template</button>
@@ -677,10 +677,16 @@ function TemplatePanel({ db, view, templateId, go, close }: { db: DatabasePage; 
   </>
 }
 
+const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const inWeekOrder = (days: readonly number[], weekStart: number) => [...days].sort((a, b) => (a - weekStart + 7) % 7 - (b - weekStart + 7) % 7)
 const repeatWords = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' } as const
 const periods = (repeat: Repeat) => `${repeat.every}${repeat.interval === 1 ? '' : 's'}`
 /** What a template's line in the list says about its repeat, so he needn't open each one to find out. */
-const repeatSummary = (repeat: Repeat) => repeat.paused ? 'Paused' : repeat.interval === 1 ? repeatWords[repeat.every] : `Every ${repeat.interval} ${periods(repeat)}`
+const repeatSummary = (repeat: Repeat, weekStart: number) => {
+  if (repeat.paused) return 'Paused'
+  const every = repeat.interval === 1 ? repeatWords[repeat.every] : `Every ${repeat.interval} ${periods(repeat)}`
+  return repeat.every === 'week' && repeat.weekdays?.length ? `${every} on ${inWeekOrder(repeat.weekdays, weekStart).map(d => weekdayNames[d]!.slice(0, 3)).join(', ')}` : every
+}
 /** Lets the box be empty while he types, which a value held to 1–999 wouldn't: from 1, typing 2 would give 12. Empty or out of range on leaving goes back to what's stored. */
 function RepeatEvery({ repeat, set }: { repeat: Repeat; set: (next: Partial<Repeat>) => void }) {
   const [draft, setDraft] = useState<string | null>(null)
@@ -693,11 +699,26 @@ const nextRowText = (date: string, time: string) => {
   const when = new Date(`${date}T${time}`)
   return when.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', ...(when.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' as const }), hour: 'numeric', minute: '2-digit' })
 }
+/** Weekly's days, the week's first day first. The last one on can't be turned off: a weekly repeat always has a day. */
+function RepeatWeekdays({ repeat, weekStart, set }: { repeat: Repeat; weekStart: number; set: (days: number[]) => void }) {
+  const on = repeat.weekdays?.length ? repeat.weekdays : [new Date(`${repeat.start}T12:00:00Z`).getUTCDay()]
+  return <div className="database-menu-row">On
+    <span className="database-repeat-days" role="group" aria-label="On these days">
+      {inWeekOrder([0, 1, 2, 3, 4, 5, 6], weekStart).map(day => {
+        const pressed = on.includes(day)
+        return <button key={day} type="button" aria-label={weekdayNames[day]} aria-pressed={pressed} disabled={pressed && on.length === 1}
+          onClick={() => set(pressed ? on.filter(d => d !== day) : [...on, day])}>{weekdayNames[day]![0]}</button>
+      })}
+    </span>
+  </div>
+}
 /** Repeat (R4-6): makes a row each period, from when he next opens the app. Off keeps every row it made. */
 function RepeatSettings({ db, templateId, change }: { db: DatabasePage; templateId: string; change: ReturnType<typeof useChange> }) {
+  const { workspace } = useWorkspace()
+  const weekStart = workspace?.weekStart ?? 0
   const repeat = db.database.repeats?.[templateId]
   const nowText = () => { const d = new Date(); return `${todayIso()}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
-  const nextRow = repeat && nextDate(repeat, nowText().slice(0, 10), nowText().slice(11))
+  const nextRow = repeat && nextDate(repeat, nowText().slice(0, 10), nowText().slice(11), weekStart)
   const set = (next: Partial<Repeat> | null) => {
     if (!next) { change({ kind: 'setRepeat', templateId, repeat: null }, true); return }
     const { last: _last, lastRan: _ran, ...kept } = { every: 'week' as const, interval: 1, start: todayIso(), time: '09:00', notBefore: nowText(), ...repeat, ...next }
@@ -715,6 +736,7 @@ function RepeatSettings({ db, templateId, change }: { db: DatabasePage; template
       <label className="database-menu-row database-repeat-field">Every
         <span className="database-repeat-every"><RepeatEvery repeat={repeat} set={set} />{periods(repeat)}</span>
       </label>
+      {repeat.every === 'week' && <RepeatWeekdays repeat={repeat} weekStart={weekStart} set={weekdays => set({ weekdays, notBefore: nowText() })} />}
       <label className="database-menu-row database-repeat-field">Starts
         <input aria-label="Starts" type="date" value={repeat.start} onChange={e => { if (e.target.value) set({ start: e.target.value, notBefore: nowText() }) }} />
       </label>

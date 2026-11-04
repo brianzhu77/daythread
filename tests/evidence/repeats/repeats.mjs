@@ -1,4 +1,4 @@
-// R4-6: repeating row templates in the built app: set in the menu, made on opening, once across two tabs, the notice, pause.
+// R4-6: repeating row templates in the built app: set in the menu, made on opening, once across two tabs, the notice, pause, weekdays, and a tab left open.
 // Usage: node tests/evidence/repeats/repeats.mjs <base-url> <store-path> [chromium|webkit]  (a throwaway store the server at <base-url> uses)
 import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
@@ -110,6 +110,73 @@ await scenario('A row deleted after it\'s made stays deleted across a reopen', '
   await open(page); await wait(500)
   const r = { rows: rows().length, trashed: store().pages.find(p => p.id === id)?.trashedAt != null }
   r.ok = r.rows === 0 && r.trashed
+  return r
+})
+const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const templatePanel = async page => {
+  await page.locator('.database-more-button').first().click(); await wait(250)
+  await menu(page).getByRole('menuitem', { name: 'Templates' }).click(); await wait(250)
+  await menu(page).getByRole('button', { name: 'Weekly review options' }).click(); await wait(300)
+}
+await scenario('Weekday buttons: the start\'s is on, adding one stores it and names the next row, and the last one on can\'t be turned off', 'week', async page => {
+  await open(page)
+  const tz = store().timezone, today = new Date().toLocaleDateString('en-CA', { timeZone: tz }), d = new Date(`${today}T12:00:00Z`).getUTCDay(), next = (d + 1) % 7
+  await templatePanel(page)
+  const button = n => menu(page).getByRole('button', { name: dayNames[n], exact: true })
+  const r = { start: await button(d).getAttribute('aria-pressed'), loneDisabled: await button(d).isDisabled() }
+  await button(next).click(); await wait(900)
+  r.stored = repeat().weekdays
+  r.nextLine = (await menu(page).innerText()).match(/Next row [^\n]*/)?.[0]
+  await button(d).click(); await wait(900)
+  r.after = repeat().weekdays; r.disabled = await button(next).isDisabled()
+  await menu(page).getByLabel('Repeat', { exact: true }).selectOption('month'); await wait(900)
+  r.monthly = repeat().weekdays; r.monthlyButtons = await button(next).count()
+  r.rows = rows().length
+  const name = dayNames[next].slice(0, 3)
+  r.ok = r.start === 'true' && r.loneDisabled && [...r.stored].sort().join() === [d, next].sort().join() && r.nextLine?.includes(name) && r.after.join() === String(next) && r.disabled && r.monthly === undefined && r.monthlyButtons === 0 && r.rows === 1
+  return r
+})
+await scenario('Away with every weekday on: the latest row, and the notice counts rows', 'days', async page => {
+  await open(page); await wait(800)
+  const r = { rows: rows().length, notice: await notices(page) }
+  r.ok = r.rows === 1 && /Weekly review · 21 earlier rows skipped/.test(r.notice)
+  return r
+})
+await scenario('390: seven buttons fit the sheet and take a tap', 'week', async page => {
+  await open(page)
+  await templatePanel(page)
+  const boxes = await menu(page).locator('.database-repeat-days button').evaluateAll(list => list.map(b => { const x = b.getBoundingClientRect(); return { left: x.left, right: x.right, height: x.height, width: x.width } }))
+  const r = { count: boxes.length, right: Math.max(...boxes.map(b => b.right)), height: Math.min(...boxes.map(b => b.height)), width: Math.min(...boxes.map(b => b.width)) }
+  r.ok = r.count === 7 && r.right <= 390 && r.height >= 44 && r.width >= 32
+  return r
+}, { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true })
+// The timer, on a clock this script moves: 09:00 passes while he's working, and his Undo is still there until he stops.
+await scenario('A tab left open: past the time while he\'s working, no row and his Undo stays; once he stops, one row', 'later', async page => {
+  // In UTC, because Node and the browsers disagree about Vancouver's offset this year, and 08:57 UTC is the same date anywhere it's seeded.
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: store().timezone })
+  await page.clock.install({ time: new Date(`${today}T08:57:00Z`) })
+  await open(page)
+  const r = { atOpen: rows().length }
+  await page.clock.fastForward('02:30')
+  await page.locator('.database-more-button').first().click(); await wait(250)
+  await menu(page).getByRole('menuitem', { name: 'Templates' }).click(); await wait(250)
+  await menu(page).getByRole('button', { name: 'Weekly review options' }).click(); await wait(300)
+  await menu(page).getByRole('checkbox', { name: 'Make every missed one' }).click(); await wait(900)
+  r.undoAfterEdit = Boolean(store().undo)
+  await page.clock.fastForward('01:00'); await wait(1200)
+  r.whileWorking = rows().length; r.undoWhileWorking = Boolean(store().undo)
+  await page.clock.fastForward('01:30'); await wait(1500)
+  r.afterIdle = rows().length; r.undoAfterIdle = Boolean(store().undo)
+  r.ok = r.atOpen === 0 && r.undoAfterEdit && r.whileWorking === 0 && r.undoWhileWorking && r.afterIdle === 1
+  return r
+}, { viewport: { width: 1280, height: 900 }, timezoneId: 'UTC' })
+await scenario('A tab in the background makes nothing until it\'s looked at', 'week', async page => {
+  await page.addInitScript(() => { window.__seen = 'hidden'; Object.defineProperty(document, 'visibilityState', { get: () => window.__seen }) })
+  await open(page)
+  const r = { hidden: rows().length }
+  await page.evaluate(() => { window.__seen = 'visible'; document.dispatchEvent(new Event('visibilitychange')) }); await wait(1500)
+  r.seen = rows().length
+  r.ok = r.hidden === 0 && r.seen === 1
   return r
 })
 await browser.close()

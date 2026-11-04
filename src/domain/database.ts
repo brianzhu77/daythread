@@ -120,6 +120,8 @@ export interface Repeat {
   every: "day" | "week" | "month" | "year";
   interval: number;
   start: LocalDate;
+  /** Weekly only, 0 is Sunday: the days it makes a row on. The start's weekday when absent. */
+  weekdays?: number[];
   /** HH:mm; the start of the day when absent. */
   time?: string;
   paused?: true;
@@ -1288,9 +1290,11 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         if (!Number.isInteger(r.interval) || r.interval < 1 || r.interval > 999) throw new DatabaseError("Every how many?");
         if (!validDateText(r.start) || r.start.length !== 10) throw new DatabaseError("Invalid start date");
         if (r.time !== undefined && !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.time)) throw new DatabaseError("Invalid time");
+        if (r.weekdays?.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) throw new DatabaseError("Invalid weekday");
+        const weekdays = r.every === "week" && r.weekdays?.length ? [...new Set(r.weekdays)].sort((a, b) => a - b) : null;
         const had = repeats[change.templateId];
         // Changing the schedule keeps what it last made, so a period it's made doesn't come round again.
-        repeats[change.templateId] = { every: r.every, interval: r.interval, start: r.start, ...(r.time ? { time: r.time } : {}), ...(r.paused ? { paused: true as const } : {}), ...(r.everyMissed ? { everyMissed: true as const } : {}), ...(r.notBefore ? { notBefore: r.notBefore } : {}), ...(had?.last ? { last: had.last } : {}), ...(had?.lastRan ? { lastRan: had.lastRan } : {}) };
+        repeats[change.templateId] = { every: r.every, interval: r.interval, start: r.start, ...(weekdays ? { weekdays } : {}), ...(r.time ? { time: r.time } : {}), ...(r.paused ? { paused: true as const } : {}), ...(r.everyMissed ? { everyMissed: true as const } : {}), ...(r.notBefore ? { notBefore: r.notBefore } : {}), ...(had?.last ? { last: had.last } : {}), ...(had?.lastRan ? { lastRan: had.lastRan } : {}) };
       }
       if (Object.keys(repeats).length) db.repeats = repeats; else delete db.repeats;
       return change.repeat ? "Repeat set" : "Repeat off";
