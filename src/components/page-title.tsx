@@ -1,3 +1,4 @@
+import { pageScopeOf } from './editor-scope'
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { Page } from '../domain/types'
 import { useWorkspace } from './use-day'
@@ -49,8 +50,9 @@ export function PageTitleField({ page, autoFocus }: { page: Page; autoFocus?: bo
       if (e.nativeEvent.isComposing) return
       if (e.key === 'Enter') {
         e.preventDefault(); save()
-        const first = document.querySelector<HTMLElement>('.bn-editor .bn-inline-content')
-        const editable = document.querySelector<HTMLElement>('.bn-editor')
+        const scope = pageScopeOf(el.current)
+        const first = scope.querySelector<HTMLElement>('.bn-editor .bn-inline-content')
+        const editable = scope.querySelector<HTMLElement>('.bn-editor')
         if (first && editable) { editable.focus(); const r = document.createRange(); r.setStart(first, 0); r.collapse(true); const s = window.getSelection(); s?.removeAllRanges(); s?.addRange(r) }
       } else if (e.key === 'Escape') {
         e.preventDefault(); if (el.current) el.current.textContent = before.current; save(); el.current?.blur()

@@ -83,3 +83,11 @@ Black, white and grey (116a40ab), with `--line` on the seam and no shadow unless
 
 [h]: https://www.notion.com/help/views-filters-and-sorts
 [tana]: https://ideas.tana.inc/posts/460-peek-side-or-center
+
+## 8. As built, center (Jazz, task #286)
+
+- **Setting:** Layout → "Open pages in", Full page or Center peek. Side comes with step 3. To-dos don't offer it.
+- **↑ ↓** walk the view's rows in their sorted order, not across groups' drawn order, and don't show after a reload, since the list comes from the view he opened it in.
+- **Esc,** one per layer: a composition, a menu or the `/` list, words selected or a line picked, then the peek.
+- **Scroll:** the page behind doesn't scroll while it's up. The panel is the editor's scroller, through `EditorScrollerContext`.
+- **The gate** requires a peek at 1280, on `/pages?page=fixture-peek-db&peek=fixture-peek-row`.
