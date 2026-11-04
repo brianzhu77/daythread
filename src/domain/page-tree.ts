@@ -46,6 +46,22 @@ export function trashBatches(ws: Workspace): { trashId: string; top: Page; membe
   const ids = [...new Set(ws.pages.filter(isTrashed).map((p) => p.trashId!))];
   return ids.map((trashId) => ({ trashId, ...trashBatch(ws, trashId)! })).map((b) => ({ ...b, trashedAt: b.top.trashedAt! })).sort((a, b) => b.trashedAt.localeCompare(a.trashedAt));
 }
+/** What a page's header shows: where it lives, and for a sub-item the parent rows after its database, stopping at one in Trash (B86). */
+export function pagePathTo(ws: Workspace, pageId: string): Page[] {
+  const chain = pageAncestors(ws, pageId), link = chain.at(-1)?.database?.subItems?.parent
+  if (!link) return chain
+  const rows: Page[] = [], seen = new Set([pageId])
+  let id = (ws.pages.find((p) => p.id === pageId)?.values?.[link] as string[] | undefined)?.[0];
+  while (id && !seen.has(id)) {
+    seen.add(id);
+    const row = ws.pages.find((p) => p.id === id);
+    if (!row || row.trashedAt) break;
+    rows.unshift(row);
+    id = (row.values?.[link] as string[] | undefined)?.[0];
+  }
+  return [...chain, ...rows];
+}
+
 export function pageAncestors(ws: Workspace, pageId: string): Page[] {
   const chain: Page[] = [], seen = new Set([pageId]);
   let current = ws.pages.find((p) => p.id === pageId);
