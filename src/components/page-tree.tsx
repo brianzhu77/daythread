@@ -132,7 +132,8 @@ export function dayMenuGroups(workspace: Workspace, page: Page, deletePage: () =
 }
 
 /** ⋯ on a document page: Move to…, then Delete after a divider (A4 layout §1). A day's is in its header (`dayMenuGroups`). */
-export function PageMenu({ page, fromBookmarks = false }: { page: Page; fromBookmarks?: boolean }) {
+/** `inPeek`: the row's menu in a peek stays in it: a copy opens there, and a row deleted closes it, with the view behind where it was. */
+export function PageMenu({ page, fromBookmarks = false, inPeek }: { page: Page; fromBookmarks?: boolean; inPeek?: (rowId: string | null) => void }) {
   const [moving, setMoving] = useState(false)
   const deletePage = useDeletePage()
   const { workspace, run } = useWorkspace()
@@ -145,11 +146,11 @@ export function PageMenu({ page, fromBookmarks = false }: { page: Page; fromBook
     const duplicate = async () => {
       const pageId = crypto.randomUUID()
       const r = await run({ type: 'add-row', databaseId: db.id, pageId, title: '', copyOf: page.id, at: new Date().toISOString() }, receipt => ({ text: receipt.message, undoOperationId: receipt.operationId }))
-      if (r) open(pageHref({ ...page, id: pageId }))
+      if (r) { if (inPeek) inPeek(pageId); else open(pageHref({ ...page, id: pageId })) }
     }
     const remove = () => {
       void run({ type: 'delete-page', pageId: page.id, at: new Date().toISOString() }, r => ({ text: /sub-item/.test(r.message) ? `Row deleted · ${r.message.split(' · ')[1]}` : 'Row deleted', undoOperationId: r.operationId }))
-      open(pageHref(db))
+      if (inPeek) inPeek(null); else open(pageHref(db))
     }
     return <>
     <RowMenu label="Row actions" triggerClass="page-more" groups={[{ items: [{ label: 'Copy link', onSelect: copyLink }, { label: 'Duplicate row', onSelect: () => void duplicate() }, { label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete row', danger: true, onSelect: remove }] }]} />

@@ -68,14 +68,17 @@ check(emma.values?.pages === 88 && emma.document.includes('typed then'), 'a cell
 check(!/changed elsewhere/i.test(notice), 'and says nothing about a change elsewhere', notice)
 
 // Closing: ×, Esc, Back, and the row isn't flashed.
+await page.evaluate(() => window.scrollTo(0, 90)); await wait(200)
 await peek.getByRole('button', { name: 'Close', exact: true }).click(); await wait(800)
+check(await page.evaluate(() => Math.round(scrollY)) === 90, 'closing leaves the view where it was scrolled to', await page.evaluate(() => scrollY))
 check(await peek.count() === 0 && !page.url().includes('peek=') && !page.url().includes('side=') && await page.evaluate(() => document.documentElement.classList.contains('has-side-peek')) === false, '× closes it and gives the view its width back')
 await openRow('dune')
 await peek.locator('.bn-inline-content').first().click(); await page.keyboard.press('Escape'); await wait(800)
 check(await peek.count() === 0, 'Esc with the caret in it closes it')
 await openRow('dune')
+await page.evaluate(() => window.scrollTo(0, 70)); await wait(200)
 await page.goBack(); await wait(1000)
-check(await peek.count() === 0 && page.url().includes('page=books'), 'Back closes it')
+check(await peek.count() === 0 && page.url().includes('page=books') && await page.evaluate(() => Math.round(scrollY)) === 70, 'Back closes it, with the view where it was', await page.evaluate(() => scrollY))
 
 // Esc in the view's own field: the field first.
 await openRow('dune')
@@ -89,6 +92,32 @@ await openRow('dune')
 await page.reload(); await wait(2500)
 check(await peek.evaluate(e => e.classList.contains('is-side')) && await peek.getByRole('button', { name: 'Next row' }).count() === 0, 'a reload reopens it at the side, with no ↑ ↓')
 await peek.getByRole('button', { name: 'Close', exact: true }).click(); await wait(800)
+
+// The row's menu, in the peek: a copy opens there, Move to… shows over it, and Delete row closes it with the view where it was.
+await openRow('ubik')
+const rowMenu = peek.getByRole('button', { name: 'Row actions' })
+await rowMenu.click(); await wait(300)
+const items = await page.getByRole('menuitem').allInnerTexts()
+check(['Copy link', 'Duplicate row', 'Move to…', 'Delete row'].every(w => items.includes(w)), 'the head has the row\'s menu', items)
+await shot('row-menu')
+const rowsBefore = store().pages.filter(x => x.parentId === 'list' && !x.trashedAt).length
+await page.getByRole('menuitem', { name: 'Duplicate row' }).click(); await wait(1400)
+check(store().pages.filter(x => x.parentId === 'list' && !x.trashedAt).length === rowsBefore + 1 && await peek.count() === 1 && page.url().includes('page=books') && !page.url().includes('peek=ubik'), 'Duplicate row opens the copy in the peek', page.url())
+await rowMenu.click(); await wait(300)
+await page.getByRole('menuitem', { name: 'Move to…' }).click(); await wait(500)
+const dialog = page.getByRole('dialog').filter({ hasNotText: 'Row actions' }).last()
+const over = await dialog.evaluate(d => { const r = d.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return d.contains(hit) && !d.classList.contains('peek') })
+check(over, 'Move to… shows over the peek')
+await page.keyboard.press('Escape'); await wait(400)
+if (await page.getByRole('button', { name: 'Cancel' }).count()) { await page.getByRole('button', { name: 'Cancel' }).first().click(); await wait(300) }
+check(await peek.count() === 1, 'and Esc closes only that')
+await page.evaluate(() => window.scrollTo(0, 40)); await wait(150)
+const heldScroll = await page.evaluate(() => scrollY)
+await rowMenu.click(); await wait(300)
+await page.getByRole('menuitem', { name: 'Delete row' }).click(); await wait(1400)
+check(await peek.count() === 0 && page.url().includes('page=books') && !page.url().includes('peek=') && store().pages.filter(x => x.parentId === 'list' && !x.trashedAt).length === rowsBefore, 'Delete row closes it and stays on the view', page.url())
+check(await page.evaluate(() => scrollY) === heldScroll, 'with the view where it was')
+await page.goto(`${base}/pages?page=books`); await wait(2300)
 
 // ↑ ↓: the drawn order, across groups.
 await block.locator('.database-more-button').click(); await wait(300); await menu.getByRole('button', { name: 'Group', exact: true }).click(); await wait(300)

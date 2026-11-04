@@ -22,10 +22,20 @@ export function drawnRows(rowId: string): string[] | null {
   return [...new Set([...block.querySelectorAll<HTMLElement>('[data-row]')].map(el => el.dataset.row!))]
 }
 
+/**
+ * The page's own place in the router's scroll record while a peek is over it. A peek's entry shares it, as the view can scroll beside a side peek
+ * and closing is going Back, which would otherwise put the view where it was when the peek opened.
+ */
+let pageScrollKey: string | null = null
+export function scrollKeyOf(location: { state: unknown; search: unknown }): string {
+  const own = (location.state as { __TSR_key?: string }).__TSR_key ?? ''
+  return (location.search as { peek?: unknown }).peek && pageScrollKey ? pageScrollKey : own
+}
+
 export function openPeek(navigate: ReturnType<typeof useNavigate>, rowId: string, rows: readonly string[] | undefined, side: boolean) {
   order = rows ?? []
   // Another row while one's open replaces it, so Back closes the peek instead of walking through every row.
   const replacing = new URLSearchParams(window.location.search).has('peek')
-  if (!replacing) openedHere = true
+  if (!replacing) { openedHere = true; pageScrollKey = (window.history.state as { __TSR_key?: string } | null)?.__TSR_key ?? null }
   void navigate({ to: '.', search: (({ side: _side, ...prev }: Record<string, unknown>) => ({ ...prev, peek: rowId, ...(side ? { side: 1 } : {}) })) as never, replace: replacing, resetScroll: false })
 }
