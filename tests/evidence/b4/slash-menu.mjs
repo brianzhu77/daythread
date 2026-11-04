@@ -7,7 +7,7 @@ import { chromium, webkit } from '/Users/dogrod/Developer/daythread/node_modules
 const [base] = process.argv.slice(2)
 if (!base || new URL(base).port === '3000') throw Error('Use a disposable loopback server')
 const KEYBOARD = 336
-const expected = ['Task', 'Page', 'Link to page', 'Database', 'Synced block', 'Bullet List', 'Heading 2', 'Heading 1', 'Heading 3', 'Quote', 'Numbered List', 'Body', 'Separator']
+const expected = ['Task', 'Page', 'Link to page', 'Database', 'Synced block', 'Bullet List', 'Heading 2', 'Heading 1', 'Heading 3', 'Quote', 'Numbered List', 'Body', 'Separator', 'CSV']
 let failed = 0
 const ok = (v, what, detail = '') => { if (!v) failed++; console.log(`${v ? 'PASS' : 'FAIL'} ${what}${detail ? ` (${detail})` : ''}`) }
 const menu = p => p.evaluate(() => {
@@ -48,8 +48,8 @@ for (const [name, br, w, h, phone] of [['chromium 1280', chromium, 1280, 900, fa
     ok(m && bar && m.bottom <= bar + 1 && m.top >= 0, `${name}: with the keyboard up the + menu sits above the toolbar and keyboard`, m && `menu ${Math.round(m.top)}-${Math.round(m.bottom)}, toolbar top ${Math.round(bar)}`)
     await p.evaluate(() => { const l = document.querySelector('#bn-suggestion-menu'); l.scrollTop = l.scrollHeight }); await p.waitForTimeout(200)
     const last = await p.evaluate(() => { const l = document.querySelector('#bn-suggestion-menu'); const o = [...l.querySelectorAll('[role=option]')].at(-1).getBoundingClientRect(), r = l.getBoundingClientRect(); return o.top >= r.top - 1 && o.bottom <= r.bottom + 1 })
-    ok(last, `${name}: scrolled to the end, Separator shows inside the menu`)
-    await p.locator('#bn-suggestion-menu [role=option]').last().tap()
+    ok(last, `${name}: scrolled to the end, the last row shows inside the menu`)
+    await p.locator('#bn-suggestion-menu [role=option]', { hasText: 'Separator' }).tap()
   } else {
     for (let i = 0; i < expected.length - 1; i++) await p.keyboard.press('ArrowDown')
     await p.waitForTimeout(200); m = await menu(p)
@@ -57,7 +57,7 @@ for (const [name, br, w, h, phone] of [['chromium 1280', chromium, 1280, 900, fa
     for (let i = 0; i < expected.length - 1; i++) await p.keyboard.press('ArrowUp')
     await p.waitForTimeout(200); m = await menu(p)
     ok(m?.selected === 'Task' && m.selectedInView, `${name}: ↑ back to the top scrolls Task into view`, m?.selected)
-    for (let i = 0; i < expected.length - 1; i++) await p.keyboard.press('ArrowDown')
+    for (let i = 0; i < expected.indexOf('Separator'); i++) await p.keyboard.press('ArrowDown')
     await p.keyboard.press('Enter')
   }
   await p.waitForTimeout(400)
