@@ -1,6 +1,6 @@
 # Sub-items and dependencies: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead, Roadbuster and Jazz to review**. Not approved and not built.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **partly live** (#106, #107, #114, 2026-11-04), without arrows or moving a tree; checklist R4-4 and R4-5 say what's open.
 - Asked by the Lead (4a1712e6). Settles R4-4's open point on To-dos, for the Lead to confirm. Nothing is cut for lack of evidence, and use only sets the order (Brian 57deaed7).
 - **Evidence:** Notion's help page on [sub-items and dependencies][h]. I read it; I haven't used them in Notion. It doesn't cover how to make a sub-item, "Blocked by" and "Blocking", arrows, rows with no dates, whether shifts go down a chain, or the phone, so those parts are my proposal.
 - **Brian's use:** no databases at the last read (Nov 3, rev 793), so examples are illustrations.

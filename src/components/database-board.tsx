@@ -7,7 +7,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type K
 import { createPortal } from 'react-dom'
 import { sectionKey, viewSections, viewSubGroups, columnCalc, propertyOf, viewBoardCalculation, canWrap, cellValue, databaseRows, isDatabase, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { PickedBar, useCardPicking, useMoveRows, useRowPicking, SubGroupHead, HiddenSubGroups, useFolds, NewRow, shownValue, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { CardSubItems, PickedBar, useCardPicking, useMoveRows, useRowPicking, SubGroupHead, HiddenSubGroups, useFolds, NewRow, shownValue, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { calcText } from './property-values'
 import { openDatabaseMenu } from './database-menu'
 import { todayIso } from './dates'
@@ -25,12 +25,12 @@ interface Drag { rowId: string; from: string; over: string; before: string | nul
 export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true, linked }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
   const { run, latest } = useWorkspace()
   const commit = useCommitCell()
-  const openRow = useOpenRow()
   const undoKey = useUndoKey()
   const today = todayIso()
   const weekStart = workspace.weekStart ?? 0
   const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
+  const openRow = useOpenRow(view, rows)
   usePendingCells()
   const ordered = withPendingMoves(rows)
   const groups: ViewGroups | null = viewGroups(db.database, view, ordered, shownRaw, weekStart)
@@ -230,6 +230,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
         if (isEmptyValue(value) && !formulaErrorOf(row, property)) return null
         return <span key={property.id} className={`database-card-value${wrap && canWrap(property.type) ? ' is-wrapped' : ''}`}><PropertyCell property={property} value={value} row={row} today={today} wrap={wrap && canWrap(property.type)} /></span>
       })}
+      <CardSubItems db={db} view={view} row={row} today={today} />
       {unsaved && <span className="database-card-unsaved">Not saved</span>}
     </>
   }

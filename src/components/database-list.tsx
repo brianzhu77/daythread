@@ -5,7 +5,7 @@ import { formulaErrorOf } from '../domain/formula'
 import { Fragment, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { sectionKey, viewSections, viewSubGroups, cellValue, databaseRows, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { PickedBar, useCardPicking, useRowPicking, SubGroupHead, HiddenSubGroups, NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { PickedBar, useCardPicking, useRowPicking, SubGroupHead, HiddenSubGroups, NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps, SubItemLead, subFoldKey, subItemTree, treeUpTo } from './database-block'
 import { todayIso } from './dates'
 import { ChevronRightIcon } from './icons'
 import { displayPageTitle } from './page-title'
@@ -18,13 +18,13 @@ const shownProperties = 3
 export function DatabaseList({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true, linked }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
   const { latest } = useWorkspace()
   const commit = useCommitCell()
-  const openRow = useOpenRow()
   const undoKey = useUndoKey()
   const wide = useWide()
   const today = todayIso()
   const weekStart = workspace.weekStart ?? 0
   const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
+  const openRow = useOpenRow(view, rows)
   usePendingCells()
   const ordered = withPendingMoves(rows)
   const groups = viewGroups(db.database, view, ordered, shownRaw, weekStart)
@@ -84,6 +84,8 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
     if (next) { e.preventDefault(); next.focus() }
   }
 
+  const tree = subItemTree(workspace, db, view, rows, Boolean(groups), folded)
+  const treeOf = new Map(tree?.map(e => [e.row.id, e]))
   const picks = useRowPicking(blockId, db, view, rows, () => [...new Set([...(wrap.current?.querySelectorAll<HTMLElement>('[data-row]') ?? [])].map(el => el.dataset.row!))])
   const cardPicks = useCardPicking(picks, db, wide, () => wrap.current)
 
@@ -93,9 +95,10 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
     const unsaved = [...pendingCells.values()].some(p => p.failed && p.rowId === row.id)
     const nav = line++ === 0 ? '0:0' : undefined
     return <div key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})}
-      className={`database-list-row${picks.picked.includes(row.id) ? ' is-chosen' : ''}${picks.picking ? ' is-pickable' : ''}${returned === row.id ? ' is-returned' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}`}>
-      {wide && !view.sort.length && !db.database.fixed && <span className="database-list-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
+      className={`database-list-row${treeOf.get(row.id)?.context ? ' is-context' : ''}${picks.picked.includes(row.id) ? ' is-chosen' : ''}${picks.picking ? ' is-pickable' : ''}${returned === row.id ? ' is-returned' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}`}>
+      {wide && !view.sort.length && !db.database.fixed && !treeOf.get(row.id)?.depth && <span className="database-list-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
       <TodoTick row={row} />
+      {treeOf.has(row.id) && <SubItemLead entry={treeOf.get(row.id)!} label={displayPageTitle(row)} onToggle={() => toggle(subFoldKey(row.id))} />}
       <button type="button" className={`database-list-title${row.title ? '' : ' is-placeholder'}`} data-nav={nav} data-cell={cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, ...(group !== undefined ? { group } : {}) })} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}</button>
       <span className="database-list-values">
         {columns.map(({ property }) => {
@@ -136,14 +139,14 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
             ? subs.shown.map(sub => { const key = sectionKey(group.key, sub.key); return <Fragment key={key}><SubGroupHead groups={subs} group={sub} isFolded={folded.has(key)} onToggle={() => toggle(key)} />{body(key, sub.rows)}</Fragment> })
             : body(group.key, group.rows))}
         </Fragment>
-      }) : ordered.slice(0, limit).map(row => rowLine(row))}
+      }) : (tree ? treeUpTo(tree, limit).map(e => e.row) : ordered.slice(0, limit)).map(row => rowLine(row))}
     </div>
     <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
     <PickedBar picks={picks} db={db} floating />
     {cardPicks.boxDrawn}
     {groups && <HiddenGroups groups={groups} changeView={changeView} />}
     {groups && <HiddenSubGroups db={db.database} view={view} rows={ordered} changeView={changeView} weekStart={weekStart} />}
-    {!groups && ordered.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
+    {!groups && (tree ? tree.filter(e => e.depth === 0).length : ordered.length) > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
     {!groups && <NewRow db={db} blockId={blockId} addRow={addRow} />}
   </div>
 }

@@ -7,7 +7,7 @@ import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { firstImageUrl } from '../domain/editor-document'
 import { sectionKey, viewSections, viewSubGroups, canWrap, cellValue, databaseRows, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { PickedBar, useCardPicking, useRowPicking, SubGroupHead, HiddenSubGroups, NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { CardSubItems, PickedBar, useCardPicking, useRowPicking, SubGroupHead, HiddenSubGroups, NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { todayIso } from './dates'
 import { ChevronRightIcon } from './icons'
 import { displayPageTitle } from './page-title'
@@ -24,13 +24,13 @@ function CardImage({ row }: { row: Page }) {
 export function DatabaseGallery({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true, linked }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
   const { latest } = useWorkspace()
   const commit = useCommitCell()
-  const openRow = useOpenRow()
   const undoKey = useUndoKey()
   const wide = useWide()
   const today = todayIso()
   const weekStart = workspace.weekStart ?? 0
   const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
+  const openRow = useOpenRow(view, rows)
   usePendingCells()
   const returned = useReturnedRow(rows)
   const viewColumnsShown = viewColumns(db.database, view)
@@ -67,6 +67,7 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
           if (property.type === 'checkbox') return <span key={property.id} className="database-card-check"><PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} disabled={isReadOnly(property)} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />{property.name}</span>
           return isEmptyValue(value) && !formulaErrorOf(row, property) ? null : <span key={property.id} className={`database-card-value${wrap && canWrap(property.type) ? ' is-wrapped' : ''}`}><PropertyCell property={property} value={value} row={row} today={today} wrap={wrap && canWrap(property.type)} /></span>
         })}
+        <CardSubItems db={db} view={view} row={row} today={today} />
         {unsaved && <span className="database-card-unsaved">Not saved</span>}
       </div>
     </article>

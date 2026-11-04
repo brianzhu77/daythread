@@ -36,7 +36,7 @@ if (!base) { console.error('usage: node scripts/check-alignment.mjs <base url> [
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
-const REQUIRED = ['timeline', 'synced block', 'sub-groups', 'lanes', 'board', 'grouped table', 'list', 'gallery', 'calendar', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
+const REQUIRED = ['timeline', 'sub-items', 'peek', 'synced block', 'sub-groups', 'lanes', 'board', 'grouped table', 'list', 'gallery', 'calendar', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
 
 /** What a table cell or a row page's value draws: its box when it's a checkbox, else its first line of text, else a chip or dot. */
 function drawnCentres() {
@@ -170,6 +170,15 @@ function measure() {
           'column head on the title': head ? head.getBoundingClientRect().left - title.getBoundingClientRect().left : null,
           "card's edge on its column head": head && card ? card.getBoundingClientRect().left - head.getBoundingClientRect().left : null,
         }
+      }
+      // Sub-items (R4-4): a top row's words on the head's Name, and a sub-item one step in. Open the first parent to measure it.
+      const toggle = content.querySelector('.database-sub-toggle')
+      if (toggle) {
+        const rowWords = el => words(el?.querySelector('.database-title-cell > span:last-child, .database-title-text') ?? el?.querySelector('.database-title-cell'))
+        const name = content.querySelector('.database-th[data-type="title"]'), rows = [...content.querySelectorAll('.database-row')]
+        const nameWords = name ? (() => { const text = document.createRange(); text.selectNode(name.lastChild); return text.getBoundingClientRect() })() : null
+        row.subItems = { "a top row's words on the head's Name": rows[0] ? gap(rowWords(rows[0]), nameWords) : null, 'toggle centred on its row': mid(toggle.getBoundingClientRect(), words(rows[0]?.querySelector('.database-title-cell'))) }
+        row.layered = true
       }
       // A timeline (R4-1): a bar's title centred on it, and a day's number and grid line together.
       const bar = content.querySelector('.database-timeline .database-bar')
@@ -368,10 +377,12 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     for (const r of selects) results.push({ at: `${width} /pages`, check: `account line "${r.label}" shows all its words: "${r.text}"`, ok: r.over !== null && r.over <= 0.5 && r.full, detail: r.over === null ? 'a bare select, which clips' : `${fmt(r.over)}px past its box` })
     await page.close()
   }
-  for (const path of paths) {
+  // A row over a page (R4-16): at 1280 only, since a phone opens it as a full page.
+  for (const path of width === 1280 ? [...paths, '/pages?page=fixture-peek-db&peek=fixture-peek-row'] : paths) {
     const page = await browser.newPage({ viewport: { width, height } })
     await page.goto(`${base}${path}`, { waitUntil: 'networkidle' }); await page.waitForTimeout(1000)
     const { rows, editorLeft, chips, synced } = await page.evaluate(measure)
+    const inPeek = path.includes('peek=') && rows.length > 0 && await page.locator('.peek .continuous-editor').count() > 0
     await drawPass(page, rows)
     const table = await page.evaluate(drawnCentres)
     // A row page lists the same values: the table's first row, opened read-only (a cell's key is block|row|column).
@@ -441,6 +452,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
         ? { at, check: `${c.kind} baseline: "${c.label}"`, ok: 'missing', detail: 'no plain text beside it on the line, so not measured' }
         : { at, check: `${c.kind} text baseline on the line's: "${c.label}"`, ok: Math.abs(c.baseline) <= TOLERANCE, detail: `${c.baseline >= 0 ? '+' : ''}${fmt(c.baseline)}px${c.across ? ' (against text on another line of the row, within its line box)' : ''}` })
     }
+    if (inPeek) seen.get(width).add('peek')
     for (const r of rows) { seen.get(width).add(r.kind); if (r.empty) seen.get(width).add('empty row'); if (r.kind === 'nested bullet' && r.depth >= 2) seen.get(width).add('level 3 bullet'); if (r.kind.endsWith(' task') && r.depth >= 1) seen.get(width).add(r.depth >= 2 ? 'level 3 task' : 'nested task'); if (r.kind.endsWith(' task') && r.depth >= 2) seen.get(width).add('nested task') }
     // 1. Columns.
     const top = rows.filter(r => r.depth === 0 && r.kind !== 'heading' && r.kind !== 'paragraph')
@@ -478,7 +490,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
           ? { at, check: `${name} ${what}: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
           : { at, check: `${name} ${what}: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
       }
-      for (const [part, kind] of [[r.subGroups, 'sub-groups'], [r.lanes, 'lanes'], [r.timeline, 'timeline']]) {
+      for (const [part, kind] of [[r.subGroups, 'sub-groups'], [r.lanes, 'lanes'], [r.subItems, 'sub-items'], [r.timeline, 'timeline']]) {
         if (!part) continue
         seen.get(width).add(kind)
         for (const [what, off] of Object.entries(part)) results.push(off == null
@@ -528,7 +540,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
 }
 await browser.close()
 // 3. Coverage.
-for (const [width, kinds] of seen) for (const kind of REQUIRED) if (!kinds.has(kind)) results.push({ at: `${width}`, check: `${kind}: not on any measured page`, ok: 'missing', detail: 'add it to the copy and run again' })
+for (const [width, kinds] of seen) for (const kind of REQUIRED) if (!kinds.has(kind) && !(kind === 'peek' && width !== 1280)) results.push({ at: `${width}`, check: `${kind}: not on any measured page`, ok: 'missing', detail: 'add it to the copy and run again' })
 
 const label = r => (r.ok === 'missing' ? 'MISSING' : r.ok ? 'ok' : 'FAIL').padEnd(7)
 const show = args.includes('--all') ? results : results.filter(r => r.ok !== true)
