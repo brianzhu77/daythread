@@ -1,6 +1,6 @@
 # Files (R3-11): sizing
 
-- Author: Roadbuster, 2026-11-03, updated 2026-11-04. Status: **building, on `feat/files`. The store is R2 (Lead c7e3ed7c). The sizes and the deleting below are proposals for the Lead and Bumblebee.**
+- Author: Roadbuster, 2026-11-03, updated 2026-11-04. Status: **built, with the Lead (`feat/files`). The store is R2 (Lead c7e3ed7c). The sizes and the deleting below are agreed (Lead 4c44be6e, Bumblebee 21e48af3).**
 - **Run on 2026-11-04, on a local Worker (workerd with its local R2), Chromium not involved:** a 25 MB upload at 3 MB/s reached the handler as 6,404 chunks of 4 KB spread over 8.3 s, so TanStack Start's handler doesn't buffer it, which was risk 3. `R2.put` takes `request.body` directly. It came back byte for byte. 26 MB is refused with 413 and an upload with no length with 411. **Not measured:** memory on a deployed Worker, as local memory doesn't tell (450 to 500 MB, mostly the local R2 itself). The prices and limits are from Cloudflare's pages, not tried.
 
 ## Recommendation
@@ -41,7 +41,9 @@ The 5 GB is read from the store on each upload, one list per 1,000 files, so two
   - **A sweep removes the rest,** when the app opens, at most once a day: a call lists the account's objects, and deletes those no row holds and that are over 7 days old. The 7 days cover an upload not yet attached, an open tab that hasn't caught up, and restoring a recent backup. No cron, as with repeating rows (`automations.md` §6).
   - **So "removed for good" takes up to 7 days plus the next open,** and until then the object is still readable by its owner only. If that's too long, the wait can shrink, at the cost of what it covers.
   - **A deleted account's files go with it,** in the same request, after its data. If that fails, the reply says so as it already does for the login (`login: 'kept'`), since no later sweep will run for that account.
-- **What opens in place:** PNG, JPEG, GIF, WebP, AVIF and PDF. Everything else downloads, including HTML and SVG, because a page opened on our origin could read his workspace. Video downloads too: iPhone Safari needs range requests to play it, and we don't serve those in this version.
+  - **What holds a file is any occurrence of its id,** in row values of any type, page bodies, day pages, synced records, templates, Trash and what Undo can bring back (`heldText`), so files in page bodies (B87) need nothing more. `POST /api/files/sweep?report=1` says what would go and removes nothing.
+- **An id comes from the browser and is never overwritten:** a key that's taken keeps what's there. The same size is taken as a retry whose first try landed, and different bytes get 409.
+- **What opens in place:** PNG, JPEG, GIF, WebP, AVIF, HEIC, HEIF and PDF. Everything else downloads, including HTML and SVG, because a page opened on our origin could read his workspace. Video downloads too: iPhone Safari needs range requests to play it, and we don't serve those in this version.
 - **Gallery:** a Files property can be a card image. Full photos on a phone's gallery would be slow, so the browser makes a small copy on upload, stored beside the file. Images only.
 
 ## Steps

@@ -167,7 +167,7 @@ await scenario('What opens in place: an image does; a page never runs on this or
   r.ok = /^inline/.test(r.png) && /^attachment/.test(r.html) && /sandbox/.test(r.csp) && r.sniff === 'nosniff'
   return r
 })
-await scenario('The sweep: only what nothing holds and is over 7 days old goes', async page => {
+await scenario('The sweep: a report removes nothing and names what would go; only what nothing holds and is over 7 days old goes', async page => {
   await open(page)
   await cell(page, 'one').click(); await wait(300)
   await choose(page, 'notes.txt'); await wait(700); await leave(page)
@@ -176,10 +176,12 @@ await scenario('The sweep: only what nothing holds and is over 7 days old goes',
   await put('orphanOld0001', 'old'); await put('orphanNew0002', 'new')
   const old = new Date(Date.now() - 8 * 86_400_000)
   utimesSync(join(folder, 'local', 'orphanOld0001'), old, old); utimesSync(join(folder, 'local', kept), old, old)
+  const report = await page.evaluate(async () => (await (await fetch('/api/files/sweep?report=1', { method: 'POST' })).json()))
+  const afterReport = inFolder()
   const removed = await page.evaluate(async () => (await (await fetch('/api/files/sweep', { method: 'POST' })).json()).removed)
   const left = inFolder()
-  const r = { removed, left }
-  r.ok = removed === 1 && !left.includes('orphanOld0001') && left.includes('orphanNew0002') && left.includes(kept)
+  const r = { report: report.wouldRemove.map(f => f.key), keptByReport: afterReport.includes('orphanOld0001'), removed, left }
+  r.ok = r.report.join() === 'local/orphanOld0001' && report.removed === 0 && r.keptByReport && removed === 1 && !left.includes('orphanOld0001') && left.includes('orphanNew0002') && left.includes(kept)
   return r
 })
 await scenario('390: in the sheet, it takes a tap, and nothing runs past the edge', async page => {
