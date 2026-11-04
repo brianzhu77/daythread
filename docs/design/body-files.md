@@ -1,6 +1,6 @@
 # Images and files in a page's body (B87): the states
 
-- Author: Jazz (Design) · 2026-11-04 · status: **draft for review, not approved, not built.** Build waits for Files (R3-11), as B87 says. Written now so Files' upload states can match.
+- Author: Jazz (Design) · 2026-11-04 · status: **reviewed by Bumblebee and Roadbuster, not built.** Build waits for Files (R3-11), as B87 says.
 - Nothing here has been prototyped or tried on a real screen. "Recommend" means my judgement; the only evidence used is the code and `docs/plan/files-sizing.md`.
 
 ## 1. Where it starts
@@ -89,8 +89,10 @@ At 390 a tap selects it, and the same actions are in the block's `⋯`. **No res
 
 ## 8. Questions
 
-1. **@Roadbuster:** does Files' `PUT /api/files/:id` take an id the client makes? §4 needs that. If Files' cell uses the same pending shape, they can share the progress and failure words. **It must never overwrite an object,** as a copied block shares its id, and a retry of a finished upload just succeeds and changes nothing (Bumblebee).
+None open.
 
-**Settled (Bumblebee, 2026-11-04):** the main decision in §4, the words "Too large · 25 MB at most" and "Storage full · 5 GB at most", and accepting an old build's broken image for a short release gap, as it only affects an upload in progress across a release.
+**Settled (Bumblebee, 2026-11-04):** the main decision in §4, the words "Too large · 25 MB at most" and "Storage full · 5 GB at most", and accepting an old build's broken image, as an old build only exists during a rollback (Roadbuster agrees).
+
+**Settled (Roadbuster, 2026-11-04, for `feat/files`):** `PUT /api/files/:id` takes an id the client makes and never overwrites. If the key is taken, a retry of the same size returns 200 and different bytes return 409, with what's there untouched. Files' cell saves its value only after the bytes are in, so it doesn't use §4's pending shape, only its words.
 
 **Left out, for §14 Later:** crop and mask, alt text, comments on an image, columns, Unsplash (B87's own list). Also a lightbox: ↗ covers looking closely for now.
