@@ -1,6 +1,6 @@
 // A table's column heads at 1280 (R4-18): a click opens the column's menu, a drag on the edge resizes it, a drag on the head moves it.
 // At 390 a head stays plain text, with Name pinned.
-import { useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { columnMoved, titleId, type View } from '../domain/database'
 import type { ChangeView } from './database-block'
@@ -20,6 +20,15 @@ export function useColumnHeads({ wide, blockId, databaseId, view, changeView, wr
   const headOf = (id: string) => scroll()?.querySelector<HTMLElement>(`[data-column-head="${CSS.escape(`${blockId}|${id}`)}"]`)
   // On the head afterwards, so ⌘Z reaches the table's Undo, not the page's text.
   const focusHead = (id: string) => headOf(id)?.querySelector<HTMLElement>('[role=button]')?.focus({ preventScroll: true })
+
+  // A menu closing leaves focus on nothing, where ⌘Z reaches no table. Back to its head, or Name's if that column has just gone; a tap elsewhere has already put focus there.
+  const hadMenu = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const left = hadMenu.current
+    hadMenu.current = menuColumn
+    if (!left || menuColumn || document.activeElement !== document.body) return
+    ;(headOf(left) ?? headOf(titleId))?.querySelector<HTMLElement>('[role=button]')?.focus({ preventScroll: true })
+  }, [menuColumn]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const startResize = (e: ReactPointerEvent<HTMLElement>, id: string) => {
     if (e.button !== 0) return
