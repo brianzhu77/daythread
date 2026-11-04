@@ -23,3 +23,9 @@ Build and typecheck passed; local suite: 709 passed, 0 failed, 5 skipped.
 PR120's separate pending-action lock and destroyed-editor reply findings remain separate dependencies. This review does not clear those, nor claim a combined PR120/121 tree has passed. Worker/Postgres gating belongs to Lead. No physical phone/iPad run here.
 
 No product changes by this reviewer. Scripts and final logs are in `tests/evidence/ratchet-side-peek/`.
+
+## Retest: e1511ebe
+
+The originating-view defect is fixed. Independently replayed the original two-view reproduction in Chromium and WebKit: opening blank in the first view now navigates to f1. Added a view-inside-a-peek scenario in both engines: opening blank from its inner, reverse-sorted view navigates to f30, rather than following the host view. No runtime errors occurred.
+
+Build and typecheck pass on this fix. The full earlier baseline suite was not repeated for this small scope change; the new and original reproductions cover its changed behavior. No additional change requested for this finding. This retest still does not clear the separate PR120 lifecycle issues or claim a combined tree passed.
