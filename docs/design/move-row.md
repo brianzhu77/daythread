@@ -10,7 +10,7 @@ A row is a page whose parent is a database (`databaseOfRow`), so `move-page` wou
 
 ## 2. The flow
 
-1. The row page's `⋯` → **Move to…** At both widths. A row in a peek too.
+1. The row page's `⋯` → **Move to…** At both widths. A row in a peek too, which #286 checks, since no peek exists yet (0d35f50b).
 2. A picker lists databases by recent use, with search. Not this one, not one in Trash, and not To-dos, as a to-do has no page.
 3. **If nothing would be lost, it moves with no question.** Otherwise it says exactly what's lost, first (§4), with Move and Cancel.
 4. The notice: "Moved to Reading list · Undo". The page stays open, now showing the new database's properties. The row goes to the end of that database's order.
@@ -50,12 +50,12 @@ Only what's actually affected, with names, not a general warning:
 ## 7. Failure and old tabs
 
 - **Offline or a failed save:** nothing moves, and unsaved typing in the row is saved first (`flushEditor`), with the move not running if that fails.
-- **Another tab on the old database:** a cell edit there names a property the row no longer has. **It must fail with a notice and change nothing, which needs a script,** because a stale property id must not be written. Roadbuster, please say what `set` does there today.
-- **Rollback:** an older build reads a moved row as a normal row of the new database, so I don't expect a floor change. Please confirm.
+- **Another tab on the old database (Roadbuster 0d35f50b, `move.mjs`, both engines, SQLite):** new builds send the database they think the row is in, and the server refuses with "This row moved to X" and writes nothing. A tab on an older build gets "Property not found" for a cell, but its title edit can still go through if that tab is at the latest revision. That's accepted, since a title belongs to the row wherever it is.
+- **Rollback:** an older build reads a moved row as a normal row of the new database. Run on SQLite in both engines, with no floor change (0d35f50b).
 
 ## 8. Open
 
-- **Roadbuster:** §7's old-tab case. And matching by name and type: is a name repeated in the target possible, and if so does the first win?
+- **Answered:** a repeated name in the target isn't possible, because `uniqueName` refuses it per database, ignoring case (Roadbuster 1445dbeb).
 - **Not known, needs Notion itself:** what Notion really does on a mismatch. Ours loses less than the sources suggest either way.
 
 [g]: https://super3.super.site/blog/move-notion-page-into-database
