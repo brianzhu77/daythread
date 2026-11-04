@@ -171,6 +171,13 @@ test('blockUpdates: own save sets the facts; another place\'s edit updates a blo
   const own = blockUpdates(typed, h.page('b').document, true)
   assert.equal(own[0]!.rev, 2)
   assert.equal(own[0]!.lines, null)
+  // An Undo back to the old lines while the save was on its way: they look untouched, but they're his latest, so they stay and save (Ratchet 0074b95c).
+  const sent = JSON.stringify(typed)
+  const undone = blockUpdates(held, h.page('b').document, true, sent)
+  assert.equal(undone[0]!.lines, null)
+  assert.equal(undone[0]!.rev, 2)
+  // Another place on the page that went out as it is still follows, whoever saved.
+  assert.deepEqual(blockUpdates(held, h.page('b').document, true, JSON.stringify(held))[0]!.lines!.map(n => n.id), ['l1:sb'])
   // It starts from what was saved, so the words typed since still read as his: nothing follows over them (Lead's review of #93).
   const after = structuredClone(typed).map(n => n.type === syncedBlockType ? { ...n, props: { ...n.props, rev: own[0]!.rev, key: own[0]!.key } } : n)
   assert.deepEqual(blockUpdates(after, h.page('b').document, false), [])

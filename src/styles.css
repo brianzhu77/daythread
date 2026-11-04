@@ -782,6 +782,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor .bn-editor { padding:8px 24px 60px; background:transparent; color:var(--ink); font-size:var(--text-row); line-height:1.65; }
 /* Space above a section sits outside the block box, so BlockNote's own side menu lines up with the heading text. */
 .continuous-editor .bn-block-outer:has(> .bn-block > .bn-block-content[data-content-type=heading]) { margin-top:18px; }
+.continuous-editor.is-paused .bn-editor { opacity:.55; transition:opacity .15s; }
 .editor-save-line { min-height:24px; font-size:var(--text-caption); color:var(--ink-2); display:flex;gap:12px; align-items:center; padding-left:24px; }
 .editor-save-line button { padding:2px 8px; font-size:var(--text-caption); }
 /* B23 (Jazz): in a conflict, Load latest is the one way on, so it reads as a button. */
