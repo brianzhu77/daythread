@@ -120,3 +120,104 @@ test('a tab that missed the move: its cell edit fails with the reason and writes
   assert.deepEqual(row(h).values, before)
   assert.equal(row(h).title, 'Dune')
 })
+
+function tree() {
+  const h = shelves()
+  const change = (pageId: string, c: DatabaseChange) => h.run({ type: 'change-database', pageId, change: c })
+  change('from', { kind: 'setSubItems', on: { parent: 'par', sub: 'sub' } })
+  for (const id of ['kid', 'kid2', 'grand', 'other']) h.run({ type: 'add-row', databaseId: 'from', pageId: id, title: id, values: id === 'kid2' ? { genre: 'hist', rate: 2 } : {}, at })
+  const set = (pageId: string, parent: string) => h.run({ type: 'set-values', pageId, values: { par: [parent] }, expected: {}, at })
+  set('kid', 'dune'); set('kid2', 'dune'); set('grand', 'kid')
+  const move = () => h.run({ type: 'move-row', pageId: 'dune', databaseId: 'to', at })
+  return { h, change, set, move }
+}
+const parentThere = (h: ReturnType<typeof harness>) => dbOf(h, 'to').database.subItems!
+test('a parent takes its whole tree: sub-items turn on there, links are made again in the target, and the old ones are gone', () => {
+  const { h, move } = tree()
+  move()
+  for (const id of ['dune', 'kid', 'kid2', 'grand']) assert.equal(h.ws.pages.find(p => p.id === id)!.parentId, 'to')
+  assert.equal(h.ws.pages.find(p => p.id === 'other')!.parentId, 'from')
+  const { parent, sub } = parentThere(h)
+  assert.deepEqual(links(h, 'kid', parent), ['dune'])
+  assert.deepEqual(links(h, 'kid2', parent), ['dune'])
+  assert.deepEqual(links(h, 'grand', parent), ['kid'])
+  assert.deepEqual(links(h, 'dune', sub), ['kid', 'kid2'])
+  assert.deepEqual(links(h, 'kid', sub), ['grand'])
+  for (const id of ['dune', 'kid', 'grand']) { assert.equal(links(h, id, 'par'), undefined); assert.equal(links(h, id, 'sub'), undefined) }
+  assert.equal(h.ws.pages.find(p => p.id === 'kid2')!.values?.genreTo !== undefined, true, 'its own values come by name too')
+  const numbers = ['dune', 'kid', 'kid2', 'grand'].map(id => links(h, id, rowNumberKey)) as number[]
+  assert.equal(new Set(numbers).size, 4, 'each takes its own number there')
+})
+test('what it says first covers the tree, once each: no word about its own links, and the count leaves out Trash', () => {
+  const { h } = tree()
+  h.run({ type: 'delete-page', pageId: 'grand', at })
+  const plan = planRowMove(h.ws, row(h), dbOf(h, 'from'), dbOf(h, 'to'))
+  assert.equal(plan.subItems, 2)
+  assert.deepEqual(plan.leftBehind, ['Rating'])
+  assert.deepEqual(plan.linksLost, [])
+  assert.deepEqual(plan.optionsAdded.filter(o => o.name === 'History').length, 1)
+})
+test('a sub-item taken alone keeps what\'s under it and names the parent it leaves', () => {
+  const { h } = tree()
+  const kid = h.ws.pages.find(p => p.id === 'kid')!
+  const plan = planRowMove(h.ws, kid, dbOf(h, 'from'), dbOf(h, 'to'))
+  assert.equal(plan.subItems, 1)
+  assert.deepEqual(plan.leftBehind, ['Parent item'])
+  assert.deepEqual(plan.linksLost, [{ database: 'From', rows: 1 }])
+  h.run({ type: 'move-row', pageId: 'kid', databaseId: 'to', at })
+  assert.deepEqual(links(h, 'grand', parentThere(h).parent), ['kid'])
+  assert.equal(links(h, 'kid', parentThere(h).parent), undefined)
+  assert.deepEqual(links(h, 'dune', 'sub'), ['kid2'], 'the old parent keeps its other sub-item')
+})
+test('a row in Trash goes with the tree, so restoring it puts it back under its parent', () => {
+  const { h, move } = tree()
+  h.run({ type: 'delete-page', pageId: 'grand', at })
+  move()
+  const grand = h.ws.pages.find(p => p.id === 'grand')!
+  assert.equal(grand.parentId, 'to')
+  assert.ok(grand.trashedAt)
+  assert.deepEqual(links(h, 'grand', parentThere(h).parent), ['kid'])
+})
+test('sub-items already on in the target are used, not made twice, with its names taken', () => {
+  const { h, change, move } = tree()
+  change('to', { kind: 'setSubItems', on: { parent: 'upTo', sub: 'downTo' } })
+  const count = dbOf(h, 'to').database.properties.length
+  move()
+  assert.equal(dbOf(h, 'to').database.properties.length, count)
+  assert.deepEqual(links(h, 'kid', 'upTo'), ['dune'])
+  assert.deepEqual(links(h, 'dune', 'downTo'), ['kid', 'kid2'])
+})
+test('a row with no sub-items doesn\'t turn them on there; a tree that won\'t fit and To-dos are refused', () => {
+  const { h, move } = tree()
+  h.run({ type: 'move-row', pageId: 'other', databaseId: 'to', at })
+  assert.equal(dbOf(h, 'to').database.subItems, undefined)
+  const page = dbOf(h, 'to')
+  const filler = Array.from({ length: 9_997 }, (_, n) => ({ id: `f${n}`, type: 'document' as const, date: null, title: '', parentId: 'to', document: '[]', createdAt: at, editedAt: at }))
+  h.ws.pages.push(...filler as never[])
+  assert.equal(page.id, 'to')
+  assert.throws(move, /is full/)
+  dbOf(h, 'people').database.fixed = true
+  assert.throws(() => h.run({ type: 'move-row', pageId: 'dune', databaseId: 'people', at }), /To-dos/)
+})
+test('one Undo puts the whole tree back with its links, and the target\'s sub-items off', () => {
+  const { h, move } = tree()
+  const before = structuredClone(h.ws.pages.filter(p => p.parentId === 'from' && !p.trashedAt).map(p => [p.id, p.values]))
+  const r = move()
+  h.run({ type: 'undo', targetOperationId: r.receipt.operationId })
+  assert.deepEqual(h.ws.pages.filter(p => p.parentId === 'from' && !p.trashedAt).map(p => [p.id, p.values]), before)
+  assert.equal(dbOf(h, 'to').database.subItems, undefined)
+  assert.equal(dbOf(h, 'to').database.properties.some(p => /Parent item/.test(p.name)), false)
+})
+test('a database inside something moving isn\'t somewhere it can go: the row, a sub-item or deeper, and nothing changes', () => {
+  const { h } = tree()
+  h.run({ type: 'create-document', title: 'Under', body: '', pageId: 'under', parentId: 'grand' } as never)
+  h.run({ type: 'create-database', pageId: 'nested', homeBlockId: null, title: 'Nested', parentId: 'under' } as never)
+  h.run({ type: 'create-database', pageId: 'inDune', homeBlockId: null, title: 'In Dune', parentId: 'dune' } as never)
+  const before = structuredClone(h.ws.pages)
+  for (const databaseId of ['nested', 'inDune']) assert.throws(() => h.run({ type: 'move-row', pageId: 'dune', databaseId, at }), /inside this row/)
+  assert.deepEqual(h.ws.pages, before)
+  assert.equal(planRowMove(h.ws, row(h), dbOf(h, 'from'), dbOf(h, 'to')).subItems, 3, 'elsewhere still goes')
+  h.run({ type: 'move-row', pageId: 'other', databaseId: 'nested', at })
+  assert.equal(h.ws.pages.find(p => p.id === 'other')!.parentId, 'nested', 'a row outside the tree can go there')
+})
+
