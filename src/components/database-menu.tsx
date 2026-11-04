@@ -4,6 +4,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { timelineUnits, viewDateEnd, type TimelineUnit } from '../domain/timeline'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
 import type { Page, Workspace } from '../domain/types'
 import { rollupFunctionsFor } from '../domain/relations'
@@ -149,7 +150,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     <div className="database-menu-tiles">
       <button type="button" onClick={() => go('filter')}>Filter</button>
       <button type="button" onClick={() => go('sort')}>Sort</button>
-      {view.layout !== 'calendar' && <button type="button" onClick={() => go('group')}>Group</button>}
+      {view.layout !== 'calendar' && view.layout !== 'timeline' && <button type="button" onClick={() => go('group')}>Group</button>}
     </div>
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
@@ -299,7 +300,8 @@ function SortPanel({ db, view, back }: { db: DatabasePage; view: View; back: () 
 
 // ---------------------------------------------------------------- group and layout (design §7.2, §7.3)
 
-const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar' }
+const unitLabels: Record<TimelineUnit, string> = { hours: 'Hours', day: 'Day', week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' }
+const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar', timeline: 'Timeline' }
 /** "Status", "Status 2", …: never a name the database already has. */
 function newPropertyName(db: Database, base: string): string {
   const taken = new Set(['name', ...db.properties.map(p => p.name.toLocaleLowerCase())])
@@ -321,7 +323,7 @@ function BoardGroupChoices({ db, onPick }: { db: DatabasePage; onPick: (property
 }
 
 /** A calendar's rows sit by a date property: asked when one is made (R3-1), as a board asks for its columns. */
-function CalendarDateChoices({ db, onPick }: { db: DatabasePage; onPick: (propertyId: string) => void }) {
+function CalendarDateChoices({ db, onPick, label = 'Show calendar by' }: { db: DatabasePage; onPick: (propertyId: string) => void; label?: string }) {
   const change = useChange(db)
   const addDate = () => {
     const id = newId()
@@ -329,7 +331,7 @@ function CalendarDateChoices({ db, onPick }: { db: DatabasePage; onPick: (proper
     onPick(id)
   }
   return <>
-    <p className="database-menu-quiet">Show calendar by</p>
+    <p className="database-menu-quiet">{label}</p>
     {dateProperties(db.database).map(p => <button key={p.id} type="button" role="menuitem" onClick={() => onPick(p.id)}>{p.name}</button>)}
     <button type="button" role="menuitem" onClick={addDate}>+ New Date property</button>
   </>
@@ -398,14 +400,14 @@ function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
   const wrapsAll = view.columns.some(c => c.wrap) && viewColumns(db.database, view).every(c => c.wrap || !canWrap(c.property.type)) && (view.layout !== 'table' || Boolean(view.wrapName))
   const changeView = useViewChange(db.id, view.id)
   const [asking, setAsking] = useState(false)
-  const [askingDate, setAskingDate] = useState(false)
-  const toCalendar = (dateBy: string) => { setAskingDate(false); changeView(current => ({ layout: 'calendar', dateBy, ...renamedFor(current, 'calendar') })) }
+  const [askingDate, setAskingDate] = useState<'calendar' | 'timeline' | null>(null)
+  const toDated = (layout: 'calendar' | 'timeline', dateBy: string) => { setAskingDate(null); changeView(current => ({ layout, dateBy, ...renamedFor(current, layout) })) }
   const toBoard = (groupBy: string) => { setAsking(false); changeView(current => ({ layout: 'board', groupBy, ...renamedFor(current, 'board') })) }
   const pick = (layout: View['layout']) => {
     if (layout === view.layout) return
-    if (layout === 'calendar') {
+    if (layout === 'calendar' || layout === 'timeline') {
       const kept = viewDateBy(db.database, view), only = dateProperties(db.database)
-      if (kept) toCalendar(kept.id); else if (only.length === 1) toCalendar(only[0]!.id); else setAskingDate(true)
+      if (kept) toDated(layout, kept.id); else if (only.length === 1) toDated(layout, only[0]!.id); else setAskingDate(layout)
       return
     }
     if (layout !== 'board') { changeView(current => ({ layout, ...renamedFor(current, layout) })); return }
@@ -415,16 +417,33 @@ function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
     if (kept) toBoard(kept.id); else if (only.length === 1) toBoard(only[0]!.id); else setAsking(true)
   }
   if (asking) return <><Head title="Board" back={() => setAsking(false)} /><BoardGroupChoices db={db} onPick={toBoard} /></>
-  if (askingDate) return <><Head title="Calendar" back={() => setAskingDate(false)} /><CalendarDateChoices db={db} onPick={toCalendar} /></>
+  if (askingDate) return <><Head title={layoutLabels[askingDate]} back={() => setAskingDate(null)} /><CalendarDateChoices db={db} label={`Show ${askingDate} by`} onPick={id => toDated(askingDate, id)} /></>
   return <>
     <Head title="Layout" back={back} />
-    {(['table', 'board', 'list', 'gallery', 'calendar'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
+    {(['table', 'board', 'list', 'gallery', 'calendar', 'timeline'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
     {(view.layout === 'table' || view.layout === 'board' || view.layout === 'gallery') && <label className="database-menu-row">Wrap all
       <input type="checkbox" checked={wrapsAll} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ wrapName: on, columns: columns.map(c => withWrap(c, on)) })) }} />
     </label>}
     {view.layout === 'calendar' && <label className="database-menu-row">Show as
       <select aria-label="Show as" value={view.calendarSpan ?? 'month'} onChange={e => { const calendarSpan = e.target.value === 'week' ? 'week' as const : null; changeView(() => ({ calendarSpan })) }}>
         <option value="month">Month</option><option value="week">Week</option>
+      </select>
+    </label>}
+    {view.layout === 'timeline' && <label className="database-menu-row">Unit
+      <select aria-label="Unit" value={view.timelineUnit ?? 'day'} onChange={e => { const timelineUnit = e.target.value as TimelineUnit; changeView(() => ({ timelineUnit })) }}>
+        {timelineUnits.map(u => <option key={u} value={u}>{unitLabels[u]}</option>)}
+      </select>
+    </label>}
+    {view.layout === 'timeline' && dateProperties(db.database).length > 0 && <label className="database-menu-row">Show timeline by
+      <select value={viewDateBy(db.database, view)?.id ?? ''} onChange={e => { const dateBy = e.target.value; if (dateBy) changeView(() => ({ dateBy })) }}>
+        {!viewDateBy(db.database, view) && <option value="">Choose…</option>}
+        {dateProperties(db.database).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </label>}
+    {view.layout === 'timeline' && viewDateBy(db.database, view) && <label className="database-menu-row">End
+      <select aria-label="End" value={viewDateEnd(db.database, view)?.id ?? ''} onChange={e => { const timelineEnd = e.target.value || null; changeView(() => ({ timelineEnd })) }}>
+        <option value="">Same property</option>
+        {dateProperties(db.database).filter(p => p.type === 'date' && p.id !== view.dateBy).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
     </label>}
     {view.layout === 'calendar' && dateProperties(db.database).length > 0 && <label className="database-menu-row">Show calendar by
@@ -713,20 +732,22 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
   const current = shownView(db.database, blockId)
   const [actions, setActions] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
-  const [adding, setAdding] = useState<null | 'type' | 'board' | 'calendar'>(null)
+  const [adding, setAdding] = useState<null | 'type' | 'board' | 'calendar' | 'timeline'>(null)
   const views = db.database.views
   const pick = (id: string) => { setShownView(blockId, id); setOpenMenu(null) }
-  const add = (from?: View, groupBy?: string, layout: 'table' | 'list' | 'gallery' | 'calendar' = 'table', dateBy?: string) => {
+  const add = (from?: View, groupBy?: string, layout: 'table' | 'list' | 'gallery' | 'calendar' | 'timeline' = 'table', dateBy?: string) => {
     const id = newId()
     // A new view is named after its type, with the name ready to rename (design §7.1); Duplicate copies one. A new board's or
     // gallery's cards start as titles alone: Properties adds what he wants on them (§7.5).
-    const view: View = from ? { ...structuredClone(from), id, name: `${from.name} (copy)` } : { id, name: groupBy ? 'Board' : layoutLabels[layout], layout: groupBy ? 'board' : layout, columns: groupBy || layout === 'gallery' || layout === 'calendar' ? [] : current.columns, sort: [], filter: [], ...(groupBy ? { groupBy } : {}), ...(dateBy ? { dateBy } : {}) }
+    const view: View = from ? { ...structuredClone(from), id, name: `${from.name} (copy)` } : { id, name: groupBy ? 'Board' : layoutLabels[layout], layout: groupBy ? 'board' : layout, columns: groupBy || layout === 'gallery' || layout === 'calendar' || layout === 'timeline' ? [] : current.columns, sort: [], filter: [], ...(groupBy ? { groupBy } : {}), ...(dateBy ? { dateBy } : {}) }
     change({ kind: 'addView', view })
     setShownView(blockId, id)
     setActions(null); setAdding(null); setRenaming(id)
   }
   const addBoard = () => { const only = groupableProperties(db.database, 'board'); if (only.length === 1) add(undefined, only[0]!.id); else setAdding('board') }
+  const addTimeline = () => { const only = dateProperties(db.database); if (only.length === 1) add(undefined, undefined, 'timeline', only[0]!.id); else setAdding('timeline') }
   const addCalendar = () => { const only = dateProperties(db.database); if (only.length === 1) add(undefined, undefined, 'calendar', only[0]!.id); else setAdding('calendar') }
+  if (adding === 'timeline') return <><Head title="New timeline" back={() => setAdding('type')} /><CalendarDateChoices db={db} label="Show timeline by" onPick={id => add(undefined, undefined, 'timeline', id)} /></>
   if (adding === 'calendar') return <><Head title="New calendar" back={() => setAdding('type')} /><CalendarDateChoices db={db} onPick={id => add(undefined, undefined, 'calendar', id)} /></>
   if (adding === 'board') return <><Head title="New board" back={() => setAdding('type')} /><BoardGroupChoices db={db} onPick={id => add(undefined, id)} /></>
   if (adding === 'type') return <>
@@ -736,6 +757,7 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
     <button type="button" role="menuitem" onClick={() => add(undefined, undefined, 'list')}>List</button>
     <button type="button" role="menuitem" onClick={() => add(undefined, undefined, 'gallery')}>Gallery</button>
     <button type="button" role="menuitem" onClick={addCalendar}>Calendar</button>
+    <button type="button" role="menuitem" onClick={addTimeline}>Timeline</button>
   </>
   return <>
     <Head title="Views" />
