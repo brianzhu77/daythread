@@ -1,8 +1,8 @@
 import { MoveRowDialog } from './move-row-dialog'
 import { Modal, SearchField } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { cardTo, childPages, hasContent, linkedFrom, moveRefusal, moveTargets, pageAncestors, pagesInDays, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { cardTo, childPages, hasContent, linkedFrom, moveRefusal, moveTargets, pageAncestors, pagePathTo, pagesInDays, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { fromIso, longLabel, todayIso } from './dates'
 import { ChevronRightIcon, PageKindIcon, PagesIcon } from './icons'
@@ -78,7 +78,7 @@ const LinkIcon = () => (
  */
 export function PageHeaderRow({ page, workspace, fromBookmarks = false }: { page: Page; workspace: Workspace; fromBookmarks?: boolean }) {
   const today = useToday()
-  const chain = pageAncestors(workspace, page.id)
+  const chain = pagePathTo(workspace, page.id)
   const pathRef = useRef<HTMLDivElement>(null)
   const [folded, setFolded] = useState(false)
   // Bumped on every width change: unfolding alone is a no-op when the path is already unfolded, and then nothing would
@@ -104,15 +104,19 @@ export function PageHeaderRow({ page, workspace, fromBookmarks = false }: { page
   const items: (Page | 'pages')[] = [...(chain[0]?.type === 'daily' ? [] : ['pages' as const]), ...chain]
   const crumb = (item: Page | 'pages', last: boolean) => item === 'pages'
     ? <PageLink key="pages" className="crumb" href="/pages">Pages</PageLink>
-    : <PageLink key={item.id} className={`crumb ${last ? 'crumb-last' : ''}`} href={pageHref(item, last ? card?.id : undefined)} title={pageLabel(item, today)}>{pageLabel(item, today)}</PageLink>
-  // Opened from Bookmarks, that's the way back: the Home Screen app has no Back button (bookmarks design §6).
-  const crumbs = fromBookmarks ? [<PageLink key="bookmarks" className="crumb crumb-last" href="/pages?view=bookmarks">Bookmarks</PageLink>] : folded && items.length > 2
-    ? [crumb(items[0]!, false), <HiddenCrumbs key="more" pages={items.slice(1, -1) as Page[]} today={today} />, crumb(items.at(-1)!, true)]
-    : items.map((item, i) => crumb(item, i === items.length - 1))
+    : <PageLink key={item.id} className={`crumb ${last ? 'crumb-last' : ''}`} href={pageHref(item, last ? card?.id : undefined)} title={pageLabel(item, today)}><span className="crumb-words">{pageLabel(item, today)}</span></PageLink>
+  // With no parent, there's no path to show beside the way back.
+  const shown = fromBookmarks && !chain.length ? [] : items
+  const crumbs = folded && shown.length > 2
+    ? [crumb(shown[0]!, false), <HiddenCrumbs key="more" pages={shown.slice(1, -1) as Page[]} today={today} />, crumb(shown.at(-1)!, true)]
+    : shown.map((item, i) => crumb(item, i === shown.length - 1))
   return (
     <div className="crumbs">
       {/* Crumbs don't shrink until folding is decided, so an overflow can be measured. */}
       <nav className={`crumbs-path ${folded ? 'folded' : 'measuring'}`} aria-label="Page location" ref={pathRef}>
+        {/* Opened from Bookmarks, the way back comes first: the Home Screen app has no Back button. It isn't a level of the path, so a line, not a chevron (references §8). */}
+        {fromBookmarks && <PageLink className="crumb crumb-back" href="/pages?view=bookmarks"><ChevronRightIcon />Bookmarks</PageLink>}
+        {fromBookmarks && crumbs.length > 0 && <span className="crumb-divider" aria-hidden="true" />}
         {crumbs.map((c, i) => <Fragment key={i}>{i > 0 && <span className="crumb-sep" aria-hidden="true"><ChevronRightIcon /></span>}{c}</Fragment>)}
       </nav>
       <PageMenu page={page} fromBookmarks={fromBookmarks} />
@@ -168,7 +172,9 @@ export function PageMenu({ page, fromBookmarks = false }: { page: Page; fromBook
 export function LinkedFrom({ page, workspace }: { page: Page; workspace: Workspace }) {
   const [all, setAll] = useState(false)
   const today = useToday()
-  const entries = linkedFrom(workspace, page.id).filter(e => !e.isParent)
+  // Not on every render, which is every keystroke's save: it reads every page in the workspace.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const entries = useMemo(() => linkedFrom(workspace, page.id).filter(e => !e.isParent), [workspace.revision, page.id])
   if (entries.length === 0) return null
   const shown = all ? entries : entries.slice(0, 3)
   return (
