@@ -181,7 +181,8 @@ export function suggestKind(values: readonly string[]): ImportKind {
   const filled = values.map(v => v.trim()).filter(Boolean)
   if (!filled.length) return 'text'
   if (filled.every(v => plainNumber.test(v))) return 'number'
-  if (filled.every(v => dayFrom(v) !== null)) return 'date'
+  // A range is what our own export writes, and pastedValue reads it.
+  if (filled.every(v => v.split(/\s*→\s*/).every(part => dayFrom(part) !== null))) return 'date'
   if (filled.every(v => /^(yes|no|true|false)$/i.test(v))) return 'checkbox'
   const distinct = new Set(filled.map(fold)).size
   if (filled.length >= 2 && distinct <= 30 && distinct * 2 <= filled.length && filled.every(v => v.length <= 100)) return 'select'
