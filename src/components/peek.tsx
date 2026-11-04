@@ -7,6 +7,7 @@ import { ArrowLeftIcon, ArrowRightIcon, CloseIcon, ExternalIcon } from './icons'
 import { displayPageTitle } from './page-title'
 import { noteOpenedHere, peekFloor, peekOpenedHere, peekOrder, sideFloor } from './peek-state'
 import { PageContent } from './pages-screen'
+import { PageHeaderRow } from './page-tree'
 import { useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
@@ -123,7 +124,7 @@ function Peek({ rowId, side }: { rowId: string; side: boolean }) {
           <button type="button" className="peek-row" aria-label="Previous row" disabled={at === 0} onClick={() => go(order[at - 1])}><ArrowLeftIcon /></button>
           <button type="button" className="peek-row" aria-label="Next row" disabled={at === order.length - 1} onClick={() => go(order[at + 1])}><ArrowRightIcon /></button>
         </>}
-        <span className="peek-gap" />
+        <div className="peek-path"><PageHeaderRow page={row} workspace={workspace!} pathOnly /></div>
         <button type="button" aria-label="Open as a full page" onClick={() => { noteOpenedHere(false); void navigate({ to: '/pages', search: { page: rowId } }) }}><ExternalIcon /></button>
         <button type="button" aria-label="Close" onClick={close}><CloseIcon /></button>
       </header>

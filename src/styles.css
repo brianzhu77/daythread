@@ -2421,7 +2421,11 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 @media (hover: hover) { .peek-head button:not(:disabled):hover { background: var(--hover-dim); color: var(--ink); } }
 .peek-head svg { width: 18px; height: 18px; }
 .peek-head .peek-row svg { transform: rotate(90deg); }
-.peek-gap { flex: 1; }
+.peek-path { flex: 1; min-width: 0; padding-left: 4px; }
+.peek-path .crumbs { min-height: 32px; }
+.peek-path .crumb { min-height: 32px; }
+.crumb-back svg { width: 11px; height: 11px; margin-right: 3px; transform: rotate(180deg); }
+.crumb-gap { flex: none; width: 1px; height: 14px; margin: 0 6px; background: var(--line); }
 .peek-body { padding: 0 40px 48px; }
 /* Side: about half the window, never leaving the view under 420 (§4). */
 :root { --side-peek-width: clamp(420px, 50vw, calc(100vw - 680px)); }

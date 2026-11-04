@@ -76,9 +76,25 @@ const LinkIcon = () => (
  * crumb lands on this page's card when the parent has one. Crumbs that don't fit fold into "…" between the first and
  * the last.
  */
-export function PageHeaderRow({ page, workspace, fromBookmarks = false }: { page: Page; workspace: Workspace; fromBookmarks?: boolean }) {
+/** A sub-item's parents come after its database in the path: the tree it's in (references prototype). */
+function withParentRows(ws: Workspace, page: Page, chain: Page[]): Page[] {
+  const db = chain.at(-1)?.database
+  if (!db?.subItems) return chain
+  const rows: Page[] = [], seen = new Set([page.id])
+  let id = (page.values?.[db.subItems.parent] as string[] | undefined)?.[0]
+  while (id && !seen.has(id)) {
+    seen.add(id)
+    const row = ws.pages.find(p => p.id === id && !p.trashedAt)
+    if (!row) break
+    rows.unshift(row)
+    id = (row.values?.[db.subItems.parent] as string[] | undefined)?.[0]
+  }
+  return [...chain, ...rows]
+}
+
+export function PageHeaderRow({ page, workspace, fromBookmarks = false, pathOnly = false }: { page: Page; workspace: Workspace; fromBookmarks?: boolean; pathOnly?: boolean }) {
   const today = useToday()
-  const chain = pageAncestors(workspace, page.id)
+  const chain = withParentRows(workspace, page, pageAncestors(workspace, page.id))
   const pathRef = useRef<HTMLDivElement>(null)
   const [folded, setFolded] = useState(false)
   // Bumped on every width change: unfolding alone is a no-op when the path is already unfolded, and then nothing would
@@ -106,16 +122,21 @@ export function PageHeaderRow({ page, workspace, fromBookmarks = false }: { page
     ? <PageLink key="pages" className="crumb" href="/pages">Pages</PageLink>
     : <PageLink key={item.id} className={`crumb ${last ? 'crumb-last' : ''}`} href={pageHref(item, last ? card?.id : undefined)} title={pageLabel(item, today)}>{pageLabel(item, today)}</PageLink>
   // Opened from Bookmarks, that's the way back: the Home Screen app has no Back button (bookmarks design §6).
-  const crumbs = fromBookmarks ? [<PageLink key="bookmarks" className="crumb crumb-last" href="/pages?view=bookmarks">Bookmarks</PageLink>] : folded && items.length > 2
+  const proto = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('proto')
+  const shown = fromBookmarks && !chain.length ? [] : items
+  const path = folded && shown.length > 2
     ? [crumb(items[0]!, false), <HiddenCrumbs key="more" pages={items.slice(1, -1) as Page[]} today={today} />, crumb(items.at(-1)!, true)]
-    : items.map((item, i) => crumb(item, i === items.length - 1))
+    : shown.map((item, i) => crumb(item, i === shown.length - 1))
+  const back = fromBookmarks && <PageLink key="bookmarks" className="crumb crumb-back" href="/pages?view=bookmarks"><ChevronRightIcon />Bookmarks</PageLink>
+  const crumbs = proto === 'before' && fromBookmarks ? [<PageLink key="bookmarks" className="crumb crumb-last" href="/pages?view=bookmarks">Bookmarks</PageLink>] : path
   return (
     <div className="crumbs">
       {/* Crumbs don't shrink until folding is decided, so an overflow can be measured. */}
       <nav className={`crumbs-path ${folded ? 'folded' : 'measuring'}`} aria-label="Page location" ref={pathRef}>
+        {proto !== 'before' && back}{proto !== 'before' && back && crumbs.length > 0 && <span className="crumb-gap" aria-hidden="true" />}
         {crumbs.map((c, i) => <Fragment key={i}>{i > 0 && <span className="crumb-sep" aria-hidden="true"><ChevronRightIcon /></span>}{c}</Fragment>)}
       </nav>
-      <PageMenu page={page} fromBookmarks={fromBookmarks} />
+      {!pathOnly && <PageMenu page={page} fromBookmarks={fromBookmarks} />}
     </div>
   )
 }
@@ -168,7 +189,8 @@ export function PageMenu({ page, fromBookmarks = false }: { page: Page; fromBook
 export function LinkedFrom({ page, workspace }: { page: Page; workspace: Workspace }) {
   const [all, setAll] = useState(false)
   const today = useToday()
-  const entries = linkedFrom(workspace, page.id).filter(e => !e.isParent)
+  const withParent = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('proto') === 'b'
+  const entries = linkedFrom(workspace, page.id).filter(e => withParent || !e.isParent)
   if (entries.length === 0) return null
   const shown = all ? entries : entries.slice(0, 3)
   return (
