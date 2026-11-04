@@ -127,14 +127,14 @@ export interface PageReference { sourceId: string; key: string; at: number | und
  * A relation that only this side shows: nothing on its target names the row, so the reference is the only sign of it (B86 9).
  * A two-way relation, a sub-item's or a dependency's already shows there as a property.
  */
-function oneWayRelations(ws: Workspace): Map<string, string[]> {
-  const out = new Map<string, string[]>();
+function oneWayRelations(ws: Workspace): Map<string, { id: string; target: string | undefined }[]> {
+  const out = new Map<string, { id: string; target: string | undefined }[]>();
   for (const db of ws.pages) {
     if (!isDatabase(db)) continue;
     const { subItems, dependencies, properties } = db.database;
     const own = new Set([subItems?.parent, subItems?.sub, dependencies?.blockedBy, dependencies?.blocking]);
-    const ids = properties.filter((p) => p.type === "relation" && !p.mirror && !own.has(p.id)).map((p) => p.id);
-    if (ids.length) out.set(db.id, ids);
+    const relations = properties.filter((p) => p.type === "relation" && !p.mirror && !own.has(p.id)).map((p) => ({ id: p.id, target: p.target }));
+    if (relations.length) out.set(db.id, relations);
   }
   return out;
 }
@@ -145,7 +145,8 @@ export function referencesTo(ws: Workspace, pageId: string): PageReference[] {
   const home = target.database?.homeBlockId, relations = oneWayRelations(ws);
   return ws.pages.flatMap((p) => p.id === pageId || isTemplate(p) || isDraft(p) ? [] : [
     ...(target.database ? flatNodes(pageNodes(p)).filter((n) => n.type === "database" && n.props?.pageId === pageId && n.id !== home).map((n): PageReference => ({ sourceId: p.id, key: `${p.id}/${n.id}`, at: undefined })) : []),
-    ...(relations.get(p.parentId ?? "") ?? []).filter((id) => (p.values?.[id] as unknown[] | undefined)?.includes(pageId)).map((id): PageReference => ({ sourceId: p.id, key: `${p.id}/${id}`, at: undefined })),
+    // A value can outlive a change of type or target, kept so Undo brings it back: only a list, pointing into the relation's database as it is now, is a link.
+    ...(relations.get(p.parentId ?? "") ?? []).filter(({ id, target: to }) => { const value = p.values?.[id]; return to === target.parentId && Array.isArray(value) && value.includes(pageId) }).map(({ id }): PageReference => ({ sourceId: p.id, key: `${p.id}/${id}`, at: undefined })),
     ...flatNodes(pageNodes(p)).filter((n) => n.type === "pageLink" && n.props?.pageId === pageId).map((n): PageReference => ({ sourceId: p.id, key: `${p.id}/${n.id}`, at: typeof n.props?.at === "number" ? n.props.at : undefined })),
     ...refHolders(p).flatMap((h) => h.refs.filter((r) => refTargetPage(ws, r) === pageId).map((r): PageReference => ({ sourceId: p.id, key: `${p.id}/${h.id}/${r.refId}`, at: r.at }))),
   ]);
