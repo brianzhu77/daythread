@@ -116,6 +116,29 @@ No usage record can show this, so these are checks, with Brian's word as the out
 4. A one-way relation and a linked view each show on their target. A two-way relation doesn't appear twice.
 5. A page with no references has no line, and a source in Trash comes last and doesn't open.
 
+## 8. The interaction (Jazz, for the Lead's proposal; a prototype, not approved)
+
+Prototype: `design/references-look`, on a throwaway store. **Two rules, on every page, with nothing specific to bookmarks:**
+
+1. **The header shows where a page lives.** Always the real path, however the page was opened. Every level opens, and tapping the parent lands on its card.
+2. **"Linked from" shows other pages that point to it,** under the title, as it does now. No references, no line.
+
+| Place | Header at 1280 and 390 | Linked from |
+| --- | --- | --- |
+| A bookmark from the sidebar, a card or Search | `Tue, Nov 3` | Other days it's saved on |
+| A bookmark from the Bookmarks list | `‹ Bookmarks \| Tue, Nov 3` | The same |
+| A sub-page | `Pages › Projects › … › R4 review`; the middle folds to `…` when it doesn't fit | The same |
+| A day page | None: a day lives nowhere | Under the date |
+| A database row | `Pages › Projects › Work`: its database is its parent | The same |
+| A sub-item | `Pages › Projects › Work › Launch the app › Build the site`: its parent rows follow the database | The same |
+| A row in a peek | The same path, in the peek's head between ↑ ↓ and ↗. It had none | The same |
+
+**The way back to the list:** `‹ Bookmarks` comes first, with a thin divider, because it isn't a level of the path: a plain `Bookmarks › Nov 3` would read as a day inside Bookmarks. It shows only when the address says the page came from that list, and the Home Screen app needs it, having no Back button. A bare `‹` beside `Nov 3` would read as going back to the day, so it keeps its word.
+
+**The parent under Linked from: I agree with §5, no.** On the real screen the day appears twice within a few lines on 13 of 14 bookmarks, and the second adds nothing the header doesn't say. Both forms are on the board for Brian.
+
+**Not settled by the prototype:** one-way relations and linked views as references (§3) aren't in it; a crumb tapped inside a peek wasn't exercised; the sub-item path walks parents in the header on every render, which belongs with Roadbuster's measure.
+
 [links]: https://www.notion.com/help/create-links-and-backlinks
 [mcp]: https://developers.notion.com/guides/mcp/tools-search-reference
 [dbs]: https://www.notion.com/help/intro-to-databases
