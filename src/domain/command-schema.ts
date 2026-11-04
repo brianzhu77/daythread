@@ -49,7 +49,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("handoff-done"), date: day }),
   z.object({ type: z.literal("save-review"), date: day }),
   z.object({ type: z.literal("create-document"), title, body: z.string().max(100_000), pageId: id.optional(), parentId: id.optional() }),
-  z.object({ type: z.literal("make-link-pages"), parentPageId: id, items: z.array(z.object({ url: z.string().min(1).max(10_000), pageId: id, title: title.optional() })).min(1).max(50) }),
+  z.object({ type: z.literal("make-link-pages"), parentPageId: id, items: z.array(z.object({ url: z.string().min(1).max(10_000), pageId: id, title: title.optional() })).min(1).max(50), at: at.optional() }),
   z.object({ type: z.literal("apply-link-preview"), pageId: id, url: z.string().min(1).max(10_000), title: z.string().max(2000).nullable(), description: z.string().max(5000).nullable() }),
   z.object({ type: z.literal("rename-page"), pageId: id, title }),
   z.object({ type: z.literal("move-page"), pageId: id, parentId: id.nullable(), beforeId: id.nullable().optional() }),
