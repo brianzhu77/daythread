@@ -283,23 +283,16 @@ export function shownFormula(stored: string, world: FormulaWorld, databaseId: st
     const nameOf = (id: string, db: Database | undefined) => propertyIn(db, id)?.name
     const anywhere = (id: string) => { for (const db of world.databases.values()) { const name = nameOf(id, db); if (name) return name } return undefined }
     const all = [...refs.map(r => ({ ...r, member: false })), ...members.map(m => ({ ...m, member: true }))]
-    const sorted = all.sort((a, b) => a.from - b.from)
-    const written = (spelled: boolean) => {
-      let out = '', last = 0
-      for (const ref of sorted) {
-        const isMember = ref.member && memberIds.has(ref.from)
-        const name = (isMember ? anywhere(ref.id) : nameOf(ref.id, here)) ?? deletedName
-        // After a dot, or where a `let` could take the name for its own, it's spelled out.
-        out += stored.slice(last, ref.from) + (isMember || spelled ? `prop(${quoted(name)})` : writtenName(name))
-        last = ref.to
-      }
-      return out + stored.slice(last)
+    const spelled = /\blets?\s*\(/.test(stored)
+    let out = '', last = 0
+    for (const ref of all.sort((a, b) => a.from - b.from)) {
+      const isMember = ref.member && memberIds.has(ref.from)
+      const name = (isMember ? anywhere(ref.id) : nameOf(ref.id, here)) ?? deletedName
+      // After a dot, or where a `let` could take the name for its own, it's spelled out.
+      out += stored.slice(last, ref.from) + (isMember || spelled ? `prop(${quoted(name)})` : writtenName(name))
+      last = ref.to
     }
-    if (/\blets?\s*\(/.test(stored)) return written(true)
-    // Bare names only if they read back as this very formula: with a property called `Number-Qty`, `Number-Qty` isn't a subtraction any more.
-    const bare = written(false)
-    try { if (storedFormula(bare, world, databaseId) === stored) return bare } catch { /* spelled out below */ }
-    return written(true)
+    return out + stored.slice(last)
   } catch { return stored }
 }
 

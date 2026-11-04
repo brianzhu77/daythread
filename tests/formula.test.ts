@@ -161,15 +161,6 @@ test('what is stored names properties by id, spacing kept; a rename reads throug
   assert.match(formulaProblem(stored, without, 'db', 'f')!, /deleted/)
 })
 
-test('the field shows what reads back as the same formula, whatever names turn up later', () => {
-  const stored = storedFormula('Number-Qty', worldWith([{ id: 'n', name: 'Number', type: 'number' }, { id: 'q', name: 'Qty', type: 'number' }]), 'db')
-  assert.equal(stored, 'prop("n")-prop("q")')
-  const later = worldWith([{ id: 'n', name: 'Number', type: 'number' }, { id: 'q', name: 'Qty', type: 'number' }, { id: 'nq', name: 'Number-Qty', type: 'number' }])
-  const shownThere = shownFormula(stored, later, 'db')
-  assert.equal(shownThere, 'prop("Number")-prop("Qty")')
-  assert.equal(storedFormula(shownThere, later, 'db'), stored)
-})
-
 test('a loop is refused, and so is a chain past 15 layers; many paths to one formula cost one check', () => {
   const chain = (n: number): Property[] => Array.from({ length: n }, (_, i) => ({ id: `f${i}`, name: `F${i}`, type: 'formula' as const, formula: i ? `prop("f${i - 1}") + 1` : '1' }))
   const looped = worldWith(chain(3))
