@@ -739,8 +739,8 @@ Restore brings back the database with its rows. Nothing else shows, and nothing 
   - **The rule he sees: ⌘Z undoes the last thing he did where his focus is.** Roadbuster to confirm the routing.
 - **Text cells save** on Enter, on blur, or after 1 s without typing. A cell edit is never sent per key.
 - **The block moves** by its `⋮⋮` like any block. It can't go into a synced block or a template (§3.1).
-- **Paste:** pasting text into a cell sets that cell. Pasting several lines or a table (TSV) into the table is later
-  (§14). Until then, only the first line goes in, and the notice says "Pasted the first line only".
+- **Paste:** pasting text into a cell sets that cell. Pasting several lines or a table (TSV) into the table fills across and down (R4-9, `csv.md` §3).
+  In a To-dos view, only the first line goes in, and the notice says "Pasted the first line only".
 
 ## 11. To-dos in a database (the one question for Brian)
 
@@ -788,6 +788,7 @@ The Lead recommends **option 1**, so this is option 1's design, with the differe
   under its Restore button.
 - **Several rows** (1280): a checkbox on hover at the left of each row, and Shift-click for a range. A bar then reads **"3
   rows · Edit property ▾ · Delete"**, the same bar as "N blocks selected". **On the phone (R3-15):** a table's `⋯` → **Select rows**, or a long-press of 450 ms on a row's Name, which picks that row; moving sooner stays a scroll. A box then shows on each row and a tap anywhere on a row ticks it. The bar stays above the toolbar and adds **All** and **Done**. Edit and Delete of several are one Undo. A table has no other long-press, and a board's is its drag, so they can't collide. To-dos have no bar, at either width. List, Board and Gallery have none at either width yet.
+- **Several rows on a List, Board and Gallery (R3-26):** the same bar. At 1280 there's no box to tick, so Shift-click takes a range, ⌘-click adds or removes one, and a box dragged from empty space picks what it touches, adding to the picks if Shift or ⌘ is held. A plain press on empty space clears. A list's rows run edge to edge, so its empty space is beside `+ New` and between groups. The bar stays in sight as the view scrolls. On a Board, dragging one of the picked cards moves them all to that column in one change with one Undo, each with its own value's rules. They keep their order among the rows, not the place they were dropped, and a drag within their own column does nothing. At 390, `⋯` → Select rows, then a tap ticks and each card shows a box; no long-press, which is a drag on a Board. "All" leaves out what's hidden. To-dos have no bar here either (R3-15). Calendar has none.
 
 ## 13. States
 
