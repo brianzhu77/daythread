@@ -2423,3 +2423,9 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .peek-head .peek-row svg { transform: rotate(90deg); }
 .peek-gap { flex: 1; }
 .peek-body { padding: 0 40px 48px; }
+/* Side: about half the window, never leaving the view under 420 (§4). */
+:root { --side-peek-width: clamp(420px, 50vw, calc(100vw - 680px)); }
+.has-side-peek .app-content { margin-right: var(--side-peek-width); }
+.peek-scrim.is-side { display: contents; }
+.peek.is-side { position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: var(--side-peek-width); max-height: none; border-left: 1px solid var(--line); border-radius: 0; box-shadow: none; }
+.peek.is-side .peek-body { padding: 0 32px 48px; }

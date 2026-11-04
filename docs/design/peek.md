@@ -91,3 +91,12 @@ Black, white and grey (116a40ab), with `--line` on the seam and no shadow unless
 - **Esc,** one per layer: a composition, a menu or the `/` list, words selected or a line picked, then the peek.
 - **Scroll:** the page behind doesn't scroll while it's up. The panel is the editor's scroller, through `EditorScrollerContext`.
 - **The gate** requires a peek at 1280, on `/pages?page=fixture-peek-db&peek=fixture-peek-row`.
+
+## 9. As built, side (Jazz, task #286, in progress)
+
+- **Setting:** Layout → "Open pages in" adds Side peek. The URL is `?peek={row}&side=1`, so a reload reopens it at the side.
+- **Width:** half the window, between 420 px and whatever leaves the view 420 (`--side-peek-width`). The view reflows into the rest.
+- **↑ ↓** now follow the rows as drawn, across groups and folds, in both forms. Rows past "Show more" aren't drawn, so the arrows stop at the last one that is.
+- **The open row** is marked in the view.
+- **Esc** in a field behind a side peek leaves the field. A pick in the view is the view's own and doesn't hold up closing the peek.
+

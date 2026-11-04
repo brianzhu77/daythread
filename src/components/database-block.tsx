@@ -25,7 +25,7 @@ import { newTodo, newTodoRowId, taskIdOfRow, todoChange, todoLine, todoMoves, to
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
 import { DatabaseTimeline } from './database-timeline'
-import { openPeek, peekFloor } from './peek-state'
+import { drawnRows, openPeek, peekFloor } from './peek-state'
 import { DatabaseGallery } from './database-gallery'
 import { LinkedDatabase } from './database-linked'
 import { DatabaseList } from './database-list'
@@ -644,7 +644,7 @@ export function useOpenRow(view?: View, rows?: readonly Page[]) {
       return
     }
     // The view's own setting, if the window has room for it (R4-11). The page behind already showing this row, nothing opens.
-    if (view?.openIn && !focus && window.innerWidth >= peekFloor) { openPeek(navigate, rowId, rows?.map(r => r.id)); return }
+    if (view?.openIn && !focus && window.innerWidth >= peekFloor) { openPeek(navigate, rowId, drawnRows(rowId) ?? rows?.map(r => r.id), view.openIn === 'side'); return }
     try { sessionStorage.setItem(returnKey, rowId) } catch { /* private mode */ } void navigate({ to: '/pages', search: { page: rowId, ...(focus ? { focus } : {}) } }) }
 }
 /** The row he's just come back from, for a second. */
