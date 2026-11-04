@@ -90,6 +90,17 @@ await openRowFromTable('dune')
 await peek.getByRole('button', { name: 'Open as a full page' }).click(); await wait(1500)
 check(await peek.count() === 0 && page.url().includes('page=dune') && !page.url().includes('peek'), '↗ opens the full page', page.url())
 
+// Timeline keeps the setting too: its rows go through the same open. Back to Table afterwards, for the checks below.
+await page.goto(`${base}/pages?page=books`); await wait(2300)
+const chooseLayout = async name => { await block.locator('.database-more-button').click(); await wait(300); await menu.getByRole('menuitem', { name: 'Layout' }).click(); await wait(300); await menu.getByRole('menuitemradio', { name, exact: true }).click(); await wait(700); await page.keyboard.press('Escape'); await wait(300); if (await menu.count()) { await page.locator('.database-menu-scrim').click({ position: { x: 5, y: 5 } }); await wait(300) } }
+await chooseLayout('Timeline')
+if (await block.locator('.database-undated-head').count()) { await block.locator('.database-undated-head').click(); await wait(300) }
+await block.locator('.database-bar-off.is-name, .database-pane-name').first().click(); await wait(1500)
+check(await peek.count() === 1 && page.url().includes('peek='), 'a row on a Timeline opens in the peek', page.url())
+await page.keyboard.press('Escape'); await wait(300)
+if (await peek.count()) { await page.keyboard.press('Escape'); await wait(1000) }
+await chooseLayout('Table')
+
 // The row's own page behind: nothing opens. Below the floor: a full page. Resized past the floor, nothing's lost.
 await page.goto(`${base}/pages?page=dune&peek=dune`); await wait(2500)
 check(await peek.count() === 0 && !page.url().includes('peek='), 'a peek of the page behind closes itself', page.url())
