@@ -85,6 +85,19 @@ await scenario('390: a row at the top of Pages with the count; ↗ is a 44 px ta
   r.ok = /Bookmarks · 3/.test(r.label) && /pages-bookmarks-row/.test(r.first) && r.size[0] >= 44 && r.size[1] >= 44 && r.overflow <= 0 && /view=bookmarks/.test(r.back)
   return r
 }, phone)
+for (const [label, options] of [['390', phone], ['1280', wide]]) await scenario(`${label}: back by the crumb lands on the row just left, not at the top`, 'many', async page => {
+  await page.goto(`${base}/pages?view=bookmarks`); await wait(1800)
+  const row = page.locator('.bookmark-main', { hasText: 'Bookmark number 3' }).first()
+  await row.scrollIntoViewIfNeeded(); await wait(200)
+  const before = (await row.boundingBox()).y
+  await row.click(); await wait(1400)
+  await page.locator('.crumbs-path').getByText('Bookmarks').click(); await wait(1000)
+  const after = await page.locator('.bookmark-main', { hasText: 'Bookmark number 3' }).first().boundingBox()
+  const height = page.viewportSize().height
+  const r = { before: Math.round(before), after: Math.round(after.y), height, scrolled: await page.evaluate(() => Math.round(document.scrollingElement?.scrollTop ?? 0)) }
+  r.ok = after.y > 0 && after.y < height - 60
+  return r
+}, options)
 await browser.close()
 console.log(failed ? `${failed} FAILED` : 'ALL PASS')
 process.exit(failed ? 1 : 0)

@@ -1,4 +1,5 @@
 // Bookmarks (docs/design/bookmarks.md): one list of every page with a `url`. Nothing's stored and nothing moves: each stays under its day, with its card.
+import { useEffect } from 'react'
 import { bookmarkPages, pagePreview, parentOf } from '../domain/page-tree'
 import type { Page, Workspace } from '../domain/types'
 import { defaultLinkTitle } from '../domain/url-key'
@@ -9,6 +10,8 @@ import { PageLink, pageLabel, useToday } from './page-tree'
 const hostOf = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' } }
 export const bookmarksHref = '/pages?view=bookmarks'
 const opened = (p: Page) => `/pages?page=${encodeURIComponent(p.id)}&from=bookmarks`
+/** The row just opened: the crumb back is a new navigation, which starts at the top, and the Home Screen app has no other way back. */
+let leftFrom: string | null = null
 
 function BookmarkRow({ page, workspace, today }: { page: Page; workspace: Workspace; today: string }) {
   const words = pagePreview(page, 1)
@@ -16,7 +19,7 @@ function BookmarkRow({ page, workspace, today }: { page: Page; workspace: Worksp
   // The card's rule: a title still at its default already reads as the address.
   const host = page.url && page.title !== defaultLinkTitle(page.url) ? hostOf(page.url) : ''
   const where = [host, parent ? pageLabel(parent, today) : ''].filter(Boolean).join(' · ')
-  return <li className="bookmark-row">
+  return <li className="bookmark-row" data-bookmark={page.id} onClickCapture={() => { leftFrom = page.id }}>
     <PageLink className="bookmark-main" href={opened(page)}>
       <span className="bookmark-title">{displayPageTitle(page)}</span>
       {words && <span className="bookmark-words">{words}</span>}
@@ -29,6 +32,14 @@ function BookmarkRow({ page, workspace, today }: { page: Page; workspace: Worksp
 export function BookmarksScreen({ workspace }: { workspace: Workspace }) {
   const today = useToday()
   const pages = bookmarkPages(workspace)
+  useEffect(() => {
+    const id = leftFrom
+    leftFrom = null
+    if (!id) return
+    // After the router's own move to the top.
+    const frame = requestAnimationFrame(() => document.querySelector(`[data-bookmark="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'center' }))
+    return () => cancelAnimationFrame(frame)
+  }, [])
   return <div className="list-screen">
     <div className="title-row"><h1 className="large-title">Bookmarks</h1></div>
     {pages.length === 0 && <p className="quiet">No bookmarks yet</p>}
