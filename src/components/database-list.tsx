@@ -24,7 +24,7 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
   const weekStart = workspace.weekStart ?? 0
   const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
-  const openRow = useOpenRow(view, rows)
+  const openRow = useOpenRow(view, rows, blockId)
   usePendingCells()
   const ordered = withPendingMoves(rows)
   const groups = viewGroups(db.database, view, ordered, shownRaw, weekStart)

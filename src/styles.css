@@ -2433,13 +2433,23 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .peek-scrim { position: fixed; inset: 0; z-index: 50; display: flex; justify-content: center; padding: 5vh 24px; background: var(--scrim); }
 .peek { display: flex; flex-direction: column; width: min(860px, 100%); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; border-radius: var(--radius-block); background: var(--bg-doc); box-shadow: var(--shadow-float); }
 .peek-head { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 2px; min-height: 40px; padding: 4px 10px; background: var(--bg-doc); }
-.peek-head button { display: inline-grid; place-items: center; width: 32px; height: 32px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
-.peek-head button:disabled { color: var(--ink-3); opacity: .5; cursor: default; }
-@media (hover: hover) { .peek-head button:not(:disabled):hover { background: var(--hover-dim); color: var(--ink); } }
+.peek-head > button, .peek-head .page-more { display: inline-grid; place-items: center; width: 32px; height: 32px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
+.peek-head > button:disabled { color: var(--ink-3); opacity: .5; cursor: default; }
+@media (hover: hover) { .peek-head > button:not(:disabled):hover, .peek-head .page-more:hover { background: var(--hover-dim); color: var(--ink); } }
 .peek-head svg { width: 18px; height: 18px; }
 .peek-head .peek-row svg { transform: rotate(90deg); }
-.peek-gap { flex: 1; }
+/* The path gives way first: everything else in the head keeps its size. */
+.peek-head > button, .peek-head > .row-menu { flex: none; }
+.peek-head .page-more { margin: 0; }
+.peek-path { flex: 1; min-height: 32px; padding: 0 6px; }
+.peek-path .crumb { min-height: 32px; }
 .peek-body { padding: 0 40px 48px; }
+/* Side: about half the window, never leaving the view under 420 (§4). */
+:root { --side-peek-width: clamp(420px, 50vw, calc(100vw - 680px)); }
+.has-side-peek .app-content { margin-right: var(--side-peek-width); }
+.peek-scrim.is-side { display: contents; }
+.peek.is-side { position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: var(--side-peek-width); max-height: none; border-left: 1px solid var(--line); border-radius: 0; box-shadow: none; }
+.peek.is-side .peek-body { padding: 0 32px 48px; }
 /* Conditional colour (R4-12): the one palette, opaque, so a frozen cell can sit on it. Whatever else is on a row is drawn over the tint. */
 /* Grey is a step darker than the fill a hovered row gets, so a rule's first result doesn't read as a hover. */
 :root { --tint-gray: var(--gray-4); --tint-brown: var(--formula-brown-tint); --tint-orange: var(--formula-orange-tint); --tint-yellow: var(--formula-yellow-tint); --tint-green: var(--formula-green-tint); --tint-blue: var(--formula-blue-tint); --tint-purple: var(--formula-purple-tint); --tint-pink: var(--formula-pink-tint); --tint-red: var(--formula-red-tint); }

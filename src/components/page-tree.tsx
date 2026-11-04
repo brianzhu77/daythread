@@ -78,6 +78,16 @@ const LinkIcon = () => (
  * the last.
  */
 export function PageHeaderRow({ page, workspace, fromBookmarks = false }: { page: Page; workspace: Workspace; fromBookmarks?: boolean }) {
+  return (
+    <div className="crumbs">
+      <PagePath page={page} workspace={workspace} fromBookmarks={fromBookmarks} />
+      <PageMenu page={page} fromBookmarks={fromBookmarks} />
+    </div>
+  )
+}
+
+/** Where a page lives: on a full page beside its menu, and in a peek's head. */
+export function PagePath({ page, workspace, fromBookmarks = false }: { page: Page; workspace: Workspace; fromBookmarks?: boolean }) {
   const today = useToday()
   const chain = pagePathTo(workspace, page.id)
   const pathRef = useRef<HTMLDivElement>(null)
@@ -112,7 +122,7 @@ export function PageHeaderRow({ page, workspace, fromBookmarks = false }: { page
     ? [crumb(shown[0]!, false), <HiddenCrumbs key="more" pages={shown.slice(1, -1) as Page[]} today={today} />, crumb(shown.at(-1)!, true)]
     : shown.map((item, i) => crumb(item, i === shown.length - 1))
   return (
-    <div className="crumbs">
+    <>
       {/* Crumbs don't shrink until folding is decided, so an overflow can be measured. */}
       <nav className={`crumbs-path ${folded ? 'folded' : 'measuring'}`} aria-label="Page location" ref={pathRef}>
         {/* Opened from Bookmarks, the way back comes first: the Home Screen app has no Back button. It isn't a level of the path, so a line, not a chevron (references §8). */}
@@ -120,8 +130,7 @@ export function PageHeaderRow({ page, workspace, fromBookmarks = false }: { page
         {fromBookmarks && crumbs.length > 0 && <span className="crumb-divider" aria-hidden="true" />}
         {crumbs.map((c, i) => <Fragment key={i}>{i > 0 && <span className="crumb-sep" aria-hidden="true"><ChevronRightIcon /></span>}{c}</Fragment>)}
       </nav>
-      <PageMenu page={page} fromBookmarks={fromBookmarks} />
-    </div>
+    </>
   )
 }
 
@@ -137,7 +146,8 @@ export function dayMenuGroups(workspace: Workspace, page: Page, deletePage: () =
 }
 
 /** ⋯ on a document page: Move to…, then Delete after a divider (A4 layout §1). A day's is in its header (`dayMenuGroups`). */
-export function PageMenu({ page, fromBookmarks = false }: { page: Page; fromBookmarks?: boolean }) {
+/** `inPeek`: the row's menu in a peek stays in it: a copy opens there, and a row deleted closes it, with the view behind where it was. */
+export function PageMenu({ page, fromBookmarks = false, inPeek }: { page: Page; fromBookmarks?: boolean; inPeek?: (rowId: string | null) => void }) {
   const [moving, setMoving] = useState(false)
   const deletePage = useDeletePage()
   const { workspace, run } = useWorkspace()
@@ -150,11 +160,11 @@ export function PageMenu({ page, fromBookmarks = false }: { page: Page; fromBook
     const duplicate = async () => {
       const pageId = crypto.randomUUID()
       const r = await run({ type: 'add-row', databaseId: db.id, pageId, title: '', copyOf: page.id, at: new Date().toISOString() }, receipt => ({ text: receipt.message, undoOperationId: receipt.operationId }))
-      if (r) open(pageHref({ ...page, id: pageId }))
+      if (r) { if (inPeek) inPeek(pageId); else open(pageHref({ ...page, id: pageId })) }
     }
     const remove = () => {
       void run({ type: 'delete-page', pageId: page.id, at: new Date().toISOString() }, r => ({ text: /sub-item/.test(r.message) ? `Row deleted · ${r.message.split(' · ')[1]}` : 'Row deleted', undoOperationId: r.operationId }))
-      open(pageHref(db))
+      if (inPeek) inPeek(null); else open(pageHref(db))
     }
     return <>
     <RowMenu label="Row actions" triggerClass="page-more" groups={[{ items: [{ label: 'Copy link', onSelect: copyLink }, { label: 'Duplicate row', onSelect: () => void duplicate() }, { label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete row', danger: true, onSelect: remove }] }]} />
