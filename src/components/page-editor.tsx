@@ -1252,6 +1252,24 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }, [])
 
   // Read from the browser's caret, not editor state: ProseMirror picks up caret moves (Home, arrows) a moment later.
+  /**
+   * Backspace at the start of the first line, when it's a bullet, a number, a checkbox or a heading: it becomes a plain line, words kept,
+   * as in Notion and on any other line (Brian's note, Nov 3). Only a plain line goes on up into the title. A to-do lets go of its task.
+   */
+  function plainFirstLine(): boolean {
+    const block = editor.getTextCursorPosition().block
+    if (block.type === 'paragraph') return false
+    if (block.type === 'task') {
+      const taskId = (block.props as { taskId?: string }).taskId
+      semanticDeletes.current.add(block.id)
+      editor.updateBlock(block.id, { type: 'paragraph', props: {} } as never)
+      const deleting = goesWithLine(taskId, nodes()), elsewhere = stillElsewhere(taskId, nodes())
+      if (deleting || elsewhere) setNotice({ text: elsewhere ?? 'To-do deleted', fingerprint: JSON.stringify(editor.document) })
+      return true
+    }
+    editor.updateBlock(block.id, { type: 'paragraph', props: {} } as never)
+    return true
+  }
   function caretAtDocumentStart(): boolean {
     const sel = window.getSelection()
     if (!sel?.isCollapsed || !sel.anchorNode) return false
@@ -2575,6 +2593,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.current.length) {
         e.preventDefault(); e.stopPropagation()
         deleteSelected()
+      } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && caretAtDocumentStart() && plainFirstLine()) {
+        e.preventDefault(); e.stopPropagation()
       } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && page.type === 'document' && caretAtDocumentStart()) {
         // Jazz's title spec: Backspace at the start of the first line goes up into the title, as in Notion.
         const title = document.querySelector<HTMLElement>('.page-title-field')
