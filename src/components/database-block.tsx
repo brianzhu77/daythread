@@ -8,7 +8,7 @@ import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMem
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
 import { treeEntries, type TreeEntry } from '../domain/sub-items'
-import { sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { showsSubItemsOnCards, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -709,6 +709,14 @@ export function subItemTree(workspace: Workspace, db: Page & { database: Databas
   return treeEntries(db.database, rows, databaseRows(workspace, db.id), id => opened.has(subFoldKey(id)), view.subItemsShow === 'parents')
 }
 export const subFoldKey = (rowId: string) => `sub:${rowId}`
+/** On a parent's card, unless its Sub-item column is already showing there. */
+export function CardSubItems({ db, view, row, today }: { db: Page & { database: Database }; view: View; row: Page; today: string }) {
+  const links = db.database.subItems
+  if (!links || !showsSubItemsOnCards(db.database, view) || view.columns.some(c => c.id === links.sub)) return null
+  const property = propertyOf(db.database, links.sub)
+  const value = property && cellValue(db.database, row, property.id)
+  return property && !isEmptyValue(value ?? null) ? <span className="database-card-value database-card-subs"><PropertyCell property={property} value={value!} row={row} today={today} /></span> : null
+}
 /** Up to `limit` top-level rows, each with what's open under it. */
 export function treeUpTo(tree: readonly TreeEntry[], limit: number): TreeEntry[] {
   let top = 0
