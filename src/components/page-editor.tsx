@@ -1758,7 +1758,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }), [editor])
   // Press-tint cleanup lives here, not in the side menu: BlockNote unmounts the side menu while a drag is in flight.
   useEffect(() => {
-    const clear = () => document.querySelectorAll('.is-picked').forEach(el => el.classList.remove('is-picked'))
+    const clear = () => document.querySelectorAll('[data-node-type="blockContainer"].is-picked').forEach(el => el.classList.remove('is-picked'))
     // ProseMirror doesn't redraw the browser selection while the editor is unfocused after a drop, so collapse both.
     // The picked ids survive the drop event itself: the editor's drop handler below reads them after this capture.
     const settle = () => { clear(); requestAnimationFrame(() => { const { state } = editor.prosemirrorView; if (!state.selection.empty) editor.prosemirrorView.dispatch(state.tr.setSelection(TextSelection.near(state.selection.$to, -1))); const dom = window.getSelection(); if (dom && !dom.isCollapsed && editor.prosemirrorView.dom.contains(dom.focusNode)) dom.collapseToEnd() }) }
@@ -2463,7 +2463,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           e.preventDefault(); e.stopPropagation()
           const first = selected.current[0]!
           selected.current = []; extendedIds.current = []; setSelectionLabel('')
-          document.querySelectorAll('.is-picked').forEach(el => el.classList.remove('is-picked'))
+          document.querySelectorAll('[data-node-type="blockContainer"].is-picked').forEach(el => el.classList.remove('is-picked'))
           if (editor.getBlock(first)) editor.setTextCursorPosition(first, 'end')
           editor.focus()
           return
@@ -2638,7 +2638,7 @@ function SectionSideMenu({ select, picked, extended, selectedIds }: { select(id:
       editor.prosemirrorState.doc.descendants((node, position) => { if (node.type.name === 'blockContainer' && node.attrs.id === block.id) pos = position })
       if (pos >= 0) editor.prosemirrorView.dispatch(editor.prosemirrorState.tr.setSelection(NodeSelection.create(editor.prosemirrorState.doc, pos)))
     }
-    document.querySelectorAll('.is-picked').forEach(el => el.classList.remove('is-picked'))
+    document.querySelectorAll('[data-node-type="blockContainer"].is-picked').forEach(el => el.classList.remove('is-picked'))
     for (const node of range)
       editor.domElement?.querySelector(`[data-node-type="blockContainer"][data-id="${CSS.escape(node.id)}"]`)?.classList.add('is-picked')
   }

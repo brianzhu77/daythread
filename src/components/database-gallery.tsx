@@ -6,7 +6,7 @@ import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { firstImageUrl } from '../domain/editor-document'
 import { sectionKey, viewSections, viewSubGroups, canWrap, cellValue, databaseRows, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { SubGroupHead, HiddenSubGroups, NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { PickedBar, useCardPicking, useRowPicking, SubGroupHead, HiddenSubGroups, NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { todayIso } from './dates'
 import { ChevronRightIcon } from './icons'
 import { displayPageTitle } from './page-title'
@@ -46,12 +46,15 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
     requestAnimationFrame(() => setOpenCell({ blockId, databaseId: db.id, rowId: pageId, columnId: titleId, ...(group !== undefined ? { group } : {}) }))
   })
 
+  const picks = useRowPicking(blockId, db, view, rows, () => [...new Set([...(wrap.current?.querySelectorAll<HTMLElement>('[data-row]') ?? [])].map(el => el.dataset.row!))])
+  const cardPicks = useCardPicking(picks, db, wide, () => wrap.current)
+
   // Where Enter goes on the block selected whole (design §10), as a table's first cell.
   let drawn = 0
   const card = (row: Page, group?: string) => {
     const unsaved = [...pendingCells.values()].some(p => p.failed && p.rowId === row.id)
     const nav = drawn++ === 0 ? '0:0' : undefined
-    return <article key={row.id} data-row={row.id} className={`database-gallery-card${returned === row.id ? ' is-returned' : ''}`}>
+    return <article key={row.id} data-row={row.id} className={`database-gallery-card${picks.picked.includes(row.id) ? ' is-chosen' : ''}${picks.picking ? ' is-pickable' : ''}${returned === row.id ? ' is-returned' : ''}`}>
       <CardImage row={row} />
       <div className="database-gallery-words">
         <TodoTick row={row} />
@@ -86,7 +89,7 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
     if (next) { e.preventDefault(); next.focus() }
   }
 
-  return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
+  return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown} {...cardPicks.props}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     {groups ? groups.shown.map(group => {
       const isFolded = folded.has(group.key)
@@ -112,6 +115,8 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
       </Fragment>
     }) : <div className="database-gallery">{rows.slice(0, limit).map(row => card(row))}</div>}
     <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
+    <PickedBar picks={picks} db={db} floating />
+    {cardPicks.boxDrawn}
     {groups && <HiddenGroups groups={groups} changeView={changeView} underCards />}
     {groups && <HiddenSubGroups db={db.database} view={view} rows={rows} changeView={changeView} weekStart={weekStart} underCards />}
     {!groups && rows.length > limit && <button type="button" className="database-more is-under-cards" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}

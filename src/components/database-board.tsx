@@ -6,12 +6,12 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type K
 import { createPortal } from 'react-dom'
 import { sectionKey, viewSections, viewSubGroups, columnCalc, propertyOf, viewBoardCalculation, canWrap, cellValue, databaseRows, isDatabase, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { SubGroupHead, HiddenSubGroups, useFolds, NewRow, shownValue, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { PickedBar, useCardPicking, useMoveRows, useRowPicking, SubGroupHead, HiddenSubGroups, useFolds, NewRow, shownValue, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { calcText } from './property-values'
 import { openDatabaseMenu } from './database-menu'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
-import { PropertyCell, PropertyCheckbox } from './property-editors'
+import { PropertyCell, PropertyCheckbox, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
 /** How long a finger holds a card still before it lifts; moving sooner is a swipe or a scroll. */
@@ -50,7 +50,11 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   const laneGroups = groups ? viewSubGroups(db.database, view, ordered, shownRaw, weekStart) : null
   // With no rows and no options there are no lanes to draw, so the columns stay in reach. Lanes he hid still keep their rows out of sight.
   const subs = laneGroups?.shown.length || laneGroups?.hidden.length ? laneGroups : null
+  const wide = useWide()
   const moveRow = useMoveRow(db, view, context, groups)
+  const moveRows = useMoveRows(db, view, context, groups)
+  const picks = useRowPicking(blockId, db, view, rows, () => [...new Set([...(wrap.current?.querySelectorAll<HTMLElement>('[data-card]') ?? [])].map(el => el.dataset.card!))])
+  const cardPicks = useCardPicking(picks, db, wide, () => wrap.current)
   const returned = useReturnedRow(rows)
   const sorted = view.sort.length > 0
 
@@ -87,7 +91,8 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
     return { over: col.dataset.column!, before: next?.dataset.card ?? null }
   }
   const startCard = (e: ReactPointerEvent, row: Page, from: string) => {
-    if (e.button !== 0 || (e.target as Element).closest('.property-checkbox')) return
+    // These are a pick, not a drag (R3-26).
+    if (e.button !== 0 || picks.picking || e.shiftKey || e.metaKey || e.ctrlKey || (e.target as Element).closest('.property-checkbox')) return
     const touch = e.pointerType !== 'mouse'
     const start = { x: e.clientX, y: e.clientY }
     pointer.current = start
@@ -134,6 +139,8 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
       if (!current) return
       pointer.current = { x: ev.clientX, y: ev.clientY }
       const target = targetAt(ev.clientX, ev.clientY, current.rowId) ?? current
+      // One of several picked: they all go, each from where it is (R3-26).
+      if (picks.picked.length > 1 && picks.picked.includes(current.rowId)) { moveRows(picks.picked.map(rowId => ({ rowId, from: wrap.current?.querySelector<HTMLElement>(`[data-card="${rowId}"]`)?.closest<HTMLElement>('[data-column]')?.dataset.column ?? null })), target.over); return }
       moveRow(current.rowId, current.from, target.over, target.before, ordered)
     }
     const cancel = () => { end(); setDrag(null) }
@@ -229,7 +236,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
   const firstCard = columns.find(g => g.rows.length)?.rows[0]?.id
   const canAddColumn = !db.database.fixed && groups && (groups.property.type === 'select' || groups.property.type === 'status')
 
-  return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown}>
+  return <div className="database-table-wrap" ref={wrap} onKeyDown={onKeyDown} {...cardPicks.props}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow(columns[0]!.key === allKey ? undefined : columns[0]!.key) }} />
     {!groups && <p className="database-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'group')}>Group by</button></p>}
     <div className={`database-board${subs ? ' has-lanes' : ''}${drag ? ' is-dragging' : ''}`} ref={scroller} onScroll={onScroll}>
@@ -243,7 +250,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
         return <section key={group.key} className={`database-column${over && (sorted || drag!.from !== group.key) ? ' is-drop' : ''}`} data-column={group.key} aria-label={group.name ? `${group.name}, ${group.rows.length}` : 'All rows'}>
           {groups && !subs && <h3 className="database-column-head"><GroupName groups={groups} group={group.head} /><span className="database-group-count">· {headOf(group.head.rows)}</span></h3>}
           {shown.map(row => <article key={row.id} data-card={row.id}
-            className={`database-card${returned === row.id ? ' is-returned' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}${over && !sorted && drag!.before === row.id && drag!.rowId !== row.id ? ' is-drop-before' : ''}`}
+            className={`database-card${picks.picked.includes(row.id) ? ' is-chosen' : ''}${picks.picking ? ' is-pickable' : ''}${returned === row.id ? ' is-returned' : ''}${drag?.rowId === row.id || (drag && picks.picked.includes(drag.rowId) && picks.picked.includes(row.id)) ? ' is-dragging' : ''}${over && !sorted && drag!.before === row.id && drag!.rowId !== row.id ? ' is-drop-before' : ''}`}
             // A mouse press selects no text: that would move the page's selection, and redraw this block under the drag.
             onPointerDown={e => startCard(e, row, group.key)} onMouseDown={e => { if (!(e.target as Element).closest('.property-checkbox')) e.preventDefault() }} onContextMenu={e => { if (e.nativeEvent instanceof PointerEvent && e.nativeEvent.pointerType !== 'mouse') e.preventDefault() }}>
             {cardBody(row, group.key, true)}
@@ -262,9 +269,11 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
       })}
     </div>
     <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
+    <PickedBar picks={picks} db={db} floating />
+    {cardPicks.boxDrawn}
     {groups && <HiddenGroups groups={groups} changeView={changeView} />}
     {groups && <HiddenSubGroups db={db.database} view={view} rows={ordered} changeView={changeView} weekStart={weekStart} />}
-    {drag && draggedRow && createPortal(<div ref={ghost} className="database-card is-ghost" aria-hidden="true">{cardBody(draggedRow, drag.from, false)}</div>, document.body)}
+    {drag && draggedRow && createPortal(<div ref={ghost} className="database-card is-ghost" aria-hidden="true">{cardBody(draggedRow, drag.from, false)}{picks.picked.length > 1 && picks.picked.includes(draggedRow.id) && <span className="database-ghost-count">{picks.picked.length} rows</span>}</div>, document.body)}
   </div>
 }
 
