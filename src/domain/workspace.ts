@@ -8,6 +8,7 @@ import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./pa
 import { hasDependencyLoop, shiftDependents, spanOf } from "./dependencies.ts";
 import { descendantsOf, hasLoop, parentIdOf } from "./sub-items.ts";
 import type { SubItems } from "./database.ts";
+import { importRefusal } from "./csv.ts";
 import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
@@ -1028,6 +1029,22 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       // An import: every row in one operation, so one Undo takes them all (csv design §5).
       addRows(state, databasePage(state, action.databaseId), action.rows, isoTime(action.at));
       return { message: `${action.rows.length} rows added`, entityId: action.databaseId };
+    }
+    case "import-csv": {
+      // A new database or an existing one, its new properties and its rows, in one operation: one Undo takes them all (csv design §5).
+      if (action.create) {
+        const { parentId = null, homeBlockId, title } = action.create;
+        if (state.pages.some((p) => p.id === action.databaseId) || reservedTargets.has(action.databaseId)) throw new DomainError("Page id already in use");
+        if (parentId !== null) pageParent(state, parentId);
+        state.pages.push({ id: action.databaseId, type: "document", date: null, title: text(title, 1000).trim(), ...(parentId ? { parentId } : {}), document: "[]", database: newDatabase(homeBlockId) });
+      }
+      const db = databasePage(state, action.databaseId);
+      // On the same question the preview asked, as the workspace may have grown since.
+      const refusal = importRefusal(state, action.rows);
+      if (refusal) throw new DomainError(refusal);
+      try { for (const change of action.changes) changeDatabase(state, db, change); } catch (error) { throw new DomainError((error as Error).message); }
+      addRows(state, db, action.rows, isoTime(action.at));
+      return { message: `${action.rows.length} rows imported`, entityId: db.id };
     }
     case "paste-cells": {
       // A grid from a spreadsheet: the cells it lands on and the rows it needs, with one Undo (csv design §3).
