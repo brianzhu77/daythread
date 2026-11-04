@@ -1,8 +1,9 @@
+import { bookmarkPages } from '../domain/page-tree'
 import { Link, useRouterState } from '@tanstack/react-router'
 import { usePreview } from './preview'
 import { rememberOpened, SidebarTree, useToday } from './page-tree'
 import { useEffect } from 'react'
-import { CalendarIcon, PagesIcon, TagsIcon, TasksIcon, TodayIcon } from './icons'
+import { BookmarkIcon, CalendarIcon, PagesIcon, TagsIcon, TasksIcon, TodayIcon } from './icons'
 import { Mark } from './mark'
 import type { LocalDate } from '../domain/types'
 import { useWorkspace } from './use-day'
@@ -23,12 +24,20 @@ const destinations = [
   { to: '/tags', label: 'Tags', Icon: TagsIcon, match: (path: string) => path.startsWith('/tags') },
 ] as const
 
+/** After Tags, once there's a bookmark (bookmarks design §3). */
+function SidebarBookmarksRow({ current }: { current: boolean }) {
+  const { workspace } = useWorkspace()
+  if (!workspace || !bookmarkPages(workspace).length) return null
+  return <Link to="/pages" search={{ view: 'bookmarks' }} className="side-row" aria-current={current ? 'page' : undefined} activeOptions={{ exact: true, includeSearch: true }}><BookmarkIcon />Bookmarks</Link>
+}
+
 /** Sidebar on laptop, floating tab capsule + capture button on phone (craft-v1 §3). CSS picks one. */
 export function Navigation() {
   const path = useRouterState({ select: s => s.location.pathname })
   const keyboardUp = useKeyboardTop() !== null
   const openPageId = useRouterState({ select: s => (s.location.search as { page?: string }).page })
   const trashView = useRouterState({ select: s => (s.location.search as { view?: string }).view === 'trash' })
+  const bookmarksView = useRouterState({ select: s => (s.location.search as { view?: string }).view === 'bookmarks' })
   const preview = usePreview()
   const today = useToday()
   // B40: the tab where he'd find a page whose text isn't saved yet carries a dot (Today, Calendar for an earlier day, Pages).
@@ -49,11 +58,12 @@ export function Navigation() {
             // An open page is highlighted in the tree, so the sidebar's Pages row is only current on the list itself;
             // the Link's own active state has to compare the search too, or it marks the row current anyway.
             <Link key={to} to={to} className="side-row" activeOptions={to === '/pages' ? { exact: true, includeSearch: true } : undefined}
-              aria-current={match(path, today) && !(to === '/pages' && (openPageId || trashView)) ? 'page' : undefined}>
+              aria-current={match(path, today) && !(to === '/pages' && (openPageId || trashView || bookmarksView)) ? 'page' : undefined}>
               <Icon />
               {label}
             </Link>
           ))}
+          <SidebarBookmarksRow current={bookmarksView} />
         </nav>
         <PageGroups path={path} openPageId={openPageId} trashView={trashView} today={today} />
       </aside>

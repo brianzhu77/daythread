@@ -75,7 +75,7 @@ const LinkIcon = () => (
  * crumb lands on this page's card when the parent has one. Crumbs that don't fit fold into "…" between the first and
  * the last.
  */
-export function PageHeaderRow({ page, workspace }: { page: Page; workspace: Workspace }) {
+export function PageHeaderRow({ page, workspace, fromBookmarks = false }: { page: Page; workspace: Workspace; fromBookmarks?: boolean }) {
   const today = useToday()
   const chain = pageAncestors(workspace, page.id)
   const pathRef = useRef<HTMLDivElement>(null)
@@ -104,7 +104,8 @@ export function PageHeaderRow({ page, workspace }: { page: Page; workspace: Work
   const crumb = (item: Page | 'pages', last: boolean) => item === 'pages'
     ? <PageLink key="pages" className="crumb" href="/pages">Pages</PageLink>
     : <PageLink key={item.id} className={`crumb ${last ? 'crumb-last' : ''}`} href={pageHref(item, last ? card?.id : undefined)} title={pageLabel(item, today)}>{pageLabel(item, today)}</PageLink>
-  const crumbs = folded && items.length > 2
+  // Opened from Bookmarks, that's the way back: the Home Screen app has no Back button (bookmarks design §6).
+  const crumbs = fromBookmarks ? [<PageLink key="bookmarks" className="crumb crumb-last" href="/pages?view=bookmarks">Bookmarks</PageLink>] : folded && items.length > 2
     ? [crumb(items[0]!, false), <HiddenCrumbs key="more" pages={items.slice(1, -1) as Page[]} today={today} />, crumb(items.at(-1)!, true)]
     : items.map((item, i) => crumb(item, i === items.length - 1))
   return (
@@ -113,7 +114,7 @@ export function PageHeaderRow({ page, workspace }: { page: Page; workspace: Work
       <nav className={`crumbs-path ${folded ? 'folded' : 'measuring'}`} aria-label="Page location" ref={pathRef}>
         {crumbs.map((c, i) => <Fragment key={i}>{i > 0 && <span className="crumb-sep" aria-hidden="true"><ChevronRightIcon /></span>}{c}</Fragment>)}
       </nav>
-      <PageMenu page={page} />
+      <PageMenu page={page} fromBookmarks={fromBookmarks} />
     </div>
   )
 }
@@ -130,7 +131,7 @@ export function dayMenuGroups(workspace: Workspace, page: Page, deletePage: () =
 }
 
 /** ⋯ on a document page: Move to…, then Delete after a divider (A4 layout §1). A day's is in its header (`dayMenuGroups`). */
-export function PageMenu({ page }: { page: Page }) {
+export function PageMenu({ page, fromBookmarks = false }: { page: Page; fromBookmarks?: boolean }) {
   const [moving, setMoving] = useState(false)
   const deletePage = useDeletePage()
   const { workspace, run } = useWorkspace()
@@ -153,7 +154,7 @@ export function PageMenu({ page }: { page: Page }) {
   }
   return (
     <>
-      <RowMenu label="Page actions" triggerClass="page-more" groups={[{ items: [{ label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void deletePage(page, page.id) }] }]} />
+      <RowMenu label="Page actions" triggerClass="page-more" groups={[{ items: [{ label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void deletePage(page, page.id, fromBookmarks ? '/pages?view=bookmarks' : undefined) }] }]} />
       {moving && <MovePageDialog page={page} onClose={() => setMoving(false)} />}
     </>
   )
