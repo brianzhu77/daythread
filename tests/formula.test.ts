@@ -146,6 +146,12 @@ test('shown as he writes it: a bare name, unless it would read back as something
     assert.equal(shownFormula(stored, w, 'db'), shown)
     assert.equal(storedFormula(shownFormula(stored, w, 'db'), w, 'db'), stored, `${name} reads back as the same property`)
   }
+  // Next to each other, bare names can make another property's name: opening it and pressing Done must change nothing (Bumblebee 55246f49).
+  const close = storedFormula('Number-Number', world, 'db')
+  const joined = worldWith([...properties, { id: 'nn', name: 'Number-Number', type: 'number' }])
+  assert.equal(shownFormula(close, joined, 'db'), 'prop("Number")-prop("Number")')
+  assert.equal(storedFormula(shownFormula(close, joined, 'db'), joined, 'db'), close)
+  assert.equal(shownFormula(close, world, 'db'), 'Number-Number', 'bare while nothing else has that name')
   // A let could take the name for its own, so inside one every property stays spelled out.
   const shadow = storedFormula('let(x, 1, x + Number)', world, 'db')
   const shadowed = named('x')
@@ -157,7 +163,7 @@ test('what is stored names properties by id, spacing kept; a rename reads throug
   assert.equal(stored, 'prop("n")  + prop("t")')
   assert.equal(shownFormula(stored, worldWith(properties.map(p => (p.id === 'n' ? { ...p, name: 'Count' } : p))), 'db'), 'Count  + Text')
   const without = worldWith(properties.filter(p => p.id !== 'n'))
-  assert.equal(shownFormula(stored, without, 'db'), 'prop("Deleted property")  + Text')
+  assert.equal(shownFormula(stored, without, 'db'), 'prop("Deleted property")  + prop("Text")')
   assert.match(formulaProblem(stored, without, 'db', 'f')!, /deleted/)
 })
 
