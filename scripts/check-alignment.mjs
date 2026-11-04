@@ -176,7 +176,7 @@ function measure() {
       if (toggle) {
         const rowWords = el => words(el?.querySelector('.database-title-cell > span:last-child, .database-title-text') ?? el?.querySelector('.database-title-cell'))
         const name = content.querySelector('.database-th[data-type="title"]'), rows = [...content.querySelectorAll('.database-row')]
-        const nameWords = name ? words(name) : null
+        const nameWords = name ? (() => { const text = document.createRange(); text.selectNode(name.lastChild); return text.getBoundingClientRect() })() : null
         row.subItems = { "a top row's words on the head's Name": rows[0] ? gap(rowWords(rows[0]), nameWords) : null, 'toggle centred on its row': mid(toggle.getBoundingClientRect(), words(rows[0]?.querySelector('.database-title-cell'))) }
         row.layered = true
       }

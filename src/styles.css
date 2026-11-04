@@ -2031,7 +2031,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
   .database-menu input:not([type=checkbox]), .database-menu select { min-height: 40px; font-size: 16px; }
   /* A finger's width of toggle, drawn back into the cell's padding so a top row's words stay on "Name". */
   .database-sub-lead { --sub-step: 12px; --sub-pull: 15px; }
-  .database-sub-lead .database-sub-toggle { width: 32px; height: 44px; min-height: 44px; }
+  .database-sub-lead .database-sub-toggle { justify-content: flex-end; width: 32px; height: 44px; min-height: 44px; padding-right: 3px; }
   .database-sub-spacer { width: 32px; height: 20px; }
   .database-sub-add { display: none; }
   /* A sheet above the keyboard: the only panel opened to type at length (design §4). */
