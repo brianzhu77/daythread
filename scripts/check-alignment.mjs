@@ -180,6 +180,12 @@ function measure() {
         row.timeline = { "bar's title centred on its bar": mid(words2, bar.getBoundingClientRect()), 'scale tick on its grid line': line ? line.getBoundingClientRect().left - tick.getBoundingClientRect().left : null }
         row.layered = true
       }
+      // At 390 it's a list by week: its words on + New's.
+      const weekRow = content.querySelector('.database-week-title')
+      if (weekRow) {
+        row.timeline = { "a week row's words on + New's": gap(words(weekRow), words(content.querySelector('.database-new'))) }
+        row.layered = true
+      }
       // These fixtures are small, with no cap or hidden group: only the rules above apply to them.
       if (firstSub || lane) row.layered = true
       const column = lane ? null : content.querySelector('.database-board .database-column')

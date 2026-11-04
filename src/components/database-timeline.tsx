@@ -54,6 +54,8 @@ export function DatabaseTimeline({ workspace, db, view, changeView, blockId, pag
   const canSet = Boolean(property && !isReadOnly(property) && !(endProperty && isReadOnly(endProperty)))
   const { bars, undated } = timelineBars(db.database, view, rows, shownRaw)
   const unit: TimelineUnit = view.timelineUnit ?? 'day'
+  // A view of this page's day opens on that day (§5); any other opens on today, wherever it sits.
+  const opensOn = pageDate && JSON.stringify(view.filter).includes('"relative":"pageDate"') ? pageDate : today
   const [limit, setLimit] = useState(cap)
   const [undatedOpen, setUndatedOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
@@ -80,7 +82,7 @@ export function DatabaseTimeline({ workspace, db, view, changeView, blockId, pag
   if (!wide) return <div className="database-table-wrap" ref={wrap}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     {!property && <p className="database-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'layout')}>Choose a date property</button></p>}
-    <TimelineWeeks bars={bars} undated={undated} from={pageDate ?? today} weekStart={weekStart} limit={limit} setLimit={setLimit} returned={returned} openRow={openRow} blockId={blockId} databaseId={db.id} />
+    <TimelineWeeks bars={bars} undated={undated} from={opensOn} weekStart={weekStart} limit={limit} setLimit={setLimit} returned={returned} openRow={openRow} blockId={blockId} databaseId={db.id} />
     <button type="button" className="database-new" onClick={() => addRow()}>+ New</button>
     <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
   </div>
@@ -88,7 +90,7 @@ export function DatabaseTimeline({ workspace, db, view, changeView, blockId, pag
   return <div className="database-table-wrap" ref={wrap}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     {!property && <p className="database-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'layout')}>Choose a date property</button></p>}
-    <TimelineScale bars={bars} undated={undated} unit={unit} today={today} pageDate={pageDate} blockId={blockId} view={view} databaseId={db.id} canSet={canSet} limit={limit} setLimit={setLimit} returned={returned}
+    <TimelineScale bars={bars} undated={undated} unit={unit} today={today} opensOn={opensOn} blockId={blockId} view={view} databaseId={db.id} canSet={canSet} limit={limit} setLimit={setLimit} returned={returned}
       undatedOpen={undatedOpen} setUndatedOpen={setUndatedOpen} openRow={openRow} undoKey={undoKey} changeView={changeView}
       write={write} addOn={from => addRow(undefined, property && canSet ? { [property.id]: { start: from } as unknown as Json } : undefined)} startProperty={property} />
     <button type="button" className="database-new" onClick={() => addRow()}>+ New</button>
@@ -151,8 +153,8 @@ function ticksFor(unit: TimelineUnit, origin: LocalDate, from: number, to: numbe
   return { upper, lower }
 }
 
-function TimelineScale({ bars, undated, unit, today, pageDate, blockId, view, databaseId, canSet, limit, setLimit, returned, undatedOpen, setUndatedOpen, openRow, undoKey, changeView, write, addOn, startProperty }: {
-  bars: readonly TimelineBar[]; undated: readonly Page[]; unit: TimelineUnit; today: LocalDate; pageDate: LocalDate | null; blockId: string; view: View; databaseId: string; canSet: boolean; limit: number; setLimit(n: number): void; returned: string | null
+function TimelineScale({ bars, undated, unit, today, opensOn, blockId, view, databaseId, canSet, limit, setLimit, returned, undatedOpen, setUndatedOpen, openRow, undoKey, changeView, write, addOn, startProperty }: {
+  bars: readonly TimelineBar[]; undated: readonly Page[]; unit: TimelineUnit; today: LocalDate; opensOn: LocalDate; blockId: string; view: View; databaseId: string; canSet: boolean; limit: number; setLimit(n: number): void; returned: string | null
   undatedOpen: boolean; setUndatedOpen(open: boolean): void; openRow(id: string): void; undoKey: ReturnType<typeof useUndoKey>; changeView: ChangeView
   write(row: Page, writes: readonly BarWrite[], words: string): void; addOn(day: LocalDate): void; startProperty: Property | null
 }) {
@@ -176,7 +178,7 @@ function TimelineScale({ bars, undated, unit, today, pageDate, blockId, view, da
     const key = `${placeKey}|${unit}`
     if (placed.current === key) return
     placed.current = key
-    centre(places.get(placeKey) ?? savedPlace(blockId, view.id) ?? pageDate ?? today)
+    centre(places.get(placeKey) ?? savedPlace(blockId, view.id) ?? opensOn)
     shownFrom.current = origin
     const el = scroller.current
     if (el) setSeen({ left: el.scrollLeft, width: el.clientWidth })
