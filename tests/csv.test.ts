@@ -1,7 +1,7 @@
 // CSV (docs/design/csv.md, R4-7): text in and out, and a database as a sheet.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { byteOrderMark, csvFile, databaseSheet, exportedRows, parseDelimited, pastedValue, planPaste, writeDelimited } from '../src/domain/csv.ts'
+import { byteOrderMark, csvFile, databaseSheet, decodeCsv, detectDelimiter, exportedRows, importRefusal, parseDelimited, pastedValue, planImport, planPaste, readSheet, suggestKind, workspaceBytes, writeDelimited } from '../src/domain/csv.ts'
 import { cellValue } from '../src/domain/database.ts'
 import type { Database, DatabaseChange, View } from '../src/domain/database.ts'
 import { harness, today } from './v2-helpers.ts'
@@ -101,4 +101,86 @@ test('a grid doesn\'t write what changed underneath it, and read-only columns ar
   assert.throws(() => h.run({ type: 'paste-cells', databaseId: 'b', items: plan.items, rows: [], at }), /Changed elsewhere/)
   const readOnly = planPaste(db, [['x']], rows, [{ id: 'made', name: 'Made', type: 'createdTime' }], 0, 0)
   assert.deepEqual([readOnly.pasted, readOnly.readOnly], [0, 1])
+})
+
+// ---------------------------------------------------------------- import
+let n = 0
+const id = () => `id-${n++}`
+test('reading a file: GBK when it isn\'t UTF-8, a byte order mark, and which delimiter', () => {
+  assert.equal(decodeCsv(new Uint8Array([0xe8, 0xaf, 0xbb, 0xe4, 0xb9, 0xa6])), '读书')
+  assert.equal(decodeCsv(new Uint8Array([0xb6, 0xc1, 0xca, 0xe9])), '读书')
+  assert.equal(detectDelimiter('a,b\n1,2'), ',')
+  assert.equal(detectDelimiter('a;b;c\n1,5;2;3'), ';')
+  assert.equal(detectDelimiter('a\tb\n1\t2'), '\t')
+  assert.deepEqual(readSheet(`${byteOrderMark}名称,数\n读书,1`, null).columns.map(c => c.header), ['名称', '数'])
+})
+test('suggesting a type: never guesses a day, never a multi-select, and $ or % stay as written', () => {
+  assert.equal(suggestKind(['1', '2,000', '-3.5', '']), 'number')
+  assert.equal(suggestKind(['2026-01-02', '03/04/2026']), 'date')
+  assert.equal(suggestKind(['03/04/2026', '25/04/2026']), 'text')
+  assert.equal(suggestKind(['Yes', 'no', 'TRUE']), 'checkbox')
+  assert.equal(suggestKind(['a', 'b', 'a', 'a', 'b']), 'select')
+  assert.equal(suggestKind(['$12', '$13']), 'text')
+  assert.equal(suggestKind(['45%', '50%']), 'text')
+  assert.equal(suggestKind(['only one', 'and another']), 'text')
+  assert.equal(suggestKind(['']), 'text')
+})
+test('a new database: Name found, properties made with their options, one command, one Undo', () => {
+  const h = harness()
+  const sheet = readSheet('Pages,Title,Read,Genre,Notes\n412,Dune,2026-01-02,SF,"a, b"\n100,Emma,03/04/2026,SF,\n1,Ubik,,Novel,\n2,Mir,,SF,\n\n', null)
+  assert.equal(sheet.emptyRows, 1)
+  assert.deepEqual(sheet.columns.map(c => c.target.to), ['new', 'name', 'new', 'new', 'new'])
+  const plan = planImport(sheet, null, id)
+  const r = h.run({ type: 'import-csv', databaseId: 'made', create: { homeBlockId: null, title: 'Made' }, changes: plan.changes, rows: plan.rows, at })
+  const page = h.ws.pages.find(p => p.id === 'made')!, db = page.database as Database
+  assert.deepEqual(db.properties.map(p => [p.name, p.type]), [['Pages', 'number'], ['Read', 'date'], ['Genre', 'select'], ['Notes', 'text']])
+  const rows = h.ws.pages.filter(p => p.parentId === 'made')
+  assert.deepEqual(rows.map(p => p.title), ['Dune', 'Emma', 'Ubik', 'Mir'])
+  const get = (t: string, name: string) => { const p = db.properties.find(x => x.name === name)!; return cellValue(db, rows.find(x => x.title === t)!, p.id) }
+  assert.equal(get('Dune', 'Pages'), 412)
+  assert.deepEqual(get('Emma', 'Read'), { start: '2026-03-04' })
+  assert.equal(get('Dune', 'Notes'), 'a, b')
+  assert.equal(db.properties.find(x => x.name === 'Genre')!.options!.map(o => o.name).join(), 'SF,Novel')
+  h.run({ type: 'undo', targetOperationId: r.receipt.operationId })
+  assert.equal(h.ws.pages.some(p => p.id === 'made' || p.parentId === 'made'), false)
+})
+test('a merge: matching headers first, new options added, only rows added, and what can\'t be read counted and named', () => {
+  const h = books(), db = dbOf(h)
+  const sheet = readSheet('Name,Pages,Genre,Tags,Extra,Owned\nSolaris,many,SF,"one, three",x,Yes\nDune,10,Horror,,,maybe\n', db)
+  assert.deepEqual(sheet.columns.map(c => (c.target.to === 'existing' ? c.target.propertyId : c.target.to)), ['name', 'n', 's', 'm', 'new', 'c'])
+  sheet.columns[4]!.target = { to: 'skip' }
+  const plan = planImport(sheet, db, id)
+  assert.deepEqual(plan.skipped, ['Extra'])
+  assert.deepEqual(plan.bad, [{ row: 2, column: 'Pages', value: 'many' }, { row: 3, column: 'Owned', value: 'maybe' }])
+  const before = h.ws.pages.filter(p => p.parentId === 'b').length
+  h.run({ type: 'import-csv', databaseId: 'b', changes: plan.changes, rows: plan.rows, at })
+  const after = dbOf(h), rows = h.ws.pages.filter(p => p.parentId === 'b')
+  // A row of the same name is another row, as Notion's.
+  assert.equal(rows.length, before + 2)
+  assert.deepEqual(after.properties.find(p => p.id === 's')!.options!.map(o => o.name), ['SF', 'Horror'])
+  assert.deepEqual(after.properties.find(p => p.id === 'm')!.options!.map(o => o.name), ['one', 'two', 'three'])
+  const solaris = rows.find(p => p.title === 'Solaris')!
+  assert.equal(cellValue(after, solaris, 'n'), null)
+  assert.equal(cellValue(after, solaris, 'c'), true)
+})
+test('our own export reads back as it was', () => {
+  const h = books(), db = dbOf(h), { rows, columns } = exportedRows(h.ws, 'b', 'whole')
+  const sheet = readSheet(csvFile(databaseSheet(db, rows, columns)), db)
+  const plan = planImport(sheet, db, id)
+  assert.deepEqual(plan.bad, [])
+  assert.deepEqual(plan.rows.map(r => r.title), ['Dune', '@Emma'])
+  assert.equal(plan.rows[0]!.values!.t, '=SUM(A1), and more')
+  assert.equal(plan.rows[0]!.values!.n, -5)
+  assert.deepEqual(plan.rows[0]!.values!.d, { start: '2026-01-02', end: '2026-01-09' })
+})
+test('the limits: rows, and the size of the workspace, asked on the server too', () => {
+  const h = books()
+  const big = Array.from({ length: 10_001 }, (_, i) => ({ pageId: `r${i}`, title: 'x' }))
+  assert.match(importRefusal(h.ws, big)!, /10,001 rows.*Nothing was written/)
+  assert.throws(() => h.run({ type: 'import-csv', databaseId: 'b', changes: [], rows: big, at }), /Nothing was written/)
+  const wordy = Array.from({ length: 3000 }, (_, i) => ({ pageId: `w${i}`, title: 'y', values: { t: 'x'.repeat(4000) } }))
+  assert.match(importRefusal(h.ws, wordy)!, /can hold about 10.0 MB/)
+  assert.equal(importRefusal(h.ws, big.slice(0, 100)), null)
+  assert.ok(workspaceBytes(h.ws) < 100_000)
+  assert.equal(h.ws.pages.filter(p => p.parentId === 'b').length, 2)
 })
