@@ -10,7 +10,7 @@
 R4-3 left open how far to follow Notion. **I'd follow it all the way, in one language with no dialect of our own.** Someone who finds a formula in a Notion guide should be able to paste it. Our own language would be smaller to build and would cost that forever.
 
 - **Both call forms:** `length("hello")` and `"hello".length()`.
-- **Properties:** as tokens, and pasted text with `prop("Name")` or a bare `Name` resolves to them.
+- **Properties:** as tokens in Notion. **Here, for now, as he'd write them (Jazz):** the field shows a bare `Price`, or `prop("Name")` where a bare name wouldn't read back as that property. Real tokens need a rich field, and the plain field's composition and phone keyboard are its riskiest parts. A misspelt name is an error at once, so tokens would mostly help reading. Pasted text with `prop("Name")` or a bare `Name` resolves to them.
 - **Stored by property id, shown by name,** so a rename changes nothing, and a deleted one reads as an error rather than a wrong value.
 - **Walking relations:** `Tasks.length()`, `Parent.first().Status`, `Tasks.every(current.Status == "Done")`.
 - **Our own evaluator only.** Nothing is ever run as code (R4-3).
