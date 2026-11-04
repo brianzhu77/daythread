@@ -8,7 +8,7 @@ if (!base || !store) { console.error('Usage: node tests/evidence/b21/races.mjs <
 const state = () => JSON.parse(execSync(`sqlite3 ${store} "select data from workspace"`, { maxBuffer: 1 << 26 }).toString())
 const wait = ms => new Promise(r => setTimeout(r, ms))
 const browser = await pw[engine].launch({ headless: true })
-const end = engine === 'webkit' ? 'End' : 'Meta+ArrowRight'
+const end = 'Meta+ArrowRight'
 let failed = 0
 const wide = { width: 1280, height: 900 }, phone = { width: 390, height: 780 }
 const scenario = async (name, act, viewport = wide) => {
