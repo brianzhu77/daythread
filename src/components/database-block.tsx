@@ -5,11 +5,11 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createPortal } from 'react-dom'
-import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
+import { type CSSProperties, createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
 import { treeEntries, type TreeEntry } from '../domain/sub-items'
-import { showsSubItemsOnCards, databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { rowColour, showsSubItemsOnCards, databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -647,6 +647,12 @@ export function useOpenRow(view?: View, rows?: readonly Page[]) {
     if (view?.openIn && !focus && window.innerWidth >= peekFloor) { openPeek(navigate, rowId, rows?.map(r => r.id)); return }
     try { sessionStorage.setItem(returnKey, rowId) } catch { /* private mode */ } void navigate({ to: '/pages', search: { page: rowId, ...(focus ? { focus } : {}) } }) }
 }
+/** What a colour rule draws on a row or card (R4-12): a tint behind it, under whatever else is on it. */
+export function rowTint(db: Database, view: View, row: Page, context: ViewContext) {
+  if (!view.colourRules?.length) return null
+  const rule = rowColour(db, view, row, context)
+  return rule ? { rule, className: ' has-tint', style: { '--row-tint': `var(--tint-${rule.tint})` } as CSSProperties } : null
+}
 /** The row he's just come back from, for a second. */
 export function useReturnedRow(rows: readonly Page[]): string | null {
   const [returned, setReturned] = useState<string | null>(null)
@@ -1067,11 +1073,24 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const footColumns = [propertyOf(db.database, titleId)!, ...columns.map(c => c.property)]
   const hasFoot = footColumns.some(p => calculations[p.id])
   const readShown = (row: Page, columnId: string) => shownValue(db.database, row, columnId)
+  // Frozen columns (R4-13), by the widths the table already sets. Wider than the window leaves, nothing stays, so nothing's out of reach.
+  const [wrapWidth, setWrapWidth] = useState(0)
+  useLayoutEffect(() => { const w = wrap.current?.clientWidth ?? 0; if (w !== wrapWidth) setWrapWidth(w) })
+  const frozen = useMemo(() => {
+    const through = wide && view.frozenThrough ? columns.findIndex(c => c.property.id === view.frozenThrough) : -1
+    let left = 0
+    const at = new Map<string, number>()
+    for (const c of columns.slice(0, through + 1)) { at.set(c.property.id, left); left += c.width ?? defaultWidth(c.property) }
+    const room = wrapWidth - left - 240 - 120
+    return { at: wrapWidth && room < 0 ? new Map<string, number>() : at, last: through >= 0 ? columns[through]!.property.id : null }
+  }, [wide, view.frozenThrough, columns, wrapWidth])
+  const frozenAt = (id: string) => { const left = frozen.at.get(id); return left === undefined ? {} : { style: { left: `calc(var(--database-name-width) + ${left}px)` } } }
+  const frozenClass = (id: string) => (frozen.at.has(id) ? ` is-frozen${frozen.last === id ? ' is-frozen-last' : ''}` : '')
   const footRow = (over: readonly Page[]) => <tr className="database-calc">
     {footColumns.map(property => {
       const kind = calculations[property.id]
       const text = kind ? calcText(kind, columnCalc(db.database, over, property.id, kind, readShown), property.format, today, property.prefix) : null
-      return <td key={property.id} className={`database-td is-${property.id === titleId ? 'title' : property.type}`}>
+      return <td key={property.id} {...frozenAt(property.id)} className={`database-td is-${property.id === titleId ? 'title' : property.type}${frozenClass(property.id)}`}>
         {(text || wide) && <button type="button" className="database-cell database-calc-cell" aria-label={text ? `${property.name}: ${text.label} ${text.value}` : `Calculate ${property.name}`} onClick={() => openDatabaseMenu(blockId, db.id, 'calculate')}>
           {text ? <span className="database-calc-text">{text.label && <span className="database-calc-label">{text.label}</span>}<span>{text.value}</span></span> : <span className="database-calc-empty">Calculate</span>}
         </button>}
@@ -1079,8 +1098,8 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     })}
     <td className="database-td is-add" />
   </tr>
-  const rowLine = (row: Page, index: number, group?: string) => <tr key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})} className={`database-row${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${treeOf.get(row.id)?.context ? ' is-context' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
-            <td className={`database-td is-title${view.wrapName ? ' is-wrapped' : ''}`}><div className="database-title-inner">
+  const rowLine = (row: Page, index: number, group?: string, tint = rowTint(db.database, view, row, context)) => <tr key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})} {...(tint ? { style: tint.style } : {})} className={`database-row${tint && tint.rule.scope !== 'property' ? tint.className : ''}${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${treeOf.get(row.id)?.context ? ' is-context' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
+            <td className={`database-td is-title${view.wrapName ? ' is-wrapped' : ''}${tint?.rule.scope === 'property' && tint.rule.rule.by === titleId ? ' has-tint' : ''}`}><div className="database-title-inner">
               {wide && <span className="database-pin-strip" />}
               {wide && !db.database.fixed && <span className="database-row-gutter">
                 {!view.sort.length && !treeOf.get(row.id)?.depth && <span className="database-row-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
@@ -1102,7 +1121,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
               // His value stays shown while it saves and after a failed save, never a silent revert (design §13).
               const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
               const navId = `${index}:${col + 1}`
-              return <td key={property.id} className={`database-td is-${property.type}${wraps ? ' is-wrapped' : ''}${pending?.failed ? ' is-unsaved' : pending ? ' is-saving' : ''}`}>
+              return <td key={property.id} {...frozenAt(property.id)} className={`database-td is-${property.type}${frozenClass(property.id)}${tint?.rule.scope === 'property' && tint.rule.rule.by === property.id ? ' has-tint' : ''}${wraps ? ' is-wrapped' : ''}${pending?.failed ? ' is-unsaved' : pending ? ' is-saving' : ''}`}>
                 {property.type === 'checkbox'
                   ? <span data-nav={navId} tabIndex={0} className="database-check-cell" onKeyDown={e => { if ((e.key === ' ' || e.key === 'Enter') && !isReadOnly(property)) { e.preventDefault(); commit(db, row, property.id, value === true ? undefined : true) } }}>
                       <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} disabled={isReadOnly(property)} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
@@ -1129,7 +1148,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
         <thead>
           <tr>
             <th scope="col" className="database-th is-title" data-type="title">{wide && <span className="database-pin-strip" />}Name</th>
-            {columns.map(c => <th key={c.property.id} scope="col" className="database-th" data-type={c.property.type} style={{ width: c.width ?? defaultWidth(c.property) }}>{c.property.name}</th>)}
+            {columns.map(c => <th key={c.property.id} scope="col" className={`database-th${frozenClass(c.property.id)}`} data-type={c.property.type} style={{ width: c.width ?? defaultWidth(c.property), ...frozenAt(c.property.id).style }}>{c.property.name}</th>)}
             {!db.database.fixed && <th scope="col" className="database-th is-add"><button type="button" aria-label="Add property" onClick={addProperty}>+</button></th>}
           </tr>
         </thead>

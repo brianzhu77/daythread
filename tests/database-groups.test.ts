@@ -2,7 +2,7 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
+import { rowColour, type ColourRule, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
@@ -895,4 +895,27 @@ test('one set-values moves both layers, with one Undo', () => {
   h.run({ type: 'undo', targetOperationId: r.receipt.operationId } as never)
   assert.equal(cellValue(h.db(), h.page('dune'), 'kind'), 'novel')
   assert.equal(cellValue(h.db(), h.page('dune'), 'owned'), true)
+})
+
+test('R4-12: the highest rule that matches colours a row; a rule whose property is gone matches nothing', () => {
+  const h = reading()
+  const rule = (id: string, by: string, value: string, tint: ColourRule['tint']): ColourRule => ({ id, rule: { by, op: 'isAnyOf', value: [value] }, tint })
+  const v = view({ colourRules: [rule('a', 'gone', 'x', 'red'), rule('b', 'kind', 'novel', 'green'), rule('c', 'kind', 'novel', 'blue')] })
+  const dune = h.rows(view()).find(r => r.id === 'dune')!, ubik = h.rows(view()).find(r => r.id === 'ubik')!
+  assert.equal(rowColour(h.db(), v, dune, ctx)?.id, 'b', 'first match, top down')
+  assert.equal(rowColour(h.db(), v, ubik, ctx), null)
+  assert.equal(rowColour(h.db(), view(), dune, ctx), null, 'no rules, no colour')
+})
+test('R4-12, R4-13: colour rules and a frozen column are saved on the view, and clear', () => {
+  const h = reading()
+  const id = h.db().views[0]!.id
+  h.change({ kind: 'updateView', viewId: id, colourRules: [{ id: 'r', rule: { by: 'kind', op: 'isEmpty' }, tint: 'gray' }], frozenThrough: 'kind' })
+  assert.equal(h.db().views[0]!.colourRules?.[0]!.tint, 'gray')
+  assert.equal(h.db().views[0]!.frozenThrough, 'kind')
+  h.change({ kind: 'updateView', viewId: id, name: 'Kept' })
+  assert.equal(h.db().views[0]!.frozenThrough, 'kind', 'another change keeps them')
+  h.change({ kind: 'updateView', viewId: id, colourRules: [], frozenThrough: null })
+  assert.equal(h.db().views[0]!.colourRules, undefined)
+  assert.equal(h.db().views[0]!.frozenThrough, undefined)
+  assert.ok(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId: id, frozenThrough: null, colourRules: [{ id: 'r', rule: { by: 'kind', op: 'isEmpty' }, tint: 'red', scope: 'property' }] } } }).success)
 })
