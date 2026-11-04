@@ -847,11 +847,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     claimHandled.current = true
     clearTimeout(timer.current); clearTimeout(retryTimer.current); dirty.current = false; pendingSave.current = null; semanticDeletes.current.clear()
     sweepClaims(page.id)
+    // Typing is held until the latest is on screen, or the load would replace it unseen.
+    editor.isEditable = false
     void (async () => {
       try {
         const ws = await refresh(), latest = ws.pages.find(p => p.id === page.id)
         if (latest) applyServerPage(latest, ws)
-      } finally { claimHandled.current = false }
+      } finally { claimHandled.current = false; editor.isEditable = true }
       setFailed(false); setUnsaved(null); setStatus("Latest loaded · this tab's text was already saved")
     })()
     return true
@@ -973,7 +975,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const receiptId = result.operationId, key: string = toast(`Removed from ${result.linesRemovedFrom} pages`, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); void run({ type: 'undo', targetOperationId: receiptId }, { text: 'Undone' }).then(r => { const ws = latest(), p = ws?.pages.find(x => x.id === page.id); if (r && ws && p) applyServerPage(p, ws) }) } } })
       }
       if (result.conflicted?.length) { applyServerPage(savedPage, latest()!); toast('Changed elsewhere meanwhile · your version is below it', { timeout: 8000 }) }
-      else if (holdsBlock) applyBlockUpdates(blockUpdates(editor.document as never, savedPage.document, true))
+      else if (holdsBlock) applyBlockUpdates(blockUpdates(editor.document as never, savedPage.document, true, document))
       // The editor has closed meanwhile: leaving takes it from here (it needs only the new starting point).
       if (left.current) return
       deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
@@ -1834,11 +1836,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }
   /** A place's end goes through one command, across every page, with one Undo; what's typed saves first so it's part of it. */
   async function endPlace(action: Extract<Action, { type: 'unsync-block' | 'delete-synced-place' }>) {
-    clearTimeout(timer.current)
-    await flushRef.current()
-    const receipt = await run(action, r => ({ text: r.message, undoOperationId: r.operationId }))
-    const ws = latest(), p = ws?.pages.find(x => x.id === page.id)
-    if (receipt && ws && p) { latestWorkspace.current = ws; latestPage.current = p; applyServerPage(p, ws) }
+    const receipt = await onServer(action, newOperationId(), undefined, r => ({ text: r.message, undoOperationId: r.operationId }))
+    if (!receipt && dirty.current) notDone("It hasn't saved yet, so nothing changed. Try again in a moment.")
   }
   endPlaceRef.current = endPlace
   function deleteSelected() {
@@ -2250,7 +2249,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const menuReturn = useRef<{ blockId: string; selection: ReturnType<Selection['toJSON']> } | null>(null)
   const closeRowNotice = () => { if (rowNotice.current) toast.close(rowNotice.current.key); rowNotice.current = null }
   useEffect(() => () => closeRowNotice(), [])
-  async function onServer(action: Action, operationId: string, options?: { inlineRefusal: RegExp; onRefused: (m: string) => void }): Promise<Receipt | null> {
+  async function onServer(action: Action, operationId: string, options?: { inlineRefusal: RegExp; onRefused: (m: string) => void }, notice: Parameters<typeof run>[1] = null): Promise<Receipt | null> {
     if (historyPending.current) return null
     historyPending.current = true; setHistoryBusy(true); editor.isEditable = false
     clearTimeout(timer.current)
@@ -2259,7 +2258,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (dirty.current) await flushRef.current()
       for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
       if (dirty.current || sending.current) return null
-      const receipt = await run(action, null, operationId, options)
+      const receipt = await run(action, notice, operationId, options)
       const ws = latest()
       const p = ws?.pages.find(x => x.id === page.id)
       if (receipt && ws && p) { latestWorkspace.current = ws; latestPage.current = p; if (pageContentKey(p) !== base.current) applyServerPage(p, ws) }
