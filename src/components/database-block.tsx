@@ -6,6 +6,7 @@ import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
 import { formulaErrorOf } from '../domain/formula'
+import { treeEntries, type TreeEntry } from '../domain/sub-items'
 import { sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
@@ -711,6 +712,27 @@ export function useViewClipboard(wrap: { current: HTMLElement | null }) {
 
 /** Which groups are folded in a table or list: on this device only, per view of a block, never a save or an Undo, like the view shown. */
 function foldKey(blockId: string, viewId: string) { return `daythread.database-fold.${blockId}.${viewId}` }
+/** A table's or list's rows as a tree, when this view nests them: never with groups, where a sub-item sits in its own group (sub-items design §2). */
+export function subItemTree(workspace: Workspace, db: Page & { database: Database }, view: View, rows: readonly Page[], grouped: boolean, opened: ReadonlySet<string>): TreeEntry[] | null {
+  if (grouped || !db.database.subItems || view.subItemsDisplay === 'flat' || view.subItemsShow === 'subs') return null
+  return treeEntries(db.database, rows, databaseRows(workspace, db.id), id => opened.has(subFoldKey(id)), view.subItemsShow === 'parents')
+}
+export const subFoldKey = (rowId: string) => `sub:${rowId}`
+/** Up to `limit` top-level rows, each with what's open under it. */
+export function treeUpTo(tree: readonly TreeEntry[], limit: number): TreeEntry[] {
+  let top = 0
+  return tree.filter(e => (e.depth === 0 ? ++top : top) <= limit)
+}
+const treeIndent = (depth: number) => Math.min(depth, 4)
+/** The indent, its toggle, and a place for a new sub-item: a row with none lines up with one that has. */
+export function SubItemLead({ entry, label, onToggle }: { entry: TreeEntry; label: string; onToggle(): void }) {
+  return <span className="database-sub-lead" data-depth={treeIndent(entry.depth)}>
+    {entry.hasChildren
+      ? <button type="button" className={`database-sub-toggle${entry.open ? ' is-open' : ''}`} aria-expanded={entry.open} aria-label={`${entry.open ? 'Hide' : 'Show'} sub-items of ${label}`} onClick={onToggle}><ChevronRightIcon /></button>
+      : <span className="database-sub-spacer" aria-hidden="true" />}
+  </span>
+}
+
 export function useFolds(blockId: string, viewId: string) {
   const read = () => { try { return new Set<string>(JSON.parse(localStorage.getItem(foldKey(blockId, viewId)) ?? '[]') as string[]) } catch { return new Set<string>() } }
   const [folded, setFolded] = useState(read)
@@ -887,7 +909,9 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   // Each group, with its sub-groups if the view has them; rows are drawn per section, under the section's key.
   const layers = groups?.shown.map(group => ({ group, subs: viewSubGroups(db.database, view, group.rows, shownRaw, weekStart) }))
   const drawn = (key: string, all: readonly Page[]) => (folded.has(key) ? [] : all.slice(0, limitOf(key)))
-  const entries: { row: Page; group?: string }[] = layers ? layers.flatMap(({ group, subs }) => folded.has(group.key) ? [] : subs && group.rows.length
+  const tree = subItemTree(workspace, db, view, rows, Boolean(groups), folded)
+  const treeOf = new Map(tree?.map(e => [e.row.id, e]))
+  const entries: { row: Page; group?: string }[] = tree ? treeUpTo(tree, limit) : layers ? layers.flatMap(({ group, subs }) => folded.has(group.key) ? [] : subs && group.rows.length
     ? subs.shown.flatMap(sub => { const key = sectionKey(group.key, sub.key); return drawn(key, sub.rows).map(row => ({ row, group: key })) })
     : drawn(group.key, group.rows).map(row => ({ row, group: group.key }))) : rows.slice(0, limit).map(row => ({ row }))
   const shown = entries.map(e => e.row)
@@ -987,19 +1011,21 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     })}
     <td className="database-td is-add" />
   </tr>
-  const rowLine = (row: Page, index: number, group?: string) => <tr key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})} className={`database-row${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
+  const rowLine = (row: Page, index: number, group?: string) => <tr key={`${group ?? ''}:${row.id}`} data-row={row.id} {...(group !== undefined ? { 'data-group': group } : {})} className={`database-row${returned === row.id ? ' is-returned' : ''}${picked.includes(row.id) ? ' is-picked' : ''}${treeOf.get(row.id)?.context ? ' is-context' : ''}${drag?.before === row.id && drag.rowId !== row.id && (drag.group ?? undefined) === group ? ' is-drop-before' : ''}${drag?.rowId === row.id ? ' is-dragging' : ''}`}>
             <td className={`database-td is-title${view.wrapName ? ' is-wrapped' : ''}`}><div className="database-title-inner">
               {wide && <span className="database-pin-strip" />}
               {wide && !db.database.fixed && <span className="database-row-gutter">
-                {!view.sort.length && <span className="database-row-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
+                {!view.sort.length && !treeOf.get(row.id)?.depth && <span className="database-row-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
                 <input type="checkbox" className="database-row-pick" aria-label={`Select ${displayPageTitle(row)}`} checked={picked.includes(row.id)} onChange={() => undefined} onClick={e => pick(row.id, e.shiftKey)} />
               </span>}
               {/* A row opens as a page, from Name, at both widths (design §5). */}
               {picking && <input type="checkbox" className="database-row-tick" tabIndex={-1} aria-label={`Select ${displayPageTitle(row)}`} checked={picked.includes(row.id)} readOnly />}
               <TodoTick row={row} />
+              {treeOf.has(row.id) && <SubItemLead entry={treeOf.get(row.id)!} label={displayPageTitle(row)} onToggle={() => toggle(subFoldKey(row.id))} />}
               <button type="button" className="database-title-cell" data-cell={key(row.id, titleId, group)} data-nav={`${index}:0`} onPointerDown={e => startHold(e, row.id)} onPointerMove={moveHold} onPointerUp={endHold} onPointerCancel={endHold} onContextMenu={e => { if (!wide) e.preventDefault() }} onClick={() => openRow(row.id)}>
                 <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
               </button>
+              {tree && !db.database.fixed && <button type="button" className="database-sub-add" aria-label={`New sub-item in ${displayPageTitle(row)}`} onClick={() => { if (!folded.has(subFoldKey(row.id))) toggle(subFoldKey(row.id)); addRow(undefined, { [db.database.subItems!.parent]: [row.id] }, null) }}>+</button>}
               <button type="button" className="database-open" onClick={() => openRow(row.id)}>Open</button>
             </div></td>
             {columns.map(({ property, wrap }, col) => {
@@ -1086,7 +1112,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     </div>}
     {groups && <HiddenGroups groups={groups} changeView={changeView} />}
     {groups && <HiddenSubGroups db={db.database} view={view} rows={withPendingMoves(rows)} changeView={changeView} weekStart={weekStart} />}
-    {!groups && rows.length > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
+    {!groups && (tree ? tree.filter(e => e.depth === 0).length : rows.length) > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
     {!groups && <NewRow db={db} blockId={blockId} addRow={addRow} />}
   </div>
 }

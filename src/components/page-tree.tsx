@@ -146,7 +146,7 @@ export function PageMenu({ page }: { page: Page }) {
       if (r) open(pageHref({ ...page, id: pageId }))
     }
     const remove = () => {
-      void run({ type: 'delete-page', pageId: page.id, at: new Date().toISOString() }, r => ({ text: 'Row deleted', undoOperationId: r.operationId }))
+      void run({ type: 'delete-page', pageId: page.id, at: new Date().toISOString() }, r => ({ text: /sub-item/.test(r.message) ? `Row deleted · ${r.message.split(' · ')[1]}` : 'Row deleted', undoOperationId: r.operationId }))
       open(pageHref(db))
     }
     return <RowMenu label="Row actions" triggerClass="page-more" groups={[{ items: [{ label: 'Copy link', onSelect: copyLink }, { label: 'Duplicate row', onSelect: () => void duplicate() }] }, { items: [{ label: 'Delete row', danger: true, onSelect: remove }] }]} />
