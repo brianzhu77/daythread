@@ -37,7 +37,7 @@ await scenario('The list: newest first, title, first words, where it came from; 
   r.ok = /view=bookmarks/.test(r.url) && r.rows[0] === 'DAN KOE (@thedankoe) on X' && r.rows.length === 3 && r.words.join().includes('How to fix') && r.where[0].startsWith('x.com · ') && r.current.join() === 'Bookmarks'
   return r
 })
-await scenario('A row opens the page with the way back in its crumb; ↗ opens the site and not the row; the same page from its day keeps its own crumb', '', async (page, context) => {
+await scenario('A row opens the page with the way back and its real path in the header; ↗ opens the site and not the row; the same page from its day keeps its own crumb', '', async (page, context) => {
   await page.goto(`${base}/pages?view=bookmarks`); await wait(1800)
   const [site] = await Promise.all([context.waitForEvent('page'), page.locator('.bookmark-row').first().locator('.bookmark-open').click()])
   const r = { siteUrl: site.url(), stayed: page.url() }
@@ -48,7 +48,7 @@ await scenario('A row opens the page with the way back in its crumb; ↗ opens t
   r.back = page.url(); r.listed = (await rows(page)).length
   await page.goto(`${base}/pages?page=dan`); await wait(1500)
   r.own = await page.locator('.crumbs-path').innerText()
-  r.ok = /x\.com/.test(r.siteUrl) && /view=bookmarks/.test(r.stayed) && /page=dan&from=bookmarks/.test(r.opened) && r.crumb.trim() === 'Bookmarks' && /view=bookmarks/.test(r.back) && r.listed === 3 && !/Bookmarks/.test(r.own)
+  r.ok = /x\.com/.test(r.siteUrl) && /view=bookmarks/.test(r.stayed) && /page=dan&from=bookmarks/.test(r.opened) && /^Bookmarks\s+Sun, Oct 25/.test(r.crumb.trim()) && /view=bookmarks/.test(r.back) && r.listed === 3 && !/Bookmarks/.test(r.own)
   return r
 })
 await scenario('Trash from a page opened here comes back here, gone from the list; Undo returns it; the card on its day stays', '', async page => {
