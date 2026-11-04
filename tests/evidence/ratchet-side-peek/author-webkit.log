@@ -1,0 +1,35 @@
+PASS the setting is saved on the view "side"
+PASS a row opens in a side peek "http://127.0.0.1:3698/pages?page=books&peek=dune&side=1"
+PASS it runs down the right of the window {"x":680,"y":0,"width":600,"height":900}
+PASS the view has what's left, none of it under the peek {"x":260,"y":-60,"width":420,"height":1714}
+PASS with no scrim 
+PASS and the view hasn't moved [60,60]
+PASS the open row is marked in the view 
+PASS the page beside it still scrolls 
+PASS a cell in the view edits with the peek open 77
+PASS a tap on empty space leaves it open "http://127.0.0.1:3698/pages?page=books&peek=dune&side=1"
+PASS another row replaces it 
+PASS what was typed in the last one is saved "[{\"id\":\"72a94512-ede9-4a0a-869b-259949ad8103\",\"type\":\"paragraph\",\"props\":{\"backgroundColor\":\"default\",\"textColor\":\"default\",\"textAlignment\":\"left\"},\"content\":[{\"type\":\"text\",\"text\":\" side words\",\"styl"
+PASS moving to it adds no history entry [3,3]
+PASS a cell edited on the open row keeps the cell and the typing [88]
+PASS and says nothing about a change elsewhere " | Saved"
+PASS closing leaves the view where it was scrolled to 90
+PASS × closes it and gives the view its width back 
+PASS Esc with the caret in it closes it 
+PASS Back closes it, with the view where it was 70
+PASS Esc in a cell behind it leaves the cell, not the peek 
+PASS a reload reopens it at the side, with no ↑ ↓ 
+PASS the head has the row's menu ["Copy link","Duplicate row","Move to…","Delete row"]
+PASS Duplicate row opens the copy in the peek "http://127.0.0.1:3698/pages?page=books&peek=2ce4672c-532a-4efb-99b1-1bb243406b8e&side=1"
+PASS Move to… shows over the peek 
+PASS and Esc closes only that 
+PASS Delete row closes it and stays on the view "http://127.0.0.1:3698/pages?page=books"
+PASS with the view where it was 
+PASS ↓ walks the rows as they're drawn, across groups {"walked":["dune","emma","ubik","f1","f2"],"drawn":["dune","emma","ubik","f1","f2"],"stored":["dune","emma","ubik","2ce4672c-532a-4efb-99b1-1bb243406b8e","blank"]}
+PASS ↑ goes back 
+PASS under 1100 it becomes a center peek, with the words still there 
+PASS back over 1100 it's at the side again, the words still there 
+PASS under 900 it opens as a full page "http://127.0.0.1:3698/pages?page=dune"
+PASS and what was typed is saved 
+PASS no page errors []
+ALL PASS
