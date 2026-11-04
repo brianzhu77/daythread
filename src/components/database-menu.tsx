@@ -31,7 +31,7 @@ function useOpenMenu() { return useSyncExternalStore(l => { listeners.add(l); re
 const newId = (): string => crypto.randomUUID()
 
 /** Opens a table's menu on one of its panels (a filter chip opens Filter). */
-export function openDatabaseMenu(blockId: string, databaseId: string, panel: 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'templates' = 'filter', pick?: (template: string | null) => void) { setOpenMenu({ blockId, databaseId, panel, ...(pick ? { pick } : {}) }) }
+export function openDatabaseMenu(blockId: string, databaseId: string, panel: 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'templates' | 'properties' = 'filter', pick?: (template: string | null) => void) { setOpenMenu({ blockId, databaseId, panel, ...(pick ? { pick } : {}) }) }
 
 /** The `⋯` on a table (inline or full page): opens its menu under it. */
 export function DatabaseMenuButton({ blockId, databaseId }: { blockId: string; databaseId: string }) {
@@ -164,12 +164,12 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     <div className="database-menu-tiles">
       <button type="button" onClick={() => go('filter')}>Filter</button>
       <button type="button" onClick={() => go('sort')}>Sort</button>
-      {view.layout !== 'calendar' && view.layout !== 'timeline' && <button type="button" onClick={() => go('group')}>Group</button>}
+      {view.layout !== 'calendar' && <button type="button" onClick={() => go('group')}>Group</button>}
     </div>
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
     {view.layout === 'table' && !wide && !db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}
-    {(view.layout === 'table' || view.layout === 'board') && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
+    {(view.layout === 'table' || view.layout === 'board' || (view.layout === 'timeline' && view.timelineTable)) && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('templates')}>Templates<span className="database-menu-chevron">›</span></button>}
     <hr />
     {(inline || linked) && !db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); void navigate({ to: '/pages', search: { page: db.id } }) }}>Open as page</button>}

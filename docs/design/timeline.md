@@ -89,4 +89,13 @@ Add to R4-1 and R4-2 when built:
 - **Scale:** it runs over the rows and today, and what's on screen stays on screen when a move changes where it starts. Today's line is the day's middle, or the time now at Hours.
 - **It opens** where it was left on this device, or on today. Only a view filtered to this page's day opens on that day.
 - **A rollup or formula date** isn't offered, as on a Calendar, so §3's last row doesn't arise yet.
-- **Not in step 1:** the table beside the scale with calculations, rows dragged up and down, Group, and dragging across an undated row's lane to make a range (a click sets one day).
+
+## 10. As built, step 2 (Jazz)
+
+- **The table:** `«` and `»` beside the scale, saved on the view. It shows Name and the view's properties, and it's pinned, so a row and its bar stay on one line and scroll as one. A tap on a cell edits it, as in a table.
+- **It takes at most 60% of the width,** so the bars keep room. Columns past that aren't drawn: the head says "· 3 more", which opens Properties. **Not as Notion:** its table scrolls on its own, and I didn't build that first.
+- **Calculations** sit at the table's foot, each group with its own, as a table's do. `⋯` → Calculate shows only while the table does.
+- **Rows up and down** drag by the table's handle when the view isn't sorted, across groups too. With the table closed there's no handle: a bar's drag is along the scale.
+- **Group** works as in a list: a section each, its fold, its cap and its `+ New`. Rows with no dates stay on the one "No date" line, not in their groups.
+- **A row with no dates:** a drag across its lane sets a range, and a click sets one day.
+- **Still to do:** Rollup and Formula dates (R4-14, with Calendar), and sub-items and dependencies when those ship.

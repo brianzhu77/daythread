@@ -150,6 +150,65 @@ if (wide) {
   await block.locator('.database-more-button').click(); await wait(300); await menu.getByRole('menuitem', { name: 'Layout' }).click(); await wait(300)
   await menu.locator('label.database-menu-row', { hasText: 'Show timeline by' }).locator('select').selectOption({ label: 'When' }); await wait(600); await closeMenu()
 
+  // The table beside the scale.
+  const toggle = block.locator('.database-timeline-toggle')
+  await tap(toggle); await wait(700)
+  check(firstView().timelineTable === true && await lane('trip').locator('.database-pane-name').count() === 1, 'the table shows, and that is saved on the view', firstView().timelineTable)
+  const lined = async id => { const a = await lane(id).locator('.database-pane-name').boundingBox(), b = await bar(id).boundingBox(); return Math.abs((a.y + a.height / 2) - (b.y + b.height / 2)) <= 1 }
+  check(await lined('trip') && await lined('call'), 'a row and its bar stay on one line')
+  const tableW = (await lane('trip').locator('.database-pane').boundingBox()).width, scaleW = (await scroller.boundingBox()).width
+  check(tableW <= scaleW * 0.6 + 1, 'the table leaves the bars their room', [tableW, scaleW])
+  check((await block.locator('.database-pane-more').innerText().catch(() => '')).includes('more'), "and names the columns it can't fit, with a way to them", await block.locator('.database-pane-head').innerText())
+  await shot('table')
+  const paneX = (await lane('trip').locator('.database-pane').boundingBox()).x, barX = (await bar('trip').boundingBox()).x
+  await scroller.hover(); await page.mouse.wheel(300, 0); await wait(350)
+  check((await lane('trip').locator('.database-pane').boundingBox()).x === paneX && (await bar('trip').boundingBox()).x < barX, 'the table stays while the bars scroll')
+  await page.mouse.wheel(-300, 0); await wait(350)
+  await tap(lane('trip').locator('.database-pane-cell').filter({ hasText: /^$/ }).first()).catch(() => {}); await wait(300); await page.keyboard.press('Escape'); await wait(200)
+
+  // Calculations at the table's foot.
+  await block.locator('.database-more-button').click(); await wait(300); await menu.getByRole('menuitem', { name: 'Calculate' }).click(); await wait(300)
+  const calcSelects = menu.locator('select')
+  await calcSelects.first().selectOption({ index: 1 }).catch(() => {}); await wait(600); await closeMenu()
+  check(await block.locator('.database-bar-lane.is-foot').count() === 1, 'a calculation shows at the foot', await block.locator('.database-bar-lane.is-foot').innerText().catch(() => ''))
+  await shot('foot')
+
+  // Rows up and down, by the table's handle.
+  const order = () => store().pages.filter(p => p.parentId === 'plans' && !p.trashedAt).map(p => p.id)
+  const dragRow = async (id, overId, after = false) => {
+    await lane(id).hover(); const h = await lane(id).locator('.database-pane-handle').boundingBox(), o = await lane(overId).boundingBox()
+    await page.mouse.move(h.x + 4, h.y + 6); await page.mouse.down(); await page.mouse.move(h.x + 4, h.y + 14, { steps: 3 }); await wait(60)
+    await page.mouse.move(h.x + 4, o.y + (after ? o.height - 3 : 3), { steps: 8 }); await wait(150); await page.mouse.up(); await wait(1000)
+  }
+  const orderBefore = order()
+  await dragRow('back', 'trip')
+  check(order().indexOf('back') < order().indexOf('trip'), 'a row drags up', order())
+  await undo()
+  check(JSON.stringify(order()) === JSON.stringify(orderBefore), 'one Undo puts it back')
+
+  // Group: a section each, its own + New, and a drag between them.
+  await block.locator('.database-more-button').click(); await wait(300); await menu.getByRole('button', { name: 'Group' }).click(); await wait(300)
+  await menu.locator('label.database-menu-row', { hasText: 'Group by' }).first().locator('select').selectOption({ label: 'Kind' }); await wait(700); await closeMenu()
+  const groupHeads = await block.locator('.database-timeline-group').allInnerTexts()
+  check(groupHeads.some(t => t.includes('Work')) && groupHeads.some(t => t.includes('Home')), 'grouped, each has its section', groupHeads)
+  await shot('grouped')
+  check(await lane('trip').getAttribute('data-group') === 'home' && await lined('trip'), 'its rows sit under it, still on one line')
+  await dragRow('trip', 'call')
+  check(pageOf('trip').values.kind === 'work', 'a drag between sections changes the group', pageOf('trip').values.kind)
+  await undo()
+  const ids0 = new Set(store().pages.map(p => p.id))
+  await block.locator('.database-group-end[data-group="work"] .database-new').click(); await wait(1200)
+  const madeHere = store().pages.find(p => p.parentId === 'plans' && !ids0.has(p.id))
+  check(madeHere?.values?.kind === 'work', "a section's + New takes its value", madeHere?.values)
+  await page.keyboard.press('Escape'); await wait(300)
+  await tap(block.locator('.database-timeline-group', { hasText: 'Home' }).locator('.database-group-fold')); await wait(250)
+  check(await lane('trip').count() === 0, 'a section folds')
+  await tap(block.locator('.database-timeline-group', { hasText: 'Home' }).locator('.database-group-fold')); await wait(250)
+  await block.locator('.database-more-button').click(); await wait(300); await menu.getByRole('button', { name: 'Group' }).click(); await wait(300)
+  await menu.locator('label.database-menu-row', { hasText: 'Group by' }).first().locator('select').selectOption(''); await wait(700); await closeMenu()
+  await tap(toggle); await wait(700)
+  check(!firstView().timelineTable && await lane('trip').locator('.database-pane-name').count() === 0, 'and hides again', firstView().timelineTable)
+
   // No date: a click on its lane gives it a day, and `+` on the scale makes a row with one.
   await tap(block.locator('.database-undated-head')); await wait(300)
   const noneLane = lane('none')
@@ -162,6 +221,9 @@ if (wide) {
   check(await noneLane.locator('.database-bar.is-ghost').count() === 1, 'a row with no dates shows a ghost bar on hover')
   await page.mouse.click(s.x + s.width / 2, y); await wait(1000)
   check(Boolean(pageOf('none').values?.when?.start), 'and a click sets its date', pageOf('none').values)
+  await undo()
+  await page.mouse.move(s.x + s.width / 2, y); await page.mouse.down(); await page.mouse.move(s.x + s.width / 2 + 96, y, { steps: 6 }); await page.mouse.up(); await wait(1000)
+  check(Boolean(pageOf('none').values?.when?.end), 'and a drag sets a range', pageOf('none').values)
   await undo()
   const idsBefore = new Set(store().pages.map(p => p.id))
   const head = await block.locator('.database-scale').boundingBox()

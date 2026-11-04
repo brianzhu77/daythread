@@ -2243,6 +2243,27 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-timeline .database-bar-off.is-after { left: calc(100% - 248px); float: right; right: 4px; }
 .database-timeline .database-bar-off.is-name { z-index: 1; background: var(--bg); color: var(--ink); }
 @media (hover: hover) { .database-timeline .database-bar-off:hover { background: var(--hover-dim); } }
+/* The table beside the scale, pinned: it and the bars scroll as one and stay on one line. */
+.database-pane { position: sticky; left: 0; z-index: 2; display: flex; align-items: stretch; height: 100%; border-right: 1px solid var(--line); background: var(--bg); }
+.database-scale .database-pane { position: sticky; float: left; }
+.database-pane-head { color: var(--ink-3); font-size: var(--text-meta); align-items: flex-end; padding-bottom: 2px; }
+.database-pane-head > span { padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.database-timeline .database-pane-name, .database-timeline .database-pane-cell { flex: none; min-height: 0; padding: 0 8px; overflow: hidden; border: 0; border-radius: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-small); text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.database-timeline .database-pane-name { padding-left: 16px; }
+.database-pane-name.is-placeholder { color: var(--placeholder); }
+@media (hover: hover) { .database-timeline .database-pane-name:hover, .database-timeline .database-pane-cell:hover { background: var(--hover-dim); } }
+.database-pane-handle { position: absolute; left: 1px; top: 8px; z-index: 1; width: 14px; color: var(--ink-3); font-size: 11px; line-height: 18px; opacity: 0; cursor: grab; touch-action: none; user-select: none; }
+.database-bar-lane:hover .database-pane-handle { opacity: 1; }
+.database-bar-lane.is-drop-before { box-shadow: inset 0 2px 0 var(--ink-2); }
+.database-bar-lane.is-dragging { opacity: .5; }
+.database-bar-lane.is-foot { color: var(--ink-2); }
+.database-timeline-toggle { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; line-height: 1; }
+.database-timeline-group .database-group-fold { margin-top: 4px; }
+.database-timeline-line { display: inline-flex; align-items: center; gap: 8px; height: 100%; }
+.database-pane.is-line { align-items: center; gap: 8px; padding-left: 8px; }
+.database-pane-head > span:first-child, .database-timeline .is-foot .database-pane-cell:first-child { padding-left: 16px; }
+.database-timeline .database-pane-name, .database-timeline .database-pane-cell { display: block; height: 100%; }
+.database-timeline .database-pane-more { display: inline; min-height: 0; padding: 0; border: 0; background: none; color: var(--ink-3); font: inherit; pointer-events: auto; }
 /* At 390: a list by week (§4). */
 .database-weeks { padding-top: 4px; }
 .database-week-head { margin: 10px 0 2px; padding: 0 8px; color: var(--ink-3); font-size: var(--text-small); font-weight: var(--weight-regular); }

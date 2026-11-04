@@ -1,7 +1,8 @@
 // Timeline (docs/design/timeline.md): what each row draws, what a drag writes, and the phone's list by week.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import type { Database, Property, View } from '../src/domain/database.ts'
+import { viewGroupBy, type Database, type Property, type View } from '../src/domain/database.ts'
+import { commandSchema } from '../src/domain/command-schema.ts'
 import { draggedBar, endAt, shifted, startAt, timelineBars, timelineWeeks, type TimelineBar } from '../src/domain/timeline.ts'
 import type { Page } from '../src/domain/types.ts'
 
@@ -79,4 +80,13 @@ test('§4: a list by week: over is earlier, and a row still running stays in thi
   assert.deepEqual(earlier.map(w => [w.week, w.bars.map(b => b.row.id)]), [['2026-10-18', ['over']]])
   assert.equal(timelineWeeks(bars, '2026-11-04', 1).weeks[0]!.week, '2026-11-02', 'follows Week starts')
   assert.equal(timelineWeeks(bars.slice(0, 1), '2026-11-04').weeks.length, 0, 'all in the past: the caller opens Earlier')
+})
+
+test('a timeline groups like a table, and keeps its own fields', () => {
+  const v = view({ groupBy: 'kind' })
+  const withKind = { ...db, properties: [...properties, { id: 'kind', name: 'Kind', type: 'select', options: [{ id: 'a', name: 'A' }] }] } as Database
+  assert.equal(viewGroupBy(withKind, v)?.id, 'kind')
+  assert.equal(viewGroupBy(withKind, { ...v, layout: 'calendar' }), null)
+  const r = commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'p', change: { kind: 'updateView', viewId: 'v', timelineTable: null, timelineUnit: 'quarter', timelineEnd: null } } })
+  assert.ok(r.success)
 })
