@@ -1,3 +1,4 @@
+import { noteLeftBookmark } from './bookmark-return'
 import { MoveRowDialog } from './move-row-dialog'
 import { Modal, SearchField } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
@@ -115,7 +116,7 @@ export function PageHeaderRow({ page, workspace, fromBookmarks = false }: { page
       {/* Crumbs don't shrink until folding is decided, so an overflow can be measured. */}
       <nav className={`crumbs-path ${folded ? 'folded' : 'measuring'}`} aria-label="Page location" ref={pathRef}>
         {/* Opened from Bookmarks, the way back comes first: the Home Screen app has no Back button. It isn't a level of the path, so a line, not a chevron (references §8). */}
-        {fromBookmarks && <PageLink className="crumb crumb-back" href="/pages?view=bookmarks"><ChevronRightIcon />Bookmarks</PageLink>}
+        {fromBookmarks && <span className="crumb-back-wrap" onClickCapture={() => noteLeftBookmark(page.id)}><PageLink className="crumb crumb-back" href="/pages?view=bookmarks"><ChevronRightIcon />Bookmarks</PageLink></span>}
         {fromBookmarks && crumbs.length > 0 && <span className="crumb-divider" aria-hidden="true" />}
         {crumbs.map((c, i) => <Fragment key={i}>{i > 0 && <span className="crumb-sep" aria-hidden="true"><ChevronRightIcon /></span>}{c}</Fragment>)}
       </nav>
