@@ -37,7 +37,7 @@
 
 The other way, adding the block only when the upload ends, would move the words under the caret, and a failed upload would have nowhere to say so.
 
-| State | What shows | What he can do |
+| State | What shows | What can be done |
 | --- | --- | --- |
 | Uploading, image | The picture at its final size, with a thin progress line along its bottom edge | Type anywhere, move it, delete it, which cancels the upload |
 | Uploading, file | Its row, with the size replaced by "12 of 25 MB" | The same |
