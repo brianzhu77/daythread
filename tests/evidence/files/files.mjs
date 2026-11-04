@@ -115,6 +115,54 @@ await scenario('While one is on its way a click outside keeps it open; Esc gives
   r.ok = r.during.length === 2 && /%/.test(r.during[1]) && r.stillOpen === 1 && r.closed === 0 && r.value.join() === 'notes.txt'
   return r
 })
+const hideable = page => page.addInitScript(() => { window.__seen = 'visible'; Object.defineProperty(document, 'visibilityState', { get: () => window.__seen }); Object.defineProperty(document, 'hidden', { get: () => window.__seen === 'hidden' }) })
+const setSeen = (page, seen) => page.evaluate(seen => { window.__seen = seen; document.dispatchEvent(new Event('visibilitychange')) }, seen)
+await scenario('Out of sight during an upload: it carries on, the editor stays, what\'s finished is saved, and it joins on return', async page => {
+  await hideable(page); await open(page)
+  await cell(page, 'one').click(); await wait(300)
+  await choose(page, 'notes.txt'); await wait(700)
+  let release, seen, first = true
+  const arrived = new Promise(r => { seen = r })
+  await page.route('**/api/files/*', async route => { if (route.request().method() === 'PUT' && first) { first = false; seen(); await new Promise(r => { release = r }) } await route.continue().catch(() => {}) })
+  await choose(page, 'photo.png'); await arrived; await wait(200)
+  await setSeen(page, 'hidden'); await wait(900)
+  const r = { open: await editor(page).count(), savedWhileHidden: held('one').map(f => f.name) }
+  release(); await wait(900)
+  await setSeen(page, 'visible'); await wait(300)
+  r.back = await lines(page)
+  await leave(page)
+  r.value = held('one').map(f => f.name)
+  r.ok = r.open === 1 && r.savedWhileHidden.join() === 'notes.txt' && r.back.length === 2 && !r.back.some(l => /%|Couldn/.test(l)) && r.value.join() === 'notes.txt,photo.png'
+  return r
+})
+await scenario('If the browser drops the upload while it\'s out of sight, coming back says so and Retry works', async page => {
+  await hideable(page); await open(page)
+  let drop = true, release, seen
+  const arrived = new Promise(r => { seen = r })
+  await page.route('**/api/files/*', async route => { if (route.request().method() !== 'PUT' || !drop) return route.continue(); seen(); await new Promise(r => { release = r }); await route.abort() })
+  await cell(page, 'one').click(); await wait(300)
+  await choose(page, 'notes.txt'); await arrived; await wait(200)
+  await setSeen(page, 'hidden'); await wait(300); release(); await wait(500)
+  await setSeen(page, 'visible'); await wait(300)
+  const r = { back: await lines(page) }
+  drop = false
+  await editor(page).getByRole('button', { name: 'Retry' }).click(); await wait(800)
+  r.retried = await lines(page)
+  await leave(page)
+  r.value = held('one').map(f => f.name)
+  r.ok = /Couldn't upload/.test(r.back[0]) && !/Couldn't/.test(r.retried[0]) && r.value.join() === 'notes.txt'
+  return r
+})
+await scenario('A picker that hides the page doesn\'t close the editor: choosing after coming back still lands', async page => {
+  await hideable(page); await open(page)
+  await cell(page, 'one').click(); await wait(300)
+  await setSeen(page, 'hidden'); await wait(500); await setSeen(page, 'visible'); await wait(300)
+  const r = { open: await editor(page).count() }
+  await choose(page, 'notes.txt'); await wait(700); await leave(page)
+  r.value = held('one').map(f => f.name)
+  r.ok = r.open === 1 && r.value.join() === 'notes.txt'
+  return r
+})
 await scenario('A row in Trash keeps its file, and Undo has it back', async (page, context) => {
   await open(page)
   await cell(page, 'one').click(); await wait(300)

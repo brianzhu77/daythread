@@ -48,6 +48,8 @@ export interface EditorProps {
   onCreateOption?(name: string): string
   /** relation: restoring its target, when the picker has nothing else to offer. */
   onRestoreTarget?(): void
+  /** Files: saves what's finished while the editor stays open, as the page going out of sight mustn't stop or close anything. */
+  onKeep?(raw: Json | undefined): void
   /** Text and URL: what's typed so far, on every change, so the caller can keep it on the device (R1-15). */
   onDraft?(text: string): void
   /** Tab / Shift-Tab in an in-cell field (≥ 900): called after the commit, to move the cell cursor along the row. */
@@ -467,7 +469,8 @@ function OptionLabel({ option, status }: { option: Option; status: boolean }) {
 
 /**
  * Files (R3-11): Add, Open and Remove. A file joins the value once its bytes are in, and the value saves on leaving, so a failed upload costs the
- * row nothing. It stays open while one is on its way; Esc gives up on those and keeps what's in.
+ * row nothing. It stays open while one is on its way; Esc gives up on those and keeps what's in. The page going out of sight stops nothing and closes
+ * nothing, as a phone's photo picker does that, and so does switching apps during a big photo. What's finished saves then, in case the tab doesn't come back.
  */
 function FilesEditor(p: EditorProps) {
   const wide = useWide()
@@ -495,11 +498,16 @@ function FilesEditor(p: EditorProps) {
     setItems(list => [...list, ...added])
     for (const item of added) if (item.file) start(item.key, item.file)
   }
+  const finished = () => latest.current.flatMap(i => (i.state === 'done' && i.value ? [i.value] : []))
   const save = () => {
     for (const abort of running.current.values()) abort()
-    return finish(p, latest.current.flatMap(i => (i.state === 'done' && i.value ? [i.value] : [])))
+    return finish(p, finished())
   }
-  useSaveOnHide(() => { void save() })
+  useSaveOnHide(() => {
+    let raw: Json | undefined
+    try { raw = storedValue(p.property, finished()) } catch { return }
+    if (!sameRaw(raw, storedNow(p.property, p.value))) p.onKeep?.(raw)
+  })
   const onDismiss = (reason: Dismiss) => {
     if (reason === 'outside' && running.current.size) return
     save()

@@ -416,6 +416,7 @@ export function DatabaseCellEditor() {
       const sent = typeof raw === 'string' ? raw : ''
       commit(db, row, cell.columnId, cell.columnId === titleId ? (raw ?? '') : raw, info?.notice, keeps ? () => dropDraft(row.id, cell.columnId, sent) : undefined)
     }}
+    onKeep={raw => commit(db, row, cell.columnId, raw)}
     onCancel={() => { setOpenCell(null); if (keeps) dropDraft(row.id, cell.columnId) }}
     onCreateOption={db.database.fixed ? undefined : property.target === todosSourceId ? namedTodo : name => createOption(run, db, property, name)}
     onRestoreTarget={property.target ? () => void run({ type: 'restore-page', pageId: property.target! }) : undefined} />
