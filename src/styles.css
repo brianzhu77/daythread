@@ -2322,6 +2322,8 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-row.has-tint.is-returned > td { box-shadow: inset 0 0 0 1px var(--ink-3); }
 .database-list-row.has-tint.is-returned, .database-card.has-tint.is-returned, .database-gallery-card.has-tint.is-returned { box-shadow: inset 0 0 0 1px var(--ink-3); }
 .database-list-row.has-tint { color: var(--ink); }
+/* Hover is an overlay here, so the tint still reads through it. */
+@media (hover: hover) { .database-list-row.has-tint:hover, .database-card.has-tint:hover, .database-gallery-card.has-tint:hover { background-image: linear-gradient(var(--hover-dim), var(--hover-dim)); } }
 .database-colour-rule { align-items: flex-start; }
 .database-colour-row { display: flex; align-items: center; gap: 6px; width: 100%; order: 4; }
 .database-colour-row select { flex: 1 1 0; min-width: 0; }

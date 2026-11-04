@@ -78,6 +78,7 @@ for (const [name, sel] of [['List', '.database-list-row[data-row="ubik"]'], ['Bo
   await layoutTo(name)
   check(await bg(sel) === blue, `${name}: the card takes the tint`, await bg(sel))
   await shot(`tint-${name}`)
+  if (wide) { await block.locator(sel).first().hover(); await wait(150); check(await block.locator(sel).first().evaluate(el => getComputedStyle(el).backgroundImage !== 'none'), `${name}: a hover still shows on the tint`); await page.mouse.move(2, 2); await wait(100) }
 }
 await layoutTo('Table')
 
