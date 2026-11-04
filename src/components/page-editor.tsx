@@ -283,7 +283,7 @@ function PageCard({ pageId, cardId, url = '', line = '' }: { pageId: string; car
   // its parent is the page the card is saved on, and the id is the card's own. A link card retries its paste.
   const savedOn = target || pendingPages.has(pageId) ? undefined : workspace?.pages.find(p => flatNodes(pageNodes(p)).some(n => n.id === cardId))
   const retrySaved = (on: Page) => link
-    ? run({ type: 'make-link-pages', parentPageId: on.id, items: [{ url: link, pageId }] })
+    ? run({ type: 'make-link-pages', parentPageId: on.id, items: [{ url: link, pageId }], at: new Date().toISOString() })
     : run({ type: 'create-document', title: '', body: '', pageId, parentId: on.id })
   const pending: PendingPage | undefined = target ? undefined : pendingPages.get(pageId)
     ?? (savedOn ? { state: 'failed', parentId: savedOn.id, retry: () => void retrySaved(savedOn) } : undefined)
@@ -1457,7 +1457,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const [next] = editor.insertBlocks([{ type: lineType } as never], insertedBlocks.at(-1)!, 'after')
       editor.setTextCursorPosition(next!, 'start')
     })
-    const action: Extract<Action, { type: 'make-link-pages' }> = { type: 'make-link-pages', parentPageId: page.id, items: items.map(({ url, pageId, title }) => ({ url, pageId, ...(title ? { title } : {}) })) }
+    const action: Extract<Action, { type: 'make-link-pages' }> = { type: 'make-link-pages', parentPageId: page.id, items: items.map(({ url, pageId, title }) => ({ url, pageId, ...(title ? { title } : {}) })), at: new Date().toISOString() }
     const fresh = items.filter(it => !latestWorkspace.current.pages.some(p => p.id === it.pageId))
     const retry = () => void confirmLinks(action, items.map(it => it.cardBlockId), operationId, fresh.map(it => it.pageId))
     for (const it of fresh) setPending(it.pageId, { state: 'creating', parentId: page.id, retry })
