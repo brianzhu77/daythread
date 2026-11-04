@@ -72,7 +72,8 @@ await scenario('A database inside the tree isn\'t offered for its parent, and is
   const r = { top: await dialog(page).getByRole('option').allInnerTexts() }
   await openMove(page, 'other')
   r.other = await dialog(page).getByRole('option').allInnerTexts()
-  r.ok = r.top.join() === 'Archive' && r.other.includes('Nested') && r.other.includes('Archive')
+  const names = list => list.map(t => t.trim())
+  r.ok = names(r.top).join() === 'Archive' && names(r.other).includes('Nested') && names(r.other).includes('Archive')
   return r
 })
 await scenario('A tab that missed the move: its edit to a sub-item is refused with a notice, and writes nothing', async (page, context) => {
