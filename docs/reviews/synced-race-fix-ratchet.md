@@ -20,3 +20,13 @@ The author held-save closing test passes in Chromium and WebKit: both sets of wo
 An attempted ordinary-day suspended-tab probe did not hold the intended refresh reliably (its captured editor was already editable and the claim slot was gone). It is retained as an explicitly inconclusive harness attempt, not a pass or a product failure. A reliable two-tab resume check remains open. No Worker, real Postgres browser or physical iPhone check was performed here.
 
 Scripts/logs/screenshots: `tests/evidence/ratchet-race-fix/`. No product changes by this reviewer.
+
+## Retest: 2a8f2d31
+
+Both requested changes are cleared. The held Unsync reply after closing the peek now preserves host typing and produces no destroyed-editor error in the independently replayed `close-action.mjs`, Chromium and WebKit.
+
+The updated race suite was independently run in both engines and passes: visible action text and dimming at 1280 and 390, real keys during the hold, unlocking after a failed Unsync without losing existing words, conflicted-reply typing, Undo during a pending save, and an ordinary two-tab draft takeover/resume. The resume test also types after release without another click, demonstrating focus recovery in these browsers. The earlier inconclusive resume attempt remains historical; this newer suite establishes the tested path.
+
+A separate held-Unsync probe and screenshot confirm the visible `Unsyncing…` text and dimmed page after 700 ms in Chromium. Build and typecheck pass on this head. I did not rerun the full unit suite; the original findings are covered by these targeted browser retests. Worker/real Postgres validation belongs to Lead.
+
+No physical iPhone or native iOS keyboard-return check was run for PR120. Product explicitly accepted that remaining uncertainty rather than expanding the change. This is not a claim that iOS always reopens the keyboard.

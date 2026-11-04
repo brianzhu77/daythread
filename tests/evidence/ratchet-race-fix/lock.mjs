@@ -1,9 +1,9 @@
 import * as pw from '@playwright/test';import{execFileSync}from'node:child_process';import{rmSync}from'node:fs';
-const store='/tmp/ratchet120-extra.sqlite',base='http://127.0.0.1:3699',engine=process.argv[2]??'chromium',wait=ms=>new Promise(r=>setTimeout(r,ms));
+const store='/tmp/ratchet120.sqlite',base='http://127.0.0.1:3698',engine=process.argv[2]??'chromium',wait=ms=>new Promise(r=>setTimeout(r,ms));
 for(const s of['','-wal','-shm'])rmSync(store+s,{force:true});execFileSync('node',['--no-warnings','tests/evidence/b21/seed.ts',store]);
 const b=await pw[engine].launch(),c=await b.newContext({serviceWorkers:'block',viewport:{width:1280,height:900}}),p=await c.newPage();p.setDefaultTimeout(2000);const errors=[];p.on('pageerror',e=>errors.push(e.message));await p.goto(base+'/pages?page=b');await p.locator('.synced-label-button').waitFor();await wait(800);
 let release,seen;const held=new Promise(r=>release=r),arrived=new Promise(r=>seen=r);await p.route('**/_serverFn/**',async r=>{if((r.request().postData()??'').includes('unsync-block')){seen();await held}await r.continue().catch(()=>{})});
-await p.locator('.bn-inline-content',{hasText:'Shared one'}).first().hover();await p.locator('.synced-label-button').click();await p.getByRole('menuitem',{name:'Unsync here',exact:true}).click();await arrived;await wait(250);
+await p.locator('.bn-inline-content',{hasText:'Shared one'}).first().hover();await p.locator('.synced-label-button').click();await p.getByRole('menuitem',{name:'Unsync here',exact:true}).click();await arrived;await wait(700);
 const capture=()=>p.evaluate(()=>({busy:document.querySelector('.continuous-editor')?.getAttribute('aria-busy'),editable:document.querySelector('.bn-editor')?.getAttribute('contenteditable'),pointer:getComputedStyle(document.querySelector('.continuous-editor')).pointerEvents,text:document.body.innerText,active:document.activeElement?.outerHTML.slice(0,200)}));
-console.log('HELD',JSON.stringify(await capture()));await p.screenshot({path:'tests/evidence/ratchet-race-fix/lock-'+engine+'.png'});
+console.log('HELD',JSON.stringify(await capture()));await p.screenshot({path:'tests/evidence/ratchet-race-fix/retest-lock-'+engine+'.png'});
 await p.locator('.bn-inline-content',{hasText:'Below on B'}).click({force:true});await p.keyboard.type(' TYPED WHILE WAITING');await wait(300);console.log('AFTER KEYS',JSON.stringify(await capture()));release();await wait(2000);console.log('RELEASED',JSON.stringify(await capture()));console.log('ERRORS',JSON.stringify(errors));await b.close();
