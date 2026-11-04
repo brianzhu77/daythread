@@ -4,7 +4,7 @@ import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository
 import type { DatabaseChange } from '../../../src/domain/database.ts'
 import { storedFormula, worldOf } from '../../../src/domain/formula.ts'
 import type { Action } from '../../../src/domain/types.ts'
-if (!process.argv[2]) { console.error('Usage: node tests/evidence/formula/seed.ts <store-path> [written|hundred|linked] (a throwaway SQLite file, never his data)'); process.exit(2) }
+if (!process.argv[2]) { console.error('Usage: node tests/evidence/formula/seed.ts <store-path> [written|hundred|linked|styled|clock] (a throwaway SQLite file, never his data)'); process.exit(2) }
 const repo = new SqliteWorkspaceRepository(process.argv[2]!, undefined, { allowMissingLegacy: true })
 let ws = await repo.load()
 const run = async (action: Action) => { ws = (await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: ws.revision, action })).workspace }
@@ -42,6 +42,11 @@ if (process.argv[3] === 'linked') {
   await formula('doubled', 'Doubled', 'sum(By.Double)')
   await maker({ kind: 'addProperty', property: { id: 'shops', name: 'Shops', type: 'relation', target: 'shop' } })
   await formula('ages', 'Ages', 'sum(By.Age)')
+}
+if (process.argv[3] === 'styled') {
+  await formula('flag', 'Flag', 'style(Name, "b", "red", "yellow_background")')
+  await formula('site', 'Site', 'link("Open", "https://example.com/" + Name)')
+  await formula('trap', 'Trap', 'link("Danger", "javascript:alert(1)")')
 }
 if (process.argv[3] === 'clock') await formula('day', 'Day', 'formatDate(today(), "YYYY-MM-DD")')
 console.log('seeded', process.argv[2])

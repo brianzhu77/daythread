@@ -2,32 +2,33 @@
 // functions to pick from: beside it at 1280, one tap away at 390. What doesn't work can't replace what does: Done says why, and Cancel leaves it.
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { databaseRows, titleId, type Database } from '../domain/database'
-import { checkTyped, clockIn, previewFormula, shownFormula, worldOf } from '../domain/formula'
+import { checkTyped, clockIn, previewFormula, shownFormula, worldOf, writtenName } from '../domain/formula'
 import { functionList } from '../domain/formula-functions'
 import type { Page, Workspace } from '../domain/types'
 import { displayPageTitle } from './page-title'
 
 const shortened = (text: string) => (text.length > 300 ? `${text.slice(0, 300)}…` : text)
 const groups = ['Logic and text', 'Numbers', 'Dates', 'Lists', 'Other'] as const
-const quoted = (name: string) => `prop("${name.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}")`
 
-function Reference({ db, propertyId, insert }: { db: Database; propertyId: string; insert(text: string, caretBack?: number): void }) {
-  const [picked, setPicked] = useState<(typeof functionList)[number] | null>(null)
+type FunctionDoc = (typeof functionList)[number]
+const Doc = ({ of }: { of: FunctionDoc }) => <div className="formula-doc">
+  <p className="formula-doc-name">{of.name}</p>
+  <p>{of.doc}</p>
+  {of.example && <code>{of.example}</code>}
+</div>
+
+function Reference({ db, propertyId, picked, setPicked, insert, wide }: { db: Database; propertyId: string; picked: FunctionDoc | null; setPicked(f: FunctionDoc): void; insert(text: string, caretBack?: number): void; wide: boolean }) {
   const names = [{ id: titleId, name: 'Name' }, ...db.properties.filter(p => p.id !== propertyId)]
   return <div className="formula-reference">
     <div className="formula-list" role="list" aria-label="Properties and functions">
       <p className="formula-group">Properties</p>
-      {names.map(p => <button key={p.id} type="button" className="formula-item" onClick={() => insert(quoted(p.name))}>{p.name}</button>)}
+      {names.map(p => <button key={p.id} type="button" className="formula-item" onClick={() => insert(writtenName(p.name))}>{p.name}</button>)}
       {groups.map(group => <div key={group}>
         <p className="formula-group">{group}</p>
         {functionList.filter(f => f.group === group).map(f => <button key={f.name} type="button" className={`formula-item is-function${picked?.name === f.name ? ' is-active' : ''}`} onClick={() => { setPicked(f); insert(`${f.name}()`, 1) }}>{f.name}</button>)}
       </div>)}
     </div>
-    {picked && <div className="formula-doc">
-      <p className="formula-doc-name">{picked.name}</p>
-      <p>{picked.doc}</p>
-      {picked.example && <code>{picked.example}</code>}
-    </div>}
+    {wide && picked && <Doc of={picked} />}
   </div>
 }
 
@@ -38,6 +39,7 @@ export function FormulaEditor({ workspace, read, db, propertyId, stored, wide, o
   const [settled, setSettled] = useState(text)
   const [refused, setRefused] = useState(false)
   const [listOpen, setListOpen] = useState(false)
+  const [picked, setPicked] = useState<FunctionDoc | null>(null)
   const composing = useRef(false)
   const field = useRef<HTMLTextAreaElement>(null)
   const caret = useRef<number | null>(null)
@@ -77,6 +79,8 @@ export function FormulaEditor({ workspace, read, db, propertyId, stored, wide, o
       <p className={`formula-status${message ? ' is-error' : ''}`} role="status">
         {message ?? (preview && 'text' in preview && row ? <><span className="formula-preview-of">{displayPageTitle(row)}</span> {shortened(preview.text) || 'Empty'}</> : null)}
       </p>
+      {/* The list closes on a pick, on the phone, so what was picked is explained here. */}
+      {!wide && picked && !listOpen && <Doc of={picked} />}
       <div className="formula-actions">
         {!wide && <button type="button" className="formula-list-toggle" aria-expanded={listOpen} onClick={() => setListOpen(o => !o)}>Properties and functions</button>}
         <span className="formula-actions-end">
@@ -85,6 +89,6 @@ export function FormulaEditor({ workspace, read, db, propertyId, stored, wide, o
         </span>
       </div>
     </div>
-    {(wide || listOpen) && <Reference db={db.database} propertyId={propertyId} insert={insert} />}
+    {(wide || listOpen) && <Reference db={db.database} propertyId={propertyId} picked={picked} setPicked={setPicked} insert={insert} wide={wide} />}
   </div>
 }

@@ -102,7 +102,7 @@ await scenario('Pasted forms: bare names and full-width punctuation; the list in
   r.preview2 = await status(page)
   const box = await menu(page).boundingBox()
   r.onScreen = box.x >= 8 && box.x + box.width <= 1272
-  r.ok = r.onScreen && /Pear cheap/.test(r.preview) && r.docBefore === 0 && r.inserted === 'round()' && /nearest whole/.test(r.doc) && r.caretKept === 'round(prop("Price"))' && /Pear 2/.test(r.preview2)
+  r.ok = r.onScreen && /Pear cheap/.test(r.preview) && r.docBefore === 0 && r.inserted === 'round()' && /nearest whole/.test(r.doc) && r.caretKept === 'round(Price)' && /Pear 2/.test(r.preview2)
   return r
 })
 
@@ -122,13 +122,13 @@ await scenario('Rename: same result. Delete: Error in red with the reason in its
   const totalCell = page.locator('.database-row[data-row="pear"] .cell-error').first()
   r.errorText = await totalCell.innerText()
   r.colour = await totalCell.evaluate(e => getComputedStyle(e).color)
-  r.red = await page.evaluate(() => { const s = document.createElement('span'); s.style.color = 'var(--red)'; document.body.append(s); const c = getComputedStyle(s).color; s.remove(); return c })
+  r.red = await page.evaluate(() => { const s = document.createElement('span'); s.style.color = 'var(--formula-red)'; document.body.append(s); const c = getComputedStyle(s).color; s.remove(); return c })
   await openProperty(page, 'Total')
   r.reason = await menu(page).locator('.is-error').innerText()
   await page.keyboard.press('Escape'); await wait(300)
   await page.locator('.toast__action').first().click(); await wait(1200)
   r.undone = await cells(page, 'pear')
-  r.ok = r.before.includes('6') && r.renamed.includes('6') && r.shown === 'prop("Price") * prop("Count")' && r.errorText === 'Error' && r.colour === r.red && /deleted/.test(r.reason) && r.undone.includes('6') && !(await page.locator('.database-row[data-row="pear"] .cell-error', { hasText: /^Error$/ }).count())
+  r.ok = r.before.includes('6') && r.renamed.includes('6') && r.shown === 'Price * Count' && r.errorText === 'Error' && r.colour === r.red && /deleted/.test(r.reason) && r.undone.includes('6') && !(await page.locator('.database-row[data-row="pear"] .cell-error', { hasText: /^Error$/ }).count())
   return r
 })
 
@@ -183,7 +183,7 @@ await scenario('390: the sheet, the list one tap away, nothing past the edge, 44
   await field(page).fill('Price * Qty'); await wait(150)
   await done(page); await wait(1000)
   r.stored = store().pages.find(p => p.id === 'shop').database.properties.at(-1).formula
-  r.ok = /Pear 6/.test(r.preview) && r.listHidden === 0 && r.sheet.x === 0 && r.sheet.right === 390 && r.listShown === 1 && r.itemHeight >= 44 && /prop\("Name"\)/.test(r.afterInsert) && r.listClosed === 0 && r.overflow <= 0 && r.stored === 'prop("price") * prop("qty")'
+  r.ok = /Pear 6/.test(r.preview) && r.listHidden === 0 && r.sheet.x === 0 && r.sheet.right === 390 && r.listShown === 1 && r.itemHeight >= 44 && /Name/.test(r.afterInsert) && r.listClosed === 0 && r.overflow <= 0 && r.stored === 'prop("price") * prop("qty")'
   return r
 }, phone)
 
@@ -248,6 +248,20 @@ await scenario('A pathological pattern and repeat don\'t hang the tab, at 390', 
   r.ok = /Too long|false/.test(r.regex) && /Too long/.test(r.repeat) && /Too long/.test(r.nested) && r.ms < 4000
   return r
 }, phone)
+
+await scenario('style and link draw in the cell; only http and https are links; the cell can still be read', 'styled', async page => {
+  const r = {}
+  const row = page.locator('.database-row[data-row="pear"]')
+  const flag = row.locator('.formula-b')
+  r.flag = await flag.evaluate(e => { const c = getComputedStyle(e); return { text: e.textContent, weight: c.fontWeight, color: c.color, background: c.backgroundColor } })
+  r.expected = await page.evaluate(() => { const s = document.createElement('span'); s.style.color = 'var(--formula-red)'; s.style.background = 'var(--formula-yellow-tint)'; document.body.append(s); const c = getComputedStyle(s); const out = { color: c.color, background: c.backgroundColor }; s.remove(); return out })
+  const links = row.locator('a.cell-url')
+  r.hrefs = await links.evaluateAll(list => list.map(a => [a.textContent, a.getAttribute('href'), a.getAttribute('target'), a.getAttribute('rel')]))
+  r.trapIsWords = await row.getByText('Danger').evaluate(e => e.closest('a') === null)
+  r.rowsTinted = await row.evaluate(e => getComputedStyle(e).backgroundColor)
+  r.ok = r.flag.text === 'Pear' && Number(r.flag.weight) >= 600 && r.flag.color === r.expected.color && r.flag.background === r.expected.background && r.hrefs.length === 1 && r.hrefs[0][1] === 'https://example.com/Pear' && r.hrefs[0][2] === '_blank' && r.hrefs[0][3] === 'noreferrer' && r.trapIsWords
+  return r
+})
 
 // Shanghai has no change of clocks, and Playwright's WebKit and Node disagree about this week's in Vancouver.
 await scenario('today() turns over at local midnight with no reload', 'clock', async page => r_midnight(page), { ...wide, timezoneId: 'Asia/Shanghai' })

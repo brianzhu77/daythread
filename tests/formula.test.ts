@@ -1,7 +1,7 @@
 // Formulas (docs/design/formula.md): Notion's own examples as the expected results, then the language's edges and its limits.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { functionList, format, type Value } from '../src/domain/formula-functions.ts'
+import { functionList, format, FormulaRich, type Value } from '../src/domain/formula-functions.ts'
 import { clockIn, formulaProblem, shownFormula, storedFormula, WorkedCells, type FormulaWorld } from '../src/domain/formula.ts'
 import { LinearRegex, RegexError } from '../src/domain/formula-regex.ts'
 import type { Database, Property } from '../src/domain/database.ts'
@@ -138,10 +138,30 @@ test('a row that breaks a formula reads Error on that row only, and an empty dat
   assert.match(String(shown(run('test("aa", "(a)\\\\1")'))), /aren't supported/)
 })
 
+test('shown as he writes it: a bare name, unless it would read back as something else', () => {
+  const named = (name: string) => worldWith(properties.map(p => (p.id === 'n' ? { ...p, name } : p)))
+  const stored = storedFormula('Number + 1', world, 'db')
+  for (const [name, shown] of [['Two words', 'Two words + 1'], ['价格', '价格 + 1'], ['if', 'prop("if") + 1'], ['Round', 'prop("Round") + 1'], ['current', 'prop("current") + 1'], ['A+B', 'prop("A+B") + 1'], ['say "hi"', 'prop("say \\"hi\\"") + 1']] as const) {
+    const w = named(name)
+    assert.equal(shownFormula(stored, w, 'db'), shown)
+    assert.equal(storedFormula(shownFormula(stored, w, 'db'), w, 'db'), stored, `${name} reads back as the same property`)
+  }
+  // Next to each other, bare names can make another property's name: opening it and pressing Done must change nothing (Bumblebee 55246f49).
+  const close = storedFormula('Number-Number', world, 'db')
+  const joined = worldWith([...properties, { id: 'nn', name: 'Number-Number', type: 'number' }])
+  assert.equal(shownFormula(close, joined, 'db'), 'prop("Number")-prop("Number")')
+  assert.equal(storedFormula(shownFormula(close, joined, 'db'), joined, 'db'), close)
+  assert.equal(shownFormula(close, world, 'db'), 'Number-Number', 'bare while nothing else has that name')
+  // A let could take the name for its own, so inside one every property stays spelled out.
+  const shadow = storedFormula('let(x, 1, x + Number)', world, 'db')
+  const shadowed = named('x')
+  assert.equal(shownFormula(shadow, shadowed, 'db'), 'let(x, 1, x + prop("x"))')
+  assert.equal(storedFormula(shownFormula(shadow, shadowed, 'db'), shadowed, 'db'), shadow)
+})
 test('what is stored names properties by id, spacing kept; a rename reads through, and a deleted one is named as such', () => {
   const stored = storedFormula('Number  + prop("Text")', world, 'db')
   assert.equal(stored, 'prop("n")  + prop("t")')
-  assert.equal(shownFormula(stored, worldWith(properties.map(p => (p.id === 'n' ? { ...p, name: 'Count' } : p))), 'db'), 'prop("Count")  + prop("Text")')
+  assert.equal(shownFormula(stored, worldWith(properties.map(p => (p.id === 'n' ? { ...p, name: 'Count' } : p))), 'db'), 'Count  + Text')
   const without = worldWith(properties.filter(p => p.id !== 'n'))
   assert.equal(shownFormula(stored, without, 'db'), 'prop("Deleted property")  + prop("Text")')
   assert.match(formulaProblem(stored, without, 'db', 'f')!, /deleted/)
@@ -169,6 +189,22 @@ test('a formula made to be slow runs out at its row, and the rest of the view is
   const r: Property = { id: 'f', name: 'F', type: 'formula', formula: backtrack }
   assert.equal(runRow([...properties, r], r).value, false)
   assert.ok(performance.now() - started < 200, `took ${performance.now() - started} ms`)
+})
+
+test('style and link keep their words for everything else, and only http and https become links', () => {
+  const rich = (typed: string) => run(typed) as unknown as FormulaRich
+  assert.deepEqual(rich('style("Notion", "b", "u")').runs, [{ text: 'Notion', b: true, u: true }])
+  assert.deepEqual(rich('style("Notion", "blue", "gray_background")').runs, [{ text: 'Notion', color: 'blue', background: 'gray' }])
+  assert.deepEqual(rich('"Notion".style("b").style("red")').runs, [{ text: 'Notion', b: true, color: 'red' }])
+  assert.deepEqual(rich('"Revenue: " + formatNumber(7, "usd", 0).style("green")').runs, [{ text: 'Revenue: ' }, { text: '$7', color: 'green' }])
+  assert.deepEqual(rich('unstyle(style("x", "b", "red"))').runs, [{ text: 'x' }])
+  assert.deepEqual(rich('unstyle(style("x", "b", "red"), "b")').runs, [{ text: 'x', color: 'red' }])
+  assert.deepEqual(rich('link("Notion", "https://notion.so")').runs, [{ text: 'Notion', href: 'https://notion.so' }])
+  assert.deepEqual(rich('join([style("a", "b"), "c"], "-")').runs, [{ text: 'a', b: true }, { text: '-' }, { text: 'c' }])
+  for (const unsafe of ['javascript:alert(1)', 'data:text/html,x', 'file:///etc/passwd', 'not a url', ' JaVaScRiPt:alert(1)']) assert.equal(run(`link("x", "${unsafe}")`), 'x', unsafe)
+  // Everything else reads the words.
+  for (const [typed, expected] of [['length(style("abc", "b"))', 3], ['upper(style("abc", "b"))', 'ABC'], ['style("a", "b") == "a"', true], ['style("b", "b") > "a"', true], ['contains(style("abc", "i"), "b")', true], ['empty(style("", "b"))', true], ['format(style("a", "b"))', 'a']] as const) assert.deepEqual(run(typed), expected, typed)
+  assert.match((run('style("a", "sparkle")') as Error).message, /"sparkle" isn't a style/)
 })
 
 test('dates read in the zone asked for, so the Worker and the browser agree', () => {

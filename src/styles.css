@@ -1888,7 +1888,34 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-menu input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(--ink); }
 .database-menu-field, .database-menu > input { margin: 2px 6px 6px; }
 .database-menu-quiet.is-error { color: var(--red); }
-.cell-error { color: var(--red); }
+.cell-error { color: var(--formula-red); }
+/* A formula's `style`: only colour he typed, inside its own cell (formula design §7). Radix's text and tint steps, and in light the text a little darker so every colour reads at 4.5:1 on hover, a picked row and every tint (tests/evidence/formula/contrast.mjs). */
+:root { --formula-gray: #646464; --formula-gray-tint: #f0f0f0; --formula-brown: #815e46; --formula-brown-tint: #f6eee7; --formula-orange: #b84600; --formula-orange-tint: #ffefd6; --formula-yellow: #8f6200; --formula-yellow-tint: #fffab8; --formula-green: #1e7951; --formula-green-tint: #e6f6eb; --formula-blue: #0c6cc0; --formula-blue-tint: #e6f4fe; --formula-purple: #8145b5; --formula-purple-tint: #f7edfe; --formula-pink: #c02989; --formula-pink-tint: #fee9f5; --formula-red: #ca2b30; --formula-red-tint: #feebec; }
+@media (prefers-color-scheme: dark) { :root { --formula-gray: #b4b4b4; --formula-gray-tint: #222222; --formula-brown: #dbb594; --formula-brown-tint: #2e201a; --formula-orange: #ffa057; --formula-orange-tint: #331e0b; --formula-yellow: #f5e147; --formula-yellow-tint: #2d2305; --formula-green: #3dd68c; --formula-green-tint: #132d21; --formula-blue: #70b8ff; --formula-blue-tint: #0d2847; --formula-purple: #d19dff; --formula-purple-tint: #301c3b; --formula-pink: #ff8dcc; --formula-pink-tint: #37172f; --formula-red: #ff9592; --formula-red-tint: #3b1219; } }
+.formula-b { font-weight: 600; }
+.formula-i { font-style: italic; }
+.formula-u { text-decoration: underline; }
+.formula-s { text-decoration: line-through; }
+.formula-u.formula-s { text-decoration: underline line-through; }
+.formula-c { font-family: var(--font-mono, ui-monospace, monospace); font-size: .9em; }
+.formula-color-gray { color: var(--formula-gray); }
+.formula-bg-gray { background: var(--formula-gray-tint); border-radius: 3px; }
+.formula-color-brown { color: var(--formula-brown); }
+.formula-bg-brown { background: var(--formula-brown-tint); border-radius: 3px; }
+.formula-color-orange { color: var(--formula-orange); }
+.formula-bg-orange { background: var(--formula-orange-tint); border-radius: 3px; }
+.formula-color-yellow { color: var(--formula-yellow); }
+.formula-bg-yellow { background: var(--formula-yellow-tint); border-radius: 3px; }
+.formula-color-green { color: var(--formula-green); }
+.formula-bg-green { background: var(--formula-green-tint); border-radius: 3px; }
+.formula-color-blue { color: var(--formula-blue); }
+.formula-bg-blue { background: var(--formula-blue-tint); border-radius: 3px; }
+.formula-color-purple { color: var(--formula-purple); }
+.formula-bg-purple { background: var(--formula-purple-tint); border-radius: 3px; }
+.formula-color-pink { color: var(--formula-pink); }
+.formula-bg-pink { background: var(--formula-pink-tint); border-radius: 3px; }
+.formula-color-red { color: var(--formula-red); }
+.formula-bg-red { background: var(--formula-red-tint); border-radius: 3px; }
 /* Edit formula: the text and what it gives on the left, what to pick from beside it. */
 .database-menu:has(.formula-editor) { width: min(620px, calc(100vw - 16px)); max-height: min(80vh, 560px); }
 .formula-editor { display: flex; gap: 10px; min-height: 0; padding: 2px 6px 6px; }
@@ -1896,16 +1923,19 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .formula-field { box-sizing: border-box; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-row); background: transparent; color: var(--ink); font: inherit; resize: vertical; outline: none; }
 .formula-field:focus, .formula-field:focus-visible { border-color: var(--blue); outline: none; box-shadow: none; }
 .formula-status { min-height: 1.4em; margin: 0; color: var(--ink); font-size: var(--text-meta); overflow-wrap: anywhere; }
-.formula-status.is-error { color: var(--red); }
+.formula-status.is-error { color: var(--formula-red); }
+.formula-editor[data-refused] .formula-field { border-color: var(--formula-red); }
+.formula-editor[data-refused] .formula-status { font-weight: var(--weight-semibold, 600); }
 .formula-preview-of { color: var(--ink-3); }
 .formula-preview-of::after { content: ' ·'; }
 .formula-actions { display: flex; align-items: center; gap: 8px; margin-top: auto; }
 .formula-actions-end { display: flex; gap: 6px; margin-left: auto; }
 .formula-actions button { min-height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-row); background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
 .formula-actions .formula-done { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.formula-actions .formula-done:hover, .formula-actions .formula-done:active { border-color: var(--ink); background: var(--ink); color: var(--paper); opacity: .85; }
 .formula-reference { display: flex; flex: 1 1 40%; flex-direction: column; gap: 6px; min-width: 0; max-height: 420px; }
 .formula-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.formula-group { margin: 6px 0 2px; color: var(--ink-3); font-size: var(--text-meta); }
+.formula-group { margin: 6px 0 2px; padding-left: 6px; color: var(--ink-2); font-size: var(--text-meta); }
 .database-menu .formula-item { display: block; width: 100%; min-height: 28px; padding: 3px 6px; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink); font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .database-menu .formula-item:hover, .database-menu .formula-item.is-active { background: var(--hover-dim); }
 .formula-doc { flex: none; padding-top: 6px; border-top: 1px solid var(--line-soft); font-size: var(--text-meta); }
