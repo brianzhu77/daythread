@@ -1,0 +1,14 @@
+PASS at 1280 the head has the path, and ↑ ↓ ⋯ ↗ × {"panel":600,"height":40,"buttons":5,"inside":true,"overlapping":false,"pathOver":false,"words":"Pages … Build the site","navWidth":397}
+PASS at side peek's narrowest it's one line {"panel":420,"height":40,"buttons":5,"inside":true,"overlapping":false,"pathOver":false,"words":"Pages … Build the site","navWidth":217}
+PASS and every button is still there, whole {"panel":420,"height":40,"buttons":5,"inside":true,"overlapping":false,"pathOver":false,"words":"Pages … Build the site","navWidth":217}
+PASS the path gives way first, folding its middle "Pages … Build the site"
+PASS the folded levels are still there "Launch the app,Work,Projects"
+PASS Esc shuts that first, not the peek 
+PASS as a center peek too {"panel":860,"height":40,"buttons":5,"inside":true,"overlapping":false,"pathOver":false,"words":"Pages Projects Work Launch the app Build the site","navWidth":658}
+PASS tapping a level opens it as a full page "http://127.0.0.1:3698/pages?page=site"
+PASS and what was just typed is saved 
+PASS Back returns to where it was "http://127.0.0.1:3698/pages?page=work&peek=copy&side=1"
+PASS with the words there 
+PASS and × closes it, staying on that page "http://127.0.0.1:3698/pages?page=work"
+PASS no page errors []
+ALL PASS

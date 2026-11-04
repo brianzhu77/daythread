@@ -1,0 +1,1 @@
+import{SqliteWorkspaceRepository}from'../../../src/server/sqlite-repository.ts';const r=new SqliteWorkspaceRepository(process.argv[2]!,undefined,{allowMissingLegacy:true}),ws=await r.load();await r.execute({operationId:crypto.randomUUID(),expectedRevision:ws.revision,action:{type:'add-task',pageId:'copy',title:'Peek task'}});
