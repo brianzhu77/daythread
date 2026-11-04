@@ -1887,6 +1887,21 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-menu select { padding-right: 4px; }
 .database-menu input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(--ink); }
 .database-menu-field, .database-menu > input { margin: 2px 6px 6px; }
+/* Import CSV: every column with its first values and where it goes, then what will happen. */
+.csv-import { position: fixed; top: 10vh; left: 50%; transform: translateX(-50%); width: min(640px, calc(100vw - 16px)); max-height: 80vh; gap: 6px; padding: 8px; }
+.csv-import-scrim { display: block; position: fixed; inset: 0; z-index: 59; background: var(--scrim); }
+.csv-import-columns { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; }
+.csv-import-column { display: grid; grid-template-columns: minmax(0, 1fr) 150px; align-items: center; gap: 4px 10px; padding: 4px 6px; border-top: 1px solid var(--line-soft); }
+.csv-import-words { display: flex; flex-direction: column; min-width: 0; }
+.csv-import-header { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }
+.database-menu-quiet.csv-import-samples { padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.csv-import-bad { grid-column: 1 / -1; color: var(--red); font-size: var(--text-meta); }
+.csv-import-summary { padding: 4px 6px; font-size: var(--text-meta); }
+.csv-import-summary p { margin: 0 0 2px; overflow-wrap: anywhere; }
+.csv-import .formula-actions { display: flex; }
+.csv-import .formula-actions-end { display: flex; gap: 6px; margin-left: auto; }
+.csv-import .formula-actions button { min-height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-row); background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+.csv-import .formula-actions .formula-done { border-color: var(--ink); background: var(--ink); color: var(--paper); }
 .database-menu-quiet.is-error { color: var(--red); }
 .database-menu-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; color: var(--ink); }
 /* A filter or sort rule: property → condition → value on one line when it fits, then wrapping. */
@@ -1960,6 +1975,9 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
   .database-menu::before { content: ''; flex: none; align-self: center; width: 36px; height: 5px; margin-bottom: 6px; border-radius: 3px; background: var(--check); }
   .database-menu > button[role=menuitem], .database-menu-head, .database-property-line, .database-menu-row { min-height: 44px; }
   .database-menu input:not([type=checkbox]), .database-menu select { min-height: 40px; font-size: 16px; }
+  .csv-import { top: auto; left: 0; transform: none; width: auto; max-height: 85vh; }
+  .csv-import-column { grid-template-columns: minmax(0, 1fr) 130px; }
+  .csv-import .formula-actions button { min-height: 44px; }
   .database-more-button { width: 44px; height: 44px; margin-right: -8px; }
 }
 @media (max-width: 899px) and (prefers-reduced-motion: reduce) { .database-menu { animation: none; } }

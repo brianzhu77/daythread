@@ -16,6 +16,7 @@ import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { linkedViewJson, linkedViewOf } from '../domain/linked-view'
+import { chooseCsv } from './csv-import'
 import { blockLinesKey, blockUpdates, mirroredLines, ownLineIds, syncedBlockType, syncedPlaces, writtenDocument, type BlockUpdate } from '../domain/synced'
 import { syncedKeys } from './synced-keys'
 import { SyncedEditorActions, SyncedLabel, type SyncedActions } from './synced-label'
@@ -1321,6 +1322,15 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (!created) { setDatabasePending(pageId, { state: 'failed', retry }); setStatus('Database not created · tap it to retry'); return }
     setDatabasePending(pageId, null)
     requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`.database-title[data-database="${CSS.escape(pageId)}"]`)?.focus())
+  }
+  /** An imported database's block goes in and saves first, so the import is the last change and one Undo can take it. */
+  async function placeImportedDatabase(pageId: string): Promise<string | null> {
+    const blockId = insertDatabaseBlock({ pageId })
+    madeHere.current.add(pageId)
+    setDatabasePending(pageId, { state: 'creating', retry: () => {} })
+    await flushRef.current()
+    setDatabasePending(pageId, null)
+    return blockId
   }
   async function confirmSubpage(pageId: string, cardId: string | undefined, open: boolean) {
     const retry = () => void confirmSubpage(pageId, cardId, false)
@@ -2638,6 +2648,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           editor.setTextCursorPosition(lineId, 'start')
         } }
         const pageItem = { title: 'Page', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
+        // Pick the file, see the preview, and only then does a block appear (R4-8).
+        const csvItem = { title: 'CSV', icon: <span className="slash-grid-icon" aria-hidden>▦</span>, aliases: ['csv', 'import', 'tsv', '导入'], group: 'Other', onItemClick: () => chooseCsv({ kind: 'new', parentId: page.id, place: placeImportedDatabase }) }
         const databaseItem = { title: 'Database', icon: <span className="slash-grid-icon" aria-hidden>▦</span>, aliases: ['database', 'table', 'db', '数据库', '表格'], group: 'Suggested', onItemClick: chooseDatabase }
         // A9a §3: the phone's way to `[[` (v0.3's toolbar button), through the same + menu.
         const linkItem = { title: 'Link to page', icon: <PagesIcon />, aliases: ['link', '[[', '链接', '引用'], group: 'Suggested', onItemClick: () => {
@@ -2647,7 +2659,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // Every item stays in the list; the menu scrolls past about 8 rows (F13). A cut hid Quote until its name was typed.
         // Database sits after Page and Link to page (design §3.1). In a template, only a linked view can be made, so it
         // needs a database to show (§9.4).
-        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, databaseItem, syncedItem, ...first, ...rest], query)
+        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, databaseItem, syncedItem, ...first, ...rest, ...(onTemplate ? [] : [csvItem])], query)
       }} />
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}

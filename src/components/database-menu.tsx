@@ -9,6 +9,7 @@ import type { Page, Workspace } from '../domain/types'
 import { rollupFunctionsFor } from '../domain/relations'
 import { databaseSource, readingWorkspace, todosSourceId, todosTitle } from '../domain/todos-source'
 import { startPicking, blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange } from './database-block'
+import { chooseCsv } from './csv-import'
 import { exportDatabase } from './database-export'
 import { todayIso } from './dates'
 import { flushAllEditors } from './editor-flush'
@@ -166,6 +167,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     {inline && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.turnIntoPage(blockId, db.id) }}>Turn into page</button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={copyLink}>Copy link</button>}
     <button type="button" role="menuitem" onClick={() => go('export')}>Export<span className="database-menu-chevron">›</span></button>
+    {!db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); chooseCsv({ kind: 'merge', databaseId: db.id }) }}>Merge with CSV</button>}
     <hr />
     {linked
       ? <button type="button" role="menuitem" className="is-danger" onClick={() => { close(); actions?.remove(blockId) }}>Remove this view</button>
