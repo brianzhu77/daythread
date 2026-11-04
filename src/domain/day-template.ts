@@ -1,6 +1,7 @@
 import type { LocalDate, Page, Workspace } from './types.ts'
 import { dayTemplate, emptyLine, emptyTaskRow, headingNode, inlineText, pageNodes, type EditorNode } from './editor-document.ts'
 import { readMention } from './date-chip.ts'
+import { isSyncedBlock } from './synced.ts'
 
 // B70 (Brian 27f8c724, Lead 4f1dfc60): templates are pages of their own (`type: "template"`), edited with the normal
 // editor and listed under Templates. A template can be the default for one target, kept in its `parentId` so no
@@ -65,7 +66,8 @@ export function templateRows(nodes: EditorNode[]): EditorNode[] {
 
 /** The page is still the template's copy as it was made: same types, words and nesting (ids aside). */
 export function isUntouchedCopy(template: Page, nodes: readonly EditorNode[]): boolean {
-  const shape = (list: readonly EditorNode[]): unknown[] => list.map(n => [n.type, inlineText(n.content).trim(), shape(n.children ?? [])])
+  // A synced block's lines aren't this page's writing: they're the same on every page, or another's edit would make it look touched.
+  const shape = (list: readonly EditorNode[]): unknown[] => list.map(n => (isSyncedBlock(n) ? [n.type] : [n.type, inlineText(n.content).trim(), shape(n.children ?? [])]))
   return JSON.stringify(shape(nodes)) === JSON.stringify(shape(pageFromTemplate(template, null)))
 }
 
@@ -90,8 +92,12 @@ function freshInline(content: unknown): unknown {
  * (planned on `date` for a day page) with fresh task ids. Page cards and other blocks aren't copied: a card would point
  * every new page at the same page.
  */
-export function pageFromTemplate(template: Page, date: LocalDate | null, todo?: (row: EditorNode) => EditorNode): EditorNode[] {
+export function pageFromTemplate(template: Page, date: LocalDate | null, todo?: (row: EditorNode) => EditorNode, isOriginal: (n: EditorNode) => boolean = () => false): EditorNode[] {
   const copy = (n: EditorNode): EditorNode[] => {
+    // Made on the template: each new page gets its own, connected to nothing. A copy pasted into it stays connected, its lines read
+    // from the record, so one note is edited once on every new day (design §7).
+    if (isSyncedBlock(n) && !isOriginal(n)) return [{ id: crypto.randomUUID(), type: n.type, props: { syncId: String(n.props?.syncId), roles: '' }, children: [] }]
+    if (isSyncedBlock(n)) return [{ id: crypto.randomUUID(), type: n.type, props: { syncId: crypto.randomUUID(), roles: '' }, children: (n.children ?? []).flatMap(copy) }]
     const children = (n.children ?? []).flatMap(copy)
     if (!copiedTypes.has(n.type)) return children
     if (n.type === 'task' || n.type === 'checkListItem') return [{ ...(todo ? todo(n) : emptyTaskRow(date)), children }]

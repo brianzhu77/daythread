@@ -61,6 +61,8 @@ R4-8 asks for up to 10,000 rows as one change with one Undo. **That's a single c
 - **First choice:** state a lower limit and refuse clearly above it, as the row allows.
 - **Not acceptable:** splitting into batches that break "one Undo", or a partial import that stops midway and leaves some rows.
 
+**Measured (Roadbuster f4d4ebd1):** 10,000 rows and 5 columns as one command fits: 640 ms on `wrangler dev` with local Postgres, and Undo works. But every command reads the whole workspace, so an ordinary save afterwards goes from 2 ms to about 100 ms. With Node's heap capped at 100 MB as a stand-in for the Worker's 128 MB, two imports worked and the third ran out of memory, and on the Worker that would likely stop the app loading. So R4-8 has **a workspace size limit as well as the row limit, about 10 MB (Lead 6934c378).** A deployed run confirms the ceiling if Roadbuster can get one. Brian's pages and tasks were 106 KB on Nov 3, after 13 days of day pages, about 8 KB a day, which is about 3 years to 10 MB at that rate. That's a small sample.
+
 ## 6. Open
 
 - **Roadbuster:** §5's measure on the Worker. And the paste limit in §3.
