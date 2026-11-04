@@ -53,13 +53,15 @@ export function MoveRowDialog({ row, onClose }: { row: Page; onClose: () => void
             <button type="button" className="app-link" onClick={onClose}>Cancel</button>
           </header>
           {asking
-            ? <div className="move-list" role="alertdialog" aria-label={`Move to ${displayPageTitle(asking.to)}`}>
+            ? <div className="move-confirm" role="alertdialog" aria-label={`Move to ${displayPageTitle(asking.to)}`}>
                 <p className="move-group">To {displayPageTitle(asking.to)}</p>
-                {asking.lines.map(line => <p key={line} className="move-note">{line}</p>)}
+                {asking.lines.map(line => <p key={line} className="move-lost">{line}</p>)}
                 <p className="move-note">Undo brings them back.</p>
-                <button type="button" role="option" aria-selected="true" className="move-row active" onClick={() => void send(asking.to)}><span className="move-row-text"><span>Move</span></span></button>
-                <button type="button" role="option" aria-selected="false" className="move-row" onClick={() => setAsking(null)}><span className="move-row-text"><span>Back</span></span></button>
                 {refused && <p className="move-refused" role="status">{refused}</p>}
+                <div className="move-confirm-actions">
+                  <button type="button" className="move-back" onClick={() => setAsking(null)}>Back</button>
+                  <button type="button" className="move-go" autoFocus onClick={() => void send(asking.to)}>Move</button>
+                </div>
               </div>
             : <>
                 <SearchField aria-label="Search databases" value={query} onChange={setQuery} autoFocus fullWidth>

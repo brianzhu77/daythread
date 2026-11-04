@@ -46,9 +46,9 @@ await scenario('Something lost: it names it first; Back moves nothing; Move does
   await openMove(page); await choose(page, 'Shelf'); await wait(500)
   const r = { said: (await dialog(page).innerText()).replace(/\s+/g, ' ') }
   r.written = store().revision - before
-  await dialog(page).getByRole('option', { name: 'Back' }).click(); await wait(200)
+  await dialog(page).getByRole('button', { name: 'Back', exact: true }).click(); await wait(200)
   await choose(page, 'Shelf'); await wait(400)
-  await dialog(page).getByRole('option', { name: 'Move' }).click(); await wait(1500)
+  await dialog(page).getByRole('button', { name: 'Move', exact: true }).click(); await wait(1500)
   const row = pageOf('dune'), shelf = pageOf('shelf').database.properties.find(p => p.id === 'genre2')
   r.parent = row.parentId; r.values = row.values; r.options = shelf.options.map(o => o.name); r.fav = pageOf('ann').values?.fav ?? null
   await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(1500)
@@ -62,7 +62,7 @@ await scenario('A tab that missed the move: its cell edit is refused with a noti
   await other.goto(`${base}/pages?page=books`); await wait(2200)
   // The other tab mustn't hear about the move before it edits.
   await other.evaluate(() => { window.BroadcastChannel = undefined })
-  await openMove(page); await page.getByRole('searchbox', { name: 'Search databases' }).fill('same'); await wait(100); await choose(page, 'Same'); await wait(500); await dialog(page).getByRole('option', { name: 'Move' }).click(); await wait(1500)
+  await openMove(page); await page.getByRole('searchbox', { name: 'Search databases' }).fill('same'); await wait(100); await choose(page, 'Same'); await wait(500); await dialog(page).getByRole('button', { name: 'Move', exact: true }).click(); await wait(1500)
   const before = JSON.stringify(pageOf('dune').values)
   const shown = await other.locator('.database-row[data-row="dune"]').count()
   const r = { stillShownThere: shown }
@@ -79,7 +79,7 @@ await scenario('390: from the row page\'s menu, in the sheet', async page => {
   await openMove(page)
   const box = await dialog(page).locator('[role=dialog]').first().boundingBox().catch(() => null)
   await page.getByRole('searchbox', { name: 'Search databases' }).fill('same'); await wait(100)
-  await choose(page, 'Same'); await wait(500); await dialog(page).getByRole('option', { name: 'Move' }).click(); await wait(1500)
+  await choose(page, 'Same'); await wait(500); await dialog(page).getByRole('button', { name: 'Move', exact: true }).click(); await wait(1500)
   return { box, parent: pageOf('dune').parentId, overflow: await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), ok: pageOf('dune').parentId === 'same' }
 }, phone)
 await browser.close()
