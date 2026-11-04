@@ -148,6 +148,13 @@ ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'u
   await change({ kind: 'updateView', viewId: view.id, layout: 'timeline', dateBy: 'when' })
   ws = await run({ type: 'add-row', databaseId: timelineId, pageId: crypto.randomUUID(), title: 'Fixture bar', values: { when: { start: today } }, at: new Date().toISOString() })
 }
+// A peek (R4-11, R4-16): a row with every kind of line, over a page with no editor of its own, so the gate measures only the peek's.
+{
+  ws = await run({ type: 'create-database', pageId: 'fixture-peek-db', parentId: null, homeBlockId: null, title: 'Fixture peek' } as never)
+  ws = await run({ type: 'add-row', databaseId: 'fixture-peek-db', pageId: 'fixture-peek-row', title: 'Fixture peek row', values: {}, at: new Date().toISOString() })
+  const row = ws.pages.find(p => p.id === 'fixture-peek-row')!
+  ws = await run({ type: 'save-editor', pageId: row.id, expectedContent: pageContentKey(row), document: JSON.stringify([headingNode('Fixture peek heading'), bullet('Fixture peek line', [bullet('Fixture peek nested')]), bullet('Fixture peek last')]) })
+}
 // Two layers on each layout that has them (R3-13): the gate measures a sub-group's chevron and a board's lanes.
 for (const { layout, id, block } of layered) {
   ws = await run({ type: 'create-database', pageId: id, parentId: scratchId, homeBlockId: block, title: `Fixture two layers, ${layout}` })
