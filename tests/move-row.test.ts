@@ -208,4 +208,16 @@ test('one Undo puts the whole tree back with its links, and the target\'s sub-it
   assert.equal(dbOf(h, 'to').database.subItems, undefined)
   assert.equal(dbOf(h, 'to').database.properties.some(p => /Parent item/.test(p.name)), false)
 })
+test('a database inside something moving isn\'t somewhere it can go: the row, a sub-item or deeper, and nothing changes', () => {
+  const { h } = tree()
+  h.run({ type: 'create-document', title: 'Under', body: '', pageId: 'under', parentId: 'grand' } as never)
+  h.run({ type: 'create-database', pageId: 'nested', homeBlockId: null, title: 'Nested', parentId: 'under' } as never)
+  h.run({ type: 'create-database', pageId: 'inDune', homeBlockId: null, title: 'In Dune', parentId: 'dune' } as never)
+  const before = structuredClone(h.ws.pages)
+  for (const databaseId of ['nested', 'inDune']) assert.throws(() => h.run({ type: 'move-row', pageId: 'dune', databaseId, at }), /inside this row/)
+  assert.deepEqual(h.ws.pages, before)
+  assert.equal(planRowMove(h.ws, row(h), dbOf(h, 'from'), dbOf(h, 'to')).subItems, 3, 'elsewhere still goes')
+  h.run({ type: 'move-row', pageId: 'other', databaseId: 'nested', at })
+  assert.equal(h.ws.pages.find(p => p.id === 'other')!.parentId, 'nested', 'a row outside the tree can go there')
+})
 

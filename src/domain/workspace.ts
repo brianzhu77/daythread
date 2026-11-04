@@ -8,7 +8,7 @@ import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./pa
 import { hasDependencyLoop, shiftDependents, spanOf } from "./dependencies.ts";
 import { descendantsOf, hasLoop, parentIdOf } from "./sub-items.ts";
 import type { SubItems } from "./database.ts";
-import { applyRowMove, rowMoveTree } from "./move-row.ts";
+import { applyRowMove, movesIntoItself, rowMoveTree } from "./move-row.ts";
 import { importRefusal } from "./csv.ts";
 import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
@@ -1032,6 +1032,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const to = databasePage(state, action.databaseId);
       if (to.id === from.id) throw new DomainError("Already there");
       if (to.database.fixed) throw new DomainError("To-dos can't take rows from another database");
+      if (movesIntoItself(state, row, from, to)) throw new DomainError("That database is inside this row");
       if (databaseRows(state, to.id).length + rowMoveTree(state, row, from).length > 10_000) throw new DomainError(`${to.title.trim() || "That database"} is full`);
       applyRowMove(state, row, from, to, isoTime(action.at), newId);
       return { message: `Moved to ${to.title.trim() || "Untitled"}`, entityId: row.id };

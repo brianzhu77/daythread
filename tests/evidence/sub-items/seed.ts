@@ -1,5 +1,5 @@
 // A disposable store for sub-items (R4-4): Work with rows; `on` turns sub-items on and nests some.
-// `move` adds Archive, somewhere to move them to.
+// `move` adds Archive, somewhere to move them to, and Nested, inside a sub-item.
 // Usage: node tests/evidence/sub-items/seed.ts <store-path> [on|move]
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
 import type { DatabaseChange } from '../../../src/domain/database.ts'
@@ -20,5 +20,6 @@ if (process.argv[3] === 'on' || process.argv[3] === 'move') {
 if (process.argv[3] === 'move') {
   await run({ type: 'create-database', pageId: 'archive', homeBlockId: null, title: 'Archive' })
   await run({ type: 'change-database', pageId: 'archive', change: { kind: 'addProperty', property: { id: 'nThere', name: 'N', type: 'number' } } })
+  await run({ type: 'create-database', pageId: 'nested', parentId: 'kid', homeBlockId: null, title: 'Nested' })
 }
 console.log('seeded', process.argv[2])

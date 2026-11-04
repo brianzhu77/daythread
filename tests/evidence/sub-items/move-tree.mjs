@@ -67,6 +67,14 @@ await scenario('A sub-item moved alone: it says it leaves its parent and how man
   r.ok = /1 value won't move: Parent item/.test(r.asked) && /3 sub-items will move with it/.test(r.asked) && /with 3 sub-items/.test(r.notice) && r.parents.join() === 'archive,archive,archive,archive,work' && r.greatUnder?.[0] === 'grand' && r.grandUp === null && r.kidSubs === null
   return r
 })
+await scenario('A database inside the tree isn\'t offered for its parent, and is for a row outside it', async page => {
+  await openMove(page, 'top')
+  const r = { top: await dialog(page).getByRole('option').allInnerTexts() }
+  await openMove(page, 'other')
+  r.other = await dialog(page).getByRole('option').allInnerTexts()
+  r.ok = r.top.join() === 'Archive' && r.other.includes('Nested') && r.other.includes('Archive')
+  return r
+})
 await scenario('A tab that missed the move: its edit to a sub-item is refused with a notice, and writes nothing', async (page, context) => {
   const other = await context.newPage()
   await other.goto(`${base}/pages?page=work`); await wait(2200)

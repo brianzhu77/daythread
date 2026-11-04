@@ -33,6 +33,15 @@ export function rowMoveTree(ws: Workspace, row: Page, from: DatabasePage): Page[
   const links = from.database.subItems
   return links ? [row, ...descendantsOf(ws.pages.filter(p => p.parentId === from.id), links, row.id)] : [row]
 }
+/** Whether the target sits inside something that's moving: a database in a row's own body would end up inside itself (Ratchet 9bdee5a4). */
+export function movesIntoItself(ws: Workspace, row: Page, from: DatabasePage, to: Page): boolean {
+  const moving = new Set(rowMoveTree(ws, row, from).map(r => r.id)), byId = new Map(ws.pages.map(p => [p.id, p])), seen = new Set<string>()
+  for (let at: Page | undefined = to; at && !seen.has(at.id); at = at.parentId ? byId.get(at.parentId) : undefined) {
+    if (moving.has(at.id)) return true
+    seen.add(at.id)
+  }
+  return false
+}
 function work(ws: Workspace, row: Page, from: DatabasePage, to: DatabasePage, tree: ReadonlySet<string>, top: boolean, adding: Adding): Worked {
   const out: Worked = { leftBehind: [], linksLost: [], optionsAdded: [], carried: [], relations: [], incoming: [] }
   const links = from.database.subItems

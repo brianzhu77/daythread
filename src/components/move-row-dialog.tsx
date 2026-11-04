@@ -3,7 +3,7 @@
 import { Modal, SearchField } from '@heroui/react'
 import { useState } from 'react'
 import { databaseOfRow, isDatabase, type Database } from '../domain/database'
-import { planRowMove, type RowMove } from '../domain/move-row'
+import { movesIntoItself, planRowMove, type RowMove } from '../domain/move-row'
 import type { Page } from '../domain/types'
 import { flushAllEditors } from './editor-flush'
 import { displayPageTitle } from './page-title'
@@ -25,7 +25,7 @@ export function MoveRowDialog({ row, onClose }: { row: Page; onClose: () => void
   const [refused, setRefused] = useState<string | null>(null)
   if (!workspace) return null
   const from = databaseOfRow(workspace, row)
-  const all = workspace.pages.filter((p): p is DatabasePage => isDatabase(p) && !p.trashedAt && !p.database.fixed && p.id !== from?.id)
+  const all = workspace.pages.filter((p): p is DatabasePage => isDatabase(p) && !p.trashedAt && !p.database.fixed && p.id !== from?.id && !(from && movesIntoItself(workspace, row, from, p)))
   const q = query.trim().toLowerCase()
   const recent = recentIds()
   const rank = (p: Page) => { const at = recent.indexOf(p.id); return at < 0 ? recent.length : at }
