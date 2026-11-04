@@ -90,6 +90,7 @@ No backfill: it's a write to production data for 4 rows at most, and Brian can r
 - **Evidence against this:** none of the 14 has words Brian wrote, and Brian said "I don't always want to go deeper".
   The site may be what Brian wants most of the time. I still recommend the page: ↗ costs no extra tap, and it's the only
   way to add a note. We have no record of which one gets tapped, so this needs Brian's word after some use (§8).
+- **Replaced by `references.md` (Brian cecb215f), because it hid the day:** the header will keep the real path, with `‹ Bookmarks` ahead of it. As built in #111:
 - **The way back is `Bookmarks`.** `PageHeaderRow` builds its crumb from the parents, so it says the day, and the Home
   Screen app has no Back button: a phone couldn't return to the list. Opened from this list, the address carries
   `from=bookmarks` and the crumb reads `Bookmarks` in place of the parents. Opened any other way, it's unchanged.
