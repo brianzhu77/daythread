@@ -25,6 +25,7 @@ import { newTodo, newTodoRowId, taskIdOfRow, todoChange, todoLine, todoMoves, to
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
 import { DatabaseTimeline } from './database-timeline'
+import { useColumnHeads } from './database-column-heads'
 import { openPeek, peekFloor } from './peek-state'
 import { DatabaseGallery } from './database-gallery'
 import { LinkedDatabase } from './database-linked'
@@ -872,7 +873,11 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
   const openRow = useOpenRow(view, rows)
-  const columns = viewColumns(db.database, view)
+  const wide = useWide()
+  const wrap = useRef<HTMLDivElement>(null)
+  const heads = useColumnHeads({ wide, blockId, databaseId: db.id, view, changeView, wrap })
+  const columns = viewColumns(db.database, view).map(c => { const width = heads.widthOf(c.property.id); return width === undefined ? c : { ...c, width } })
+  const nameWidth = wide ? heads.widthOf(titleId) ?? view.nameWidth : undefined
   const place = blockPlaces.get(blockId)
   const [limit, setLimitState] = useState(place?.limit ?? cap)
   const setLimit = (next: number) => { setLimitState(next); blockPlaces.set(blockId, { scrollLeft: blockPlaces.get(blockId)?.scrollLeft ?? 0, limit: next }) }
@@ -886,7 +891,6 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const { limitOf, showMore, reach } = useGroupLimits(`${blockId}|${view.id}`, cap)
   const { folded, toggle } = useFolds(blockId, view.id)
   const moveRow = useMoveRow(db, view, context, groups)
-  const wide = useWide()
   const returned = useReturnedRow(rows)
   const [reveal, setReveal] = useState<string | null>(null)
   // Several rows at 1280 (design §12): a box on hover at each row's left, Shift for a range, then the bar.
@@ -914,7 +918,6 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   // Rows drag by their ⋮⋮ only while the view isn't sorted (design §7.2); the drop is a move-page among the rows.
   const [drag, setDrag] = useState<{ rowId: string; from: string | null; before: string | null; group: string | null } | null>(null)
   const tbody = useRef<HTMLTableSectionElement>(null)
-  const wrap = useRef<HTMLDivElement>(null)
   const startDrag = (e: ReactPointerEvent, rowId: string, from: string | null) => {
     if (view.sort.length) return
     e.preventDefault()
@@ -1081,9 +1084,9 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     let left = 0
     const at = new Map<string, number>()
     for (const c of columns.slice(0, through + 1)) { at.set(c.property.id, left); left += c.width ?? defaultWidth(c.property) }
-    const room = wrapWidth - left - 240 - 120
+    const room = wrapWidth - left - (nameWidth ?? 240) - 120
     return { at: wrapWidth && room < 0 ? new Map<string, number>() : at, last: through >= 0 ? columns[through]!.property.id : null }
-  }, [wide, view.frozenThrough, columns, wrapWidth])
+  }, [wide, view.frozenThrough, columns, nameWidth, wrapWidth])
   const frozenAt = (id: string) => { const left = frozen.at.get(id); return left === undefined ? {} : { style: { left: `calc(var(--database-name-width) + ${left}px)` } } }
   const frozenClass = (id: string) => (frozen.at.has(id) ? ` is-frozen${frozen.last === id ? ' is-frozen-last' : ''}` : '')
   const footRow = (over: readonly Page[]) => <tr className="database-calc">
@@ -1143,12 +1146,14 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
           </tr>
   return <div className={`database-table-wrap${db.database.fixed ? ' is-todos' : ''}`} ref={wrap} onKeyDown={onKeyDown}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
+    {heads.overlay}
     <div className="database-scroll" ref={scroller} onScroll={onScroll}>
-      <table className={`database-table${view.wrapName || columns.some(c => c.wrap && canWrap(c.property.type)) ? ' has-wrap' : ''}`} style={{ width: `calc(var(--database-name-width) + ${columns.reduce((sum, c) => sum + (c.width ?? defaultWidth(c.property)), addColumnWidth)}px)` }}>
+      <table className={`database-table${view.wrapName || columns.some(c => c.wrap && canWrap(c.property.type)) ? ' has-wrap' : ''}`} style={{ width: `calc(var(--database-name-width) + ${columns.reduce((sum, c) => sum + (c.width ?? defaultWidth(c.property)), addColumnWidth)}px)`, ...(nameWidth ? { '--database-name-width': `${nameWidth}px` } : {}) } as CSSProperties}>
         <thead>
           <tr>
-            <th scope="col" className="database-th is-title" data-type="title">{wide && <span className="database-pin-strip" />}Name</th>
-            {columns.map(c => <th key={c.property.id} scope="col" className={`database-th${frozenClass(c.property.id)}`} data-type={c.property.type} style={{ width: c.width ?? defaultWidth(c.property), ...frozenAt(c.property.id).style }}>{c.property.name}</th>)}
+            <th scope="col" className={`database-th is-title${heads.classOf(titleId)}`} data-type="title" {...heads.props(titleId, 'Name')}>{wide && <span className="database-pin-strip" />}{heads.content(titleId, 'Name')}</th>
+            {columns.map(c => <th key={c.property.id} scope="col" className={`database-th${frozenClass(c.property.id)}${heads.classOf(c.property.id)}`} data-type={c.property.type} style={{ width: c.width ?? defaultWidth(c.property), ...frozenAt(c.property.id).style }} {...heads.props(c.property.id, c.property.name)}>{heads.content(c.property.id, c.property.name)}</th>)}
+            {db.database.fixed && wide && <th aria-hidden="true" className="database-th is-add" />}
             {!db.database.fixed && <th scope="col" className="database-th is-add"><button type="button" aria-label="Add property" onClick={addProperty}>+</button></th>}
           </tr>
         </thead>

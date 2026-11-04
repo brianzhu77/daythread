@@ -21,10 +21,10 @@ import { useKeyboardTop } from './keyboard'
 import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
-type Panel = 'root' | 'colour' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | { formula: string } | 'export' | 'more' | 'new-property' | 'views' | 'templates' | { template: string }
-interface OpenMenu { blockId: string; databaseId: string; panel: Panel; /** From `+ New ⌄`: a pick makes the row, in its place. */ pick?: (template: string | null) => void }
+type Panel = 'name' | 'root' | 'colour' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | { insertBefore: string } | { formula: string } | 'export' | 'more' | 'new-property' | 'views' | 'templates' | { template: string }
+interface OpenMenu { blockId: string; databaseId: string; panel: Panel; /** From a column's head: it opens under that head. */ column?: string; /** From `+ New ⌄`: a pick makes the row, in its place. */ pick?: (template: string | null) => void }
 /** The views list opens under "Table ⌄" on the left; every other panel under the `⋯` on the right. */
-const anchorOf = (m: OpenMenu) => m.panel === 'views' ? `[data-database-views="${CSS.escape(m.blockId)}"]` : `[data-database-menu="${CSS.escape(m.blockId)}"]`
+const anchorOf = (m: OpenMenu) => m.column ? `[data-column-head="${CSS.escape(`${m.blockId}|${m.column}`)}"]` : m.panel === 'views' ? `[data-database-views="${CSS.escape(m.blockId)}"]` : `[data-database-menu="${CSS.escape(m.blockId)}"]`
 let openMenu: OpenMenu | null = null
 const listeners = new Set<() => void>()
 function setOpenMenu(next: OpenMenu | null) { openMenu = next; for (const l of listeners) l() }
@@ -33,6 +33,13 @@ const newId = (): string => crypto.randomUUID()
 
 /** Opens a table's menu on one of its panels (a filter chip opens Filter). */
 export function openDatabaseMenu(blockId: string, databaseId: string, panel: 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'templates' | 'properties' = 'filter', pick?: (template: string | null) => void) { setOpenMenu({ blockId, databaseId, panel, ...(pick ? { pick } : {}) }) }
+
+/** A column head's click (R4-18): that column's menu under it, or shut if it's already open. */
+export function openColumnMenu(blockId: string, databaseId: string, column: string) {
+  setOpenMenu(openMenu?.blockId === blockId && openMenu.column === column ? null : { blockId, databaseId, column, panel: column === titleId ? 'name' : { property: column } })
+}
+export function closeColumnMenu(blockId: string) { if (openMenu?.blockId === blockId && openMenu.column) setOpenMenu(null) }
+export function useColumnMenu(blockId: string): string | undefined { const open = useOpenMenu(); return open?.blockId === blockId ? open.column : undefined }
 
 /** The `⋯` on a table (inline or full page): opens its menu under it. */
 export function DatabaseMenuButton({ blockId, databaseId }: { blockId: string; databaseId: string }) {
@@ -68,19 +75,20 @@ export function DatabaseMenuHost() {
       // Moved left as far as it takes too, for the same reason: "Table ⌄" sits near the page's right edge.
       // Formula's editor is too wide to hang left from `⋯` without covering the sidebar, so it starts at the block's edge.
       const width = ref.current?.offsetWidth ?? 300, block = anchor.closest('.database-block')?.getBoundingClientRect()
-      const next = width > 320 && block && window.innerWidth >= 900 ? { top, left: Math.max(8, Math.min(block.left, window.innerWidth - width - 8)) } : open.panel === 'views' ? { top, left: Math.max(8, Math.min(r.left, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) } : { top, right: Math.max(8, Math.min(window.innerWidth - r.right, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) }
+      // Under a column's head it hangs from the head's left edge, as far as the window lets it.
+      const next = open.column && width <= 320 ? { top, left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)) } : width > 320 && block && window.innerWidth >= 900 ? { top, left: Math.max(8, Math.min(block.left, window.innerWidth - width - 8)) } : open.panel === 'views' ? { top, left: Math.max(8, Math.min(r.left, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) } : { top, right: Math.max(8, Math.min(window.innerWidth - r.right, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) }
       setAt(a => (a && a.top === next.top && a.left === next.left && a.right === next.right ? a : next))
       frame = requestAnimationFrame(place)
     }
     place()
     return () => cancelAnimationFrame(frame)
-  }, [open?.blockId, open?.panel === 'views']) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open?.blockId, open?.column, open?.panel === 'views']) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return
     const away = (e: PointerEvent) => {
       const t = e.target as Element
       // The scrim closes on its own click, so the tap's click can't land on the page once it's gone.
-      if (!ref.current?.contains(t) && !t.closest?.(`[data-database-menu], [data-database-views], .database-menu-scrim`)) setOpenMenu(null)
+      if (!ref.current?.contains(t) && !t.closest?.(`[data-database-menu], [data-database-views], [data-column-head], .database-menu-scrim`)) setOpenMenu(null)
     }
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenMenu(null) }
     document.addEventListener('pointerdown', away)
@@ -123,7 +131,9 @@ export function DatabaseMenuHost() {
     {open.panel === 'more' && <MoreSettingsPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'export' && <ExportPanel db={db} view={view} blockId={open.blockId} back={() => go('root')} close={() => setOpenMenu(null)} />}
     {open.panel === 'properties' && <PropertiesPanel db={db} view={view} go={go} />}
+    {open.panel === 'name' && <NamePanel db={db} view={view} go={go} />}
     {open.panel === 'new-property' && <NewPropertyPanel db={db} view={view} go={go} />}
+    {typeof open.panel === 'object' && 'insertBefore' in open.panel && <NewPropertyPanel db={db} view={view} go={go} beforeId={open.panel.insertBefore} />}
     {typeof open.panel === 'object' && 'property' in open.panel && <PropertyPanel db={db} view={view} propertyId={open.panel.property} go={go} />}
     {typeof open.panel === 'object' && 'formula' in open.panel && <FormulaPanel db={db} propertyId={open.panel.formula} go={go} />}
     </MenuBlock.Provider>
@@ -722,7 +732,7 @@ function LinkSettings({ db, property, update, change }: { db: DatabasePage; prop
     </label>
   </>
 }
-function NewPropertyPanel({ db, view, go }: { db: DatabasePage; view: View; go: (p: Panel) => void }) {
+function NewPropertyPanel({ db, view, go, beforeId }: { db: DatabasePage; view: View; go: (p: Panel) => void; beforeId?: string }) {
   const change = useChange(db)
   const changeView = useViewChange(db.id, view.id)
   const blockId = useContext(MenuBlock) ?? ''
@@ -732,8 +742,8 @@ function NewPropertyPanel({ db, view, go }: { db: DatabasePage; view: View; go: 
   const make = (type: PropertyType) => {
     const id = newId()
     const linked = isLinkedBlock(blockId)
-    change({ kind: 'addProperty', property: { id, name: name.trim() || typeLabels[type], type, ...linkFields(workspace, db, type) }, ...(linked ? {} : { viewId: view.id }) })
-    if (linked) changeView(current => ({ columns: [...current.columns, { id }] }))
+    change({ kind: 'addProperty', property: { id, name: name.trim() || typeLabels[type], type, ...linkFields(workspace, db, type) }, ...(linked ? {} : { viewId: view.id, ...(beforeId ? { beforeId } : {}) }) })
+    if (linked) changeView(current => { const at = beforeId ? current.columns.findIndex(c => c.id === beforeId) : -1; return { columns: at < 0 ? [...current.columns, { id }] : [...current.columns.slice(0, at), { id }, ...current.columns.slice(at)] } })
     go(type === 'formula' ? { formula: id } : { property: id })
   }
   return <>
@@ -847,6 +857,42 @@ function FormulaPanel({ db, propertyId, go }: { db: DatabasePage; propertyId: st
   </>
 }
 
+/** A new column beside this one (R4-18): the add-property form, placing it in this view in one change. */
+function InsertRows({ view, propertyId, go }: { view: View; propertyId: string; go: (p: Panel) => void }) {
+  const at = view.columns.findIndex(c => c.id === propertyId), right = view.columns[at + 1]?.id
+  return <>
+    {propertyId !== titleId && <button type="button" role="menuitem" onClick={() => go({ insertBefore: propertyId })}>Insert left</button>}
+    <button type="button" role="menuitem" onClick={() => go(right ? { insertBefore: right } : 'new-property')}>Insert right</button>
+  </>
+}
+
+/** Sort by a column and filter by it, in its menu (R4-18). Choosing a direction again takes the sort off. */
+function ColumnSortFilter({ db, view, propertyId, go }: { db: DatabasePage; view: View; propertyId: string; go: (p: Panel) => void }) {
+  const changeView = useViewChange(db.id, view.id)
+  const direction = view.sort.find(s => s.by === propertyId)?.direction
+  const sortBy = (next: Sort['direction']) => changeView(current => ({ sort: [...(direction === next ? [] : [{ by: propertyId, direction: next }]), ...current.sort.filter(s => s.by !== propertyId)] }))
+  const type = db.database.properties.find(p => p.id === propertyId)?.type
+  return <>
+    <button type="button" role="menuitemcheckbox" aria-checked={direction === 'asc'} onClick={() => sortBy('asc')}>Sort ascending{direction === 'asc' && <span className="database-menu-chevron">✓</span>}</button>
+    <button type="button" role="menuitemcheckbox" aria-checked={direction === 'desc'} onClick={() => sortBy('desc')}>Sort descending{direction === 'desc' && <span className="database-menu-chevron">✓</span>}</button>
+    <button type="button" role="menuitem" onClick={() => { changeView(current => ({ filter: [...current.filter, { by: propertyId, op: type ? opsFor(type)[0]! : 'contains' }] })); go('filter') }}>Filter</button>
+  </>
+}
+
+/** Name's head (R4-18): always shown and always first, so there's no type, hide or delete to offer. */
+function NamePanel({ db, view, go }: { db: DatabasePage; view: View; go: (p: Panel) => void }) {
+  const changeView = useViewChange(db.id, view.id)
+  return <>
+    <Head title="Name" back={() => go('properties')} />
+    <ColumnSortFilter db={db} view={view} propertyId={titleId} go={go} />
+    {!db.database.fixed && <InsertRows view={{ ...view, columns: [{ id: titleId }, ...view.columns] }} propertyId={titleId} go={go} />}
+    <hr />
+    <label className="database-menu-row">Wrap Name
+      <input type="checkbox" checked={Boolean(view.wrapName)} onChange={e => { const wrapName = e.target.checked; changeView(() => ({ wrapName })) }} />
+    </label>
+  </>
+}
+
 function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: View; propertyId: string; go: (p: Panel) => void }) {
   const wide = useWide()
   const change = useChange(db)
@@ -860,6 +906,16 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
   const updateOptions = (build: (options: Property['options'] & object) => Property['options'] & object, withUndo = false) =>
     change(current => ({ kind: 'updateProperty', propertyId, options: build(current.properties.find(p => p.id === propertyId)?.options ?? []) }), withUndo)
   const shown = view.columns.some(c => c.id === propertyId)
+  const wrapRow = shown && canWrap(property.type) && <label className="database-menu-row">Wrap in this view
+    <input type="checkbox" checked={Boolean(view.columns.find(c => c.id === propertyId)?.wrap)} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ columns: columns.map(c => (c.id !== propertyId ? c : withWrap(c, on))) })) }} />
+  </label>
+  const viewRows = <>
+    <ColumnSortFilter db={db} view={view} propertyId={propertyId} go={go} />
+    {wide && view.layout === 'table' && shown && <button type="button" role="menuitem" onClick={() => changeView(() => ({ frozenThrough: view.frozenThrough === propertyId ? null : propertyId }))}>{view.frozenThrough === propertyId ? 'Unfreeze column' : 'Freeze up to column'}</button>}
+    <button type="button" role="menuitem" onClick={() => changeView(({ columns }) => ({ columns: columns.some(c => c.id === propertyId) ? columns.filter(c => c.id !== propertyId) : [...columns, { id: propertyId }] }))}>{shown ? 'Hide in this view' : 'Show in this view'}</button>
+  </>
+  // To-dos' columns are the app's own: what he can change there is how this view shows them.
+  if (db.database.fixed) return <><Head title={property.name} back={() => go('properties')} />{wrapRow}{viewRows}</>
   return <>
     <Head title={property.name} back={() => go('properties')} />
     <CommitInput key={property.name} ariaLabel="Name" initial={property.name} onCommit={v => { if (v.trim()) update({ name: v.trim() }) }} />
@@ -879,9 +935,7 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
         <option value="plain">Number</option><option value="comma">1,000</option><option value="percent">Percent</option><option value="currency">Currency</option>
       </select>
     </label>}
-    {shown && canWrap(property.type) && <label className="database-menu-row">Wrap in this view
-      <input type="checkbox" checked={Boolean(view.columns.find(c => c.id === propertyId)?.wrap)} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ columns: columns.map(c => (c.id !== propertyId ? c : withWrap(c, on))) })) }} />
-    </label>}
+    {wrapRow}
     {property.type === 'id' && <label className="database-menu-row">Prefix
       <CommitInput key={property.prefix ?? ''} ariaLabel="Prefix" initial={property.prefix ?? ''} placeholder="None" onCommit={v => update({ prefix: v })} />
     </label>}
@@ -900,8 +954,9 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
       <CommitInput key={options.length} ariaLabel="New option" initial="" placeholder="Add an option" onCommit={v => { if (v.trim()) { const made = { id: newId(), name: v.trim(), ...(property.type === 'status' ? { group: 'todo' as const } : {}) }; updateOptions(now => [...now, made]) } }} />
     </div>}
     <hr />
-    {wide && view.layout === 'table' && <button type="button" role="menuitem" onClick={() => changeView(() => ({ frozenThrough: view.frozenThrough === propertyId ? null : propertyId }))}>{view.frozenThrough === propertyId ? 'Unfreeze column' : 'Freeze up to column'}</button>}
-    <button type="button" role="menuitem" onClick={() => changeView(({ columns }) => ({ columns: columns.some(c => c.id === propertyId) ? columns.filter(c => c.id !== propertyId) : [...columns, { id: propertyId }] }))}>{shown ? 'Hide in this view' : 'Show in this view'}</button>
+    {viewRows}
+    {shown && view.layout === 'table' && <InsertRows view={view} propertyId={propertyId} go={go} />}
+    <button type="button" role="menuitem" onClick={() => { const newId_ = newId(); change({ kind: 'duplicateProperty', propertyId, newId: newId_ }, true); go({ property: newId_ }) }}>Duplicate property</button>
     {property.mirror && <p className="database-menu-quiet">Deleting it also deletes its other side.</p>}
     <button type="button" role="menuitem" className="is-danger" onClick={() => { change({ kind: 'removeProperty', propertyId }, true); go('properties') }}>Delete property</button>
   </>

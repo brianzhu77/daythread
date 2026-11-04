@@ -2,7 +2,7 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { rowColour, type ColourRule, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
+import { columnMoved, rowColour, type ColourRule, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
@@ -918,4 +918,57 @@ test('R4-12, R4-13: colour rules and a frozen column are saved on the view, and 
   assert.equal(h.db().views[0]!.colourRules, undefined)
   assert.equal(h.db().views[0]!.frozenThrough, undefined)
   assert.ok(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId: id, frozenThrough: null, colourRules: [{ id: 'r', rule: { by: 'kind', op: 'isEmpty' }, tint: 'red', scope: 'property' }] } } }).success)
+})
+
+test('a column dropped elsewhere (R4-18): crossing the frozen edge changes only which columns are frozen (R4-13)', () => {
+  const c = (...ids: string[]) => ids.map(id => ({ id }))
+  const ids = (r: ReturnType<typeof columnMoved>) => r?.columns.map(x => x.id).join()
+  const all = c('a', 'b', 'c', 'd')
+  assert.equal(ids(columnMoved(all, undefined, 'a', 'c')), 'b,a,c,d')
+  assert.equal(ids(columnMoved(all, undefined, 'd', 'a')), 'd,a,b,c')
+  assert.equal(ids(columnMoved(all, undefined, 'a', null)), 'b,c,d,a')
+  assert.equal(columnMoved(all, undefined, 'a', 'a'), null, 'on itself')
+  assert.equal(columnMoved(all, undefined, 'a', 'b'), null, 'where it already is')
+  assert.equal(columnMoved(all, undefined, 'd', null), null, 'already last')
+  assert.equal(columnMoved(all, undefined, 'gone', 'a'), null)
+  assert.equal(columnMoved(all, undefined, 'a', 'gone'), null)
+  assert.deepEqual(columnMoved(c('a', 'b'), undefined, 'b', 'a'), { columns: c('b', 'a') }, 'no frozen, nothing said about them')
+  // a b | c d: into the frozen, it joins them.
+  assert.deepEqual(columnMoved(all, 'b', 'd', 'b'), { columns: c('a', 'd', 'b', 'c') }, 'b is still the last frozen')
+  assert.deepEqual(columnMoved(all, 'b', 'c', 'a'), { columns: c('c', 'a', 'b', 'd') }, 'b is still the last frozen')
+  // Out past the edge, it leaves them.
+  assert.deepEqual(columnMoved(all, "b", "a", "d"), { columns: c("b", "c", "a", "d") }, "b is still the last frozen")
+  assert.deepEqual(columnMoved(all, 'b', 'b', 'd'), { columns: c('a', 'c', 'b', 'd'), frozenThrough: 'a' })
+  assert.deepEqual(columnMoved(all, 'a', 'a', 'c'), { columns: c('b', 'a', 'c', 'd'), frozenThrough: null }, 'the only one frozen leaves: none are')
+  // Right on the edge, it stays as it was.
+  assert.deepEqual(columnMoved(all, 'b', 'a', 'c'), { columns: c('b', 'a', 'c', 'd'), frozenThrough: 'a' }, 'frozen, last of them now')
+  assert.deepEqual(columnMoved(all, 'b', 'd', 'c'), { columns: c('a', 'b', 'd', 'c') }, 'not frozen, first of the rest')
+})
+
+test('duplicating a property (R4-18): its settings and values, beside it, with its own name; one side of a link', () => {
+  const h = reading()
+  h.change({ kind: 'addProperty', property: { id: 'kind2', name: 'Kind copy', type: 'text' } })
+  const views = h.db().views[0]!
+  h.change({ kind: 'updateView', viewId: views.id, columns: [{ id: 'kind', width: 200 }, { id: 'kind2' }] })
+  h.change({ kind: 'duplicateProperty', propertyId: 'kind', newId: 'k3' })
+  const made = h.db().properties.find(p => p.id === 'k3')!
+  assert.equal(made.name, 'Kind copy 2')
+  assert.deepEqual(made.options, h.db().properties.find(p => p.id === 'kind')!.options)
+  assert.deepEqual(h.db().views[0]!.columns.map(c => c.id), ['kind', 'k3', 'kind2'])
+  assert.equal(h.db().views[0]!.columns[1]!.width, 200)
+  assert.equal(h.page('dune').values?.k3, 'novel', 'its values come too')
+  assert.throws(() => h.change({ kind: 'duplicateProperty', propertyId: 'kind', newId: 'k3' }), /Invalid id/)
+  assert.ok(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'duplicateProperty', propertyId: 'kind', newId: 'k4' } } }).success)
+})
+
+test('a property inserted beside a column (R4-18): placed there in that view, last in the others, in one change', () => {
+  const h = reading()
+  const a = h.db().views[0]!.id
+  h.change({ kind: 'addView', view: { id: 'other', name: 'Other', layout: 'table', columns: [{ id: 'kind' }, { id: 'pages' }], sort: [], filter: [] } })
+  h.change({ kind: 'updateView', viewId: a, columns: [{ id: 'kind' }, { id: 'pages' }] })
+  h.change({ kind: 'addProperty', property: { id: 'n1', name: 'Between', type: 'text' }, viewId: a, beforeId: 'pages' })
+  assert.deepEqual(h.db().views[0]!.columns.map(c => c.id), ['kind', 'n1', 'pages'])
+  assert.deepEqual(h.db().views.find(v => v.id === 'other')!.columns.map(c => c.id), ['kind', 'pages', 'n1'])
+  h.change({ kind: 'addProperty', property: { id: 'n2', name: 'Gone', type: 'text' }, viewId: a, beforeId: 'not-a-column' })
+  assert.equal(h.db().views[0]!.columns.at(-1)!.id, 'n2', 'a column gone meanwhile: last')
 })
