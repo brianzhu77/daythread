@@ -36,7 +36,7 @@ if (!base) { console.error('usage: node scripts/check-alignment.mjs <base url> [
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
-const REQUIRED = ['synced block', 'sub-groups', 'lanes', 'board', 'grouped table', 'list', 'gallery', 'calendar', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
+const REQUIRED = ['sub-items', 'synced block', 'sub-groups', 'lanes', 'board', 'grouped table', 'list', 'gallery', 'calendar', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
 
 /** What a table cell or a row page's value draws: its box when it's a checkbox, else its first line of text, else a chip or dot. */
 function drawnCentres() {
@@ -170,6 +170,15 @@ function measure() {
           'column head on the title': head ? head.getBoundingClientRect().left - title.getBoundingClientRect().left : null,
           "card's edge on its column head": head && card ? card.getBoundingClientRect().left - head.getBoundingClientRect().left : null,
         }
+      }
+      // Sub-items (R4-4): a top row's words on the head's Name, and a sub-item one step in. Open the first parent to measure it.
+      const toggle = content.querySelector('.database-sub-toggle')
+      if (toggle) {
+        const rowWords = el => words(el?.querySelector('.database-title-cell > span:last-child, .database-title-text') ?? el?.querySelector('.database-title-cell'))
+        const name = content.querySelector('.database-th[data-type="title"]'), rows = [...content.querySelectorAll('.database-row')]
+        const nameWords = name ? words(name) : null
+        row.subItems = { "a top row's words on the head's Name": rows[0] ? gap(rowWords(rows[0]), nameWords) : null, 'toggle centred on its row': mid(toggle.getBoundingClientRect(), words(rows[0]?.querySelector('.database-title-cell'))) }
+        row.layered = true
       }
       // These fixtures are small, with no cap or hidden group: only the rules above apply to them.
       if (firstSub || lane) row.layered = true
@@ -463,7 +472,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
           ? { at, check: `${name} ${what}: "${r.label}"`, ok: 'missing', detail: 'not found, so not measured' }
           : { at, check: `${name} ${what}: "${r.label}"`, ok: Math.abs(off) <= TOLERANCE, detail: `${off >= 0 ? '+' : ''}${fmt(off)}px` })
       }
-      for (const [part, kind] of [[r.subGroups, 'sub-groups'], [r.lanes, 'lanes']]) {
+      for (const [part, kind] of [[r.subGroups, 'sub-groups'], [r.lanes, 'lanes'], [r.subItems, 'sub-items']]) {
         if (!part) continue
         seen.get(width).add(kind)
         for (const [what, off] of Object.entries(part)) results.push(off == null

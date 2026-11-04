@@ -1888,15 +1888,16 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-menu input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(--ink); }
 .database-menu-field, .database-menu > input { margin: 2px 6px 6px; }
 /* Sub-items: an indent that stops growing at 4 levels, so 390 stays readable (design §2). */
-.database-sub-lead { --sub-step: 16px; display: inline-flex; flex: none; align-items: center; margin-left: calc(var(--sub-depth, 0) * var(--sub-step)); }
+.database-sub-lead { --sub-step: 16px; --sub-pull: 0px; display: inline-flex; flex: none; align-items: center; margin-left: calc(var(--sub-depth, 0) * var(--sub-step) - var(--sub-pull)); }
 .database-sub-lead[data-depth="1"] { --sub-depth: 1; } .database-sub-lead[data-depth="2"] { --sub-depth: 2; } .database-sub-lead[data-depth="3"] { --sub-depth: 3; } .database-sub-lead[data-depth="4"] { --sub-depth: 4; }
-.database-sub-toggle, .database-sub-spacer { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; }
+/* 17px puts a top row's words on the head's "Name", and the chevron under its "Aa". */
+.database-sub-toggle, .database-sub-spacer { display: inline-flex; align-items: center; justify-content: center; width: 17px; height: 20px; }
 .database-sub-lead { position: relative; z-index: 1; }
 .database-sub-lead .database-sub-toggle { min-height: 0; }
 .database-sub-toggle { padding: 0; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink-3); cursor: pointer; }
 .database-sub-toggle svg { width: 12px; height: 12px; }
 .database-sub-toggle.is-open svg { transform: rotate(90deg); }
-.database-sub-toggle:hover { background: var(--hover-dim); }
+@media (hover: hover) { .database-sub-toggle:hover { background: var(--hover-dim); } }
 .database-sub-add { flex: none; width: 20px; height: 20px; padding: 0; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink-3); cursor: pointer; opacity: 0; }
 .database-row:hover .database-sub-add, .database-sub-add:focus-visible { opacity: 1; }
 .database-sub-add:hover { background: var(--hover-dim); }
@@ -2028,7 +2029,8 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
   .database-menu::before { content: ''; flex: none; align-self: center; width: 36px; height: 5px; margin-bottom: 6px; border-radius: 3px; background: var(--check); }
   .database-menu > button[role=menuitem], .database-menu-head, .database-property-line, .database-menu-row { min-height: 44px; }
   .database-menu input:not([type=checkbox]), .database-menu select { min-height: 40px; font-size: 16px; }
-  .database-sub-lead { --sub-step: 12px; }
+  /* A finger's width of toggle, drawn back into the cell's padding so a top row's words stay on "Name". */
+  .database-sub-lead { --sub-step: 12px; --sub-pull: 15px; }
   .database-sub-lead .database-sub-toggle { width: 32px; height: 44px; min-height: 44px; }
   .database-sub-spacer { width: 32px; height: 20px; }
   .database-sub-add { display: none; }

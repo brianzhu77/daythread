@@ -61,6 +61,7 @@ const lineTarget = crypto.randomUUID()
 // Databases R1 (design §15): an inline table, so its title, `+ New` and view chevron are measured too.
 const databaseId = crypto.randomUUID(), databaseBlock = crypto.randomUUID()
 // R2: a board and a grouped table, each with a column or group past the row cap and a hidden one.
+const treeId = crypto.randomUUID(), treeBlock = crypto.randomUUID()
 const layered = (['table', 'list', 'gallery', 'board'] as const).map(layout => ({ layout, id: crypto.randomUUID(), block: crypto.randomUUID() }))
 const boardId = crypto.randomUUID(), boardBlock = crypto.randomUUID(), groupedId = crypto.randomUUID(), groupedBlock = crypto.randomUUID(), listId = crypto.randomUUID(), listBlock = crypto.randomUUID(), galleryId = crypto.randomUUID(), galleryBlock = crypto.randomUUID(), calendarId = crypto.randomUUID(), calendarBlock = crypto.randomUUID()
 const document: EditorNode[] = [
@@ -86,6 +87,7 @@ const document: EditorNode[] = [
   { id: databaseBlock, type: 'database', props: { pageId: databaseId, view: '' }, children: [] },
   { id: boardBlock, type: 'database', props: { pageId: boardId, view: '' }, children: [] },
   ...layered.map(l => ({ id: l.block, type: 'database', props: { pageId: l.id, view: '' }, children: [] })),
+  { id: treeBlock, type: 'database', props: { pageId: treeId, view: '' }, children: [] },
   { id: groupedBlock, type: 'database', props: { pageId: groupedId, view: '' }, children: [] },
   { id: listBlock, type: 'database', props: { pageId: listId, view: '' }, children: [] },
   { id: galleryBlock, type: 'database', props: { pageId: galleryId, view: '' }, children: [] },
@@ -124,6 +126,15 @@ ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'u
 {
   const first = ws.pages.find(p => p.id === databaseId)!.database!.views[0]!
   ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'updateView', viewId: first.id, columns: first.columns.map(c => (c.id === 'text' ? { ...c, wrap: true as const } : c)) } })
+}
+// Sub-items (R4-4): the gate measures the toggle's column and one step of indent.
+{
+  ws = await run({ type: 'create-database', pageId: treeId, parentId: scratchId, homeBlockId: treeBlock, title: 'Fixture sub-items' })
+  await run({ type: 'change-database', pageId: treeId, change: { kind: 'addProperty', property: { id: 'par', name: 'Parent', type: 'relation', target: treeId, twoWay: 'sub' } } as never })
+  await run({ type: 'change-database', pageId: treeId, change: { kind: 'setSubItems', on: { parent: 'par', sub: 'sub' } } as never })
+  const top = crypto.randomUUID()
+  ws = await run({ type: 'add-row', databaseId: treeId, pageId: top, title: 'Fixture parent row', values: {}, at: new Date().toISOString() })
+  ws = await run({ type: 'add-row', databaseId: treeId, pageId: crypto.randomUUID(), title: 'Fixture sub-item', values: { par: [top] } as never, at: new Date().toISOString() })
 }
 // Two layers on each layout that has them (R3-13): the gate measures a sub-group's chevron and a board's lanes.
 for (const { layout, id, block } of layered) {
