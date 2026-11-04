@@ -107,14 +107,14 @@ export function useColumnHeads({ wide, blockId, databaseId, view, changeView, wr
       onClick: () => { open(id); focusHead(id) },
       ...(id === titleId ? {} : { onPointerDown: (e: ReactPointerEvent<HTMLElement>) => startMove(e, id, name) }),
     }),
-    /** What goes inside it. */
+    /** What goes inside it: the words last, as the alignment gate reads them from there. */
     content: (id: string, name: string): ReactNode => (!wide ? name : <>
+      <span aria-hidden="true" className={`database-column-edge${sized?.id === id ? ' is-active' : ''}`} onPointerDown={e => startResize(e, id)} onClick={e => e.stopPropagation()} />
       <span role="button" tabIndex={0} aria-haspopup="dialog" aria-expanded={menuColumn === id} className="database-column-name" onKeyDown={(e: KeyboardEvent) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); open(id) }
         // The menu's to close; the table would take it as selecting the block instead.
         if (e.key === 'Escape' && menuColumn) { e.preventDefault(); e.stopPropagation(); closeColumnMenu(blockId) }
       }}>{name}</span>
-      <span aria-hidden="true" className={`database-column-edge${sized?.id === id ? ' is-active' : ''}`} onPointerDown={e => startResize(e, id)} onClick={e => e.stopPropagation()} />
     </>),
     overlay: moving && createPortal(<>
       <div className="database-column-drop" style={{ left: moving.line.left, top: moving.line.top, height: moving.line.height }} />
