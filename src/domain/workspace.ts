@@ -5,6 +5,9 @@ import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
+import { hasDependencyLoop, shiftDependents, spanOf } from "./dependencies.ts";
+import { descendantsOf, hasLoop, parentIdOf } from "./sub-items.ts";
+import type { SubItems } from "./database.ts";
 import { applyRowMove } from "./move-row.ts";
 import { importRefusal } from "./csv.ts";
 import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
@@ -322,8 +325,27 @@ function restorePages(state: Workspace, ids: Set<string>): { pages: Page[]; toTo
   return { pages, toTopLevel, joined };
 }
 /** The pages to trash with `p`, as one batch: it and its live descendants (a database's rows with it). */
+/** Duplicating copies the tree, each copy linked to the new parent, never to the old rows (sub-items design §2). Ids follow from the copy's, so the browser's preview and the server agree. */
+function copySubItems(state: Workspace, db: Page & { database: NonNullable<Page["database"]> }, tree: SubItems, from: Page, to: Page, day: string, at: string): void {
+  const children = databaseRows(state, db.id).filter((r) => parentIdOf(r, tree) === from.id);
+  children.forEach((child, i) => {
+    const { [tree.sub]: _theirs, ...values } = structuredClone(child.values ?? {});
+    const copy: Page = { ...child, id: `${to.id.slice(0, 80)}.${i}`, parentId: db.id, values: { ...values, [tree.parent]: [to.id] }, createdAt: at, editedAt: at };
+    copy.document = JSON.stringify(copiedBody(state, child, copy, day));
+    numberNewRow(db.database, copy);
+    for (const p of db.database.properties) { const raw = copy.values?.[p.id]; if (p.type === "relation" && Array.isArray(raw)) syncMirror(state, p, copy.id, [], raw as string[], at); }
+    state.pages.push(copy);
+    copySubItems(state, db, tree, child, copy, day, at);
+  });
+}
+/** A row's sub-items go with it, however deep (sub-items design §2). */
+function subItemsGoing(state: Workspace, p: Page): Page[] {
+  const db = databaseOfRow(state, p);
+  return db?.database.subItems ? descendantsOf(databaseRows(state, db.id), db.database.subItems, p.id) : [];
+}
 function trashSubtree(state: Workspace, p: Page, at: string, operationId: string): Page[] {
   const ids = subtreeIds(state, p.id);
+  for (const sub of subItemsGoing(state, p)) for (const id of subtreeIds(state, sub.id)) ids.add(id);
   const members = state.pages.filter((x) => ids.has(x.id) && !isTrashed(x));
   for (const x of members) { x.trashedAt = at; x.trashId = operationId; }
   return members;
@@ -355,16 +377,22 @@ function pageParent(state: Workspace, id: string): Page {
   if (isTrashed(parent)) throw new DomainError("Page is in trash");
   return parent;
 }
-function rowEdit(state: Workspace, edit: RowEdit, at: string): void {
+function rowEdit(state: Workspace, edit: RowEdit, at: string): string[] {
   if (!edit || typeof edit.pageId !== "string") throw new DomainError("Invalid row");
   const { row, db } = rowPage(state, edit.pageId, true);
   if (edit.databaseId && edit.databaseId !== db.id) throw new DomainError(`This row moved to ${db.title.trim() || "another database"}`);
   const links = (id: string) => { const raw = row.values?.[id]; return Array.isArray(raw) ? (raw as string[]) : []; };
   const relations = db.database.properties.filter((p) => p.type === "relation" && edit.values && p.id in edit.values);
   const before = relations.map((p) => links(p.id));
+  const deps = db.database.dependencies, dateChanges = Boolean(deps && edit.values && (deps.date in edit.values || (deps.end && deps.end in edit.values))) && !rowTemplateDatabaseId(row);
+  const spanBefore = deps && dateChanges ? spanOf(db.database, deps, row) : null;
   try { editRow(db.database, row, edit, at); } catch (error) { throw new DomainError((error as Error).message); }
   // A template isn't a row, so nothing links back to it; the rows made from it do that.
   if (!rowTemplateDatabaseId(row)) relations.forEach((p, i) => syncMirror(state, p, row.id, before[i]!, links(p.id), at));
+  const tree = db.database.subItems;
+  if (tree && edit.values && (tree.parent in edit.values || tree.sub in edit.values) && !rowTemplateDatabaseId(row) && hasLoop(databaseRows(state, db.id), tree, row.id)) throw new DomainError("A row can't be its own ancestor");
+  if (deps && edit.values && (deps.blockedBy in edit.values || deps.blocking in edit.values) && !rowTemplateDatabaseId(row) && hasDependencyLoop(databaseRows(state, db.id), deps, row.id)) throw new DomainError("That would make a loop: a row can't end up blocking itself");
+  return deps && dateChanges ? shiftDependents(db.database, deps, databaseRows(state, db.id), row.id, spanBefore, spanOf(db.database, deps, row), at) : [];
 }
 function addRows(state: Workspace, db: ReturnType<typeof databasePage>, rows: Array<{ pageId: string; title: string; values?: Record<string, import("./database.ts").Json> }>, at: string): void {
   if (databaseRows(state, db.id).length + rows.length > 10_000) throw new DomainError("Too many rows");
@@ -385,6 +413,12 @@ const localDay = (state: Workspace, at: string): string => new Date(at).toLocale
 /** A4: what Restore on a page brings back: the page plus its descendants trashed in the same delete. */
 function restoreSetOf(state: Workspace, p: Page): Set<string> {
   const ids = new Set([p.id]);
+  // Sub-items that went with it, which are its database's children and not its own (sub-items design §2).
+  const db = databaseOfRow(state, p);
+  if (db?.database.subItems) {
+    const together = state.pages.filter((x) => x.parentId === db.id && x.trashId === p.trashId);
+    for (const sub of descendantsOf(together, db.database.subItems, p.id)) ids.add(sub.id);
+  }
   for (let grew = true; grew; ) {
     grew = false;
     for (const x of state.pages) if (isTrashed(x) && x.trashId === p.trashId && x.parentId && ids.has(x.parentId) && !ids.has(x.id)) { ids.add(x.id); grew = true; }
@@ -773,9 +807,11 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (isTrashed(p)) throw new DomainError("Page is in trash");
       if (!Number.isFinite(Date.parse(action.at))) throw new DomainError("Invalid time");
       const rows = isDatabase(p) ? databaseRows(state, p.id).length : 0;
+      const subItems = subItemsGoing(state, p).length;
       // A database's rows go with it, and aren't subpages he'd count.
       const n = trashSubtree(state, p, action.at, operationId).filter((x) => !databaseOfRow(state, x)).length - 1;
       if (isDatabase(p)) return { message: rows ? `Moved to trash · ${rows} row${rows === 1 ? "" : "s"}` : "Moved to trash", entityId: p.id };
+      if (subItems) return { message: `Moved to trash · ${subItems} sub-item${subItems === 1 ? "" : "s"}`, entityId: p.id };
       return { message: n ? `Moved to trash · ${n} subpage${n === 1 ? "" : "s"}` : "Moved to trash", entityId: p.id };
     }
     case "restore-page": {
@@ -977,6 +1013,9 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
           return { id: newId(), type: "task", props: { taskId: task.id, role: "reference", planDate: "" }, content: structuredClone(n.content), children: [] };
         }, (n) => isOriginalBlock(state, n)));
       }
+      // A copy's sub-items are copies of its own, below: the originals stay with the row they're under.
+      const tree = db.database.subItems;
+      if (source && tree && row.values) { const { [tree.sub]: _theirs, ...kept } = row.values; if (Object.keys(kept).length) row.values = kept; else delete row.values; }
       numberNewRow(db.database, row);
       // A new row's links show on their other side, a copy's too.
       for (const p of db.database.properties) { const raw = row.values?.[p.id]; if (p.type === "relation" && Array.isArray(raw)) syncMirror(state, p, row.id, [], raw as string[], at); }
@@ -985,6 +1024,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const before = action.beforeId ? rows.find((r) => r.id === action.beforeId) : source ? rows[rows.indexOf(source.row) + 1] : undefined;
       if (action.beforeId && !before) throw new DomainError("Row not found");
       state.pages.splice(before ? state.pages.indexOf(before) : state.pages.length, 0, row);
+      if (source && tree) copySubItems(state, db, tree, source.row, row, localDay(state, at), at);
       return { message: source ? "Row duplicated" : "Row added", entityId: row.id };
     }
     case "move-row": {
@@ -1032,7 +1072,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       for (const todo of action.newTodos ?? []) {
         if (!state.tasks.some((t) => t.id === todo.id)) addTask(state, ensureDay(state, todo.on), { title: todo.title, plannedOn: todo.on, id: todo.id });
       }
-      rowEdit(state, action, isoTime(action.at));
+      const shifted = rowEdit(state, action, isoTime(action.at));
       if (action.beforeId !== undefined) {
         const row = page(state, action.pageId);
         // Before a row that's gone meanwhile: the end, as `move-page`'s drag does.
@@ -1040,14 +1080,14 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         state.pages.splice(state.pages.indexOf(row), 1);
         state.pages.splice(before ? state.pages.indexOf(before) : state.pages.length, 0, row);
       }
-      return { message: "Saved", entityId: action.pageId };
+      return { message: "Saved", entityId: action.pageId, ...(shifted.length ? { shifted } : {}) };
     }
     case "set-values-many": {
       const at = isoTime(action.at);
       if (!Array.isArray(action.items) || !action.items.length || action.items.length > databaseLimits.rowsAtOnce) throw new DomainError("Invalid rows");
       if (new Set(action.items.map((i) => i.pageId)).size !== action.items.length) throw new DomainError("Invalid rows");
-      for (const item of action.items) rowEdit(state, item, at);
-      return { message: `Saved ${action.items.length} rows` };
+      const shifted = action.items.flatMap((item) => rowEdit(state, item, at));
+      return { message: `Saved ${action.items.length} rows`, ...(shifted.length ? { shifted: [...new Set(shifted)] } : {}) };
     }
     case "delete-pages": {
       const at = isoTime(action.at);
@@ -1055,9 +1095,11 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (!pages.length || new Set(action.pageIds).size !== pages.length) throw new DomainError("Invalid pages");
       for (const p of pages) { if (p.type !== "document") throw new DomainError("Day pages can't be deleted"); if (isTrashed(p)) throw new DomainError("Page is in trash"); }
       const rows = pages.every((p) => databaseOfRow(state, p));
+      const picked = new Set(action.pageIds);
+      const going = new Set(pages.flatMap((p) => subItemsGoing(state, p)).filter((x) => !picked.has(x.id)).map((x) => x.id)).size;
       for (const p of pages) if (!isTrashed(p)) trashSubtree(state, p, at, operationId);
       const n = pages.length;
-      return { message: `${n} ${rows ? (n === 1 ? "row" : "rows") : n === 1 ? "page" : "pages"} moved to trash` };
+      return { message: `${n} ${rows ? (n === 1 ? "row" : "rows") : n === 1 ? "page" : "pages"} moved to trash${going ? ` · ${going} sub-item${going === 1 ? "" : "s"}` : ""}` };
     }
     case "set-timezone":
       state.timezone = validTimezone(action.timezone);
@@ -1160,7 +1202,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   let state = structuredClone(input);
   const { undo: _previousUndo, receipts: _receipts, ...rest } = input;
   const before = { ...structuredClone(rest), receipts: {} as Workspace["receipts"] };
-  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number };
+  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number; shifted?: string[] };
   if (command.action.type === "undo") {
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");
