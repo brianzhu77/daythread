@@ -60,3 +60,12 @@ Rules are evaluated per row per view, as filters are. **R2-7's budget gets a var
 [f]: https://thomasjfrank.com/notion-conditional-color-formatting-everything-you-need-to-know/
 [m]: https://matthiasfrank.de/en/notion-updates/conditional-color-upgrade/
 [s]: https://sparxno.com/blog/notion-conditional-color
+
+## 7. As built (Jazz, task #287)
+
+- **Tints:** `--tint-*`, plain names for Formula's nine tints, so there's one palette. The ink clears 4.5:1 on all nine in both themes (`formula/contrast.mjs`). They're opaque, so a frozen cell can sit on one.
+- **On a row:** a picked row and a row just returned to keep their own mark, as an inset line over the tint, not another fill.
+- **Reordering** is ↑ and ↓ on a rule, not a drag.
+- **A row's choice** "Whole row" or "Only this property" shows on a table only. Elsewhere a rule colours the card.
+- **Frozen columns (R4-13):** from a property's menu in Properties, at 1280. If they and Name would leave less than 120 px of the view, nothing is frozen until there's room, so nothing's out of reach.
+- **Timeline's bars** take the tint once Timeline is on main; it's not in this PR.

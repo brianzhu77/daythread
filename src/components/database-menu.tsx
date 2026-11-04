@@ -3,7 +3,7 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
-import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { tints, type ColourRule, type Tint, calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
 import type { Page, Workspace } from '../domain/types'
 import { databaseSource, readingWorkspace, todosSourceId, todosTitle } from '../domain/todos-source'
@@ -20,7 +20,7 @@ import { useKeyboardTop } from './keyboard'
 import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
-type Panel = 'root' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | { formula: string } | 'export' | 'new-property' | 'views' | 'templates' | { template: string }
+type Panel = 'root' | 'colour' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | { formula: string } | 'export' | 'new-property' | 'views' | 'templates' | { template: string }
 interface OpenMenu { blockId: string; databaseId: string; panel: Panel; /** From `+ New ⌄`: a pick makes the row, in its place. */ pick?: (template: string | null) => void }
 /** The views list opens under "Table ⌄" on the left; every other panel under the `⋯` on the right. */
 const anchorOf = (m: OpenMenu) => m.panel === 'views' ? `[data-database-views="${CSS.escape(m.blockId)}"]` : `[data-database-menu="${CSS.escape(m.blockId)}"]`
@@ -112,11 +112,12 @@ export function DatabaseMenuHost() {
     {open.panel === 'views' && <ViewsPanel db={db} blockId={open.blockId} />}
     {open.panel === 'root' && <RootPanel db={db} view={view} blockId={open.blockId} go={go} />}
     {open.panel === 'group' && <GroupPanel db={db} view={view} back={() => go('root')} />}
-    {open.panel === 'layout' && <LayoutPanel db={db} view={view} back={() => go('root')} />}
+    {open.panel === 'layout' && <LayoutPanel db={db} view={view} back={() => go('root')} go={go} />}
     {open.panel === 'templates' && <TemplatesPanel db={db} view={view} go={go} close={() => setOpenMenu(null)} {...(open.pick ? { pick: open.pick } : {})} />}
     {typeof open.panel === 'object' && 'template' in open.panel && <TemplatePanel db={db} view={view} templateId={open.panel.template} go={go} close={() => setOpenMenu(null)} />}
     {open.panel === 'calculate' && <CalculatePanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'filter' && <FilterPanel db={db} view={view} back={() => go('root')} />}
+    {open.panel === 'colour' && <ColourPanel db={db} view={view} back={() => go('layout')} />}
     {open.panel === 'sort' && <SortPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'export' && <ExportPanel db={db} view={view} blockId={open.blockId} back={() => go('root')} close={() => setOpenMenu(null)} />}
     {open.panel === 'properties' && <PropertiesPanel db={db} view={view} go={go} />}
@@ -241,6 +242,44 @@ export function opsFor(type: PropertyType): FilterOp[] {
 }
 const titleProperty: Property = { id: titleId, name: 'Name', type: 'text' }
 function columnsOf(db: Database): Property[] { return [titleProperty, ...db.properties] }
+
+/** Conditional colour (R4-12): one filter rule and a tint each, the highest that matches wins. A new rule starts grey, so colour takes a deliberate tap. */
+function ColourPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
+  const changeView = useViewChange(db.id, view.id)
+  const rules = view.colourRules ?? []
+  const save = (build: (now: ColourRule[]) => ColourRule[]) => changeView(current => ({ colourRules: build(current.colourRules ?? []) }))
+  const set = (id: string, next: Partial<ColourRule>) => save(now => now.map(r => (r.id === id ? { ...r, ...next } : r)))
+  const move = (at: number, by: number) => save(now => { const next = [...now]; const [r] = next.splice(at, 1); next.splice(at + by, 0, r!); return next })
+  return <>
+    <Head title="Conditional colour" back={back} />
+    {rules.length === 0 && <p className="database-menu-quiet">No rules</p>}
+    {rules.map((r, i) => {
+      const property = propertyOf(db.database, r.rule.by), c = r.rule
+      return <div key={r.id} className="database-rule database-colour-rule">
+        {property ? <>
+          <select aria-label="Property" value={c.by} onChange={e => { const p = propertyOf(db.database, e.target.value)!; set(r.id, { rule: { by: p.id, op: opsFor(p.type)[0]!, ...(p.type === 'checkbox' ? { value: true } : {}) } }) }}>
+            {columnsOf(db.database).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          <select aria-label="Condition" value={c.op} onChange={e => set(r.id, { rule: { by: c.by, op: e.target.value as FilterOp, ...(c.value !== undefined && !e.target.value.includes('Empty') ? { value: c.value } : {}) } })}>
+            {opsFor(property.type).map(op => <option key={op} value={op}>{opLabels[op]}</option>)}
+          </select>
+          <RuleValue property={property} condition={c} onChange={value => set(r.id, { rule: value === undefined ? { by: c.by, op: c.op } : { ...c, value } })} />
+        </> : <span className="database-rule-deleted">(deleted)</span>}
+        <span className="database-colour-row">
+          <span className={`database-tint-dot is-${r.tint}`} aria-hidden="true" />
+          <select aria-label="Colour" value={r.tint} onChange={e => set(r.id, { tint: e.target.value as Tint })}>{tints.map(t => <option key={t} value={t}>{t[0]!.toUpperCase() + t.slice(1)}</option>)}</select>
+          {view.layout === 'table' && <select aria-label="What it colours" value={r.scope ?? 'row'} onChange={e => { const only = e.target.value === 'property'; save(now => now.map(x => { if (x.id !== r.id) return x; const { scope: _scope, ...rest } = x; return only ? { ...rest, scope: 'property' as const } : rest })) }}>
+            <option value="row">Whole row</option><option value="property">Only this property</option>
+          </select>}
+          {i > 0 && <button type="button" aria-label="Move up" onClick={() => move(i, -1)}>↑</button>}
+          {i < rules.length - 1 && <button type="button" aria-label="Move down" onClick={() => move(i, 1)}>↓</button>}
+          <button type="button" className="database-rule-remove" aria-label="Remove rule" onClick={() => save(now => now.filter(x => x.id !== r.id))}>×</button>
+        </span>
+      </div>
+    })}
+    <button type="button" className="database-add-rule" onClick={() => save(now => [...now, { id: newId(), rule: { by: titleId, op: 'contains' }, tint: 'gray' }])}>+ Add rule</button>
+  </>
+}
 
 function FilterPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
   const changeView = useViewChange(db.id, view.id)
@@ -443,7 +482,7 @@ function GroupPanel({ db, view, back }: { db: DatabasePage; view: View; back: ()
 
 /** A view named after its type keeps following it; one he named keeps his name. */
 const renamedFor = (view: View, layout: View['layout']) => (view.name === layoutLabels[view.layout] ? { name: layoutLabels[layout] } : {})
-function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
+function LayoutPanel({ db, view, back, go }: { db: DatabasePage; view: View; back: () => void; go: (p: Panel) => void }) {
   const wrapsAll = view.columns.some(c => c.wrap) && viewColumns(db.database, view).every(c => c.wrap || !canWrap(c.property.type)) && (view.layout !== 'table' || Boolean(view.wrapName))
   const changeView = useViewChange(db.id, view.id)
   const [asking, setAsking] = useState(false)
@@ -471,6 +510,7 @@ function LayoutPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
     {(view.layout === 'table' || view.layout === 'board' || view.layout === 'gallery') && <label className="database-menu-row">Wrap all
       <input type="checkbox" checked={wrapsAll} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ wrapName: on, columns: columns.map(c => withWrap(c, on)) })) }} />
     </label>}
+    <button type="button" role="menuitem" onClick={() => go('colour')}>Conditional colour<span className="database-menu-chevron">{view.colourRules?.length || ''} ›</span></button>
     {view.layout === 'calendar' && <label className="database-menu-row">Show as
       <select aria-label="Show as" value={view.calendarSpan ?? 'month'} onChange={e => { const calendarSpan = e.target.value === 'week' ? 'week' as const : null; changeView(() => ({ calendarSpan })) }}>
         <option value="month">Month</option><option value="week">Week</option>
@@ -714,6 +754,7 @@ function FormulaPanel({ db, propertyId, go }: { db: DatabasePage; propertyId: st
 }
 
 function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: View; propertyId: string; go: (p: Panel) => void }) {
+  const wide = useWide()
   const change = useChange(db)
   const changeView = useViewChange(db.id, view.id)
   const property = db.database.properties.find(p => p.id === propertyId)
@@ -765,6 +806,7 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
       <CommitInput key={options.length} ariaLabel="New option" initial="" placeholder="Add an option" onCommit={v => { if (v.trim()) { const made = { id: newId(), name: v.trim(), ...(property.type === 'status' ? { group: 'todo' as const } : {}) }; updateOptions(now => [...now, made]) } }} />
     </div>}
     <hr />
+    {wide && view.layout === 'table' && <button type="button" role="menuitem" onClick={() => changeView(() => ({ frozenThrough: view.frozenThrough === propertyId ? null : propertyId }))}>{view.frozenThrough === propertyId ? 'Unfreeze column' : 'Freeze up to column'}</button>}
     <button type="button" role="menuitem" onClick={() => changeView(({ columns }) => ({ columns: columns.some(c => c.id === propertyId) ? columns.filter(c => c.id !== propertyId) : [...columns, { id: propertyId }] }))}>{shown ? 'Hide in this view' : 'Show in this view'}</button>
     {property.mirror && <p className="database-menu-quiet">Deleting it also deletes its other side.</p>}
     <button type="button" role="menuitem" className="is-danger" onClick={() => { change({ kind: 'removeProperty', propertyId }, true); go('properties') }}>Delete property</button>
