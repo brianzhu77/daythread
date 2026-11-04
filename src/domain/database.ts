@@ -148,7 +148,7 @@ export const titleId = "title";
 /** The `pageId` of a block showing To-dos, and a relation's target when it links tasks. No real page has it. */
 export const todosSourceId = "source:tasks";
 /** Where a row keeps its number, among its values: under no property, so changing a property's type never touches it. */
-const rowNumberKey = "@id";
+export const rowNumberKey = "@id";
 /** The types the app fills in: they can't be typed, pasted, or set by a filter's `+ New` (R3-9). */
 export const isReadOnlyType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime" || type === "id";
 /** Nothing can be typed here: the app's own columns, a rollup, To-dos' Page. */
@@ -824,7 +824,7 @@ export type DatabaseChange =
   | { kind: "removeView"; viewId: string }
   | { kind: "moveView"; viewId: string; beforeId: string | null };
 /** One row's edit: values by column id (`title` for the title), null clears; `expected`: those columns as the edit saw them. */
-export interface RowEdit { pageId: string; values: Record<string, Json>; expected: Record<string, Json> }
+export interface RowEdit { pageId: string; values: Record<string, Json>; expected: Record<string, Json>; /** The database the sender thinks it's in: a tab that missed a move is refused rather than writing a property across (move-row §7). */ databaseId?: string }
 
 // ---------------------------------------------------------------- schema and view changes
 

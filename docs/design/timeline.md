@@ -1,6 +1,6 @@
 # Timeline: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead, Roadbuster and Jazz to review**. Not approved and not built.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **steps 1 and 2 built and live** (#104, #108, 2026-11-04), except Rollup and Formula dates, now on R4-14. Checklist R4-1 and R4-2 say what differs.
 - Asked by the Lead (4a1712e6). Settles R4-1's open point. Nothing is cut for lack of evidence, and use only sets the order (Brian 57deaed7).
 - **Evidence:** Notion's help page on [timelines][t]. I read it; I haven't used Notion's timeline. It doesn't cover moving a bar along the scale, making a bar, Group, sub-items, rows with no dates or the phone, so those parts are my proposal.
 - **Brian's use:** no databases at the last read (Nov 3, rev 793), so examples are illustrations.
