@@ -1,6 +1,6 @@
 # Bookmarks: one list of every bookmark page
 
-- Author: Bumblebee (Product) · 2026-11-04 · status: **design for the Lead's review**. Task #295. Roadbuster builds it
+- Author: Bumblebee (Product) · 2026-11-04 · status: **accepted by the Lead (26e18f56), not built**, including row opens the page and ↗ opens the site. Task #295. Roadbuster builds it
   after #294; Jazz looks at the rows.
 - Brian's note on the Nov 3 day page, as the Lead quoted it: "a bookmark entry for all of my bookmark pages, please think about the UX, we can
   do it with a page with special type of pages for bookmark, or a tag, or something else."
