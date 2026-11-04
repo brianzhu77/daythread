@@ -104,6 +104,7 @@ Jazz's screens should show a bookmark both ways, so this is judged on the real p
 - **Roadbuster:** this may not be a Postgres question. `linkedFrom` runs in the browser over the workspace it already holds, on
   every render of a page's head, and nothing is stored. So the cost to measure is that scan with a 10,000-row database, plus
   reading relation values if they're added. An index only matters if that's too slow.
+  **Measured (Roadbuster eb9de711, in Node on synthetic workspaces, not in a browser or on a phone):** 22 ms per scan at 10,000 rows and under 2 ms after the first at 566 pages, plus 0.32 ms at most for relations. No references table. Build it with `LinkedFrom` memoized on the page and workspace revision, because today it rescans on every render. Linked views and long row bodies weren't timed.
 
 ## 7. How we'll know
 
