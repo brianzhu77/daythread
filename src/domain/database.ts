@@ -1,6 +1,7 @@
 // Databases (docs/design/databases-model.md): a database is a page with `database` (its properties and views); a row
 // is a child page with `values`. Values are read through their property, never trusted as stored, so a schema change
 // rewrites only the database page. Pure: the domain's commands and the browser's views share it.
+import { rowTemplateTarget } from "./day-template.ts";
 import { formulaProblem, rollupProblem, worldOf } from "./formula.ts";
 import type { LocalDate, Page, WeekStart, Workspace } from "./types.ts";
 
@@ -137,6 +138,24 @@ export type DependencyMode = "overlap" | "keep" | "none";
 export interface Dependencies { blockedBy: string; blocking: string; date: string; end?: string; mode: DependencyMode; avoidWeekends?: true }
 export type SubItemsDisplay = "nested" | "flat";
 export type SubItemsShow = "both" | "parents" | "subs";
+/** A row template that makes a row every so often (R4-6), kept with the database, as what it makes lives there. */
+export interface Repeat {
+  every: "day" | "week" | "month" | "year";
+  interval: number;
+  start: LocalDate;
+  /** Weekly only, 0 is Sunday: the days it makes a row on. The start's weekday when absent. */
+  weekdays?: number[];
+  /** HH:mm; the start of the day when absent. */
+  time?: string;
+  paused?: true;
+  /** Make every period missed while he was away, not only the latest. */
+  everyMissed?: true;
+  /** When it was set up, YYYY-MM-DDTHH:mm: a start in the past doesn't reach back before this. */
+  notBefore?: string;
+  /** The last period it made, and when. */
+  last?: LocalDate;
+  lastRan?: string;
+}
 export interface Database {
   /** The `database` block that is its place in its parent page; null: shown as a full page. */
   homeBlockId: string | null;
@@ -150,6 +169,8 @@ export interface Database {
   /** Sub-items are on: which two self-relations make the tree (sub-items design §1). Turning them off clears this and keeps both. */
   subItems?: SubItems;
   dependencies?: Dependencies;
+  /** Row templates that repeat, by template id. */
+  repeats?: Record<string, Repeat>;
   /** The next row number, once an ID property has been made. It only goes up, past a delete or an undone add (R3-9). */
   nextRowNumber?: number;
 }
@@ -889,6 +910,7 @@ export type DatabaseChange =
   | { kind: "addView"; view: View }
   | { kind: "updateView"; viewId: string; cardImage?: string | null; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; openIn?: "center" | "side" | null; colourRules?: ColourRule[]; frozenThrough?: string | null; /** null: back to the default */ nameWidth?: number | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
   /** null: none */
+  | { kind: "setRepeat"; templateId: string; repeat: Omit<Repeat, "last" | "lastRan"> | null }
   | { kind: "setDefaultTemplate"; templateId: string | null }
   | { kind: "removeView"; viewId: string }
   | { kind: "moveView"; viewId: string; beforeId: string | null };
@@ -1427,6 +1449,25 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       };
       db.views[db.views.indexOf(old)] = next;
       return "View saved";
+    }
+    case "setRepeat": {
+      const template = ws.pages.find((p) => p.id === change.templateId);
+      if (!template || template.parentId !== rowTemplateTarget(page.id)) throw new DatabaseError("That template's gone");
+      const repeats = { ...db.repeats };
+      if (!change.repeat) delete repeats[change.templateId];
+      else {
+        const r = change.repeat;
+        if (!Number.isInteger(r.interval) || r.interval < 1 || r.interval > 999) throw new DatabaseError("Every how many?");
+        if (!validDateText(r.start) || r.start.length !== 10) throw new DatabaseError("Invalid start date");
+        if (r.time !== undefined && !/^([01]\d|2[0-3]):[0-5]\d$/.test(r.time)) throw new DatabaseError("Invalid time");
+        if (r.weekdays?.some((d) => !Number.isInteger(d) || d < 0 || d > 6)) throw new DatabaseError("Invalid weekday");
+        const weekdays = r.every === "week" && r.weekdays?.length ? [...new Set(r.weekdays)].sort((a, b) => a - b) : null;
+        const had = repeats[change.templateId];
+        // Changing the schedule keeps what it last made, so a period it's made doesn't come round again.
+        repeats[change.templateId] = { every: r.every, interval: r.interval, start: r.start, ...(weekdays ? { weekdays } : {}), ...(r.time ? { time: r.time } : {}), ...(r.paused ? { paused: true as const } : {}), ...(r.everyMissed ? { everyMissed: true as const } : {}), ...(r.notBefore ? { notBefore: r.notBefore } : {}), ...(had?.last ? { last: had.last } : {}), ...(had?.lastRan ? { lastRan: had.lastRan } : {}) };
+      }
+      if (Object.keys(repeats).length) db.repeats = repeats; else delete db.repeats;
+      return change.repeat ? "Repeat set" : "Repeat off";
     }
     case "setDefaultTemplate": {
       if (change.templateId) db.defaultTemplate = checkId(change.templateId); else delete db.defaultTemplate;
