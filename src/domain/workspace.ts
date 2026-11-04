@@ -993,6 +993,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (databaseRows(state, to.id).length >= 10_000) throw new DomainError(`${to.title.trim() || "That database"} is full`);
       applyRowMove(state, row, from, to, isoTime(action.at), newId);
       return { message: `Moved to ${to.title.trim() || "Untitled"}`, entityId: row.id };
+    }
     case "add-rows": {
       // An import: every row in one operation, so one Undo takes them all (csv design §5).
       addRows(state, databasePage(state, action.databaseId), action.rows, isoTime(action.at));
