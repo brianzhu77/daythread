@@ -201,3 +201,41 @@ export const GripIcon = () => (
     {[2, 8, 14].flatMap(y => [<circle key={`l${y}`} cx="2" cy={y} r="1.5" />, <circle key={`r${y}`} cx="8" cy={y} r="1.5" />])}
   </svg>
 )
+
+// The `/` menu's blocks, drawn as the rest of the app's icons are, so a row's icon doesn't change weight between Task and Bullet list.
+export const SyncedIcon = () => (
+  <Icon>
+    <path d="M19.5 12a7.5 7.5 0 0 1-13.1 5" />
+    <path d="M4.5 12A7.5 7.5 0 0 1 17.6 7" />
+    <path d="M18 3.5V7.5h-4M6 20.5V16.5h4" />
+  </Icon>
+)
+export const BodyIcon = () => (
+  <Icon>
+    <path d="M6 6.5h12M12 6.5V18.5M9.5 18.5h5" />
+  </Icon>
+)
+export const BulletListIcon = () => (
+  <Icon>
+    <path d="M9.5 7h10M9.5 12h10M9.5 17h10" />
+    <path d="M5 7h.01M5 12h.01M5 17h.01" strokeWidth="2.4" />
+  </Icon>
+)
+export const NumberedListIcon = () => (
+  <Icon>
+    <path d="M10 7h9.5M10 12h9.5M10 17h9.5" />
+    <path d="M4.5 5.5 6 4.8V9M4.5 14.2c.3-.6 2.6-.9 2.6.5 0 1-2.6 1.6-2.6 3h2.8" />
+  </Icon>
+)
+export const QuoteIcon = () => (
+  <Icon>
+    <path d="M6 5.5v13M10.5 8h8.5M10.5 12h8.5M10.5 16h5.5" />
+  </Icon>
+)
+export const SeparatorIcon = () => (
+  <Icon>
+    <path d="M4.5 12h15" />
+  </Icon>
+)
+/** H1, H2, H3 in the icon's place: a heading's level is the thing to read. */
+export const HeadingIcon = ({ level }: { level: 1 | 2 | 3 }) => <span className="slash-heading-icon" aria-hidden="true">H{level}</span>

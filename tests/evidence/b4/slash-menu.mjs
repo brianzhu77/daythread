@@ -7,7 +7,7 @@ import { chromium, webkit } from '/Users/dogrod/Developer/daythread/node_modules
 const [base] = process.argv.slice(2)
 if (!base || new URL(base).port === '3000') throw Error('Use a disposable loopback server')
 const KEYBOARD = 336
-const expected = ['Task', 'Page', 'Link to page', 'Bullet List', 'Heading 2', 'Heading 1', 'Heading 3', 'Quote', 'Numbered List', 'Body', 'Separator']
+const expected = ['Task', 'Page', 'Link to page', 'Database', 'Synced block', 'Bullet List', 'Heading 2', 'Heading 1', 'Heading 3', 'Quote', 'Numbered List', 'Body', 'Separator']
 let failed = 0
 const ok = (v, what, detail = '') => { if (!v) failed++; console.log(`${v ? 'PASS' : 'FAIL'} ${what}${detail ? ` (${detail})` : ''}`) }
 const menu = p => p.evaluate(() => {
