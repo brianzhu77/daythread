@@ -107,6 +107,8 @@ export interface View {
   dateBy?: string;
   /** Calendar: a week at a time; a month when absent (R3-20). */
   calendarSpan?: "week";
+  /** Where a row opens from this view (R4-11); a full page when absent. */
+  openIn?: "center" | "side";
 }
 export interface Database {
   /** The `database` block that is its place in its parent page; null: shown as a full page. */
@@ -787,7 +789,7 @@ export type DatabaseChange =
   | { kind: "removeProperty"; propertyId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
+  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; openIn?: "center" | "side" | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
   /** null: none */
   | { kind: "setDefaultTemplate"; templateId: string | null }
   | { kind: "removeView"; viewId: string }
@@ -1045,7 +1047,7 @@ function cleanLayout(input: unknown): ViewLayout {
   return input as ViewLayout;
 }
 const dateBys = new Set<unknown>(["day", "week", "month"]);
-type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "subGroupBy" | "subGroupDateBy" | "hiddenSubGroups" | "dateBy" | "calendarSpan">;
+type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "subGroupBy" | "subGroupDateBy" | "hiddenSubGroups" | "dateBy" | "openIn" | "calendarSpan">;
 /** A view's group fields, checked. A new `groupBy` must name a live property that can group; one it already holds may be deleted since, and is kept unread, so Undo or changing the type back reads it again. */
 function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before?: Pick<View, "groupBy" | "subGroupBy" | "dateBy">): GroupFields {
   const out: GroupFields = {};
@@ -1059,6 +1061,7 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
     out.dateBy = input.dateBy;
   }
   if (input.calendarSpan === "week") out.calendarSpan = "week";
+  if (input.openIn === "center" || input.openIn === "side") out.openIn = input.openIn;
   if (input.groupDateBy !== undefined) { if (!dateBys.has(input.groupDateBy)) throw new DatabaseError("Invalid view"); out.groupDateBy = input.groupDateBy; }
   if (input.hideEmptyGroups) out.hideEmptyGroups = true;
   if (input.subGroupBy !== undefined) {
@@ -1212,7 +1215,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     }
     case "updateView": {
       const old = view(change.viewId);
-      const { filterAny: _filterAny, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, ...rest } = old;
+      const { filterAny: _filterAny, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, openIn: _openIn, ...rest } = old;
       const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
       const group = cleanGroup(db, {
         groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
@@ -1224,6 +1227,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         hiddenSubGroups: change.hiddenSubGroups ?? old.hiddenSubGroups,
         dateBy: change.dateBy ?? old.dateBy,
         ...(change.calendarSpan === null ? {} : { calendarSpan: change.calendarSpan ?? old.calendarSpan }),
+        ...(change.openIn === null ? {} : { openIn: change.openIn ?? old.openIn }),
       }, layout, old);
       const next: View = {
         ...rest,

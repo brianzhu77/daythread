@@ -53,19 +53,7 @@ export function PagesScreen() {
   if (p && isTrashed(p)) return <TrashedPage key={p.id} page={p} workspace={workspace} />
   // A day page opened from the trash and just restored (B16): its home is its date.
   if (p?.type === 'daily' && p.date) return <Navigate to="/day/$date" params={{ date: p.date }} replace />
-  // A database's full page is its table, with no body (design §4.3); a row's page shows its properties over its body (§5).
-  const rowOf = p ? databaseOfRow(workspace, p) : null
-  if (p) return <div className="doc-screen"><PageHeaderRow page={p} workspace={workspace} />
-    <div className="page-head">
-      {p.type === 'document' ? <PageTitleField key={p.id} page={p} autoFocus={search.focus === 'title'} /> : <h1 className="large-title">{p.title}</h1>}
-      {!isDatabase(p) && <LinkUrlRow page={p} />}
-      <LinkedFrom page={p} workspace={workspace} />
-    </div>
-    {isDatabase(p) ? <DatabasePage key={p.id} workspace={withLinks(workspace)} db={withLinks(workspace).pages.find(x => x.id === p.id) as typeof p} /> : <>
-      {rowOf && <RowProperties key={p.id} workspace={withLinks(workspace)} row={withLinks(workspace).pages.find(x => x.id === p.id) ?? p} db={(withLinks(workspace).pages.find(x => x.id === rowOf.id) ?? rowOf) as typeof rowOf} />}
-      <ContinuousPage page={p} workspace={workspace} />
-      <Subpages page={p} workspace={workspace} />
-    </>}</div>
+  if (p) return <div className="doc-screen"><PageHeaderRow page={p} workspace={workspace} /><PageContent page={p} workspace={workspace} focus={search.focus} /></div>
   // Top-level pages, then pages made inside day pages by day (Lead 02cbc559); deeper pages are reached through each
   // page's Subpages list (layout §6).
   const documents = childPages(workspace, null)
@@ -247,4 +235,21 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
       <ContinuousPage page={page} workspace={workspace} />
     </div>
   )
+}
+
+/** A page's head and body, on its own screen or in a peek (peek.md §3). A database's full page is its table, with no body (design §4.3); a row's page shows its properties over its body (§5). */
+export function PageContent({ page: p, workspace, focus }: { page: Page; workspace: Workspace; focus?: 'title' | undefined }) {
+  const rowOf = databaseOfRow(workspace, p)
+  return <>
+    <div className="page-head">
+      {p.type === 'document' ? <PageTitleField key={p.id} page={p} autoFocus={focus === 'title'} /> : <h1 className="large-title">{p.title}</h1>}
+      {!isDatabase(p) && <LinkUrlRow page={p} />}
+      <LinkedFrom page={p} workspace={workspace} />
+    </div>
+    {isDatabase(p) ? <DatabasePage key={p.id} workspace={withLinks(workspace)} db={withLinks(workspace).pages.find(x => x.id === p.id) as typeof p} /> : <>
+      {rowOf && <RowProperties key={p.id} workspace={withLinks(workspace)} row={withLinks(workspace).pages.find(x => x.id === p.id) ?? p} db={(withLinks(workspace).pages.find(x => x.id === rowOf.id) ?? rowOf) as typeof rowOf} />}
+      <ContinuousPage page={p} workspace={workspace} />
+      <Subpages page={p} workspace={workspace} />
+    </>}
+  </>
 }
