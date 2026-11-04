@@ -16,7 +16,7 @@ import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { linkedViewJson, linkedViewOf } from '../domain/linked-view'
-import { blockLinesKey, blockUpdates, mirroredLines, syncedBlockType, syncedPlaces, writtenDocument, type BlockUpdate } from '../domain/synced'
+import { blockLinesKey, blockUpdates, mirroredLines, ownLineIds, syncedBlockType, syncedPlaces, writtenDocument, type BlockUpdate } from '../domain/synced'
 import { syncedKeys } from './synced-keys'
 import { SyncedEditorActions, SyncedLabel, type SyncedActions } from './synced-label'
 import { databaseSource, withTodos } from '../domain/todos-source'
@@ -974,7 +974,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       cutIds.forEach(id => cutTasks.current.delete(id))
       flags.detachDatabaseIds?.forEach(id => databaseFlags.current.detach.delete(id))
       flags.adoptDatabaseBlocks?.forEach(a => databaseFlags.current.adopt.delete(a.pageId))
-      dirty.current = !result.conflicted?.length && writtenDocument(JSON.stringify(editor.document)) !== writtenDocument(result.renamed ? renamedDocument(document, result.renamed) : document)
+      // Another place on this page may have just followed the save: nothing's left to send if the editor now holds what was saved.
+      const showing = writtenDocument(JSON.stringify(editor.document))
+      dirty.current = !result.conflicted?.length && showing !== writtenDocument(result.renamed ? renamedDocument(document, result.renamed) : document) && !(holdsBlock && showing === writtenDocument(savedPage.document))
       // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
       const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
       setFailed(false); setUnsaved(null); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
@@ -1068,17 +1070,22 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     blockKeys.current = keys
     if (suppress.current || composing.current) return
     const updates: { id: string; lines: EditorNode[] }[] = []
+    let changed: EditorNode | undefined
     for (const source of blocks) {
       if (!was.has(source.id) || was.get(source.id) === keys.get(source.id)) continue
+      changed = source
       for (const target of blocks) if (target.id !== source.id && target.props?.syncId === source.props?.syncId && keys.get(target.id) !== keys.get(source.id)) updates.push({ id: target.id, lines: mirroredLines(source, target, latestWorkspace.current.synced?.find(r => r.id === source.props?.syncId)) })
       break
     }
     if (!updates.length) return
     suppress.current = true
+    if (changed) applyRenamedLines(editor.prosemirrorView, ownLineIds(changed, latest()?.synced?.find(r => r.id === changed.props?.syncId)))
     editor.transact(tr => { for (const u of updates) editor.updateBlock(u.id, { children: u.lines } as never); tr.setMeta('addToHistory', false) })
     suppress.current = false
     blockKeys.current = new Map(deepNodes(nodes()).filter(n => n.type === syncedBlockType).map(n => [n.id, blockLinesKey(n)]))
   }
+  // What each block starts from: without it the first edit after opening a page has nothing to compare with, and doesn't reach the other place.
+  useEffect(() => { blockKeys.current = new Map(deepNodes(nodes()).filter(n => n.type === syncedBlockType).map(n => [n.id, blockLinesKey(n)])) }, [editor])
   useEffect(() => editor.onChange(() => {
     mirrorCopies()
     const before = taskRows.current, rows = readTaskRows()

@@ -200,6 +200,16 @@ export function mirroredLines(source: EditorNode, target: EditorNode, record: Sy
   const lines = unplaced(source)
   return placed(target, record ?? { id: '', lines: '[]', rev: 0, original: '' }, roles, lines)
 }
+/**
+ * What a place's own new lines become before they're mirrored. Until a save names them they carry the id the editor gave them, and
+ * the original, which keeps plain ids, is about to hold that same id: one page can't have it twice.
+ */
+export function ownLineIds(source: EditorNode, record: SyncedRecord | undefined): Record<string, string> {
+  const rename: Record<string, string> = {}
+  if (!record || record.original === source.id) return rename
+  walk(source.children ?? [], n => { if (!n.id.endsWith(`${separator}${source.id}`)) rename[n.id] = `${n.id}${separator}${source.id}` })
+  return rename
+}
 /** Every place a record is shown, Trash included, with the page it's on, in the workspace's order. */
 export function syncedPlaces(ws: Pick<Workspace, 'pages'>, syncId: string): { page: Page; block: EditorNode }[] {
   const out: { page: Page; block: EditorNode }[] = []
