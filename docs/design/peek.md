@@ -41,9 +41,9 @@ The peek holds what `pages-screen.tsx:58`-`:68` draws for a row now: the head wi
 | `+ New` | As today: at 1280 the title opens to be typed in the view. A peek opens only when asked |
 | ↗ in the peek's head | Full page, with the caret where it was if that's cheap |
 | ↑ ↓ in the peek's head | The previous or next row in this view's current order, across groups. Grey at either end. **Not the bare arrow keys,** which move the caret |
-| Esc | Closes it, after anything inside has had its Esc: a menu, the `/` list, a paste menu, a selection (`:360`, `:2377`, `:2462`) |
+| Esc | One layer per press, innermost first: a pinyin composition, a menu, the `/` list, a paste menu, a selection (`:360`, `:2377`, `:2462`), then the peek. So a caret in the body with nothing else open closes it. In a cell's editor behind a side peek, Esc leaves the cell first (Jazz c20b5a25) |
 | **Side:** tap another row | That row replaces it, after saving, with the view's scroll unmoved |
-| **Side:** tap empty space in the view | Closes it. Editing a cell leaves it open |
+| **Side:** tap empty space in the view | **Stays open** (Jazz c20b5a25). A press there can start a box drag or clear a pick, and a mis-tap would lose the caret and scroll in a long body. ×, Esc and Back close it. Editing a cell leaves it open too. **Known difference, on weak evidence:** [one user's post][tana] lists clicking away as closing Notion's side peek, and Notion's own page doesn't say. A one-line change if Brian expects it |
 | **Center:** tap outside | Closes it. The view behind doesn't respond |
 
 **Keeping the place:** the view never unmounted, so scroll, filters and folded groups stay, and the row just left isn't flashed with `useReturnedRow`.
@@ -59,7 +59,7 @@ The peek holds what `pages-screen.tsx:58`-`:68` draws for a row now: the head wi
 - **The open row leaves the view** because of a filter or an edit: the peek stays open on it. ↑ ↓ go on from where it was.
 - **The open row is deleted** from the view or another tab: as for a full page that's gone today. From the view, one Undo brings the row back, and the peek doesn't reopen.
 - **A synced block on both pages (B21):** the row's body and the page behind are then two places open in one tab, which is the path the Lead's #96 review found losing an edit (bugs 2 and 3, `1f45d7f2`). **So a peek must not ship before that fix,** and B21's script gets this case.
-- **Narrow windows:** below `popoverMinWidth` (900 px, `useWide`) it opens as a full page, as the phone does. **Center and side need a floor of their own, for Jazz to state,** because a side peek at 1000 px leaves little for either side.
+- **Narrow windows (Jazz c20b5a25):** a side peek needs 1100 px or more: the sidebar's 260, a view of at least 420, and a peek of at least 420. From 900 to 1099 a side setting opens as a center peek, so Brian stays on the view. Below `popoverMinWidth` (900 px, `useWide`) it opens as a full page, as the phone does, and so does a `?peek` link. **A window resized across a floor with a peek open** loses no words and keeps the same row open; the caret should stay if that's cheap.
 - **Menus and sheets:** the editor's menus use fixed portals, so they must sit above the peek. A center peek's focus trap mustn't shut them out.
 - **Old tabs and rollback:** an older build ignores the view's new field and keeps it when saving (R4-15). It opens as a full page.
 
@@ -77,8 +77,9 @@ Black, white and grey (116a40ab), with `--line` on the seam and no shadow unless
 
 ## 7. Open
 
-- **Jazz:** the `?peek` URL, Esc's order, and the floor for narrow windows. Is it wrong to close a side peek on empty space, given that a mis-tap costs only a reopen?
+- **Settled with Jazz (c20b5a25):** the `?peek` URL, Esc's order, the floors, and a side peek staying open on empty space, all above.
 - **Roadbuster:** §2's bet, that the leaving save covers closing a peek as it is.
 - **Not known, needs Notion itself:** what Notion does on keys and on the phone. I haven't used it, and its pages don't say.
 
 [h]: https://www.notion.com/help/views-filters-and-sorts
+[tana]: https://ideas.tana.inc/posts/460-peek-side-or-center
