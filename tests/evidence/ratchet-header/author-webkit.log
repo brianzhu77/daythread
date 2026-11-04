@@ -1,0 +1,37 @@
+PASS 1280: opened from Bookmarks, the header reads ‹ Bookmarks | the day "Bookmarks Tue, Nov 3"
+PASS 1280: with a line between them, not a chevron 
+PASS 1280: and the day isn't under Linked from as well ""
+PASS 1280: ‹ Bookmarks returns to the list with that row in view "http://127.0.0.1:3698/pages?view=bookmarks"
+PASS 1280: and a row far down the list too 1633
+PASS 1280: tapping the day lands on the card, marked {"url":"http://127.0.0.1:3698/day/2026-11-03","flash":1,"cardIn":true}
+PASS 1280: from anywhere else: the same day, no ‹ Bookmarks "Tue, Nov 3"
+PASS 1280: from Search too "Tue, Nov 3"
+PASS 1280: a long path fits, with nothing cut off unmarked {"over":false,"cut":0,"noMark":0,"crumbs":"Pages Projects Daythread Design notes and things to look at again R4 review"}
+PASS 1280: with the way back as well "Bookmarks Pages Projects Daythread Design notes and things to look at again R4 review"
+PASS 1280: a day has no path 
+PASS 1280: and what links to it is under its date "Linked from Projects"
+PASS 1280: a row's path ends in its database "Pages Projects Work"
+PASS 1280: a sub-item's goes on through its parent rows "Pages Projects Work Launch the app Build the site"
+PASS 1280: stopping at one in Trash "Pages Projects Work Middle row"
+PASS 1280: saved on two days: the first in the header, the second under Linked from ["Sun, Oct 25","Linked from Tue, Nov 3"]
+PASS 1280: no page errors []
+PASS 390: opened from Bookmarks, the header reads ‹ Bookmarks | the day "Bookmarks Tue, Nov 3"
+PASS 390: with a line between them, not a chevron 
+PASS 390: and the day isn't under Linked from as well ""
+PASS 390: ‹ Bookmarks returns to the list with that row in view "http://127.0.0.1:3698/pages?view=bookmarks"
+PASS 390: and a row far down the list too 1587
+PASS 390: tapping the day lands on the card, marked {"url":"http://127.0.0.1:3698/day/2026-11-03","flash":1,"cardIn":true}
+PASS 390: from anywhere else: the same day, no ‹ Bookmarks "Tue, Nov 3"
+PASS 390: from Search too "Tue, Nov 3"
+PASS 390: a long path fits, with nothing cut off unmarked {"over":false,"cut":0,"noMark":0,"crumbs":"Pages … R4 review"}
+PASS 390: and its middle folds "Pages … R4 review"
+PASS 390: with every level still reachable "Design notes and things to look at again,Daythread,Projects"
+PASS 390: with the way back as well "Bookmarks Pages … R4 review"
+PASS 390: a day has no path 
+PASS 390: and what links to it is under its date "Linked from Projects"
+PASS 390: a row's path ends in its database "Pages Projects Work"
+PASS 390: a sub-item's goes on through its parent rows "Pages … Build the site"
+PASS 390: stopping at one in Trash "Pages Projects Work Middle row"
+PASS 390: saved on two days: the first in the header, the second under Linked from ["Sun, Oct 25","Linked from Tue, Nov 3"]
+PASS 390: no page errors []
+ALL PASS
