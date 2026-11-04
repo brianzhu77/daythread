@@ -25,6 +25,7 @@
 | `/image`, `/file` | A small panel at the line: **Upload** and **Paste a link**. Upload opens the file chooser | The same, as a sheet. `/image` opens the phone's photo picker, `/file` its file picker |
 | Drag onto the page | The editor's drop line shows where. One block per file, in the order dropped | Not applicable |
 | Paste | A screenshot lands at the caret, and the caret goes to the line below, so typing carries on | The same |
+| Paste holding text and an image | **Text wins,** as it does today. Numbers, Excel and Word can put both on the clipboard, and a pasted table mustn't turn into a picture (Bumblebee). An image lands only when the clipboard holds nothing else. Not yet tried in those apps | The same |
 | Paste a link to an image | As today: B44's paste menu. Not fetched or copied into our store | The same |
 
 - **Several files** upload three at a time, each with its own block, so one failure doesn't touch the others.
@@ -45,13 +46,14 @@ The other way, adding the block only when the upload ends, would move the words 
 | Failed | "Not uploaded · Retry" | Retry, Remove |
 | Too large | "Too large · 25 MB at most". Said at once, no attempt | Remove |
 | Account full | "Storage full · 5 GB at most" | Remove |
-| Reloaded before it finished | "Didn't finish uploading · Choose again" | Choose again, Remove. The tab's copy of the bytes has gone |
 | Leaving the page mid-upload | Carries on while the tab is open. Coming back shows where it's got to | |
 | Closing the tab mid-upload | The browser's usual "leave site?", as for unsaved words | |
-| Open in another tab or device | "Uploading elsewhere", then the image once the object exists | Remove |
+| **Anything else with no file to find:** a reload mid-upload, a tab closed mid-upload, another device while it uploads, or a backup older than 7 days | "{name} isn't here · Choose again" | Choose again, Remove. It looks again when the page regains focus, so an upload that has finished shows up |
 
 - **The page's "Saved"** is about words, and doesn't wait for an upload. Each block speaks for itself.
+- **One state, not three (Bumblebee):** nothing in the document changes when an upload ends, so a tab without the bytes can't tell "still uploading" from "never finished" from "gone". A stored "finished" flag would, but it adds a save at the end of every upload, and the distinction doesn't earn that. It also means a closed tab can't leave another device saying "uploading" for ever.
 - **Undo** while uploading removes the block and cancels the upload.
+- **Undo after deleting a block mid-upload** brings the block back. If the tab still has the bytes it reads "Not uploaded · Retry". If not, it's the state above (B87 7).
 
 ## 5. An image, selected
 
@@ -72,7 +74,7 @@ At 390 a tap selects it, and the same actions are in the block's `⋯`. **No res
 | State | What shows |
 | --- | --- |
 | Loading | A box at its saved size, or a 16:9 one if it has none, in `--fill`, so the page doesn't jump |
-| A file gone (a backup older than 7 days) | "This file is gone", with its name. No broken-image mark. Remove works |
+| A file not found | "{name} isn't here · Choose again" (§4). No broken-image mark |
 | A link to an image that fails | "Can't load this image", with the address. As Gallery says, the card just goes without |
 | Offline | As failing, with "Offline" |
 | An old tab or an old build | Keeps the block untouched (B87 12). An old build draws an image with no address as an empty block, so `url` should hold `/api/files/:id`, which also helps export and Gallery |
@@ -87,8 +89,8 @@ At 390 a tap selects it, and the same actions are in the block's `⋯`. **No res
 
 ## 8. Questions
 
-1. **@Roadbuster:** does Files' `PUT /api/files/:id` take an id the client makes? §4 needs that. If Files' cell uses the same pending shape, they can share the progress and failure words.
-2. **@Roadbuster:** an old build with `url: /api/files/:id` and an upload not finished draws a broken image. Is that worth a check on the state, or fine for a short release gap?
-3. **@Bumblebee:** "Storage full · 5 GB at most" and "Too large · 25 MB at most" are the only places the limits show, as R3-11 asks. Are you happy with those words?
+1. **@Roadbuster:** does Files' `PUT /api/files/:id` take an id the client makes? §4 needs that. If Files' cell uses the same pending shape, they can share the progress and failure words. **It must never overwrite an object,** as a copied block shares its id, and a retry of a finished upload just succeeds and changes nothing (Bumblebee).
+
+**Settled (Bumblebee, 2026-11-04):** the main decision in §4, the words "Too large · 25 MB at most" and "Storage full · 5 GB at most", and accepting an old build's broken image for a short release gap, as it only affects an upload in progress across a release.
 
 **Left out, for §14 Later:** crop and mask, alt text, comments on an image, columns, Unsplash (B87's own list). Also a lightbox: ↗ covers looking closely for now.
