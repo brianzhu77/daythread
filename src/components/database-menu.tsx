@@ -743,7 +743,7 @@ function NewPropertyPanel({ db, view, go, beforeId }: { db: DatabasePage; view: 
   const make = (type: PropertyType) => {
     const id = newId()
     const linked = isLinkedBlock(blockId)
-    change({ kind: 'addProperty', property: { id, name: name.trim() || typeLabels[type], type, ...linkFields(workspace, db, type) }, ...(linked ? {} : { viewId: view.id, ...(beforeId ? { beforeId } : {}) }) })
+    change({ kind: 'addProperty', property: { id, name: name.trim() || typeLabels[type], type, ...linkFields(workspace, db, type) }, ...(linked ? {} : { viewId: view.id, ...(beforeId ? { beforeId } : {}) }) }, true)
     if (linked) changeView(current => { const at = beforeId ? current.columns.findIndex(c => c.id === beforeId) : -1; return { columns: at < 0 ? [...current.columns, { id }] : [...current.columns.slice(0, at), { id }, ...current.columns.slice(at)] } })
     go(type === 'formula' ? { formula: id } : { property: id })
   }

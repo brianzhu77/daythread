@@ -960,7 +960,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
     void run(ws => {
       const now = ws.pages.find(p => p.id === db.id)
       return isDatabase(now) ? { type: 'change-database', pageId: db.id, change: { kind: 'addProperty', property: { id, name: uniqueName(now.database), type: 'text' }, ...(linked ? {} : { viewId: view.id }) } } : null
-    })
+    }, r => ({ text: r.message, undoOperationId: r.operationId }))
     // A linked view shows it in its own columns; the source's views only list it.
     if (linked) changeView(current => ({ columns: [...current.columns, { id }] }))
   }
@@ -1406,7 +1406,7 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
   usePendingCells()
   const failedHere = [...pendingCells.values()].filter(p => p.failed && !p.part && p.databaseId === db.id)
   const shown = fold ? properties.filter(p => !empty.includes(p)) : properties
-  const addProperty = () => void run({ type: 'change-database', pageId: db.id, change: { kind: 'addProperty', property: { id: newId(), name: uniqueName(db.database), type: 'text' } } })
+  const addProperty = () => void run({ type: 'change-database', pageId: db.id, change: { kind: 'addProperty', property: { id: newId(), name: uniqueName(db.database), type: 'text' } } }, r => ({ text: r.message, undoOperationId: r.operationId }))
   void workspace
   return <div className="row-properties" aria-label="Properties">
     {shown.map(property => {
