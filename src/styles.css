@@ -1895,7 +1895,9 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .csv-import-words { display: flex; flex-direction: column; min-width: 0; }
 .csv-import-header { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }
 .database-menu-quiet.csv-import-samples { padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.csv-import-bad { grid-column: 1 / -1; color: var(--red); font-size: var(--text-meta); }
+.csv-import-bad { grid-column: 1 / -1; color: var(--formula-red); font-size: var(--text-meta); }
+.csv-import .database-menu-head { padding-inline: 6px; }
+.csv-import-caption { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 10px; padding: 0 6px; color: var(--ink-3); font-size: var(--text-caption); }
 .csv-import-summary { padding: 4px 6px; font-size: var(--text-meta); }
 .csv-import-summary p { margin: 0 0 2px; overflow-wrap: anywhere; }
 .csv-import .formula-actions { display: flex; }
@@ -2030,7 +2032,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
   .database-menu > button[role=menuitem], .database-menu-head, .database-property-line, .database-menu-row { min-height: 44px; }
   .database-menu input:not([type=checkbox]), .database-menu select { min-height: 40px; font-size: 16px; }
   .csv-import { top: auto; left: 0; transform: none; width: auto; max-height: 85vh; }
-  .csv-import-column { grid-template-columns: minmax(0, 1fr) 130px; }
+  .csv-import-column, .csv-import-caption { grid-template-columns: minmax(0, 1fr) 130px; }
   .csv-import .formula-actions button { min-height: 44px; }
   /* A sheet above the keyboard: the only panel opened to type at length (design §4). */
   .database-menu:has(.formula-editor) { bottom: var(--keyboard-lift, 0px) !important; width: auto; max-height: calc(85vh - var(--keyboard-lift, 0px)); }

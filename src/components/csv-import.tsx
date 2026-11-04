@@ -70,6 +70,7 @@ function ImportDialog({ open: { into, name, text } }: { open: Open }) {
     <div className="app-menu database-menu csv-import" role="dialog" aria-label="Import CSV" onKeyDown={e => e.stopPropagation()}>
       <div className="database-menu-head"><span>{into.kind === 'merge' ? `Merge with ${target?.title || 'Untitled'}` : 'Import CSV'}</span></div>
       {into.kind === 'new' && <input className="database-menu-field" aria-label="Database name" placeholder="Database name" value={title} onChange={e => setTitle(e.target.value)} />}
+      <div className="csv-import-caption" aria-hidden="true"><span>Column</span><span>Imports as</span></div>
       <div className="csv-import-columns">
         {sheet.columns.map(c => <div key={c.index} className="csv-import-column">
           <div className="csv-import-words">
@@ -79,14 +80,14 @@ function ImportDialog({ open: { into, name, text } }: { open: Open }) {
           <select aria-label={`Where ${c.header} goes`} value={targetKey(c.target)} onChange={e => choose(c.index, e.target.value)}>
             <option value="name">Name</option>
             {properties.length > 0 && <optgroup label={`In ${target?.title || 'Untitled'}`}>{properties.map(p => <option key={p.id} value={`existing:${p.id}`}>{p.name}</option>)}</optgroup>}
-            <optgroup label="New property">{importKinds.map(k => <option key={k} value={`new:${k}`}>{typeLabels[k]}</option>)}</optgroup>
+            <optgroup label="New property">{importKinds.map(k => <option key={k} value={`new:${k}`}>{into.kind === 'merge' ? `New ${typeLabels[k]}` : typeLabels[k]}</option>)}</optgroup>
             <option value="skip">Don't import</option>
           </select>
           {Boolean(plan.badByColumn[c.index]) && <span className="csv-import-bad">{plan.badByColumn[c.index]} won't read</span>}
         </div>)}
       </div>
       <div className="csv-import-summary" role="status">
-        <p>{plan.rows.length.toLocaleString('en-US')} row{plan.rows.length === 1 ? '' : 's'} to add. It only adds rows, and doesn't look for duplicates.</p>
+        <p>It only adds rows, and doesn't look for duplicates.</p>
         {plan.skipped.length > 0 && <p>Left out: {plan.skipped.join(', ')}</p>}
         {sheet.extraCells > 0 && <p className="csv-import-bad">{sheet.extraCells} cell{sheet.extraCells === 1 ? '' : 's'} past the last header left out</p>}
         {plan.bad.length > 0 && <p className="csv-import-bad">{plan.bad.length} cell{plan.bad.length === 1 ? '' : 's'} won't read and stay empty: {plan.bad.slice(0, 5).map(b => `row ${b.row}, ${b.column}: “${b.value}”`).join('; ')}{plan.bad.length > 5 ? ` and ${plan.bad.length - 5} more` : ''}</p>}
@@ -95,7 +96,7 @@ function ImportDialog({ open: { into, name, text } }: { open: Open }) {
       <div className="formula-actions">
         <span className="formula-actions-end">
           <button type="button" onClick={close}>Cancel</button>
-          <button type="button" className="formula-done" disabled={busy || Boolean(refusal) || !plan.rows.length} onClick={() => void write()}>Import</button>
+          <button type="button" className="formula-done" disabled={busy || Boolean(refusal) || !plan.rows.length} onClick={() => void write()}>{busy ? 'Importing…' : plan.rows.length ? `Import ${plan.rows.length.toLocaleString('en-US')} row${plan.rows.length === 1 ? '' : 's'}` : 'Import'}</button>
         </span>
       </div>
     </div>
