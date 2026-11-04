@@ -145,6 +145,7 @@ export type Action =
   | { type: "change-database"; pageId: string; change: import("./database.ts").DatabaseChange }
   /** A row, at the end or before `beforeId`; `copyOf`: Duplicate row, copying that row's values and body. */
   | { type: "add-rows"; databaseId: string; rows: Array<{ pageId: string; title: string; values?: Record<string, import("./database.ts").Json> }>; at: string }
+  | { type: "paste-cells"; databaseId: string; items: import("./database.ts").RowEdit[]; rows: Array<{ pageId: string; title: string; values?: Record<string, import("./database.ts").Json> }>; at: string }
   | { type: "add-row"; databaseId: string; pageId: string; title: string; values?: Record<string, import("./database.ts").Json>; beforeId?: string | null; copyOf?: string; /** A template of this database: its values under `values`, its body, and its title if there's none. */ template?: string; at: string }
   /** `beforeId`: also moves the row, in one Undo (a card dragged to another column); null is the end. */
   /** `newTodos`: to-dos named in a relation's pick list, made here so that one Undo takes them and their link (R3-25). */

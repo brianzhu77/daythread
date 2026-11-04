@@ -5,6 +5,7 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
+import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
@@ -399,18 +400,8 @@ export function DatabaseCellEditor() {
     onRestoreTarget={property.target ? () => void run({ type: 'restore-page', pageId: property.target! }) : undefined} />
 }
 
-/** What a pasted line means in a cell: undefined when it means nothing there. An option is found by its name; a new one isn't made by a paste. */
-function pastedValue(db: Database, property: Property, line: string): Json | undefined {
-  const text = line.trim()
-  if (line.length > 10_000) return undefined
-  if (property.id === titleId || property.type === 'text') return line
-  if (property.type === 'url' || property.type === 'email' || property.type === 'phone') return text
-  if (isReadOnly(property)) return undefined
-  if (property.type === 'number') { const n = Number(text.replace(/,/g, '')); return Number.isFinite(n) ? n : undefined }
-  const option = (propertyOf(db, property.id)?.options ?? []).find(o => o.name.toLowerCase() === text.toLowerCase())
-  if (property.type === 'select' || property.type === 'status') return option?.id
-  if (property.type === 'multiSelect' || property.type === 'relation') return option ? [option.id] : undefined
-  return undefined
+function pasteCounts(p: PastePlan): string {
+  return [`${p.pasted} cell${p.pasted === 1 ? '' : 's'} pasted`, p.unconverted && `${p.unconverted} couldn't convert`, p.readOnly && `${p.readOnly} read-only`, p.dropped && `${p.dropped} didn't fit`].filter(Boolean).join(' · ')
 }
 
 /** To-dos named in a relation's pick list: nothing until the cell saves, in that one command, so one Undo takes both and one unticked first is never made (R3-25). */
@@ -954,12 +945,31 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
       if (e.type === 'cut' && c > 0 && !isReadOnly(property) && !isEmptyValue(value)) commit(db, row, property.id, undefined)
       return
     }
-    const lines = (e.clipboardData?.getData('text/plain') ?? '').replace(/\r?\n$/, '').split(/\r?\n/), first = lines[0]!
+    const pasted = (e.clipboardData?.getData('text/plain') ?? '').replace(/\r?\n$/, '')
+    const grid = parseDelimited(pasted, '\t')
+    if (grid.length > 1 || (grid[0]?.length ?? 0) > 1) {
+      // To-dos' columns are its tasks' own commands, one at a time.
+      if (!db.database.fixed) { pasteGrid(grid, r, c); return }
+    }
+    const lines = pasted.split(/\r?\n/), first = lines[0] ?? ''
     if (!first.trim()) return
     const raw = pastedValue(db.database, property, first)
-    if (raw === undefined) { toast(`Can't paste that into ${property.name}`, { timeout: 6000 }); return }
+    if (raw === undefined || raw === null) { toast(`Can't paste that into ${property.name}`, { timeout: 6000 }); return }
     commit(db, row, property.id, raw)
     if (lines.length > 1) toast('Pasted the first line only', { timeout: 6000 })
+  }
+  /** Across and down from the selected cell, over what's shown, as one change with one Undo (csv design §3). */
+  const pasteGrid = (grid: string[][], r: number, c: number) => {
+    const cells = grid.reduce((n, line) => n + line.length, 0)
+    if (cells > maxPastedCells) { toast(`That's ${cells} cells. A paste takes up to ${maxPastedCells}.`, { timeout: 6000 }); return }
+    // Rows past the ones drawn are still in the view, unless it's grouped, where what's next is a matter of which group's open.
+    const onward = groups ? shown : rows
+    const start = groups ? r : Math.max(0, rows.findIndex(x => x.id === shown[r]?.id))
+    const plan = planPaste(db.database, grid, onward, [titleProperty, ...columns.map(x => x.property)], start, c)
+    if (!plan.items.length && !plan.newRows.length) { toast(`Nothing to paste there · ${pasteCounts(plan)}`, { timeout: 6000 }); return }
+    const made = newRowValues(db.database, view, context)
+    const newRows = plan.newRows.map(n => ({ pageId: newId(), title: n.title || made.title, values: { ...made.values, ...n.values } }))
+    void run({ type: 'paste-cells', databaseId: db.id, items: plan.items, rows: newRows, at: new Date().toISOString() }, x => ({ text: `${pasteCounts(plan)}${newRows.length && !made.visible ? ' · hidden by this view\'s filter' : ''}`, undoOperationId: x.operationId }))
   }
   const clipboardHandler = useRef(onClipboard)
   clipboardHandler.current = onClipboard

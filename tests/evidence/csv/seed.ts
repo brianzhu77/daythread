@@ -19,5 +19,5 @@ await run({ type: 'add-row', databaseId: 'books', pageId: 'gone', title: 'Short'
 const dune = ws.pages.find(p => p.id === 'dune')!
 await run({ type: 'save-editor', pageId: 'dune', expectedContent: pageContentKey(dune), document: JSON.stringify([{ id: 'body1', type: 'paragraph', props: {}, content: [{ type: 'text', text: 'A body for Dune', styles: {} }], children: [] }]), today: new Date().toISOString().slice(0, 10) })
 const db = ws.pages.find(p => p.id === 'books')!.database!
-await run({ type: 'change-database', pageId: 'books', change: { kind: 'updateView', viewId: db.views[0]!.id, columns: [{ id: 'pages' }, { id: 'notes' }], filter: [{ by: 'pages', op: 'gt', value: 100 }] } })
+if (process.argv[3] !== 'all') await run({ type: 'change-database', pageId: 'books', change: { kind: 'updateView', viewId: db.views[0]!.id, columns: [{ id: 'pages' }, { id: 'notes' }], filter: [{ by: 'pages', op: 'gt', value: 100 }] } })
 console.log('seeded', process.argv[2])

@@ -356,6 +356,20 @@ function rowEdit(state: Workspace, edit: RowEdit, at: string): void {
   // A template isn't a row, so nothing links back to it; the rows made from it do that.
   if (!rowTemplateDatabaseId(row)) relations.forEach((p, i) => syncMirror(state, p, row.id, before[i]!, links(p.id), at));
 }
+function addRows(state: Workspace, db: ReturnType<typeof databasePage>, rows: Array<{ pageId: string; title: string; values?: Record<string, import("./database.ts").Json> }>, at: string): void {
+  if (databaseRows(state, db.id).length + rows.length > 10_000) throw new DomainError("Too many rows");
+  const taken = new Set(state.pages.map((p) => p.id));
+  for (const { pageId, title, values: input } of rows) {
+    if (taken.has(pageId) || reservedTargets.has(pageId)) throw new DomainError("Page id already in use");
+    taken.add(pageId);
+    let values: Page["values"];
+    try { values = newRowStored(db.database, input); } catch (error) { throw new DomainError((error as Error).message); }
+    const row: Page = { id: pageId, type: "document", date: null, title: text(title, 1000).trim(), parentId: db.id, document: JSON.stringify([emptyLine("paragraph")]), ...(values ? { values } : {}), createdAt: at, editedAt: at };
+    numberNewRow(db.database, row);
+    for (const p of db.database.properties) { const raw = row.values?.[p.id]; if (p.type === "relation" && Array.isArray(raw)) syncMirror(state, p, row.id, [], raw as string[], at); }
+    state.pages.push(row);
+  }
+}
 /** The local day of an ISO time in the workspace's zone. */
 const localDay = (state: Workspace, at: string): string => new Date(at).toLocaleDateString("en-CA", { timeZone: state.timezone });
 /** A4: what Restore on a page brings back: the page plus its descendants trashed in the same delete. */
@@ -946,21 +960,19 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     }
     case "add-rows": {
       // An import: every row in one operation, so one Undo takes them all (csv design §5).
-      const db = databasePage(state, action.databaseId);
+      addRows(state, databasePage(state, action.databaseId), action.rows, isoTime(action.at));
+      return { message: `${action.rows.length} rows added`, entityId: action.databaseId };
+    }
+    case "paste-cells": {
+      // A grid from a spreadsheet: the cells it lands on and the rows it needs, with one Undo (csv design §3).
       const at = isoTime(action.at);
-      if (databaseRows(state, db.id).length + action.rows.length > 10_000) throw new DomainError("Too many rows");
-      const taken = new Set(state.pages.map((p) => p.id));
-      for (const { pageId, title, values: input } of action.rows) {
-        if (taken.has(pageId) || reservedTargets.has(pageId)) throw new DomainError("Page id already in use");
-        taken.add(pageId);
-        let values: Page["values"];
-        try { values = newRowStored(db.database, input); } catch (error) { throw new DomainError((error as Error).message); }
-        const row: Page = { id: pageId, type: "document", date: null, title: text(title, 1000).trim(), parentId: db.id, document: JSON.stringify([emptyLine("paragraph")]), ...(values ? { values } : {}), createdAt: at, editedAt: at };
-        numberNewRow(db.database, row);
-        for (const p of db.database.properties) { const raw = row.values?.[p.id]; if (p.type === "relation" && Array.isArray(raw)) syncMirror(state, p, row.id, [], raw as string[], at); }
-        state.pages.push(row);
+      if (new Set(action.items.map((i) => i.pageId)).size !== action.items.length) throw new DomainError("Invalid rows");
+      for (const item of action.items) {
+        if (rowPage(state, item.pageId, true).db.id !== action.databaseId) throw new DomainError("Not a row");
+        rowEdit(state, item, at);
       }
-      return { message: `${action.rows.length} rows added`, entityId: db.id };
+      addRows(state, databasePage(state, action.databaseId), action.rows, at);
+      return { message: "Pasted", entityId: action.databaseId };
     }
     case "set-values": {
       // On that day's page, made from his template if need be, as `+ New` in To-dos does (R2-11). A resend finds it made already.
