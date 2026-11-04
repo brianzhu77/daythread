@@ -29,6 +29,12 @@ for (const colorScheme of ['light', 'dark']) {
       rows.push({ what: `${n} on its tint`, ratio: ratio(text, tint), gated: true })
       rows.push({ what: `ink on ${n} tint`, ratio: ratio(ink, tint), gated: true })
       rows.push({ what: `${n} tint against the page`, ratio: ratio(tint, page), gated: false })
+      // A rule's tint behind a row (R4-12): its words, its quieter words, and a formula's colours on it.
+      const rule = over(rgba(resolve(`--tint-${n}`)), page)
+      rows.push({ what: `ink on rule ${n}`, ratio: ratio(ink, rule), gated: true })
+      rows.push({ what: `ink-2 on rule ${n}`, ratio: ratio(over(rgba(resolve('--ink-2')), page), rule), gated: true })
+      rows.push({ what: `ink-3 on rule ${n}`, ratio: ratio(over(rgba(resolve('--ink-3')), page), rule), gated: false, quiet: true })
+      for (const m of names) rows.push({ what: `${m} on rule ${n}`, ratio: ratio(over(rgba(resolve(`--formula-${m}`)), page), rule), gated: false, onRule: true })
       for (const m of names) if (m !== n) rows.push({ what: `${n} on ${m} tint`, ratio: ratio(text, over(rgba(resolve(`--formula-${m}-tint`)), page)), gated: false, other: true })
     }
     return rows
@@ -40,6 +46,9 @@ for (const colorScheme of ['light', 'dark']) {
   for (const r of below) console.log(`  BELOW ${r.what} ${r.ratio.toFixed(2)}`)
   const others = out.filter(r => r.other), low = others.reduce((a, b) => (a.ratio < b.ratio ? a : b))
   console.log(`  another colour's tint, not gated: lowest ${low.what} ${low.ratio.toFixed(2)}, ${others.filter(r => r.ratio < 4.5).length} of ${others.length} below 4.5`)
+  const quiet = out.filter(r => r.quiet), lowQuiet = quiet.reduce((a, b) => (a.ratio < b.ratio ? a : b)), onRule = out.filter(r => r.onRule), lowRule = onRule.reduce((a, b) => (a.ratio < b.ratio ? a : b))
+  console.log(`  ink-3 on a rule, not gated: lowest ${lowQuiet.what} ${lowQuiet.ratio.toFixed(2)}`)
+  console.log(`  a formula's colour in a tinted row, not gated: lowest ${lowRule.what} ${lowRule.ratio.toFixed(2)}, ${onRule.filter(r => r.ratio < 4.5).length} of ${onRule.length} below 4.5`)
   const tints = out.filter(r => r.what.endsWith('against the page')), faint = tints.reduce((a, b) => (a.ratio < b.ratio ? a : b))
   console.log(`  faintest tint against the page: ${faint.what.split(' ')[0]} ${faint.ratio.toFixed(2)}`)
   await page.close()
