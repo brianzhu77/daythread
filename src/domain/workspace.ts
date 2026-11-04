@@ -351,6 +351,32 @@ function trashSubtree(state: Workspace, p: Page, at: string, operationId: string
   for (const x of members) { x.trashedAt = at; x.trashId = operationId; }
   return members;
 }
+/**
+ * Several at once (a bar's Delete): what `trashSubtree` reaches for each of them, walking the workspace once, or All on a big table takes seconds.
+ * Returns how many sub-items went that weren't picked. Two tests hold it to the one at a time: `tests/bar-limit.test.ts`.
+ */
+function trashTogether(state: Workspace, pages: Page[], at: string, operationId: string): number {
+  const children = new Map<string, Page[]>(), subs = new Map<string, Page[]>(), byId = new Map(state.pages.map((x) => [x.id, x]));
+  const add = (map: Map<string, Page[]>, key: string, x: Page) => { const list = map.get(key); if (list) list.push(x); else map.set(key, [x]); };
+  for (const x of state.pages) {
+    if (!x.parentId) continue;
+    const parent = byId.get(x.parentId);
+    // As `subtreeIds`: a template's parentId is what it's the default for, and it never goes with that page.
+    if (!isTemplate(x) && !isDraft(x)) add(children, x.parentId, x);
+    const links = isDatabase(parent) && x.type === "document" && !isTrashed(x) ? parent.database.subItems : undefined;
+    const up = links ? parentIdOf(x, links) : null;
+    if (up) add(subs, up, x);
+  }
+  const picked = new Set(pages.map((p) => p.id)), going = new Set<string>();
+  const under = (id: string, map: Map<string, Page[]>, into: Set<string>) => {
+    for (const stack = [id]; stack.length; ) for (const x of map.get(stack.pop()!) ?? []) if (!into.has(x.id)) { into.add(x.id); stack.push(x.id); }
+  };
+  for (const id of picked) under(id, subs, going);
+  const ids = new Set([...picked, ...going]);
+  for (const id of [...ids]) under(id, children, ids);
+  for (const x of state.pages) if (ids.has(x.id) && !isTrashed(x)) { x.trashedAt = at; x.trashId = operationId; }
+  return [...going].filter((id) => !picked.has(id)).length;
+}
 function isoTime(value: string | undefined): string {
   if (value === undefined) return new Date().toISOString();
   if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) throw new DomainError("Invalid time");
@@ -980,7 +1006,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       for (const { database, template, dates, skipped: missed } of dueRepeats(state, action.today, action.time)) {
         const repeat = database.database.repeats![template.id]!;
         let noRoom = 0;
-        for (const date of dates.slice(0, databaseLimits.rowsAtOnce)) {
+        for (const date of dates.slice(0, databaseLimits.repeatsAtOnce)) {
           const pageId = repeatRowId(template.id, date);
           // A row he's deleted since, or one another tab just made, stays as it is.
           if (!state.pages.some((p) => p.id === pageId)) {
@@ -1119,12 +1145,11 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
     case "delete-pages": {
       const at = isoTime(action.at);
       const pages = action.pageIds.map((id) => page(state, id));
-      if (!pages.length || new Set(action.pageIds).size !== pages.length) throw new DomainError("Invalid pages");
+      if (!pages.length || pages.length > databaseLimits.rowsAtOnce || new Set(action.pageIds).size !== pages.length) throw new DomainError("Invalid pages");
       for (const p of pages) { if (p.type !== "document") throw new DomainError("Day pages can't be deleted"); if (isTrashed(p)) throw new DomainError("Page is in trash"); }
-      const rows = pages.every((p) => databaseOfRow(state, p));
-      const picked = new Set(action.pageIds);
-      const going = new Set(pages.flatMap((p) => subItemsGoing(state, p)).filter((x) => !picked.has(x.id)).map((x) => x.id)).size;
-      for (const p of pages) if (!isTrashed(p)) trashSubtree(state, p, at, operationId);
+      const byId = new Map(state.pages.map((x) => [x.id, x]));
+      const rows = pages.every((p) => { const parent = p.parentId ? byId.get(p.parentId) : undefined; return isDatabase(parent); });
+      const going = trashTogether(state, pages, at, operationId);
       const n = pages.length;
       return { message: `${n} ${rows ? (n === 1 ? "row" : "rows") : n === 1 ? "page" : "pages"} moved to trash${going ? ` · ${going} sub-item${going === 1 ? "" : "s"}` : ""}` };
     }

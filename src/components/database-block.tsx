@@ -1246,7 +1246,7 @@ export function useRowPicking(blockId: string, db: Page & { database: Database }
     lastPicked.current = rowId
   }
   const deletePicked = () => {
-    const ids = picked.filter(id => rows.some(r => r.id === id))
+    const here = new Set(rows.map(r => r.id)), ids = picked.filter(id => here.has(id))
     stopPicking()
     if (ids.length) void run({ type: 'delete-pages', pageIds: ids, at: new Date().toISOString() }, r => ({ text: ids.length === 1 ? 'Row deleted' : `${ids.length} rows deleted`, undoOperationId: r.operationId }))
   }
@@ -1318,7 +1318,8 @@ function EditPickedButton({ db, rowIds, editing, setEditing }: { db: Page & { da
   const [open, setOpen] = useState(false)
   const property = editing ? db.database.properties.find(p => p.id === editing) ?? null : null
   const anchor = useRef<HTMLButtonElement>(null)
-  const rows = (workspace?.pages ?? []).filter(p => rowIds.includes(p.id) && !p.trashedAt)
+  const picked = new Set(rowIds)
+  const rows = (workspace?.pages ?? []).filter(p => picked.has(p.id) && !p.trashedAt)
   const apply = (raw: Json | undefined) => {
     const p = property!
     setEditing(null)
