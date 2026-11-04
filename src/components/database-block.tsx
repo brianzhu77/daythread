@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom'
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
-import { sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
 import { displayPageTitle } from './page-title'
@@ -262,9 +262,14 @@ export function useCommitCell() {
     const newTodos = named.map(todo => ({ ...todo, on: todayIso() }))
     const said = notice ?? (named.length ? (named.length === 1 ? 'To-do added' : `${named.length} to-dos added`) : undefined)
     const send = () => run(
-      { type: 'set-values', pageId: row.id, values, expected: { [columnId]: expected, ...Object.fromEntries(alsoExpected.map(c => [c.columnId, c.expected])) }, ...(beforeId !== undefined ? { beforeId } : {}), ...(newTodos.length ? { newTodos } : {}), at: new Date().toISOString() },
+      { type: 'set-values', pageId: row.id, databaseId: db.id, values, expected: { [columnId]: expected, ...Object.fromEntries(alsoExpected.map(c => [c.columnId, c.expected])) }, ...(beforeId !== undefined ? { beforeId } : {}), ...(newTodos.length ? { newTodos } : {}), at: new Date().toISOString() },
       said ? r => ({ text: said, undoOperationId: r.operationId }) : null, newId(),
-      { inlineRefusal: /Saved elsewhere|Changed elsewhere/, onRefused: () => { refused = true; void again() }, quiet: true })
+      { inlineRefusal: /Saved elsewhere|Changed elsewhere|This row moved/, onRefused: m => {
+        refused = true
+        // Another tab moved the row: this one's out of date, and the value goes nowhere, with a notice (move-row §7).
+        if (m.startsWith('This row moved')) { show(null); onSaved?.(); toast(m, { timeout: 8000 }); void refresh(); return }
+        void again()
+      }, quiet: true })
     const settle = (r: unknown) => {
       if (r) { show(null); onSaved?.(); return }
       if (!refused) show(pending(true))
@@ -276,6 +281,9 @@ export function useCommitCell() {
       // A row deleted meanwhile: his value goes quietly (Bumblebee 3c5198d5). A kept copy is done with once its value
       // is saved, its row is gone, or he's been asked (the notice below); a save that only failed keeps it.
       if (!now || now.trashedAt) { onSaved?.(); return }
+      // Moved to another database by another tab: this value belongs to a column it's left behind (move-row §7).
+      const nowIn = databaseOfRow(fresh, now)
+      if (nowIn && nowIn.id !== db.id) { onSaved?.(); toast(`This row moved to ${displayPageTitle(nowIn)}`, { timeout: 8000 }); return }
       if (sameRaw(rawOf(now, columnId), expected) && alsoExpected.every(c => sameRaw(rawOf(now, c.columnId), c.expected)) && !resentOnce) { resentOnce = true; refused = false; show(pending(false)); void send().then(settle); return }
       onSaved?.()
       // One wording everywhere (Lead 0b05067c, design §13).

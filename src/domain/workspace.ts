@@ -5,6 +5,7 @@ import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
+import { applyRowMove } from "./move-row.ts";
 import { importRefusal } from "./csv.ts";
 import { dueRepeats, periodWord, repeatRowId } from "./repeats.ts";
 import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
@@ -358,6 +359,7 @@ function pageParent(state: Workspace, id: string): Page {
 function rowEdit(state: Workspace, edit: RowEdit, at: string): void {
   if (!edit || typeof edit.pageId !== "string") throw new DomainError("Invalid row");
   const { row, db } = rowPage(state, edit.pageId, true);
+  if (edit.databaseId && edit.databaseId !== db.id) throw new DomainError(`This row moved to ${db.title.trim() || "another database"}`);
   const links = (id: string) => { const raw = row.values?.[id]; return Array.isArray(raw) ? (raw as string[]) : []; };
   const relations = db.database.properties.filter((p) => p.type === "relation" && edit.values && p.id in edit.values);
   const before = relations.map((p) => links(p.id));
@@ -1004,6 +1006,14 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (action.beforeId && !before) throw new DomainError("Row not found");
       state.pages.splice(before ? state.pages.indexOf(before) : state.pages.length, 0, row);
       return { message: source ? "Row duplicated" : "Row added", entityId: row.id };
+    }
+    case "move-row": {
+      const { row, db: from } = rowPage(state, action.pageId);
+      const to = databasePage(state, action.databaseId);
+      if (to.id === from.id) throw new DomainError("Already there");
+      if (databaseRows(state, to.id).length >= 10_000) throw new DomainError(`${to.title.trim() || "That database"} is full`);
+      applyRowMove(state, row, from, to, isoTime(action.at), newId);
+      return { message: `Moved to ${to.title.trim() || "Untitled"}`, entityId: row.id };
     }
     case "add-rows": {
       // An import: every row in one operation, so one Undo takes them all (csv design §5).
