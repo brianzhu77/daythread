@@ -59,6 +59,8 @@ export interface Receipt {
   conflicted?: string[];
   /** save-editor: lines left a synced block shown on this many pages. */
   linesRemovedFrom?: number;
+  /** A cell edit that moved the rows it blocks: which ones. */
+  shifted?: string[];
   fingerprint?: string;
 }
 

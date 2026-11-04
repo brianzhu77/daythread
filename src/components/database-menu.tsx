@@ -3,7 +3,7 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
-import { tints, type ColourRule, type Tint, calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { tints, type ColourRule, type Tint, calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type DependencyMode, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import { timelineUnits, viewDateEnd, type TimelineUnit } from '../domain/timeline'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
 import type { Page, Workspace } from '../domain/types'
@@ -21,7 +21,7 @@ import { useKeyboardTop } from './keyboard'
 import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
-type Panel = 'name' | 'root' | 'colour' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | { formula: string } | 'export' | 'new-property' | 'views' | 'templates' | { template: string }
+type Panel = 'name' | 'root' | 'colour' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | { formula: string } | 'export' | 'more' | 'new-property' | 'views' | 'templates' | { template: string }
 interface OpenMenu { blockId: string; databaseId: string; panel: Panel; /** From a column's head: it opens under that head. */ column?: string; /** From `+ New ⌄`: a pick makes the row, in its place. */ pick?: (template: string | null) => void }
 /** The views list opens under "Table ⌄" on the left; every other panel under the `⋯` on the right. */
 const anchorOf = (m: OpenMenu) => m.column ? `[data-column-head="${CSS.escape(`${m.blockId}|${m.column}`)}"]` : m.panel === 'views' ? `[data-database-views="${CSS.escape(m.blockId)}"]` : `[data-database-menu="${CSS.escape(m.blockId)}"]`
@@ -128,6 +128,7 @@ export function DatabaseMenuHost() {
     {open.panel === 'filter' && <FilterPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'colour' && <ColourPanel db={db} view={view} back={() => go('layout')} />}
     {open.panel === 'sort' && <SortPanel db={db} view={view} back={() => go('root')} />}
+    {open.panel === 'more' && <MoreSettingsPanel db={db} view={view} back={() => go('root')} />}
     {open.panel === 'export' && <ExportPanel db={db} view={view} blockId={open.blockId} back={() => go('root')} close={() => setOpenMenu(null)} />}
     {open.panel === 'properties' && <PropertiesPanel db={db} view={view} go={go} />}
     {open.panel === 'name' && <NamePanel db={db} view={view} go={go} />}
@@ -182,6 +183,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     {view.layout !== 'calendar' && view.layout !== 'timeline' && !wide && !db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}
     {(view.layout === 'table' || view.layout === 'board' || (view.layout === 'timeline' && view.timelineTable)) && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('templates')}>Templates<span className="database-menu-chevron">›</span></button>}
+    {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('more')}>More settings<span className="database-menu-chevron">›</span></button>}
     <hr />
     {(inline || linked) && !db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); void navigate({ to: '/pages', search: { page: db.id } }) }}>Open as page</button>}
     {(inline || linked) && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.duplicate(blockId) }}>Duplicate</button>}
@@ -193,6 +195,74 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     {linked
       ? <button type="button" role="menuitem" className="is-danger" onClick={() => { close(); actions?.remove(blockId) }}>Remove this view</button>
       : <button type="button" role="menuitem" className="is-danger" onClick={remove}>Delete database</button>}
+  </>
+}
+
+// ---------------------------------------------------------------- more settings (sub-items design §2)
+
+function MoreSettingsPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
+  const change = useChange(db)
+  const changeView = useViewChange(db.id, view.id)
+  const on = Boolean(db.database.subItems)
+  const nests = view.layout === 'table' || view.layout === 'list'
+  // Off, and back on, it picks up the same two relations and every link in them.
+  const toggle = (next: boolean) => {
+    if (!next) { change({ kind: 'setSubItems', on: null }, true); return }
+    const kept = db.database.properties.find(p => p.type === 'relation' && p.target === db.id && p.mirror && p.limit === 1)
+    change({ kind: 'setSubItems', on: kept ? { parent: kept.id, sub: kept.mirror!, using: true } : { parent: crypto.randomUUID(), sub: crypto.randomUUID() } }, true)
+  }
+  return <>
+    <Head title="More settings" back={back} />
+    <label className="database-menu-row">Sub-items
+      <input type="checkbox" checked={on} onChange={e => toggle(e.target.checked)} />
+    </label>
+    {on && view.layout !== 'timeline' && <label className="database-menu-row">Show
+      <select aria-label="Show sub-items" value={view.subItemsDisplay ?? 'nested'} onChange={e => { const subItemsDisplay = e.target.value as View['subItemsDisplay']; changeView(() => ({ subItemsDisplay })) }}>
+        <option value="nested">{nests ? 'Nested in toggle' : 'On the parent\'s card'}</option><option value="flat">Flattened list</option>
+      </select>
+    </label>}
+    {on && (nests || view.layout === 'timeline' || view.subItemsDisplay === 'flat') && <label className="database-menu-row">Rows
+      <select aria-label="Which rows" value={view.subItemsShow ?? 'both'} onChange={e => { const subItemsShow = e.target.value as View['subItemsShow']; changeView(() => ({ subItemsShow })) }}>
+        <option value="both">Parents and sub-items</option><option value="parents">Parents only</option><option value="subs">Sub-items only</option>
+      </select>
+    </label>}
+    <hr />
+    <DependencySettings db={db} change={change} />
+  </>
+}
+
+const modeLabels: Record<DependencyMode, string> = { overlap: 'Shift only when dates overlap', keep: 'Shift and keep the time between', none: "Don't shift" }
+function DependencySettings({ db, change }: { db: DatabasePage; change: ReturnType<typeof useChange> }) {
+  const deps = db.database.dependencies
+  const dates = db.database.properties.filter(p => p.type === 'date' && !isFormula(p) && !p.rollup)
+  const update = (fields: Partial<NonNullable<typeof deps>>) => {
+    if (!deps) return
+    const next = { ...deps, ...fields }
+    change({ kind: 'setDependencies', on: { blockedBy: next.blockedBy, blocking: next.blocking, date: next.date, ...(next.end ? { end: next.end } : {}), mode: next.mode, avoidWeekends: Boolean(next.avoidWeekends), using: true } }, true)
+  }
+  const toggle = (next: boolean) => {
+    if (!next) { change({ kind: 'setDependencies', on: null }, true); return }
+    const kept = db.database.properties.find(p => p.type === 'relation' && p.target === db.id && p.mirror && p.name === 'Blocked by')
+    change({ kind: 'setDependencies', on: { blockedBy: kept?.id ?? crypto.randomUUID(), blocking: kept?.mirror ?? crypto.randomUUID(), date: dates[0]!.id, mode: 'overlap', ...(kept ? { using: true } : {}) } }, true)
+  }
+  return <>
+    <label className="database-menu-row">Dependencies
+      <input type="checkbox" checked={Boolean(deps)} disabled={!deps && !dates.length} onChange={e => toggle(e.target.checked)} />
+    </label>
+    {!deps && !dates.length && <p className="database-menu-quiet">These go by a Date property, and this database has none yet.</p>}
+    {deps && <>
+      <label className="database-menu-row">When a blocker moves
+        <select aria-label="When a blocker moves" value={deps.mode} onChange={e => update({ mode: e.target.value as DependencyMode })}>
+          {(Object.keys(modeLabels) as DependencyMode[]).map(m => <option key={m} value={m}>{modeLabels[m]}</option>)}
+        </select>
+      </label>
+      {dates.length > 1 && <label className="database-menu-row">Dates from
+        <select aria-label="Dates from" value={deps.date} onChange={e => update({ date: e.target.value })}>{dates.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+      </label>}
+      <label className="database-menu-row">Avoid weekends
+        <input type="checkbox" checked={Boolean(deps.avoidWeekends)} onChange={e => update({ avoidWeekends: e.target.checked ? true : undefined as never })} />
+      </label>
+    </>}
   </>
 }
 
