@@ -17,8 +17,12 @@ export const Route = createFileRoute('/api/files/$fileId')({
         const type = request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() || 'application/octet-stream'
         const store = await fileStore()
         if (await accountIsFull(store, size)) return Response.json({ error: 'full' }, { status: 507 })
-        await store.put(fileKey(params.fileId), request.body, size, type)
-        return Response.json({ id: params.fileId, size, type }, { status: 201 })
+        const key = fileKey(params.fileId)
+        if (await store.put(key, request.body, size, type)) return Response.json({ id: params.fileId, size, type }, { status: 201 })
+        // Already there: a retry whose first try got through is fine, and anything else is refused.
+        const there = await store.get(key)
+        await there?.body.cancel()
+        return there?.size === size ? Response.json({ id: params.fileId, size, type: there.type }) : Response.json({ error: 'taken' }, { status: 409 })
       },
       GET: async ({ request, params }) => {
         const { fileStore, fileKey, fileIdPattern } = await import('../../../server/file-store.ts')

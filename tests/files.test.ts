@@ -1,5 +1,5 @@
 // Files (R3-11): the value, the file store, and the sweep, which is the one thing that can lose a file for good and so errs towards keeping.
-import { test } from 'node:test'
+import { after, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { cellValue, fileLimits, holdsFiles, readValue, storedValue, valueText, type Database, type DatabaseChange, type FileValue, type Property } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { exportFiles } from '../src/domain/export.ts'
-import { accountIsFull, fileKey, fileStore, idsHeldIn, ownerPrefix, sweepFiles } from '../src/server/file-store.ts'
+import { accountIsFull, fileKey, fileStore, filesToSweep, ownerPrefix, sweepFiles } from '../src/server/file-store.ts'
 import { asOwner } from '../src/server/auth/request-owner.ts'
 import { harness } from './v2-helpers.ts'
 
@@ -35,7 +35,7 @@ function shelf() {
   set('row', [file(a)])
   const db = () => h.ws.pages.find(p => p.id === 'db')!.database as Database
   const row = (id = 'row') => h.ws.pages.find(p => p.id === id)!
-  const held = () => idsHeldIn(JSON.stringify(h.ws))
+  const held = () => new Set([a, b].filter(id => JSON.stringify(h.ws).includes(id)))
   return { h, change, set, db, row, held }
 }
 test('it stays in the row through Trash and Undo, names itself in text, and the workspace knows it holds a file', () => {
@@ -82,10 +82,10 @@ test('what holds a file for the sweep: a value, a type change and back, a row te
   s.h.run({ type: 'add-row', databaseId: 'db', pageId: 'later2', title: 'Later', at })
   assert.equal(s.held().has(a), false, 'past Undo, nothing does')
 })
-function folder() {
-  const dir = mkdtempSync(join(tmpdir(), 'daythread-files-')); process.env.DAYTHREAD_FILES_PATH = dir
-  return { dir, done: () => rmSync(dir, { recursive: true, force: true }) }
-}
+// One folder for the file: the store is made once.
+const dir = mkdtempSync(join(tmpdir(), 'daythread-files-')); process.env.DAYTHREAD_FILES_PATH = dir
+after(() => rmSync(dir, { recursive: true, force: true }))
+const folder = () => ({ dir, done: () => {} })
 const stream = (text: string) => new Blob([text]).stream()
 test('the store keeps each account\'s files under its own key, and another account\'s id finds nothing; the sweep keeps what\'s held or recent', async () => {
   const f = folder()
@@ -97,14 +97,19 @@ test('the store keeps each account\'s files under its own key, and another accou
     assert.equal(got?.type, 'text/plain')
     assert.equal(got?.size, 5)
     assert.equal(await new Response(got!.body).text(), 'hello')
+    assert.equal(await store.put(fileKey(a, 'alice'), stream('other'), 5, 'text/plain'), false, 'a taken key is never overwritten')
+    assert.equal(await new Response((await store.get(fileKey(a, 'alice')))!.body).text(), 'hello')
     await assert.rejects(store.put(fileKey('fileWrong1', 'alice'), stream('hello'), 99, 'text/plain'), /different size/)
     assert.equal(await store.get(fileKey('fileWrong1', 'alice')), null, 'a short upload leaves nothing')
     await store.put(fileKey(b, 'alice'), stream('bye'), 3, 'text/plain')
     await store.put(fileKey('fileKeep03', 'bob'), stream('bob'), 3, 'text/plain')
     const now = Date.now(), old = new Date(now - 8 * 24 * 60 * 60_000)
-    assert.equal(await sweepFiles(store, new Set(), now, 'alice'), 0, 'nothing under 7 days old goes')
+    assert.deepEqual(await sweepFiles(store, '', now, { owner: 'alice' }), [], 'nothing under 7 days old goes')
     utimesSync(join(f.dir, 'alice', a), old, old); utimesSync(join(f.dir, 'alice', b), old, old); utimesSync(join(f.dir, 'bob', 'fileKeep03'), old, old)
-    assert.equal(await sweepFiles(store, idsHeldIn(`{"id":"${b}"}`), now, 'alice'), 1, 'old and held by nothing')
+    const heldText = `{"id":"${b}"}`
+    assert.deepEqual((await sweepFiles(store, heldText, now, { owner: 'alice', report: true })).map(f => f.key), [`alice/${a}`], 'a report says what would go')
+    assert.ok(await store.get(fileKey(a, 'alice')), 'and removes nothing')
+    assert.deepEqual((await sweepFiles(store, heldText, now, { owner: 'alice' })).map(f => f.key), [`alice/${a}`], 'old and held by nothing')
     assert.equal(await store.get(fileKey(a, 'alice')), null)
     assert.ok(await store.get(fileKey(b, 'alice')), 'held stays')
     assert.ok(await store.get(fileKey('fileKeep03', 'bob')), 'another account\'s isn\'t touched')
@@ -132,5 +137,30 @@ test('a row moved to another database keeps its file, and Undo of the move holds
   assert.ok(s.held().has(a))
   s.h.run({ type: 'undo', targetOperationId: moved.receipt.operationId })
   assert.deepEqual(s.row().values?.f, [file(a)])
+})
+test('anything that reads as the id holds a file, however it\'s written: glued to other words, escaped in a document, or past a token\'s length', async () => {
+  const f = folder()
+  try {
+    const store = await fileStore(), now = Date.now(), old = new Date(now - 8 * 24 * 60 * 60_000), id = 'fileHeld0123'
+    await store.put(fileKey(id, 'carol'), stream('x'), 1, 'text/plain')
+    utimesSync(join(f.dir, 'carol', id), old, old)
+    const glued = [`\\"id\\":\\"${id}\\"`, `/api/files/${id}?name=a`, `\\n${id}`, `${'y'.repeat(70)}${id}`, `prefix_${id}_suffix`]
+    for (const held of glued) assert.deepEqual(await filesToSweep(store, held, now, 'carol'), [], held)
+    assert.equal((await filesToSweep(store, 'fileHeld012', now, 'carol')).length, 1, 'part of the id isn\'t the id')
+  } finally { f.done() }
+})
+test('in a page body: a day, a synced record, a template and a page in Trash all hold it (B87)', () => {
+  const s = shelf(), id = 'fileBody0001', line = (lineId: string) => ({ id: lineId, type: 'paragraph', props: {}, content: [{ type: 'text', text: `/api/files/${id}`, styles: {} }], children: [] })
+  s.set('row', null)
+  const inWorkspace = () => JSON.stringify(s.h.ws).includes(id)
+  s.h.day('2026-11-04')
+  s.h.save('day:2026-11-04', d => [...d, line('b1')] as never)
+  assert.ok(inWorkspace(), 'a day page')
+  s.h.run({ type: 'create-document', title: 'Doc', body: '', pageId: 'doc' })
+  s.h.save('doc', () => [line('b2')] as never)
+  s.h.save('day:2026-11-04', d => d.filter(n => n.id !== 'b1'))
+  s.h.run({ type: 'delete-page', pageId: 'doc', at })
+  s.h.run({ type: 'add-row', databaseId: 'db', pageId: 'later', title: 'Later', at })
+  assert.ok(inWorkspace(), 'a page in Trash')
 })
 

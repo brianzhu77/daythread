@@ -14,7 +14,8 @@ export const fileIdPattern = /^[A-Za-z0-9_-]{8,64}$/
 export interface StoredKey { key: string; size: number; storedAt: number }
 export interface StoredFile { body: ReadableStream; size: number; type: string; etag: string }
 export interface FileStore {
-  put(key: string, body: ReadableStream, size: number, type: string): Promise<void>
+  /** Never overwrites: false when the key already holds a file, and the body isn't kept. An id comes from the browser, and a copied one mustn't replace what's there. */
+  put(key: string, body: ReadableStream, size: number, type: string): Promise<boolean>
   get(key: string): Promise<StoredFile | null>
   delete(keys: string[]): Promise<void>
   /** Every key under a prefix, with its size and when it was stored. */
@@ -30,17 +31,24 @@ export async function accountIsFull(store: FileStore, size: number, owner?: stri
 }
 
 const sweepAfterMs = 7 * 24 * 60 * 60_000
-/** Every token that could be a file's id, in whatever text can hold one. It reads all of it, not just Files values: a property changed to another type keeps its old value. */
-export const idsHeldIn = (text: string): Set<string> => new Set(text.match(/[A-Za-z0-9_-]{8,64}/g) ?? [])
 /**
- * Removes what nothing holds any more (R3-11). This is the one thing that can lose a file for good, so it errs towards keeping: anything anywhere
- * that reads as the id holds it, and nothing under 7 days old goes, which covers an upload not attached yet, a tab behind and restoring a recent backup.
+ * What the sweep would remove (R3-11, B87): old objects whose id appears nowhere in `held`, which is everything stored for the workspace: row values of any
+ * type, page bodies, day pages, synced records, templates, Trash and what Undo can bring back. This is the one thing that can lose a file for good, so it errs
+ * towards keeping: any occurrence of the id holds it, whatever it's part of, and nothing under 7 days old goes, which covers an upload not attached yet, a tab
+ * behind and restoring a recent backup. Most ids are found by the token set; only what isn't gets the slow search, so a big account stays cheap.
  */
-export async function sweepFiles(store: FileStore, held: Set<string>, now: number, owner?: string): Promise<number> {
-  const prefix = ownerPrefix(owner)
-  const gone = (await store.list(prefix)).filter(f => now - f.storedAt > sweepAfterMs && !held.has(f.key.slice(prefix.length))).map(f => f.key)
-  if (gone.length) await store.delete(gone)
-  return gone.length
+export async function filesToSweep(store: FileStore, held: string, now: number, owner?: string): Promise<StoredKey[]> {
+  const prefix = ownerPrefix(owner), tokens = new Set(held.match(/[A-Za-z0-9_-]{8,64}/g) ?? [])
+  return (await store.list(prefix)).filter(f => {
+    const id = f.key.slice(prefix.length)
+    return now - f.storedAt > sweepAfterMs && !tokens.has(id) && !held.includes(id)
+  })
+}
+/** `report`: says what it would remove and removes nothing. */
+export async function sweepFiles(store: FileStore, held: string, now: number, options: { owner?: string; report?: boolean } = {}): Promise<StoredKey[]> {
+  const gone = await filesToSweep(store, held, now, options.owner)
+  if (gone.length && !options.report) await store.delete(gone.map(f => f.key))
+  return gone
 }
 
 class FolderFileStore implements FileStore {
@@ -50,10 +58,12 @@ class FolderFileStore implements FileStore {
   async put(key: string, body: ReadableStream, size: number, type: string) {
     const path = this.path(key), part = `${path}.part`
     await mkdir(dirname(path), { recursive: true })
+    if (await stat(path).catch(() => null)) { await body.cancel(); return false }
     await pipeline(Readable.fromWeb(body as never), createWriteStream(part))
     if ((await stat(part)).size !== size) { await rm(part, { force: true }); throw new Error('The file came in at a different size') }
     await writeFile(`${path}.type`, type)
     await rename(part, path)
+    return true
   }
   async get(key: string): Promise<StoredFile | null> {
     const path = this.path(key)
@@ -79,7 +89,7 @@ class FolderFileStore implements FileStore {
 
 interface R2Object { size: number; httpEtag: string; httpMetadata?: { contentType?: string }; body: ReadableStream }
 interface R2Bucket {
-  put(key: string, body: ReadableStream, options: { httpMetadata: { contentType: string } }): Promise<unknown>
+  put(key: string, body: ReadableStream, options: { httpMetadata: { contentType: string }; onlyIf: { etagDoesNotMatch: string } }): Promise<unknown>
   get(key: string): Promise<R2Object | null>
   delete(keys: string[]): Promise<void>
   list(options: { prefix: string; cursor?: string }): Promise<{ objects: Array<{ key: string; size: number; uploaded: Date }>; truncated: boolean; cursor?: string }>
@@ -87,7 +97,10 @@ interface R2Bucket {
 class R2FileStore implements FileStore {
   private readonly bucket: R2Bucket
   constructor(bucket: R2Bucket) { this.bucket = bucket }
-  async put(key: string, body: ReadableStream, _size: number, type: string) { await this.bucket.put(key, body, { httpMetadata: { contentType: type } }) }
+  async put(key: string, body: ReadableStream, _size: number, type: string) {
+    // R2 answers null when the condition fails, which is its way of saying the key's taken.
+    return (await this.bucket.put(key, body, { httpMetadata: { contentType: type }, onlyIf: { etagDoesNotMatch: '*' } })) !== null
+  }
   async get(key: string): Promise<StoredFile | null> {
     const object = await this.bucket.get(key)
     return object && { body: object.body, size: object.size, type: object.httpMetadata?.contentType ?? 'application/octet-stream', etag: object.httpEtag }

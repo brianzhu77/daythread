@@ -15,8 +15,8 @@ function put(id: string, body: Blob, type: string, onProgress?: (percent: number
     request.upload.onprogress = e => { if (e.lengthComputable) onProgress?.(Math.round(e.loaded / e.total * 100)) }
     request.onload = () => {
       if (request.status >= 200 && request.status < 300) resolve()
-      else if (request.status === 507) reject({ message: 'Storage is full (5 GB)', retry: false } satisfies UploadFailure)
-      else if (request.status === 413) reject({ message: 'Too large', retry: false } satisfies UploadFailure)
+      else if (request.status === 507) reject({ message: 'Storage full · 5 GB at most', retry: false } satisfies UploadFailure)
+      else if (request.status === 413) reject({ message: 'Too large · 25 MB at most', retry: false } satisfies UploadFailure)
       else reject({ message: "Couldn't upload", retry: true } satisfies UploadFailure)
     }
     request.onerror = () => reject({ message: "Couldn't upload", retry: true } satisfies UploadFailure)

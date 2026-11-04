@@ -74,7 +74,7 @@ await scenario('Over 25 MB is refused at once with the limit, nothing uploads, a
   const r = { shown: await lines(page), puts }
   await choose(page, 'notes.txt'); await wait(700); await leave(page)
   r.value = held('one').map(f => f.name)
-  r.ok = /Over 25 MB/.test(r.shown[0]) && r.puts === 0 && r.value.join() === 'notes.txt'
+  r.ok = /Too large · 25 MB at most/.test(r.shown[0]) && r.puts === 0 && r.value.join() === 'notes.txt'
   return r
 })
 await scenario('A failed upload says so and Retry works; a full account says that; the rest of the row is untouched', async page => {
@@ -97,7 +97,7 @@ await scenario('A failed upload says so and Retry works; a full account says tha
   r.full = await lines(page); r.retryOnFull = await editor(page).getByRole('button', { name: 'Retry' }).count()
   await leave(page)
   r.value = held('one').map(f => f.name)
-  r.ok = /Couldn't upload/.test(r.failed[0]) && /KB|MB/.test(r.retried[0]) && /Storage is full/.test(r.full[1]) && r.retryOnFull === 0 && r.value.join() === 'notes.txt'
+  r.ok = /Couldn't upload/.test(r.failed[0]) && /KB|MB/.test(r.retried[0]) && /Storage full · 5 GB at most/.test(r.full[1]) && r.retryOnFull === 0 && r.value.join() === 'notes.txt'
   return r
 })
 await scenario('While one is on its way a click outside keeps it open; Esc gives up on it and keeps what\'s in', async page => {
@@ -147,6 +147,14 @@ await scenario('Gallery: Card image shows the small copy; a file gone from the s
   await page.reload(); await wait(2400)
   r.imagesAfter = await page.locator('.database-gallery-image').count(); r.cards = await page.locator('.database-gallery-card, .database-card').count()
   r.ok = r.src?.startsWith('/api/files/') && r.width > 0 && r.gone === 404 && r.imagesAfter === 0
+  return r
+})
+await scenario('An id that\'s taken is never overwritten: a retry of the same size is fine, different bytes are refused', async page => {
+  await open(page)
+  const put = (body, type = 'text/plain') => page.evaluate(async ([body, type]) => (await fetch('/api/files/takenFile0001', { method: 'PUT', headers: { 'content-type': type }, body })).status, [body, type])
+  const r = { first: await put('first!'), retry: await put('other!'), differ: await put('much longer words') }
+  r.still = await page.evaluate(async () => (await fetch('/api/files/takenFile0001')).text())
+  r.ok = r.first === 201 && r.retry === 200 && r.differ === 409 && r.still === 'first!'
   return r
 })
 await scenario('What opens in place: an image does; a page never runs on this origin', async (page, context) => {

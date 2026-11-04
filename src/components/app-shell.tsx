@@ -23,7 +23,7 @@ function SweepFiles() {
     const key = 'daythread:files:swept', day = todayIso()
     if (localStorage.getItem(key) === day) return
     localStorage.setItem(key, day)
-    void fetch('/api/files/sweep', { method: 'POST' }).catch(() => {})
+    void fetch('/api/files/sweep', { method: 'POST' }).then(r => r.text()).catch(() => {})
   }, [opened])
   return null
 }

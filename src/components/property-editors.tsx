@@ -490,7 +490,7 @@ function FilesEditor(p: EditorProps) {
     const added = [...(files ?? [])].map((file, n): FileItem => n >= room
       ? { key: crypto.randomUUID(), name: file.name, state: 'failed', message: `Over ${fileLimits.perCell} files` }
       : file.size > fileLimits.size
-        ? { key: crypto.randomUUID(), name: file.name, state: 'failed', message: `Over ${fileLimits.size / 1024 / 1024} MB` }
+        ? { key: crypto.randomUUID(), name: file.name, state: 'failed', message: `Too large · ${fileLimits.size / 1024 / 1024} MB at most` }
         : { key: crypto.randomUUID(), name: file.name, state: 'uploading', file, progress: 0 })
     setItems(list => [...list, ...added])
     for (const item of added) if (item.file) start(item.key, item.file)
