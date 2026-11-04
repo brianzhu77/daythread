@@ -1,6 +1,6 @@
 # CSV export, CSV import and pasting TSV: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead and Roadbuster to review**. Not approved and not built. Task #289, checklist R4-7, R4-8, R4-9, whose rows hold the acceptance bar and the Notion sources. This doc adds only what they leave open.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **built and live** (R4-7 and R4-9 #102, R4-8 #103, 2026-11-04); the checklist rows say what differs. Task #289, checklist R4-7, R4-8, R4-9, whose rows hold the acceptance bar and the Notion sources. This doc adds only what they leave open.
 - **Evidence:** Notion's [export][e] and [import][i] pages, as read for those rows. Excel's and Numbers' behaviour below is from what I know and **needs one real file from each,** as no test has run. I read our code on main.
 
 ## 1. Recommended order
