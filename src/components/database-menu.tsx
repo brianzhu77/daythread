@@ -3,7 +3,7 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
-import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type DependencyMode, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import { timelineUnits, viewDateEnd, type TimelineUnit } from '../domain/timeline'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
 import type { Page, Workspace } from '../domain/types'
@@ -216,6 +216,43 @@ function MoreSettingsPanel({ db, view, back }: { db: DatabasePage; view: View; b
         <option value="both">Parents and sub-items</option><option value="parents">Parents only</option><option value="subs">Sub-items only</option>
       </select>
     </label>}
+    <hr />
+    <DependencySettings db={db} change={change} />
+  </>
+}
+
+const modeLabels: Record<DependencyMode, string> = { overlap: 'Shift only when dates overlap', keep: 'Shift and keep the time between', none: "Don't shift" }
+function DependencySettings({ db, change }: { db: DatabasePage; change: ReturnType<typeof useChange> }) {
+  const deps = db.database.dependencies
+  const dates = db.database.properties.filter(p => p.type === 'date' && !isFormula(p) && !p.rollup)
+  const update = (fields: Partial<NonNullable<typeof deps>>) => {
+    if (!deps) return
+    const next = { ...deps, ...fields }
+    change({ kind: 'setDependencies', on: { blockedBy: next.blockedBy, blocking: next.blocking, date: next.date, ...(next.end ? { end: next.end } : {}), mode: next.mode, avoidWeekends: Boolean(next.avoidWeekends), using: true } }, true)
+  }
+  const toggle = (next: boolean) => {
+    if (!next) { change({ kind: 'setDependencies', on: null }, true); return }
+    const kept = db.database.properties.find(p => p.type === 'relation' && p.target === db.id && p.mirror && p.name === 'Blocked by')
+    change({ kind: 'setDependencies', on: { blockedBy: kept?.id ?? crypto.randomUUID(), blocking: kept?.mirror ?? crypto.randomUUID(), date: dates[0]!.id, mode: 'overlap', ...(kept ? { using: true } : {}) } }, true)
+  }
+  return <>
+    <label className="database-menu-row">Dependencies
+      <input type="checkbox" checked={Boolean(deps)} disabled={!deps && !dates.length} onChange={e => toggle(e.target.checked)} />
+    </label>
+    {!deps && !dates.length && <p className="database-menu-quiet">These go by a Date property, and this database has none yet.</p>}
+    {deps && <>
+      <label className="database-menu-row">When a blocker moves
+        <select aria-label="When a blocker moves" value={deps.mode} onChange={e => update({ mode: e.target.value as DependencyMode })}>
+          {(Object.keys(modeLabels) as DependencyMode[]).map(m => <option key={m} value={m}>{modeLabels[m]}</option>)}
+        </select>
+      </label>
+      {dates.length > 1 && <label className="database-menu-row">Dates from
+        <select aria-label="Dates from" value={deps.date} onChange={e => update({ date: e.target.value })}>{dates.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+      </label>}
+      <label className="database-menu-row">Avoid weekends
+        <input type="checkbox" checked={Boolean(deps.avoidWeekends)} onChange={e => update({ avoidWeekends: e.target.checked ? true : undefined as never })} />
+      </label>
+    </>}
   </>
 }
 

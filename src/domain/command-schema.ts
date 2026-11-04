@@ -24,6 +24,7 @@ const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("addProperty"), property: z.object({ id, ...propertyFields }), viewId: id.optional() }),
   z.object({ kind: z.literal("updateProperty"), propertyId: id, ...propertyFields, name: propertyFields.name.optional(), type: propertyFields.type.optional() }),
   z.object({ kind: z.literal("removeProperty"), propertyId: id }),
+  z.object({ kind: z.literal("setDependencies"), on: z.object({ blockedBy: id, blocking: id, date: id, end: id.optional(), mode: z.enum(["overlap", "keep", "none"]), avoidWeekends: z.boolean().optional(), using: z.boolean().optional() }).nullable() }),
   z.object({ kind: z.literal("setSubItems"), on: z.object({ parent: id, sub: id, using: z.boolean().optional() }).nullable() }),
   z.object({ kind: z.literal("setMirror"), propertyId: id, mirror: z.object({ id, name: z.string().max(200) }).nullable() }),
   z.object({ kind: z.literal("moveProperty"), propertyId: id, beforeId: id.nullable() }),
