@@ -88,6 +88,26 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           HYPERDRIVE_ID: ${{ vars.HYPERDRIVE_ID }}
+      # Files (R3-11): a private bucket per Worker, made the first time and bound as DAYTHREAD_FILES. Only its own name is ever asked about, and nothing
+      # is made public. If the token may not make one, the deploy stops here, before anything changes.
+      - name: Files bucket
+        run: |
+          set -euo pipefail
+          api() { curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' "$@"; }
+          account=$(api https://api.cloudflare.com/client/v4/accounts | jq -r '.result[0].id')
+          bucket=daythread-files
+          [ "$NAME" = daythread-preview ] && bucket=daythread-files-preview
+          buckets="https://api.cloudflare.com/client/v4/accounts/$account/r2/buckets"
+          if [ "$(api "$buckets/$bucket" | jq -r '.success')" != true ]; then
+            result=$(api -X POST "$buckets" -d "$(jq -n --arg name "$bucket" '{name: $name}')")
+            [ "$(echo "$result" | jq -r '.success')" = true ] || { echo "Cloudflare refused making $bucket: $(echo "$result" | jq -c '.errors')"; exit 1; }
+            echo "made $bucket"
+          fi
+          jq --arg bucket "$bucket" '.r2_buckets = [{binding: "DAYTHREAD_FILES", bucket_name: $bucket}]' .output/server/wrangler.json > "$RUNNER_TEMP/w.json"
+          mv "$RUNNER_TEMP/w.json" .output/server/wrangler.json
+          echo "bound $bucket"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: Deploy
         run: |
           if [ "$NAME" = daythread-preview ]; then
