@@ -593,8 +593,8 @@ function LayoutPanel({ db, view, back, go }: { db: DatabasePage; view: View; bac
       <input type="checkbox" checked={wrapsAll} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ wrapName: on, columns: columns.map(c => withWrap(c, on)) })) }} />
     </label>}
     {!db.database.fixed && <label className="database-menu-row">Open pages in
-      <select aria-label="Open pages in" value={view.openIn ?? 'page'} onChange={e => { const openIn = e.target.value === 'center' ? 'center' as const : null; changeView(() => ({ openIn })) }}>
-        <option value="page">Full page</option><option value="center">Center peek</option>
+      <select aria-label="Open pages in" value={view.openIn ?? 'page'} onChange={e => { const v = e.target.value, openIn = v === 'center' || v === 'side' ? v : null; changeView(() => ({ openIn })) }}>
+        <option value="page">Full page</option><option value="side">Side peek</option><option value="center">Center peek</option>
       </select>
     </label>}
     <button type="button" role="menuitem" onClick={() => go('colour')}>Conditional colour<span className="database-menu-chevron">{view.colourRules?.length || ''} ›</span></button>
