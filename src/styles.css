@@ -850,6 +850,28 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor .editor-task-title.task-done, .continuous-editor .editor-task-title.task-done * { color:var(--ink-3); text-decoration:var(--done-decoration); }
 /* B19: a nested line's text starts one step (24px) right of its parent's text. */
 .continuous-editor .bn-block-group .bn-block-group { margin-left:45px; }
+/* A synced block (states §3): its own row takes no line, and an outline in the margin holds room above and below it, so nothing
+   shifts when the label shows. Black, white and grey (Brian 116a40ab). Its lines' columns are set below, after the rules they undo. */
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) { position: relative; margin: 8px 0 6px; outline: 1px solid var(--line); outline-offset: 2px; border-radius: 8px; }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]):hover,
+.continuous-editor .bn-block-outer.has-caret > .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]),
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]):focus-within { outline-color: var(--ink-3); }
+.continuous-editor .bn-block-content[data-content-type="syncedBlock"] { height: 0; min-height: 0; padding: 0; overflow: visible; }
+/* On the top edge, clear of the first line's text and the line above (Roadbuster: a taller box covered that line and took its clicks). */
+.continuous-editor .synced-label { position: absolute; top: -11px; right: 6px; left: auto; z-index: 1; display: block; height: 14px; padding: 0 4px; background: var(--bg-doc); color: var(--ink-2); font-size: 12px; line-height: 14px; opacity: 0; pointer-events: none; }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]):hover > .react-renderer .synced-label,
+.continuous-editor .bn-block-outer.has-caret > .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .react-renderer .synced-label,
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]):focus-within > .react-renderer .synced-label,
+.continuous-editor .synced-label:has([aria-expanded="true"]) { opacity: 1; pointer-events: auto; }
+.continuous-editor .synced-label .synced-label-button { position: relative; display: block; width: auto; height: 14px; min-width: 0; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; line-height: inherit; cursor: pointer; }
+/* A finger's reach, upward: over the space above the block, never down onto the first line's text. */
+@media (pointer: coarse) { .continuous-editor .synced-label .synced-label-button::after { content: ""; position: absolute; inset: -18px -6px -2px; } }
+/* Its record can't be read (states §8, B21-17): no lines, so this is what holds its place. */
+.continuous-editor .bn-block-content[data-content-type="syncedBlock"]:has(.synced-unavailable) { height: auto; }
+.synced-unavailable { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; color: var(--ink-2); font-size: var(--text-meta); }
+.synced-unavailable .app-link { font: inherit; }
+/* The phone's handle has a backing for whatever scrolls under it, and beside these lines that would cut the outline. */
+body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transparent; }
 /* Deeper levels step by the same 24px: the top-level group's 45px already includes the dot column. */
 .continuous-editor .bn-block-group .bn-block-group .bn-block-group { margin-left:24px; }
 /* B39 (Jazz; Lead: Notion's convention): every nested block starts at its parent's text, so a nested to-do's checkbox
@@ -873,6 +895,20 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor .bn-block-group .bn-block-group .bn-block-group > .bn-block-outer > .bn-block > .bn-block-content[data-content-type="bulletListItem"]::before {
   background:linear-gradient(currentColor, currentColor) 20.5px 50% / 5px 5px no-repeat;
 }
+/* A synced block's lines keep the columns they have outside (states §3): undo the rules above that count its group as a level.
+   Its first level reads as the page's, and each level under it as one nearer the page. */
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group { margin-left: 0; }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer::before { display: none; }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer > .bn-block > .bn-block-group { margin-left: 45px; }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer > .bn-block > .react-renderer > .bn-block-content[data-content-type="task"] { margin-left: 0; }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer > .bn-block > .bn-block-content[data-content-type="bulletListItem"]::before {
+  margin-left: 0; background: radial-gradient(circle, currentColor 2.6px, transparent 3px) 20px 50% / 6px 6px no-repeat;
+}
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer > .bn-block > .bn-block-group > .bn-block-outer > .bn-block > .bn-block-content[data-content-type="bulletListItem"]::before {
+  background: radial-gradient(circle, transparent 1.5px, currentColor 1.8px, currentColor 2.7px, transparent 3.1px) 20px 50% / 6px 6px no-repeat;
+}
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer:only-child > .bn-block > .bn-block-content[data-content-type="paragraph"] .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before { content: "Empty synced block"; position: absolute; color: var(--ink-3); pointer-events: none; }
+.continuous-editor .bn-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer:only-child > .bn-block > .bn-block-content[data-content-type="paragraph"]:has(.ProseMirror-trailingBreak:only-child)::after { content: none; }
 /* BlockNote's type-specific hints ignore focus; only the bullet being typed in shows one. */
 .continuous-editor .bn-editor .bn-block-content[data-content-type="bulletListItem"][data-is-empty-and-focused]:has(.ProseMirror-trailingBreak:only-child):after { content:"Write…"; }
 .continuous-editor [data-is-empty-and-focused] .editor-task-title:empty:before { content:attr(data-placeholder); color:var(--ink-3); pointer-events:none; }
@@ -990,7 +1026,8 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 }
 
 /* The editor must not enlarge the mobile layout viewport through floating format controls. */
-@media(max-width:899px) { .continuous-editor { overflow-x:clip; } .editor-selection-bar { max-width:calc(100vw - 32px); } }
+/* The clip reaches 4px past the column, so a synced block's outline in the margin isn't cut. */
+@media(max-width:899px) { .continuous-editor { overflow-x:clip; margin-inline:-4px; padding-inline:4px; } .editor-save-line { right:4px; } .editor-selection-bar { max-width:calc(100vw - 32px); } }
 .editor-source-checklist { display:flex; gap:8px; align-items:baseline; }
 .editor-source-checklist > span:last-child { flex:1; min-width:0; }
 .editor-paste-notice { display:flex; align-items:center; gap:12px; max-width:min(90vw,600px); padding:8px 12px; border-radius:14px; background:var(--bg); color:var(--ink-2); box-shadow:var(--shadow-float); font-size:var(--text-meta); pointer-events:auto; }
@@ -1850,6 +1887,61 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-menu select { padding-right: 4px; }
 .database-menu input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(--ink); }
 .database-menu-field, .database-menu > input { margin: 2px 6px 6px; }
+.database-menu-quiet.is-error { color: var(--red); }
+.cell-error { color: var(--formula-red); }
+/* A formula's `style`: only colour he typed, inside its own cell (formula design §7). Radix's text and tint steps, and in light the text a little darker so every colour reads at 4.5:1 on hover, a picked row and every tint (tests/evidence/formula/contrast.mjs). */
+:root { --formula-gray: #646464; --formula-gray-tint: #f0f0f0; --formula-brown: #815e46; --formula-brown-tint: #f6eee7; --formula-orange: #b84600; --formula-orange-tint: #ffefd6; --formula-yellow: #8f6200; --formula-yellow-tint: #fffab8; --formula-green: #1e7951; --formula-green-tint: #e6f6eb; --formula-blue: #0c6cc0; --formula-blue-tint: #e6f4fe; --formula-purple: #8145b5; --formula-purple-tint: #f7edfe; --formula-pink: #c02989; --formula-pink-tint: #fee9f5; --formula-red: #ca2b30; --formula-red-tint: #feebec; }
+@media (prefers-color-scheme: dark) { :root { --formula-gray: #b4b4b4; --formula-gray-tint: #222222; --formula-brown: #dbb594; --formula-brown-tint: #2e201a; --formula-orange: #ffa057; --formula-orange-tint: #331e0b; --formula-yellow: #f5e147; --formula-yellow-tint: #2d2305; --formula-green: #3dd68c; --formula-green-tint: #132d21; --formula-blue: #70b8ff; --formula-blue-tint: #0d2847; --formula-purple: #d19dff; --formula-purple-tint: #301c3b; --formula-pink: #ff8dcc; --formula-pink-tint: #37172f; --formula-red: #ff9592; --formula-red-tint: #3b1219; } }
+.formula-b { font-weight: 600; }
+.formula-i { font-style: italic; }
+.formula-u { text-decoration: underline; }
+.formula-s { text-decoration: line-through; }
+.formula-u.formula-s { text-decoration: underline line-through; }
+.formula-c { font-family: var(--font-mono, ui-monospace, monospace); font-size: .9em; }
+.formula-color-gray { color: var(--formula-gray); }
+.formula-bg-gray { background: var(--formula-gray-tint); border-radius: 3px; }
+.formula-color-brown { color: var(--formula-brown); }
+.formula-bg-brown { background: var(--formula-brown-tint); border-radius: 3px; }
+.formula-color-orange { color: var(--formula-orange); }
+.formula-bg-orange { background: var(--formula-orange-tint); border-radius: 3px; }
+.formula-color-yellow { color: var(--formula-yellow); }
+.formula-bg-yellow { background: var(--formula-yellow-tint); border-radius: 3px; }
+.formula-color-green { color: var(--formula-green); }
+.formula-bg-green { background: var(--formula-green-tint); border-radius: 3px; }
+.formula-color-blue { color: var(--formula-blue); }
+.formula-bg-blue { background: var(--formula-blue-tint); border-radius: 3px; }
+.formula-color-purple { color: var(--formula-purple); }
+.formula-bg-purple { background: var(--formula-purple-tint); border-radius: 3px; }
+.formula-color-pink { color: var(--formula-pink); }
+.formula-bg-pink { background: var(--formula-pink-tint); border-radius: 3px; }
+.formula-color-red { color: var(--formula-red); }
+.formula-bg-red { background: var(--formula-red-tint); border-radius: 3px; }
+/* Edit formula: the text and what it gives on the left, what to pick from beside it. */
+.database-menu:has(.formula-editor) { width: min(620px, calc(100vw - 16px)); max-height: min(80vh, 560px); }
+.formula-editor { display: flex; gap: 10px; min-height: 0; padding: 2px 6px 6px; }
+.formula-main { display: flex; flex: 1 1 60%; flex-direction: column; gap: 6px; min-width: 0; }
+.formula-field { box-sizing: border-box; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-row); background: transparent; color: var(--ink); font: inherit; resize: vertical; outline: none; }
+.formula-field:focus, .formula-field:focus-visible { border-color: var(--blue); outline: none; box-shadow: none; }
+.formula-status { min-height: 1.4em; margin: 0; color: var(--ink); font-size: var(--text-meta); overflow-wrap: anywhere; }
+.formula-status.is-error { color: var(--formula-red); }
+.formula-editor[data-refused] .formula-field { border-color: var(--formula-red); }
+.formula-editor[data-refused] .formula-status { font-weight: var(--weight-semibold, 600); }
+.formula-preview-of { color: var(--ink-3); }
+.formula-preview-of::after { content: ' ·'; }
+.formula-actions { display: flex; align-items: center; gap: 8px; margin-top: auto; }
+.formula-actions-end { display: flex; gap: 6px; margin-left: auto; }
+.formula-actions button { min-height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-row); background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+.formula-actions .formula-done { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.formula-actions .formula-done:hover, .formula-actions .formula-done:active { border-color: var(--ink); background: var(--ink); color: var(--paper); opacity: .85; }
+.formula-reference { display: flex; flex: 1 1 40%; flex-direction: column; gap: 6px; min-width: 0; max-height: 420px; }
+.formula-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.formula-group { margin: 6px 0 2px; padding-left: 6px; color: var(--ink-2); font-size: var(--text-meta); }
+.database-menu .formula-item { display: block; width: 100%; min-height: 28px; padding: 3px 6px; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink); font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.database-menu .formula-item:hover, .database-menu .formula-item.is-active { background: var(--hover-dim); }
+.formula-doc { flex: none; padding-top: 6px; border-top: 1px solid var(--line-soft); font-size: var(--text-meta); }
+.formula-doc p { margin: 0 0 2px; }
+.formula-doc-name { font-weight: 600; }
+.formula-doc code { color: var(--ink-3); overflow-wrap: anywhere; }
 .database-menu-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; color: var(--ink); }
 /* A filter or sort rule: property → condition → value on one line when it fits, then wrapping. */
 .database-rule { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 6px 6px 10px; border-radius: var(--radius-row); }
@@ -1922,6 +2014,13 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
   .database-menu::before { content: ''; flex: none; align-self: center; width: 36px; height: 5px; margin-bottom: 6px; border-radius: 3px; background: var(--check); }
   .database-menu > button[role=menuitem], .database-menu-head, .database-property-line, .database-menu-row { min-height: 44px; }
   .database-menu input:not([type=checkbox]), .database-menu select { min-height: 40px; font-size: 16px; }
+  /* A sheet above the keyboard: the only panel opened to type at length (design §4). */
+  .database-menu:has(.formula-editor) { bottom: var(--keyboard-lift, 0px) !important; width: auto; max-height: calc(85vh - var(--keyboard-lift, 0px)); }
+  .formula-editor { flex-direction: column; padding: 2px 0 6px; }
+  .formula-field { font-size: 16px; }
+  .formula-actions button { min-height: 44px; }
+  .database-menu .formula-item { min-height: 44px; }
+  .formula-reference { max-height: 40vh; }
   .database-more-button { width: 44px; height: 44px; margin-right: -8px; }
 }
 @media (max-width: 899px) and (prefers-reduced-motion: reduce) { .database-menu { animation: none; } }

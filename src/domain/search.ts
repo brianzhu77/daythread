@@ -5,6 +5,7 @@ import { isDraft } from './day-draft.ts'
 import { tagIndex, tagKey, type TagEntry } from './tags.ts'
 import type { LocalDate, Page, Workspace } from './types.ts'
 import { cellValue, databaseOfRow, valueText } from './database.ts'
+import { isSyncedBlock, syncedHome, syncedPlaces } from './synced.ts'
 
 // Search (docs/design/search-states.md): a plain-text look over the loaded workspace. Nothing is stored or sent
 // anywhere; the index is read from the pages like tags and links are, and rebuilt whenever the workspace changes.
@@ -12,7 +13,7 @@ import { cellValue, databaseOfRow, valueText } from './database.ts'
 /** A page whose title (or a day whose date) matches. */
 export interface PageHit { page: Page; /** "Pages › Work" for a nested page, the day for a day's subpage; empty at the top. */ path: string }
 /** A line whose words match. `text` is the task's current title for a to-do row. */
-export interface LineHit { page: Page; blockId: string; date: LocalDate | null; sectionTitle: string; taskId: string | null; text: string }
+export interface LineHit { page: Page; blockId: string; date: LocalDate | null; sectionTitle: string; taskId: string | null; text: string; /** In a synced block shown on this many pages. */ places?: number }
 export interface TagHit { key: string; tag: string; count: number }
 export interface SearchResults {
   pages: PageHit[]
@@ -26,7 +27,7 @@ export const lineLimit = 50
 export const pageLimit = 8
 export const tagLimit = 5
 
-interface IndexedLine { page: Page; blockId: string; sectionTitle: string; taskId: string | null; text: string; folded: string }
+interface IndexedLine { page: Page; blockId: string; sectionTitle: string; taskId: string | null; text: string; folded: string; /** In a synced block shown on this many pages. */ places?: number }
 interface IndexedPage { page: Page; path: string; folded: string; /** Day pages: their date words ("sun, oct 18", "october 18, 2026", "2026-10-18"). */ dayWords: string }
 export interface SearchIndex { pages: IndexedPage[]; lines: IndexedLine[]; tags: TagEntry[] }
 
@@ -62,7 +63,8 @@ export function pagePath(ws: Workspace, p: Page, dayLabel: (date: LocalDate) => 
  */
 export function buildSearchIndex(ws: Workspace, dayLabel: (date: LocalDate) => string = date => date): SearchIndex {
   const tasks = new Map(ws.tasks.map(t => [t.id, t]))
-  const pages = ws.pages.map((page, created) => ({ page, created })).filter(p => !isTrashed(p.page) && !isTemplate(p.page) && !isDraft(p.page))
+  const counts = (p: Page) => !isTrashed(p) && !isTemplate(p) && !isDraft(p)
+  const pages = ws.pages.map((page, created) => ({ page, created })).filter(p => counts(p.page))
     .sort((a, b) => (b.page.date ?? '').localeCompare(a.page.date ?? '') || b.created - a.created).map(p => p.page)
   const indexedPages: IndexedPage[] = [], lines: IndexedLine[] = []
   for (const page of pages) {
@@ -70,14 +72,23 @@ export function buildSearchIndex(ws: Workspace, dayLabel: (date: LocalDate) => s
     const db = databaseOfRow(ws, page)
     const values = db ? db.database.properties.map(p => valueText(db.database, p.id, cellValue(db.database, page, p.id))).filter(Boolean).join(' ') : ''
     indexedPages.push({ page, path: pagePath(ws, page, dayLabel), folded: fold(`${page.title} ${page.url ?? ''} ${values}`), dayWords: page.type === 'daily' && page.date ? dayWords(page.date) : '' })
-    let section = ''
+    let section = '', places = 0
     const visit = (node: EditorNode) => {
       if (node.type === 'heading') section = inlineText(node.content).trim()
       else if (lineTypes.has(node.type)) {
         const taskId = rowTaskId(node)
         const text = (taskId ? tasks.get(taskId)?.title : undefined) ?? inlineText(node.content, textDate(page))
         const trimmed = text.trim().replace(/\s+/g, ' ')
-        if (trimmed) lines.push({ page, blockId: node.id, sectionTitle: section, taskId, text: trimmed, folded: fold(trimmed) })
+        if (trimmed) lines.push({ page, blockId: node.id, sectionTitle: section, taskId, text: trimmed, folded: fold(trimmed), ...(places > 1 ? { places } : {}) })
+      }
+      // A synced block is found once, under the original, or a template copy would add a hit a day (states §7).
+      if (isSyncedBlock(node)) {
+        const syncId = String(node.props?.syncId)
+        if (syncedHome(ws, syncId, 'original', counts) !== node.id) return
+        places = new Set(syncedPlaces(ws, syncId).filter(p => counts(p.page)).map(p => p.page.id)).size
+        node.children?.forEach(visit)
+        places = 0
+        return
       }
       node.children?.forEach(visit)
     }
@@ -125,7 +136,7 @@ export function search(index: SearchIndex, query: string, today: LocalDate, yest
   let moreLines = 0
   for (const line of index.lines) {
     if (!matchesAll(line.folded, terms)) continue
-    if (lineHits.length < lineLimit) lineHits.push({ page: line.page, blockId: line.blockId, date: line.page.date, sectionTitle: line.sectionTitle, taskId: line.taskId, text: line.text })
+    if (lineHits.length < lineLimit) lineHits.push({ page: line.page, blockId: line.blockId, date: line.page.date, sectionTitle: line.sectionTitle, taskId: line.taskId, text: line.text, ...(line.places ? { places: line.places } : {}) })
     else moreLines++
   }
   return { pages: pageHits, tags: tagHits, lines: lineHits, moreLines }

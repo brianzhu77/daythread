@@ -71,6 +71,9 @@ const document: EditorNode[] = [
   todo('Fixture cancelled to-do', 'plan'),
   // B39: a nested to-do's checkbox starts at its parent's text; two levels deep.
   todo('Fixture parent to-do', 'plan', [todo('Fixture child to-do', 'plan', [todo('Fixture grandchild to-do', 'plan')]), bullet('Fixture note under a to-do')]),
+  // A synced block (B21-18): its lines keep the columns they have outside, at each level, and the label clears what's around it.
+  { id: crypto.randomUUID(), type: 'syncedBlock', props: { syncId: crypto.randomUUID(), rev: 0, key: '', roles: '' }, children: [bullet('Fixture synced line', [bullet('Fixture synced nested', [bullet('Fixture synced level 3')])]), todo('Fixture synced to-do', 'reference', [todo('Fixture synced child to-do', 'reference')])] },
+  bullet('Fixture line below a synced block'),
   headingNode('Events'),
   bullet(''),
   headingNode('Good Stuffs'),
