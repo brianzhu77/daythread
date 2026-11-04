@@ -17,9 +17,9 @@ Brian's rule is black, white and grey (116a40ab), and options have no colour her
 
 **Tints (Jazz 96d52959):** Formula's nine, opaque and already at 4.5:1 with `--ink` in both themes, named `--tint-red` and so on (`tokens.md` rule 1), so the app has one palette. Text stays `--ink`. Colour never replaces a value, because the value that matched is still in its cell.
 
-**The grey needs its own step.** Formula's grey tint is `--gray-3` in both themes (#f0f0f0, #222222), which is also `--fill` and `--fill-hover`. Every new rule starts grey, so a rule's first look would be a row that seems to be hovered. Jazz to settle the value; the other eight can stay Formula's.
+**The grey needs its own step.** Formula's grey tint is `--gray-3` in both themes (#f0f0f0, #222222), which is also `--fill` and `--fill-hover`. Every new rule starts grey, so a rule's first look would be a row that seems to be hovered. A rule's grey is `--gray-4`, a step past that fill (Jazz 3260cc24); Formula's stays. The other eight are Formula's.
 
-**Other text on a tint:** the script also checks `--ink-2`, and a formula's `style` colours in a tinted row. `--ink-3` is already under 4.5:1 on white, so it only needs to read no worse than it does there.
+**Other text on a tint:** the script also checks `--ink-2`, and a formula's `style` colours in a tinted row. `--ink-2` clears 4.5:1 on all nine in both themes. A formula's colours all clear it in dark, and 6 of 81 pairs fall short in light, all on the grey, the lowest at 4.37:1; left as they are (Jazz 3260cc24, Bumblebee yes). `--ink-3` falls to 2.71:1 on the grey in light, against about 3.3:1 on white, so a tinted row should use `--ink-2` for it.
 
 ## 2. A rule
 
@@ -60,7 +60,6 @@ Rules are evaluated per row per view, as filters are. **R2-7's budget gets a var
 ## 6. Open
 
 - **Settled with Jazz (96d52959):** the tints, §1. §4's stacking as proposed: a picked row, a hover and a returned row keep their own treatment drawn over the tint, and a dragged row keeps its fade. "Whole row or only this property" stays per rule, default whole row. It's on a weak source and easy to take out.
-- **Jazz:** the grey's value (§1).
 
 [f]: https://thomasjfrank.com/notion-conditional-color-formatting-everything-you-need-to-know/
 [m]: https://matthiasfrank.de/en/notion-updates/conditional-color-upgrade/
