@@ -142,7 +142,8 @@ test('[[ links: stamped once with the revision of their first save, kept across 
   h.save('K', doc => [...doc, para('k1', text('up: '), pageRef('R', 'r2'))])
   assert.deepEqual(linkedFrom(h.ws, 'R').map(e => [e.page.id, e.isParent]), [['K', false], [dayId(today), false], [dayId(yesterday), false]])
   h.run({ type: 'delete-page', pageId: 'K', at: '2026-10-22T12:00:00.000Z' })
-  assert.deepEqual(linkedFrom(h.ws, 'R').map(e => [e.page.id, e.removed]), [['K', true], [dayId(today), false], [dayId(yesterday), false]])
+  // In Trash it goes last, whatever its date (B86 11).
+  assert.deepEqual(linkedFrom(h.ws, 'R').map(e => [e.page.id, e.removed]), [[dayId(today), false], [dayId(yesterday), false], ['K', true]])
 })
 
 test('line links resolve: live, moved with its task to another day, not found, and in the trash', () => {
