@@ -206,12 +206,12 @@ function MoreSettingsPanel({ db, view, back }: { db: DatabasePage; view: View; b
     <label className="database-menu-row">Sub-items
       <input type="checkbox" checked={on} onChange={e => toggle(e.target.checked)} />
     </label>
-    {on && <label className="database-menu-row">Show
+    {on && view.layout !== 'timeline' && <label className="database-menu-row">Show
       <select aria-label="Show sub-items" value={view.subItemsDisplay ?? 'nested'} onChange={e => { const subItemsDisplay = e.target.value as View['subItemsDisplay']; changeView(() => ({ subItemsDisplay })) }}>
         <option value="nested">{nests ? 'Nested in toggle' : 'On the parent\'s card'}</option><option value="flat">Flattened list</option>
       </select>
     </label>}
-    {on && (nests || view.subItemsDisplay === 'flat') && <label className="database-menu-row">Rows
+    {on && (nests || view.layout === 'timeline' || view.subItemsDisplay === 'flat') && <label className="database-menu-row">Rows
       <select aria-label="Which rows" value={view.subItemsShow ?? 'both'} onChange={e => { const subItemsShow = e.target.value as View['subItemsShow']; changeView(() => ({ subItemsShow })) }}>
         <option value="both">Parents and sub-items</option><option value="parents">Parents only</option><option value="subs">Sub-items only</option>
       </select>

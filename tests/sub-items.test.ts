@@ -85,6 +85,9 @@ test('cards have no room for a tree: parents only unless flat, and a flat view t
     assert.equal(ids({ layout, subItemsDisplay: 'flat' }).length, 6)
     assert.deepEqual(ids({ layout, subItemsDisplay: 'flat', subItemsShow: 'subs' }), ['grand', 'great', 'kid', 'kid2'])
   }
+  // A Timeline lists them flat for now, with its Rows setting.
+  assert.equal(ids({ layout: 'timeline' }).length, 6)
+  assert.deepEqual(ids({ layout: 'timeline', subItemsShow: 'parents' }), ['other', 'top'])
   s.change({ kind: 'setSubItems', on: null })
   assert.equal(ids({ layout: 'board' }).length, 6)
 })
