@@ -1147,14 +1147,16 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
     if (input.groupBy !== before?.groupBy && !groupableProperties(db, layout).some((p) => p.id === input.groupBy)) throw new DatabaseError("Can't group by that");
     out.groupBy = input.groupBy;
   }
-  // Like `groupBy`: a new one must be a live date; the one it holds may be deleted since.
+  // Like `groupBy`: a new one must be a live date; the one it holds may be deleted since. A Formula or Rollup is stored without the type it works out to, which
+  // the menu reads, so it's taken here: if it stops being a date, the view reads as one whose date is gone (`viewDateBy`), and asks for another.
+  const workedOut = (p: Property) => p.formula !== undefined || Boolean(p.rollup);
   if (input.dateBy !== undefined) {
-    if (input.dateBy !== before?.dateBy && !dateProperties(db).some((p) => p.id === input.dateBy)) throw new DatabaseError("Can't place rows by that");
+    if (input.dateBy !== before?.dateBy && !db.properties.some((p) => p.id === input.dateBy && (p.type === "date" || isTimeType(p.type) || workedOut(p)))) throw new DatabaseError("Can't place rows by that");
     out.dateBy = input.dateBy;
   }
   if (input.calendarSpan === "week") out.calendarSpan = "week";
   if (input.timelineEnd !== undefined) {
-    if (input.timelineEnd !== before?.timelineEnd && !db.properties.some((p) => p.id === input.timelineEnd && p.type === "date")) throw new DatabaseError("Can't place rows by that");
+    if (input.timelineEnd !== before?.timelineEnd && !db.properties.some((p) => p.id === input.timelineEnd && (p.type === "date" || workedOut(p)))) throw new DatabaseError("Can't place rows by that");
     out.timelineEnd = input.timelineEnd;
   }
   if (input.timelineTable === true) out.timelineTable = true;
