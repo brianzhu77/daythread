@@ -15,7 +15,11 @@ Brian's rule is black, white and grey (116a40ab), and options have no colour her
 
 **With A:** a new rule starts grey, so choosing colour takes a deliberate tap. No view, template or default ever ships with a colour. It's reversible, since a rule's colour is one field, and no view changes until Brian acts.
 
-**Tints:** tokens per theme, `--tint-red` and so on, not hex (`tokens.md` rule 1), chosen by Jazz. Text stays `--ink`, at 4.5:1 on every tint in both themes, checked by script. Colour never replaces a value, because the value that matched is still in its cell.
+**Tints (Jazz 96d52959):** Formula's nine, opaque and already at 4.5:1 with `--ink` in both themes, named `--tint-red` and so on (`tokens.md` rule 1), so the app has one palette. Text stays `--ink`. Colour never replaces a value, because the value that matched is still in its cell.
+
+**The grey needs its own step.** Formula's grey tint is `--gray-3` in both themes (#f0f0f0, #222222), which is also `--fill` and `--fill-hover`. Every new rule starts grey, so a rule's first look would be a row that seems to be hovered. Jazz to settle the value; the other eight can stay Formula's.
+
+**Other text on a tint:** the script also checks `--ink-2`, and a formula's `style` colours in a tinted row. `--ink-3` is already under 4.5:1 on white, so it only needs to read no worse than it does there.
 
 ## 2. A rule
 
@@ -55,7 +59,8 @@ Rules are evaluated per row per view, as filters are. **R2-7's budget gets a var
 
 ## 6. Open
 
-- **Jazz:** the tints, and §4's stacking. Is the per-rule "whole row or only this property" worth having, given its weak source? I'd keep it, as it's the quieter choice on a black, white and grey page.
+- **Settled with Jazz (96d52959):** the tints, §1. §4's stacking as proposed: a picked row, a hover and a returned row keep their own treatment drawn over the tint, and a dragged row keeps its fade. "Whole row or only this property" stays per rule, default whole row. It's on a weak source and easy to take out.
+- **Jazz:** the grey's value (§1).
 
 [f]: https://thomasjfrank.com/notion-conditional-color-formatting-everything-you-need-to-know/
 [m]: https://matthiasfrank.de/en/notion-updates/conditional-color-upgrade/
