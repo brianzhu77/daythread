@@ -211,7 +211,13 @@ function MoreSettingsPanel({ db, view, back }: { db: DatabasePage; view: View; b
     {on && <label className="database-menu-row">Rows
       <select aria-label="Which rows" value={view.subItemsShow ?? 'both'} onChange={e => { const subItemsShow = e.target.value as View['subItemsShow']; changeView(() => ({ subItemsShow })) }}>
         <option value="both">Parents and sub-items</option><option value="parents">Parents only</option><option value="subs">Sub-items only</option>
+      </select>
+    </label>}
+  </>
+}
+
 // ---------------------------------------------------------------- export (csv design §2)
+
 function ExportPanel({ db, view, blockId, back, close }: { db: DatabasePage; view: View; blockId: string; back: () => void; close: () => void }) {
   const { workspace } = useWorkspace()
   const [withBodies, setWithBodies] = useState(false)
@@ -228,11 +234,14 @@ function ExportPanel({ db, view, blockId, back, close }: { db: DatabasePage; vie
       await exportDatabase(readingWorkspace(workspace, db.id), db, whole ? 'whole' : { view, context }, withBodies, whole ? title : `${title} - ${view.name}`)
       close()
     } catch { setState('failed') }
+  }
+  return <>
     <Head title="Export" back={back} />
     <button type="button" role="menuitem" disabled={state === 'busy'} onClick={() => void take(false)}>This view</button>
     <button type="button" role="menuitem" disabled={state === 'busy'} onClick={() => void take(true)}>Whole database</button>
     {!db.database.fixed && <label className="database-menu-row">Include page bodies
       <input type="checkbox" checked={withBodies} onChange={e => setWithBodies(e.target.checked)} />
+    </label>}
     {state === 'unsaved' && <p className="database-menu-quiet is-error" role="status">No file came: a page hasn't saved yet. Try again in a moment.</p>}
     {state === 'failed' && <p className="database-menu-quiet is-error" role="status">No file came. Try again.</p>}
   </>
