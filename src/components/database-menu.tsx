@@ -727,7 +727,7 @@ function RepeatSettings({ db, templateId, change }: { db: DatabasePage; template
       <label className="database-menu-row">Paused
         <input type="checkbox" checked={Boolean(repeat.paused)} onChange={e => { const { paused: _off, ...rest } = repeat; change({ kind: 'setRepeat', templateId, repeat: { ...rest, ...(e.target.checked ? { paused: true as const } : { notBefore: nowText() }) } }, true) }} />
       </label>
-      {nextRow && <p className="database-menu-quiet">Next row {nextRowText(nextRow, repeat.time ?? '00:00')}, or when you next open Daythread</p>}
+      {nextRow && <p className="database-menu-quiet">Next row {nextRowText(nextRow, repeat.time ?? '00:00')}</p>}
       {repeat.lastRan && <p className="database-menu-quiet">Last ran {new Date(repeat.lastRan).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>}
     </>}
   </>
