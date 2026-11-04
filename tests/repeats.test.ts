@@ -4,11 +4,20 @@ import assert from 'node:assert/strict'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import type { Database, DatabaseChange, Repeat } from '../src/domain/database.ts'
 import { rowTemplates } from '../src/domain/day-template.ts'
-import { dueDates, dueRepeats, repeatRowId } from '../src/domain/repeats.ts'
+import { dueDates, dueRepeats, nextDate, repeatRowId } from '../src/domain/repeats.ts'
 import { harness } from './v2-helpers.ts'
 
 const at = '2026-11-04T10:00:00.000Z'
 const r = (o: Partial<Repeat>): Repeat => ({ every: 'week', interval: 1, start: '2026-11-02', ...o })
+test('the next date: the first still to come, after what it made and not before it was set up; paused has none', () => {
+  assert.equal(nextDate(r({}), '2026-11-04', '10:00'), '2026-11-09')
+  assert.equal(nextDate(r({ time: '09:00' }), '2026-11-02', '08:00'), '2026-11-02')
+  assert.equal(nextDate(r({ time: '09:00' }), '2026-11-02', '10:00'), '2026-11-09')
+  assert.equal(nextDate(r({ interval: 2 }), '2026-11-04', '10:00'), '2026-11-16')
+  assert.equal(nextDate(r({ last: '2026-11-09' }), '2026-11-04', '10:00'), '2026-11-16')
+  assert.equal(nextDate(r({ notBefore: '2026-11-20T00:00' }), '2026-11-04', '10:00'), '2026-11-23')
+  assert.equal(nextDate(r({ paused: true }), '2026-11-04', '10:00'), null)
+})
 test('occurrences: each kind and interval, and a month keeps its day where it can', () => {
   assert.deepEqual(dueDates(r({ every: 'day', interval: 2, start: '2026-11-01' }), '2026-11-06', '12:00'), ['2026-11-01', '2026-11-03', '2026-11-05'])
   assert.deepEqual(dueDates(r({}), '2026-11-16', '00:00'), ['2026-11-02', '2026-11-09', '2026-11-16'])

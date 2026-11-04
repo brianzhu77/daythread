@@ -1906,8 +1906,8 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-title-row.is-page .database-view-name { margin-right: 2px; }
 .database-title-row:not(.is-page) .database-more-button { margin-left: -6px; }
 .database-menu-scrim { display: none; }
-.database-menu { z-index: 60; width: 300px; max-height: min(70vh, 520px); overflow-y: auto; display: flex; flex-direction: column; gap: 1px; font-size: var(--text-ui); }
-.database-menu > button[role=menuitem] { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding: 0 10px; color: var(--ink); }
+.database-menu { z-index: 60; width: 300px; max-height: min(70vh, 560px); overflow-y: auto; display: flex; flex-direction: column; gap: 1px; font-size: var(--text-ui); }
+.database-menu > button[role=menuitem], .database-menu > button[role=menuitemcheckbox] { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding: 0 10px; color: var(--ink); }
 .database-menu hr { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
 .database-menu-head { display: flex; align-items: center; gap: 4px; min-height: 36px; padding: 0 6px 0 2px; font-weight: var(--weight-semibold); color: var(--ink); }
 .database-menu-back { display: inline-grid; place-items: center; width: 28px; height: 28px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
@@ -1996,6 +1996,10 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .formula-doc-name { font-weight: 600; }
 .formula-doc code { color: var(--ink-3); overflow-wrap: anywhere; }
 .database-menu-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; color: var(--ink); }
+/* A repeat's fields share one column, so their left edges line up. */
+.database-repeat-field > select, .database-repeat-field > input, .database-repeat-every { flex: none; width: 164px; }
+.database-repeat-every { display: flex; align-items: center; gap: 8px; color: var(--ink-2); }
+.database-repeat-every input { width: 64px; flex: none; }
 /* A filter or sort rule: property → condition → value on one line when it fits, then wrapping. */
 .database-rule { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 6px 6px 10px; border-radius: var(--radius-row); }
 .database-rule + .database-rule { border-top: 1px solid var(--line-soft); }
@@ -2031,7 +2035,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-menu .is-danger { color: var(--app-danger); }
 /* .app-menu gives every button the full width and a 38 px height, meant for menu items; the small controls inside
    these panels (back, ×, ↑, the property name) size themselves instead. */
-.database-menu button:not([role=menuitem]) { width: auto; }
+.database-menu button:not([role=menuitem]):not([role=menuitemcheckbox]) { width: auto; }
 .database-menu .database-menu-back, .database-menu .database-rule-remove, .database-menu .database-rule button,
 .database-menu .database-property-line > button:not(.database-property-name), .database-menu .database-option-line > button {
   flex: none; justify-content: center; width: 28px; height: 28px; min-height: 0; padding: 0; }
@@ -2065,7 +2069,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
   .database-menu { position: fixed !important; inset: auto 0 0 0 !important; width: auto; max-height: 85vh; padding: 8px 12px calc(12px + env(safe-area-inset-bottom)); border: 0; border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; box-shadow: var(--shadow-float); animation: sheet-in .2s ease-out; }
   .database-menu-scrim { display: block; position: fixed; inset: 0; z-index: 59; background: var(--scrim); }
   .database-menu::before { content: ''; flex: none; align-self: center; width: 36px; height: 5px; margin-bottom: 6px; border-radius: 3px; background: var(--check); }
-  .database-menu > button[role=menuitem], .database-menu-head, .database-property-line, .database-menu-row { min-height: 44px; }
+  .database-menu > button[role=menuitem], .database-menu > button[role=menuitemcheckbox], .database-menu-head, .database-property-line, .database-menu-row { min-height: 44px; }
   .database-menu input:not([type=checkbox]), .database-menu select { min-height: 40px; font-size: 16px; }
   .csv-import { top: auto; left: 0; transform: none; width: auto; max-height: 85vh; }
   .csv-import-column, .csv-import-caption { grid-template-columns: minmax(0, 1fr) 130px; }

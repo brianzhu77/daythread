@@ -75,6 +75,32 @@ await scenario('Paused: nothing', 'paused', async page => {
   r.ok = r.rows === 0
   return r
 })
+await scenario('Turned back on after a pause: nothing for the periods it was paused, no notice, and the next row is named', 'paused', async page => {
+  await open(page); await wait(800)
+  await page.locator('.database-more-button').first().click(); await wait(250)
+  await menu(page).getByRole('menuitem', { name: 'Templates' }).click(); await wait(250)
+  const listed = (await menu(page).innerText()).replace(/\s+/g, ' ')
+  await menu(page).getByRole('button', { name: 'Weekly review options' }).click(); await wait(300)
+  await menu(page).getByRole('checkbox', { name: 'Paused' }).click(); await wait(1500)
+  const r = { listed, rows: rows().length, notice: await notices(page), next: /Next row \w+, \w+ \d+/.test(await menu(page).innerText()) }
+  r.ok = /· Paused/.test(listed) && r.rows === 0 && !/skipped/.test(r.notice) && r.next
+  return r
+})
+await scenario('Every can be emptied while typing: 1, backspace, 2 gives 2; left empty it goes back', 'week', async page => {
+  await open(page)
+  await page.locator('.database-more-button').first().click(); await wait(250)
+  await menu(page).getByRole('menuitem', { name: 'Templates' }).click(); await wait(250)
+  await menu(page).getByRole('button', { name: 'Weekly review options' }).click(); await wait(300)
+  const every = menu(page).getByLabel('Every how many')
+  await every.click(); await page.keyboard.press('End'); await page.keyboard.press('Backspace'); await wait(300)
+  const emptied = await every.inputValue()
+  await page.keyboard.type('2'); await wait(900)
+  const r = { emptied, typed: await every.inputValue(), stored: repeat().interval, unit: /weeks/.test(await menu(page).innerText()) }
+  await page.keyboard.press('Backspace'); await menu(page).getByText('Paused').hover(); await every.blur(); await wait(300)
+  r.left = await every.inputValue()
+  r.ok = emptied === '' && r.typed === '2' && r.stored === 2 && r.unit && r.left === '2'
+  return r
+})
 await scenario('A row deleted after it\'s made stays deleted across a reopen', 'week', async page => {
   await open(page)
   const id = rows()[0].id
