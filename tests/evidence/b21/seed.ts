@@ -13,6 +13,7 @@ const write = async (pageId: string, title: string, nodes: object[]) => {
   await run({ type: 'create-document', title, body: '', pageId })
   await run({ type: 'save-editor', pageId, expectedContent: pageContentKey(ws.pages.find(p => p.id === pageId)!), document: JSON.stringify(nodes) })
 }
+await write('plain', 'Plain', [line('p1', 'A plain line')])
 await write('a', 'Page A', [line('a1', 'Above on A'), block('sa', [line('l1', 'Shared one'), line('l2', 'Shared two')]), line('a2', 'Below on A')])
 await write('b', 'Page B', [line('b1', 'Above on B'), block('sb'), line('b2', 'Below on B')])
 console.log('seeded')

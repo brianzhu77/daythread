@@ -285,15 +285,19 @@ export function deleteBlockPlace(state: Workspace, syncId: string, blockId: stri
  * has changed stays as it is, and the next save sorts it out (above).
  */
 export interface BlockUpdate { id: string; rev: number; key: string; lines: EditorNode[] | null; rename: Record<string, string> }
-export function blockUpdates(editorNodes: EditorNode[], saved: string, own: boolean): BlockUpdate[] {
+export function blockUpdates(editorNodes: EditorNode[], saved: string, own: boolean, sent?: string): BlockUpdate[] {
   if (!mentionsBlock(saved)) return []
-  const held = new Map<string, EditorNode>()
+  const held = new Map<string, EditorNode>(), sentLines = new Map<string, string>()
   walk(editorNodes, n => { if (isBlock(n)) held.set(n.id, n) })
+  if (sent) walk(JSON.parse(sent) as EditorNode[], n => { if (isBlock(n)) sentLines.set(n.id, blockLinesKey(n)) })
   const out: BlockUpdate[] = []
   walk(JSON.parse(saved) as EditorNode[], s => {
     const e = isBlock(s) ? held.get(s.id) : undefined
     if (!e) return
     const rev = Number(s.props?.rev), key = String(s.props?.key ?? ''), mine = blockLinesKey(e)
+    // His own save, and these lines have changed since it went: an Undo back to where they started looks untouched, but it's his latest,
+    // so it starts from what was saved and goes in the next save (Ratchet 0074b95c).
+    if (own && mine !== key && sentLines.has(e.id) && sentLines.get(e.id) !== mine) { out.push({ id: e.id, rev, key, lines: null, rename: {} }); return }
     // A copy just pasted hasn't read the record yet, and takes its lines. Its `key` says what it was pasted with, so words he's typed
     // since stay his; a block he's just made has no key, and goes on below (Lead's review of #96).
     if (!Number(e.props?.rev) && mine === e.props?.key) { out.push({ id: e.id, rev, key, lines: s.children ?? [], rename: {} }); return }
