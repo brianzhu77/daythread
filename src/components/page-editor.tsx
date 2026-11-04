@@ -18,6 +18,7 @@ import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { linkedViewJson, linkedViewOf } from '../domain/linked-view'
 import { chooseCsv } from './csv-import'
 import { blockLinesKey, blockUpdates, mirroredLines, ownLineIds, syncedBlockType, syncedPlaces, writtenDocument, type BlockUpdate } from '../domain/synced'
+import { EditorScrollerContext, pageScopeOf } from './editor-scope'
 import { syncedKeys } from './synced-keys'
 import { SyncedEditorActions, SyncedLabel, type SyncedActions } from './synced-label'
 import { databaseSource, withTodos } from '../domain/todos-source'
@@ -418,6 +419,7 @@ function firstLineCenter(block: HTMLElement): number {
 }
 
 export function PageEditor({ page, workspace }: { page: Page; workspace: Workspace }) {
+  const scroller = useContext(EditorScrollerContext)
   // B70: a page made inside the day template would be copied into every day, so the template makes none (Jazz §2).
   const onTemplate = isTemplate(page)
   const { run, refresh, latest } = useWorkspace()
@@ -747,7 +749,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const go = (href: string) => { if (latestWorkspace.current.pages.some(p => p.id === r.pageId)) void navigate({ href, replace: true, resetScroll: false }); else window.location.replace(href) }
       const elsewhere = r.pageId !== page.id || page.type === 'daily'
       if (r.state === 'line-not-found' || r.state === 'page-not-found' || !r.blockId) {
-        dropParam(); window.scrollTo({ top: 0 }); toast("Couldn't find that line", { timeout: 4000 })
+        dropParam(); scroller.to(0); toast("Couldn't find that line", { timeout: 4000 })
         if (r.href && elsewhere) go(r.href)
         return
       }
@@ -1321,7 +1323,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
     if (!created) { setDatabasePending(pageId, { state: 'failed', retry }); setStatus('Database not created · tap it to retry'); return }
     setDatabasePending(pageId, null)
-    requestAnimationFrame(() => document.querySelector<HTMLInputElement>(`.database-title[data-database="${CSS.escape(pageId)}"]`)?.focus())
+    requestAnimationFrame(() => editor.domElement?.querySelector<HTMLInputElement>(`.database-title[data-database="${CSS.escape(pageId)}"]`)?.focus())
   }
   /** An imported database's block goes in and saves first, so the import is the last change and one Undo can take it. */
   async function placeImportedDatabase(pageId: string): Promise<string | null> {
@@ -1408,8 +1410,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const down = (e: PointerEvent) => { if (!(e.target as Element).closest?.('.paste-menu')) keep() }
     const hidden = () => { if (document.visibilityState === 'hidden') keep() }
     const scrolled = () => {
-      const rect = document.querySelector(`.bn-block-outer[data-id="${CSS.escape(last)}"]`)?.getBoundingClientRect()
-      if (!rect || rect.bottom < 0 || rect.top > (window.visualViewport?.height ?? window.innerHeight)) keep()
+      const rect = editor.domElement?.querySelector(`.bn-block-outer[data-id="${CSS.escape(last)}"]`)?.getBoundingClientRect(), edges = scroller.edges()
+      if (!rect || rect.bottom < edges.top || rect.top > edges.bottom) keep()
     }
     document.addEventListener('pointerdown', down, true); document.addEventListener('visibilitychange', hidden)
     window.addEventListener('pagehide', keep); window.addEventListener('scroll', scrolled, true)
@@ -1860,7 +1862,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }), [editor])
   // Press-tint cleanup lives here, not in the side menu: BlockNote unmounts the side menu while a drag is in flight.
   useEffect(() => {
-    const clear = () => document.querySelectorAll('[data-node-type="blockContainer"].is-picked').forEach(el => el.classList.remove('is-picked'))
+    const clear = () => editor.domElement?.querySelectorAll('[data-node-type="blockContainer"].is-picked').forEach(el => el.classList.remove('is-picked'))
     // ProseMirror doesn't redraw the browser selection while the editor is unfocused after a drop, so collapse both.
     // The picked ids survive the drop event itself: the editor's drop handler below reads them after this capture.
     const settle = () => { clear(); requestAnimationFrame(() => { const { state } = editor.prosemirrorView; if (!state.selection.empty) editor.prosemirrorView.dispatch(state.tr.setSelection(TextSelection.near(state.selection.$to, -1))); const dom = window.getSelection(); if (dom && !dom.isCollapsed && editor.prosemirrorView.dom.contains(dom.focusNode)) dom.collapseToEnd() }) }
@@ -1885,13 +1887,14 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const id = el?.dataset.id
     const doc = nodes(), target = doc.find(n => n.id === id), first = dragging.current[0]
     if (!first) return
-    const lastElement = document.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(doc.at(-1)?.id ?? '')}"]`)
+    const lastElement = editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(doc.at(-1)?.id ?? '')}"]`)
     const atEnd = !el && !!lastElement && y >= lastElement.getBoundingClientRect().bottom || !!el && y > el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2 && target?.id === doc.at(-1)?.id
     const valid = !dragging.current.some(n => n.id === id)
     const next = valid ? { id: id ?? '', end: atEnd, top: el ? (atEnd ? el.getBoundingClientRect().bottom : el.getBoundingClientRect().top) : y } : null
     dropRef.current = next; setDrop(next)
-    if (y < 85) window.scrollBy(0, -20)
-    else if (y > window.innerHeight - 120) window.scrollBy(0, 20)
+    const edges = scroller.edges()
+    if (y < edges.top + 85) scroller.by(-20)
+    else if (y > edges.bottom - 120) scroller.by(20)
     return valid
   }
   function commitDrag() {
@@ -1990,7 +1993,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   useEffect(() => {
     const update = () => {
       const block = editor.getTextCursorPosition().block
-      const el = document.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"]`)
+      const el = editor.domElement?.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(block.id)}"]`)
       // Finding 11: measured from what he can see on iOS, placed from the layout viewport, so add fixedOffset().
       if (el) { const top = firstLineCenter(el) - touchHandleSize / 2 + fixedOffset(); setTouchHandle(previous => previous?.id === block.id && Math.abs(previous.top - top) < 0.5 ? previous : { id: block.id, top }) }
     }
@@ -2574,7 +2577,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           e.preventDefault(); e.stopPropagation()
           const first = selected.current[0]!
           selected.current = []; extendedIds.current = []; setSelectionLabel('')
-          document.querySelectorAll('[data-node-type="blockContainer"].is-picked').forEach(el => el.classList.remove('is-picked'))
+          editor.domElement?.querySelectorAll('[data-node-type="blockContainer"].is-picked').forEach(el => el.classList.remove('is-picked'))
           if (editor.getBlock(first)) editor.setTextCursorPosition(first, 'end')
           editor.focus()
           return
@@ -2587,7 +2590,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         deleteSelected()
       } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && page.type === 'document' && caretAtDocumentStart()) {
         // Jazz's title spec: Backspace at the start of the first line goes up into the title, as in Notion.
-        const title = document.querySelector<HTMLElement>('.page-title-field')
+        const title = pageScopeOf(editor.domElement).querySelector<HTMLElement>('.page-title-field')
         if (title) { e.preventDefault(); e.stopPropagation(); focusAtEnd(title) }
       } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && editor.prosemirrorState.selection.empty && editor.getTextCursorPosition().block.type === 'task' && !inlineText(editor.getTextCursorPosition().block.content)) {
         // The caret goes to the end of the line above, as when any line is deleted (Brian 301105c0), not to the start of
@@ -2758,7 +2761,7 @@ function SectionSideMenu({ select, picked, extended, selectedIds }: { select(id:
       editor.prosemirrorState.doc.descendants((node, position) => { if (node.type.name === 'blockContainer' && node.attrs.id === block.id) pos = position })
       if (pos >= 0) editor.prosemirrorView.dispatch(editor.prosemirrorState.tr.setSelection(NodeSelection.create(editor.prosemirrorState.doc, pos)))
     }
-    document.querySelectorAll('[data-node-type="blockContainer"].is-picked').forEach(el => el.classList.remove('is-picked'))
+    editor.domElement?.querySelectorAll('[data-node-type="blockContainer"].is-picked').forEach(el => el.classList.remove('is-picked'))
     for (const node of range)
       editor.domElement?.querySelector(`[data-node-type="blockContainer"][data-id="${CSS.escape(node.id)}"]`)?.classList.add('is-picked')
   }
