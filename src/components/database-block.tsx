@@ -6,6 +6,7 @@ import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
+import { formulaErrorOf } from '../domain/formula'
 import { sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
@@ -1019,11 +1020,11 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
               const navId = `${index}:${col + 1}`
               return <td key={property.id} className={`database-td is-${property.type}${wraps ? ' is-wrapped' : ''}${pending?.failed ? ' is-unsaved' : pending ? ' is-saving' : ''}`}>
                 {property.type === 'checkbox'
-                  ? <span data-nav={navId} tabIndex={0} className="database-check-cell" onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); commit(db, row, property.id, value === true ? undefined : true) } }}>
-                      <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
+                  ? <span data-nav={navId} tabIndex={0} className="database-check-cell" onKeyDown={e => { if ((e.key === ' ' || e.key === 'Enter') && !isReadOnly(property)) { e.preventDefault(); commit(db, row, property.id, value === true ? undefined : true) } }}>
+                      <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} disabled={isReadOnly(property)} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
                     </span>
                   : isReadOnly(property)
-                  ? <span data-nav={navId} tabIndex={0} className="database-cell is-read-only"><PropertyCell property={property} value={value} today={today} /></span>
+                  ? <span data-nav={navId} tabIndex={0} className="database-cell is-read-only"><PropertyCell property={property} value={value} row={row} today={today} /></span>
                   : wide && typeof value === 'string' && linkHref(property, value)
                   // At 1280 a link opens from its text, and the pencil edits it (design §6.1, Jazz bf91cb72).
                   ? <span className="database-url-cell">
@@ -1166,7 +1167,8 @@ function defaultWidth(property: Property): number {
     case 'date': return 110
     case 'select': case 'multiSelect': case 'status': return 140
     case 'relation': return 180
-    case 'rollup': return 120
+    case 'rollup':
+    case 'formula': return 120
     case 'text': case 'url': case 'email': case 'phone': return 180
     case 'createdTime': case 'editedTime': return 150
     case 'id': return 70 + (property.prefix?.length ?? 0) * 8
@@ -1205,8 +1207,10 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
       const key = cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: property.id })
       return <div key={property.id} className={`row-property${pending?.failed ? ' is-unsaved' : ''}`}>
         <span className="row-property-name" data-type={property.type}>{property.name}</span>
-        {isReadOnly(property)
-          ? <span className="row-property-value is-read-only">{isEmptyValue(value) ? <span className="is-placeholder">Empty</span> : <PropertyCell property={property} value={value} today={today} />}</span>
+        {isReadOnly(property) && property.type === 'checkbox' && !formulaErrorOf(row, property)
+          ? <span className="row-property-value is-read-only"><PropertyCheckbox checked={value === true} label={property.name} disabled onToggle={() => {}} /></span>
+          : isReadOnly(property)
+          ? <span className="row-property-value is-read-only">{isEmptyValue(value) && !formulaErrorOf(row, property) ? <span className="is-placeholder">Empty</span> : <PropertyCell property={property} value={value} row={row} today={today} />}</span>
           : property.type === 'checkbox'
           ? <span className="row-property-value"><PropertyCheckbox checked={value === true} label={property.name} onToggle={next => commit(db, row, property.id, next ? true : undefined)} /></span>
           : <button type="button" className="row-property-value" data-cell={key} onClick={() => setOpenCell({ blockId, databaseId: db.id, rowId: row.id, columnId: property.id })}>
