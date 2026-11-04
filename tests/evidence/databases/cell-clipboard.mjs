@@ -38,7 +38,7 @@ const scenario = async (name, column, text, act, check) => {
 const paste = ({ press }) => press('Meta+v')
 const results = [
   await scenario('paste one line', 8, 'single', paste, (s, n) => intact(s) && s.notes === 'single' && !/first line/.test(n)),
-  await scenario('paste several lines', 8, 'one\ntwo\nthree', paste, (s, n) => intact(s) && s.notes === 'one' && /Pasted the first line only/.test(n)),
+  await scenario('paste several lines: down the column (R4-9)', 8, 'one\ntwo\nthree', paste, (s, n) => intact(s) && s.notes === 'one' && /3 cells pasted/.test(n)),
   await scenario('paste into Name', 0, 'Arrakis', paste, s => intact(s) && s.name === 'Arrakis'),
   await scenario('paste a number', 2, '1,024', paste, s => intact(s) && s.pages === 1024),
   await scenario('paste words into a number', 2, 'many', paste, (s, n) => intact(s) && s.pages === 412 && /Can't paste/.test(n)),
