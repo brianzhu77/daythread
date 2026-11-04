@@ -1,6 +1,6 @@
 import { createExtension } from '@blocknote/core'
 import { Plugin, TextSelection } from '@tiptap/pm/state'
-import type { EditorView } from '@tiptap/pm/view'
+import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
 import type { Node as ProseNode, ResolvedPos } from '@tiptap/pm/model'
 import { syncedBlockType } from '../domain/synced'
 
@@ -28,7 +28,7 @@ const put = (view: EditorView, pos: number, side: 1 | -1) => view.dispatch(view.
  * Here it stops, with the caret at the edge. Enter on its empty last line still leaves it, as the editor does already.
  * On capture, so it runs before the editor's own keys.
  */
-export function syncedEdgeKey(view: EditorView, event: KeyboardEvent): boolean {
+export function syncedEdgeKey(view: EditorView, event: KeyboardEvent, onEmpty: (blockId: string) => void): boolean {
   const { selection } = view.state
   if (!selection.empty || event.isComposing) return false
   const { $from } = selection, line = lineAt($from)
@@ -36,7 +36,11 @@ export function syncedEdgeKey(view: EditorView, event: KeyboardEvent): boolean {
   const atStart = $from.parentOffset === 0, atEnd = $from.parentOffset === $from.parent.content.size
   const lineSize = line.group.child(line.index).nodeSize
   if (event.key === 'Backspace' && atStart && !event.metaKey) {
-    if (line.holder && line.index === 0) return true
+    if (line.holder && line.index === 0) {
+      // The one exception: an empty block, if this is its only place, goes (the caller checks that).
+      if (line.group.childCount === 1 && !$from.parent.content.size) onEmpty(String(line.holder.attrs.id))
+      return true
+    }
     if (isBlock(line.before)) { put(view, line.start, -1); return true }
   }
   if (event.key === 'Delete' && atEnd) {
@@ -51,13 +55,20 @@ export function syncedEdgeKey(view: EditorView, event: KeyboardEvent): boolean {
   }
   return false
 }
-export const syncedKeys = () => createExtension({
+export const syncedKeys = (onEmpty: (blockId: string) => void) => createExtension({
   key: 'daythreadSyncedKeys',
   prosemirrorPlugins: [new Plugin({
     view: view => {
-      const key = (event: KeyboardEvent) => { if (['Backspace', 'Delete', 'Tab'].includes(event.key) && syncedEdgeKey(view, event)) { event.preventDefault(); event.stopPropagation() } }
+      const key = (event: KeyboardEvent) => { if (['Backspace', 'Delete', 'Tab'].includes(event.key) && syncedEdgeKey(view, event, onEmpty)) { event.preventDefault(); event.stopPropagation() } }
       view.dom.addEventListener('keydown', key, true)
       return { destroy: () => view.dom.removeEventListener('keydown', key, true) }
+    },
+    // The caret in it shows its label (states §3): focus stays on the editor, so `:focus-within` can't say so, and a phone has no hover.
+    props: {
+      decorations: ({ doc, selection: { $from } }) => {
+        for (let depth = $from.depth; depth > 0; depth--) if (isBlock($from.node(depth))) return DecorationSet.create(doc, [Decoration.node($from.before(depth), $from.after(depth), { class: 'has-caret' })])
+        return null
+      },
     },
   })],
 })

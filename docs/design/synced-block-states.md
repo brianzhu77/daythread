@@ -66,7 +66,8 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
 - **Room for the outline and label (b21 plan: the container's own row takes no line):** the block always keeps 8 px
   above its first line and 6 px below its last, hover or not, so nothing shifts when the label appears. The outline
   runs through that space, and the label straddles the top edge on a `--bg` backing. Its box must clear the first
-  line's text and the line above the block (a geometry check). Only vertical space is added; columns don't change.
+  line's text and the line above the block (a geometry check), so it's 14 px tall. Only vertical space is added; columns don't
+  change. **On a phone its tap area reaches up** over the space above the block, never down onto the first line.
 - **"Only here":** when it's on one page, the label reads "↻ Synced · only here". It stays a synced block, so he can
   still copy it elsewhere later.
 - **Tap the label:** a small menu, the app's `RowMenu` style:
@@ -78,6 +79,8 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
   - **Copy:** copies the synced block (same as selecting it and ⌘C).
   - **On a copy: Unsync here. On the original: Unsync all**, or Unsync when it's the only place (§6). While the original is
     in Trash, a copy still has Unsync here, and nothing offers Unsync all.
+  - **Delete:** ends this place, as §6. A block's own row takes no line, so no handle reaches it: the label is the one place to
+    delete it, at both widths (Jazz, on Roadbuster's question). It's separate from Unsync, so it's the last item.
 - **The one thing that differs by place inside the lines:** a to-do reads as a plan row only on the page that plans it,
   and carries the existing "Reference" tag everywhere else (§5). It's the same tag as any reference row, not a new look.
 
@@ -132,7 +135,7 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
 - **The block's edges hold.** The earlier experiment showed lines spilling out and being pulled in, so:
   - Backspace at the start of its first line does nothing to the block, and doesn't pull that line out. The one exception:
     on a block that's empty and in only this place, it removes the block. An empty block shown elsewhere stays, because that
-    would be a delete with no notice. He removes a shared block by selecting it (§6).
+    would be a delete with no notice. He removes a shared block from its label's menu (§6).
   - Backspace at the start of the line below it, or Delete at the end of the line above, puts the caret at the block's edge and
     moves nothing in.
   - Enter on an empty last line leaves the block, with a new line below it.
@@ -146,7 +149,7 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
 
 | He does | That place | Other places | Notice |
 | --- | --- | --- | --- |
-| **Deletes a copy** (select → Delete) | goes | unchanged, still synced | "Removed from this page · still on {n} pages · Undo" |
+| **Deletes a copy** (Delete in its label's menu) | goes | unchanged, still synced | "Removed from this page · still on {n} pages · Undo" |
 | **Unsync here**, on a copy | stays, as ordinary lines | unchanged, still synced | "Unsynced here · Undo" |
 | **Unsync all**, on the original | all become ordinary lines, each page keeping them | the same | "Unsynced on {n} pages · Undo" |
 | **Unsync**, on an original that's the only place | stays, as ordinary lines | none | "Unsynced · Undo" |
@@ -198,7 +201,7 @@ There are two ways in, with no tip or onboarding (Lead `10e9e0f0`).
 1. Select 2 bullets on a doc page → Sync → outline appears; bullets and text don't move (`check-alignment`).
    Undo → plain bullets, identical, with the same line ids.
 1b. `/` Synced block → an empty block with the caret in it; Backspace removes it. Pasted on a second page and emptied: Backspace
-   on either does nothing, and selecting it → Delete follows §6.
+   on either does nothing, and Delete in the label's menu follows §6.
 2. Copy (label menu) → paste on an empty line on today's Notes → the doc page reads "↻ Original · 2 pages", today "↻ Synced
    · 2 pages"; "On" lists the other page, with Original marked, and opens it at the block.
 2a. **On the phone, in the Home Screen app:** Copy from the label, paste on another page → it arrives synced, both labels "2 pages".

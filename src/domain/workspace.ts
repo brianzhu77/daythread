@@ -8,7 +8,7 @@ import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./pa
 import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
-import { acceptSavedBlocks, expandedWorkspace, settleSynced } from "./synced.ts";
+import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, settleSynced, unsyncBlock } from "./synced.ts";
 
 export class DomainError extends Error {}
 export function createEmptyWorkspace(timezone = "America/Vancouver"): Workspace {
@@ -576,6 +576,22 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       t.version++;
       return { message: "Date set", entityId: t.id };
     }
+    case "unsync-block":
+    case "delete-synced-place": {
+      const here = pageNodes(page(state, action.pageId));
+      const block = flatNodes(here).find((n) => n.id === action.blockId);
+      const syncId = block?.props?.syncId;
+      if (!block || typeof syncId !== "string") throw new DomainError("Block not found");
+      if (action.type === "unsync-block") {
+        if (action.all && state.synced?.find((r) => r.id === syncId)?.original !== block.id) throw new DomainError("Only the original can do that");
+        const places = unsyncBlock(state, syncId, block.id, Boolean(action.all));
+        const others = places - 1;
+        return { message: action.all ? `Unsynced on ${places} ${places === 1 ? "page" : "pages"}` : others ? "Unsynced here" : "Unsynced", entityId: action.pageId };
+      }
+      const { places, wasOriginal } = deleteBlockPlace(state, syncId, block.id);
+      const others = places - 1;
+      return { message: !others ? "Deleted" : wasOriginal ? `Removed · the other ${others} ${others === 1 ? "page keeps its" : "pages keep their"} lines, no longer synced` : `Removed from this page · still on ${others} ${others === 1 ? "page" : "pages"}`, entityId: action.pageId };
+    }
     case "plan-task": {
       const t = task(state, action.taskId);
       if (action.from) date(action.from);
@@ -1077,7 +1093,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   let state = structuredClone(input);
   const { undo: _previousUndo, receipts: _receipts, ...rest } = input;
   const before = { ...structuredClone(rest), receipts: {} as Workspace["receipts"] };
-  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[] };
+  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number };
   if (command.action.type === "undo") {
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");
@@ -1086,7 +1102,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
     result = { message: "Previous operation restored" };
   } else {
     result = execute(state, command.action, command.operationId);
-    settleSynced(state);
+    result = { ...result, ...settleSynced(state) };
   }
   state.revision = input.revision + 1;
   const receipt = { operationId: command.operationId, ...result, fingerprint };
