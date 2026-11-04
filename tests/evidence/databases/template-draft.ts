@@ -11,21 +11,25 @@ if (!process.argv[2] || !process.argv[3]) { console.error('Usage: node tests/evi
 const [copy, scratch] = process.argv.slice(2) as [string, string]
 const date = '2026-12-21', next = '2026-12-22'
 const anyIds = (s: string) => s.replace(/[0-9a-f]{8}-[0-9a-f-]{27}/g, 'ID')
-const shape = (nodes: EditorNode[]) => nodes.filter(n => n.type !== 'database').map(n => `${n.type}:${inlineText(n.content).trim()}`)
+// A view or a synced block's lines aren't what's being compared: the day around them is.
+const lineIds = (nodes: EditorNode[]) => new Set(nodes.filter(n => n.type === 'syncedBlock').flatMap(n => flatNodes(n.children ?? []).map(c => c.id)))
+const shape = (nodes: EditorNode[]) => { const inside = lineIds(nodes); return nodes.filter(n => n.type !== 'database' && n.type !== 'syncedBlock' && !inside.has(n.id)).map(n => `${n.type}:${inlineText(n.content).trim()}`) }
 
-async function run(variant: 'plain' | 'viewed' | 'todos') {
+async function run(variant: 'plain' | 'viewed' | 'todos' | 'block') {
   const path = `${scratch}/draft-${variant}.sqlite`
   execSync(`rm -f ${path} ${path}-wal ${path}-shm`)
   copyFileSync(copy, path)
   execSync(`node tests/evidence/databases/seed-table.ts ${path}`, { stdio: 'ignore' })
-  execSync(`node tests/evidence/databases/template-view-seed.ts ${path} ${variant === 'viewed' ? '' : variant}`, { stdio: 'ignore' })
+  // A synced block's copy in the template, before the days are made: a day has to read as a day with a note in it, and nothing else.
+  if (variant === 'block') execSync(`node tests/evidence/b21/template-seed.ts ${path}`, { stdio: 'ignore' })
+  execSync(`node tests/evidence/databases/template-view-seed.ts ${path} ${variant === 'viewed' ? '' : variant === 'block' ? 'plain' : variant}`, { stdio: 'ignore' })
   const repo = new SqliteWorkspaceRepository(path)
   let ws = await repo.load()
   const exec = async (action: Action) => { const r = await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: ws.revision, action }); ws = r.workspace; return r.receipt }
   const page = (d = date) => ws.pages.find(p => p.date === d) as Page
   const doc = () => flatNodes(pageNodes(page()))
   const request = buildDayDraftRequest(ws, page())
-  const views = doc().filter(n => n.type === 'database').length
+  const views = doc().filter(n => n.type === 'database' || n.type === 'syncedBlock').length
   // A draft as the model's reply becomes one: the first open tasks into the first empty slots, the rest by the fallback.
   const candidates = draftCandidates(ws, page()), slots = doc().filter(n => n.type === 'task' && !inlineText(n.content).trim())
   let n = 0
@@ -40,17 +44,18 @@ async function run(variant: 'plain' | 'viewed' | 'todos') {
   await exec({ type: 'apply-draft', pageId: page().id, itemIds: items.map(i => i.id), today: date })
   await exec({ type: 'ensure-day', date: next })
   const carried = shape(flatNodes(pageNodes(page(next))))
-  return { views, messages: anyIds(JSON.stringify(request.messages)), anchorsAView: [...request.blocks.values()].some(b => b.type === 'database'), candidates: candidates.length, items: items.length, before, applied, undone, carried, tasksMade: ws.tasks.length - tasks, viewsNext: flatNodes(pageNodes(page(next))).filter(b => b.type === 'database').length }
+  return { views, messages: anyIds(JSON.stringify(request.messages)), anchorsAView: [...request.blocks.values()].some(b => b.type === 'database'), candidates: candidates.length, items: items.length, before, applied, undone, carried, tasksMade: ws.tasks.length - tasks, viewsNext: flatNodes(pageNodes(page(next))).filter(b => b.type === 'database' || b.type === 'syncedBlock').length }
 }
 
 const plain = await run('plain')
 let allOk = true
-for (const variant of ['viewed', 'todos'] as const) {
+for (const variant of ['viewed', 'todos', 'block'] as const) {
 const viewed = await run(variant)
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const checks = {
-  viewsOnTheDay: viewed.views === 2 && plain.views === 0,
-  sameWordsToTheModel: viewed.messages === plain.messages,
+  viewsOnTheDay: viewed.views === (variant === 'block' ? 1 : 2) && plain.views === 0,
+  // A block's lines are the day's context: the note once, and otherwise the same words.
+  sameWordsToTheModel: variant === 'block' ? viewed.messages.split('One standing note').length === 2 && viewed.messages.replace(/ {3}[^\\]*One standing note[^\\]*\\n/, '') === plain.messages : viewed.messages === plain.messages,
   noViewAsAnchor: !viewed.anchorsAView,
   sameDayBefore: same(viewed.before, plain.before),
   sameAfterApply: same(viewed.applied, plain.applied),
@@ -58,10 +63,11 @@ const checks = {
   sameCarryOver: same(viewed.carried, plain.carried),
   sameTasks: viewed.tasksMade === plain.tasksMade,
   draftChangedTheDay: viewed.items > 0 && !same(viewed.applied, viewed.before),
-  viewsOnTheNextDay: viewed.viewsNext === 2,
+  viewsOnTheNextDay: viewed.viewsNext === (variant === 'block' ? 1 : 2),
 }
 console.log(variant, JSON.stringify({ candidates: viewed.candidates, items: viewed.items, checks }))
 const ok = Object.values(checks).every(Boolean)
+if (!checks.sameWordsToTheModel) { const a = plain.messages, b = viewed.messages.replace(/ {3}[^\\]*One standing note[^\\]*\\n/, ''); let i = 0; while (i < a.length && a[i] === b[i]) i++; console.log('first difference', JSON.stringify(a.slice(i - 40, i + 80)), JSON.stringify(b.slice(i - 40, i + 80))) }
 if (!ok) for (const k of ['before', 'applied', 'undone', 'carried'] as const) if (!same(viewed[k], plain[k])) console.log(k, JSON.stringify(plain[k]).slice(0, 800), '\n', JSON.stringify(viewed[k]).slice(0, 800))
 allOk &&= ok
 }

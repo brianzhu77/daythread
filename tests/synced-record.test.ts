@@ -16,7 +16,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
-import { harness, para, text, todo, today } from './v2-helpers.ts'
+import { buildDayDraftRequest } from '../src/server/model/day-draft.ts'
+import { buildSearchIndex } from '../src/domain/search.ts'
+import { tagIndex } from '../src/domain/tags.ts'
+import { plannedOn } from '../src/domain/workspace.ts'
+import { dayId, harness, para, text, todo, today, tomorrow } from './v2-helpers.ts'
 
 const block = (id: string, syncId: string, children: EditorNode[] = []): EditorNode => ({ id, type: syncedBlockType, props: { syncId, roles: '' }, children })
 const line = (id: string, words: string) => para(id, text(words))
@@ -312,6 +316,100 @@ test('the new commands pass the schema', () => {
   for (const action of [{ type: 'unsync-block', pageId: 'p', blockId: 'b' }, { type: 'unsync-block', pageId: 'p', blockId: 'b', all: true }, { type: 'delete-synced-place', pageId: 'p', blockId: 'b' }]) {
     assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 0, action }).success, true, action.type)
   }
+})
+
+test('planning: a row in a block is per place. Planned elsewhere, Not today, carried: the line stays on every page', () => {
+  const h = harness()
+  h.day(today)
+  const day = dayId(today), next = dayId(tomorrow)
+  h.run({ type: 'create-document', title: 'B', body: '', pageId: 'b' })
+  h.save(day, d => [...d, block('sa', 's1', [todo('r1', 'Book the flights')])])
+  h.save('b', d => [...d, block('sb', 's1')])
+  const task = h.task('Book the flights').id
+  const row = (id: string) => flatNodes(pageNodes(h.page(id))).find(n => n.props?.taskId === task)
+  const words = () => JSON.parse(h.ws.synced![0]!.lines)
+  // Moved to tomorrow: today's line stays, as a reference; tomorrow has its plan row; nothing else changed.
+  h.run({ type: 'plan-task', taskId: task, date: tomorrow, from: today, today })
+  assert.equal(row(day)!.props?.role, 'reference')
+  assert.equal(row(next)!.props?.role, 'plan')
+  assert.equal(row('b')!.props?.role, 'reference')
+  assert.equal(words().length, 1)
+  assert.equal(h.ws.tasks.filter(t => t.id === task).length, 1)
+  assert.equal(plannedOn(h.ws, task), tomorrow)
+  // Planned back on today, in the block: only that place's row.
+  h.run({ type: 'plan-task', taskId: task, date: today, from: tomorrow, today })
+  assert.equal(row(day)!.props?.role, 'plan')
+  assert.equal(row('b')!.props?.role, 'reference')
+  // Not today: the row leaves the plan, not the block.
+  h.run({ type: 'not-today', taskId: task, date: today })
+  assert.ok(row(day), 'the line stays')
+  assert.equal(row(day)!.props?.role, 'reference')
+  assert.ok(row('b'))
+  assert.equal(words().length, 1)
+})
+
+test('templates: made on the template each page gets its own; a copy pasted into it stays connected, one note on every new day', () => {
+  const h = harness()
+  h.day(today)
+  h.run({ type: 'create-template', title: 'Day', pageId: 'tpl', dayPage: true })
+  h.run({ type: 'create-document', title: 'Notes', body: '', pageId: 'notes' })
+  h.save('notes', d => [...d, block('home', 'shared', [line('n1', 'One note')])])
+  h.save('tpl', () => [para('t1', text('Plain')), block('own', 'tplsync', [line('o1', 'Made here')]), block('copy', 'shared')])
+  const first = h.day(tomorrow), other = h.day('2026-10-24')
+  const blocks = (p: Page) => pageNodes(p).filter(n => n.type === syncedBlockType)
+  assert.equal(blocks(first).length, 2)
+  const syncIds = (p: Page) => blocks(p).map(n => n.props?.syncId)
+  assert.notEqual(syncIds(first)[0], 'tplsync', 'its own')
+  assert.notEqual(syncIds(first)[0], syncIds(other)[0], 'connected to nothing')
+  assert.equal(syncIds(first)[1], 'shared')
+  assert.equal(syncIds(other)[1], 'shared')
+  h.save('notes', d => d.map(n => n.type === syncedBlockType ? { ...n, children: [line('n1', 'One note, edited')] } : n))
+  assert.ok(lines(h.page(dayId(tomorrow))).includes('One note, edited'))
+  assert.ok(lines(h.page('tpl')).includes('One note, edited'))
+  // An edit in one day's own block stays there.
+  const ownId = blocks(first)[0]!.id
+  h.save(dayId(tomorrow), d => d.map(n => n.id === ownId ? { ...n, children: [line('x1', 'Only tomorrow')] } : n))
+  assert.ok(!lines(h.page(dayId('2026-10-24'))).includes('Only tomorrow'))
+  assert.ok(lines(h.page(dayId('2026-10-24'))).includes('Made here'))
+})
+
+test('a duplicated row: a connected block stays connected, an original gets its own', () => {
+  const h = harness()
+  h.run({ type: 'create-database', pageId: 'db', homeBlockId: null, title: 'DB' })
+  h.run({ type: 'add-row', databaseId: 'db', pageId: 'row', title: 'Row', at: '2026-10-22T18:00:00.000Z' })
+  h.run({ type: 'create-document', title: 'Notes', body: '', pageId: 'notes' })
+  h.save('notes', d => [...d, block('home', 'shared', [line('n1', 'One note')])])
+  h.save('row', () => [block('own', 'rowsync', [line('o1', 'Own')]), block('copy', 'shared')])
+  h.run({ type: 'add-row', databaseId: 'db', pageId: 'dup', copyOf: 'row', title: '', at: '2026-10-22T18:00:00.000Z' })
+  const ids = pageNodes(h.page('dup')).map(n => n.props?.syncId)
+  assert.notEqual(ids[0], 'rowsync')
+  assert.equal(ids[1], 'shared')
+  assert.ok(lines(h.page('dup')).includes('One note'))
+})
+
+test('once: Tags and Search count a block once, under the original or its earliest day; the draft sees it on its day, with no anchor in it', () => {
+  const h = harness()
+  h.day(today); h.day(tomorrow)
+  h.run({ type: 'create-document', title: 'Notes', body: '', pageId: 'notes' })
+  h.save('notes', d => [...d, block('home', 'shared', [line('n1', 'A note #idea')])])
+  h.save(dayId(tomorrow), d => [...d, block('copy1', 'shared')])
+  h.save(dayId(today), d => [...d, block('copy2', 'shared'), block('copy3', 'shared')])
+  const tag = tagIndex(h.ws).find(t => t.key === 'idea')!
+  assert.equal(tag.occurrences.length, 1)
+  assert.equal(tag.occurrences[0]!.date, today, 'under its earliest day')
+  const index = buildSearchIndex(h.ws)
+  const hits = index.lines.filter(l => l.text.includes('A note'))
+  assert.equal(hits.length, 1)
+  assert.equal(hits[0]!.page.id, 'notes')
+  assert.equal(hits[0]!.places, 3)
+  // Original in Trash: under the oldest live place.
+  h.run({ type: 'delete-page', pageId: 'notes', at: '2026-10-22T18:00:00.000Z' })
+  assert.equal(buildSearchIndex(h.ws).lines.filter(l => l.text.includes('A note')).length, 1)
+  const request = buildDayDraftRequest(h.ws, h.page(dayId(today)))
+  assert.equal(JSON.stringify(request.messages).match(/A note/g)!.length, 1, 'once, though shown twice on the day')
+  // And once when yesterday showed it too.
+  assert.equal(JSON.stringify(buildDayDraftRequest(h.ws, h.page(dayId(tomorrow))).messages).match(/A note/g)!.length, 1)
+  assert.ok(![...request.blocks.values()].some(n => n.type === syncedBlockType))
 })
 
 test('with no block nothing changes: the same objects, the same key', () => {

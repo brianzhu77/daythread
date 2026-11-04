@@ -236,7 +236,7 @@ function LineRow({ hit, query, workspace }: { hit: LineHit; query: string; works
       </span>
       <span className="search-row-text">
         <span className={`search-row-line ${task?.status === 'done' ? 'is-done' : ''}`}><Marked text={snippet(hit.text, query)} query={query} /></span>
-        {hit.sectionTitle && <small>{hit.sectionTitle}</small>}
+        {(hit.sectionTitle || hit.places) && <small>{hit.sectionTitle}{hit.sectionTitle && hit.places ? ' · ' : ''}{hit.places ? `↻ ${hit.places} pages` : ''}</small>}
       </span>
     </>
   )
