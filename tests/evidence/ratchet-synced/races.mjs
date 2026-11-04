@@ -1,0 +1,13 @@
+import * as pw from '@playwright/test';import {execFileSync} from 'node:child_process';import {writeFileSync,rmSync} from 'node:fs'
+const store=process.env.STORE??'/tmp/ratchet296.sqlite',base=process.env.BASE??'http://127.0.0.1:3696';const b=await pw[process.argv[2]??'chromium'].launch();const wait=ms=>new Promise(r=>setTimeout(r,ms));let failed=0
+const state=()=>JSON.parse(execFileSync('sqlite3',[store,'select data from workspace']).toString())
+for(const action of ['Unsync here','Delete']){
+ for(const suffix of ['', '-wal','-shm'])rmSync(store+suffix,{force:true});execFileSync('node',['--no-warnings','tests/evidence/b21/seed.ts',store]);const c=await b.newContext({serviceWorkers:'block'});const p=await c.newPage();await p.goto(base+'/pages?page=b');await p.locator('.synced-label-button').waitFor();await wait(1000)
+ let release,seen;const held=new Promise(r=>release=r),arrived=new Promise(r=>seen=r);let once=false
+ await p.route('**/_serverFn/**',async r=>{const data=r.request().postData()??'';if(!once&&r.request().method()==='POST'&&(data.includes('unsync-block')||data.includes('delete-synced-place'))){once=true;seen();await held}await r.continue().catch(()=>{})})
+ await p.locator('.bn-inline-content',{hasText:'Shared one'}).first().hover();await wait(200);await p.locator('.synced-label-button').first().click();await p.getByRole('menuitem',{name:action,exact:true}).click();await Promise.race([arrived,wait(5000).then(()=>{throw Error('no held action')})])
+ const line=p.locator('.bn-inline-content',{hasText:'Below on B'}).first();await line.click();await p.keyboard.press('Meta+ArrowRight');await wait(180);await p.keyboard.type(' TYPED DURING ACTION');await wait(700)
+ const before=await p.locator('.bn-inline-content').allInnerTexts();release();await wait(3500);const after=await p.locator('.bn-inline-content').allInnerTexts();const doc=state().pages.find(x=>x.id==='b').document;const ok=after.join('|').includes('TYPED DURING ACTION')&&doc.includes('TYPED DURING ACTION');if(!ok)failed++
+ const notice=await p.locator('[role=status],[role=alert]').allInnerTexts();const kept=await p.evaluate(()=>Object.entries(localStorage).filter(([k,v])=>v.includes('TYPED DURING ACTION')).map(([k])=>k));await p.reload();await wait(3000);const reopened=await p.locator('.bn-inline-content').allInnerTexts();console.log(ok?'PASS':'FAIL',action,JSON.stringify({before,after,stored:JSON.parse(doc),notice,kept,reopened,afterReload:state().pages.find(x=>x.id==='b').document,keptAfterReload:await p.evaluate(()=>Object.entries(localStorage).filter(([k,v])=>v.includes('TYPED DURING ACTION')).map(([k])=>k))}));await c.close()
+}
+await b.close();process.exit(failed?1:0)
