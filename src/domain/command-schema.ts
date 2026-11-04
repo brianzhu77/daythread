@@ -8,7 +8,7 @@ const status = z.enum(["open", "done", "cancelled"]);
 const json: z.ZodType<Json> = z.lazy(() => z.union([z.string().max(10_000), z.number(), z.boolean(), z.null(), z.array(json).max(200), z.record(z.string().max(200), json)]));
 const at = z.string().max(40);
 const values = z.record(z.string().min(1).max(200), json);
-const rowEdit = z.object({ pageId: id, values, expected: values });
+const rowEdit = z.object({ pageId: id, values, expected: values, databaseId: id.optional() });
 const option = z.object({ id, name: z.string().max(200), group: z.enum(["todo", "active", "done"]).optional() });
 const propertyFields = { name: z.string().max(200), type: z.enum(propertyTypes), options: z.array(option).max(200).optional(), format: z.enum(["plain", "comma", "percent", "currency"]).optional(), withTime: z.boolean().optional(), prefix: z.string().max(limits.prefix + 100).optional(), target: id.optional(), limit: z.literal(1).nullable().optional(), rollup: z.object({ relation: id, property: id, fn: z.enum(rollupFunctions) }).optional(), formula: z.string().max(limits.formula).optional() };
 const columns = z.array(z.object({ id, width: z.number().int().optional(), wrap: z.literal(true).optional() })).max(100);
@@ -66,6 +66,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("skip-draft"), pageId: id, itemIds: z.array(z.string().min(1).max(100)).min(1).max(50) }),
   z.object({ type: z.literal("create-database"), pageId: id, parentId: id.nullable().optional(), homeBlockId: id.nullable(), title }),
   z.object({ type: z.literal("change-database"), pageId: id, change }),
+  z.object({ type: z.literal("move-row"), pageId: id, databaseId: id, at }),
   z.object({ type: z.literal("add-row"), databaseId: id, pageId: id, title, values: values.optional(), beforeId: id.nullable().optional(), copyOf: id.optional(), template: id.optional(), at }),
   z.object({ type: z.literal("set-values"), ...rowEdit.shape, beforeId: id.nullable().optional(), newTodos: z.array(z.object({ id, title: title.min(1), on: day })).max(100).optional(), at }),
   z.object({ type: z.literal("set-values-many"), items: z.array(rowEdit).min(1).max(200), at }),
