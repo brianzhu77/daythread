@@ -1416,7 +1416,9 @@ body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transpare
 .bookmark-title { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
 .bookmark-words { overflow: hidden; color: var(--ink-2); font-size: var(--text-meta); text-overflow: ellipsis; white-space: nowrap; }
 .bookmark-where { color: var(--ink-3); font-size: var(--text-meta); }
-.bookmark-open { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 32px; height: 40px; color: var(--ink-3); }
+/* As tall as the title's line and its padding, so ↗ sits on the title's first line; its right edge on the column's. */
+.bookmark-open { display: inline-flex; flex: none; align-items: center; justify-content: flex-end; width: 32px; height: 44px; color: var(--ink-3); }
+@media (hover: hover) { .bookmark-main:hover .bookmark-title { text-decoration: underline; text-decoration-color: var(--ink-3); text-underline-offset: 3px; } }
 .bookmark-open:hover { color: var(--ink); }
 .bookmark-open svg { width: 18px; height: 18px; }
 .trash-banner { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--radius-block); background: var(--fill); font-size: var(--text-small); color: var(--ink-2); }
