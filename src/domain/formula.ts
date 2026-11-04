@@ -1,6 +1,6 @@
 // Formulas (docs/design/formula.md): what's stored is the text with properties by id, and nothing else. Its type is checked against the
 // databases it reads before it's saved and again whenever it's read, as a property it reads can change; its value is worked out per row when read.
-import { formulaFunctions, FormulaDate, FormulaPage, FormulaRich, FormulaRowError, FormulaTooLong, format, formatDate, isList, itemOf, notApplicable, pageTarget, unionType, validDateUnit, type Clock, type FormulaFunction, type RichRun, type RunContext, type Value, type ValueType } from './formula-functions.ts'
+import { functionList, formulaFunctions, FormulaDate, FormulaPage, FormulaRich, FormulaRowError, FormulaTooLong, format, formatDate, isList, itemOf, notApplicable, pageTarget, unionType, validDateUnit, type Clock, type FormulaFunction, type RichRun, type RunContext, type Value, type ValueType } from './formula-functions.ts'
 import { FormulaSyntaxError, parseFormula, rewriteRefs, type FormulaNames, type FormulaNode, type PropRef } from './formula-parse.ts'
 import { cellValue, isDatabase, readValue, titleId, type CellValue, type Database, type DateValue, type Json, type Property } from './database.ts'
 import { rollupType } from './relations.ts'
@@ -54,6 +54,7 @@ function typedNames(world: FormulaWorld, databaseId: string): FormulaNames {
   return { names: [...ids.keys()], memberNames: [...elsewhere], stored: false, idOf: name => ids.get(name) ?? lower.get(name.toLocaleLowerCase()) ?? null }
 }
 const storedNames: FormulaNames = { names: [], memberNames: [], stored: true, idOf: () => null }
+const deletedName = 'Deleted property'
 const quoted = (text: string) => `"${text.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
 const propertyIn = (db: Database | undefined, id: string) => (id === titleId ? { id: titleId, name: titleName, type: 'text' as const } : db?.properties.find(p => p.id === id))
 
@@ -258,6 +259,12 @@ export function storedFormula(typed: string, world: FormulaWorld, databaseId: st
   }
   return rewriteRefs(typed, [...refs, ...checker.memberRefs], id => `prop(${quoted(id)})`)
 }
+/**
+ * A property as he writes it: its bare name, as he'd type it, or `prop("…")` where a bare name wouldn't read back as that property.
+ * Real tokens would need a rich field, and the field's composition and phone keyboard are its riskiest parts (design §2).
+ */
+const notBare = new Set(['true', 'false', 'not', 'and', 'or', 'mod', 'current', 'index', 'let', 'lets', 'prop', ...functionList.map(f => f.name)].map(n => n.toLocaleLowerCase()))
+export const writtenName = (name: string): string => (/^[\p{L}_][\p{L}\p{N}_ ]*$/u.test(name) && !name.endsWith(' ') && !notBare.has(name.toLocaleLowerCase()) && name !== deletedName ? name : `prop(${quoted(name)})`)
 /** The text as he reads it: names as they are now. */
 export function shownFormula(stored: string, world: FormulaWorld, databaseId: string): string {
   try {
@@ -276,10 +283,13 @@ export function shownFormula(stored: string, world: FormulaWorld, databaseId: st
     const nameOf = (id: string, db: Database | undefined) => propertyIn(db, id)?.name
     const anywhere = (id: string) => { for (const db of world.databases.values()) { const name = nameOf(id, db); if (name) return name } return undefined }
     const all = [...refs.map(r => ({ ...r, member: false })), ...members.map(m => ({ ...m, member: true }))]
+    const spelled = /\blets?\s*\(/.test(stored)
     let out = '', last = 0
     for (const ref of all.sort((a, b) => a.from - b.from)) {
-      const name = (ref.member && memberIds.has(ref.from) ? anywhere(ref.id) : nameOf(ref.id, here)) ?? 'Deleted property'
-      out += stored.slice(last, ref.from) + `prop(${quoted(name)})`
+      const isMember = ref.member && memberIds.has(ref.from)
+      const name = (isMember ? anywhere(ref.id) : nameOf(ref.id, here)) ?? deletedName
+      // After a dot, or where a `let` could take the name for its own, it's spelled out.
+      out += stored.slice(last, ref.from) + (isMember || spelled ? `prop(${quoted(name)})` : writtenName(name))
       last = ref.to
     }
     return out + stored.slice(last)

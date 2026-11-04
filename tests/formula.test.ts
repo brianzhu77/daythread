@@ -138,12 +138,26 @@ test('a row that breaks a formula reads Error on that row only, and an empty dat
   assert.match(String(shown(run('test("aa", "(a)\\\\1")'))), /aren't supported/)
 })
 
+test('shown as he writes it: a bare name, unless it would read back as something else', () => {
+  const named = (name: string) => worldWith(properties.map(p => (p.id === 'n' ? { ...p, name } : p)))
+  const stored = storedFormula('Number + 1', world, 'db')
+  for (const [name, shown] of [['Two words', 'Two words + 1'], ['价格', '价格 + 1'], ['if', 'prop("if") + 1'], ['Round', 'prop("Round") + 1'], ['current', 'prop("current") + 1'], ['A+B', 'prop("A+B") + 1'], ['say "hi"', 'prop("say \\"hi\\"") + 1']] as const) {
+    const w = named(name)
+    assert.equal(shownFormula(stored, w, 'db'), shown)
+    assert.equal(storedFormula(shownFormula(stored, w, 'db'), w, 'db'), stored, `${name} reads back as the same property`)
+  }
+  // A let could take the name for its own, so inside one every property stays spelled out.
+  const shadow = storedFormula('let(x, 1, x + Number)', world, 'db')
+  const shadowed = named('x')
+  assert.equal(shownFormula(shadow, shadowed, 'db'), 'let(x, 1, x + prop("x"))')
+  assert.equal(storedFormula(shownFormula(shadow, shadowed, 'db'), shadowed, 'db'), shadow)
+})
 test('what is stored names properties by id, spacing kept; a rename reads through, and a deleted one is named as such', () => {
   const stored = storedFormula('Number  + prop("Text")', world, 'db')
   assert.equal(stored, 'prop("n")  + prop("t")')
-  assert.equal(shownFormula(stored, worldWith(properties.map(p => (p.id === 'n' ? { ...p, name: 'Count' } : p))), 'db'), 'prop("Count")  + prop("Text")')
+  assert.equal(shownFormula(stored, worldWith(properties.map(p => (p.id === 'n' ? { ...p, name: 'Count' } : p))), 'db'), 'Count  + Text')
   const without = worldWith(properties.filter(p => p.id !== 'n'))
-  assert.equal(shownFormula(stored, without, 'db'), 'prop("Deleted property")  + prop("Text")')
+  assert.equal(shownFormula(stored, without, 'db'), 'prop("Deleted property")  + Text')
   assert.match(formulaProblem(stored, without, 'db', 'f')!, /deleted/)
 })
 

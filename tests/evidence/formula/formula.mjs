@@ -102,7 +102,7 @@ await scenario('Pasted forms: bare names and full-width punctuation; the list in
   r.preview2 = await status(page)
   const box = await menu(page).boundingBox()
   r.onScreen = box.x >= 8 && box.x + box.width <= 1272
-  r.ok = r.onScreen && /Pear cheap/.test(r.preview) && r.docBefore === 0 && r.inserted === 'round()' && /nearest whole/.test(r.doc) && r.caretKept === 'round(prop("Price"))' && /Pear 2/.test(r.preview2)
+  r.ok = r.onScreen && /Pear cheap/.test(r.preview) && r.docBefore === 0 && r.inserted === 'round()' && /nearest whole/.test(r.doc) && r.caretKept === 'round(Price)' && /Pear 2/.test(r.preview2)
   return r
 })
 
@@ -122,13 +122,13 @@ await scenario('Rename: same result. Delete: Error in red with the reason in its
   const totalCell = page.locator('.database-row[data-row="pear"] .cell-error').first()
   r.errorText = await totalCell.innerText()
   r.colour = await totalCell.evaluate(e => getComputedStyle(e).color)
-  r.red = await page.evaluate(() => { const s = document.createElement('span'); s.style.color = 'var(--red)'; document.body.append(s); const c = getComputedStyle(s).color; s.remove(); return c })
+  r.red = await page.evaluate(() => { const s = document.createElement('span'); s.style.color = 'var(--formula-red)'; document.body.append(s); const c = getComputedStyle(s).color; s.remove(); return c })
   await openProperty(page, 'Total')
   r.reason = await menu(page).locator('.is-error').innerText()
   await page.keyboard.press('Escape'); await wait(300)
   await page.locator('.toast__action').first().click(); await wait(1200)
   r.undone = await cells(page, 'pear')
-  r.ok = r.before.includes('6') && r.renamed.includes('6') && r.shown === 'prop("Price") * prop("Count")' && r.errorText === 'Error' && r.colour === r.red && /deleted/.test(r.reason) && r.undone.includes('6') && !(await page.locator('.database-row[data-row="pear"] .cell-error', { hasText: /^Error$/ }).count())
+  r.ok = r.before.includes('6') && r.renamed.includes('6') && r.shown === 'Price * Count' && r.errorText === 'Error' && r.colour === r.red && /deleted/.test(r.reason) && r.undone.includes('6') && !(await page.locator('.database-row[data-row="pear"] .cell-error', { hasText: /^Error$/ }).count())
   return r
 })
 
@@ -183,7 +183,7 @@ await scenario('390: the sheet, the list one tap away, nothing past the edge, 44
   await field(page).fill('Price * Qty'); await wait(150)
   await done(page); await wait(1000)
   r.stored = store().pages.find(p => p.id === 'shop').database.properties.at(-1).formula
-  r.ok = /Pear 6/.test(r.preview) && r.listHidden === 0 && r.sheet.x === 0 && r.sheet.right === 390 && r.listShown === 1 && r.itemHeight >= 44 && /prop\("Name"\)/.test(r.afterInsert) && r.listClosed === 0 && r.overflow <= 0 && r.stored === 'prop("price") * prop("qty")'
+  r.ok = /Pear 6/.test(r.preview) && r.listHidden === 0 && r.sheet.x === 0 && r.sheet.right === 390 && r.listShown === 1 && r.itemHeight >= 44 && /Name/.test(r.afterInsert) && r.listClosed === 0 && r.overflow <= 0 && r.stored === 'prop("price") * prop("qty")'
   return r
 }, phone)
 
