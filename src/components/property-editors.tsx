@@ -11,7 +11,7 @@ import { Link } from '@tanstack/react-router'
 import { taskIdOfRow, todoLine } from '../domain/todos-source'
 import { PagesIcon } from './icons'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { todosSourceId } from '../domain/database.ts'
+import { fileLimits, todosSourceId, type FileValue } from '../domain/database.ts'
 import {
   sameRaw, storedValue, type CellValue, type DateValue, type Json, type Option, type Property,
 } from '../domain/database.ts'
@@ -27,6 +27,7 @@ import {
   orderedDate, popoverMinWidth, readNumberInput, readingLabel, splitDate, statusDot, statusGroups, tooLong,
   emailHref, phoneHref, tooLongMessage, urlHref, urlLabel, withoutTime,
 } from './property-values.ts'
+import { fileHref, fileSizeLabel, uploadFile, type FileItem, type UploadFailure } from './file-upload'
 
 export interface CommitInfo {
   /** Show this as the usual Undo notice ("Notes changed · Undo"): phone Text/URL commits only (Lead f1e56ab4). */
@@ -83,6 +84,7 @@ export function PropertyEditor(props: EditorProps) {
     case 'status':
     case 'relation': case 'multiSelect': return props.property.targetTrashed ? <TargetInTrash {...props} /> : <OptionsEditor {...props} />
     case 'date': return <DateEditor {...props} />
+    case 'files': return <FilesEditor {...props} />
     case 'checkbox': return null
   }
 }
@@ -349,7 +351,7 @@ function OptionsEditor(p: EditorProps) {
   const [created, setCreated] = useState<Option[]>([])
   const property = useMemo(() => ({ ...p.property, options: [...(p.property.options ?? []), ...created.filter(c => !p.property.options?.some(o => o.id === c.id))] }), [p.property, created])
   const options = property.options
-  const [picked, setPicked] = useState<string[]>(() => (Array.isArray(p.value) ? p.value : typeof p.value === 'string' ? [p.value] : []))
+  const [picked, setPicked] = useState<string[]>(() => (Array.isArray(p.value) ? p.value as string[] : typeof p.value === 'string' ? [p.value] : []))
   const [query, setQuery] = useState('')
   // The list and its highlight are worked out together from the query, so Enter right after a key uses this query's
   // highlight, never the one from the key before.
@@ -462,6 +464,64 @@ function OptionLabel({ option, status }: { option: Option; status: boolean }) {
 }
 
 // ---------- Date (§6.3.9) ----------
+
+/**
+ * Files (R3-11): Add, Open and Remove. A file joins the value once its bytes are in, and the value saves on leaving, so a failed upload costs the
+ * row nothing. It stays open while one is on its way; Esc gives up on those and keeps what's in.
+ */
+function FilesEditor(p: EditorProps) {
+  const wide = useWide()
+  const [items, setItems] = useState<FileItem[]>(() => ((p.value ?? []) as FileValue[]).map(value => ({ key: value.id, name: value.name, state: 'done', value })))
+  const running = useRef(new Map<string, () => void>())
+  const latest = useRef(items)
+  latest.current = items
+  const update = (key: string, change: Partial<FileItem>) => setItems(list => list.map(i => (i.key === key ? { ...i, ...change } : i)))
+  const start = (key: string, file: File) => {
+    update(key, { state: 'uploading', progress: 0, message: '' })
+    const upload = uploadFile(file, progress => update(key, { progress }))
+    running.current.set(key, upload.abort)
+    void upload.done.then(
+      value => { running.current.delete(key); update(key, { state: 'done', value }) },
+      (failure: UploadFailure) => { running.current.delete(key); update(key, { state: 'failed', message: failure.message, ...(failure.retry ? {} : { file: undefined }) }) },
+    )
+  }
+  const add = (files: FileList | null) => {
+    const room = fileLimits.perCell - latest.current.length
+    const added = [...(files ?? [])].map((file, n): FileItem => n >= room
+      ? { key: crypto.randomUUID(), name: file.name, state: 'failed', message: `Over ${fileLimits.perCell} files` }
+      : file.size > fileLimits.size
+        ? { key: crypto.randomUUID(), name: file.name, state: 'failed', message: `Over ${fileLimits.size / 1024 / 1024} MB` }
+        : { key: crypto.randomUUID(), name: file.name, state: 'uploading', file, progress: 0 })
+    setItems(list => [...list, ...added])
+    for (const item of added) if (item.file) start(item.key, item.file)
+  }
+  const save = () => {
+    for (const abort of running.current.values()) abort()
+    return finish(p, latest.current.flatMap(i => (i.state === 'done' && i.value ? [i.value] : [])))
+  }
+  useSaveOnHide(() => { void save() })
+  const onDismiss = (reason: Dismiss) => {
+    if (reason === 'outside' && running.current.size) return
+    save()
+  }
+  return (
+    <EditorShell wide={wide} anchor={p.anchor} property={p.property} rowTitle={p.rowTitle} onDismiss={onDismiss}>
+      <div className="property-files">
+        {items.map(item => <div key={item.key} className={`property-file${item.state === 'failed' ? ' is-failed' : ''}`}>
+          {item.value
+            ? <a className="property-file-name" href={fileHref(item.value)} target="_blank" rel="noreferrer">{item.name}</a>
+            : <span className="property-file-name">{item.name}</span>}
+          <span className="property-file-note" role={item.state === 'failed' ? 'alert' : undefined}>
+            {item.state === 'uploading' ? `${item.progress ?? 0}%` : item.state === 'failed' ? item.message : fileSizeLabel(item.value!.size)}
+          </span>
+          {item.state === 'failed' && item.file && <button type="button" onClick={() => start(item.key, item.file!)}>Retry</button>}
+          {item.state !== 'uploading' && <button type="button" aria-label={`Remove ${item.name}`} onClick={() => setItems(list => list.filter(i => i.key !== item.key))}>×</button>}
+        </div>)}
+        <label className="property-file-add">Add files<input type="file" multiple onChange={e => { add(e.target.files); e.target.value = '' }} /></label>
+      </div>
+    </EditorShell>
+  )
+}
 
 function DateEditor(p: EditorProps) {
   const weekStart = useWorkspace().workspace?.weekStart
@@ -619,6 +679,7 @@ export function PropertyCell({ property, value, row, today = todayIso(), wrap = 
     }
     case 'rollup':
     case 'formula': return null
+    case 'files': return <span className="cell-chips">{(read as FileValue[]).map(f => <span key={f.id} className="property-chip">{f.name}</span>)}</span>
     case 'relation': {
       const chosen = (read as string[]).map(id => property.options?.find(o => o.id === id)).filter((o): o is Option => Boolean(o))
       // Titles as page refs, our `[[` look: each opens its row, and the rest of the cell opens the picker.

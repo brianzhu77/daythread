@@ -1693,6 +1693,17 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 .property-popover.is-over-cell .property-field { min-height: 36px; padding: 6px 8px; border: 0; border-radius: var(--radius-tight); background: var(--paper); box-shadow: none; }
 .property-popover > div { display: grid; gap: 4px; }
 .property-sheet { margin: 0; }
+.property-files { display: grid; gap: 2px; min-width: 240px; }
+.property-file { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 6px; }
+.property-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+a.property-file-name { text-decoration: underline; text-decoration-color: var(--line); }
+.property-file-note { flex: none; color: var(--ink-3); font-size: var(--text-meta); }
+.property-file.is-failed .property-file-note { color: var(--red, var(--ink-2)); }
+.property-file button { flex: none; min-width: 24px; min-height: 24px; padding: 0 4px; border: 0; background: none; color: var(--ink-2); cursor: pointer; font: inherit; }
+.property-file-add { display: flex; align-items: center; min-height: 36px; padding: 0 6px; color: var(--ink-2); cursor: pointer; border-radius: var(--radius-row); }
+.property-file-add:hover { background: var(--hover-dim); }
+.property-file-add input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+@media (max-width: 899px) { .property-file, .property-file-add { min-height: 44px; } .property-file button { min-width: 44px; min-height: 44px; } }
 .property-sheet-body { display: grid; gap: 8px; }
 .property-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
 .property-sheet-title { display: grid; min-width: 0; }

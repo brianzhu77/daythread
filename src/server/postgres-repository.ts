@@ -282,6 +282,12 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     })
   }
 
+  async heldText(): Promise<string> {
+    await this.init()
+    const { scope, workspace } = await this.read(this.sql, false)
+    const [last] = await this.sql.query<{ inverse: string }>(`select inverse::text as inverse from ${this.t('operations')} where workspace_id = $1::uuid and inverse is not null order by revision desc limit 1`, [scope.id])
+    return JSON.stringify(workspace) + (last?.inverse ?? '')
+  }
   async load(): Promise<Workspace> {
     await this.init()
     return (await this.read(this.sql, false)).workspace

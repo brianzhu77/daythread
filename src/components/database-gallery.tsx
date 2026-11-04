@@ -5,7 +5,7 @@
 import { formulaErrorOf } from '../domain/formula'
 import { Fragment, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { firstImageUrl } from '../domain/editor-document'
-import { sectionKey, viewSections, viewSubGroups, canWrap, cellValue, databaseRows, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type View } from '../domain/database.ts'
+import { sectionKey, viewSections, viewSubGroups, canWrap, cellValue, databaseRows, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type FileValue, type Property, type View } from '../domain/database.ts'
 import type { Page } from '../domain/types'
 import { rowTint, CardSubItems, PickedBar, useCardPicking, useRowPicking, SubGroupHead, HiddenSubGroups, NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { todayIso } from './dates'
@@ -14,8 +14,13 @@ import { displayPageTitle } from './page-title'
 import { PropertyCell, PropertyCheckbox, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
-function CardImage({ row }: { row: Page }) {
-  const url = useMemo(() => firstImageUrl(row), [row.document]) // eslint-disable-line react-hooks/exhaustive-deps
+function CardImage({ row, property }: { row: Page; property?: Property }) {
+  const url = useMemo(() => {
+    if (!property) return firstImageUrl(row)
+    // A card asks for the small copy. A file that's gone, or one with no image, leaves a clean card.
+    const image = ((readValue(property, row.values?.[property.id]) ?? []) as FileValue[]).find(f => f.type.startsWith('image/'))
+    return image ? `/api/files/${image.thumb ?? image.id}` : null
+  }, [row.document, row.values, property]) // eslint-disable-line react-hooks/exhaustive-deps
   const [failed, setFailed] = useState<string | null>(null)
   if (!url || failed === url) return null
   return <img className="database-gallery-image" src={url} alt="" loading="lazy" referrerPolicy="no-referrer" draggable={false} onError={() => setFailed(url)} />
@@ -27,6 +32,7 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
   const undoKey = useUndoKey()
   const wide = useWide()
   const today = todayIso()
+  const cardImage = db.database.properties.find(p => p.id === view.cardImage && p.type === 'files')
   const weekStart = workspace.weekStart ?? 0
   const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
@@ -57,7 +63,7 @@ export function DatabaseGallery({ workspace, db, view, changeView, blockId, page
     const nav = drawn++ === 0 ? '0:0' : undefined
     const tint = rowTint(db.database, view, row, context)
     return <article key={row.id} data-row={row.id} {...(tint ? { style: tint.style } : {})} className={`database-gallery-card${tint ? tint.className : ''}${picks.picked.includes(row.id) ? ' is-chosen' : ''}${picks.picking ? ' is-pickable' : ''}${returned === row.id ? ' is-returned' : ''}`}>
-      <CardImage row={row} />
+      <CardImage row={row} {...(cardImage ? { property: cardImage } : {})} />
       <div className="database-gallery-words">
         <TodoTick row={row} />
         <button type="button" className={`database-gallery-title${row.title ? '' : ' is-placeholder'}`} data-nav={nav}
