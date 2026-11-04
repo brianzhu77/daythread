@@ -178,6 +178,7 @@ function measure() {
         const name = content.querySelector('.database-th[data-type="title"]'), rows = [...content.querySelectorAll('.database-row')]
         const nameWords = name ? (() => { const text = document.createRange(); text.selectNode(name.lastChild); return text.getBoundingClientRect() })() : null
         row.subItems = { "a top row's words on the head's Name": rows[0] ? gap(rowWords(rows[0]), nameWords) : null, 'toggle centred on its row': mid(toggle.getBoundingClientRect(), words(rows[0]?.querySelector('.database-title-cell'))) }
+        row.layered = true
       }
       // A timeline (R4-1): a bar's title centred on it, and a day's number and grid line together.
       const bar = content.querySelector('.database-timeline .database-bar')
