@@ -78,6 +78,16 @@ const LinkIcon = () => (
  * the last.
  */
 export function PageHeaderRow({ page, workspace, fromBookmarks = false }: { page: Page; workspace: Workspace; fromBookmarks?: boolean }) {
+  return (
+    <div className="crumbs">
+      <PagePath page={page} workspace={workspace} fromBookmarks={fromBookmarks} />
+      <PageMenu page={page} fromBookmarks={fromBookmarks} />
+    </div>
+  )
+}
+
+/** Where a page lives: on a full page beside its menu, and in a peek's head. */
+export function PagePath({ page, workspace, fromBookmarks = false }: { page: Page; workspace: Workspace; fromBookmarks?: boolean }) {
   const today = useToday()
   const chain = pagePathTo(workspace, page.id)
   const pathRef = useRef<HTMLDivElement>(null)
@@ -112,7 +122,7 @@ export function PageHeaderRow({ page, workspace, fromBookmarks = false }: { page
     ? [crumb(shown[0]!, false), <HiddenCrumbs key="more" pages={shown.slice(1, -1) as Page[]} today={today} />, crumb(shown.at(-1)!, true)]
     : shown.map((item, i) => crumb(item, i === shown.length - 1))
   return (
-    <div className="crumbs">
+    <>
       {/* Crumbs don't shrink until folding is decided, so an overflow can be measured. */}
       <nav className={`crumbs-path ${folded ? 'folded' : 'measuring'}`} aria-label="Page location" ref={pathRef}>
         {/* Opened from Bookmarks, the way back comes first: the Home Screen app has no Back button. It isn't a level of the path, so a line, not a chevron (references §8). */}
@@ -120,8 +130,7 @@ export function PageHeaderRow({ page, workspace, fromBookmarks = false }: { page
         {fromBookmarks && crumbs.length > 0 && <span className="crumb-divider" aria-hidden="true" />}
         {crumbs.map((c, i) => <Fragment key={i}>{i > 0 && <span className="crumb-sep" aria-hidden="true"><ChevronRightIcon /></span>}{c}</Fragment>)}
       </nav>
-      <PageMenu page={page} fromBookmarks={fromBookmarks} />
-    </div>
+    </>
   )
 }
 
