@@ -53,7 +53,7 @@ for (const [name, br, w, h, phone] of [['chromium 1280', chromium, 1280, 900, fa
   } else {
     for (let i = 0; i < expected.length - 1; i++) await p.keyboard.press('ArrowDown')
     await p.waitForTimeout(200); m = await menu(p)
-    ok(m?.selected === 'Separator' && m.selectedInView, `${name}: ↓ past the 8th row scrolls the highlighted item into view`, m && `${m.selected}, in view ${m.selectedInView}`)
+    ok(m?.selected === expected.at(-1) && m.selectedInView, `${name}: ↓ past the 8th row scrolls the highlighted item into view`, m && `${m.selected}, in view ${m.selectedInView}`)
     for (let i = 0; i < expected.length - 1; i++) await p.keyboard.press('ArrowUp')
     await p.waitForTimeout(200); m = await menu(p)
     ok(m?.selected === 'Task' && m.selectedInView, `${name}: ↑ back to the top scrolls Task into view`, m?.selected)
