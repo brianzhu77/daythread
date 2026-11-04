@@ -1,6 +1,6 @@
 # References and the parent in the header: Product's view
 
-- Author: Bumblebee (Product) · 2026-11-04 · status: **independent view for the Lead's proposal**. Not approved, not built.
+- Author: Bumblebee (Product) · 2026-11-04 · status: **Brian saw the boards and chose the recommended version** (cecb215f: the day doesn't also go under Linked from). Being built by Jazz (Lead cc07d163); acceptance is B86 on the checklist.
   Jazz owns the interaction and Roadbuster the cost; this covers what Notion does, what counts as a reference and where
   it stops.
 - Brian's words (#daythread:6644e90e): "我想从 bookmark 里找到对应的 daythread，可以加一个引用的展示吗？你们想一下交互先。不要定制，
@@ -82,7 +82,7 @@ because the ask is general (scope comes from all users, 57deaed7).
 **Deliberately not in this:** the line of text around each reference, a count-only display, the Off setting, reference lists in
 Search or Export. Brian asked for none of them, and none is needed to get from a bookmark to its day.
 
-## 5. The one choice to show Brian
+## 5. The one choice to show Brian (answered: header only, Brian cecb215f)
 
 **Should the parent also appear under "Linked from"?** I recommend no, and it's a reading of Brian's words, not something
 Brian said: the sentence gives references one place and the parent another. Keeping it out means 13 of 14 bookmarks show the
@@ -104,6 +104,7 @@ Jazz's screens should show a bookmark both ways, so this is judged on the real p
 - **Roadbuster:** this may not be a Postgres question. `linkedFrom` runs in the browser over the workspace it already holds, on
   every render of a page's head, and nothing is stored. So the cost to measure is that scan with a 10,000-row database, plus
   reading relation values if they're added. An index only matters if that's too slow.
+  **Measured (Roadbuster eb9de711, in Node on synthetic workspaces, not in a browser or on a phone):** 22 ms per scan at 10,000 rows and under 2 ms after the first at 566 pages, plus 0.32 ms at most for relations. No references table. Build it with `LinkedFrom` memoized on the page and workspace revision, because today it rescans on every render. Linked views and long row bodies weren't timed.
 
 ## 7. How we'll know
 

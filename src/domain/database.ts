@@ -118,7 +118,17 @@ export interface View {
   timelineUnit?: "hours" | "day" | "week" | "month" | "quarter" | "year";
   /** Where a row opens from this view (R4-11); a full page when absent. */
   openIn?: "center" | "side";
+  /** Colour by a value (R4-12): from the top, the first that matches wins. Nothing colours until he makes a rule. */
+  colourRules?: ColourRule[];
+  /** Table at 1280: this column and those to its left stay while the rest scroll (R4-13). */
+  frozenThrough?: string;
+  /** Table at 1280: Name's width, dragged on its head (R4-18); the default when absent. */
+  nameWidth?: number;
 }
+export const tints = ["gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"] as const;
+export type Tint = (typeof tints)[number];
+/** One filter rule and a tint. `property`: only the rule's own cell, in a table; the whole row otherwise. */
+export interface ColourRule { id: string; rule: Condition; tint: Tint; scope?: "property" }
 export interface SubItems { parent: string; sub: string }
 export type DependencyMode = "overlap" | "keep" | "none";
 /** Dependencies are on: the two relations, the date they go by (one Date, or a start and an end), and how a shift behaves (sub-items design §3). */
@@ -490,6 +500,14 @@ export function conditionHolds(property: Property, condition: Condition, value: 
     }
   }
 }
+/** The rule that colours this row, or none. A rule whose property is gone matches nothing, and stays in the list as broken. */
+export function rowColour(db: Database, view: View, row: Page, context: ViewContext): ColourRule | null {
+  for (const rule of view.colourRules ?? []) {
+    const property = propertyOf(db, rule.rule.by);
+    if (property && conditionHolds(property, rule.rule, cellValue(db, row, rule.rule.by), context)) return rule;
+  }
+  return null;
+}
 export function rowMatches(db: Database, row: Page, filter: readonly Condition[], context: ViewContext, any = false): boolean {
   // A filter on a deleted property is shown struck through and ignored (design §13), as is one that can't be read.
   const results = filter.map((c) => { const property = propertyOf(db, c.by); return property ? conditionHolds(property, c, cellValue(db, row, c.by), context) : null; }).filter((r) => r !== null);
@@ -569,6 +587,25 @@ export function viewRows(ws: Workspace, databaseId: string, view: View, context:
 /** The view's shown properties, in order, after the title: listed ones that still exist. */
 /** What can run long enough to wrap: not a number, a tick or an ID. */
 export const canWrap = (type: PropertyType): boolean => type !== "number" && type !== "checkbox" && type !== "id";
+/**
+ * A column dropped before another, or last with null (R4-18). Crossing the frozen edge changes only which columns are frozen (R4-13):
+ * dropped among the frozen it joins them, dropped past the edge it leaves them, and dropped right on the edge it stays as it was.
+ */
+export function columnMoved(columns: View["columns"], frozenThrough: string | undefined, id: string, beforeId: string | null): { columns: View["columns"]; frozenThrough?: string | null } | null {
+  const from = columns.findIndex((c) => c.id === id), moved = columns[from];
+  if (!moved || beforeId === id) return null;
+  const through = frozenThrough ? columns.findIndex((c) => c.id === frozenThrough) : -1;
+  const rest = columns.filter((c) => c.id !== id);
+  const at = beforeId === null ? rest.length : rest.findIndex((c) => c.id === beforeId);
+  if (at < 0 || at === from) return null;
+  const next = [...rest.slice(0, at), moved, ...rest.slice(at)];
+  if (through < 0) return { columns: next };
+  const stay = rest.filter((c) => columns.indexOf(c) <= through).length;
+  const count = stay + ((at < stay || (at === stay && from <= through)) ? 1 : 0);
+  const last = count ? next[count - 1]!.id : null;
+  return last === frozenThrough ? { columns: next } : { columns: next, frozenThrough: last };
+}
+
 export function viewColumns(db: Database, view: View): { property: Property; width?: number; wrap?: true }[] {
   return view.columns.flatMap((c) => { const property = db.properties.find((p) => p.id === c.id); return property ? [{ property, ...(c.width !== undefined ? { width: c.width } : {}), ...(c.wrap ? { wrap: true as const } : {}) }] : []; });
 }
@@ -811,16 +848,17 @@ export function groupValue(property: Property, key: string, raw: unknown, fromKe
 export interface PropertyInput { id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
 /** One schema or view change: one write, the database page. */
 export type DatabaseChange =
-  | { kind: "addProperty"; property: PropertyInput; /** the view it was added from: it shows there; other views list it too */ viewId?: string }
+  | { kind: "addProperty"; property: PropertyInput; /** the view it was added from: it shows there; other views list it too */ viewId?: string; /** in that view, placed before this column (R4-18's Insert); last otherwise */ beforeId?: string }
   | { kind: "updateProperty"; propertyId: string; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
   /** "Show on Books": a relation's other side, made as a property of the target, or gone with null. */
   | { kind: "setDependencies"; on: { blockedBy: string; blocking: string; date: string; end?: string; mode: DependencyMode; avoidWeekends?: boolean; using?: boolean } | null }
   | { kind: "setSubItems"; on: { parent: string; sub: string; using?: boolean } | null }
   | { kind: "setMirror"; propertyId: string; mirror: { id: string; name: string } | null }
   | { kind: "removeProperty"; propertyId: string }
+  | { kind: "duplicateProperty"; propertyId: string; newId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; openIn?: "center" | "side" | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
+  | { kind: "updateView"; viewId: string; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; openIn?: "center" | "side" | null; colourRules?: ColourRule[]; frozenThrough?: string | null; /** null: back to the default */ nameWidth?: number | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
   /** null: none */
   | { kind: "setDefaultTemplate"; templateId: string | null }
   | { kind: "removeView"; viewId: string }
@@ -1079,7 +1117,7 @@ function cleanLayout(input: unknown): ViewLayout {
 }
 const dateBys = new Set<unknown>(["day", "week", "month"]);
 const timelineUnitSet = new Set<unknown>(["hours", "day", "week", "month", "quarter", "year"]);
-type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "subGroupBy" | "subGroupDateBy" | "hiddenSubGroups" | "dateBy" | "openIn" | "calendarSpan" | "timelineEnd" | "timelineUnit" | "timelineTable">;
+type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "subGroupBy" | "subGroupDateBy" | "hiddenSubGroups" | "dateBy" | "openIn" | "calendarSpan" | "timelineEnd" | "timelineUnit" | "timelineTable" | "colourRules" | "frozenThrough" | "nameWidth">;
 /** A view's group fields, checked. A new `groupBy` must name a live property that can group; one it already holds may be deleted since, and is kept unread, so Undo or changing the type back reads it again. */
 function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before?: Pick<View, "groupBy" | "subGroupBy" | "dateBy" | "timelineEnd">): GroupFields {
   const out: GroupFields = {};
@@ -1100,6 +1138,12 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
   if (input.timelineTable === true) out.timelineTable = true;
   if (input.timelineUnit !== undefined) { if (!timelineUnitSet.has(input.timelineUnit)) throw new DatabaseError("Invalid view"); out.timelineUnit = input.timelineUnit; }
   if (input.openIn === "center" || input.openIn === "side") out.openIn = input.openIn;
+  if (input.colourRules?.length) out.colourRules = input.colourRules;
+  if (input.frozenThrough) out.frozenThrough = input.frozenThrough;
+  if (input.nameWidth !== undefined) {
+    if (!Number.isInteger(input.nameWidth) || input.nameWidth < 40 || input.nameWidth > 2000) throw new DatabaseError("Invalid view");
+    out.nameWidth = input.nameWidth;
+  }
   if (input.groupDateBy !== undefined) { if (!dateBys.has(input.groupDateBy)) throw new DatabaseError("Invalid view"); out.groupDateBy = input.groupDateBy; }
   if (input.hideEmptyGroups) out.hideEmptyGroups = true;
   if (input.subGroupBy !== undefined) {
@@ -1176,6 +1220,10 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       if (added.type === "id") numberRows(ws, page);
       // A new property shows in every view, at the end (Notion shows it where it was made; one person rarely needs it hidden elsewhere).
       for (const v of db.views) v.columns.push({ id: added.id });
+      if (change.viewId !== undefined && change.beforeId !== undefined) {
+        const v = view(change.viewId), at = v.columns.findIndex((c) => c.id === change.beforeId);
+        if (at >= 0) { v.columns.pop(); v.columns.splice(at, 0, { id: added.id }); }
+      }
       return `Added ${added.name}`;
     }
     case "updateProperty": {
@@ -1197,6 +1245,24 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       db.properties[db.properties.indexOf(old)] = next;
       if (next.type === "id") numberRows(ws, page);
       return notes.join(" · ") || (next.name !== old.name ? `Renamed to ${next.name}` : "Property saved");
+    }
+    case "duplicateProperty": {
+      const old = property(change.propertyId);
+      if (db.properties.length >= limits.properties) throw new DatabaseError("Too many properties");
+      if (db.properties.some((p) => p.id === change.newId)) throw new DatabaseError("Invalid id");
+      const taken = new Set(["name", ...db.properties.map((p) => p.name.toLocaleLowerCase())]);
+      let name = `${old.name} copy`;
+      for (let n = 2; taken.has(name.toLocaleLowerCase()); n++) name = `${old.name} copy ${n}`;
+      // One side only: a second two-way link to the same rows isn't what a copy means.
+      const { mirror: _mirror, ...rest } = old;
+      const added = cleanProperty({ ...rest, id: change.newId, name }, db);
+      db.properties.splice(db.properties.indexOf(old) + 1, 0, added);
+      checkLinks(ws, page.id, db, added);
+      if (added.type === "id") numberRows(ws, page);
+      else for (const row of ws.pages) if (row.parentId === page.id && row.values && old.id in row.values) row.values = { ...row.values, [added.id]: row.values[old.id]! };
+      // Beside it, wherever it shows, at its width; hidden where it's hidden.
+      for (const v of db.views) { const at = v.columns.findIndex((c) => c.id === old.id); if (at >= 0) v.columns.splice(at + 1, 0, { ...v.columns[at]!, id: added.id }); }
+      return `Added ${name}`;
     }
     case "setDependencies": {
       if (db.fixed) throw new DatabaseError("To-dos can't have dependencies");
@@ -1293,7 +1359,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     }
     case "updateView": {
       const old = view(change.viewId);
-      const { filterAny: _filterAny, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, openIn: _openIn, ...rest } = old;
+      const { filterAny: _filterAny, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, openIn: _openIn, colourRules: _colourRules, frozenThrough: _frozenThrough, nameWidth: _nameWidth, ...rest } = old;
       const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
       const group = cleanGroup(db, {
         groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
@@ -1309,6 +1375,9 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         timelineUnit: change.timelineUnit ?? old.timelineUnit,
         ...(change.timelineTable === null ? {} : { timelineTable: change.timelineTable ?? old.timelineTable }),
         ...(change.openIn === null ? {} : { openIn: change.openIn ?? old.openIn }),
+        colourRules: change.colourRules ?? old.colourRules,
+        ...(change.frozenThrough === null ? {} : { frozenThrough: change.frozenThrough ?? old.frozenThrough }),
+        ...(change.nameWidth === null ? {} : { nameWidth: change.nameWidth ?? old.nameWidth }),
       }, layout, old);
       const next: View = {
         ...rest,
