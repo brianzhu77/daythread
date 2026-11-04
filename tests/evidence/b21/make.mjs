@@ -145,6 +145,38 @@ await scenario('two places on one page update as he types, with the caret kept; 
   r.record = JSON.parse(store().synced[0].lines).map(n => n.content?.[0]?.text); r.shown = (await page.locator('.bn-inline-content').allInnerTexts()).filter(t => /Second of A/.test(t)); r.notice = await notices(page)
   return { ...r, ok: asHeTypes.length === 2 && asHeTypes.every(t => t === 'Second of A x') && r.caretStays.every(t => t === 'Second of A xy') && r.record.join() === 'Second of A xyz' && r.shown.every(t => t === 'Second of A xyz') && !/Changed |another (tab|device)/i.test(r.notice) }
 })
+// Lead's: with two places on a page and one on another, a deleted line said so, then Undo found a second save had followed it. Each order, each place.
+for (const pasted of ['before the original', 'after the original']) for (const deleteFrom of [0, 1]) await scenario(`two places on one page, one on another, the copy ${pasted}: a line deleted from place ${deleteFrom + 1} says so, saves once, and Undo works`, async page => {
+  await open(page, 'a'); await sync(page, 'Second of A'); await copyBlock(page)
+  await pasteAfter(page, pasted === 'before the original' ? 'First of A' : 'Third of A'); await wait(2400)
+  await open(page, 'b'); await pasteAfter(page, 'Only line of B'); await wait(2400)
+  await open(page, 'a')
+  const r = { label: await labels(page) }
+  // Typed in the first place: a new line there, mirrored into the second, is what a page can't hold twice.
+  await line(page, 'Second of A').click(); await page.keyboard.press('Meta+ArrowRight'); await wait(150); await page.keyboard.press('Enter'); await page.keyboard.type('Goes away'); await wait(2600)
+  r.status = await notices(page); r.record = JSON.parse(store().synced[0].lines).map(n => n.content?.[0]?.text)
+  // A line from an earlier visit, as well as one typed just now.
+  if (deleteFrom === 1) await open(page, 'a')
+  await page.mouse.move(1, 1); await page.locator('.bn-inline-content', { hasText: 'Goes away' }).nth(deleteFrom).hover(); await wait(300)
+  await page.locator('.bn-side-menu [aria-label^="Select or drag"]').first().click(); await wait(300)
+  const before = store().revision
+  await page.locator('.editor-selection-bar').getByRole('button', { name: 'Delete' }).click(); await wait(3200)
+  r.revisions = store().revision - before; r.notice = await notices(page); r.lines = JSON.parse(store().synced[0].lines).length
+  r.shown = await page.locator('.bn-inline-content', { hasText: 'Goes away' }).count()
+  if (await page.getByRole('button', { name: 'Undo' }).count()) { await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(2600) }
+  r.afterUndo = JSON.parse(store().synced[0].lines).length; r.noticeAfter = await notices(page); r.shownAfter = await page.locator('.bn-inline-content', { hasText: 'Goes away' }).count()
+  r.ok = r.record.join() === 'Second of A,Goes away' && !/Duplicate/.test(r.status) && r.revisions === 1 && /Removed from 2 pages/.test(r.notice) && r.lines === 1 && r.shown === 0 && r.afterUndo === 2 && r.shownAfter === 2 && !/changed since/i.test(r.noticeAfter)
+  return r
+})
+await scenario('two places on one page: plain typing sends one save per burst, and the revision goes up once', async page => {
+  await open(page, 'a'); await sync(page, 'Second of A'); await copyBlock(page)
+  await pasteAfter(page, 'First of A'); await wait(2400)
+  const before = store().revision
+  await line(page, 'Second of A').first().click(); await page.keyboard.press('Meta+ArrowRight'); await wait(150); await page.keyboard.type(' typed'); await wait(3000)
+  const r = { revisions: store().revision - before, record: JSON.parse(store().synced[0].lines).map(n => n.content?.[0]?.text) }
+  r.ok = r.revisions === 1 && /typed/.test(r.record.join())
+  return r
+})
 await scenario('at 390: Sync in the bar, Copy from the label, a paste arrives synced, Delete from the label with Undo', async page => {
   await open(page, 'a')
   const r = { overflow: await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth) }
