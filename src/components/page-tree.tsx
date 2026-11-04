@@ -1,3 +1,4 @@
+import { MoveRowDialog } from './move-row-dialog'
 import { Modal, SearchField } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
@@ -39,7 +40,7 @@ export function useToday(): LocalDate {
   return today
 }
 
-function usePhone() {
+export function usePhone() {
   const [phone, setPhone] = useState(false)
   useEffect(() => {
     const media = window.matchMedia('(max-width: 599px)')
@@ -137,7 +138,7 @@ export function PageMenu({ page, fromBookmarks = false }: { page: Page; fromBook
   const { workspace, run } = useWorkspace()
   const open = useOpen()
   if (page.type === 'daily') return null
-  // A row (design §5, §12): Copy link, Duplicate row, Delete row; no Move to…, since a row stays in its database.
+  // A row (design §5, §12): Copy link, Duplicate row, Move to another database, Delete row.
   const db = workspace ? databaseOfRow(workspace, page) : null
   if (db) {
     const copyLink = () => void navigator.clipboard?.writeText(new URL(pageHref(page), window.location.origin).href)
@@ -150,7 +151,10 @@ export function PageMenu({ page, fromBookmarks = false }: { page: Page; fromBook
       void run({ type: 'delete-page', pageId: page.id, at: new Date().toISOString() }, r => ({ text: /sub-item/.test(r.message) ? `Row deleted · ${r.message.split(' · ')[1]}` : 'Row deleted', undoOperationId: r.operationId }))
       open(pageHref(db))
     }
-    return <RowMenu label="Row actions" triggerClass="page-more" groups={[{ items: [{ label: 'Copy link', onSelect: copyLink }, { label: 'Duplicate row', onSelect: () => void duplicate() }] }, { items: [{ label: 'Delete row', danger: true, onSelect: remove }] }]} />
+    return <>
+    <RowMenu label="Row actions" triggerClass="page-more" groups={[{ items: [{ label: 'Copy link', onSelect: copyLink }, { label: 'Duplicate row', onSelect: () => void duplicate() }, { label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete row', danger: true, onSelect: remove }] }]} />
+      {moving && <MoveRowDialog row={page} onClose={() => setMoving(false)} />}
+    </>
   }
   return (
     <>
