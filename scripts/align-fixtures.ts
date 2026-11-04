@@ -61,6 +61,7 @@ const lineTarget = crypto.randomUUID()
 // Databases R1 (design §15): an inline table, so its title, `+ New` and view chevron are measured too.
 const databaseId = crypto.randomUUID(), databaseBlock = crypto.randomUUID()
 // R2: a board and a grouped table, each with a column or group past the row cap and a hidden one.
+const timelineId = crypto.randomUUID(), timelineBlock = crypto.randomUUID()
 const layered = (['table', 'list', 'gallery', 'board'] as const).map(layout => ({ layout, id: crypto.randomUUID(), block: crypto.randomUUID() }))
 const boardId = crypto.randomUUID(), boardBlock = crypto.randomUUID(), groupedId = crypto.randomUUID(), groupedBlock = crypto.randomUUID(), listId = crypto.randomUUID(), listBlock = crypto.randomUUID(), galleryId = crypto.randomUUID(), galleryBlock = crypto.randomUUID(), calendarId = crypto.randomUUID(), calendarBlock = crypto.randomUUID()
 const document: EditorNode[] = [
@@ -86,6 +87,7 @@ const document: EditorNode[] = [
   { id: databaseBlock, type: 'database', props: { pageId: databaseId, view: '' }, children: [] },
   { id: boardBlock, type: 'database', props: { pageId: boardId, view: '' }, children: [] },
   ...layered.map(l => ({ id: l.block, type: 'database', props: { pageId: l.id, view: '' }, children: [] })),
+  { id: timelineBlock, type: 'database', props: { pageId: timelineId, view: '' }, children: [] },
   { id: groupedBlock, type: 'database', props: { pageId: groupedId, view: '' }, children: [] },
   { id: listBlock, type: 'database', props: { pageId: listId, view: '' }, children: [] },
   { id: galleryBlock, type: 'database', props: { pageId: galleryId, view: '' }, children: [] },
@@ -124,6 +126,15 @@ ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'u
 {
   const first = ws.pages.find(p => p.id === databaseId)!.database!.views[0]!
   ws = await run({ type: 'change-database', pageId: databaseId, change: { kind: 'updateView', viewId: first.id, columns: first.columns.map(c => (c.id === 'text' ? { ...c, wrap: true as const } : c)) } })
+}
+// A timeline (R4-1): the gate measures a bar's title and the scale.
+{
+  ws = await run({ type: 'create-database', pageId: timelineId, parentId: scratchId, homeBlockId: timelineBlock, title: 'Fixture timeline' })
+  const change = async (c: unknown) => { ws = await run({ type: 'change-database', pageId: timelineId, change: c as never }) }
+  await change({ kind: 'addProperty', property: { id: 'when', name: 'When', type: 'date' } })
+  const view = ws.pages.find(p => p.id === timelineId)!.database!.views[0]!
+  await change({ kind: 'updateView', viewId: view.id, layout: 'timeline', dateBy: 'when' })
+  ws = await run({ type: 'add-row', databaseId: timelineId, pageId: crypto.randomUUID(), title: 'Fixture bar', values: { when: { start: today } }, at: new Date().toISOString() })
 }
 // Two layers on each layout that has them (R3-13): the gate measures a sub-group's chevron and a board's lanes.
 for (const { layout, id, block } of layered) {

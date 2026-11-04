@@ -79,3 +79,14 @@ Add to R4-1 and R4-2 when built:
 - A copy of his real data at both widths (R3-18).
 
 [t]: https://www.notion.com/help/timelines
+
+## 9. As built, step 1 (Jazz, R4-1, R4-2, task #285)
+
+- **The unit** is a dropdown beside Today, and also in Layout. **End** in Layout picks a second date; "Same property" reads a range.
+- **Widths:** a day is 1152 px at Hours, 48 at Day, 24 at Week, 12 at Month, 4 at Quarter and 1.5 at Year. A bar is at least 10 px wide. A move or an edge snaps to an hour at Hours and a day at every other unit, so a date he didn't mean to change is never rounded.
+- **A bar off-screen** shows its name at the edge of its line with an arrow, and a tap goes to it. So a row is never a blank line while the table beside it isn't built.
+- **A date with a time** moves by hours at Hours and keeps its time elsewhere. One with no time moves by whole days at any unit.
+- **Scale:** it runs over the rows and today, and what's on screen stays on screen when a move changes where it starts. Today's line is the day's middle, or the time now at Hours.
+- **It opens** where it was left on this device, or on today. Only a view filtered to this page's day opens on that day.
+- **A rollup or formula date** isn't offered, as on a Calendar, so §3's last row doesn't arise yet.
+- **Not in step 1:** the table beside the scale with calculations, rows dragged up and down, Group, and dragging across an undated row's lane to make a range (a click sets one day).

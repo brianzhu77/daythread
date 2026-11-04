@@ -2271,6 +2271,54 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 @media (max-width: 899px) { .database-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /* Databases R3: a Calendar (design §7.2): a month of days at 1280; on the phone the month with dots, and the chosen day's rows under it. */
+/* The Timeline (docs/design/timeline.md §6): black, white and grey. A bar's open edge fades, so it reads as not ended, with no extra mark. */
+.database-timeline { position: relative; overflow-x: auto; overscroll-behavior-x: contain; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.database-timeline-body { position: relative; min-height: 60px; }
+.database-timeline-unit { min-height: 28px; padding: 2px 4px; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
+.database-timeline-head .database-calendar-today:disabled { color: var(--ink-3); cursor: default; background: none; }
+.database-scale { position: relative; height: 44px; border-bottom: 1px solid var(--line); font-size: var(--text-caption); color: var(--ink-3); }
+.database-scale-upper, .database-scale-lower { position: relative; height: 22px; line-height: 22px; }
+.database-scale-label { position: absolute; top: 0; color: var(--ink-2); white-space: nowrap; }
+.database-scale-label > span { position: sticky; left: 6px; padding-left: 6px; }
+.database-scale-tick { position: absolute; top: 0; padding-left: 4px; white-space: nowrap; }
+.database-scale-add { position: absolute; top: 2px; z-index: 2; width: 20px; height: 20px; min-height: 0; margin-left: -10px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--bg); color: var(--ink-2); font: inherit; line-height: 1; cursor: pointer; }
+.database-timeline-grid { position: absolute; inset: 44px 0 0; pointer-events: none; }
+.database-grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--line-soft); }
+.database-today-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--ink-3); }
+.database-bar-lane { position: relative; border-bottom: 1px solid var(--line-soft); }
+.database-bar-lane.is-returned { background: var(--fill-soft); }
+.database-bar-lane.is-line { height: 36px; }
+.database-timeline-line { position: sticky; left: 0; }
+.database-timeline .database-undated-head { min-height: 32px; margin-top: 2px; padding: 4px 8px; border: 0; background: var(--bg); color: var(--ink-3); font: inherit; font-size: var(--text-small); cursor: pointer; }
+.database-weeks .database-weeks-earlier { min-height: 44px; padding: 4px 8px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: var(--text-small); cursor: pointer; }
+.database-timeline .database-bar { position: absolute; top: 4px; display: block; height: 28px; min-height: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-control); background: var(--gray-3); color: var(--ink); font: inherit; font-size: var(--text-small); text-align: left; cursor: grab; }
+@media (hover: hover) { .database-timeline .database-bar:hover { background: var(--gray-4); border-color: var(--ink-3); } }
+.database-timeline .database-bar.is-dragging { z-index: 3; border-color: var(--ink-2); cursor: grabbing; }
+.database-timeline .database-bar.is-read-only { cursor: pointer; background: var(--fill-soft); }
+.database-timeline .database-bar.is-ghost { pointer-events: none; background: var(--fill-soft); border-style: dashed; }
+.database-timeline .database-bar.is-open-end { border-right-color: transparent; border-radius: var(--radius-control) 0 0 var(--radius-control); background: linear-gradient(to right, var(--gray-3) 40%, transparent); }
+.database-timeline .database-bar.is-open-start { border-left-color: transparent; border-radius: 0 var(--radius-control) var(--radius-control) 0; background: linear-gradient(to left, var(--gray-3) 40%, transparent); }
+.database-timeline .database-bar.is-inverted { border-left: 2px solid var(--formula-red, var(--red)); }
+.database-bar-title { position: sticky; left: 6px; display: inline-block; padding: 0 6px; line-height: 26px; white-space: nowrap; pointer-events: none; }
+.database-bar-title.is-placeholder { color: var(--placeholder); }
+.database-bar-edge { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; }
+.database-bar-edge.is-start { left: -2px; }
+.database-bar-edge.is-end { right: -2px; }
+.database-bar-tip { position: absolute; top: -22px; left: 0; z-index: 3; padding: 0 6px; border-radius: var(--radius-tight); background: var(--ink); color: var(--paper); font-size: var(--text-caption); line-height: 18px; white-space: nowrap; }
+.database-timeline .database-bar-off { position: sticky; top: 4px; display: inline-block; height: 28px; min-height: 0; max-width: 240px; margin-top: 4px; padding: 0 8px; overflow: hidden; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; font-size: var(--text-small); line-height: 28px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.database-timeline .database-bar-off.is-before { left: 4px; }
+.database-timeline .database-bar-off.is-after { left: calc(100% - 248px); float: right; right: 4px; }
+.database-timeline .database-bar-off.is-name { z-index: 1; background: var(--bg); color: var(--ink); }
+@media (hover: hover) { .database-timeline .database-bar-off:hover { background: var(--hover-dim); } }
+/* At 390: a list by week (§4). */
+.database-weeks { padding-top: 4px; }
+.database-week-head { margin: 10px 0 2px; padding: 0 8px; color: var(--ink-3); font-size: var(--text-small); font-weight: var(--weight-regular); }
+.database-week-open { display: block; width: 100%; min-height: 44px; padding: 8px; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink); font: inherit; text-align: left; }
+.database-week-title { display: block; overflow-wrap: anywhere; }
+.database-week-title.is-placeholder { color: var(--placeholder); }
+.database-week-dates { display: block; color: var(--ink-3); font-size: var(--text-small); }
+.database-week-dates.is-error { color: var(--formula-red, var(--red)); }
+.database-week-row.is-returned { background: var(--fill-soft); }
 .database-calendar-head { display: flex; align-items: center; gap: 4px; min-height: 36px; font-size: var(--text-ui); color: var(--ink-2); }
 .database-calendar-month { flex: 1; min-width: 0; }
 .database-calendar-head button { min-height: 0; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; border-radius: var(--radius-tight); }
