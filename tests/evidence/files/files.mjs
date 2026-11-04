@@ -49,7 +49,7 @@ await scenario('Add two: each shows, they save on leaving, the bytes are stored,
   const id = held('one').find(f => f.name === 'notes.txt').id
   const got = await context.request.get(`${base}/api/files/${id}?name=notes.txt`)
   r.back = await got.text(); r.disposition = got.headers()['content-disposition']
-  r.ok = r.shown.length === 2 && r.value.length === 2 && r.value[0][1] === onePixel.length && r.value[1][2].startsWith('text/plain') && r.chips.join() === 'photo.png,notes.txt' && r.stored >= 2 && r.back === 'some words' && /attachment/.test(r.disposition)
+  r.ok = r.shown.length === 2 && r.value.length === 2 && r.value[0][1] === onePixel.length && r.value[1][2].startsWith('text/plain') && r.chips.map(t => t.trim()).join() === 'photo.png,notes.txt' && r.stored >= 2 && r.back === 'some words' && /attachment/.test(r.disposition)
   return r
 })
 await scenario('Remove saves on leaving and Undo brings it back; the object stays for that', async page => {
