@@ -125,8 +125,9 @@ images. Trashing is on the page's own menu.
   page returns to the list, then Undo. `from=bookmarks` doesn't change the line lookup in `page-editor.tsx`, which reads
   only `tags` and `search`. Both themes.
 - A copy of Brian's data: all 14 listed, Nov 1 first, with the same 14 cards still on their days and no page changed.
-- Rollback: an older build ignores `createdAt` on these pages and drops nothing. **To confirm:** nothing reads
-  `createdAt` as meaning "this is a row". From the code, only database time properties read it.
+- Rollback: an older build ignores `createdAt` on these pages and drops nothing. Nothing reads
+  `createdAt` as meaning "this is a row": only database time properties and a row's own creation use it (Roadbuster
+  107552c4, from searching `src`).
 
 **Success, in order of what we can observe:**
 
