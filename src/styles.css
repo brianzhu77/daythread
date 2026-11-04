@@ -1915,7 +1915,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-title-row.is-page .database-view-name { margin-right: 2px; }
 .database-title-row:not(.is-page) .database-more-button { margin-left: -6px; }
 .database-menu-scrim { display: none; }
-.database-menu { z-index: 60; width: 300px; max-height: min(70vh, 560px); overflow-y: auto; display: flex; flex-direction: column; gap: 1px; font-size: var(--text-ui); }
+.database-menu { z-index: 60; width: 300px; max-height: min(70vh, 580px); overflow-y: auto; display: flex; flex-direction: column; gap: 1px; font-size: var(--text-ui); }
 .database-menu > button[role=menuitem], .database-menu > button[role=menuitemcheckbox] { display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding: 0 10px; color: var(--ink); }
 .database-menu hr { width: 100%; margin: 4px 0; border: 0; border-top: 1px solid var(--line); }
 .database-menu-head { display: flex; align-items: center; gap: 4px; min-height: 36px; padding: 0 6px 0 2px; font-weight: var(--weight-semibold); color: var(--ink); }
