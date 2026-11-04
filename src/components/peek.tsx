@@ -6,7 +6,7 @@ import { elementScroller, EditorScrollerContext, windowScroller } from './editor
 import { ArrowLeftIcon, ArrowRightIcon, CloseIcon, ExternalIcon } from './icons'
 import { displayPageTitle } from './page-title'
 import { noteOpenedHere, peekFloor, peekOpenedHere, peekOrder, sideFloor } from './peek-state'
-import { PageMenu } from './page-tree'
+import { PageMenu, PagePath } from './page-tree'
 import { PageContent } from './pages-screen'
 import { useWide } from './property-editors'
 import { useWorkspace } from './use-day'
@@ -124,7 +124,8 @@ function Peek({ rowId, side }: { rowId: string; side: boolean }) {
           <button type="button" className="peek-row" aria-label="Previous row" disabled={at === 0} onClick={() => go(order[at - 1])}><ArrowLeftIcon /></button>
           <button type="button" className="peek-row" aria-label="Next row" disabled={at === order.length - 1} onClick={() => go(order[at + 1])}><ArrowRightIcon /></button>
         </>}
-        <span className="peek-gap" />
+        {/* Tapping a level leaves the peek for a full page: the editor's leaving save takes what's typed, and Back mustn't count as closing it. */}
+        <div className="crumbs peek-path" onClickCapture={e => { if ((e.target as Element).closest('a')) noteOpenedHere(false) }}><PagePath page={row} workspace={workspace!} /></div>
         <PageMenu page={row} inPeek={id => { if (id) go(id); else close() }} />
         <button type="button" aria-label="Open as a full page" onClick={() => { noteOpenedHere(false); void navigate({ to: '/pages', search: { page: rowId } }) }}><ExternalIcon /></button>
         <button type="button" aria-label="Close" onClick={close}><CloseIcon /></button>

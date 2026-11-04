@@ -2426,7 +2426,11 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 @media (hover: hover) { .peek-head > button:not(:disabled):hover, .peek-head .page-more:hover { background: var(--hover-dim); color: var(--ink); } }
 .peek-head svg { width: 18px; height: 18px; }
 .peek-head .peek-row svg { transform: rotate(90deg); }
-.peek-gap { flex: 1; }
+/* The path gives way first: everything else in the head keeps its size. */
+.peek-head > button, .peek-head > .row-menu { flex: none; }
+.peek-head .page-more { margin: 0; }
+.peek-path { flex: 1; min-height: 32px; padding: 0 6px; }
+.peek-path .crumb { min-height: 32px; }
 .peek-body { padding: 0 40px 48px; }
 /* Side: about half the window, never leaving the view under 420 (§4). */
 :root { --side-peek-width: clamp(420px, 50vw, calc(100vw - 680px)); }
