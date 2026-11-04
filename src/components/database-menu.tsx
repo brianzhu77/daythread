@@ -12,6 +12,7 @@ import { isFormula } from '../domain/formula'
 import { rollupFunctionsFor, withLinks } from '../domain/relations'
 import { FormulaEditor } from './formula-editor'
 import { startPicking, blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange } from './database-block'
+import { chooseCsv } from './csv-import'
 import { exportDatabase } from './database-export'
 import { todayIso } from './dates'
 import { flushAllEditors } from './editor-flush'
@@ -168,7 +169,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     </div>
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
-    {view.layout === 'table' && !wide && !db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}
+    {view.layout !== 'calendar' && !wide && !db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}
     {(view.layout === 'table' || view.layout === 'board') && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('templates')}>Templates<span className="database-menu-chevron">›</span></button>}
     <hr />
@@ -177,6 +178,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     {inline && actions && <button type="button" role="menuitem" onClick={() => { close(); actions.turnIntoPage(blockId, db.id) }}>Turn into page</button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={copyLink}>Copy link</button>}
     <button type="button" role="menuitem" onClick={() => go('export')}>Export<span className="database-menu-chevron">›</span></button>
+    {!db.database.fixed && <button type="button" role="menuitem" onClick={() => { close(); chooseCsv({ kind: 'merge', databaseId: db.id }) }}>Merge with CSV</button>}
     <hr />
     {linked
       ? <button type="button" role="menuitem" className="is-danger" onClick={() => { close(); actions?.remove(blockId) }}>Remove this view</button>

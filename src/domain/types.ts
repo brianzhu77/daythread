@@ -127,7 +127,7 @@ export type Action =
   | { type: "save-review"; date: LocalDate }
   | { type: "create-document"; title: string; body: string; pageId?: string; parentId?: string }
   /** URLs pasted as bookmarks: one page per URL, made under `parentPageId`, reused if live, restored if trashed. */
-  | { type: "make-link-pages"; parentPageId: string; items: { url: string; pageId: string; title?: string }[] }
+  | { type: "make-link-pages"; parentPageId: string; items: { url: string; pageId: string; title?: string }[]; /** When it's made: a bookmark's place in the list (bookmarks design §5). */ at?: string }
   /** The page's title and a quote read from the web, applied only while the page is as the paste left it. */
   | { type: "apply-link-preview"; pageId: string; url: string; title: string | null; description: string | null }
   | { type: "rename-page"; pageId: string; title: string }
@@ -151,6 +151,7 @@ export type Action =
   | { type: "change-database"; pageId: string; change: import("./database.ts").DatabaseChange }
   /** A row, at the end or before `beforeId`; `copyOf`: Duplicate row, copying that row's values and body. */
   | { type: "add-rows"; databaseId: string; rows: Array<{ pageId: string; title: string; values?: Record<string, import("./database.ts").Json> }>; at: string }
+  | { type: "import-csv"; databaseId: string; create?: { parentId?: string | null; homeBlockId: string | null; title: string }; changes: import("./database.ts").DatabaseChange[]; rows: Array<{ pageId: string; title: string; values?: Record<string, import("./database.ts").Json> }>; at: string }
   | { type: "paste-cells"; databaseId: string; items: import("./database.ts").RowEdit[]; rows: Array<{ pageId: string; title: string; values?: Record<string, import("./database.ts").Json> }>; at: string }
   | { type: "add-row"; databaseId: string; pageId: string; title: string; values?: Record<string, import("./database.ts").Json>; beforeId?: string | null; copyOf?: string; /** A template of this database: its values under `values`, its body, and its title if there's none. */ template?: string; at: string }
   /** `beforeId`: also moves the row, in one Undo (a card dragged to another column); null is the end. */
