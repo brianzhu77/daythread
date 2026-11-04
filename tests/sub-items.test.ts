@@ -76,6 +76,21 @@ test('which rows a view counts: both, parents only, sub-items only', () => {
   assert.deepEqual([s.db().views[0]!.subItemsDisplay, s.db().views[0]!.subItemsShow], ['flat', 'parents'])
   assert.ok(commandSchema.safeParse({ operationId: 'o', expectedRevision: 0, action: { type: 'change-database', pageId: 'p', change: { kind: 'setSubItems', on: { parent: 'a', sub: 'b' } } } }).success)
 })
+test('cards have no room for a tree: parents only unless flat, and a flat view takes its Rows setting', () => {
+  const s = work(), view: View = s.db().views[0]!
+  const ids = (extra: Partial<View>) => viewRows(s.h.ws, 'w', { ...view, ...extra }, context).map(r => r.id).sort()
+  for (const layout of ['board', 'gallery', 'calendar'] as const) {
+    assert.deepEqual(ids({ layout }), ['other', 'top'])
+    assert.deepEqual(ids({ layout, subItemsShow: 'subs' }), ['other', 'top'])
+    assert.equal(ids({ layout, subItemsDisplay: 'flat' }).length, 6)
+    assert.deepEqual(ids({ layout, subItemsDisplay: 'flat', subItemsShow: 'subs' }), ['grand', 'great', 'kid', 'kid2'])
+  }
+  // A Timeline lists them flat for now, with its Rows setting.
+  assert.equal(ids({ layout: 'timeline' }).length, 6)
+  assert.deepEqual(ids({ layout: 'timeline', subItemsShow: 'parents' }), ['other', 'top'])
+  s.change({ kind: 'setSubItems', on: null })
+  assert.equal(ids({ layout: 'board' }).length, 6)
+})
 test('deleting a parent takes its sub-items, says how many, one Undo restores them; Restore from Trash brings them together', () => {
   const s = work()
   const r = s.h.run({ type: 'delete-page', pageId: 'kid', at })

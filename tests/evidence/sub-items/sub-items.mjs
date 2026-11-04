@@ -112,6 +112,18 @@ await scenario('A list nests too', 'on', async page => {
   r.ok = r.closed.join() === 'top,other' && r.opened.join() === 'top,kid,kid2,other'
   return r
 })
+await scenario('Cards: a gallery shows parents with their sub-items on the card, and flat shows them all', 'on', async page => {
+  await page.locator('.database-more-button').first().click(); await wait(250)
+  await menu(page).getByRole('menuitem', { name: /Layout/ }).click(); await wait(250)
+  await menu(page).getByRole('menuitemradio', { name: 'Gallery' }).click(); await wait(1000)
+  await page.keyboard.press('Escape'); await wait(300)
+  const cards = () => page.locator('.database-gallery-title').allInnerTexts()
+  const r = { gallery: await cards(), onCard: await page.locator('.database-gallery-card[data-row="top"] .database-card-subs').innerText() }
+  await more(page); await menu(page).getByLabel('Show sub-items').selectOption('flat'); await wait(1000); await page.keyboard.press('Escape'); await wait(300)
+  r.flat = await cards(); r.flatOnCard = await page.locator('.database-card-subs').count()
+  r.ok = r.gallery.join() === 'top,other' && /kid/.test(r.onCard) && /kid2/.test(r.onCard) && r.flat.length === 8 && r.flatOnCard === 0
+  return r
+})
 await scenario('390: toggles take a tap, nothing past the edge', 'on', async page => {
   await page.locator('.database-row[data-row="top"] .database-sub-toggle').click(); await wait(250)
   const box = await page.locator('.database-row[data-row="top"] .database-sub-toggle').boundingBox()

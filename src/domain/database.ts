@@ -528,11 +528,16 @@ function compareValues(property: Property, a: CellValue, b: CellValue): number {
   }
 }
 /** The rows a view shows: live rows, filtered (all conditions), then sorted by each key in turn; empty last; ties keep page order. */
+/** Layouts with no room for a tree: unless it's flat, a parent carries its sub-items on its card (sub-items design §2). A Timeline lists them flat for now: nesting its bars isn't built yet. */
+export const showsSubItemsOnCards = (db: Database, view: Pick<View, "layout" | "subItemsDisplay">): boolean =>
+  Boolean(db.subItems) && view.layout !== "table" && view.layout !== "list" && view.layout !== "timeline" && view.subItemsDisplay !== "flat";
 /** Parents only, or sub-items only. A row whose parent has gone reads as a parent. */
 function inSubItemsShow(db: Database, row: Page, view: View): boolean {
-  if (!db.subItems || !view.subItemsShow || view.subItemsShow === "both") return true;
+  if (!db.subItems) return true;
+  const show = showsSubItemsOnCards(db, view) ? "parents" : view.subItemsShow;
+  if (!show || show === "both") return true;
   const raw = row.values?.[db.subItems.parent];
-  return (Array.isArray(raw) && raw.length > 0) === (view.subItemsShow === "subs");
+  return (Array.isArray(raw) && raw.length > 0) === (show === "subs");
 }
 export function viewRows(ws: Workspace, databaseId: string, view: View, context: ViewContext): Page[] {
   const page = ws.pages.find((p) => p.id === databaseId);
