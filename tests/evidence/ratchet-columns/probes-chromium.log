@@ -1,0 +1,21 @@
+(node:37490) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS overlapping resizes keep both widths {"want":{"pages":135,"kind":170},"columns":[{"id":"status"},{"id":"kind","width":170},{"id":"tags"},{"id":"pages","width":135},{"id":"due"},{"id":"owned"}]}
+PASS reload keeps all columns ""
+PASS overlap no runtime errors []
+(node:37561) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS a failed resize leaves other columns intact; next resize saves {"notice":["Not saved — your changes are still here ·\nRetry",""],"columns":[{"id":"status"},{"id":"kind","width":170},{"id":"tags"},{"id":"pages"},{"id":"due"},{"id":"owned"}]}
+PASS failed no runtime errors []
+(node:37617) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS deleted frozen edge does not pin an unrelated column ""
+PASS deleted colour rule stays editable/removable ""
+PASS deleted stale rule can be removed ""
+PASS deleted no runtime errors []
+(node:37746) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS hidden frozen edge does not pin an unrelated column ""
+PASS hidden colour rule stays editable/removable ""
+PASS hidden stale rule can be removed ""
+PASS hidden no runtime errors []

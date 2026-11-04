@@ -1,0 +1,58 @@
+PASS a click on a head opens a menu under it {"h":{"x":1030,"y":191.5,"width":90,"height":32},"m":{"x":972,"y":227.5,"width":300,"height":517.25}}
+PASS its menu has Pages 
+PASS its menu has Type 
+PASS its menu has Sort ascending 
+PASS its menu has Sort descending 
+PASS its menu has Filter 
+PASS its menu has Freeze up to column 
+PASS its menu has Hide in this view 
+PASS its menu has Duplicate property 
+PASS its menu has Delete property 
+PASS a second click closes it 
+PASS a click on another head moves to it 
+PASS Esc closes it 
+PASS Name has only what applies to it "‹ Name Sort ascending Sort descending Filter Insert right Wrap Name"
+PASS Sort descending is saved [{"by":"pages","direction":"desc"}]
+PASS and says so 
+PASS choosing it again takes it off 
+PASS Filter adds a rule on this column and shows it [{"by":"pages","op":"eq"}]
+PASS and it can be taken off there 
+PASS Duplicate makes a copy beside it, with its values, and opens it ["status,kind,tags,pages,6ba11fa7-8afb-425d-b5e1-d1b8389c0f2d,due,owned","6ba11fa7-8afb-425d-b5e1-d1b8389c0f2d"]
+PASS its Undo takes it away "status,kind,tags,pages,due,owned"
+PASS Insert left puts it just before ["status","kind","tags","4d042cc7-b405-409a-9a5c-56232a921155","pages","due","owned"]
+PASS and it can go again "status,kind,tags,pages,due,owned"
+PASS Insert right puts it just after ["status","kind","tags","pages","41ae6844-40d8-4823-b6ce-e48acd08aad7","due","owned"]
+PASS Insert right on Name makes it the first column "bc373eb6-1294-418e-af46-14c80e001f8b,status,kind,tags,pages,due,owned"
+PASS back to where it was "status,kind,tags,pages,due,owned"
+PASS a drag on the edge follows the pointer {"start":90,"mid":170}
+PASS it saves on release, not on the way {"saved":170}
+PASS and no menu opens 
+PASS it stays where it was dropped 
+PASS one Undo puts it back 
+PASS Esc during the drag cancels it 
+PASS it stops at its narrowest 60
+PASS a reload keeps it 
+PASS Name resizes too 300
+PASS with one Undo 
+PASS moving a head shows where it would land 
+PASS nothing is saved on the way 
+PASS dropped, it lands there "kind,tags,status,pages,due,owned"
+PASS and no menu opens 
+PASS one Undo puts it back "status,kind,tags,pages,due,owned"
+PASS Esc during the drag cancels it 
+PASS the far end works "kind,tags,pages,due,owned,status"
+PASS freezing is in the head's menu "kind"
+PASS a frozen column dragged past the edge leaves the frozen ones ["kind,tags,pages,due,status,owned","kind"]
+PASS and scrolls 
+PASS one dragged in among them joins them ["owned,kind,tags,pages,due,status","kind"]
+PASS the frozen ones stay side by side [[660,720],[720,860]]
+PASS a drag leaves nothing selected on the page ""
+PASS nor does Esc on its menu ""
+PASS no page errors []
+PASS at 390 a head is plain text 
+PASS and a tap opens nothing 
+PASS a frozen column lines up on a row with its toggle open {"head":660,"off":0,"cells":4,"inName":true,"toggles":2}
+PASS and scrolled sideways, it stays there {"head":660,"off":0,"cells":4,"inName":true,"toggles":2}
+PASS on To-dos the menu has only the view's own rows "‹ Status Wrap in this view Sort ascending Sort descending Filter Freeze up to column Hide in this view"
+PASS and its edge follows the pointer, with no + column to take up the slack ["Status",140,180]
+ALL PASS
