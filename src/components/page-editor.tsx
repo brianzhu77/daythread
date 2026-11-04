@@ -16,8 +16,9 @@ import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { linkedViewJson, linkedViewOf } from '../domain/linked-view'
-import { blockUpdates, syncedBlockType, writtenDocument, type BlockUpdate } from '../domain/synced'
+import { blockLinesKey, blockUpdates, mirroredLines, ownLineIds, syncedBlockType, syncedPlaces, writtenDocument, type BlockUpdate } from '../domain/synced'
 import { syncedKeys } from './synced-keys'
+import { SyncedEditorActions, SyncedLabel, type SyncedActions } from './synced-label'
 import { databaseSource, withTodos } from '../domain/todos-source'
 import { DatabasePicker } from './database-linked'
 import { holdKeyboard } from './keyboard'
@@ -88,7 +89,7 @@ const database = createReactBlockSpec({ type: 'database', propSchema: { pageId: 
 // A synced block (docs/design/synced-blocks.md): the lines shown in several places, as this block's children. Known to the
 // editor before anything can make one, so a build at the rollback floor keeps it whole (docs/plan/b21-sizing.md).
 const syncedBlock = createReactBlockSpec({ type: syncedBlockType, propSchema: { syncId: { default: '' }, rev: { default: 0 }, key: { default: '' }, roles: { default: '' } }, content: 'none' }, {
-  render: () => <span className="synced-block-mark" contentEditable={false} />,
+  render: ({ block }) => <SyncedLabel blockId={block.id} syncId={block.props.syncId} />,
 })()
 function DatabaseInPage({ blockId, pageId, viewJson }: { blockId: string; pageId: string; viewJson: string }) {
   const actions = useContext(DatabaseEditorActions)
@@ -419,6 +420,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   // B70: a page made inside the day template would be copied into every day, so the template makes none (Jazz §2).
   const onTemplate = isTemplate(page)
   const { run, refresh, latest } = useWorkspace()
+  const copyBlockRef = useRef<(blockId: string) => void>(() => undefined)
+  const endPlaceRef = useRef<(action: Extract<Action, { type: 'unsync-block' | 'delete-synced-place' }>) => Promise<void>>(async () => undefined)
   const runRef = useRef(run); runRef.current = run
   const navigate = useNavigate()
   const key = `daythread:editor:${page.id}`
@@ -464,7 +467,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   rowsAnchor.current = rows.length ? eventsAnchor(pageNodes(page), new Set(workspace.tasks.map(t => t.id))) : undefined
   // separatorShortcut needs the editor it is part of; a ref breaks the type cycle of passing `editor` itself.
   const editorRef = useRef<BlockNoteEditor<any, any, any> | null>(null)
-  const editor = useCreateBlockNote({ schema, dictionary, disableExtensions: ['gapCursor', 'divider-block-shortcuts'], extensions: [databaseKeys(), syncedKeys(), separatorShortcut(() => editorRef.current!), tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), draftBands(() => groupsRef.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
+  const editor = useCreateBlockNote({ schema, dictionary, disableExtensions: ['gapCursor', 'divider-block-shortcuts'], extensions: [databaseKeys(), syncedKeys(blockId => {
+    const block = deepNodes(editorRef.current!.document as never).find(n => n.id === blockId)
+    const syncId = block?.props?.syncId
+    if (typeof syncId !== 'string' || syncedPlaces(latestWorkspace.current, syncId).filter(p => !p.page.trashedAt).length > 1) return
+    void endPlaceRef.current({ type: 'delete-synced-place', pageId: page.id, blockId })
+  }), separatorShortcut(() => editorRef.current!), tagDecorations(tagCounts), rowArrows(), eventRows(rowsHost, () => rowsAnchor.current), draftBands(() => groupsRef.current), dateChipPaste()], dropCursor: { color: 'var(--bn-brand)', width: 3 }, placeholders: { default: 'Write…', emptyDocument: 'Write…', bulletListItem: '' }, pasteHandler: ({ event, editor, defaultPasteHandler }) => {
     const data = event.clipboardData
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
     pastingNow.current = true; setTimeout(() => { pastingNow.current = false }, 0)
@@ -523,8 +531,17 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           return task && task.title.trim() && !showing.has(task.id) ? task : null
         }
         const sameTaskRows: string[] = []
+        const here = editor.getTextCursorPosition().block
+        // Into another block, or a to-do's row, a synced block arrives as plain lines (no nesting; states §4).
+        const plainOnly = here.type === 'task' || insideSyncedBlock(here.id)
+        const pasted = plainOnly ? payload.blocks.flatMap((n: EditorNode) => (n.type === syncedBlockType ? n.children ?? [] : [n])) : payload.blocks as EditorNode[]
         const fresh = (node: EditorNode): EditorNode => {
           const id = node.type !== 'database' && keepsId(node) ? node.id : crypto.randomUUID()
+          // A copy of a block: the same content, shown here too (states §4). The save reads it from the record.
+          if (node.type === syncedBlockType) {
+            const copy: EditorNode = { id, type: syncedBlockType, props: { syncId: String(node.props?.syncId), rev: 0, key: '', roles: '' }, children: (node.children ?? []).map(function line(n: EditorNode): EditorNode { return { ...n, id: crypto.randomUUID(), children: (n.children ?? []).map(line) } }) }
+            return { ...copy, props: { ...copy.props, key: blockLinesKey(copy) } }
+          }
           const task = sameTask(node)
           if (task) {
             sameTaskRows.push(id); showing.add(task.id)
@@ -544,8 +561,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // With the caret in a to-do with words, whole rows go below it. Fitted in at the caret, they'd split it, and its second
         // half would be another row of the same task (Bumblebee).
         const at = editor.getTextCursorPosition().block
-        if (at.type === 'task' && inlineText(at.content).trim() && editor.prosemirrorState.selection.empty) editor.insertBlocks(payload.blocks.map(fresh) as never, at.id, 'after')
-        else insert(payload.blocks.map(fresh))
+        if (at.type === 'task' && inlineText(at.content).trim() && editor.prosemirrorState.selection.empty) editor.insertBlocks(pasted.map(fresh) as never, at.id, 'after')
+        else insert(pasted.map(fresh))
         if (sameTaskRows.length) {
           const n = sameTaskRows.length
           setNotice({ text: n === 1 ? 'Pasted as the same task' : 'Pasted as the same tasks', fingerprint: JSON.stringify(editor.document), extra: { label: n === 1 ? 'Make a copy' : 'Make copies', run: () => {
@@ -945,6 +962,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (result.renamed) applyRenamedLines(editor.prosemirrorView, result.renamed)
       // A synced block changed elsewhere and he'd changed it too: the block has the latest, and his version is below it, on the
       // page as saved. Otherwise this save's facts: its revision, and this place's ids on any new lines.
+      // Lines deleted from a block shown elsewhere are a loss on pages he isn't looking at: it says so (states §5).
+      if (result.linesRemovedFrom && !result.conflicted?.length) {
+        const receiptId = result.operationId, key: string = toast(`Removed from ${result.linesRemovedFrom} pages`, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); void run({ type: 'undo', targetOperationId: receiptId }, { text: 'Undone' }).then(r => { const ws = latest(), p = ws?.pages.find(x => x.id === page.id); if (r && ws && p) applyServerPage(p, ws) }) } } })
+      }
       if (result.conflicted?.length) { applyServerPage(savedPage, latest()!); toast('Changed elsewhere meanwhile · your version is below it', { timeout: 8000 }) }
       else if (holdsBlock) applyBlockUpdates(blockUpdates(editor.document as never, savedPage.document, true))
       // The editor has closed meanwhile: leaving takes it from here (it needs only the new starting point).
@@ -953,7 +974,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       cutIds.forEach(id => cutTasks.current.delete(id))
       flags.detachDatabaseIds?.forEach(id => databaseFlags.current.detach.delete(id))
       flags.adoptDatabaseBlocks?.forEach(a => databaseFlags.current.adopt.delete(a.pageId))
-      dirty.current = !result.conflicted?.length && writtenDocument(JSON.stringify(editor.document)) !== writtenDocument(result.renamed ? renamedDocument(document, result.renamed) : document)
+      // Another place on this page may have just followed the save: nothing's left to send if the editor now holds what was saved.
+      const showing = writtenDocument(JSON.stringify(editor.document))
+      dirty.current = !result.conflicted?.length && showing !== writtenDocument(result.renamed ? renamedDocument(document, result.renamed) : document) && !(holdsBlock && showing === writtenDocument(savedPage.document))
       // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
       const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
       setFailed(false); setUnsaved(null); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
@@ -1037,7 +1060,34 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const taskRows = useRef<Map<string, string> | null>(null)
   const readTaskRows = () => new Map(deepNodes(nodes()).filter(n => n.type === 'task').map(n => [n.id, String(n.props?.taskId)]))
   useEffect(() => { taskRows.current ??= readTaskRows() }, [])
+  /** What each synced block held when last seen, to tell which copy he's typing in. */
+  const blockKeys = useRef(new Map<string, string>())
+  /** Two copies on one page update as he types (B21-3). Only the other copy changes, outside his Undo, so his caret stays. */
+  const mirrorCopies = () => {
+    if (!JSON.stringify(editor.document).includes(`"${syncedBlockType}"`)) return
+    const blocks = deepNodes(nodes()).filter(n => n.type === syncedBlockType)
+    const was = blockKeys.current, keys = new Map(blocks.map(n => [n.id, blockLinesKey(n)]))
+    blockKeys.current = keys
+    if (suppress.current || composing.current) return
+    const updates: { id: string; lines: EditorNode[] }[] = []
+    let changed: EditorNode | undefined
+    for (const source of blocks) {
+      if (!was.has(source.id) || was.get(source.id) === keys.get(source.id)) continue
+      changed = source
+      for (const target of blocks) if (target.id !== source.id && target.props?.syncId === source.props?.syncId && keys.get(target.id) !== keys.get(source.id)) updates.push({ id: target.id, lines: mirroredLines(source, target, latestWorkspace.current.synced?.find(r => r.id === source.props?.syncId)) })
+      break
+    }
+    if (!updates.length) return
+    suppress.current = true
+    if (changed) applyRenamedLines(editor.prosemirrorView, ownLineIds(changed, latest()?.synced?.find(r => r.id === changed.props?.syncId)))
+    editor.transact(tr => { for (const u of updates) editor.updateBlock(u.id, { children: u.lines } as never); tr.setMeta('addToHistory', false) })
+    suppress.current = false
+    blockKeys.current = new Map(deepNodes(nodes()).filter(n => n.type === syncedBlockType).map(n => [n.id, blockLinesKey(n)]))
+  }
+  // What each block starts from: without it the first edit after opening a page has nothing to compare with, and doesn't reach the other place.
+  useEffect(() => { blockKeys.current = new Map(deepNodes(nodes()).filter(n => n.type === syncedBlockType).map(n => [n.id, blockLinesKey(n)])) }, [editor])
   useEffect(() => editor.onChange(() => {
+    mirrorCopies()
     const before = taskRows.current, rows = readTaskRows()
     taskRows.current = rows
     if (suppress.current) return
@@ -1687,7 +1737,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }
   }
   function select(id: string, ids?: readonly string[]) {
-    const range = ids?.length ? nodes().filter(n => ids.includes(n.id)) : sectionRange(nodes(), id)
+    const range = ids?.length ? deepNodes(nodes()).filter(n => ids.includes(n.id)) : sectionRange(nodes(), id)
     selected.current = range.map(n => n.id)
     setSelectionLabel(range[0]?.type === 'heading' ? `'${inlineText(range[0].content)}' section selected` : range.length > 1 ? `${range.length} blocks selected` : 'Block selected')
     if (range.length > 1) editor.setSelection(range[0]!.id, range.at(-1)!.id)
@@ -1721,10 +1771,50 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const from = here.type === 'daily' && here.date === todayIso() ? 'today' : here.type === 'daily' ? placeLabel(here) : 'this page'
     return `Removed from ${from} · ${other.type === 'daily' ? `still on ${placeLabel(other)}` : `still in ${placeLabel(other)}`}`
   }
+  /** Is this line one of a synced block's? */
+  function insideSyncedBlock(id: string): boolean {
+    return deepNodes(nodes()).some(n => n.type === syncedBlockType && deepNodes(n.children ?? []).some(c => c.id === id))
+  }
+  /** Sync (states §2): the selected lines become one synced block where they are, under the same ids. */
+  function syncSelected() {
+    const chosen = deepNodes(nodes()).filter(n => selected.current.includes(n.id))
+    if (!chosen.length) return
+    if (chosen.some(n => insideSyncedBlock(n.id))) { toast("A synced block can't go inside another. Select only other lines.", { timeout: 6000 }); return }
+    if (deepNodes(chosen).some(n => n.type === syncedBlockType)) { toast("A synced block can't go inside another. Select only other lines.", { timeout: 6000 }); return }
+    if (deepNodes(chosen).some(n => n.type === 'database')) { toast("A database can't be synced yet. Select only other lines.", { timeout: 6000 }); return }
+    const id = crypto.randomUUID()
+    selected.current = []; setSelectionLabel('')
+    editor.replaceBlocks(chosen.map(n => n.id), [{ id, type: syncedBlockType, props: { syncId: crypto.randomUUID(), rev: 0, key: '', roles: '' }, children: chosen }] as never)
+    clearTimeout(timer.current); void flushRef.current()
+    const key: string = toast('Synced block', { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); unwrapBlock(id) } } })
+    copyPrompt(id)
+  }
+  /** Undo of Sync: the plain lines back, under the same ids, so links to them survive. */
+  function unwrapBlock(id: string) {
+    const block = editor.getBlock(id)
+    if (!block) return
+    editor.replaceBlocks([id], (block.children ?? []) as never)
+    clearTimeout(timer.current); void flushRef.current()
+  }
+  function copyPrompt(blockId: string) {
+    const key: string = toast('Copy it to another page', { timeout: 8000, actionProps: { children: 'Copy', onPress: () => { toast.close(key); copyRow(blockId) } } })
+  }
+  /** A place's end goes through one command, across every page, with one Undo; what's typed saves first so it's part of it. */
+  async function endPlace(action: Extract<Action, { type: 'unsync-block' | 'delete-synced-place' }>) {
+    clearTimeout(timer.current)
+    await flushRef.current()
+    const receipt = await run(action, r => ({ text: r.message, undoOperationId: r.operationId }))
+    const ws = latest(), p = ws?.pages.find(x => x.id === page.id)
+    if (receipt && ws && p) { latestWorkspace.current = ws; latestPage.current = p; applyServerPage(p, ws) }
+  }
+  endPlaceRef.current = endPlace
   function deleteSelected() {
     const before = nodes()
+    const insideSyncedBlockBefore = (id: string) => before.some(n => n.type === syncedBlockType && deepNodes(n.children ?? []).some(c => c.id === id))
     const ids = selected.current; selected.current = []
-    const first = before.find(n => n.id === ids[0])
+    const only = ids.length === 1 ? before.find(n => n.id === ids[0]) : undefined
+    if (only?.type === syncedBlockType) { setSelectionLabel(''); void endPlace({ type: 'delete-synced-place', pageId: page.id, blockId: only.id }); return }
+    const first = deepNodes(before).find(n => n.id === ids[0])
     const above = before[before.findIndex(n => n.id === ids[0]) - 1]
     // B33: a task born on this page goes with its line, so only tasks with history "stay" (Jazz: no notice for the rest).
     const removedIds = new Set(deepNodes(before.filter(n => ids.includes(n.id))).map(n => n.id))
@@ -1741,6 +1831,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     else if (editor.document[0]) editor.setTextCursorPosition(editor.document[0].id, 'start')
     editor.focus()
     setSelectionLabel(''); setStatus('Content removed')
+    // Lines inside a synced block: the save's notice speaks for it, on every page it left (states §5).
+    if (ids.some(insideSyncedBlockBefore)) return
     // One copy of a task whose other line stays on this page: nothing happened to the task, so no notice (Lead 2fd18667).
     if (ids.length === 1 && first?.type === 'task' && deepNodes(after).some(n => n.type === 'task' && n.props?.taskId === first.props?.taskId)) return
     setNotice({ text: first?.type === 'heading' ? `Deleted '${inlineText(first.content)}'${plannedCount ? ` · ${plannedCount === 1 ? '1 planned task stays' : `${plannedCount} planned tasks stay`} planned` : ''}` : ids.length === 1 && first?.type === 'task' && stillElsewhere(first.props?.taskId, after) ? stillElsewhere(first.props?.taskId, after)! : ids.length === 1 && first?.type === 'task' && first.props?.role === 'plan' && kept(first) && !deepNodes(after).some(n => n.type === 'task' && n.props?.taskId === first.props?.taskId) ? 'Not today · deadline kept' : deletedCount ? (deletedCount === 1 ? 'To-do deleted' : `${deletedCount} to-dos deleted`) : 'Content removed · tasks unchanged', fingerprint: JSON.stringify(editor.document) })
@@ -1857,6 +1949,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // Esc from the table: the block selected whole again, in the page editor (design §10).
     select: blockId => { if (editor.getBlock(blockId)) { editor.setTextCursorPosition(blockId); editor.focus() } },
   }), [editor, page.id])
+  const syncedActions = useMemo<SyncedActions>(() => ({
+    hostPageId: page.id,
+    copy: blockId => copyBlockRef.current(blockId),
+    unsync: (blockId, all) => { void endPlaceRef.current({ type: 'unsync-block', pageId: page.id, blockId, ...(all ? { all: true as const } : {}) }) },
+    remove: blockId => { void endPlaceRef.current({ type: 'delete-synced-place', pageId: page.id, blockId }) },
+  }), [page.id])
   const [dock, setDock] = useState<HTMLElement | null>(null)
   const [picker, setPicker] = useState<{ top: number; left: number } | null>(null)
   useEffect(() => setDock(document.getElementById('editor-dock')), [])
@@ -2088,8 +2186,10 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const token = crypto.randomUUID()
     const partial = snapshot ? [snapshot.blockCutAtStart, snapshot.blockCutAtEnd].filter(Boolean) : []
     e.clipboardData.setData(clipboardType, JSON.stringify({ blocks, cut, token, at: Date.now(), partial }))
-    e.clipboardData.setData('text/html', editor.blocksToHTMLLossy(blocks as never))
-    e.clipboardData.setData('text/plain', blocks.map(n => inlineText(n.content)).join('\n'))
+    // Another app gets a synced block's lines.
+    const plain = blocks.flatMap(n => (n.type === syncedBlockType ? n.children ?? [] : [n]))
+    e.clipboardData.setData('text/html', editor.blocksToHTMLLossy(plain as never))
+    e.clipboardData.setData('text/plain', plain.map(n => inlineText(n.content)).join('\n'))
     e.preventDefault(); e.stopPropagation()
     if (cut) {
       cutTokens.add(token)
@@ -2242,7 +2342,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (!block) return
     const blocks = [block]
     rememberCopy(blocks)
-    const text = inlineText(block.content)
+    const text = (block.type === syncedBlockType ? block.children ?? [] : [block]).map(n => inlineText(n.content)).join('\n')
     let wrote = false
     const onCopy = (e: ClipboardEvent) => {
       if (!e.clipboardData) return
@@ -2257,6 +2357,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (!navigator.clipboard?.writeText) { notice(false); return }
     navigator.clipboard.writeText(text).then(() => notice(true), () => notice(false))
   }
+  copyBlockRef.current = copyRow
   /** ⌘/ on a line with no ⋯ (any line but an open task on a day page): a menu with Copy link to line (Jazz §1). */
   const [lineMenu, setLineMenu] = useState<{ blockId: string; anchor: { top: number; bottom: number; left: number } } | null>(null)
   const closeLineMenu = (refocus: boolean) => {
@@ -2499,6 +2600,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     <div ref={saveLine} className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? conflictText : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
     <ChipPageDate.Provider value={page.type === 'daily' ? page.date ?? null : null}>
+    <SyncedEditorActions.Provider value={syncedActions}>
     <DatabaseEditorActions.Provider value={databaseActions}>
     {picker && createPortal(<DatabasePicker workspace={withTodos(latestWorkspace.current)} at={picker} allowNew={page.type !== 'template'}
       onNew={() => { holdKeyboard(); setPicker(null); void createDatabase() }}
@@ -2530,6 +2632,11 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           const role = insertionRole(currentId)
           insertOrUpdateBlockForSlashMenu(editor, { ...(replaceCurrent ? {} : { id }), type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? page.date ?? '' : '' }, content: '' })
         } }
+        const syncedItem = { title: 'Synced block', icon: <span aria-hidden>↻</span>, aliases: ['synced', 'sync', '同步'], group: 'Suggested', onItemClick: () => {
+          const lineId = crypto.randomUUID()
+          insertOrUpdateBlockForSlashMenu(editor, { type: syncedBlockType, props: { syncId: crypto.randomUUID(), rev: 0, key: '', roles: '' }, children: [{ id: lineId, type: 'paragraph' }] } as never)
+          editor.setTextCursorPosition(lineId, 'start')
+        } }
         const pageItem = { title: 'Page', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
         const databaseItem = { title: 'Database', icon: <span className="slash-grid-icon" aria-hidden>▦</span>, aliases: ['database', 'table', 'db', '数据库', '表格'], group: 'Suggested', onItemClick: chooseDatabase }
         // A9a §3: the phone's way to `[[` (v0.3's toolbar button), through the same + menu.
@@ -2540,7 +2647,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // Every item stays in the list; the menu scrolls past about 8 rows (F13). A cut hid Quote until its name was typed.
         // Database sits after Page and Link to page (design §3.1). In a template, only a linked view can be made, so it
         // needs a database to show (§9.4).
-        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, databaseItem, ...first, ...rest], query)
+        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, databaseItem, syncedItem, ...first, ...rest], query)
       }} />
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}
@@ -2550,6 +2657,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       {(hoverPointer || linkTapped) && <LinkToolbarController />}
     </BlockNoteView>
     </DatabaseEditorActions.Provider>
+    </SyncedEditorActions.Provider>
     </ChipPageDate.Provider>
     </RowActionsContext.Provider>
     {touchHandle && <button className="editor-touch-handle" aria-label="Drag current section or block" style={{ top: touchHandle.top }}
@@ -2578,7 +2686,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     {dock && createPortal(<>
       {/* B38: no role; the header's status line already announces each change. */}
       {unsaved && !saveLineVisible && <div className="editor-unsaved-line"><span className="editor-unsaved-dot" aria-hidden="true" />{unsavedText}</div>}
-      {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span>{selected.current.length === 1 && editor.getBlock(selected.current[0]!)?.type === 'task' && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyRow(id) }}>Copy</button>}{selected.current.length === 1 && lineLinkTarget(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyLineLink(id) }}>Copy link</button>}<button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
+      {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span>{selected.current.length === 1 && editor.getBlock(selected.current[0]!)?.type === 'task' && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyRow(id) }}>Copy</button>}{selected.current.length === 1 && lineLinkTarget(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyLineLink(id) }}>Copy link</button>}{!selected.current.some(id => editor.getBlock(id)?.type === syncedBlockType) && <button onPointerDown={e => e.preventDefault()} onClick={syncSelected}>Sync</button>}<button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
       {lineMenu && <LineMenu anchor={lineMenu.anchor} onClose={closeLineMenu} onCopy={() => { const id = lineMenu.blockId; closeLineMenu(true); copyLineLink(id) }} />}
     {pastedChecklistIds.length > 0 && <div className="editor-paste-notice" role="status">{pastedChecklistIds.length} checklist {pastedChecklistIds.length === 1 ? 'line' : 'lines'} · <button onClick={() => {
       let count = 0, planned = 0

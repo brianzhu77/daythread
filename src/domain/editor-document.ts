@@ -108,7 +108,8 @@ export function editorSeed(page: Page, workspace: Workspace): EditorNode[] {
 /** The nodes of a heading's section: the heading and everything below it up to the next heading of its level or higher. */
 export function sectionRange(nodes: readonly EditorNode[], id: string): EditorNode[] {
   const start = nodes.findIndex(n => n.id === id)
-  if (start < 0) return []
+  // A line inside another (a synced block's, a nested one): just that line.
+  if (start < 0) { const inner = flatNodes(nodes as EditorNode[]).find(n => n.id === id); return inner ? [inner] : [] }
   const first = nodes[start]!
   if (first.type !== 'heading') return [first]
   let end = start + 1

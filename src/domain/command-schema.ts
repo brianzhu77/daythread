@@ -10,7 +10,7 @@ const at = z.string().max(40);
 const values = z.record(z.string().min(1).max(200), json);
 const rowEdit = z.object({ pageId: id, values, expected: values });
 const option = z.object({ id, name: z.string().max(200), group: z.enum(["todo", "active", "done"]).optional() });
-const propertyFields = { name: z.string().max(200), type: z.enum(propertyTypes), options: z.array(option).max(200).optional(), format: z.enum(["plain", "comma", "percent", "currency"]).optional(), withTime: z.boolean().optional(), prefix: z.string().max(limits.prefix + 100).optional(), target: id.optional(), limit: z.literal(1).nullable().optional(), rollup: z.object({ relation: id, property: id, fn: z.enum(rollupFunctions) }).optional() };
+const propertyFields = { name: z.string().max(200), type: z.enum(propertyTypes), options: z.array(option).max(200).optional(), format: z.enum(["plain", "comma", "percent", "currency"]).optional(), withTime: z.boolean().optional(), prefix: z.string().max(limits.prefix + 100).optional(), target: id.optional(), limit: z.literal(1).nullable().optional(), rollup: z.object({ relation: id, property: id, fn: z.enum(rollupFunctions) }).optional(), formula: z.string().max(limits.formula).optional() };
 const columns = z.array(z.object({ id, width: z.number().int().optional(), wrap: z.literal(true).optional() })).max(100);
 const sort = z.array(z.object({ by: id, direction: z.enum(["asc", "desc"]) })).max(10);
 const filter = z.array(z.object({ by: id, op: z.enum(filterOpList), value: json.optional() })).max(20);
@@ -38,6 +38,8 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("add-task"), pageId: id, title: title.min(1), plannedOn: day.nullable().optional(), attentionOn: day.nullable().optional(), deadlineOn: day.nullable().optional() }),
   z.object({ type: z.literal("task-status"), taskId: id, status, today: day.optional() }),
   z.object({ type: z.literal("rename-task"), taskId: id, title: z.string().max(1000) }),
+  z.object({ type: z.literal("unsync-block"), pageId: id, blockId: id, all: z.literal(true).optional() }),
+  z.object({ type: z.literal("delete-synced-place"), pageId: id, blockId: id }),
   z.object({ type: z.literal("set-task-dates"), taskId: id, attentionOn: day.nullable().optional(), deadlineOn: day.nullable().optional() }),
   z.object({ type: z.literal("plan-task"), taskId: id, date: day, from: day.optional(), today: day.optional() }),
   z.object({ type: z.literal("plan-tasks"), date: day, items: z.array(z.object({ taskId: id })).min(1).max(100) }),

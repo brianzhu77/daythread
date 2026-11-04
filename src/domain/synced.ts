@@ -114,7 +114,7 @@ export function strippedWorkspace(ws: Workspace): Workspace {
  */
 export function acceptSavedBlocks(state: Workspace, page: Page, nodes: EditorNode[], refuse: (message: string) => never): string[] {
   if (!nodes.length || !JSON.stringify(nodes).includes(`"${syncedBlockType}"`)) return []
-  const here = new Set<string>(), conflicts: string[] = []
+  const here = new Set<string>(), conflicts: string[] = [], editedHere = new Map<string, string>()
   walk(pageNodes(page), n => { if (isBlock(n)) here.add(n.id) })
   const visit = (list: EditorNode[]) => {
     for (let i = 0; i < list.length; i++) {
@@ -127,8 +127,16 @@ export function acceptSavedBlocks(state: Workspace, page: Page, nodes: EditorNod
       if (!record && !n.children?.length) continue
       if (!record) { (state.synced ??= []).push({ id: syncId as string, lines: JSON.stringify(unplaced(n)), rev: 1, original: n.id }); continue }
       if (!here.has(n.id)) { n.children = []; continue }
-      if (Number(n.props?.rev) >= record.rev) continue
-      const changed = blockLinesKey(n) !== n.props?.key && Boolean(n.children?.length)
+      let changed = false
+      if (Number(n.props?.rev) >= record.rev) {
+        // Every line deleted: one empty line stays, and the block (states §5).
+        if (!n.children?.length) n.children = [{ id: derivedId(`${n.id}|${record.rev}`), type: 'paragraph', props: {}, content: [], children: [] }]
+        // Two places on this page changed differently in one save: the first is the edit, and the other's words go below it, not away.
+        const key = blockLinesKey(n), first = editedHere.get(record.id)
+        if (key === recordKey(record)) continue
+        if (first === undefined || first === key) { editedHere.set(record.id, key); continue }
+        changed = true
+      } else changed = blockLinesKey(n) !== n.props?.key && Boolean(n.children?.length)
       if (changed) {
         const mine = (n.children ?? []).map(function fresh(line: EditorNode): EditorNode {
           const { id, ...rest } = line
@@ -149,8 +157,10 @@ export function acceptSavedBlocks(state: Workspace, page: Page, nodes: EditorNod
  * After a command: a place whose lines differ from its record is where they changed, and the record takes them. Then every
  * place is written again from the record, its own roles kept, so one command never leaves two places apart.
  */
-export function settleSynced(state: Workspace): void {
-  if (!hasRecords(state)) return
+export function settleSynced(state: Workspace): { linesRemovedFrom?: number } {
+  // A block only comes from a template or a duplicate where a record exists already, so with none this costs nothing (B21-14).
+  if (!hasRecords(state)) return {}
+  let linesRemovedFrom: number | undefined
   // Measured against the record as it was, so the places that haven't changed don't change it back.
   const was = new Map(state.synced!.map(r => [r.id, recordKey(r)]))
   for (const page of state.pages) {
@@ -158,12 +168,19 @@ export function settleSynced(state: Workspace): void {
     walk(pageNodes(page), n => {
       if (!isBlock(n) || !n.children?.length) return
       const record = state.synced!.find(r => r.id === n.props?.syncId)
-      if (!record) return
+      // Made outside a save, on a new page from a template: its own, starting here.
+      if (!record) { state.synced!.push({ id: String(n.props?.syncId), lines: JSON.stringify(unplaced(n)), rev: 1, original: n.id }); return }
       const lines = unplaced(n)
-      if (linesKey(lines) !== was.get(record.id)) record.lines = JSON.stringify(lines)
+      if (linesKey(lines) !== was.get(record.id)) {
+        // Fewer lines than it had, on a block shown elsewhere too.
+        const count = (list: EditorNode[]): number => list.reduce((sum, l) => sum + 1 + count(l.children ?? []), 0)
+        if (count(lines) < count(pageNodes({ document: record.lines }))) { const pages = new Set(syncedPlaces(state, record.id).map(p => p.page.id)).size; if (pages > 1) linesRemovedFrom = pages }
+        record.lines = JSON.stringify(lines)
+      }
     })
   }
-  for (const record of state.synced!) if (recordKey(record) !== was.get(record.id)) record.rev++
+  for (const record of state.synced!) if (was.has(record.id) && recordKey(record) !== was.get(record.id)) record.rev++
+  dropUnheldRecords(state)
   for (const page of state.pages) {
     if (!mentionsBlock(page.document)) continue
     // A place's roles come from its rows when it has them, or its stored block when it was written without.
@@ -175,6 +192,91 @@ export function settleSynced(state: Workspace): void {
     })
     page.document = JSON.stringify(nodes)
   }
+  return linesRemovedFrom ? { linesRemovedFrom } : {}
+}
+
+/** A place's lines as another place on the page shows them: its ids, its rows' roles. For two copies on one page, as he types (B21-3). */
+export function mirroredLines(source: EditorNode, target: EditorNode, record: SyncedRecord | undefined): EditorNode[] {
+  const roles: Roles = {}
+  unplaced(target, roles)
+  const lines = unplaced(source)
+  return placed(target, record ?? { id: '', lines: '[]', rev: 0, original: '' }, roles, lines)
+}
+/**
+ * What a place's own new lines become before they're mirrored. Until a save names them they carry the id the editor gave them, and
+ * the original, which keeps plain ids, is about to hold that same id: one page can't have it twice.
+ */
+export function ownLineIds(source: EditorNode, record: SyncedRecord | undefined): Record<string, string> {
+  const rename: Record<string, string> = {}
+  if (!record || record.original === source.id) return rename
+  walk(source.children ?? [], n => { if (!n.id.endsWith(`${separator}${source.id}`)) rename[n.id] = `${n.id}${separator}${source.id}` })
+  return rename
+}
+/** Every place a record is shown, Trash included, with the page it's on, in the workspace's order. */
+export function syncedPlaces(ws: Pick<Workspace, 'pages'>, syncId: string): { page: Page; block: EditorNode }[] {
+  const out: { page: Page; block: EditorNode }[] = []
+  for (const page of ws.pages) {
+    if (!mentionsBlock(page.document)) continue
+    walk(pageNodes(page), n => { if (isBlock(n) && n.props?.syncId === syncId) out.push({ page, block: n }) })
+  }
+  return out
+}
+export const isSyncedBlock = isBlock
+/** The block a record was made as: on a template or a duplicated row it makes its own block; any other place stays connected (design §7). */
+export const isOriginalBlock = (ws: Pick<Workspace, 'synced'>, n: EditorNode): boolean => ws.synced?.find(r => r.id === n.props?.syncId)?.original === n.id
+/**
+ * Where a block counts when it counts once (states §7): Search under the original, or the oldest live place if that's in Trash;
+ * Tags under its earliest day, or that same place if no day page shows it. Templates and hidden pages don't count.
+ */
+export function syncedHome(ws: Pick<Workspace, 'pages' | 'synced'>, syncId: string, by: 'original' | 'day', counts: (p: Page) => boolean): string | null {
+  const places = syncedPlaces(ws, syncId).filter(p => counts(p.page))
+  if (!places.length) return null
+  if (by === 'day') { const days = places.filter(p => p.page.date).sort((a, b) => a.page.date!.localeCompare(b.page.date!)); if (days.length) return days[0]!.block.id }
+  const original = ws.synced?.find(r => r.id === syncId)?.original
+  return (places.find(p => p.block.id === original) ?? places[0]!).block.id
+}
+/** Once no place is left anywhere, the record goes: a deleted note isn't kept behind his back (Undo's copy still has it). */
+function dropUnheldRecords(state: Workspace): void {
+  if (!state.synced?.length) return
+  const held = new Set<string>()
+  for (const page of state.pages) {
+    if (!mentionsBlock(page.document)) continue
+    walk(pageNodes(page), n => { if (isBlock(n)) held.add(String(n.props?.syncId)) })
+  }
+  state.synced = state.synced.filter(r => held.has(r.id))
+  if (!state.synced.length) delete state.synced
+}
+/** A block turned into ordinary lines, where it sits, under the ids they have there, its rows keeping their roles. */
+function withoutBlock(nodes: EditorNode[], matches: (n: EditorNode) => boolean, keepLines: boolean): EditorNode[] {
+  return nodes.flatMap(n => {
+    if (isBlock(n) && matches(n)) return keepLines ? n.children ?? [] : []
+    return n.children?.length ? [{ ...n, children: withoutBlock(n.children, matches, keepLines) }] : [n]
+  })
+}
+function rewrite(page: Page, matches: (n: EditorNode) => boolean, keepLines: boolean): void {
+  page.document = JSON.stringify(withoutBlock(pageNodes(page), matches, keepLines))
+}
+/** "Unsync here" or, on the original, "Unsync all": those places become ordinary lines. No task changes: rows stay rows of the same task. */
+export function unsyncBlock(state: Workspace, syncId: string, blockId: string, all: boolean): number {
+  const places = syncedPlaces(state, syncId)
+  const here = places.find(p => p.block.id === blockId)
+  if (!here) return 0
+  const pages = new Set((all ? places : [here]).map(p => p.page))
+  for (const page of pages) rewrite(page, n => n.props?.syncId === syncId && (all || n.id === blockId), true)
+  return places.length
+}
+/**
+ * Deleting a place. A copy just goes. The original ends the syncing: every other place keeps its lines as ordinary lines, as
+ * the only choice that loses nothing (design §4), at any count. How many places it had.
+ */
+export function deleteBlockPlace(state: Workspace, syncId: string, blockId: string): { places: number; wasOriginal: boolean } {
+  const places = syncedPlaces(state, syncId), record = state.synced?.find(r => r.id === syncId)
+  const here = places.find(p => p.block.id === blockId)
+  if (!here || !record) return { places: 0, wasOriginal: false }
+  const wasOriginal = record.original === blockId
+  rewrite(here.page, n => n.id === blockId, false)
+  if (wasOriginal) for (const { page } of places) if (mentionsBlock(page.document)) rewrite(page, n => n.props?.syncId === syncId, true)
+  return { places: places.length, wasOriginal }
 }
 
 /**
@@ -192,15 +294,20 @@ export function blockUpdates(editorNodes: EditorNode[], saved: string, own: bool
     const e = isBlock(s) ? held.get(s.id) : undefined
     if (!e) return
     const rev = Number(s.props?.rev), key = String(s.props?.key ?? ''), mine = blockLinesKey(e)
+    // A copy just pasted hasn't read the record yet, and takes its lines. Its `key` says what it was pasted with, so words he's typed
+    // since stay his; a block he's just made has no key, and goes on below (Lead's review of #96).
+    if (!Number(e.props?.rev) && mine === e.props?.key) { out.push({ id: e.id, rev, key, lines: s.children ?? [], rename: {} }); return }
     if (mine === key) {
       // The same lines: only what's new here takes this place's ids.
       const rename: Record<string, string> = {}, ids = new Set<string>()
       walk(s.children ?? [], n => ids.add(n.id))
       walk(e.children ?? [], n => { if (!ids.has(n.id) && ids.has(`${n.id}${separator}${e.id}`)) rename[n.id] = `${n.id}${separator}${e.id}` })
       if (rev !== Number(e.props?.rev) || e.props?.key !== key || Object.keys(rename).length) out.push({ id: e.id, rev, key, lines: null, rename })
+    // Unchanged since it last read: it follows, whoever saved. That has to come first: another place on this page keeps its old lines
+    // otherwise, and the next save sends them back as an edit (Lead's review of #96).
+    } else if (mine === e.props?.key) out.push({ id: e.id, rev, key, lines: s.children ?? [], rename: {} })
     // His own save, and he's typed since: it starts from what was saved, so what he's typed still reads as changed, and saves.
-    } else if (own) out.push({ id: e.id, rev, key, lines: null, rename: {} })
-    else if (mine === e.props?.key) out.push({ id: e.id, rev, key, lines: s.children ?? [], rename: {} })
+    else if (own) out.push({ id: e.id, rev, key, lines: null, rename: {} })
   })
   return out
 }

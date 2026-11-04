@@ -22,7 +22,7 @@
 
 ## 2. What's mine
 
-- **Moving a bar along the scale** keeps its length, with one Undo. Notion's page doesn't state this, but R4-1 asks for it and other sources describe it. It snaps to the unit shown: a day at Day, Week and Month, an hour at Hours.
+- **Moving a bar along the scale** keeps its length, with one Undo. Notion's page doesn't state this, but R4-1 asks for it and other sources describe it. It snaps to the unit shown: a day at Day, Week, Month, Quarter and Year (Jazz 1d3eda45), and an hour at Hours.
 - **Making a bar:** on a row with no dates, a hover shows a one-day ghost bar, and a click or a drag sets its dates. `+` on the scale makes a row with dates from where it's clicked. `+ New` at the table's foot makes one with none.
 - **Group** as in a list (R2), and a new row takes the group's value, as `+ New` does today. A group folds, and the scale stays aligned.
 - **Sub-items:** nested in a toggle or flat (`sub-items.md`).
@@ -42,7 +42,7 @@
 
 ## 4. On a phone
 
-**Notion's page doesn't cover the phone, so this is R4-2's call, and I keep it.** Bars don't fit at 390. A list grouped by week: a row sits under its start's week with its dates in full, so a two-week row is listed once. Tapping opens it. Dates change in the sheet. It opens at this week, and earlier weeks are above it, reachable by scrolling. Weeks follow Week starts (R3-20). The unit and table settings stay as they are and are ignored here, so a phone never changes what 1280 shows.
+**Notion's page doesn't cover the phone, so this is R4-2's call, and I keep it.** Bars don't fit at 390. A list grouped by week: a row sits under its start's week with its dates in full, so a two-week row is listed once. **A row still running this week sits under this week, not its start's week** (Bumblebee, 1d3eda45), so it's never folded away as past. Tapping opens it. Dates change in the sheet. It draws from this week down, with a line at the top, "Earlier · 12", that opens the rest, because scrolling a block to this week on open would pull a day page around it (Jazz 1d3eda45). If nothing's left from this week on, Earlier is open already, so the view isn't blank. Rows with no date sit on the same "No date" line at the end. Weeks follow Week starts (R3-20). The unit and table settings stay as they are and are ignored here, so a phone never changes what 1280 shows.
 
 ## 5. Elsewhere
 
@@ -63,7 +63,7 @@
 ## 7. Release order, within Timeline
 
 1. Bars from one Date or a pair, moves and edges, Today, units, and the 390 list.
-2. The table beside it with calculations, arrows off-screen, Group.
+2. The table beside it with calculations, arrows off-screen, Group, **and Rollup and Formula dates as read-only bars (§3's last row),** which step 1 doesn't offer (Jazz c3ff1937).
 3. Sub-items and dependencies, when those ship.
 
 ## 8. Checks before release
@@ -72,7 +72,7 @@ Add to R4-1 and R4-2 when built:
 
 - Every row of §3, at Day and Month. No date is rewritten unless that bar was moved.
 - A move and an edge drag: one Undo each, and Edited moves once.
-- A row never disappears: the count on the table equals rows with bars plus the "No date" line.
+- A row never disappears: the count on the table equals rows with bars plus the "No date" line, and at 390 the rows listed plus "Earlier" plus "No date".
 - A To-do moved on a Timeline keeps its line on its day page.
 - At 390: the list, no sideways scroll, and a date changed in its sheet moves the row to the right week.
 - Sideways scroll on a linked Timeline in a day page doesn't move the page, in WebKit.
