@@ -97,8 +97,9 @@ await chooseLayout('Timeline')
 if (await block.locator('.database-undated-head').count()) { await block.locator('.database-undated-head').click(); await wait(300) }
 await block.locator('.database-bar-off.is-name, .database-pane-name').first().click(); await wait(1500)
 check(await peek.count() === 1 && page.url().includes('peek='), 'a row on a Timeline opens in the peek', page.url())
-await page.keyboard.press('Escape'); await wait(300)
-if (await peek.count()) { await page.keyboard.press('Escape'); await wait(1000) }
+check((await page.evaluate(() => document.activeElement?.closest('.ProseMirror') != null)), 'it opens with the caret in its editor')
+await page.keyboard.press('Escape'); await wait(1000)
+check(await peek.count() === 0, 'and one Esc closes it')
 await chooseLayout('Table')
 
 // The row's own page behind: nothing opens. Below the floor: a full page. Resized past the floor, nothing's lost.

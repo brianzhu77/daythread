@@ -67,8 +67,18 @@ function Peek({ rowId }: { rowId: string }) {
       if (selection && !selection.isCollapsed) { selection.collapseToEnd(); return }
       close()
     }
+    // The editor takes Esc to let go of the caret, and says it handled it. A caret with nothing else open isn't a layer (§3), so the peek hears it first.
+    const escInEditor = (e: KeyboardEvent) => {
+      const editor = e.target instanceof Element ? e.target.closest('.ProseMirror') : null
+      if (e.key !== 'Escape' || !editor || !panel.current?.contains(editor) || document.querySelector(innerLayer)) return
+      if (e.isComposing || e.keyCode === 229) return
+      e.preventDefault(); e.stopPropagation()
+      const selection = window.getSelection()
+      if (selection && !selection.isCollapsed) selection.collapseToEnd(); else close()
+    }
     document.addEventListener('keydown', esc)
-    return () => document.removeEventListener('keydown', esc)
+    document.addEventListener('keydown', escInEditor, true)
+    return () => { document.removeEventListener('keydown', esc); document.removeEventListener('keydown', escInEditor, true) }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   // A tap outside closes it; the view behind doesn't respond (§3).
