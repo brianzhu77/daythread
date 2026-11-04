@@ -1,6 +1,6 @@
 # Side and center peek: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead, Jazz and Roadbuster to review**. Not approved, not prototyped and not built. Task #286, checklist R4-11.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **center peek built and live** (#112, #113, 2026-11-04); side peek in progress. Checklist R4-11 says what's open. Task #286, checklist R4-11.
 - **Evidence:** [Notion's page on views][h] gives the "Open pages in" setting and its defaults. It says nothing about keys, the URL, what stays usable in a center peek, or the phone, so those parts below are my proposals. I read our code on main and ran nothing.
 - **Brian's use:** no databases at the last read (Nov 3, rev 793). Use sets the order, not whether this is in (Brian 57deaed7).
 
