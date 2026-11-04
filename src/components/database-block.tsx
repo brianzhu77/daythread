@@ -23,6 +23,7 @@ import { taskRows } from '../domain/workspace'
 import { newTodo, newTodoRowId, taskIdOfRow, todoChange, todoLine, todoMoves, todoRowId, todosSourceId, readingWorkspace, withTodos } from '../domain/todos-source'
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
+import { DatabaseTimeline } from './database-timeline'
 import { openPeek, peekFloor } from './peek-state'
 import { DatabaseGallery } from './database-gallery'
 import { LinkedDatabase } from './database-linked'
@@ -783,6 +784,7 @@ export function LaidOutView(props: DatabaseViewProps & { view: View; changeView:
   if (props.view.layout === 'list') return <DatabaseList {...props} />
   if (props.view.layout === 'gallery') return <DatabaseGallery {...props} />
   if (props.view.layout === 'calendar') return <DatabaseCalendar {...props} />
+  if (props.view.layout === 'timeline') return <DatabaseTimeline {...props} />
   return <DatabaseTable {...props} />
 }
 

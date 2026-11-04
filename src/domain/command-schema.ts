@@ -18,7 +18,8 @@ const groupDateBy = z.enum(["day", "week", "month"]);
 const hiddenGroups = z.array(z.string().max(200)).max(limits.hiddenGroups);
 const calculations = z.record(id, z.enum(calcKinds));
 const boardCalculation = z.object({ by: id, kind: z.enum(calcKinds) });
-const view = z.object({ id, name: z.string().max(200), layout: z.enum(viewLayouts), columns, sort, filter, groupBy: id.optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), subGroupBy: id.optional(), subGroupDateBy: groupDateBy.optional(), hiddenSubGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").optional(), openIn: z.enum(["center", "side"]).optional(), filterAny: z.literal(true).optional(), wrapName: z.literal(true).optional(), calculations: calculations.optional(), boardCalculation: boardCalculation.optional(), defaultTemplate: id.optional() });
+const timelineUnit = z.enum(["hours", "day", "week", "month", "quarter", "year"]);
+const view = z.object({ id, name: z.string().max(200), layout: z.enum(viewLayouts), columns, sort, filter, groupBy: id.optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), subGroupBy: id.optional(), subGroupDateBy: groupDateBy.optional(), hiddenSubGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").optional(), timelineEnd: id.optional(), timelineUnit: timelineUnit.optional(), timelineTable: z.literal(true).optional(), openIn: z.enum(["center", "side"]).optional(), filterAny: z.literal(true).optional(), wrapName: z.literal(true).optional(), calculations: calculations.optional(), boardCalculation: boardCalculation.optional(), defaultTemplate: id.optional() });
 const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("addProperty"), property: z.object({ id, ...propertyFields }), viewId: id.optional() }),
   z.object({ kind: z.literal("updateProperty"), propertyId: id, ...propertyFields, name: propertyFields.name.optional(), type: propertyFields.type.optional() }),
@@ -26,7 +27,7 @@ const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("setMirror"), propertyId: id, mirror: z.object({ id, name: z.string().max(200) }).nullable() }),
   z.object({ kind: z.literal("moveProperty"), propertyId: id, beforeId: id.nullable() }),
   z.object({ kind: z.literal("addView"), view }),
-  z.object({ kind: z.literal("updateView"), viewId: id, name: z.string().max(200).optional(), columns: columns.optional(), sort: sort.optional(), filter: filter.optional(), layout: z.enum(viewLayouts).optional(), groupBy: id.nullable().optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), subGroupBy: id.nullable().optional(), subGroupDateBy: groupDateBy.optional(), hiddenSubGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").nullable().optional(), openIn: z.enum(["center", "side"]).nullable().optional(), filterAny: z.boolean().optional(), wrapName: z.boolean().optional(), calculations: calculations.optional(), boardCalculation: boardCalculation.nullable().optional(), defaultTemplate: id.nullable().optional() }),
+  z.object({ kind: z.literal("updateView"), viewId: id, name: z.string().max(200).optional(), columns: columns.optional(), sort: sort.optional(), filter: filter.optional(), layout: z.enum(viewLayouts).optional(), groupBy: id.nullable().optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), subGroupBy: id.nullable().optional(), subGroupDateBy: groupDateBy.optional(), hiddenSubGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").nullable().optional(), timelineEnd: id.nullable().optional(), timelineUnit: timelineUnit.optional(), timelineTable: z.literal(true).nullable().optional(), openIn: z.enum(["center", "side"]).nullable().optional(), filterAny: z.boolean().optional(), wrapName: z.boolean().optional(), calculations: calculations.optional(), boardCalculation: boardCalculation.nullable().optional(), defaultTemplate: id.nullable().optional() }),
   z.object({ kind: z.literal("setDefaultTemplate"), templateId: id.nullable() }),
   z.object({ kind: z.literal("removeView"), viewId: id }),
   z.object({ kind: z.literal("moveView"), viewId: id, beforeId: id.nullable() }),
@@ -49,7 +50,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("handoff-done"), date: day }),
   z.object({ type: z.literal("save-review"), date: day }),
   z.object({ type: z.literal("create-document"), title, body: z.string().max(100_000), pageId: id.optional(), parentId: id.optional() }),
-  z.object({ type: z.literal("make-link-pages"), parentPageId: id, items: z.array(z.object({ url: z.string().min(1).max(10_000), pageId: id, title: title.optional() })).min(1).max(50) }),
+  z.object({ type: z.literal("make-link-pages"), parentPageId: id, items: z.array(z.object({ url: z.string().min(1).max(10_000), pageId: id, title: title.optional() })).min(1).max(50), at: at.optional() }),
   z.object({ type: z.literal("apply-link-preview"), pageId: id, url: z.string().min(1).max(10_000), title: z.string().max(2000).nullable(), description: z.string().max(5000).nullable() }),
   z.object({ type: z.literal("rename-page"), pageId: id, title }),
   z.object({ type: z.literal("move-page"), pageId: id, parentId: id.nullable(), beforeId: id.nullable().optional() }),

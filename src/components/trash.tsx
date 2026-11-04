@@ -33,7 +33,7 @@ function oldParentLabel(ws: Workspace, p: Page, today: string): string {
 export function useDeletePage() {
   const { workspace, run } = useWorkspace()
   const navigate = useNavigate()
-  return async (page: Page, openPageId: string | null) => {
+  return async (page: Page, openPageId: string | null, backTo?: string) => {
     if (!workspace) return
     const subtree = subtreeIds(workspace, page.id)
     for (const id of subtree) if (!(await flushEditor(id))) return
@@ -42,7 +42,7 @@ export function useDeletePage() {
     const receipt = await run({ type: 'delete-page', pageId: page.id, at: new Date().toISOString() },
       r => ({ text: r.message, undoOperationId: r.operationId }))
     // A day stays on its date, which now says its page is in Trash (B16).
-    if (receipt && openPageId && subtree.has(openPageId)) void navigate({ href: parent ? pageHref(parent, card?.id) : page.type === 'daily' ? `/day/${page.date}` : '/pages', resetScroll: !card })
+    if (receipt && openPageId && subtree.has(openPageId)) void navigate({ href: backTo ?? (parent ? pageHref(parent, card?.id) : page.type === 'daily' ? `/day/${page.date}` : '/pages'), resetScroll: !card })
   }
 }
 
