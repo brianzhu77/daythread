@@ -117,6 +117,8 @@ test('reading a file: GBK when it isn\'t UTF-8, a byte order mark, and which del
 test('suggesting a type: never guesses a day, never a multi-select, and $ or % stay as written', () => {
   assert.equal(suggestKind(['1', '2,000', '-3.5', '']), 'number')
   assert.equal(suggestKind(['2026-01-02', '03/04/2026']), 'date')
+  assert.equal(suggestKind(['2026-01-02 → 2026-01-09', '2026-02-01']), 'date')
+  assert.equal(suggestKind(['2026-01-02 → soon']), 'text')
   assert.equal(suggestKind(['03/04/2026', '25/04/2026']), 'text')
   assert.equal(suggestKind(['Yes', 'no', 'TRUE']), 'checkbox')
   assert.equal(suggestKind(['a', 'b', 'a', 'a', 'b']), 'select')
