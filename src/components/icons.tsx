@@ -232,6 +232,11 @@ export const QuoteIcon = () => (
     <path d="M6 5.5v13M10.5 8h8.5M10.5 12h8.5M10.5 16h5.5" />
   </Icon>
 )
+export const ImportIcon = () => (
+  <Icon>
+    <path d="M12 4.5v10M8 10.5l4 4 4-4M5 18.5h14" />
+  </Icon>
+)
 export const SeparatorIcon = () => (
   <Icon>
     <path d="M4.5 12h15" />

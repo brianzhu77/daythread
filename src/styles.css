@@ -1905,6 +1905,23 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-menu select { padding-right: 4px; }
 .database-menu input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(--ink); }
 .database-menu-field, .database-menu > input { margin: 2px 6px 6px; }
+/* Import CSV: every column with its first values and where it goes, then what will happen. */
+.csv-import { position: fixed; top: 10vh; left: 50%; transform: translateX(-50%); width: min(640px, calc(100vw - 16px)); max-height: 80vh; gap: 6px; padding: 8px; }
+.csv-import-scrim { display: block; position: fixed; inset: 0; z-index: 59; background: var(--scrim); }
+.csv-import-columns { display: flex; flex-direction: column; gap: 2px; min-height: 0; overflow-y: auto; }
+.csv-import-column { display: grid; grid-template-columns: minmax(0, 1fr) 150px; align-items: center; gap: 4px 10px; padding: 4px 6px; border-top: 1px solid var(--line-soft); }
+.csv-import-words { display: flex; flex-direction: column; min-width: 0; }
+.csv-import-header { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }
+.database-menu-quiet.csv-import-samples { padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.csv-import-bad { grid-column: 1 / -1; color: var(--formula-red); font-size: var(--text-meta); }
+.csv-import .database-menu-head { padding-inline: 6px; }
+.csv-import-caption { display: grid; grid-template-columns: minmax(0, 1fr) 150px; gap: 10px; padding: 0 6px; color: var(--ink-3); font-size: var(--text-caption); }
+.csv-import-summary { padding: 4px 6px; font-size: var(--text-meta); }
+.csv-import-summary p { margin: 0 0 2px; overflow-wrap: anywhere; }
+.csv-import .formula-actions { display: flex; }
+.csv-import .formula-actions-end { display: flex; gap: 6px; margin-left: auto; }
+.csv-import .formula-actions button { min-height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-row); background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+.csv-import .formula-actions .formula-done { border-color: var(--ink); background: var(--ink); color: var(--paper); }
 .database-menu-quiet.is-error { color: var(--red); }
 .cell-error { color: var(--formula-red); }
 /* A formula's `style`: only colour he typed, inside its own cell (formula design §7). Radix's text and tint steps, and in light the text a little darker so every colour reads at 4.5:1 on hover, a picked row and every tint (tests/evidence/formula/contrast.mjs). */
@@ -2032,6 +2049,9 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
   .database-menu::before { content: ''; flex: none; align-self: center; width: 36px; height: 5px; margin-bottom: 6px; border-radius: 3px; background: var(--check); }
   .database-menu > button[role=menuitem], .database-menu-head, .database-property-line, .database-menu-row { min-height: 44px; }
   .database-menu input:not([type=checkbox]), .database-menu select { min-height: 40px; font-size: 16px; }
+  .csv-import { top: auto; left: 0; transform: none; width: auto; max-height: 85vh; }
+  .csv-import-column, .csv-import-caption { grid-template-columns: minmax(0, 1fr) 130px; }
+  .csv-import .formula-actions button { min-height: 44px; }
   /* A sheet above the keyboard: the only panel opened to type at length (design §4). */
   .database-menu:has(.formula-editor) { bottom: var(--keyboard-lift, 0px) !important; width: auto; max-height: calc(85vh - var(--keyboard-lift, 0px)); }
   .formula-editor { flex-direction: column; padding: 2px 0 6px; }
