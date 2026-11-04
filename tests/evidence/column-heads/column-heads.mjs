@@ -23,6 +23,8 @@ const shownOrder = () => page.locator('.database-th[data-column-head]').evaluate
 const undo = async () => { await page.keyboard.press(`${process.platform === 'darwin' ? 'Meta' : 'Control'}+z`); await wait(900) }
 const closeMenu = async () => { await page.keyboard.press('Escape'); await wait(300) }
 const dragEdge = async (name, by, { release = true } = {}) => {
+  // Its edge well inside the table, where a real pointer could reach it.
+  await head(name).evaluate(th => { const el = th.closest('.database-scroll'), over = th.getBoundingClientRect().right - (el.getBoundingClientRect().right - 40); if (over > 0) el.scrollLeft += over }); await wait(150)
   const b = await box(head(name)), x = b.x + b.width - 3, y = b.y + b.height / 2
   await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + by / 2, y, { steps: 4 }); await page.mouse.move(x + by, y, { steps: 4 }); await wait(120)
   if (release) { await page.mouse.up(); await wait(900) }
@@ -78,6 +80,33 @@ check(await menu.getByRole('textbox', { name: 'Name', exact: true }).inputValue(
 await closeMenu(); await wait(200)
 await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(900)
 check(order() === before, 'its Undo takes it away', order())
+
+// Insert left and right: the add form, and the new column beside this one, with one Undo.
+await head('Pages').click(); await wait(300)
+await menu.getByRole('menuitem', { name: 'Insert left' }).click(); await wait(300)
+await menu.getByLabel('Property name').fill('Before pages'); await page.keyboard.press('Enter'); await wait(900)
+const made = order().split(','), at = made.indexOf('pages')
+check(made.length === before.split(',').length + 1 && !before.split(',').includes(made[at - 1]), 'Insert left puts it just before', made)
+await closeMenu(); await wait(200)
+await head('Before pages').click(); await wait(300)
+await menu.getByRole('menuitem', { name: 'Delete property' }).click(); await wait(900); await closeMenu()
+check(order() === before, 'and it can go again', order())
+await head('Pages').click(); await wait(300)
+await menu.getByRole('menuitem', { name: 'Insert right' }).click(); await wait(300)
+await menu.getByLabel('Property name').fill('After pages'); await page.keyboard.press('Enter'); await wait(900)
+const made2 = order().split(',')
+check(made2.indexOf('pages') + 1 === made2.indexOf(made2.find(id => !before.split(',').includes(id))), 'Insert right puts it just after', made2)
+await closeMenu(); await wait(200)
+await head('After pages').click(); await wait(300)
+await menu.getByRole('menuitem', { name: 'Delete property' }).click(); await wait(900); await closeMenu()
+await page.locator('.database-th.is-title').click(); await wait(300)
+await menu.getByRole('menuitem', { name: 'Insert right' }).click(); await wait(300)
+await menu.getByLabel('Property name').fill('First now'); await page.keyboard.press('Enter'); await wait(900)
+check(!before.split(',').includes(order().split(',')[0]), 'Insert right on Name makes it the first column', order())
+await closeMenu(); await wait(200)
+await head('First now').click(); await wait(300)
+await menu.getByRole('menuitem', { name: 'Delete property' }).click(); await wait(900); await closeMenu()
+check(order() === before, 'back to where it was', order())
 
 // The edge: follows the pointer, saved once on release, one Undo, and a reload keeps it.
 const start = (await box(head('Pages'))).width
@@ -152,6 +181,24 @@ check(await p.locator('[data-column-head], .database-column-edge').count() === 0
 await th.click(); await p.waitForTimeout(400)
 check(await p.locator('.database-menu').count() === 0, 'and a tap opens nothing')
 await phone.close()
+// A frozen column beside a sub-item's toggle (R4-13): head and cells stay lined up, opened and scrolled.
+execSync(`rm -f ${storePath} ${storePath}-wal ${storePath}-shm && node --no-warnings tests/evidence/sub-items/seed.ts ${storePath} on`, { stdio: 'ignore' })
+const subs = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' })
+const u = await subs.newPage()
+await u.goto(`${base}/pages?page=work`); await u.waitForTimeout(2500)
+const firstColumn = u.locator('.database-th[data-column-head]').nth(1)
+await firstColumn.click(); await u.waitForTimeout(300)
+await u.locator('.database-menu').getByRole('menuitem', { name: 'Freeze up to column' }).click(); await u.waitForTimeout(700)
+await u.keyboard.press('Escape'); await u.waitForTimeout(300)
+await u.locator('.database-sub-toggle').first().click(); await u.waitForTimeout(500)
+const lined = () => u.evaluate(() => { const th = document.querySelector('th.is-frozen').getBoundingClientRect(); const name = document.querySelector('th.is-title').getBoundingClientRect(); const tds = [...document.querySelectorAll('td.is-frozen')].map(t => t.getBoundingClientRect()); const toggles = [...document.querySelectorAll('.database-sub-toggle')].map(t => t.getBoundingClientRect()); return { head: th.left, off: tds.filter(t => Math.abs(t.left - th.left) > 1).length, cells: tds.length, inName: toggles.every(t => t.left >= name.left && t.right <= th.left), toggles: toggles.length } })
+const opened = await lined()
+check(opened.cells > 1 && opened.off === 0 && opened.inName && opened.toggles > 0, 'a frozen column lines up on a row with its toggle open', opened)
+await u.locator('.database-scroll').first().evaluate(el => { el.scrollLeft = 200 }); await u.waitForTimeout(300)
+const scrolled = await lined()
+check(scrolled.off === 0 && scrolled.inName && Math.abs(scrolled.head - opened.head) <= 1, 'and scrolled sideways, it stays there', scrolled)
+await subs.close()
+
 // To-dos' columns are the app's own: the menu has only how this view shows them, and they resize like any others.
 execSync(`rm -f ${storePath} ${storePath}-wal ${storePath}-shm && node --no-warnings tests/evidence/todo-card/seed-todo-card.ts ${storePath}`, { stdio: 'ignore' })
 const todos = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' })

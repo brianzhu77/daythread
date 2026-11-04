@@ -21,7 +21,7 @@ import { useKeyboardTop } from './keyboard'
 import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
-type Panel = 'name' | 'root' | 'colour' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | { formula: string } | 'export' | 'more' | 'new-property' | 'views' | 'templates' | { template: string }
+type Panel = 'name' | 'root' | 'colour' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | { insertBefore: string } | { formula: string } | 'export' | 'more' | 'new-property' | 'views' | 'templates' | { template: string }
 interface OpenMenu { blockId: string; databaseId: string; panel: Panel; /** From a column's head: it opens under that head. */ column?: string; /** From `+ New ⌄`: a pick makes the row, in its place. */ pick?: (template: string | null) => void }
 /** The views list opens under "Table ⌄" on the left; every other panel under the `⋯` on the right. */
 const anchorOf = (m: OpenMenu) => m.column ? `[data-column-head="${CSS.escape(`${m.blockId}|${m.column}`)}"]` : m.panel === 'views' ? `[data-database-views="${CSS.escape(m.blockId)}"]` : `[data-database-menu="${CSS.escape(m.blockId)}"]`
@@ -133,6 +133,7 @@ export function DatabaseMenuHost() {
     {open.panel === 'properties' && <PropertiesPanel db={db} view={view} go={go} />}
     {open.panel === 'name' && <NamePanel db={db} view={view} go={go} />}
     {open.panel === 'new-property' && <NewPropertyPanel db={db} view={view} go={go} />}
+    {typeof open.panel === 'object' && 'insertBefore' in open.panel && <NewPropertyPanel db={db} view={view} go={go} beforeId={open.panel.insertBefore} />}
     {typeof open.panel === 'object' && 'property' in open.panel && <PropertyPanel db={db} view={view} propertyId={open.panel.property} go={go} />}
     {typeof open.panel === 'object' && 'formula' in open.panel && <FormulaPanel db={db} propertyId={open.panel.formula} go={go} />}
     </MenuBlock.Provider>
@@ -726,7 +727,7 @@ function LinkSettings({ db, property, update, change }: { db: DatabasePage; prop
     </label>
   </>
 }
-function NewPropertyPanel({ db, view, go }: { db: DatabasePage; view: View; go: (p: Panel) => void }) {
+function NewPropertyPanel({ db, view, go, beforeId }: { db: DatabasePage; view: View; go: (p: Panel) => void; beforeId?: string }) {
   const change = useChange(db)
   const changeView = useViewChange(db.id, view.id)
   const blockId = useContext(MenuBlock) ?? ''
@@ -736,8 +737,8 @@ function NewPropertyPanel({ db, view, go }: { db: DatabasePage; view: View; go: 
   const make = (type: PropertyType) => {
     const id = newId()
     const linked = isLinkedBlock(blockId)
-    change({ kind: 'addProperty', property: { id, name: name.trim() || typeLabels[type], type, ...linkFields(workspace, db, type) }, ...(linked ? {} : { viewId: view.id }) })
-    if (linked) changeView(current => ({ columns: [...current.columns, { id }] }))
+    change({ kind: 'addProperty', property: { id, name: name.trim() || typeLabels[type], type, ...linkFields(workspace, db, type) }, ...(linked ? {} : { viewId: view.id, ...(beforeId ? { beforeId } : {}) }) })
+    if (linked) changeView(current => { const at = beforeId ? current.columns.findIndex(c => c.id === beforeId) : -1; return { columns: at < 0 ? [...current.columns, { id }] : [...current.columns.slice(0, at), { id }, ...current.columns.slice(at)] } })
     go(type === 'formula' ? { formula: id } : { property: id })
   }
   return <>
@@ -851,6 +852,15 @@ function FormulaPanel({ db, propertyId, go }: { db: DatabasePage; propertyId: st
   </>
 }
 
+/** A new column beside this one (R4-18): the add-property form, placing it in this view in one change. */
+function InsertRows({ view, propertyId, go }: { view: View; propertyId: string; go: (p: Panel) => void }) {
+  const at = view.columns.findIndex(c => c.id === propertyId), right = view.columns[at + 1]?.id
+  return <>
+    {propertyId !== titleId && <button type="button" role="menuitem" onClick={() => go({ insertBefore: propertyId })}>Insert left</button>}
+    <button type="button" role="menuitem" onClick={() => go(right ? { insertBefore: right } : 'new-property')}>Insert right</button>
+  </>
+}
+
 /** Sort by a column and filter by it, in its menu (R4-18). Choosing a direction again takes the sort off. */
 function ColumnSortFilter({ db, view, propertyId, go }: { db: DatabasePage; view: View; propertyId: string; go: (p: Panel) => void }) {
   const changeView = useViewChange(db.id, view.id)
@@ -870,6 +880,7 @@ function NamePanel({ db, view, go }: { db: DatabasePage; view: View; go: (p: Pan
   return <>
     <Head title="Name" back={() => go('properties')} />
     <ColumnSortFilter db={db} view={view} propertyId={titleId} go={go} />
+    {!db.database.fixed && <InsertRows view={{ ...view, columns: [{ id: titleId }, ...view.columns] }} propertyId={titleId} go={go} />}
     <hr />
     <label className="database-menu-row">Wrap Name
       <input type="checkbox" checked={Boolean(view.wrapName)} onChange={e => { const wrapName = e.target.checked; changeView(() => ({ wrapName })) }} />
@@ -939,6 +950,7 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
     </div>}
     <hr />
     {viewRows}
+    {shown && view.layout === 'table' && <InsertRows view={view} propertyId={propertyId} go={go} />}
     <button type="button" role="menuitem" onClick={() => { const newId_ = newId(); change({ kind: 'duplicateProperty', propertyId, newId: newId_ }, true); go({ property: newId_ }) }}>Duplicate property</button>
     {property.mirror && <p className="database-menu-quiet">Deleting it also deletes its other side.</p>}
     <button type="button" role="menuitem" className="is-danger" onClick={() => { change({ kind: 'removeProperty', propertyId }, true); go('properties') }}>Delete property</button>

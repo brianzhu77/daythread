@@ -22,7 +22,7 @@ const colourRules = z.array(z.object({ id, rule: z.object({ by: id, op: z.enum(f
 const timelineUnit = z.enum(["hours", "day", "week", "month", "quarter", "year"]);
 const view = z.object({ id, subItemsDisplay: z.enum(["nested", "flat"]).optional(), subItemsShow: z.enum(["both", "parents", "subs"]).optional(), name: z.string().max(200), layout: z.enum(viewLayouts), columns, sort, filter, groupBy: id.optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), subGroupBy: id.optional(), subGroupDateBy: groupDateBy.optional(), hiddenSubGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").optional(), timelineEnd: id.optional(), timelineUnit: timelineUnit.optional(), timelineTable: z.literal(true).optional(), colourRules: colourRules.optional(), frozenThrough: id.optional(), nameWidth: z.number().int().optional(), filterAny: z.literal(true).optional(), wrapName: z.literal(true).optional(), calculations: calculations.optional(), boardCalculation: boardCalculation.optional(), defaultTemplate: id.optional() });
 const change = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("addProperty"), property: z.object({ id, ...propertyFields }), viewId: id.optional() }),
+  z.object({ kind: z.literal("addProperty"), property: z.object({ id, ...propertyFields }), viewId: id.optional(), beforeId: id.optional() }),
   z.object({ kind: z.literal("updateProperty"), propertyId: id, ...propertyFields, name: propertyFields.name.optional(), type: propertyFields.type.optional() }),
   z.object({ kind: z.literal("removeProperty"), propertyId: id }),
   z.object({ kind: z.literal("duplicateProperty"), propertyId: id, newId: id }),

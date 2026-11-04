@@ -960,3 +960,15 @@ test('duplicating a property (R4-18): its settings and values, beside it, with i
   assert.throws(() => h.change({ kind: 'duplicateProperty', propertyId: 'kind', newId: 'k3' }), /Invalid id/)
   assert.ok(commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'duplicateProperty', propertyId: 'kind', newId: 'k4' } } }).success)
 })
+
+test('a property inserted beside a column (R4-18): placed there in that view, last in the others, in one change', () => {
+  const h = reading()
+  const a = h.db().views[0]!.id
+  h.change({ kind: 'addView', view: { id: 'other', name: 'Other', layout: 'table', columns: [{ id: 'kind' }, { id: 'pages' }], sort: [], filter: [] } })
+  h.change({ kind: 'updateView', viewId: a, columns: [{ id: 'kind' }, { id: 'pages' }] })
+  h.change({ kind: 'addProperty', property: { id: 'n1', name: 'Between', type: 'text' }, viewId: a, beforeId: 'pages' })
+  assert.deepEqual(h.db().views[0]!.columns.map(c => c.id), ['kind', 'n1', 'pages'])
+  assert.deepEqual(h.db().views.find(v => v.id === 'other')!.columns.map(c => c.id), ['kind', 'pages', 'n1'])
+  h.change({ kind: 'addProperty', property: { id: 'n2', name: 'Gone', type: 'text' }, viewId: a, beforeId: 'not-a-column' })
+  assert.equal(h.db().views[0]!.columns.at(-1)!.id, 'n2', 'a column gone meanwhile: last')
+})

@@ -846,7 +846,7 @@ export function groupValue(property: Property, key: string, raw: unknown, fromKe
 export interface PropertyInput { id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
 /** One schema or view change: one write, the database page. */
 export type DatabaseChange =
-  | { kind: "addProperty"; property: PropertyInput; /** the view it was added from: it shows there; other views list it too */ viewId?: string }
+  | { kind: "addProperty"; property: PropertyInput; /** the view it was added from: it shows there; other views list it too */ viewId?: string; /** in that view, placed before this column (R4-18's Insert); last otherwise */ beforeId?: string }
   | { kind: "updateProperty"; propertyId: string; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
   /** "Show on Books": a relation's other side, made as a property of the target, or gone with null. */
   | { kind: "setDependencies"; on: { blockedBy: string; blocking: string; date: string; end?: string; mode: DependencyMode; avoidWeekends?: boolean; using?: boolean } | null }
@@ -1217,6 +1217,10 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       if (added.type === "id") numberRows(ws, page);
       // A new property shows in every view, at the end (Notion shows it where it was made; one person rarely needs it hidden elsewhere).
       for (const v of db.views) v.columns.push({ id: added.id });
+      if (change.viewId !== undefined && change.beforeId !== undefined) {
+        const v = view(change.viewId), at = v.columns.findIndex((c) => c.id === change.beforeId);
+        if (at >= 0) { v.columns.pop(); v.columns.splice(at, 0, { id: added.id }); }
+      }
       return `Added ${added.name}`;
     }
     case "updateProperty": {
