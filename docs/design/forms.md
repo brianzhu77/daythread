@@ -1,6 +1,6 @@
 # Forms: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead and Jazz to review**. Not approved and not built.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead and Jazz to review**. Not approved and not built. §5 updated from Ratchet's review; the public link stays off.
 - Asked by the Lead (3f046122). Nothing is cut for lack of evidence, and his use only sets the order (Brian 57deaed7).
 - **Evidence:** Notion's help page on [forms](https://www.notion.com/help/forms), which I read but haven't used. His use: no databases at the last read (Nov 2), so the examples are illustrations.
 
@@ -66,7 +66,15 @@ Today every write needs a signed-in session, and the app is invite-only. A publi
 - **The public page** has no app shell, no search indexing and no signs of whose workspace it is, beyond his own wording.
 - **Reset link** replaces the id, so an old link stops at once.
 
-**Other people's answers are personal data in his workspace.** They go with his export and account deletion, and they must stay out of usage reads, logs and the day draft model. The draft should never see a response unless he has put it on a day himself.
+**Other people's answers are personal data in his workspace.** They go with his export and account deletion, and they must stay out of usage reads and logs, including request bodies and error reports. **The promise is narrowed after Ratchet's review:** the day draft model never reads a database's rows, but an answer Brian or his own rule copies onto a day is then text on that day, and the app won't track where it came from. I own the usage reads and will leave these rows out by database, counting them only.
+
+**Ratchet's review (`docs/reviews/public-forms-ratchet.md`, b417b7ce on `review/ratchet-forms`): the public link stays off until these hold.** Design only, nothing deployed. Only-me Forms isn't affected.
+
+1. **A stranger's answer does no more than add its row.** The server builds the row from the published questions. On a public submission, Row added automations and default-template effects don't run, which is narrower than §4 and Only me. A visitor can never name a database, property, template or action. If Brian wants a rule to run later, that's a separate decision with its own limits.
+2. **Limits are numbers, enforced in one shared place.** My starting point, for Roadbuster to measure on the Worker: 200 accepted answers a day per form, 500 across the workspace, 20 an hour per address, and 64 KB an answer, all inside the existing size ceiling. They count accepted rows, and exactly the remaining number can commit under a race. Bad or oversized requests are refused before the workspace loads. If the count can't be read, submitting is refused. Reset link doesn't reset the count, and Brian can reopen a form that hit its cap.
+3. **Retry and Reset link are one contract.** A submission's key belongs to that form and that version of its link, and is bound to its answers: the same key with different answers is refused, and a retry gets only a plain "received". Publication, link version and questions are checked in the same transaction as the row, so nothing from an old link commits after a reset.
+4. **The public page reads only an allowlist,** rebuilt from the current state on every request: wording, question type, Required, and option names. A question that has become a Relation, Files or read-only stops being offered, and a form in a trashed database is closed. Closed, deleted and nonexistent all look the same to a visitor.
+5. **Tests before Brian is asked,** as the review lists them: the race at the last slot, Reset during a held submission, a question changed during a held submission, and a copied answer reaching a day.
 
 **Running cost:** none expected beyond Worker and database use, but abuse could raise both, which is what the cap is for.
 
