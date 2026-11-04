@@ -2,10 +2,12 @@
 // its target's rows, so it reads, sorts and filters as a multi-select does; a rollup becomes a read-only column of the type it
 // works out to, with its value on each row, so its cell, sort and filter can't disagree. With neither, this is the workspace.
 import { cellValue, isDatabase, isEmptyValue, propertyOf, titleId, todosSourceId, valueText, type CellValue, type Database, type DateValue, type Json, type Option, type Property, type Rollup, type RollupFunction } from './database.ts'
+import { clockIn, formulaShape, isFormula, usesClock, workFormulas } from './formula.ts'
+import type { Clock } from './formula-functions.ts'
 import { withTodos } from './todos-source.ts'
 import type { Page, Workspace } from './types.ts'
 
-const shows = (p: Property) => p.type === 'relation' || p.type === 'rollup'
+const shows = (p: Property) => p.type === 'relation' || p.type === 'rollup' || p.type === 'formula'
 const dayOf = (v: CellValue): string | null => (v && typeof v === 'object' && !Array.isArray(v) ? (v as DateValue).start : null)
 const numberOf = (v: CellValue): number | null => (typeof v === 'number' ? v : null)
 const median = (list: number[]) => { const s = [...list].sort((a, b) => a - b), m = s.length >> 1; return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2 }
@@ -63,11 +65,15 @@ function compute(fn: RollupFunction, values: CellValue[], text: (v: CellValue) =
   }
 }
 
-const projected = new WeakMap<Workspace, Workspace>()
-export function withLinks(ws: Workspace): Workspace {
-  const known = projected.get(ws)
-  if (known) return known
-  if (!ws.pages.some(p => p.database?.properties.some(shows))) { projected.set(ws, ws); return ws }
+const projected = new WeakMap<Workspace, { next: Workspace; day: number | null }>()
+const localDay = () => { const d = new Date(); return d.getFullYear() * 372 + d.getMonth() * 31 + d.getDate() }
+/** `clock` is for a reader that isn't this device: the Worker's export, with his zone. */
+export function withLinks(ws: Workspace, clock?: Clock): Workspace {
+  const known = clock ? undefined : projected.get(ws)
+  // today() has to turn over with the day page, with nothing else having changed.
+  if (known && (known.day === null || known.day === localDay())) return known.next
+  if (!ws.pages.some(p => p.database?.properties.some(shows))) { projected.set(ws, { next: ws, day: null }); return ws }
+  const reading = clock ?? clockIn(undefined)
   const byId = new Map(ws.pages.map(p => [p.id, p]))
   const rowsOf = new Map<string, Page[]>()
   const optionsOf = new Map<string, Option[]>()
@@ -100,7 +106,7 @@ export function withLinks(ws: Workspace): Workspace {
     const database = linked.get(page.id)
     if (database) {
       const rollups = database.properties.filter(x => x.type === 'rollup')
-      return { ...page, database: { ...database, properties: database.properties.map(x => (x.type === 'rollup' ? { ...x, ...rollupType(x.rollup?.fn ?? 'original'), readOnly: true as const } : x)) }, _rollups: rollups }
+      return { ...page, database: { ...database, properties: database.properties.map(x => (x.type === 'rollup' ? { ...x, ...rollupType(x.rollup?.fn ?? 'original'), readOnly: true as const } : x.type === 'formula' ? { ...x, ...formulaShape(database, x), readOnly: true as const } : x)) }, _rollups: rollups }
     }
     return page
   })
@@ -120,7 +126,20 @@ export function withLinks(ws: Workspace): Workspace {
       return { ...row, values }
     })
   }
-  projected.set(ws, next)
+  // After rollups: a formula reads one as its result.
+  const formulaDatabases = next.pages.filter(p => p.database?.properties.some(isFormula))
+  if (formulaDatabases.length) {
+    const rowsOfDatabase = new Map<string, Page[]>()
+    for (const row of next.pages) if (row.parentId) { const list = rowsOfDatabase.get(row.parentId); if (list) list.push(row); else rowsOfDatabase.set(row.parentId, [row]) }
+    const replaced = new Map<string, Page>()
+    for (const page of formulaDatabases) {
+      const db = page.database!, rows = rowsOfDatabase.get(page.id) ?? []
+      workFormulas(db, db.properties.filter(isFormula), rows, reading).forEach(row => replaced.set(row.id, row))
+    }
+    next.pages = next.pages.map(p => replaced.get(p.id) ?? p)
+  }
+  const clocked = next.pages.some(p => p.database && usesClock(p.database))
+  if (!clock) projected.set(ws, { next, day: clocked ? localDay() : null })
   return next
 }
 

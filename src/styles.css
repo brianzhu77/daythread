@@ -1887,6 +1887,31 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-menu select { padding-right: 4px; }
 .database-menu input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(--ink); }
 .database-menu-field, .database-menu > input { margin: 2px 6px 6px; }
+.database-menu-quiet.is-error { color: var(--red); }
+.cell-error { color: var(--red); }
+/* Edit formula: the text and what it gives on the left, what to pick from beside it. */
+.database-menu:has(.formula-editor) { width: min(620px, calc(100vw - 16px)); max-height: min(80vh, 560px); }
+.formula-editor { display: flex; gap: 10px; min-height: 0; padding: 2px 6px 6px; }
+.formula-main { display: flex; flex: 1 1 60%; flex-direction: column; gap: 6px; min-width: 0; }
+.formula-field { box-sizing: border-box; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-row); background: transparent; color: var(--ink); font: inherit; resize: vertical; outline: none; }
+.formula-field:focus, .formula-field:focus-visible { border-color: var(--blue); outline: none; box-shadow: none; }
+.formula-status { min-height: 1.4em; margin: 0; color: var(--ink); font-size: var(--text-meta); overflow-wrap: anywhere; }
+.formula-status.is-error { color: var(--red); }
+.formula-preview-of { color: var(--ink-3); }
+.formula-preview-of::after { content: ' ·'; }
+.formula-actions { display: flex; align-items: center; gap: 8px; margin-top: auto; }
+.formula-actions-end { display: flex; gap: 6px; margin-left: auto; }
+.formula-actions button { min-height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-row); background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+.formula-actions .formula-done { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.formula-reference { display: flex; flex: 1 1 40%; flex-direction: column; gap: 6px; min-width: 0; max-height: 420px; }
+.formula-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.formula-group { margin: 6px 0 2px; color: var(--ink-3); font-size: var(--text-meta); }
+.database-menu .formula-item { display: block; width: 100%; min-height: 28px; padding: 3px 6px; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink); font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.database-menu .formula-item:hover, .database-menu .formula-item.is-active { background: var(--hover-dim); }
+.formula-doc { flex: none; padding-top: 6px; border-top: 1px solid var(--line-soft); font-size: var(--text-meta); }
+.formula-doc p { margin: 0 0 2px; }
+.formula-doc-name { font-weight: 600; }
+.formula-doc code { color: var(--ink-3); overflow-wrap: anywhere; }
 .database-menu-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; color: var(--ink); }
 /* A filter or sort rule: property → condition → value on one line when it fits, then wrapping. */
 .database-rule { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 6px 6px 10px; border-radius: var(--radius-row); }
@@ -1959,6 +1984,13 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
   .database-menu::before { content: ''; flex: none; align-self: center; width: 36px; height: 5px; margin-bottom: 6px; border-radius: 3px; background: var(--check); }
   .database-menu > button[role=menuitem], .database-menu-head, .database-property-line, .database-menu-row { min-height: 44px; }
   .database-menu input:not([type=checkbox]), .database-menu select { min-height: 40px; font-size: 16px; }
+  /* A sheet above the keyboard: the only panel opened to type at length (design §4). */
+  .database-menu:has(.formula-editor) { bottom: var(--keyboard-lift, 0px) !important; width: auto; max-height: calc(85vh - var(--keyboard-lift, 0px)); }
+  .formula-editor { flex-direction: column; padding: 2px 0 6px; }
+  .formula-field { font-size: 16px; }
+  .formula-actions button { min-height: 44px; }
+  .database-menu .formula-item { min-height: 44px; }
+  .formula-reference { max-height: 40vh; }
   .database-more-button { width: 44px; height: 44px; margin-right: -8px; }
 }
 @media (max-width: 899px) and (prefers-reduced-motion: reduce) { .database-menu { animation: none; } }

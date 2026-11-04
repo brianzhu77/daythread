@@ -2,9 +2,10 @@
 // card drags to another column by pointer at 1280 and by long-press on the phone, one `set-values` with its new place, so
 // one Undo takes back both. Nothing moves in the page while dragging, only a floating copy: a redraw of the block mid-drag
 // would lose the pointer.
+import { formulaErrorOf } from '../domain/formula'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type UIEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { sectionKey, viewSections, viewSubGroups, columnCalc, propertyOf, viewBoardCalculation, canWrap, cellValue, databaseRows, isDatabase, isEmptyValue, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
+import { sectionKey, viewSections, viewSubGroups, columnCalc, propertyOf, viewBoardCalculation, canWrap, cellValue, databaseRows, isDatabase, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
 import type { Page } from '../domain/types'
 import { SubGroupHead, HiddenSubGroups, useFolds, NewRow, shownValue, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { calcText } from './property-values'
@@ -217,10 +218,10 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
         const pending = pendingCells.get(pendingKey(row.id, property.id))
         const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)
         if (property.type === 'checkbox') return <span key={property.id} className="database-card-check">
-          <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} disabled={!interactive} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />{property.name}
+          <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} disabled={!interactive || isReadOnly(property)} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />{property.name}
         </span>
-        if (isEmptyValue(value)) return null
-        return <span key={property.id} className={`database-card-value${wrap && canWrap(property.type) ? ' is-wrapped' : ''}`}><PropertyCell property={property} value={value} today={today} wrap={wrap && canWrap(property.type)} /></span>
+        if (isEmptyValue(value) && !formulaErrorOf(row, property)) return null
+        return <span key={property.id} className={`database-card-value${wrap && canWrap(property.type) ? ' is-wrapped' : ''}`}><PropertyCell property={property} value={value} row={row} today={today} wrap={wrap && canWrap(property.type)} /></span>
       })}
       {unsaved && <span className="database-card-unsaved">Not saved</span>}
     </>

@@ -2,18 +2,21 @@
 // property's own menu (§6.2). Like the cell editors it lives outside the page editor's block (one host in the app
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
-import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
 import type { Page, Workspace } from '../domain/types'
-import { rollupFunctionsFor } from '../domain/relations'
+import { isFormula } from '../domain/formula'
+import { rollupFunctionsFor, withLinks } from '../domain/relations'
 import { databaseSource, todosSourceId, todosTitle } from '../domain/todos-source'
+import { FormulaEditor } from './formula-editor'
 import { startPicking, blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange } from './database-block'
 import { ChevronDownIcon } from './icons'
+import { useKeyboardTop } from './keyboard'
 import { useSaveOnHide, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
-type Panel = 'root' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | 'new-property' | 'views' | 'templates' | { template: string }
+type Panel = 'root' | 'filter' | 'sort' | 'group' | 'layout' | 'calculate' | 'properties' | { property: string } | { formula: string } | 'new-property' | 'views' | 'templates' | { template: string }
 interface OpenMenu { blockId: string; databaseId: string; panel: Panel; /** From `+ New ⌄`: a pick makes the row, in its place. */ pick?: (template: string | null) => void }
 /** The views list opens under "Table ⌄" on the left; every other panel under the `⋯` on the right. */
 const anchorOf = (m: OpenMenu) => m.panel === 'views' ? `[data-database-views="${CSS.escape(m.blockId)}"]` : `[data-database-menu="${CSS.escape(m.blockId)}"]`
@@ -58,7 +61,7 @@ export function DatabaseMenuHost() {
       // Under its button, moved up only as far as it takes to stay on screen: a table low on the page would leave it cut off.
       const top = Math.max(8, Math.min(r.bottom + 4, window.innerHeight - (ref.current?.offsetHeight ?? 0) - 8))
       // Moved left as far as it takes too, for the same reason: "Table ⌄" sits near the page's right edge.
-      const next = open.panel === 'views' ? { top, left: Math.max(8, Math.min(r.left, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) } : { top, right: Math.max(8, window.innerWidth - r.right) }
+      const next = open.panel === 'views' ? { top, left: Math.max(8, Math.min(r.left, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) } : { top, right: Math.max(8, Math.min(window.innerWidth - r.right, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) }
       setAt(a => (a && a.top === next.top && a.left === next.left && a.right === next.right ? a : next))
       frame = requestAnimationFrame(place)
     }
@@ -80,6 +83,7 @@ export function DatabaseMenuHost() {
   // A phone's sheet sits at the bottom of the screen, so a keyboard left up by the database title or the page's text
   // hides it completely (Jazz's native run on 930e18b2). Leaving the field also saves it.
   const wide = useWide()
+  const keyboardTop = useKeyboardTop()
   const opened = Boolean(open)
   useEffect(() => {
     if (!opened || wide) return
@@ -96,7 +100,7 @@ export function DatabaseMenuHost() {
   // reaches the page under it (Jazz's native run: it put a caret there).
   return <>
     <div className="database-menu-scrim" aria-hidden="true" onClick={() => setOpenMenu(null)} />
-    <div ref={ref} className="app-menu database-menu" role="dialog" aria-label="Database options" style={{ position: 'fixed', top: at.top, ...(at.left !== undefined ? { left: at.left } : { right: at.right }) }}
+    <div ref={ref} className="app-menu database-menu" role="dialog" aria-label="Database options" style={{ position: 'fixed', top: at.top, ...(at.left !== undefined ? { left: at.left } : { right: at.right }), ...(keyboardTop === null ? {} : { '--keyboard-lift': `${window.innerHeight - keyboardTop}px` } as CSSProperties) }}
     onKeyDown={e => e.stopPropagation()}>
     <MenuBlock.Provider value={open.blockId}>
     {open.panel === 'views' && <ViewsPanel db={db} blockId={open.blockId} />}
@@ -111,6 +115,7 @@ export function DatabaseMenuHost() {
     {open.panel === 'properties' && <PropertiesPanel db={db} view={view} go={go} />}
     {open.panel === 'new-property' && <NewPropertyPanel db={db} view={view} go={go} />}
     {typeof open.panel === 'object' && 'property' in open.panel && <PropertyPanel db={db} view={view} propertyId={open.panel.property} go={go} />}
+    {typeof open.panel === 'object' && 'formula' in open.panel && <FormulaPanel db={db} propertyId={open.panel.formula} go={go} />}
     </MenuBlock.Provider>
   </div>
   </>
@@ -126,6 +131,9 @@ function useChange(db: DatabasePage) {
     return isDatabase(now) ? { type: 'change-database', pageId: db.id, change: typeof change === 'function' ? change(now.database) : change } : null
   }, withUndo ? r => ({ text: r.message, undoOperationId: r.operationId }) : null)
 }
+
+/** The type he chose, where it reads as the type it works out to. */
+const kindOf = (p: Property): PropertyType => (p.rollup ? 'rollup' : isFormula(p) ? 'formula' : p.type)
 
 function Head({ title, back }: { title: string; back?: () => void }) {
   return <div className="database-menu-head">{back && <button type="button" className="database-menu-back" aria-label="Back" onClick={back}>‹</button>}<span>{title}</span></div>
@@ -185,7 +193,8 @@ export function opsFor(type: PropertyType): FilterOp[] {
     case 'select': case 'status': return ['isAnyOf', 'isNoneOf', 'isEmpty']
     case 'relation': case 'multiSelect': return ['contains', 'doesNotContain', 'isEmpty']
     // Read as the type it works out to (relations.ts), so it never gets here.
-    case 'rollup': return []
+    case 'rollup':
+    case 'formula': return []
     case 'date': return ['is', 'before', 'after', 'within', 'isEmpty']
     case 'checkbox': return ['is']
   }
@@ -462,8 +471,8 @@ function PropertiesPanel({ db, view, go }: { db: DatabasePage; view: View; go: (
     {ordered.map(p => <div key={p.id} className="database-property-line">
       <label className="database-property-switch"><input type="checkbox" checked={shown.has(p.id)} onChange={() => toggle(p)} aria-label={`Show ${p.name}`} /></label>
       {db.database.fixed
-        ? <span className="database-property-name">{p.name}<span className="database-menu-quiet"> · {typeLabels[p.rollup ? 'rollup' : p.type]}</span></span>
-        : <button type="button" className="database-property-name" onClick={() => go({ property: p.id })}>{p.name}<span className="database-menu-quiet"> · {typeLabels[p.rollup ? 'rollup' : p.type]}</span></button>}
+        ? <span className="database-property-name">{p.name}<span className="database-menu-quiet"> · {typeLabels[kindOf(p)]}</span></span>
+        : <button type="button" className="database-property-name" onClick={() => go({ property: p.id })}>{p.name}<span className="database-menu-quiet"> · {typeLabels[kindOf(p)]}</span></button>}
       {shown.has(p.id) && view.columns[0]?.id !== p.id && <button type="button" aria-label={`Move ${p.name} left`} onClick={() => shift(p, -1)}>↑</button>}
       {shown.has(p.id) && view.columns.at(-1)?.id !== p.id && <button type="button" aria-label={`Move ${p.name} right`} onClick={() => shift(p, 1)}>↓</button>}
     </div>)}
@@ -517,7 +526,7 @@ function LinkSettings({ db, property, update, change }: { db: DatabasePage; prop
   const relations = db.database.properties.filter(p => p.type === 'relation')
   const through = relations.find(p => p.id === rollup.relation)
   const target = through && workspace ? databaseSource(workspace, through.target!) : undefined
-  const readable = isDatabase(target) ? target.database.properties.filter(p => p.type !== 'rollup') : []
+  const readable = isDatabase(target) ? target.database.properties.filter(p => p.type !== 'rollup' && !isFormula(p)) : []
   const read = readable.find(p => p.id === rollup.property)
   const fns = rollupFunctionsFor(read?.type ?? 'title')
   return <>
@@ -551,7 +560,7 @@ function NewPropertyPanel({ db, view, go }: { db: DatabasePage; view: View; go: 
     const linked = isLinkedBlock(blockId)
     change({ kind: 'addProperty', property: { id, name: name.trim() || typeLabels[type], type, ...linkFields(workspace, db, type) }, ...(linked ? {} : { viewId: view.id }) })
     if (linked) changeView(current => ({ columns: [...current.columns, { id }] }))
-    go({ property: id })
+    go(type === 'formula' ? { formula: id } : { property: id })
   }
   return <>
     <Head title="New property" back={() => go('properties')} />
@@ -650,6 +659,20 @@ function CalculatePanel({ db, view, back }: { db: DatabasePage; view: View; back
   </>
 }
 
+function FormulaPanel({ db, propertyId, go }: { db: DatabasePage; propertyId: string; go: (p: Panel) => void }) {
+  const { workspace } = useWorkspace()
+  const change = useChange(db)
+  const wide = useWide()
+  const property = db.database.properties.find(p => p.id === propertyId)
+  const back = () => go({ property: propertyId })
+  if (!property) return <><Head title="Formula" back={() => go('properties')} /><p className="database-menu-quiet">Deleted</p></>
+  return <>
+    <Head title={`Edit formula · ${property.name}`} back={back} />
+    <FormulaEditor workspace={workspace && withLinks(workspace)} db={db} propertyId={propertyId} stored={property.formula ?? ''} wide={wide}
+      onCancel={back} onDone={stored => { if (stored !== property.formula) change({ kind: 'updateProperty', propertyId, formula: stored }, true); back() }} />
+  </>
+}
+
 function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: View; propertyId: string; go: (p: Panel) => void }) {
   const change = useChange(db)
   const changeView = useViewChange(db.id, view.id)
@@ -667,12 +690,16 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
     <CommitInput key={property.name} ariaLabel="Name" initial={property.name} onCommit={v => { if (v.trim()) update({ name: v.trim() }) }} />
     <label className="database-menu-row">Type
       {/* Changing the type converts what it can and says how many it couldn't, with Undo (design §6.2). */}
-      <select value={property.rollup ? 'rollup' : property.type} onChange={e => { const type = e.target.value as PropertyType; update({ type, ...linkFields(workspace, db, type) }, true) }}>
+      <select value={kindOf(property)} onChange={e => { const type = e.target.value as PropertyType; update({ type, ...linkFields(workspace, db, type) }, true) }}>
         {propertyTypes.map(t => <option key={t} value={t}>{typeLabels[t]}</option>)}
       </select>
     </label>
     <LinkSettings db={db} property={property} update={fields => update(fields, true)} change={change} />
-    {property.type === 'number' && !property.rollup && <label className="database-menu-row">Format
+    {isFormula(property) && <>
+      <button type="button" role="menuitem" onClick={() => go({ formula: propertyId })}>Edit formula</button>
+      {property.formulaError && <p className="database-menu-quiet is-error" role="status">{property.formulaError}</p>}
+    </>}
+    {property.type === 'number' && kindOf(property) === 'number' && <label className="database-menu-row">Format
       <select value={property.format ?? 'plain'} onChange={e => update({ format: e.target.value as Property['format'] })}>
         <option value="plain">Number</option><option value="comma">1,000</option><option value="percent">Percent</option><option value="currency">Currency</option>
       </select>
@@ -683,7 +710,7 @@ function PropertyPanel({ db, view, propertyId, go }: { db: DatabasePage; view: V
     {property.type === 'id' && <label className="database-menu-row">Prefix
       <CommitInput key={property.prefix ?? ''} ariaLabel="Prefix" initial={property.prefix ?? ''} placeholder="None" onCommit={v => update({ prefix: v })} />
     </label>}
-    {property.type === 'date' && !property.rollup && <label className="database-menu-row">Include time
+    {property.type === 'date' && kindOf(property) === 'date' && <label className="database-menu-row">Include time
       <input type="checkbox" checked={Boolean(property.withTime)} onChange={e => update({ withTime: e.target.checked })} />
     </label>}
     {hasOptions && <div className="database-options">
