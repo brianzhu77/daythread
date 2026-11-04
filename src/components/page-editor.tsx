@@ -66,6 +66,8 @@ import { mayRead, readDate, type Reading } from '../domain/date-reading'
 import { mentionText } from '../domain/date-chip'
 import { RowActionsContext, menuGroups, noticeDate, rowMenu, useRowActions, type RowActions, type RowIntent } from './row-actions'
 
+/** A normal connection answers before this, and shows nothing. */
+const pausedAfterMs = 400
 const task = createReactBlockSpec({ type: 'task', propSchema: { taskId: { default: '' }, role: { default: 'reference' }, planDate: { default: '' } }, content: 'inline' }, {
   toExternalHTML: ({ contentRef }) => <p ref={contentRef} />,
   render: ({ block, contentRef }) => <EditorTask blockId={block.id} taskId={block.props.taskId} role={block.props.role} planDate={block.props.planDate} contentRef={contentRef} />,
@@ -631,6 +633,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const historyPending = useRef(false)
   const historyGuardBypass = useRef(false)
   const [historyBusy, setHistoryBusy] = useState(false)
+  /** What a held editor is waiting on, once it's been long enough to notice: the page dims and the save line says it. */
+  const [pausedFor, setPausedFor] = useState<string | null>(null)
   const lastSent = useRef('')
   // The document the server last accepted from this editor, so leaving knows whether anything is still unsaved.
   const lastSaved = useRef<string | null>(null)
@@ -835,6 +839,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (anchor === null || head === null || view.state.selection.anchor === anchor && view.state.selection.head === head) return
     view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, anchor, head)))
   }
+  /** Holding the editor takes its focus: what had the caret gets it back where it was when this lets go, and then the keyboard goes on. */
+  function holdEditor() {
+    const selection = browserSelection(), focused = Boolean(editor.domElement?.contains(document.activeElement))
+    editor.isEditable = false
+    return () => {
+      if (left.current) return
+      editor.isEditable = true
+      if (focused) { restoreBrowserSelection(selection); editor.focus() }
+    }
+  }
   const nodes = () => editor.document as unknown as EditorNode[]
   // A to-do typed on a day page is planned for that day, wherever it sits; on any other page it's a reference.
   const insertionRole = (_blockId: string) => (latestPage.current.date ? 'plan' : 'reference')
@@ -849,11 +863,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     claimHandled.current = true
     clearTimeout(timer.current); clearTimeout(retryTimer.current); dirty.current = false; pendingSave.current = null; semanticDeletes.current.clear()
     sweepClaims(page.id)
+    // Typing is held until the latest is on screen, or the load would replace it unseen.
+    const letGo = holdEditor(); setStatus('Loading latest…')
     void (async () => {
       try {
         const ws = await refresh(), latest = ws.pages.find(p => p.id === page.id)
-        if (latest) applyServerPage(latest, ws)
-      } finally { claimHandled.current = false }
+        if (latest && !left.current) applyServerPage(latest, ws)
+      } finally { claimHandled.current = false; letGo() }
       setFailed(false); setUnsaved(null); setStatus("Latest loaded · this tab's text was already saved")
     })()
     return true
@@ -967,15 +983,38 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const holdsBlock = document.includes(`"${syncedBlockType}"`)
       const savedPage = ((result.renamed || holdsBlock) && latest()?.pages.find(p => p.id === page.id)) || preview.pages.find(p => p.id === page.id)!
       base.current = pageContentKey(savedPage); baseDoc.current = savedPage.document
-      if (result.renamed) applyRenamedLines(editor.prosemirrorView, result.renamed)
+      // A peek or a page closed while this was on its way has no view left to touch: only the bookkeeping above and the notices below still apply.
+      if (result.renamed && !left.current) applyRenamedLines(editor.prosemirrorView, result.renamed)
       // A synced block changed elsewhere and he'd changed it too: the block has the latest, and his version is below it, on the
       // page as saved. Otherwise this save's facts: its revision, and this place's ids on any new lines.
       // Lines deleted from a block shown elsewhere are a loss on pages he isn't looking at: it says so (states §5).
       if (result.linesRemovedFrom && !result.conflicted?.length) {
-        const receiptId = result.operationId, key: string = toast(`Removed from ${result.linesRemovedFrom} pages`, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); void run({ type: 'undo', targetOperationId: receiptId }, { text: 'Undone' }).then(r => { const ws = latest(), p = ws?.pages.find(x => x.id === page.id); if (r && ws && p) applyServerPage(p, ws) }) } } })
+        const receiptId = result.operationId, key: string = toast(`Removed from ${result.linesRemovedFrom} pages`, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => {
+          toast.close(key)
+          const undo: Action = { type: 'undo', targetOperationId: receiptId }
+          // From a closed peek there's no editor to hold.
+          if (left.current) void run(undo, { text: 'Undone' })
+          // The lines live in the record, so the page's own key doesn't change when they come back: it always shows the server's.
+          else void onServer(undo, newOperationId(), undefined, { text: 'Undone' }, true)
+        } } })
       }
-      if (result.conflicted?.length) { applyServerPage(savedPage, latest()!); toast('Changed elsewhere meanwhile · your version is below it', { timeout: 8000 }) }
-      else if (holdsBlock) applyBlockUpdates(blockUpdates(editor.document as never, savedPage.document, true))
+      const sentAs = result.renamed ? renamedDocument(document, result.renamed) : document
+      let typedSince = false
+      if (result.conflicted?.length) {
+        if (!left.current) {
+          const ws = latest()!, showingNow = nodes()
+          typedSince = writtenDocument(JSON.stringify(showingNow)) !== writtenDocument(sentAs)
+          applyServerPage(savedPage, ws)
+          // Words typed while this save was on its way aren't in it: they go back on top of what the server made, and save next.
+          if (typedSince) {
+            const seed = (p: Page) => editorSeed(p, ws)
+            const merged = mergeDraft(seed({ ...savedPage, document: sentAs }), showingNow, seed(savedPage), new Set(ws.tasks.map(t => t.id)))
+            editor.transact(tr => { closeHistory(tr); editor.replaceBlocks(editor.document, merged.document as never) })
+          }
+        }
+        toast('Changed elsewhere meanwhile · your version is below it', { timeout: 8000 })
+      }
+      else if (holdsBlock && !left.current) applyBlockUpdates(blockUpdates(editor.document as never, savedPage.document, true, sentAs))
       // The editor has closed meanwhile: leaving takes it from here (it needs only the new starting point).
       if (left.current) return
       deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
@@ -984,7 +1023,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       flags.adoptDatabaseBlocks?.forEach(a => databaseFlags.current.adopt.delete(a.pageId))
       // Another place on this page may have just followed the save: nothing's left to send if the editor now holds what was saved.
       const showing = writtenDocument(JSON.stringify(editor.document))
-      dirty.current = !result.conflicted?.length && showing !== writtenDocument(result.renamed ? renamedDocument(document, result.renamed) : document) && !(holdsBlock && showing === writtenDocument(savedPage.document))
+      dirty.current = typedSince || (!result.conflicted?.length && showing !== writtenDocument(sentAs) && !(holdsBlock && showing === writtenDocument(savedPage.document)))
       // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
       const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
       setFailed(false); setUnsaved(null); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
@@ -1836,11 +1875,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }
   /** A place's end goes through one command, across every page, with one Undo; what's typed saves first so it's part of it. */
   async function endPlace(action: Extract<Action, { type: 'unsync-block' | 'delete-synced-place' }>) {
-    clearTimeout(timer.current)
-    await flushRef.current()
-    const receipt = await run(action, r => ({ text: r.message, undoOperationId: r.operationId }))
-    const ws = latest(), p = ws?.pages.find(x => x.id === page.id)
-    if (receipt && ws && p) { latestWorkspace.current = ws; latestPage.current = p; applyServerPage(p, ws) }
+    const receipt = await onServer(action, newOperationId(), undefined, r => ({ text: r.message, undoOperationId: r.operationId }), true)
+    if (!receipt && dirty.current) notDone("It hasn't saved yet, so nothing changed. Try again in a moment.")
   }
   endPlaceRef.current = endPlace
   function deleteSelected() {
@@ -2253,22 +2289,29 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const menuReturn = useRef<{ blockId: string; selection: ReturnType<Selection['toJSON']> } | null>(null)
   const closeRowNotice = () => { if (rowNotice.current) toast.close(rowNotice.current.key); rowNotice.current = null }
   useEffect(() => () => closeRowNotice(), [])
-  async function onServer(action: Action, operationId: string, options?: { inlineRefusal: RegExp; onRefused: (m: string) => void }): Promise<Receipt | null> {
+  async function onServer(action: Action, operationId: string, options?: { inlineRefusal: RegExp; onRefused: (m: string) => void }, notice: Parameters<typeof run>[1] = null, alwaysShow = false): Promise<Receipt | null> {
     if (historyPending.current) return null
-    historyPending.current = true; setHistoryBusy(true); editor.isEditable = false
+    historyPending.current = true; setHistoryBusy(true)
+    const letGo = holdEditor()
     clearTimeout(timer.current)
+    const word = action.type === 'unsync-block' ? 'Unsyncing…' : action.type === 'delete-synced-place' ? 'Deleting…' : action.type === 'undo' ? 'Undoing…' : 'Saving…'
+    const showPaused = setTimeout(() => setPausedFor(word), pausedAfterMs)
     try {
       for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
       if (dirty.current) await flushRef.current()
       for (let i = 0; sending.current && i < 150; i++) await new Promise(resolve => setTimeout(resolve, 20))
       if (dirty.current || sending.current) return null
-      const receipt = await run(action, null, operationId, options)
+      const receipt = await run(action, notice, operationId, options)
+      // Closed meanwhile (a peek): there's no view left to show it in.
+      if (left.current) return receipt
       const ws = latest()
       const p = ws?.pages.find(x => x.id === page.id)
-      if (receipt && ws && p) { latestWorkspace.current = ws; latestPage.current = p; if (pageContentKey(p) !== base.current) applyServerPage(p, ws) }
+      if (receipt && ws && p) { latestWorkspace.current = ws; latestPage.current = p; if (alwaysShow || pageContentKey(p) !== base.current) applyServerPage(p, ws) }
       return receipt
     } finally {
-      historyPending.current = false; setHistoryBusy(false); editor.isEditable = true
+      clearTimeout(showPaused); setPausedFor(null)
+      historyPending.current = false; setHistoryBusy(false)
+      letGo()
     }
   }
   const notDone = (text: string) => { setStatus(text); toast(text, { timeout: 6000 }) }
@@ -2428,7 +2471,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const conflictText = changedBy(page.id) === 'tab' ? 'Changed in another tab · draft kept' : 'Changed on another device · draft kept'
   // B38: the dock line's words stay steady while typing flips the header between "Unsaved changes" and "Saving…".
   const unsavedText = conflict ? conflictText : !online ? "Offline · saves when you're back" : unsaved === 'network' ? 'Not saved yet · trying again' : "Couldn't save · draft kept"
-  return <div className={`continuous-editor ${keyboardShown ? 'is-keyboard-up' : ''} ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''} ${pasteMenu ? 'has-paste-menu' : ''} ${styleOpen && lineStyle ? 'has-style-panel' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
+  return <div className={`continuous-editor ${keyboardShown ? 'is-keyboard-up' : ''} ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''} ${pasteMenu ? 'has-paste-menu' : ''} ${styleOpen && lineStyle ? 'has-style-panel' : ''} ${pausedFor ? 'is-paused' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onBlur={e => { if (e.target === editor.domElement) setStyleOpen(false) }}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
     onMouseDownCapture={e => { const target = e.target as Element; if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') } }}
@@ -2635,7 +2678,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     <div ref={selectionFocus} tabIndex={-1} className="sr-only" aria-label={selectionLabel || undefined} />
     {hiddenEmpty.size > 0 && <style>{[...hiddenEmpty].map(id => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"]`).join(',')}{'{display:none}'}</style>}
     {pasteMenu && <PasteLinkMenu menu={pasteMenu} detail={bookmarkDetail(pasteMenu.urls)} onKeep={() => setPasteMenu(null)} onBookmark={bookmarkPasted} onHighlight={h => setPasteMenu({ ...pasteMenu, highlight: h })} />}
-    <div ref={saveLine} className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? conflictText : status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
+    <div ref={saveLine} className={`editor-save-line${conflict ? ' is-conflict' : ''}`} role="status">{conflict ? conflictText : pausedFor ?? status}{conflict ? <button onClick={() => void loadLatest()}>Load latest</button> : failed && <><button onClick={() => void flush()}>Retry saving</button><button onClick={async () => { await navigator.clipboard.writeText(await editor.blocksToMarkdownLossy()); setStatus('Draft copied · original kept here') }}>Copy draft</button></>}{selectionLabel && <span className="sr-only">{selectionLabel}</span>}</div>
     <RowActionsContext.Provider value={rowActions}>
     <ChipPageDate.Provider value={page.type === 'daily' ? page.date ?? null : null}>
     <SyncedEditorActions.Provider value={syncedActions}>
@@ -2725,6 +2768,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     </div>
     {dock && createPortal(<>
       {/* B38: no role; the header's status line already announces each change. */}
+      {pausedFor && !saveLineVisible && <div className="editor-unsaved-line" role="status">{pausedFor}</div>}
       {unsaved && !saveLineVisible && <div className="editor-unsaved-line"><span className="editor-unsaved-dot" aria-hidden="true" />{unsavedText}</div>}
       {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span>{selected.current.length === 1 && editor.getBlock(selected.current[0]!)?.type === 'task' && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyRow(id) }}>Copy</button>}{selected.current.length === 1 && lineLinkTarget(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyLineLink(id) }}>Copy link</button>}{!selected.current.some(id => editor.getBlock(id)?.type === syncedBlockType) && <button onPointerDown={e => e.preventDefault()} onClick={syncSelected}>Sync</button>}<button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
       {lineMenu && <LineMenu anchor={lineMenu.anchor} onClose={closeLineMenu} onCopy={() => { const id = lineMenu.blockId; closeLineMenu(true); copyLineLink(id) }} />}

@@ -782,6 +782,7 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor .bn-editor { padding:8px 24px 60px; background:transparent; color:var(--ink); font-size:var(--text-row); line-height:1.65; }
 /* Space above a section sits outside the block box, so BlockNote's own side menu lines up with the heading text. */
 .continuous-editor .bn-block-outer:has(> .bn-block > .bn-block-content[data-content-type=heading]) { margin-top:18px; }
+.continuous-editor.is-paused .bn-editor { opacity:.55; transition:opacity .15s; }
 .editor-save-line { min-height:24px; font-size:var(--text-caption); color:var(--ink-2); display:flex;gap:12px; align-items:center; padding-left:24px; }
 .editor-save-line button { padding:2px 8px; font-size:var(--text-caption); }
 /* B23 (Jazz): in a conflict, Load latest is the one way on, so it reads as a button. */
@@ -1259,7 +1260,12 @@ body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transpare
 .crumbs { display: flex; align-items: center; gap: 4px; min-width: 0; min-height: 44px; font-size: var(--text-small); color: var(--ink-2); }
 .crumbs-path { display: flex; align-items: center; gap: 2px; flex: 1; min-width: 0; overflow: hidden; }
 .crumb { display: inline-flex; align-items: center; min-height: 44px; min-width: 0; max-width: 220px; padding: 0 6px; border: 0; border-radius: var(--radius-inline); background: none; color: var(--ink-2); font: inherit; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.crumb-words { overflow: hidden; text-overflow: ellipsis; }
 .crumbs-path > :first-child { margin-left: -6px; }
+.crumb-back-wrap { display: inline-flex; flex: none; }
+.crumb-back { flex: none; }
+.crumb-back svg { flex: none; width: 11px; height: 11px; margin-right: 3px; transform: rotate(180deg); }
+.crumb-divider { flex: none; width: 1px; height: 14px; margin: 0 6px; background: var(--line); }
 .crumbs-path.measuring > *, .crumbs-path.folded > :not(.crumb-last) { flex-shrink: 0; }
 .crumbs-path.measuring { overflow: hidden; }
 .doc-screen { grid-template-columns: minmax(0, 1fr); }
