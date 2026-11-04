@@ -43,7 +43,8 @@ Only what's actually affected, with names, not a general warning:
 
 ## 6. Sub-items and limits
 
-- **Sub-items (once #291 ships):** the whole tree moves, with one Undo, as `sub-items.md` §2 says. A dependency on a row left behind is removed and counted in §4.
+- **Sub-items:** the whole tree moves to any depth, with one Undo, as `sub-items.md` §2 says, and Trash's too, so one restored later comes back under its parent. Sub-items turn on in the target if they're off, and the tree's links are made again there. If nothing's lost it still moves with no question, and the notice counts them: "Moved to Archive with 6 sub-items · Undo". A sub-item moved alone takes what's under it and names the parent it leaves.
+- **Dependencies:** every Blocked by and Blocking link stays behind and is named in §4, including a link between two rows of the same tree, since dependencies may be off in the target.
 - **The target's 10,000-row limit (`workspace.ts:906`):** counts the tree, and refuses with the reason before anything moves.
 - **Row templates and pages inside the row:** row templates aren't rows here, and stay where they are. Pages inside move with the row, as their parent is unchanged.
 
