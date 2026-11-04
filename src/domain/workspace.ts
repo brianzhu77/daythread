@@ -6,6 +6,7 @@ import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDra
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
 import { importRefusal } from "./csv.ts";
+import { dueRepeats, periodWord, repeatRowId } from "./repeats.ts";
 import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
@@ -500,7 +501,7 @@ function claimLineIds(state: Workspace, p: Page, nodes: readonly EditorNode[]): 
 
 // ---------------------------------------------------------------- commands
 
-function execute(state: Workspace, action: Action, operationId: string): { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[] } {
+function execute(state: Workspace, action: Action, operationId: string): { message: string; entityId?: string; skippedRepeats?: Array<{ title: string; earlier: string }>; renamed?: Record<string, string>; conflicted?: string[] } {
   switch (action.type) {
     case "save-editor": {
       const p = page(state, action.pageId);
@@ -935,6 +936,25 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       const p = databasePage(state, action.pageId);
       try { return { message: changeDatabase(state, p, action.change), entityId: p.id }; } catch (error) { throw new DomainError((error as Error).message); }
     }
+    case "run-repeats": {
+      const skipped: Array<{ title: string; earlier: string }> = [];
+      let made = 0;
+      for (const { database, template, dates, skipped: missed } of dueRepeats(state, action.today, action.time)) {
+        const repeat = database.database.repeats![template.id]!;
+        for (const date of dates.slice(0, databaseLimits.rowsAtOnce)) {
+          const pageId = repeatRowId(template.id, date);
+          // A row he's deleted since, or one another tab just made, stays as it is.
+          if (!state.pages.some((p) => p.id === pageId) && databaseRows(state, database.id).length < 10_000) {
+            execute(state, { type: "add-row", databaseId: database.id, pageId, title: template.title, template: template.id, at: action.at }, operationId);
+            made++;
+          }
+          repeat.last = date;
+          repeat.lastRan = action.at;
+        }
+        if (missed) skipped.push({ title: template.title.trim() || "Untitled", earlier: periodWord(repeat, missed) });
+      }
+      return { message: made ? `${made} repeating row${made === 1 ? "" : "s"} made` : "Nothing due", ...(skipped.length ? { skippedRepeats: skipped } : {}) };
+    }
     case "add-row": {
       const db = databasePage(state, action.databaseId);
       const at = isoTime(action.at);
@@ -1150,7 +1170,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   let state = structuredClone(input);
   const { undo: _previousUndo, receipts: _receipts, ...rest } = input;
   const before = { ...structuredClone(rest), receipts: {} as Workspace["receipts"] };
-  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number };
+  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number; skippedRepeats?: Array<{ title: string; earlier: string }> };
   if (command.action.type === "undo") {
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");
@@ -1164,7 +1184,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   state.revision = input.revision + 1;
   const receipt = { operationId: command.operationId, ...result, fingerprint };
   state.receipts = compactReceipts({ ...state.receipts, [command.operationId]: receipt });
-  if (!["undo", "ensure-day"].includes(command.action.type)) state.undo = { operationId: command.operationId, revision: state.revision, before };
+  if (!["undo", "ensure-day", "run-repeats"].includes(command.action.type)) state.undo = { operationId: command.operationId, revision: state.revision, before };
   else delete state.undo;
   return { workspace: state, receipt };
 }

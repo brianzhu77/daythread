@@ -3,7 +3,7 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
-import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
+import { calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type Repeat, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View } from '../domain/database.ts'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
 import type { Page, Workspace } from '../domain/types'
 import { databaseSource, readingWorkspace, todosSourceId, todosTitle } from '../domain/todos-source'
@@ -651,8 +651,48 @@ function TemplatePanel({ db, view, templateId, go, close }: { db: DatabasePage; 
     <button type="button" role="menuitem" onClick={() => { close(); void navigate({ to: '/pages', search: { page: templateId } }) }}>Edit</button>
     <button type="button" role="menuitemcheckbox" aria-checked={hereOn} onClick={() => changeView(() => ({ defaultTemplate: hereOn ? null : templateId }))}>Default for this view{hereOn && <span className="database-menu-chevron">✓</span>}</button>
     <button type="button" role="menuitemcheckbox" aria-checked={allOn} onClick={setAll}>Default for all views{allOn && <span className="database-menu-chevron">✓</span>}</button>
+    <RepeatSettings db={db} templateId={templateId} change={change} />
     <hr />
     <button type="button" role="menuitem" className="is-danger" onClick={() => { go('templates'); void run({ type: 'delete-template', pageId: templateId }, r => ({ text: r.message, undoOperationId: r.operationId })) }}>Delete</button>
+  </>
+}
+
+const repeatWords = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' } as const
+/** Repeat (R4-6): makes a row each period, from when he next opens the app. Off keeps every row it made. */
+function RepeatSettings({ db, templateId, change }: { db: DatabasePage; templateId: string; change: ReturnType<typeof useChange> }) {
+  const repeat = db.database.repeats?.[templateId]
+  const nowText = () => { const d = new Date(); return `${todayIso()}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
+  const set = (next: Partial<Repeat> | null) => {
+    if (!next) { change({ kind: 'setRepeat', templateId, repeat: null }, true); return }
+    const { last: _last, lastRan: _ran, ...kept } = { every: 'week' as const, interval: 1, start: todayIso(), time: '09:00', notBefore: nowText(), ...repeat, ...next }
+    change({ kind: 'setRepeat', templateId, repeat: kept }, true)
+  }
+  return <>
+    <hr />
+    <label className="database-menu-row">Repeat
+      <select aria-label="Repeat" value={repeat?.every ?? 'off'} onChange={e => { const v = e.target.value; set(v === 'off' ? null : { every: v as Repeat['every'] }) }}>
+        <option value="off">Off</option>
+        {(Object.keys(repeatWords) as Array<keyof typeof repeatWords>).map(k => <option key={k} value={k}>{repeatWords[k]}</option>)}
+      </select>
+    </label>
+    {repeat && <>
+      <label className="database-menu-row">Every
+        <input aria-label="Every how many" type="number" min={1} max={999} value={repeat.interval} onChange={e => { const interval = Number(e.target.value); if (Number.isInteger(interval) && interval >= 1 && interval <= 999) set({ interval }) }} />
+      </label>
+      <label className="database-menu-row">Starts
+        <input aria-label="Starts" type="date" value={repeat.start} onChange={e => { if (e.target.value) set({ start: e.target.value, notBefore: nowText() }) }} />
+      </label>
+      <label className="database-menu-row">At
+        <input aria-label="At" type="time" value={repeat.time ?? '00:00'} onChange={e => { if (e.target.value) set({ time: e.target.value, notBefore: nowText() }) }} />
+      </label>
+      <label className="database-menu-row">Make every missed one
+        <input type="checkbox" checked={Boolean(repeat.everyMissed)} onChange={e => { const { everyMissed: _off, ...rest } = repeat; change({ kind: 'setRepeat', templateId, repeat: { ...rest, ...(e.target.checked ? { everyMissed: true as const } : {}) } }, true) }} />
+      </label>
+      <label className="database-menu-row">Paused
+        <input type="checkbox" checked={Boolean(repeat.paused)} onChange={e => { const { paused: _off, ...rest } = repeat; change({ kind: 'setRepeat', templateId, repeat: { ...rest, ...(e.target.checked ? { paused: true as const } : {}) } }, true) }} />
+      </label>
+      {repeat.lastRan && <p className="database-menu-quiet">Last ran {new Date(repeat.lastRan).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>}
+    </>}
   </>
 }
 

@@ -1,3 +1,5 @@
+import { todayIso } from './dates'
+import { dueRepeats } from '../domain/repeats'
 import { Toast } from '@heroui/react'
 import { usePreview } from './preview'
 import { useRouterState } from '@tanstack/react-router'
@@ -11,6 +13,28 @@ import { CsvImportHost } from './csv-import'
 import { DatabaseMenuHost } from './database-menu'
 import { flushAllEditors } from './editor-flush'
 import { useMoveToNewBuild } from './new-build'
+
+/**
+ * Repeating row templates catch up when he opens the app, and while it stays open (R4-6, automations design §6). Asked of the workspace
+ * first, so a day with nothing due sends nothing. It says something only when it left periods out.
+ */
+function RepeatingRows() {
+  const { workspace, run } = useWorkspace()
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => setTick(n => n + 1), 60_000)
+    return () => clearInterval(timer)
+  }, [])
+  const revision = workspace?.revision
+  useEffect(() => {
+    if (!workspace) return
+    const now = new Date(), today = todayIso(), time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    if (!dueRepeats(workspace, today, time).length) return
+    void run({ type: 'run-repeats', today, time, at: now.toISOString() }, r => (r.skippedRepeats?.length ? { text: r.skippedRepeats.map(s => `${s.title} · ${s.earlier} skipped`).join(' · ') } : null), undefined, { quiet: true, inlineRefusal: /Saved elsewhere/, onRefused: () => {} })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick, revision])
+  return null
+}
 
 /** App frame (craft-v1 §3): sidebar on laptop, bottom tabs and + on phone, dev banner, undo notices. */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -34,6 +58,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Toasts />
         <DatabaseCellEditor />
         <DatabaseMenuHost />
+        <RepeatingRows />
         <CsvImportHost />
         <GlobalSearch />
         <div className="safe-top" aria-hidden="true" />
