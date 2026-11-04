@@ -49,7 +49,7 @@ export function DatabaseTimeline({ workspace, db, view, changeView, blockId, pag
   const weekStart = workspace.weekStart ?? 0
   const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
-  const openRow = useOpenRow(view, rows)
+  const openRow = useOpenRow(view, rows, blockId)
   usePendingCells()
   const returned = useReturnedRow(rows)
   const property = viewDateBy(db.database, view), endProperty = viewDateEnd(db.database, view)

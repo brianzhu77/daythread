@@ -12,14 +12,11 @@ let openedHere = false
 export const peekOpenedHere = () => openedHere
 export const noteOpenedHere = (on: boolean) => { openedHere = on }
 
-/**
- * The rows as they're drawn, across groups and folds, from the view showing this one. The last match, as a peek comes after the page behind in
- * the document and a view inside it is the one tapped.
- */
-export function drawnRows(rowId: string): string[] | null {
-  const block = [...document.querySelectorAll(`[data-row="${CSS.escape(rowId)}"]`)].at(-1)?.closest('.database-block')
-  if (!block) return null
-  return [...new Set([...block.querySelectorAll<HTMLElement>('[data-row]')].map(el => el.dataset.row!))]
+/** The rows as they're drawn, across groups and folds, in the view it was opened from: the same row can be in two views on a page, in different orders. */
+export function drawnRows(blockId: string, rowId: string): string[] | null {
+  const block = document.querySelector(`[data-database-menu="${CSS.escape(blockId)}"]`)?.closest('.database-block')
+  const rows = block ? [...new Set([...block.querySelectorAll<HTMLElement>('[data-row]')].map(el => el.dataset.row!))] : []
+  return rows.includes(rowId) ? rows : null
 }
 
 /**
