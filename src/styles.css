@@ -850,6 +850,28 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor .editor-task-title.task-done, .continuous-editor .editor-task-title.task-done * { color:var(--ink-3); text-decoration:var(--done-decoration); }
 /* B19: a nested line's text starts one step (24px) right of its parent's text. */
 .continuous-editor .bn-block-group .bn-block-group { margin-left:45px; }
+/* A synced block (states §3): its own row takes no line, and an outline in the margin holds room above and below it, so nothing
+   shifts when the label shows. Black, white and grey (Brian 116a40ab). Its lines' columns are set below, after the rules they undo. */
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) { position: relative; margin: 8px 0 6px; outline: 1px solid var(--line); outline-offset: 2px; border-radius: 8px; }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]):hover,
+.continuous-editor .bn-block-outer.has-caret > .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]),
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]):focus-within { outline-color: var(--ink-3); }
+.continuous-editor .bn-block-content[data-content-type="syncedBlock"] { height: 0; min-height: 0; padding: 0; overflow: visible; }
+/* On the top edge, clear of the first line's text and the line above (Roadbuster: a taller box covered that line and took its clicks). */
+.continuous-editor .synced-label { position: absolute; top: -11px; right: 6px; left: auto; z-index: 1; display: block; height: 14px; padding: 0 4px; background: var(--bg-doc); color: var(--ink-2); font-size: 12px; line-height: 14px; opacity: 0; pointer-events: none; }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]):hover > .react-renderer .synced-label,
+.continuous-editor .bn-block-outer.has-caret > .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .react-renderer .synced-label,
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]):focus-within > .react-renderer .synced-label,
+.continuous-editor .synced-label:has([aria-expanded="true"]) { opacity: 1; pointer-events: auto; }
+.continuous-editor .synced-label .synced-label-button { position: relative; display: block; width: auto; height: 14px; min-width: 0; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; line-height: inherit; cursor: pointer; }
+/* A finger's reach, upward: over the space above the block, never down onto the first line's text. */
+@media (pointer: coarse) { .continuous-editor .synced-label .synced-label-button::after { content: ""; position: absolute; inset: -18px -6px -2px; } }
+/* Its record can't be read (states §8, B21-17): no lines, so this is what holds its place. */
+.continuous-editor .bn-block-content[data-content-type="syncedBlock"]:has(.synced-unavailable) { height: auto; }
+.synced-unavailable { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; color: var(--ink-2); font-size: var(--text-meta); }
+.synced-unavailable .app-link { font: inherit; }
+/* The phone's handle has a backing for whatever scrolls under it, and beside these lines that would cut the outline. */
+body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transparent; }
 /* Deeper levels step by the same 24px: the top-level group's 45px already includes the dot column. */
 .continuous-editor .bn-block-group .bn-block-group .bn-block-group { margin-left:24px; }
 /* B39 (Jazz; Lead: Notion's convention): every nested block starts at its parent's text, so a nested to-do's checkbox
@@ -873,6 +895,20 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 .continuous-editor .bn-block-group .bn-block-group .bn-block-group > .bn-block-outer > .bn-block > .bn-block-content[data-content-type="bulletListItem"]::before {
   background:linear-gradient(currentColor, currentColor) 20.5px 50% / 5px 5px no-repeat;
 }
+/* A synced block's lines keep the columns they have outside (states §3): undo the rules above that count its group as a level.
+   Its first level reads as the page's, and each level under it as one nearer the page. */
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group { margin-left: 0; }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer::before { display: none; }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer > .bn-block > .bn-block-group { margin-left: 45px; }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer > .bn-block > .react-renderer > .bn-block-content[data-content-type="task"] { margin-left: 0; }
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer > .bn-block > .bn-block-content[data-content-type="bulletListItem"]::before {
+  margin-left: 0; background: radial-gradient(circle, currentColor 2.6px, transparent 3px) 20px 50% / 6px 6px no-repeat;
+}
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer > .bn-block > .bn-block-group > .bn-block-outer > .bn-block > .bn-block-content[data-content-type="bulletListItem"]::before {
+  background: radial-gradient(circle, transparent 1.5px, currentColor 1.8px, currentColor 2.7px, transparent 3.1px) 20px 50% / 6px 6px no-repeat;
+}
+.continuous-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer:only-child > .bn-block > .bn-block-content[data-content-type="paragraph"] .bn-inline-content:has(> .ProseMirror-trailingBreak:only-child)::before { content: "Empty synced block"; position: absolute; color: var(--ink-3); pointer-events: none; }
+.continuous-editor .bn-editor .bn-block:has(> .react-renderer > .bn-block-content[data-content-type="syncedBlock"]) > .bn-block-group > .bn-block-outer:only-child > .bn-block > .bn-block-content[data-content-type="paragraph"]:has(.ProseMirror-trailingBreak:only-child)::after { content: none; }
 /* BlockNote's type-specific hints ignore focus; only the bullet being typed in shows one. */
 .continuous-editor .bn-editor .bn-block-content[data-content-type="bulletListItem"][data-is-empty-and-focused]:has(.ProseMirror-trailingBreak:only-child):after { content:"Write…"; }
 .continuous-editor [data-is-empty-and-focused] .editor-task-title:empty:before { content:attr(data-placeholder); color:var(--ink-3); pointer-events:none; }
@@ -990,7 +1026,8 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 }
 
 /* The editor must not enlarge the mobile layout viewport through floating format controls. */
-@media(max-width:899px) { .continuous-editor { overflow-x:clip; } .editor-selection-bar { max-width:calc(100vw - 32px); } }
+/* The clip reaches 4px past the column, so a synced block's outline in the margin isn't cut. */
+@media(max-width:899px) { .continuous-editor { overflow-x:clip; margin-inline:-4px; padding-inline:4px; } .editor-save-line { right:4px; } .editor-selection-bar { max-width:calc(100vw - 32px); } }
 .editor-source-checklist { display:flex; gap:8px; align-items:baseline; }
 .editor-source-checklist > span:last-child { flex:1; min-width:0; }
 .editor-paste-notice { display:flex; align-items:center; gap:12px; max-width:min(90vw,600px); padding:8px 12px; border-radius:14px; background:var(--bg); color:var(--ink-2); box-shadow:var(--shadow-float); font-size:var(--text-meta); pointer-events:auto; }
@@ -2006,7 +2043,7 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 
 /* Databases R2: the Board (design §7.2): columns of cards, 260 px, or one at a time at 300 px on the phone. */
 .database-board { display: flex; align-items: flex-start; gap: 12px; max-width: 100%; padding-bottom: 4px; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
-.database-column > :not(.database-new, .database-new-more) { flex-basis: 100%; }
+.database-column > :not(.database-new, .database-new-more) { flex-basis: 100%; min-width: 0; max-width: 100%; }
 .database-column { flex: none; display: flex; flex-flow: row wrap; align-content: flex-start; gap: 6px; width: 260px; min-height: 64px; border-radius: var(--radius-control); }
 .database-column.is-drop { background: var(--fill-soft); box-shadow: 0 0 0 4px var(--fill-soft); }
 .database-block .database-column-head { display: flex; align-items: baseline; gap: 4px; min-height: 32px; margin: 0; padding: 4px 0; color: var(--ink-2); font-size: var(--text-small); line-height: 24px; font-weight: var(--weight-regular); }
@@ -2020,7 +2057,7 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 /* The whole card opens the row, from its title's own button, and stays inside the card. A box on it sits above. */
 /* Their words line up with a card's: its padding plus its border. */
 .database-column .database-new, .database-column .database-more { padding-inline: 11px; }
-.database-card .database-card-title { display: block; width: 100%; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: var(--weight-regular); text-align: left; overflow-wrap: anywhere; cursor: inherit; }
+.database-card .database-card-title { display: block; width: 100%; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: var(--weight-regular); text-align: left; overflow-wrap: anywhere; white-space: normal; cursor: inherit; }
 .database-card-title::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
 .database-card-title:focus-visible { outline: none; }
 .database-card:has(.database-card-title:focus-visible) { outline: 2px solid var(--blue); outline-offset: 1px; }
@@ -2092,6 +2129,10 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-gallery-card:has(.database-gallery-title:focus-visible) { outline: 2px solid var(--blue); outline-offset: 1px; }
 .database-gallery-image { display: block; width: 100%; aspect-ratio: 16 / 10; margin: 0; object-fit: cover; background: var(--fill-soft); }
 .database-gallery-words { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; }
+/* A to-do's box sits on its title's first line, as on the to-do's own line (Bumblebee's ask on R2-9). */
+.database-card > .property-checkbox, .database-gallery-words > .property-checkbox { position: relative; z-index: 1; margin-top: 3px; }
+.database-card:has(> .property-checkbox:first-child), .database-gallery-words:has(> .property-checkbox:first-child) { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; align-items: start; }
+.database-card:has(> .property-checkbox:first-child) > :not(.property-checkbox, .database-card-title), .database-gallery-words:has(> .property-checkbox:first-child) > :not(.property-checkbox, .database-gallery-title) { grid-column: 1 / -1; }
 .database-gallery-card .database-gallery-title { display: block; width: 100%; min-height: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
 .database-gallery-title::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
 .database-gallery-title:focus-visible { outline: none; }

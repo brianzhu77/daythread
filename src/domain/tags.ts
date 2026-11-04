@@ -2,7 +2,8 @@ import { flatNodes, inlineText, pageNodes, rowTaskId, textDate, type EditorNode 
 import { isTrashed } from './page-tree.ts'
 import { isTemplate } from './day-template.ts'
 import { isDraft } from './day-draft.ts'
-import type { LocalDate, Workspace } from './types.ts'
+import type { LocalDate, Page, Workspace } from './types.ts'
+import { isSyncedBlock, syncedHome } from './synced.ts'
 
 // Tags are plain text: `#` (or full-width `＃`) followed by the tag characters below, ending at the first other
 // character or the end of the line. Nothing is stored; every reader derives tags from the documents with the same rule.
@@ -43,7 +44,8 @@ const textTypes = new Set(['paragraph', 'bulletListItem', 'numberedListItem', 'q
 /** Every tag on every line, most recently used first; each line counts once per tag. */
 export function tagIndex(workspace: Workspace): TagEntry[] {
   const byKey = new Map<string, { tag: string; page: string; occurrences: TagOccurrence[] }>()
-  const pages = workspace.pages.map((page, created) => ({ page, created })).filter(p => !isTrashed(p.page) && !isTemplate(p.page) && !isDraft(p.page))
+  const counts = (p: Page) => !isTrashed(p) && !isTemplate(p) && !isDraft(p)
+  const pages = workspace.pages.map((page, created) => ({ page, created })).filter(p => counts(p.page))
     .sort((a, b) => (b.page.date ?? '').localeCompare(a.page.date ?? '') || b.created - a.created).map(p => p.page)
   for (const page of pages) {
     let section = ''
@@ -62,6 +64,8 @@ export function tagIndex(workspace: Workspace): TagEntry[] {
           entry.occurrences.push({ pageId: page.id, blockId: node.id, date: page.date, pageTitle: page.title, sectionTitle: section, taskId: rowTaskId(node) ?? undefined, text })
         }
       }
+      // A tag in a synced block counts once: one piece of content, under its earliest day (states §7).
+      if (isSyncedBlock(node) && syncedHome(workspace, String(node.props?.syncId), 'day', counts) !== node.id) return
       node.children?.forEach(visit)
     }
     pageNodes(page).forEach(visit)

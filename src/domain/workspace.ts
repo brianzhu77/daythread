@@ -8,7 +8,7 @@ import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./pa
 import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
-import { acceptSavedBlocks, expandedWorkspace, settleSynced } from "./synced.ts";
+import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, unsyncBlock } from "./synced.ts";
 
 export class DomainError extends Error {}
 export function createEmptyWorkspace(timezone = "America/Vancouver"): Workspace {
@@ -142,6 +142,13 @@ export function carryAncestors(from: Page | undefined, taskId: string): string[]
 function removeNodes(list: EditorNode[], ids: ReadonlySet<string>): EditorNode[] {
   const out: EditorNode[] = [];
   for (const n of list) {
+    // Planning never edits a synced block: a row there only becomes a reference here, and the line stays on every page (design §3).
+    if (isSyncedBlock(n)) {
+      const held = structuredClone(n);
+      for (const line of flatNodes(held.children ?? [])) if (ids.has(line.id)) line.props = { ...line.props, role: "reference", planDate: "" };
+      out.push(held);
+      continue;
+    }
     const children = removeNodes(n.children ?? [], ids);
     if (ids.has(n.id)) out.push(...children);
     else out.push(children.length || n.children ? { ...n, children } : n);
@@ -245,7 +252,7 @@ function ensureDay(state: Workspace, day: string): Page {
     for (let n = 2; state.pages.some((x) => x.id === id && x.type === "daily" && isTrashed(x)); n++) id = `day:${day}:${n}`;
     if (state.pages.some((x) => x.id === id)) throw new DomainError("Page id already in use");
     const template = defaultTemplate(state, dayPagesTarget);
-    p = { id, type: "daily", date: day, title: day, document: JSON.stringify(template ? pageFromTemplate(template, day) : templateDocument(id, day)) };
+    p = { id, type: "daily", date: day, title: day, document: JSON.stringify(template ? pageFromTemplate(template, day, undefined, (n) => isOriginalBlock(state, n)) : templateDocument(id, day)) };
     state.pages.push(p);
   }
   return p;
@@ -444,6 +451,9 @@ function placeDatabases(state: Workspace, p: Page, before: EditorNode[], after: 
 /** A duplicated row's body: fresh block ids, and its to-dos as new tasks of the copy (same state), so ticking one never ticks the other. */
 function copiedBody(state: Workspace, from: Page, to: Page, on: string): EditorNode[] {
   const visit = (n: EditorNode): EditorNode => {
+    // A synced block in a duplicated row, as on a template (design §7): its own if it's the original here, else still connected.
+    if (isSyncedBlock(n) && !isOriginalBlock(state, n)) return { id: newId(), type: n.type, props: { syncId: String(n.props?.syncId), roles: "" }, children: [] };
+    if (isSyncedBlock(n)) return { id: newId(), type: n.type, props: { syncId: newId(), roles: "" }, children: (n.children ?? []).map(visit) };
     const copy: EditorNode = { ...structuredClone(n), id: newId(), children: (n.children ?? []).map(visit) };
     const taskId = rowTaskId(n), t = taskId ? state.tasks.find((x) => x.id === taskId) : undefined;
     if (t) {
@@ -590,6 +600,22 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       t.version++;
       return { message: "Date set", entityId: t.id };
     }
+    case "unsync-block":
+    case "delete-synced-place": {
+      const here = pageNodes(page(state, action.pageId));
+      const block = flatNodes(here).find((n) => n.id === action.blockId);
+      const syncId = block?.props?.syncId;
+      if (!block || typeof syncId !== "string") throw new DomainError("Block not found");
+      if (action.type === "unsync-block") {
+        if (action.all && state.synced?.find((r) => r.id === syncId)?.original !== block.id) throw new DomainError("Only the original can do that");
+        const places = unsyncBlock(state, syncId, block.id, Boolean(action.all));
+        const others = places - 1;
+        return { message: action.all ? `Unsynced on ${places} ${places === 1 ? "page" : "pages"}` : others ? "Unsynced here" : "Unsynced", entityId: action.pageId };
+      }
+      const { places, wasOriginal } = deleteBlockPlace(state, syncId, block.id);
+      const others = places - 1;
+      return { message: !others ? "Deleted" : wasOriginal ? `Removed · the other ${others} ${others === 1 ? "page keeps its" : "pages keep their"} lines, no longer synced` : `Removed from this page · still on ${others} ${others === 1 ? "page" : "pages"}`, entityId: action.pageId };
+    }
     case "plan-task": {
       const t = task(state, action.taskId);
       if (action.from) date(action.from);
@@ -667,7 +693,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       // B70 (Lead 80555761): a new page with an empty body starts from the nearest default, however it was made; its
       // title isn't copied. Only a page made with words keeps them and gets no template.
       const template = !body ? newPageTemplate(state, parent) : undefined;
-      const nodes = template ? pageFromTemplate(template, null) : [line];
+      const nodes = template ? pageFromTemplate(template, null, undefined, (n) => isOriginalBlock(state, n)) : [line];
       state.pages.push({ id, type: "document", date: null, title: text(action.title, 1000), ...(action.parentId ? { parentId: action.parentId } : {}), document: JSON.stringify(nodes) });
       return { message: "Page saved", entityId: id };
     }
@@ -946,7 +972,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
           if (!words) return emptyTaskRow(null);
           const task = createTask(state, words, row, localDay(state, at));
           return { id: newId(), type: "task", props: { taskId: task.id, role: "reference", planDate: "" }, content: structuredClone(n.content), children: [] };
-        }));
+        }, (n) => isOriginalBlock(state, n)));
       }
       numberNewRow(db.database, row);
       // A new row's links show on their other side, a copy's too.
@@ -1107,7 +1133,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   let state = structuredClone(input);
   const { undo: _previousUndo, receipts: _receipts, ...rest } = input;
   const before = { ...structuredClone(rest), receipts: {} as Workspace["receipts"] };
-  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[] };
+  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number };
   if (command.action.type === "undo") {
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");
@@ -1116,7 +1142,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
     result = { message: "Previous operation restored" };
   } else {
     result = execute(state, command.action, command.operationId);
-    settleSynced(state);
+    result = { ...result, ...settleSynced(state) };
   }
   state.revision = input.revision + 1;
   const receipt = { operationId: command.operationId, ...result, fingerprint };
