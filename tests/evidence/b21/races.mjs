@@ -84,6 +84,25 @@ await scenario('A save that comes back conflicted: words typed while it was on i
   r.ok = r.during.includes('WHILE') && r.after.includes('WHILE') && r.saved && r.reopened.includes('WHILE') && /THEIRS/.test(r.after)
   return r
 })
+await scenario('Undo on "Removed from 2 pages" with the command on its way: keys never show, the line comes back, and typing after it saves', async page => {
+  await openB(page)
+  await page.locator('.bn-inline-content', { hasText: 'Shared two' }).first().click(); await page.keyboard.press(end)
+  for (let i = 0; i < 'Shared two'.length + 1; i++) await page.keyboard.press('Backspace')
+  await wait(1800)
+  const r = { removed: (await lines(page)).join('|'), notice: await notices(page) }
+  const { release, arrived } = await hold(page, /"undo"/)
+  await page.getByRole('button', { name: 'Undo' }).last().click()
+  await Promise.race([arrived, wait(5000).then(() => { throw new Error('no undo held') })])
+  await typeBelow(page, ' DURING').catch(() => {})
+  r.during = (await lines(page)).join('|')
+  release(); await wait(2500)
+  r.after = (await lines(page)).join('|'); r.noticeAfter = await notices(page)
+  await typeBelow(page, ' AFTER'); await wait(1800)
+  r.saved = stored('b').includes('AFTER')
+  const shownDuring = r.during.includes('DURING')
+  r.ok = /Removed from 2 pages/.test(r.notice) && r.after.includes('Shared two') && !/draft kept/.test(r.noticeAfter) && r.saved && (!shownDuring || stored('b').includes('DURING'))
+  return r
+})
 await scenario('Undo while a save is on its way: the words stay gone, on the page and in the record', async page => {
   await openB(page)
   const { release, arrived } = await hold(page, /save-editor/)

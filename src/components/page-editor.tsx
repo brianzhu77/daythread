@@ -975,10 +975,32 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       // page as saved. Otherwise this save's facts: its revision, and this place's ids on any new lines.
       // Lines deleted from a block shown elsewhere are a loss on pages he isn't looking at: it says so (states §5).
       if (result.linesRemovedFrom && !result.conflicted?.length) {
-        const receiptId = result.operationId, key: string = toast(`Removed from ${result.linesRemovedFrom} pages`, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); void run({ type: 'undo', targetOperationId: receiptId }, { text: 'Undone' }).then(r => { const ws = latest(), p = ws?.pages.find(x => x.id === page.id); if (r && ws && p) applyServerPage(p, ws) }) } } })
+        const receiptId = result.operationId, key: string = toast(`Removed from ${result.linesRemovedFrom} pages`, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => {
+          toast.close(key)
+          const undo: Action = { type: 'undo', targetOperationId: receiptId }
+          // From a closed peek there's no editor to hold.
+          if (left.current) void run(undo, { text: 'Undone' })
+          // The lines live in the record, so the page's own key doesn't change when they come back: it always shows the server's.
+          else void onServer(undo, newOperationId(), undefined, { text: 'Undone' }, true)
+        } } })
       }
-      if (result.conflicted?.length) { if (!left.current) applyServerPage(savedPage, latest()!); toast('Changed elsewhere meanwhile · your version is below it', { timeout: 8000 }) }
-      else if (holdsBlock && !left.current) applyBlockUpdates(blockUpdates(editor.document as never, savedPage.document, true, document))
+      const sentAs = result.renamed ? renamedDocument(document, result.renamed) : document
+      let typedSince = false
+      if (result.conflicted?.length) {
+        if (!left.current) {
+          const ws = latest()!, showingNow = nodes()
+          typedSince = writtenDocument(JSON.stringify(showingNow)) !== writtenDocument(sentAs)
+          applyServerPage(savedPage, ws)
+          // Words typed while this save was on its way aren't in it: they go back on top of what the server made, and save next.
+          if (typedSince) {
+            const seed = (p: Page) => editorSeed(p, ws)
+            const merged = mergeDraft(seed({ ...savedPage, document: sentAs }), showingNow, seed(savedPage), new Set(ws.tasks.map(t => t.id)))
+            editor.transact(tr => { closeHistory(tr); editor.replaceBlocks(editor.document, merged.document as never) })
+          }
+        }
+        toast('Changed elsewhere meanwhile · your version is below it', { timeout: 8000 })
+      }
+      else if (holdsBlock && !left.current) applyBlockUpdates(blockUpdates(editor.document as never, savedPage.document, true, sentAs))
       // The editor has closed meanwhile: leaving takes it from here (it needs only the new starting point).
       if (left.current) return
       deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
@@ -987,7 +1009,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       flags.adoptDatabaseBlocks?.forEach(a => databaseFlags.current.adopt.delete(a.pageId))
       // Another place on this page may have just followed the save: nothing's left to send if the editor now holds what was saved.
       const showing = writtenDocument(JSON.stringify(editor.document))
-      dirty.current = !result.conflicted?.length && showing !== writtenDocument(result.renamed ? renamedDocument(document, result.renamed) : document) && !(holdsBlock && showing === writtenDocument(savedPage.document))
+      dirty.current = typedSince || (!result.conflicted?.length && showing !== writtenDocument(sentAs) && !(holdsBlock && showing === writtenDocument(savedPage.document)))
       // "Saved" only when every card on this page points at a page that exists (Jazz): a card still waiting doesn't count.
       const waiting = [...pendingPages.values()].some(x => x.parentId === page.id)
       setFailed(false); setUnsaved(null); setStatus(dirty.current ? 'Saving…' : waiting ? 'Saved · page not created yet' : 'Saved')
@@ -1839,7 +1861,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }
   /** A place's end goes through one command, across every page, with one Undo; what's typed saves first so it's part of it. */
   async function endPlace(action: Extract<Action, { type: 'unsync-block' | 'delete-synced-place' }>) {
-    const receipt = await onServer(action, newOperationId(), undefined, r => ({ text: r.message, undoOperationId: r.operationId }))
+    const receipt = await onServer(action, newOperationId(), undefined, r => ({ text: r.message, undoOperationId: r.operationId }), true)
     if (!receipt && dirty.current) notDone("It hasn't saved yet, so nothing changed. Try again in a moment.")
   }
   endPlaceRef.current = endPlace
@@ -2253,7 +2275,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const menuReturn = useRef<{ blockId: string; selection: ReturnType<Selection['toJSON']> } | null>(null)
   const closeRowNotice = () => { if (rowNotice.current) toast.close(rowNotice.current.key); rowNotice.current = null }
   useEffect(() => () => closeRowNotice(), [])
-  async function onServer(action: Action, operationId: string, options?: { inlineRefusal: RegExp; onRefused: (m: string) => void }, notice: Parameters<typeof run>[1] = null): Promise<Receipt | null> {
+  async function onServer(action: Action, operationId: string, options?: { inlineRefusal: RegExp; onRefused: (m: string) => void }, notice: Parameters<typeof run>[1] = null, alwaysShow = false): Promise<Receipt | null> {
     if (historyPending.current) return null
     historyPending.current = true; setHistoryBusy(true); editor.isEditable = false
     clearTimeout(timer.current)
@@ -2265,7 +2287,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const receipt = await run(action, notice, operationId, options)
       const ws = latest()
       const p = ws?.pages.find(x => x.id === page.id)
-      if (receipt && ws && p) { latestWorkspace.current = ws; latestPage.current = p; if (pageContentKey(p) !== base.current) applyServerPage(p, ws) }
+      if (receipt && ws && p) { latestWorkspace.current = ws; latestPage.current = p; if (alwaysShow || pageContentKey(p) !== base.current) applyServerPage(p, ws) }
       return receipt
     } finally {
       historyPending.current = false; setHistoryBusy(false); editor.isEditable = true
