@@ -25,12 +25,12 @@ interface Drag { rowId: string; from: string; over: string; before: string | nul
 export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDate, cap, showTitle = true, linked }: DatabaseViewProps & { view: View; changeView: ChangeView }) {
   const { run, latest } = useWorkspace()
   const commit = useCommitCell()
-  const openRow = useOpenRow()
   const undoKey = useUndoKey()
   const today = todayIso()
   const weekStart = workspace.weekStart ?? 0
   const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
+  const openRow = useOpenRow(view, rows)
   usePendingCells()
   const ordered = withPendingMoves(rows)
   const groups: ViewGroups | null = viewGroups(db.database, view, ordered, shownRaw, weekStart)

@@ -116,6 +116,8 @@ export interface View {
   timelineTable?: true;
   /** Timeline: the scale's unit; Day when absent. */
   timelineUnit?: "hours" | "day" | "week" | "month" | "quarter" | "year";
+  /** Where a row opens from this view (R4-11); a full page when absent. */
+  openIn?: "center" | "side";
   /** Colour by a value (R4-12): from the top, the first that matches wins. Nothing colours until he makes a rule. */
   colourRules?: ColourRule[];
   /** Table at 1280: this column and those to its left stay while the rest scroll (R4-13). */
@@ -834,7 +836,7 @@ export type DatabaseChange =
   | { kind: "removeProperty"; propertyId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; colourRules?: ColourRule[]; frozenThrough?: string | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
+  | { kind: "updateView"; viewId: string; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; openIn?: "center" | "side" | null; colourRules?: ColourRule[]; frozenThrough?: string | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
   /** null: none */
   | { kind: "setDefaultTemplate"; templateId: string | null }
   | { kind: "removeView"; viewId: string }
@@ -1093,7 +1095,7 @@ function cleanLayout(input: unknown): ViewLayout {
 }
 const dateBys = new Set<unknown>(["day", "week", "month"]);
 const timelineUnitSet = new Set<unknown>(["hours", "day", "week", "month", "quarter", "year"]);
-type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "subGroupBy" | "subGroupDateBy" | "hiddenSubGroups" | "dateBy" | "calendarSpan" | "timelineEnd" | "timelineUnit" | "timelineTable" | "colourRules" | "frozenThrough">;
+type GroupFields = Pick<View, "groupBy" | "groupDateBy" | "hideEmptyGroups" | "hiddenGroups" | "subGroupBy" | "subGroupDateBy" | "hiddenSubGroups" | "dateBy" | "openIn" | "calendarSpan" | "timelineEnd" | "timelineUnit" | "timelineTable" | "colourRules" | "frozenThrough">;
 /** A view's group fields, checked. A new `groupBy` must name a live property that can group; one it already holds may be deleted since, and is kept unread, so Undo or changing the type back reads it again. */
 function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before?: Pick<View, "groupBy" | "subGroupBy" | "dateBy" | "timelineEnd">): GroupFields {
   const out: GroupFields = {};
@@ -1113,6 +1115,7 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
   }
   if (input.timelineTable === true) out.timelineTable = true;
   if (input.timelineUnit !== undefined) { if (!timelineUnitSet.has(input.timelineUnit)) throw new DatabaseError("Invalid view"); out.timelineUnit = input.timelineUnit; }
+  if (input.openIn === "center" || input.openIn === "side") out.openIn = input.openIn;
   if (input.colourRules?.length) out.colourRules = input.colourRules;
   if (input.frozenThrough) out.frozenThrough = input.frozenThrough;
   if (input.groupDateBy !== undefined) { if (!dateBys.has(input.groupDateBy)) throw new DatabaseError("Invalid view"); out.groupDateBy = input.groupDateBy; }
@@ -1308,7 +1311,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     }
     case "updateView": {
       const old = view(change.viewId);
-      const { filterAny: _filterAny, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, colourRules: _colourRules, frozenThrough: _frozenThrough, ...rest } = old;
+      const { filterAny: _filterAny, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, openIn: _openIn, colourRules: _colourRules, frozenThrough: _frozenThrough, ...rest } = old;
       const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
       const group = cleanGroup(db, {
         groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
@@ -1323,6 +1326,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         ...(change.timelineEnd === null ? {} : { timelineEnd: change.timelineEnd ?? old.timelineEnd }),
         timelineUnit: change.timelineUnit ?? old.timelineUnit,
         ...(change.timelineTable === null ? {} : { timelineTable: change.timelineTable ?? old.timelineTable }),
+        ...(change.openIn === null ? {} : { openIn: change.openIn ?? old.openIn }),
         colourRules: change.colourRules ?? old.colourRules,
         ...(change.frozenThrough === null ? {} : { frozenThrough: change.frozenThrough ?? old.frozenThrough }),
       }, layout, old);

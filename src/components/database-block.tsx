@@ -25,6 +25,7 @@ import { newTodo, newTodoRowId, taskIdOfRow, todoChange, todoLine, todoMoves, to
 import { DatabaseBoard } from './database-board'
 import { DatabaseCalendar } from './database-calendar'
 import { DatabaseTimeline } from './database-timeline'
+import { openPeek, peekFloor } from './peek-state'
 import { DatabaseGallery } from './database-gallery'
 import { LinkedDatabase } from './database-linked'
 import { DatabaseList } from './database-list'
@@ -630,7 +631,7 @@ function TodoBox({ taskId, title }: { taskId: string; title: string }) {
 }
 
 /** Opening a row remembers it, so Back tints it for a second where he left it (design §5). */
-export function useOpenRow() {
+export function useOpenRow(view?: View, rows?: readonly Page[]) {
   const navigate = useNavigate()
   const { latest } = useWorkspace()
   return (rowId: string, focus?: 'title') => {
@@ -642,6 +643,8 @@ export function useOpenRow() {
       else toast("This to-do's line is gone", { timeout: 6000 })
       return
     }
+    // The view's own setting, if the window has room for it (R4-11). The page behind already showing this row, nothing opens.
+    if (view?.openIn && !focus && window.innerWidth >= peekFloor) { openPeek(navigate, rowId, rows?.map(r => r.id)); return }
     try { sessionStorage.setItem(returnKey, rowId) } catch { /* private mode */ } void navigate({ to: '/pages', search: { page: rowId, ...(focus ? { focus } : {}) } }) }
 }
 /** What a colour rule draws on a row or card (R4-12): a tint behind it, under whatever else is on it. */
@@ -868,6 +871,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const weekStart = workspace.weekStart ?? 0
   const context = useMemo(() => ({ today, pageDate, weekStart }), [today, pageDate, weekStart])
   const rows = useMemo(() => viewRows(workspace, db.id, view, context), [workspace, db.id, view, context])
+  const openRow = useOpenRow(view, rows)
   const columns = viewColumns(db.database, view)
   const place = blockPlaces.get(blockId)
   const [limit, setLimitState] = useState(place?.limit ?? cap)
@@ -883,7 +887,6 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   const { folded, toggle } = useFolds(blockId, view.id)
   const moveRow = useMoveRow(db, view, context, groups)
   const wide = useWide()
-  const openRow = useOpenRow()
   const returned = useReturnedRow(rows)
   const [reveal, setReveal] = useState<string | null>(null)
   // Several rows at 1280 (design §12): a box on hover at each row's left, Shift for a range, then the bar.
