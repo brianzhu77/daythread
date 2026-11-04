@@ -53,7 +53,7 @@ export function RowMenu({ label, groups, trigger, triggerClass = 'icon', onEscap
           const at = items.indexOf(document.activeElement as HTMLElement)
           const to = e.key === 'ArrowDown' ? (at + 1) % items.length : e.key === 'ArrowUp' ? (at - 1 + items.length) % items.length : e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : -1
           // Esc is handled here too: a menu inside the editor stops key events from reaching the document.
-          if (to < 0) { if (e.key === 'Escape') { setOpen(false); if (onEscape) onEscape(); else ref.current?.querySelector<HTMLElement>('[aria-haspopup=menu]')?.focus() } return }
+          if (to < 0) { if (e.key === 'Escape') { e.preventDefault(); /* this Esc was the menu's: a peek around it stays */ setOpen(false); if (onEscape) onEscape(); else ref.current?.querySelector<HTMLElement>('[aria-haspopup=menu]')?.focus() } return }
           e.preventDefault(); e.stopPropagation(); items[to]?.focus()
         }}>
           {groups.map((g, gi) => (

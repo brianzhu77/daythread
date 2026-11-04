@@ -3,15 +3,36 @@ import type { useNavigate } from '@tanstack/react-router'
 
 /** Below this it opens as a full page, as the phone does. */
 export const peekFloor = 900
-/** The rows of the view it came from, in order, for ↑ ↓. After a reload there's no such list, and they don't show. */
+/** Below this a side peek opens as a center one: the sidebar's 260, a view of at least 420 and a peek of at least 420 (§4). */
+export const sideFloor = 1100
+/** The rows of the view it came from, as drawn, for ↑ ↓. After a reload there's no such list, and they don't show. */
 let order: readonly string[] = []
 export const peekOrder = () => order
 let openedHere = false
 export const peekOpenedHere = () => openedHere
 export const noteOpenedHere = (on: boolean) => { openedHere = on }
 
-export function openPeek(navigate: ReturnType<typeof useNavigate>, rowId: string, rows: readonly string[] | undefined) {
+/** The rows as they're drawn, across groups and folds, in the view it was opened from: the same row can be in two views on a page, in different orders. */
+export function drawnRows(blockId: string, rowId: string): string[] | null {
+  const block = document.querySelector(`[data-database-menu="${CSS.escape(blockId)}"]`)?.closest('.database-block')
+  const rows = block ? [...new Set([...block.querySelectorAll<HTMLElement>('[data-row]')].map(el => el.dataset.row!))] : []
+  return rows.includes(rowId) ? rows : null
+}
+
+/**
+ * The page's own place in the router's scroll record while a peek is over it. A peek's entry shares it, as the view can scroll beside a side peek
+ * and closing is going Back, which would otherwise put the view where it was when the peek opened.
+ */
+let pageScrollKey: string | null = null
+export function scrollKeyOf(location: { state: unknown; search: unknown }): string {
+  const own = (location.state as { __TSR_key?: string }).__TSR_key ?? ''
+  return (location.search as { peek?: unknown }).peek && pageScrollKey ? pageScrollKey : own
+}
+
+export function openPeek(navigate: ReturnType<typeof useNavigate>, rowId: string, rows: readonly string[] | undefined, side: boolean) {
   order = rows ?? []
-  openedHere = true
-  void navigate({ to: '.', search: ((prev: Record<string, unknown>) => ({ ...prev, peek: rowId })) as never })
+  // Another row while one's open replaces it, so Back closes the peek instead of walking through every row.
+  const replacing = new URLSearchParams(window.location.search).has('peek')
+  if (!replacing) { openedHere = true; pageScrollKey = (window.history.state as { __TSR_key?: string } | null)?.__TSR_key ?? null }
+  void navigate({ to: '.', search: (({ side: _side, ...prev }: Record<string, unknown>) => ({ ...prev, peek: rowId, ...(side ? { side: 1 } : {}) })) as never, replace: replacing, resetScroll: false })
 }

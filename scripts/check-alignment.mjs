@@ -36,7 +36,7 @@ if (!base) { console.error('usage: node scripts/check-alignment.mjs <base url> [
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancouver' })
 const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
-const REQUIRED = ['timeline', 'sub-items', 'peek', 'synced block', 'sub-groups', 'lanes', 'board', 'grouped table', 'list', 'gallery', 'calendar', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
+const REQUIRED = ['timeline', 'sub-items', 'peek', 'side peek', 'synced block', 'sub-groups', 'lanes', 'board', 'grouped table', 'list', 'gallery', 'calendar', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day']
 
 /** What a table cell or a row page's value draws: its box when it's a checkbox, else its first line of text, else a chip or dot. */
 function drawnCentres() {
@@ -378,7 +378,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     await page.close()
   }
   // A row over a page (R4-16): at 1280 only, since a phone opens it as a full page.
-  for (const path of width === 1280 ? [...paths, '/pages?page=fixture-peek-db&peek=fixture-peek-row'] : paths) {
+  for (const path of width === 1280 ? [...paths, '/pages?page=fixture-peek-db&peek=fixture-peek-row', '/pages?page=fixture-peek-db&peek=fixture-peek-row&side=1'] : paths) {
     const page = await browser.newPage({ viewport: { width, height } })
     await page.goto(`${base}${path}`, { waitUntil: 'networkidle' }); await page.waitForTimeout(1000)
     const { rows, editorLeft, chips, synced } = await page.evaluate(measure)
@@ -452,7 +452,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
         ? { at, check: `${c.kind} baseline: "${c.label}"`, ok: 'missing', detail: 'no plain text beside it on the line, so not measured' }
         : { at, check: `${c.kind} text baseline on the line's: "${c.label}"`, ok: Math.abs(c.baseline) <= TOLERANCE, detail: `${c.baseline >= 0 ? '+' : ''}${fmt(c.baseline)}px${c.across ? ' (against text on another line of the row, within its line box)' : ''}` })
     }
-    if (inPeek) seen.get(width).add('peek')
+    if (inPeek) seen.get(width).add(path.includes('side=1') ? 'side peek' : 'peek')
     for (const r of rows) { seen.get(width).add(r.kind); if (r.empty) seen.get(width).add('empty row'); if (r.kind === 'nested bullet' && r.depth >= 2) seen.get(width).add('level 3 bullet'); if (r.kind.endsWith(' task') && r.depth >= 1) seen.get(width).add(r.depth >= 2 ? 'level 3 task' : 'nested task'); if (r.kind.endsWith(' task') && r.depth >= 2) seen.get(width).add('nested task') }
     // 1. Columns.
     const top = rows.filter(r => r.depth === 0 && r.kind !== 'heading' && r.kind !== 'paragraph')
@@ -540,7 +540,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
 }
 await browser.close()
 // 3. Coverage.
-for (const [width, kinds] of seen) for (const kind of REQUIRED) if (!kinds.has(kind) && !(kind === 'peek' && width !== 1280)) results.push({ at: `${width}`, check: `${kind}: not on any measured page`, ok: 'missing', detail: 'add it to the copy and run again' })
+for (const [width, kinds] of seen) for (const kind of REQUIRED) if (!kinds.has(kind) && !((kind === 'peek' || kind === 'side peek') && width !== 1280)) results.push({ at: `${width}`, check: `${kind}: not on any measured page`, ok: 'missing', detail: 'add it to the copy and run again' })
 
 const label = r => (r.ok === 'missing' ? 'MISSING' : r.ok ? 'ok' : 'FAIL').padEnd(7)
 const show = args.includes('--all') ? results : results.filter(r => r.ok !== true)

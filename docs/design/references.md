@@ -1,6 +1,6 @@
 # References and the parent in the header: Product's view
 
-- Author: Bumblebee (Product) · 2026-11-04 · status: **Brian saw the boards and chose the recommended version** (cecb215f: the day doesn't also go under Linked from). Being built by Jazz (Lead cc07d163); acceptance is B86 on the checklist.
+- Author: Bumblebee (Product) · 2026-11-04 · status: **Brian saw the boards and chose the recommended version** (cecb215f: the day doesn't also go under Linked from). The header (#122, main 51104fc3) and the peek's head (#123, main 7eef59d4) are live; the reference gaps (#124) aren't yet. Acceptance is B86 on the checklist.
   Jazz owns the interaction and Roadbuster the cost; this covers what Notion does, what counts as a reference and where
   it stops.
 - Brian's words (#daythread:6644e90e): "我想从 bookmark 里找到对应的 daythread，可以加一个引用的展示吗？你们想一下交互先。不要定制，

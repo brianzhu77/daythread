@@ -78,3 +78,34 @@ test('real Postgres: a row number is never used twice, past an Undo', { skip }, 
     await a.end()
   }
 })
+
+test('real Postgres: moving a parent takes its tree in one operation, and one Undo puts all of it back', { skip }, async () => {
+  const schema = `daythread_test_move_${process.pid}`
+  const a = connect()
+  try {
+    const r = new PostgresWorkspaceRepository(postgresClient(a), schema), at = '2026-10-22T18:00:00.000Z'
+    let ws = await r.load()
+    const run = async (operationId: string, action: never) => { await r.execute({ operationId, expectedRevision: ws.revision, action }); ws = await r.load() }
+    const values = (id: string) => ws.pages.find(p => p.id === id)!.values
+    await run('m1', { type: 'create-database', pageId: 'from', homeBlockId: null, title: 'From' } as never)
+    await run('m2', { type: 'create-database', pageId: 'to', homeBlockId: null, title: 'To' } as never)
+    await run('m3', { type: 'change-database', pageId: 'from', change: { kind: 'setSubItems', on: { parent: 'par', sub: 'sub' } } } as never)
+    for (const id of ['top', 'kid', 'grand']) await run(`add-${id}`, { type: 'add-row', databaseId: 'from', pageId: id, title: id, at } as never)
+    await run('m4', { type: 'set-values', pageId: 'kid', values: { par: ['top'] }, expected: {}, at } as never)
+    await run('m5', { type: 'set-values', pageId: 'grand', values: { par: ['kid'] }, expected: {}, at } as never)
+    const before = ['top', 'kid', 'grand'].map(values)
+    await run('move', { type: 'move-row', pageId: 'top', databaseId: 'to', at } as never)
+    assert.deepEqual(['top', 'kid', 'grand'].map(id => ws.pages.find(p => p.id === id)!.parentId), ['to', 'to', 'to'])
+    const { parent, sub } = ws.pages.find(p => p.id === 'to')!.database!.subItems!
+    assert.deepEqual(values('grand')![parent], ['kid'])
+    assert.deepEqual(values('top')![sub], ['kid'])
+    await run('back', { type: 'undo', targetOperationId: 'move' } as never)
+    assert.deepEqual(['top', 'kid', 'grand'].map(id => ws.pages.find(p => p.id === id)!.parentId), ['from', 'from', 'from'])
+    assert.deepEqual(['top', 'kid', 'grand'].map(values), before)
+    assert.equal(ws.pages.find(p => p.id === 'to')!.database!.subItems, undefined)
+  } finally {
+    await a.unsafe(`drop schema if exists ${schema} cascade`)
+    await a.end()
+  }
+})
+
