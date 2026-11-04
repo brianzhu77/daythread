@@ -1,6 +1,6 @@
 # Moving a row to another database: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead and Roadbuster to review**. Not approved and not built. Task #290, checklist R4-10.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **built and live** (#105, 2026-11-04); checklist R4-10 says what differs. Task #290, checklist R4-10.
 - **Evidence, weak:** I found no Notion help page on this. [A third-party guide][g] says only properties of a matching type carry over, and [a third-party copy of the SDK docs][s] says incompatible properties may be lost. I read our code on main and ran nothing.
 - **Brian's use:** no databases at the last read (Nov 3, rev 793).
 

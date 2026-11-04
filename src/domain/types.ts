@@ -150,6 +150,7 @@ export type Action =
   | { type: "create-database"; pageId: string; parentId?: string | null; homeBlockId: string | null; title: string }
   | { type: "change-database"; pageId: string; change: import("./database.ts").DatabaseChange }
   /** A row, at the end or before `beforeId`; `copyOf`: Duplicate row, copying that row's values and body. */
+  | { type: "move-row"; pageId: string; databaseId: string; at: string }
   | { type: "add-rows"; databaseId: string; rows: Array<{ pageId: string; title: string; values?: Record<string, import("./database.ts").Json> }>; at: string }
   | { type: "import-csv"; databaseId: string; create?: { parentId?: string | null; homeBlockId: string | null; title: string }; changes: import("./database.ts").DatabaseChange[]; rows: Array<{ pageId: string; title: string; values?: Record<string, import("./database.ts").Json> }>; at: string }
   | { type: "paste-cells"; databaseId: string; items: import("./database.ts").RowEdit[]; rows: Array<{ pageId: string; title: string; values?: Record<string, import("./database.ts").Json> }>; at: string }
