@@ -969,15 +969,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       const holdsBlock = document.includes(`"${syncedBlockType}"`)
       const savedPage = ((result.renamed || holdsBlock) && latest()?.pages.find(p => p.id === page.id)) || preview.pages.find(p => p.id === page.id)!
       base.current = pageContentKey(savedPage); baseDoc.current = savedPage.document
-      if (result.renamed) applyRenamedLines(editor.prosemirrorView, result.renamed)
+      // A peek or a page closed while this was on its way has no view left to touch: only the bookkeeping above and the notices below still apply.
+      if (result.renamed && !left.current) applyRenamedLines(editor.prosemirrorView, result.renamed)
       // A synced block changed elsewhere and he'd changed it too: the block has the latest, and his version is below it, on the
       // page as saved. Otherwise this save's facts: its revision, and this place's ids on any new lines.
       // Lines deleted from a block shown elsewhere are a loss on pages he isn't looking at: it says so (states §5).
       if (result.linesRemovedFrom && !result.conflicted?.length) {
         const receiptId = result.operationId, key: string = toast(`Removed from ${result.linesRemovedFrom} pages`, { timeout: 8000, actionProps: { children: 'Undo', onPress: () => { toast.close(key); void run({ type: 'undo', targetOperationId: receiptId }, { text: 'Undone' }).then(r => { const ws = latest(), p = ws?.pages.find(x => x.id === page.id); if (r && ws && p) applyServerPage(p, ws) }) } } })
       }
-      if (result.conflicted?.length) { applyServerPage(savedPage, latest()!); toast('Changed elsewhere meanwhile · your version is below it', { timeout: 8000 }) }
-      else if (holdsBlock) applyBlockUpdates(blockUpdates(editor.document as never, savedPage.document, true, document))
+      if (result.conflicted?.length) { if (!left.current) applyServerPage(savedPage, latest()!); toast('Changed elsewhere meanwhile · your version is below it', { timeout: 8000 }) }
+      else if (holdsBlock && !left.current) applyBlockUpdates(blockUpdates(editor.document as never, savedPage.document, true, document))
       // The editor has closed meanwhile: leaving takes it from here (it needs only the new starting point).
       if (left.current) return
       deletions.forEach(id => { semanticDeletes.current.delete(id); knownSemantic.current.add(id) })
