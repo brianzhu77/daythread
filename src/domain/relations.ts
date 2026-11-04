@@ -1,8 +1,8 @@
 // Relations and rollups as the layouts read them (design §6, R3-5, R3-7). Nothing here is stored. A relation's options become
 // its target's rows, so it reads, sorts and filters as a multi-select does; a rollup becomes a read-only column of the type it
 // works out to, with its value on each row, so its cell, sort and filter can't disagree. With neither, this is the workspace.
-import { cellValue, isDatabase, isEmptyValue, propertyOf, titleId, todosSourceId, valueText, type CellValue, type Database, type DateValue, type Json, type Option, type Property, type Rollup, type RollupFunction } from './database.ts'
-import { clockIn, formulaShape, isFormula, usesClock, workFormulas } from './formula.ts'
+import { isDatabase, isEmptyValue, propertyOf, titleId, todosSourceId, valueText, type CellValue, type Database, type DateValue, type Json, type Option, type Property, type Rollup, type RollupFunction } from './database.ts'
+import { clockIn, formulaShape, isFormula, noteRowErrors, usesClock, WorkedCells, worldOf } from './formula.ts'
 import type { Clock } from './formula-functions.ts'
 import { withTodos } from './todos-source.ts'
 import type { Page, Workspace } from './types.ts'
@@ -92,69 +92,68 @@ export function withLinks(ws: Workspace, clock?: Clock): Workspace {
   const linked = new Map<string, Database>()
   const tasks = withTodos(ws)
   let todoOptions: Option[] | undefined
+  const relationShape = (id: string | undefined): Pick<Property, 'options' | 'targetTitle' | 'targetTrashed'> => {
+    // To-dos: its rows are his tasks, so a deleted task drops out, and comes back with it (R3-23).
+    if (id === todosSourceId) { todoOptions ??= tasks.pages.filter(p => p.parentId === todosSourceId).map(r => ({ id: r.id, name: r.title })); return { options: todoOptions, targetTitle: 'To-dos' } }
+    const target = byId.get(id ?? '')
+    return { options: target && isDatabase(target) ? optionsFor(target) : [], targetTitle: target?.title || 'Untitled', ...(target?.trashedAt ? { targetTrashed: true as const } : {}) }
+  }
   for (const p of ws.pages) {
     if (!isDatabase(p) || !p.database.properties.some(shows)) continue
     linked.set(p.id, { ...p.database, properties: p.database.properties.map(x => {
-      if (x.type !== 'relation') return x
-      // To-dos: its rows are his tasks, so a deleted task drops out, and comes back with it (R3-23).
-      if (x.target === todosSourceId) { todoOptions ??= tasks.pages.filter(p => p.parentId === todosSourceId).map(r => ({ id: r.id, name: r.title })); return { ...x, options: todoOptions, targetTitle: 'To-dos' } }
-      const target = byId.get(x.target ?? '')
-      return { ...x, options: target && isDatabase(target) ? optionsFor(target) : [], targetTitle: target?.title || 'Untitled', ...(target?.trashedAt ? { targetTrashed: true as const } : {}) }
+      return x.type === 'relation' ? { ...x, ...relationShape(x.target) } : x
     }) })
   }
+  const world = worldOf(ws)
   const pages = ws.pages.map(page => {
     const database = linked.get(page.id)
-    if (database) {
-      const rollups = database.properties.filter(x => x.type === 'rollup')
-      return { ...page, database: { ...database, properties: database.properties.map(x => (x.type === 'rollup' ? { ...x, ...rollupType(x.rollup?.fn ?? 'original'), readOnly: true as const } : x.type === 'formula' ? { ...x, ...formulaShape(database, x), readOnly: true as const } : x)) }, _rollups: rollups }
-    }
-    return page
-  })
-  const next = { ...ws, pages: pages.map(({ _rollups, ...page }: Page & { _rollups?: Property[] }) => page as Page) }
-  const finalById = new Map(next.pages.map(p => [p.id, p]))
-  const rollupsByDb = new Map(pages.flatMap(p => { const r = (p as Page & { _rollups?: Property[] })._rollups; return r?.length ? [[p.id, r] as const] : [] }))
-  if (rollupsByDb.size) {
-    next.pages = next.pages.map(row => {
-      const rollups = row.parentId ? rollupsByDb.get(row.parentId) : undefined
-      if (!rollups) return row
-      const values: Record<string, Json> = { ...row.values }
-      const database = finalById.get(row.parentId!)!.database!
-      for (const r of rollups) {
-        const worked = r.rollup ? rollupOf(r.rollup, row, database, finalById, tasks) : undefined
-        if (worked === undefined) delete values[r.id]; else values[r.id] = worked
-      }
-      return { ...row, values }
+    if (!database) return page
+    const properties = database.properties.map(x => {
+      if (x.type === 'rollup') return { ...x, ...rollupType(x.rollup?.fn ?? 'original'), readOnly: true as const }
+      if (x.type !== 'formula') return x
+      const shape = formulaShape(world, page.id, x)
+      // A formula that gives pages reads as a relation does, and draws its page refs.
+      return { ...x, ...shape, ...(shape.target ? relationShape(shape.target) : {}), readOnly: true as const }
     })
-  }
-  // After rollups: a formula reads one as its result.
-  const formulaDatabases = next.pages.filter(p => p.database?.properties.some(isFormula))
-  if (formulaDatabases.length) {
-    const rowsOfDatabase = new Map<string, Page[]>()
-    for (const row of next.pages) if (row.parentId) { const list = rowsOfDatabase.get(row.parentId); if (list) list.push(row); else rowsOfDatabase.set(row.parentId, [row]) }
-    const replaced = new Map<string, Page>()
-    for (const page of formulaDatabases) {
-      const db = page.database!, rows = rowsOfDatabase.get(page.id) ?? []
-      workFormulas(db, db.properties.filter(isFormula), rows, reading).forEach(row => replaced.set(row.id, row))
+    return { ...page, database: { ...database, properties } }
+  })
+  const next = { ...ws, pages }
+  const databases = new Map<string, Database>()
+  for (const p of tasks.pages) if (isDatabase(p)) databases.set(p.id, p.database)
+  for (const p of pages) if (isDatabase(p)) databases.set(p.id, p.database)
+  const allPages = new Map(tasks.pages.map(p => [p.id, p]))
+  // Formulas and rollups read each other, across databases, so each is worked out when first asked for.
+  const cells: WorkedCells = new WorkedCells({ world, pages: allPages, databases, clock: reading, rollup: (r, row, db) => (r.rollup ? rollupOf(r.rollup, row, db, allPages, databases, cells) : undefined) })
+  next.pages = pages.map(row => {
+    const db = row.parentId ? databases.get(row.parentId) : undefined
+    const worked = db?.properties.filter(p => p.rollup || isFormula(p))
+    if (!db || !worked?.length) return row
+    const values: Record<string, Json> = { ...row.values }
+    const errors: Record<string, string> = {}
+    for (const p of worked) {
+      const { cell, error } = isFormula(p) ? cells.columnCell(row, db, p) : { cell: cells.rollupColumn(row, db, p), error: undefined }
+      if (cell === undefined) delete values[p.id]; else values[p.id] = cell
+      if (error) errors[p.id] = error
     }
-    next.pages = next.pages.map(p => replaced.get(p.id) ?? p)
-  }
-  const clocked = next.pages.some(p => p.database && usesClock(p.database))
-  if (!clock) projected.set(ws, { next, day: clocked ? localDay() : null })
+    const read = { ...row, values }
+    if (Object.keys(errors).length) noteRowErrors(read, errors)
+    return read
+  })
+  if (!clock) projected.set(ws, { next, day: usesClock(world) ? localDay() : null })
   return next
 }
 
-function rollupOf(rollup: Rollup, row: Page, database: Database, stored: ReadonlyMap<string, Page>, tasks: Workspace): Json | undefined {
+function rollupOf(rollup: Rollup, row: Page, database: Database, pages: ReadonlyMap<string, Page>, databases: ReadonlyMap<string, Database>, cells: WorkedCells): Json | undefined {
   const relation = propertyOf(database, rollup.relation)
   if (relation?.type !== 'relation') return undefined
-  const pages = relation.target === todosSourceId ? new Map(tasks.pages.map(p => [p.id, p])) : stored
-  const target = pages.get(relation.target ?? '')
-  if (!isDatabase(target)) return undefined
+  const target = databases.get(relation.target ?? '')
+  if (!target) return undefined
   const known = new Set((relation.options ?? []).map(o => o.id))
   const raw = row.values?.[relation.id]
   const linked = (Array.isArray(raw) ? (raw as string[]) : []).filter(id => known.has(id)).map(id => pages.get(id)!).filter(Boolean)
   // A property deleted since reads as nothing there, rather than as a wrong number.
-  if (rollup.property !== titleId && !propertyOf(target.database, rollup.property)) return undefined
-  const read = (r: Page): CellValue => (rollup.property === titleId ? r.title || null : cellValue(target.database, r, rollup.property))
-  return compute(rollup.fn, linked.map(read), v => (rollup.property === titleId ? String(v) : valueText(target.database, rollup.property, v)))
+  const source = rollup.property === titleId ? null : propertyOf(target, rollup.property)
+  if (rollup.property !== titleId && !source) return undefined
+  const read = (r: Page): CellValue => (source ? cells.cell(r, target, source) : r.title || null)
+  return compute(rollup.fn, linked.map(read), v => (rollup.property === titleId ? String(v) : valueText(target, rollup.property, v)))
 }
-

@@ -4,7 +4,7 @@
 // Usage: node tests/evidence/databases/seed-day-table.ts <store-path> [plain|linked|todos|relation|formula]
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
 import { pageContentKey } from '../../../src/domain/editor-document.ts'
-import { storedFormula } from '../../../src/domain/formula.ts'
+import { storedFormula, worldOf } from '../../../src/domain/formula.ts'
 import { todosSourceId } from '../../../src/domain/todos-source.ts'
 import type { Action } from '../../../src/domain/types.ts'
 if (!process.argv[2]) { console.error('Usage: node tests/evidence/databases/seed-day-table.ts <store-path> [plain|linked|todos|relation|formula]'); process.exit(2) }
@@ -42,8 +42,7 @@ if (todos) {
   }
   // Formulas on a table of 100 rows (R4-3): arithmetic, a date against today, a chain, text and a regular expression.
   if (formula) for (const [id, name, typed] of [['twice', 'Twice', 'Pages * 2'], ['late', 'Late', 'if(and(now() > Due, Status != "Done"), "Overdue", "")'], ['days', 'Days', 'dateBetween(Due, today(), "days")'], ['more', 'More', 'Twice + 1'], ['label', 'Label', 'Name + " · " + format(More)'], ['tidy', 'Tidy', 'replaceAll(Name, "[0-9]+", "#")']]) {
-    const db = ws.pages.find(p => p.id === 'list')!.database!
-    await run({ type: 'change-database', pageId: 'list', change: { kind: 'addProperty', property: { id: id!, name: name!, type: 'formula', formula: storedFormula(typed!, db) } } })
+    await run({ type: 'change-database', pageId: 'list', change: { kind: 'addProperty', property: { id: id!, name: name!, type: 'formula', formula: storedFormula(typed!, worldOf(ws), 'list') } } })
   }
   for (let i = 0; i < (formula ? 100 : 25); i++) await run({ type: 'add-row', databaseId: 'list', pageId: `row${i}`, title: `Book ${i}`, values: { ...(relation ? { by: ['author'] } : {}), pages: 100 + i, genre: i % 2 ? 'novel' : 'essay', tags: ['sf'], due: { start: today }, owned: i % 3 === 0, link: `https://example.com/${i}`, notes: `Note ${i}` }, at })
 }

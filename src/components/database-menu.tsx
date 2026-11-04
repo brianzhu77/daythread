@@ -526,7 +526,7 @@ function LinkSettings({ db, property, update, change }: { db: DatabasePage; prop
   const relations = db.database.properties.filter(p => p.type === 'relation')
   const through = relations.find(p => p.id === rollup.relation)
   const target = through && workspace ? databaseSource(workspace, through.target!) : undefined
-  const readable = isDatabase(target) ? target.database.properties.filter(p => p.type !== 'rollup' && !isFormula(p)) : []
+  const readable = isDatabase(target) ? target.database.properties.filter(p => p.type !== 'rollup') : []
   const read = readable.find(p => p.id === rollup.property)
   const fns = rollupFunctionsFor(read?.type ?? 'title')
   return <>
@@ -665,10 +665,10 @@ function FormulaPanel({ db, propertyId, go }: { db: DatabasePage; propertyId: st
   const wide = useWide()
   const property = db.database.properties.find(p => p.id === propertyId)
   const back = () => go({ property: propertyId })
-  if (!property) return <><Head title="Formula" back={() => go('properties')} /><p className="database-menu-quiet">Deleted</p></>
+  if (!property || !workspace) return <><Head title="Formula" back={() => go('properties')} /><p className="database-menu-quiet">Deleted</p></>
   return <>
     <Head title={`Edit formula · ${property.name}`} back={back} />
-    <FormulaEditor workspace={workspace && withLinks(workspace)} db={db} propertyId={propertyId} stored={property.formula ?? ''} wide={wide}
+    <FormulaEditor workspace={workspace} read={withLinks(workspace)} db={db} propertyId={propertyId} stored={property.formula ?? ''} wide={wide}
       onCancel={back} onDone={stored => { if (stored !== property.formula) change({ kind: 'updateProperty', propertyId, formula: stored }, true); back() }} />
   </>
 }

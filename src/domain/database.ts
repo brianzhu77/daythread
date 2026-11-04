@@ -1,7 +1,7 @@
 // Databases (docs/design/databases-model.md): a database is a page with `database` (its properties and views); a row
 // is a child page with `values`. Values are read through their property, never trusted as stored, so a schema change
 // rewrites only the database page. Pure: the domain's commands and the browser's views share it.
-import { formulaProblem } from "./formula.ts";
+import { formulaProblem, rollupProblem, worldOf } from "./formula.ts";
 import type { LocalDate, Page, WeekStart, Workspace } from "./types.ts";
 
 export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url", "email", "phone", "createdTime", "editedTime", "id", "relation", "rollup", "formula"] as const;
@@ -924,7 +924,13 @@ function cleanRollup(input: Rollup | undefined): Rollup {
   return { relation: input.relation, property: input.property, fn: input.fn };
 }
 /** A relation's target is a live database. A rollup reads a relation of this database, and a property of its target, never another rollup: no loop can form. */
-function checkLinks(ws: Workspace, db: Database, property: Property): void {
+function checkLinks(ws: Workspace, databaseId: string, db: Database, property: Property): void {
+  if (property.type === "formula") {
+    // No text that doesn't work replaces one that does (formula design §4).
+    const problem = formulaProblem(property.formula ?? "", worldOf(ws), databaseId, property.id);
+    if (problem) throw new DatabaseError(problem);
+    return;
+  }
   if (property.type === "relation" && property.target !== todosSourceId && !isDatabase(ws.pages.find((p) => p.id === property.target))) throw new DatabaseError("That database isn't there");
   if (property.type !== "rollup") return;
   const { relation, property: read } = property.rollup!;
@@ -938,7 +944,7 @@ function checkLinks(ws: Workspace, db: Database, property: Property): void {
   const source = target.database.properties.find((p) => p.id === read);
   if (!source) throw new DatabaseError("Property not found");
   if (source.type === "rollup") throw new DatabaseError("A rollup can't read another rollup");
-  if (source.type === "formula") throw new DatabaseError("A rollup can't read a formula yet");
+  if (source.type === "formula") { const problem = rollupProblem(worldOf(ws), databaseId, property); if (problem) throw new DatabaseError(problem); }
 }
 /**
  * A link's other end: this side's link written on that side, and a limit of 1 keeping to it. A two-way relation writes its
@@ -992,9 +998,6 @@ function cleanProperty(input: PropertyInput, db: Database, except?: string): Pro
   if (input.type === "formula") {
     if (input.formula !== undefined && (typeof input.formula !== "string" || input.formula.length > limits.formula)) throw new DatabaseError("That formula is too long");
     property.formula = input.formula ?? "";
-    // No text that doesn't work replaces one that does (formula design §4).
-    const problem = formulaProblem(property.formula, db, property.id);
-    if (problem) throw new DatabaseError(problem);
   }
   if (input.prefix !== undefined) {
     const prefix = typeof input.prefix === "string" ? input.prefix.trim() : null;
@@ -1126,7 +1129,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       const added = cleanProperty(change.property, db);
       if (change.viewId !== undefined) view(change.viewId);
       db.properties.push(added);
-      checkLinks(ws, db, added);
+      checkLinks(ws, page.id, db, added);
       if (added.type === "id") numberRows(ws, page);
       // A new property shows in every view, at the end (Notion shows it where it was made; one person rarely needs it hidden elsewhere).
       for (const v of db.views) v.columns.push({ id: added.id });
@@ -1138,7 +1141,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       if (old.mirror && type !== "relation") throw new DatabaseError("Turn off its other side first");
       const next = cleanProperty({ id: old.id, name: change.name ?? old.name, type, options: change.options ?? old.options, format: change.format ?? old.format, withTime: change.withTime ?? old.withTime, prefix: change.prefix ?? old.prefix, target: change.target ?? old.target, limit: change.limit === null ? undefined : change.limit ?? old.limit, rollup: change.rollup ?? old.rollup, formula: change.formula ?? old.formula }, db, old.id);
       if (old.mirror) { if (next.target !== old.target) throw new DatabaseError("Turn off its other side first"); next.mirror = old.mirror; }
-      checkLinks(ws, db, next);
+      checkLinks(ws, page.id, db, next);
       const notes: string[] = [];
       if (type !== old.type) {
         const lost = lostOnTypeChange(ws, page.id, old, type);

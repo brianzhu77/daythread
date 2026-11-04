@@ -1,6 +1,7 @@
 // Every function a formula can call (docs/design/formula.md §2), one line each, with what it takes and gives: the checker reads the
 // same line the evaluator runs, so the field's "expected a number" and the cell can't disagree. Examples are Notion's own.
 import { regexOf, RegexError, type Spend } from './formula-regex.ts'
+import type { Page } from './types.ts'
 
 /** Dates are wall clock, in UTC fields, so arithmetic has no daylight saving in it and a stored date reads as written (design §6). */
 export class FormulaDate {
@@ -13,8 +14,13 @@ export class FormulaDate {
     this.end = end
   }
 }
-export type Value = number | string | boolean | null | FormulaDate | Value[]
-/** `number`, `text`, `boolean`, `date`, `empty`, `any`, or `list:<item>`. */
+/** A row reached through a relation. */
+export class FormulaPage {
+  readonly row: Page
+  constructor(row: Page) { this.row = row }
+}
+export type Value = number | string | boolean | null | FormulaDate | FormulaPage | Value[]
+/** `number`, `text`, `boolean`, `date`, `empty`, `any`, `page:<database>`, or `list:<item>`. */
 export type ValueType = string
 
 export class FormulaRowError extends Error {}
@@ -51,6 +57,8 @@ export interface FormulaFunction {
 export const isList = (t: ValueType) => t.startsWith('list')
 export const itemOf = (t: ValueType): ValueType => (t.startsWith('list:') ? t.slice(5) : 'any')
 const listOf = (t: ValueType): ValueType => `list:${t}`
+/** The database a page, or a list of pages, is from. */
+export const pageTarget = (t: ValueType): string | null => (t.startsWith('page:') ? t.slice(5) : t.startsWith('list:page:') ? t.slice(10) : null)
 export function unionType(a: ValueType, b: ValueType): ValueType {
   if (a === b || b === 'empty') return a
   if (a === 'empty') return b
@@ -162,12 +170,14 @@ export function format(v: Value): string {
   if (typeof v === 'string') return v
   if (typeof v === 'number' || typeof v === 'boolean') return String(v)
   if (Array.isArray(v)) return v.map(format).join(', ')
+  if (v instanceof FormulaPage) return v.row.title || 'Untitled'
   return v.end === undefined ? dateText(v.start, v.timed) : `${dateText(v.start, v.timed)} → ${dateText(v.end, v.timed)}`
 }
 function deepEqual(a: Value, b: Value): boolean {
   if (a === null || b === null) return a === b || isEmpty(a) && isEmpty(b)
   if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => deepEqual(x, b[i]!))
   if (a instanceof FormulaDate && b instanceof FormulaDate) return a.start === b.start && a.end === b.end
+  if (a instanceof FormulaPage && b instanceof FormulaPage) return a.row.id === b.row.id
   return a === b
 }
 function compare(a: Value, b: Value): number | null {
@@ -176,6 +186,7 @@ function compare(a: Value, b: Value): number | null {
   if (typeof a === 'string' && typeof b === 'string') return a < b ? -1 : a > b ? 1 : 0
   if (typeof a === 'boolean' && typeof b === 'boolean') return Number(a) - Number(b)
   if (a instanceof FormulaDate && b instanceof FormulaDate) return a.start - b.start
+  if (a instanceof FormulaPage && b instanceof FormulaPage) return format(a).localeCompare(format(b))
   throw new FormulaRowError("Those two can't be compared")
 }
 const order = (test: (n: number) => boolean) => ([a, b]: Value[]) => { const c = compare(a!, b!); return c === null ? false : test(c) }
@@ -330,7 +341,7 @@ const table: FormulaFunction[] = [
   { name: 'map', group: lists, takes: 'list any', gives: ([, t]) => listOf(t!), each: (list, item) => list.map((v, i) => item(v, i)), doc: 'Each item worked out anew, using current and index.', example: 'map([1, 2, 3], current + index)' },
   { name: 'flat', group: lists, takes: 'list', gives: ([l]) => (isList(itemOf(l!)) ? itemOf(l!) : l!), run: ([l], ctx) => { ctx.spend(1 + listOfValues(l!).length); return listOfValues(l!).flat(1) as Value[] }, doc: 'Lists inside a list, as one list.', example: 'flat([[1, 2], [3, 4]])' },
 
-  { name: 'id', group: other, takes: '', gives: 'text', run: (_, ctx) => ctx.rowId, doc: "This row's ID.", example: 'id()' },
+  { name: 'id', group: other, takes: 'page?', gives: 'text', run: ([page], ctx) => (page instanceof FormulaPage ? page.row.id : ctx.rowId), doc: "This row's ID, or a page's.", example: 'id()' },
   { name: 'equal', group: other, takes: 'any any', gives: 'boolean', run: ([a, b]) => deepEqual(a!, b!), doc: 'True if the two are equal.', example: 'equal(1, 1)' },
   { name: 'unequal', group: other, takes: 'any any', gives: 'boolean', run: ([a, b]) => !deepEqual(a!, b!), doc: 'True if the two differ.', example: 'unequal(1, 2)' },
 
@@ -354,4 +365,3 @@ export const notApplicable: Readonly<Record<string, string>> = {
   name: "name reads a person, and Daythread doesn't have a person type",
   email: "email reads a person, and Daythread doesn't have a person type",
 }
-export const cleanNumber = clean
