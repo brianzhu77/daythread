@@ -283,16 +283,22 @@ export function shownFormula(stored: string, world: FormulaWorld, databaseId: st
     const nameOf = (id: string, db: Database | undefined) => propertyIn(db, id)?.name
     const anywhere = (id: string) => { for (const db of world.databases.values()) { const name = nameOf(id, db); if (name) return name } return undefined }
     const all = [...refs.map(r => ({ ...r, member: false })), ...members.map(m => ({ ...m, member: true }))]
-    const spelled = /\blets?\s*\(/.test(stored)
-    let out = '', last = 0
-    for (const ref of all.sort((a, b) => a.from - b.from)) {
-      const isMember = ref.member && memberIds.has(ref.from)
-      const name = (isMember ? anywhere(ref.id) : nameOf(ref.id, here)) ?? deletedName
-      // After a dot, or where a `let` could take the name for its own, it's spelled out.
-      out += stored.slice(last, ref.from) + (isMember || spelled ? `prop(${quoted(name)})` : writtenName(name))
-      last = ref.to
+    const sorted = all.sort((a, b) => a.from - b.from)
+    const text = (spelled: boolean) => {
+      let out = '', last = 0
+      for (const ref of sorted) {
+        const isMember = ref.member && memberIds.has(ref.from)
+        const name = (isMember ? anywhere(ref.id) : nameOf(ref.id, here)) ?? deletedName
+        // After a dot it's spelled out.
+        out += stored.slice(last, ref.from) + (isMember || spelled ? `prop(${quoted(name)})` : writtenName(name))
+        last = ref.to
+      }
+      return out + stored.slice(last)
     }
-    return out + stored.slice(last)
+    // Bare names only if the whole text reads back as what's stored: next to each other they can make another property's name, and a `let` can take one for its own.
+    const bare = text(false)
+    try { if (storedFormula(bare, world, databaseId) === stored) return bare } catch { /* A deleted property, say: spelled out below. */ }
+    return text(true)
   } catch { return stored }
 }
 
