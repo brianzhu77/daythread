@@ -88,6 +88,9 @@ export interface View {
   filterAny?: true;
   /** What `+ New` starts from in this view, over the database's own (R3-12). */
   defaultTemplate?: string;
+  /** With sub-items on: nested in toggles (table, list) or flat; and which rows. Absent: nested, both. */
+  subItemsDisplay?: SubItemsDisplay;
+  subItemsShow?: SubItemsShow;
   /** A table's foot: what each column adds up to, by column id (design §4.1a, R3-8). */
   calculations?: Record<string, CalcKind>;
   /** What a board's column heads show instead of their count: one per view (R3-24). */
@@ -122,6 +125,12 @@ export const tints = ["gray", "brown", "orange", "yellow", "green", "blue", "pur
 export type Tint = (typeof tints)[number];
 /** One filter rule and a tint. `property`: only the rule's own cell, in a table; the whole row otherwise. */
 export interface ColourRule { id: string; rule: Condition; tint: Tint; scope?: "property" }
+export interface SubItems { parent: string; sub: string }
+export type DependencyMode = "overlap" | "keep" | "none";
+/** Dependencies are on: the two relations, the date they go by (one Date, or a start and an end), and how a shift behaves (sub-items design §3). */
+export interface Dependencies { blockedBy: string; blocking: string; date: string; end?: string; mode: DependencyMode; avoidWeekends?: true }
+export type SubItemsDisplay = "nested" | "flat";
+export type SubItemsShow = "both" | "parents" | "subs";
 export interface Database {
   /** The `database` block that is its place in its parent page; null: shown as a full page. */
   homeBlockId: string | null;
@@ -132,6 +141,9 @@ export interface Database {
   fixed?: true;
   /** What `+ New` starts from in every view without its own (R3-12). */
   defaultTemplate?: string;
+  /** Sub-items are on: which two self-relations make the tree (sub-items design §1). Turning them off clears this and keeps both. */
+  subItems?: SubItems;
+  dependencies?: Dependencies;
   /** The next row number, once an ID property has been made. It only goes up, past a delete or an undone add (R3-9). */
   nextRowNumber?: number;
 }
@@ -536,11 +548,22 @@ function compareValues(property: Property, a: CellValue, b: CellValue): number {
   }
 }
 /** The rows a view shows: live rows, filtered (all conditions), then sorted by each key in turn; empty last; ties keep page order. */
+/** Layouts with no room for a tree: unless it's flat, a parent carries its sub-items on its card (sub-items design §2). A Timeline lists them flat for now: nesting its bars isn't built yet. */
+export const showsSubItemsOnCards = (db: Database, view: Pick<View, "layout" | "subItemsDisplay">): boolean =>
+  Boolean(db.subItems) && view.layout !== "table" && view.layout !== "list" && view.layout !== "timeline" && view.subItemsDisplay !== "flat";
+/** Parents only, or sub-items only. A row whose parent has gone reads as a parent. */
+function inSubItemsShow(db: Database, row: Page, view: View): boolean {
+  if (!db.subItems) return true;
+  const show = showsSubItemsOnCards(db, view) ? "parents" : view.subItemsShow;
+  if (!show || show === "both") return true;
+  const raw = row.values?.[db.subItems.parent];
+  return (Array.isArray(raw) && raw.length > 0) === (show === "subs");
+}
 export function viewRows(ws: Workspace, databaseId: string, view: View, context: ViewContext): Page[] {
   const page = ws.pages.find((p) => p.id === databaseId);
   if (!isDatabase(page)) return [];
   const db = page.database;
-  const rows = databaseRows(ws, databaseId).filter((r) => inView(db, r, view, context));
+  const rows = databaseRows(ws, databaseId).filter((r) => inView(db, r, view, context) && inSubItemsShow(db, r, view));
   // A sort on a deleted property is dropped quietly (design §13).
   const sorts = view.sort.map((s) => ({ ...s, property: propertyOf(db, s.by) })).filter((s): s is Sort & { property: Property } => s.property !== null);
   if (!sorts.length) return rows;
@@ -805,11 +828,13 @@ export type DatabaseChange =
   | { kind: "addProperty"; property: PropertyInput; /** the view it was added from: it shows there; other views list it too */ viewId?: string }
   | { kind: "updateProperty"; propertyId: string; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
   /** "Show on Books": a relation's other side, made as a property of the target, or gone with null. */
+  | { kind: "setDependencies"; on: { blockedBy: string; blocking: string; date: string; end?: string; mode: DependencyMode; avoidWeekends?: boolean; using?: boolean } | null }
+  | { kind: "setSubItems"; on: { parent: string; sub: string; using?: boolean } | null }
   | { kind: "setMirror"; propertyId: string; mirror: { id: string; name: string } | null }
   | { kind: "removeProperty"; propertyId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; colourRules?: ColourRule[]; frozenThrough?: string | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
+  | { kind: "updateView"; viewId: string; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; colourRules?: ColourRule[]; frozenThrough?: string | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
   /** null: none */
   | { kind: "setDefaultTemplate"; templateId: string | null }
   | { kind: "removeView"; viewId: string }
@@ -1111,7 +1136,7 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
 function cleanView(db: Database, input: View): View {
   if (!input) throw new DatabaseError("Unknown view type");
   const layout = cleanLayout(input.layout);
-  return { id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.wrapName ? { wrapName: true as const } : {}), ...(input.boardCalculation ? { boardCalculation: cleanBoardCalculation(db, input.boardCalculation) } : {}), ...(input.defaultTemplate ? { defaultTemplate: input.defaultTemplate } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...cleanGroup(db, input, layout, input) };
+  return { ...(input.subItemsDisplay === 'flat' ? { subItemsDisplay: 'flat' as const } : {}), ...(input.subItemsShow === 'parents' || input.subItemsShow === 'subs' ? { subItemsShow: input.subItemsShow } : {}), id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.wrapName ? { wrapName: true as const } : {}), ...(input.boardCalculation ? { boardCalculation: cleanBoardCalculation(db, input.boardCalculation) } : {}), ...(input.defaultTemplate ? { defaultTemplate: input.defaultTemplate } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...cleanGroup(db, input, layout, input) };
 }
 function move<T extends { id: string }>(list: T[], id: string, beforeId: string | null): T[] {
   const item = list.find((x) => x.id === id);
@@ -1188,8 +1213,48 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       if (next.type === "id") numberRows(ws, page);
       return notes.join(" · ") || (next.name !== old.name ? `Renamed to ${next.name}` : "Property saved");
     }
+    case "setDependencies": {
+      if (db.fixed) throw new DatabaseError("To-dos can't have dependencies");
+      if (!change.on) { delete db.dependencies; return "Dependencies off"; }
+      const { blockedBy, blocking, date, end, mode, avoidWeekends, using } = change.on;
+      const writable = (id: string | undefined) => { const p = id ? db.properties.find((x) => x.id === id) : undefined; if (!p || p.type !== "date") throw new DatabaseError("Dependencies need a Date property to go by"); };
+      writable(date);
+      if (end !== undefined) writable(end);
+      if (!(["overlap", "keep", "none"] as const).includes(mode)) throw new DatabaseError("Unknown mode");
+      if (using) {
+        const relation = property(blockedBy);
+        if (relation.type !== "relation" || relation.target !== page.id || relation.mirror !== blocking) throw new DatabaseError("Dependencies need a two-way relation to this database");
+      } else {
+        const free = (name: string) => { let next = name; for (let n = 2; db.properties.some((p) => fold(p.name) === fold(next)); n++) next = `${name} ${n}`; return next; };
+        changeDatabase(ws, page, { kind: "addProperty", property: { id: blockedBy, name: free("Blocked by"), type: "relation", target: page.id } });
+        changeDatabase(ws, page, { kind: "setMirror", propertyId: blockedBy, mirror: { id: blocking, name: free("Blocking") } });
+        for (const v of db.views) v.columns = v.columns.filter((c) => c.id !== blockedBy && c.id !== blocking);
+      }
+      db.dependencies = { blockedBy, blocking, date, ...(end ? { end } : {}), mode, ...(avoidWeekends ? { avoidWeekends: true as const } : {}) };
+      return "Dependencies on";
+    }
+    case "setSubItems": {
+      if (db.fixed) throw new DatabaseError("To-dos' nesting lives on their pages");
+      if (!change.on) { delete db.subItems; return "Sub-items off"; }
+      const { parent, sub, using } = change.on;
+      if (using) {
+        const relation = property(parent);
+        if (relation.type !== "relation" || relation.target !== page.id || relation.mirror !== sub) throw new DatabaseError("Sub-items need a two-way relation to this database");
+        relation.limit = 1;
+      } else {
+        const free = (name: string) => { let next = name; for (let n = 2; db.properties.some((p) => fold(p.name) === fold(next)); n++) next = `${name} ${n}`; return next; };
+        changeDatabase(ws, page, { kind: "addProperty", property: { id: parent, name: free("Parent item"), type: "relation", target: page.id, limit: 1 } });
+        changeDatabase(ws, page, { kind: "setMirror", propertyId: parent, mirror: { id: sub, name: free("Sub-item") } });
+        // The toggle shows them. Properties can still put them in a view.
+        for (const v of db.views) v.columns = v.columns.filter((c) => c.id !== parent && c.id !== sub);
+      }
+      db.subItems = { parent, sub };
+      return "Sub-items on";
+    }
     case "removeProperty": {
       const old = property(change.propertyId);
+      if (db.subItems && (db.subItems.parent === old.id || db.subItems.sub === old.id)) delete db.subItems;
+      if (db.dependencies && [db.dependencies.blockedBy, db.dependencies.blocking, db.dependencies.date, db.dependencies.end].includes(old.id)) delete db.dependencies;
       // Its values stay on the rows, unread, so Undo brings them back with it.
       db.properties = db.properties.filter((p) => p !== old);
       for (const v of db.views) v.columns = v.columns.filter((c) => c.id !== old.id);
@@ -1265,6 +1330,8 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         ...rest,
         layout,
         ...(change.name !== undefined ? { name: cleanName(change.name, "A view") } : {}),
+        ...(change.subItemsDisplay ? { subItemsDisplay: change.subItemsDisplay } : {}),
+        ...(change.subItemsShow ? { subItemsShow: change.subItemsShow } : {}),
         ...(change.columns !== undefined ? { columns: cleanColumns(db, change.columns) } : {}),
         ...(change.sort !== undefined ? { sort: cleanSort(db, change.sort, old.sort) } : {}),
         ...(change.filter !== undefined ? { filter: cleanFilter(db, change.filter, old.filter) } : {}),
