@@ -26,7 +26,7 @@ A workspace holds one person, so a comment is a note attached to something, kept
   - Selected text: `Comment` in its bar.
   - A block: `Comment` in the handle's menu, including an image, a file, a table or a card. A chosen block's bar has it too.
   - A page or a row page: `Comment` in the head's `⋯`.
-  - A row from a view: `Comment` in its menu, as Open and Move are there. Notion leaves a Timeline out unless its table shows, and I'd follow that.
+  - A row: from its row page's `⋯`, including in a peek. **Corrected (Roadbuster ad27a337, Bumblebee):** a view has no row menu to put it in, as a table row only has Open, and comments don't justify adding one. A row menu would be its own decision. Notion's page has one, so this is a known difference.
   - ⌘⇧M at 1280 does the first that applies: selected text, then the block at the caret, then the page.
 - **Writing:** a small field at the place at 1280, a sheet at 390 that clears the keyboard. Enter on a phone makes a new line and the button sends. At 1280 ⌘Enter sends and Esc cancels, keeping the draft if there are words.
 - **Seeing:**
@@ -35,7 +35,7 @@ A workspace holds one person, so a comment is a note attached to something, kept
   - A page or row comment shows a count in the head, which opens the pane.
   - Resolved threads leave no mark.
 - **The pane:** at the side at 1280, a sheet at 390. Threads with the newest reply first, Open by default, Resolved one tap away. A thread shows the words it's on, its comments with their times, and Reply. Tapping it goes to the place. It has no author name or avatar, as there's one person.
-- **Actions on a comment:** Edit and Delete. **On a thread:** Resolve and Reopen. Deleting and resolving have the usual notice with Undo.
+- **Actions on a comment:** Edit and Delete. **On a thread:** Resolve and Reopen. Deleting and resolving have the usual notice with Undo. **Adding and editing take no Undo slot (Bumblebee, after Roadbuster ad27a337):** they have no notice, so taking the one slot would silently cost the Undo of whatever came before, such as a table just deleted. A comment added by mistake can be deleted, and an edit edited again. Deleting the last comment removes its thread; deleting the first keeps the replies (Roadbuster). The count in the head is open threads only. Going to another page closes the pane. A draft survives a reload until it's sent or cancelled, as a phone can discard a tab that's in the background.
 
 ## 3. Where a comment is stored (for Roadbuster, the main choice)
 
@@ -90,4 +90,4 @@ A workspace holds one person, so a comment is a note attached to something, kept
 
 ## 8. Success read
 
-Counted only, in usage reads: threads made per week, by kind (page, block, text), and how many get resolved. If nobody makes any after release, that's a reason to stop at the first step of §6 rather than a reason to remove it (57deaed7).
+Counted only, in usage reads, by reading the table: nothing to build for it. Threads made per week, by kind (page, block, text), and how many get resolved. If nobody makes any after release, that's a reason to stop at the first step of §6 rather than a reason to remove it (57deaed7).
