@@ -84,7 +84,7 @@ A workspace holds one person, so a comment is a note attached to something, kept
 ## 7. Open for review
 
 - **Decided (Lead 3f167c20):** reactions wait for shared pages, and margin marks only, with no comments at the side (§1). **Lead, still open:** no count of comments in Pages or the sidebar.
-- **Jazz:** where the margin mark sits on a To-do line and in a section with hidden empty rows (B19). The underline in both themes. The pane against a side peek: only one should be open at 1280.
+- **Jazz:** where the margin mark sits on a To-do line and in a section with hidden empty rows (B19). The underline in both themes. **Settled (Jazz a9dd4697, replacing my "only one should be open"):** at 1100 px and wider the pane and a peek stay open side by side, as the peek's row is what the note is about. Below that the pane lies over them, and Esc closes the pane first, then the peek.
 - **Roadbuster:** §3's storage, how a command for a comment gets its one Undo, and whether Linked from or Search needs anything new.
 - **Ratchet:** the anchor falling back when words change, a thread on a moved or trashed line, owner checks, and a synced block's thread.
 
