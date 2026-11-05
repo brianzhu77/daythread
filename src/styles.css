@@ -2161,8 +2161,10 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-chart-side { position: absolute; inset: 0; left: 50%; display: flex; width: min(70%, 48px); gap: 1px; transform: translateX(-50%); }
 .database-chart-side-slot { position: relative; flex: 1 1 0; min-width: 0; height: 100%; }
 .database-chart-bar .database-chart-side-slot i { left: 0; right: 0; width: auto; transform: none; }
-.database-chart-line-track.is-side { display: flex; flex-direction: column; justify-content: center; gap: 1px; height: auto; }
-.database-chart-line-track.is-side i { position: static; display: block; height: 4px; min-height: 0; }
+/* Across, each series a bar of its own height, and the rows further apart than the bars inside one. */
+.database-chart-line-track.is-side { display: flex; flex-direction: column; justify-content: center; gap: 2px; height: auto; padding: 4px 0; }
+.database-chart-line-track.is-side i { position: static; display: block; height: 10px; min-height: 0; box-shadow: none; }
+.database-chart-line-track.is-side i.is-zero { min-width: 0; }
 .database-chart-line-path .is-grey-1 { stroke: var(--ink-2); } .database-chart-line-path .is-grey-2 { stroke: var(--ink-3); } .database-chart-line-path .is-grey-3 { stroke: var(--chart-grey-4); }
 .database-chart-line-path .is-other { stroke: var(--ink-3); stroke-dasharray: 4 3; }
 /* Under the chart, in a column, so its basis would be a height. */

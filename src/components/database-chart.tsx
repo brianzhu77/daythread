@@ -93,13 +93,17 @@ function stackOf(p: ChartPoint): { key: string; from: number; to: number }[] {
   let up = 0, down = 0
   return (p.parts ?? []).flatMap(x => { const v = x.value; if (!v) return []; if (v > 0) { const from = up; up += v; return [{ key: x.key, from, to: up }] } const to = down; down += v; return [{ key: x.key, from: down, to }] })
 }
-function VerticalBars({ points, series, sideBySide, focus, dateAxis, line, opened, onOpen, textOf }: { points: ChartPoint[]; series?: ChartSeries[]; sideBySide?: boolean; focus?: string | null; dateAxis: boolean; line?: boolean; opened: string | null; onOpen: (key: string) => void; textOf: (r: CalcResult) => string }) {
+/** One side-by-side bar's width in a band, as `.database-chart-side` lays them out: 70% of the band up to 48 px, 1 px apart. */
+const sideBarWidth = (band: number, parts: number) => (Math.min(band * 0.7, 48) - (parts - 1)) / parts
+function VerticalBars({ points, series, sideBySide, focus, dateAxis, line: asLine, opened, onOpen, textOf }: { points: ChartPoint[]; series?: ChartSeries[]; sideBySide?: boolean; focus?: string | null; dateAxis: boolean; line?: boolean; opened: string | null; onOpen: (key: string) => void; textOf: (r: CalcResult) => string }) {
   const { ref, width } = useWidth()
+  const band = width ? (width - plotLeft) / Math.max(points.length, 1) : 0
+  // Side-by-side bars too thin to tell apart read as a line for each series, for this width only.
+  const line = asLine || Boolean(sideBySide && series && band && sideBarWidth(band, Math.max(...points.map(p => p.parts?.length ?? 1))) < 4)
   // A stack's reach is its bands', a line's is each series' own.
   const values = points.flatMap(p => (p.parts && (line || sideBySide) ? p.parts.flatMap(x => (x.value === null ? [] : [x.value])) : p.parts ? stackOf(p).flatMap(b => [b.from, b.to]) : p.value === null ? [] : [p.value]))
   const ticks = chartTicks(values), low = ticks[0]!, high = ticks.at(-1)!, span = high - low || 1
   const at = (n: number) => ((n - low) / span) * 100
-  const band = width ? (width - plotLeft) / Math.max(points.length, 1) : 0
   const step = axisStep(points, band, dateAxis, label => labelWidth(ref.current, label))
   // A date can be counted along from the labels either side, but an option can't, so bars that can't all be named go across, for this width only.
   if (!dateAxis && step > 1) return <div ref={ref}><HorizontalBars points={points} {...(series ? { series } : {})} sideBySide={Boolean(sideBySide)} focus={focus ?? null} opened={opened} onOpen={onOpen} textOf={textOf} /></div>
@@ -117,7 +121,7 @@ function VerticalBars({ points, series, sideBySide, focus, dateAxis, line, opene
           const value = p.value, from = at(Math.min(0, value ?? 0)), to = at(Math.max(0, value ?? 0)), text = textOf(p.result)
           return <button key={p.key} type="button" className={`database-chart-bar${opened === p.key ? ' is-open' : ''}${opened && opened !== p.key ? ' is-dim' : ''}`} title={`${p.name}: ${text}`} aria-label={`${p.name}: ${text}`} aria-pressed={opened === p.key} onClick={() => onOpen(p.key)}>
             {p.parts && line ? (band && band < 12 ? null : p.parts.map(x => { const sr = series?.find(y => y.key === x.key); return x.value === null ? null : <u key={x.key} className={`${greyOf(sr)}${focus && focus !== x.key ? ' is-dim' : ''}`} style={{ bottom: `${at(x.value)}%` }} /> }))
-              : p.parts && sideBySide ? <span className="database-chart-side">{p.parts.map(x => { const sr = series?.find(y => y.key === x.key), v = x.value ?? 0, a = at(Math.min(0, v)), b = at(Math.max(0, v)); return <span key={x.key} className="database-chart-side-slot"><i className={`${greyOf(sr)}${focus && focus !== x.key ? ' is-dim' : ''}`} style={{ bottom: `${a}%`, height: `${b - a}%` }} /></span> })}</span>
+              : p.parts && sideBySide ? <span className="database-chart-side">{p.parts.map(x => { const sr = series?.find(y => y.key === x.key), v = x.value ?? 0, a = at(Math.min(0, v)), b = at(Math.max(0, v)); return <span key={x.key} className="database-chart-side-slot">{v ? <i className={`${greyOf(sr)}${focus && focus !== x.key ? ' is-dim' : ''}`} style={{ bottom: `${a}%`, height: `${b - a}%` }} /> : null}</span> })}</span>
               : p.parts ? stackOf(p).map(b => { const sr = series?.find(y => y.key === b.key); return <i key={b.key} className={`${greyOf(sr)}${focus && focus !== b.key ? ' is-dim' : ''}`} style={{ bottom: `${at(b.from)}%`, height: `${at(b.to) - at(b.from)}%` }} /> })
               : line ? (value === null || (band && band < 12) ? null : <u style={{ bottom: `${at(value)}%` }} />) : value ? <i style={{ bottom: `${from}%`, height: `${to - from}%` }} /> : null}
             {band >= 34 && value !== null && !(p.parts && (line || sideBySide)) && <b style={{ bottom: `${line ? at(value) + 2 : p.parts ? at(Math.max(0, ...stackOf(p).map(x => x.to))) : to}%` }}>{shortNumber(value)}</b>}
@@ -141,7 +145,7 @@ function HorizontalBars({ points, series, sideBySide, focus, opened, onOpen, tex
       const value = p.value, from = at(Math.min(0, value ?? 0)), to = at(Math.max(0, value ?? 0)), text = textOf(p.result)
       return <button key={p.key} type="button" className={`database-chart-line${opened === p.key ? ' is-open' : ''}${opened && opened !== p.key ? ' is-dim' : ''}`} title={`${p.name}: ${text}`} aria-label={`${p.name}: ${text}`} aria-pressed={opened === p.key} onClick={() => onOpen(p.key)}>
         <span className="database-chart-line-name">{p.name}</span>
-        <span className={`database-chart-line-track${p.parts && sideBySide ? ' is-side' : ''}`}>{p.parts && sideBySide ? p.parts.map(x => { const sr = series?.find(y => y.key === x.key), v = x.value ?? 0, a = at(Math.min(0, v)), b = at(Math.max(0, v)); return <i key={x.key} className={`${greyOf(sr)}${focus && focus !== x.key ? ' is-dim' : ''}`} style={{ marginLeft: `${a}%`, width: `${b - a}%` }} /> }) : p.parts ? stackOf(p).map(b => { const sr = series?.find(y => y.key === b.key); return <i key={b.key} className={`${greyOf(sr)}${focus && focus !== b.key ? ' is-dim' : ''}`} style={{ left: `${at(b.from)}%`, width: `${at(b.to) - at(b.from)}%` }} /> }) : value ? <i style={{ left: `${from}%`, width: `${to - from}%` }} /> : null}</span>
+        <span className={`database-chart-line-track${p.parts && sideBySide ? ' is-side' : ''}`}>{p.parts && sideBySide ? p.parts.map(x => { const sr = series?.find(y => y.key === x.key), v = x.value ?? 0, a = at(Math.min(0, v)), b = at(Math.max(0, v)); return <i key={x.key} className={`${greyOf(sr)}${v ? '' : ' is-zero'}${focus && focus !== x.key ? ' is-dim' : ''}`} style={{ marginLeft: `${a}%`, width: `${b - a}%` }} /> }) : p.parts ? stackOf(p).map(b => { const sr = series?.find(y => y.key === b.key); return <i key={b.key} className={`${greyOf(sr)}${focus && focus !== b.key ? ' is-dim' : ''}`} style={{ left: `${at(b.from)}%`, width: `${at(b.to) - at(b.from)}%` }} /> }) : value ? <i style={{ left: `${from}%`, width: `${to - from}%` }} /> : null}</span>
         <span className="database-chart-line-value">{value === null ? text : shortNumber(value)}</span>
       </button>
     })}
