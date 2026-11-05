@@ -656,7 +656,13 @@ function ChartSettingsRows({ db, view }: { db: DatabasePage; view: View }) {
         <option value="axis">Its own order</option><option value="value">Value</option>
       </select>
     </label>}
-    {settings.form !== 'number' && settings.form !== 'donut' && !settings.sortByValue && counts && <label className="database-menu-row">Cumulative
+    {(settings.form === 'bar' || settings.form === 'barHorizontal' || settings.form === 'line') && counts && !settings.cumulative && <label className="database-menu-row">Group by
+      <select aria-label="Group by" value={view.subGroupBy ?? ''} onChange={e => { const subGroupBy = e.target.value || null; changeView(() => ({ subGroupBy })) }}>
+        <option value="">None</option>
+        {choices.filter(p => p.id !== axis?.id).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </label>}
+    {settings.form !== 'number' && settings.form !== 'donut' && !settings.sortByValue && !view.subGroupBy && counts && <label className="database-menu-row">Cumulative
       <input type="checkbox" checked={Boolean(settings.cumulative)} onChange={e => { const on = e.target.checked; set(c => (on ? { ...c, cumulative: true } : without(c, 'cumulative'))) }} />
     </label>}
   </>

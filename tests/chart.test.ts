@@ -144,6 +144,19 @@ test('a line has its points in order, with a blank left as a blank', () => {
   assert.deepEqual(pairs(of(h, view({ chart: { form: 'line', measure: { by: 'pages', kind: 'sum' } } }))).map(x => x[1]), [700, 100, null, null])
   assert.deepEqual(pairs(of(h, view({ chart: { form: 'line', cumulative: true } }))).map(x => x[1]), [2, 3, 3, 1])
 })
+test('Group by: a value in each series, four largest named and the rest in Other, only for what adds up', () => {
+  const h = shelf(), v = (over: Partial<View> = {}) => view({ groupBy: 'kind', subGroupBy: 'tags', hideEmptyGroups: true, ...over })
+  const d = chartData(h.db(), v(), viewRows(h.ws, 'list', v(), ctx)); assert.ok(d && d !== 'choose')
+  assert.deepEqual(d.series!.map(s => [s.name, s.total, s.grey]), [['SF', 2, 0], ['History', 1, 1], ['No value', 2, 2]])
+  assert.deepEqual(d.points.find(p => p.name === 'Novel')!.parts, [{ key: 'sf', value: 2 }, { key: 'hist', value: 1 }, { key: 'none', value: 0 }])
+  // A multi-select counts a row under each of its values, as Group does, so a stack can reach past its count; the bar's own value doesn't change.
+  assert.equal(d.points.find(p => p.name === 'Novel')!.value, 2)
+  // A sum stacks; an average doesn't, and a Cumulative doesn't.
+  const sum = v({ chart: { form: 'bar', measure: { by: 'pages', kind: 'sum' } } }), ds = chartData(h.db(), sum, viewRows(h.ws, 'list', sum, ctx)); assert.ok(ds && ds !== 'choose'); assert.ok(ds.series)
+  const avg = v({ chart: { form: 'bar', measure: { by: 'pages', kind: 'average' } } }), da = chartData(h.db(), avg, viewRows(h.ws, 'list', avg, ctx)); assert.ok(da && da !== 'choose'); assert.equal(da.series, undefined)
+  const cum = v({ chart: { form: 'bar', cumulative: true } }), dc = chartData(h.db(), cum, viewRows(h.ws, 'list', cum, ctx)); assert.ok(dc && dc !== 'choose'); assert.equal(dc.series, undefined)
+  const none = view({ chart: { form: 'donut' }, subGroupBy: 'tags' }), dn = chartData(h.db(), none, viewRows(h.ws, 'list', none, ctx)); assert.ok(dn && dn !== 'choose'); assert.equal(dn.series, undefined)
+})
 test('a short number for tight places', () => {
   assert.equal(shortNumber(1000000000), '1B'); assert.equal(shortNumber(1234567), '1.2M'); assert.equal(shortNumber(9999), '9,999'); assert.equal(shortNumber(0.5), '0.5'); assert.equal(shortNumber(-25000), '-25K')
 })

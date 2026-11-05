@@ -2143,6 +2143,21 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-chart-legend-item .is-other { box-sizing: border-box; border: 1px solid var(--ink-3); background: none; }
 .database-chart-legend-item .is-none { background: none; }
 .database-chart-from { color: var(--ink-2); }
+/* Group by: bands and lines in the same greys as a donut's. */
+.database-chart-bar i.is-grey-0, .database-chart-line-track i.is-grey-0, .database-chart-bar u.is-grey-0 { background: var(--ink); }
+.database-chart-bar i.is-grey-1, .database-chart-line-track i.is-grey-1, .database-chart-bar u.is-grey-1 { background: var(--ink-2); }
+.database-chart-bar i.is-grey-2, .database-chart-line-track i.is-grey-2, .database-chart-bar u.is-grey-2 { background: var(--ink-3); }
+.database-chart-bar i.is-grey-3, .database-chart-line-track i.is-grey-3, .database-chart-bar u.is-grey-3 { background: var(--chart-grey-4); }
+.database-chart-bar i.is-other, .database-chart-line-track i.is-other { box-sizing: border-box; border: 1px solid var(--ink-3); background: none; }
+.database-chart-bar u.is-other { box-sizing: border-box; border: 1px solid var(--ink-3); background: var(--bg-doc); }
+.database-chart-bar i[class*="is-"].is-dim, .database-chart-line-track i.is-dim, .database-chart-bar u.is-dim, .database-chart-line-path path.is-dim { opacity: .25; }
+.database-chart-bar i { border-radius: 0; }
+.database-chart-line-path .is-grey-1 { stroke: var(--ink-2); } .database-chart-line-path .is-grey-2 { stroke: var(--ink-3); } .database-chart-line-path .is-grey-3 { stroke: var(--chart-grey-4); }
+.database-chart-line-path .is-other { stroke: var(--ink-3); stroke-dasharray: 4 3; }
+/* Under the chart, in a column, so its basis would be a height. */
+.database-chart-legend.is-row { flex: 0 0 auto; flex-flow: row wrap; gap: 0 16px; max-width: none; }
+.database-chart-legend.is-row .database-chart-legend-item { grid-template-columns: 12px auto; }
+.database-chart-legend-item.is-open span { font-weight: var(--weight-semibold); }
 .database-chart-horizontal { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .database-chart-line { display: grid; grid-template-columns: minmax(0, 30%) minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 28px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-ui); text-align: left; cursor: pointer; touch-action: manipulation; }
 .database-chart-line-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
