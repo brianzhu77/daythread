@@ -87,29 +87,30 @@ interface TickDeps {
  */
 export async function runTick({ store, loadWorkspace, send, now = new Date(), windowMs = tickWindowMs }: TickDeps): Promise<TickSummary> {
   const summary: TickSummary = { workspaces: 0, due: 0, sent: 0, gone: 0, failed: 0 }
+  const started = Date.now()
   for (const { workspaceId, subscriptions } of await store.subscribed()) {
     summary.workspaces++
     const ws = await loadWorkspace(workspaceId)
     if (!ws) continue
     const due = dueReminders(ws, now.getTime() - windowMs, now.getTime())
-    const fresh = new Set(await store.claim(workspaceId, due.map(r => r.key), now))
-    const done: string[] = [], again: string[] = []
     let live = subscriptions
-    for (const reminder of due.filter(r => fresh.has(r.key))) {
+    for (const reminder of due) {
+      // Taken right before it's sent and settled right after, each on its own lease, so a long batch can't outlast one. The clock moves with the batch.
+      const at = new Date(now.getTime() + Date.now() - started)
+      if (!(await store.claim(workspaceId, [reminder.key], at)).length) continue
       const signedUp = live.filter(s => s.since <= reminder.fireAt)
-      if (!signedUp.length) { done.push(reminder.key); continue }
+      if (!signedUp.length) { await store.markSent(workspaceId, [reminder.key], at); continue }
       summary.due++
+      // At once, so however many devices, one reminder takes no longer than one send's timeout.
+      const results = await Promise.all(signedUp.map(async sub => [sub, await send(sub, { key: reminder.key, title: reminder.title, body: reminder.body, url: reminder.url })] as const))
       let taken = false
-      for (const sub of signedUp) {
-        const result = await send(sub, { key: reminder.key, title: reminder.title, body: reminder.body, url: reminder.url })
+      for (const [sub, result] of results) {
         if (result === 'ok') { summary.sent++; taken = true }
         else if (result === 'gone') { summary.gone++; taken = true; await store.remove(sub.endpoint); live = live.filter(s => s.endpoint !== sub.endpoint) }
         else summary.failed++
       }
-      if (taken || !live.length) done.push(reminder.key); else again.push(reminder.key)
+      if (taken || !live.length) await store.markSent(workspaceId, [reminder.key], at); else await store.release(workspaceId, [reminder.key])
     }
-    await store.markSent(workspaceId, done, now)
-    await store.release(workspaceId, again)
   }
   if (now.getMinutes() === 0) await store.prune(now)
   return summary

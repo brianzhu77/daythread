@@ -256,4 +256,24 @@ test('two ticks at once send one reminder once, and a device moved to another wo
   assert.equal(moved[0]!.workspaceId, wsB)
   assert.ok(moved[0]!.subscriptions[0]!.since > before!.subscriptions[0]!.since, 'a move starts again')
 })
+test('a slow batch holds each reminder only while it sends it: a second tick takes the later ones, once, and a slow device doesn\'t delay the next (Ratchet, #138)', async () => {
+  const { push, wsA } = await stores()
+  await push.subscribe(wsA, { endpoint: 'https://push.example/a', p256dh: 'p', auth: 'a' })
+  await push.subscribe(wsA, { endpoint: 'https://push.example/b', p256dh: 'p', auth: 'b' })
+  await push.subscribe(wsA, { endpoint: 'https://push.example/c', p256dh: 'p', auth: 'c' })
+  const at = '2099-10-28', w = workspace('UTC', [{ id: 'd', type: 'daily', date: at, title: '', nodes: [line('l1', [text('One '), chip('e1', at, '15:00')]), line('l2', [text('Two '), chip('e2', at, '15:01')])] }])
+  const now = new Date(zonedEpoch(at, '15:02', 'UTC')), sent: string[] = []
+  let release!: () => void
+  const held = new Promise<void>(r => { release = r })
+  let started = 0
+  const first = runTick({ store: push, loadWorkspace: async () => w, send: async (s, p) => { started++; sent.push(`${s.auth}:${p.title}`); if (p.title === 'One') await held; return 'ok' }, now })
+  while (started < 3) await new Promise(r => setTimeout(r, 5))
+  assert.deepEqual(sent.slice().sort(), ['a:One', 'b:One', 'c:One'], 'every device at once: none waits on another')
+  const second = await runTick({ store: push, loadWorkspace: async () => w, send: async (s, p) => { sent.push(`${s.auth}:${p.title}`); return 'ok' }, now })
+  assert.equal(second.sent, 3, 'the later one was never held by the first tick')
+  release()
+  assert.equal((await first).sent, 3, 'and the first tick finds it taken')
+  assert.equal(sent.filter(k => k.endsWith('Two')).length, 3)
+  assert.equal(sent.filter(k => k.endsWith('One')).length, 3)
+})
 

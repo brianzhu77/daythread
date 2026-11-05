@@ -19,7 +19,7 @@ export function pushConfig(env: NodeJS.ProcessEnv = process.env): PushConfig | n
 /** How long a push service keeps a reminder for a device that is offline: an hour, then it is stale anyway. */
 const ttlSeconds = 3600
 
-/** Well under a tick's lease, so only a crash can outlast it, and a slow push service can't send one reminder twice. */
+/** Well under a reminder's lease (`leaseMs`), so only a crash can outlast it, and a slow push service can't send one reminder twice. */
 const sendTimeoutMs = 30_000
 
 /** The real sender; `origin` is the site's address, the VAPID subject when none is configured. */

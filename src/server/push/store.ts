@@ -10,7 +10,7 @@ export interface SubscribedWorkspace { workspaceId: string; subscriptions: (Push
 
 /** How long a sent key is remembered: longer than any window a tick looks back over. */
 export const sentKeepMs = 7 * 24 * 3600_000
-/** How long a tick holds a reminder it's sending: longer than a tick's sends take, and short enough that one that died is retried within the hour it's looked for. */
+/** How long a tick holds a reminder it's sending: longer than one reminder's sends can take, and short enough that one that died is retried within the hour it's looked for. */
 export const leaseMs = 5 * 60_000
 
 export class PushStore {
