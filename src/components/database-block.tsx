@@ -85,7 +85,8 @@ export function shownView(db: Database, blockId: string): View {
 }
 export type ViewFields = Omit<Extract<DatabaseChange, { kind: 'updateView' }>, 'kind' | 'viewId'>
 /** A change to a view's own settings: everything that edits one goes through here, built from its latest copy. */
-export type ChangeView = (build: (current: View) => ViewFields) => void
+/** `notice`: says so with an Undo, where a change takes more than one tap's worth away. A linked view's block saves with its page, which has its own way back. */
+export type ChangeView = (build: (current: View) => ViewFields, notice?: string) => void
 /** Which block the menu is open on: a linked view's changes go to its block, not its database. */
 export const MenuBlock = createContext<string | null>(null)
 export function useViewChange(databaseId: string, viewId: string): ChangeView {
@@ -93,10 +94,10 @@ export function useViewChange(databaseId: string, viewId: string): ChangeView {
   const blockId = useContext(MenuBlock)
   const linked = blockId ? linkedBlocks.get(blockId) : undefined
   if (linked) return linked.change
-  return build => void run(ws => {
+  return (build, notice) => void run(ws => {
     const now = ws.pages.find(p => p.id === databaseId), current = isDatabase(now) ? now.database.views.find(v => v.id === viewId) : undefined
     return current ? { type: 'change-database', pageId: databaseId, change: { kind: 'updateView', viewId, ...build(current) } } : null
-  })
+  }, notice ? r => ({ text: notice, undoOperationId: r.operationId }) : undefined)
 }
 
 /** Databases being made by `/` Database in this tab: the block shows "Creating…", then "Not created · Retry". */

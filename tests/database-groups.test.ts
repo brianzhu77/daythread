@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { columnMoved, hasFilter, rowColour, type ColourRule, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
+import { canHoldGroup, moveIntoGroup, moveIntoNewGroup, moveOutOfGroup, moveRulesOut, removeGroup, treeFields, withoutRule } from '../src/domain/filter-tree.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
 import { harness, today } from './v2-helpers.ts'
@@ -1047,5 +1048,21 @@ test('filter groups: stored only as far as three layers and twenty rules, held b
   // The command's shape stops at three layers, so nothing deeper reaches the store.
   const parsed = commandSchema.parse({ operationId: 'a', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId: 'v', filterGroups: [{ rules: [rule], groups: [{ rules: [rule], groups: [{ rules: [rule] }] }] }] } } }) as never as { action: { change: { filterGroups: { groups: object[] }[] } } }
   assert.equal('groups' in parsed.action.change.filterGroups[0]!.groups[0]!, false)
+})
+
+test('filter groups: the sheet\'s moves keep every rule, and no group stands empty', () => {
+  const a = { by: 'a', op: 'isEmpty' } as const, b = { by: 'b', op: 'isEmpty' } as const, c = { by: 'c', op: 'isEmpty' } as const
+  assert.deepEqual(moveIntoNewGroup({ rules: [a, b] }, 0), { rules: [b], groups: [{ rules: [a] }] })
+  assert.deepEqual(moveIntoGroup({ rules: [a], groups: [{ rules: [b] }] }, 0, 0), { rules: [], groups: [{ rules: [b, a] }] })
+  // Out, and the group goes with its last rule, under any layer.
+  assert.deepEqual(moveOutOfGroup({ rules: [], groups: [{ rules: [a] }] }, [0], 0), { rules: [a] })
+  assert.deepEqual(moveOutOfGroup({ rules: [], groups: [{ rules: [b], groups: [{ rules: [a, c] }] }] }, [0, 0], 1), { rules: [], groups: [{ rules: [b, c], groups: [{ rules: [a] }] }] })
+  assert.deepEqual(withoutRule({ rules: [a], groups: [{ rules: [b] }] }, [0], 0), { rules: [a] })
+  assert.deepEqual(withoutRule({ rules: [], groups: [{ rules: [b], groups: [{ rules: [c] }] }] }, [0, 0], 0), { rules: [], groups: [{ rules: [b] }] })
+  // A group's rules join the layer above, and groups inside it come up too, so they still fit.
+  assert.deepEqual(moveRulesOut({ rules: [a], groups: [{ any: true, rules: [b], groups: [{ rules: [c] }] }] }, 0), { rules: [a, b], groups: [{ rules: [c] }] })
+  assert.deepEqual(removeGroup({ rules: [a], groups: [{ rules: [b] }] }, 0), { rules: [a] })
+  assert.equal(canHoldGroup([]), true); assert.equal(canHoldGroup([0]), true); assert.equal(canHoldGroup([0, 0]), false)
+  assert.deepEqual(treeFields({ any: true, rules: [a] }), { filter: [a], filterAny: true, filterGroups: [] })
 })
 

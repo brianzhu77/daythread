@@ -2095,6 +2095,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-rule-moves button { min-height: 32px; padding: 4px 8px; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
 @media (hover: hover) { .database-rule-moves button:hover { background: var(--hover-dim); } }
 .database-filter-adds { display: flex; flex-wrap: wrap; gap: 4px; }
+.database-menu .database-filter-adds button[role=menuitem] { flex: none; width: auto; }
 .database-rule-deleted, .database-filter-chip.is-deleted { text-decoration: line-through; color: var(--ink-3); }
 /* Properties (design §7.5): a switch, the name with its type, and a move. */
 .database-property-line { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 6px 0 10px; color: var(--ink); }
@@ -2166,7 +2167,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
   .database-menu:has(.formula-editor) { bottom: var(--keyboard-lift, 0px) !important; width: auto; max-height: calc(85vh - var(--keyboard-lift, 0px)); }
   .database-menu:has(.database-filter-sheet) { bottom: var(--keyboard-lift, 0px) !important; max-height: calc(85vh - var(--keyboard-lift, 0px)); }
   .database-filter-sheet button.database-rule-remove:not([role=menuitem]):not([role=menuitemcheckbox]), .database-filter-sheet button.database-rule-more:not([role=menuitem]):not([role=menuitemcheckbox]) { width: 36px; height: 40px; }
-  .database-filter-group-head { padding-right: 42px; }
+  .database-filter-group-head { padding-right: 48px; }
   .database-rule-moves button { min-height: 44px; }
   .database-filter-adds .database-add-rule { min-height: 44px; }
   .formula-editor { flex-direction: column; padding: 2px 0 6px; }

@@ -367,7 +367,7 @@ function ColourPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
 
 function FilterPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
   const changeView = useViewChange(db.id, view.id)
-  const edit: EditFilter = change => changeView(current => treeFields(change(filterTree(current))))
+  const edit: EditFilter = (change, notice) => changeView(current => treeFields(change(filterTree(current))), notice)
   return <div className="database-filter-sheet">
     <Head title="Filter" back={back} />
     {!hasFilter(view) && <p className="database-menu-quiet">No filters</p>}
@@ -375,7 +375,7 @@ function FilterPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
   </div>
 }
 
-type EditFilter = (change: (top: FilterGroup) => FilterGroup) => void
+type EditFilter = (change: (top: FilterGroup) => FilterGroup, notice?: string) => void
 /** One layer of the filter: its rules, the groups below them, and what can be added. Its moves open in place, as a menu over a scrolling sheet would be cut off. */
 function FilterRules({ db, node, path, edit, full }: { db: DatabasePage; node: FilterGroup; path: FilterPath; edit: EditFilter; full: boolean }) {
   const [moves, setMoves] = useState<string | null>(null)
@@ -423,7 +423,7 @@ function FilterRules({ db, node, path, edit, full }: { db: DatabasePage; node: F
         </div>
         {moves === `g${i}` && <div className="database-rule-moves" role="menu" aria-label="Group actions">
           <button type="button" role="menuitem" onClick={() => act(top => atPath(top, path, n => moveRulesOut(n, i)))}>Move rules out</button>
-          <button type="button" role="menuitem" onClick={() => act(top => atPath(top, path, n => removeGroup(n, i)))}>Remove group and its {rules === 1 ? '1 rule' : `${rules} rules`}</button>
+          <button type="button" role="menuitem" onClick={() => { setMoves(null); edit(top => atPath(top, path, n => removeGroup(n, i)), 'Group removed') }}>Remove group and its {rules === 1 ? '1 rule' : `${rules} rules`}</button>
         </div>}
         <FilterRules db={db} node={g} path={[...path, i]} edit={edit} full={full} />
       </div>
