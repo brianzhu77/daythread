@@ -180,7 +180,7 @@ await scenario('An image selected: the toolbar offers Caption, Replace, Align an
   const r = { buttons: await toolbar.locator('button').evaluateAll(l => l.map(b => b.getAttribute('aria-label') || b.getAttribute('data-test') || b.textContent).filter(Boolean)) }
   await toolbar.locator('[data-test="alignTextCenter"]').click(); await wait(1300)
   r.align = doc().find(n => n.type === 'image').props.textAlignment
-  await toolbar.locator('[data-test="editcaption"], [aria-label*="aption"]').first().click(); await wait(300)
+  await toolbar.locator('[aria-label="Caption"]').first().click(); await wait(300)
   await page.keyboard.type('A caption', { delay: 40 }); await page.keyboard.press('Enter'); await wait(1400)
   r.caption = doc().find(n => n.type === 'image').props.caption
   r.ok = r.align === 'center' && r.caption === 'A caption'
@@ -405,6 +405,53 @@ if (engine === 'chromium') await scenario('A real drag of files from the desktop
   await drag('dragEnter', 8, 300); await drag('dragOver', 8, 300); await drag('drop', 8, 300); await wait(800)
   r.stillHere = page.url().startsWith(base) && (await page.locator('.bn-inline-content', { hasText: 'First line' }).count()) === 1
   r.ok = r.line === 1 && r.caret === 0 && r.types.includes('image') && r.types.indexOf('file') === r.types.indexOf('image') + 1 && r.stillHere
+  return r
+})
+await scenario('A caption is written in place, under the picture: Enter goes to a line below, a click edits it, Esc leaves it as it was, and clicking away keeps it', async page => {
+  await caretOn(page, 'Second line'); await paste(page, [png]); await wait(1300)
+  const image = () => doc().find(n => n.type === 'image'), field = page.locator('.body-image-caption')
+  await page.locator('.bn-visual-media').first().click(); await wait(500)
+  await page.locator('.bn-formatting-toolbar [aria-label="Caption"]').click(); await wait(300)
+  const r = { inBlock: await page.locator('[data-content-type="image"] .body-image-caption').count(), focused: await field.evaluate(el => el === document.activeElement), popover: await page.locator('input[placeholder="Edit caption"]').count() }
+  await page.keyboard.type('Written in place', { delay: 30 }); await wait(200)
+  r.keptTyping = await field.inputValue()
+  await page.keyboard.press('Enter'); await wait(1400)
+  r.saved = image().props.caption
+  r.gone = await field.count()
+  await page.keyboard.type('Next'); await wait(1400)
+  r.below = doc()[doc().findIndex(n => n.type === 'image') + 1]?.content?.[0]?.text
+  r.color = await page.locator('.bn-file-caption').evaluate(el => getComputedStyle(el).color === getComputedStyle(document.querySelector('.body-file-line') ?? document.documentElement).color || getComputedStyle(el).color)
+  await page.locator('.bn-file-caption').click(); await wait(300)
+  r.reopened = await field.inputValue()
+  r.oneCaption = await page.locator('.bn-file-caption:visible').count()
+  await page.keyboard.type(' again'); await page.keyboard.press('Escape'); await wait(1200)
+  r.afterEsc = image().props.caption
+  await page.locator('.bn-file-caption').click(); await wait(300)
+  await page.keyboard.type(' and more'); await page.locator('.bn-inline-content', { hasText: 'First line' }).click(); await wait(1400)
+  r.afterAway = image().props.caption
+  r.ok = r.inBlock === 1 && r.focused && r.popover === 0 && r.keptTyping === 'Written in place' && r.saved === 'Written in place' && r.gone === 0 && r.below === 'Next' && r.reopened === 'Written in place' && r.oneCaption === 0 && r.afterEsc === 'Written in place' && r.afterAway === 'Written in place and more'
+  return r
+})
+await scenario('A file has no caption in its bar, and its status sits by its row: closer than the next block, and its name said once', async page => {
+  await page.route('**/api/files/*', r => r.request().method() === 'PUT' ? r.abort() : r.continue())
+  await caretOn(page, 'First line'); await paste(page, [pdf]); await wait(800); await paste(page, [txt]); await wait(1200)
+  const gaps = () => page.evaluate(() => { const [one, two] = document.querySelectorAll('[data-content-type="file"]'), row = one.querySelector('.body-file'), line = one.querySelector('.body-file-line'); const r = e => e.getBoundingClientRect(); return { toOwn: Math.round(r(line.querySelector('span')).top - r(row).bottom), toNext: Math.round(r(two.querySelector('.body-file')).top - r(line.querySelector('span')).bottom) } })
+  const r = { failed: await gaps() }
+  await page.unroute('**/api/files/*'); await page.reload(); await page.locator('.body-file-line').first().waitFor(); await wait(900)
+  r.missing = await gaps()
+  r.words = await page.locator('.body-file-line span').first().innerText()
+  await page.locator('.body-file').first().click({ position: { x: 300, y: 10 } }); await wait(500)
+  r.captionInBar = await page.locator('.bn-formatting-toolbar [aria-label="Caption"]').count()
+  r.ok = r.failed.toOwn < r.failed.toNext && r.missing.toOwn < r.missing.toNext && r.words === "Isn't here" && r.captionInBar === 0
+  return r
+})
+await scenario('A picture on its way shows a track from the start', async page => {
+  await page.route('**/api/files/*', async route => { if (route.request().method() === 'PUT') await new Promise(() => {}); else await route.continue() })
+  await caretOn(page, 'First line'); await paste(page, [big]); await wait(700)
+  const box = await page.locator('.body-file-progress').boundingBox(), image = await page.locator('.bn-visual-media').first().boundingBox()
+  const r = { track: box && [Math.round(box.width), Math.round(box.height)], image: Math.round(image.width), bottom: box && Math.round(image.y + image.height - box.y - box.height) }
+  r.ok = Boolean(box) && Math.abs(box.width - image.width) <= 1 && box.height >= 2 && Math.abs(r.bottom) <= 1
+  page.close().catch(() => {})
   return r
 })
 await scenario('390: a tap brings ⋯, with what the bar offers; no resize; a saved width stays inside the column; a caption and Remove work from it', async page => {

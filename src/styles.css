@@ -2527,9 +2527,17 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .body-file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bn-shadcn .bn-editor a.body-file-name { color: inherit; text-decoration: underline; text-decoration-color: var(--line); }
 .body-file-size { flex: none; color: var(--ink-3); font-size: var(--text-meta); }
-.body-file-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0; color: var(--ink-2); font-size: var(--text-meta); }
-.body-file-line button { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; text-decoration-color: var(--line); cursor: pointer; }
-.body-file-progress { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--ink-2); transition: width .15s; }
+/* A block's status belongs to it: it sits right under the row, closer than the next block is. */
+.body-file-line { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; padding: 2px 0 0; color: var(--ink-2); font-size: var(--text-meta); }
+.body-file-line button { min-height: 0; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; text-decoration-color: var(--line); cursor: pointer; }
+/* A track, so a picture that hasn't moved yet still reads as on its way, on a dark photo as on a light one. */
+.body-file-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: color-mix(in srgb, var(--app-surface) 75%, transparent); }
+.body-file-progress > div { height: 100%; background: var(--ink); transition: width .15s; }
+/* A caption is a line under the picture: read and written in the same place, in the same words' size. */
+[data-content-type="image"] .bn-file-caption { color: var(--ink-2); font-size: var(--text-meta); cursor: text; }
+[data-content-type="image"]:has(.body-image-caption) .bn-file-caption { display: none; }
+.body-image-caption { flex-basis: 100%; min-width: 0; min-height: 0; padding: 4px 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); }
+.body-image-caption::placeholder { color: var(--ink-3); }
 [data-content-type="image"] .bn-visual-media-wrapper { flex-wrap: wrap; }
 [data-content-type="file"] .bn-file-block-content-wrapper { width: 100%; }
 .bn-shadcn .bn-editor a.body-file-go { flex: none; display: inline-flex; color: var(--ink-3); margin-left: auto; }
@@ -2546,9 +2554,16 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 @media (max-width: 899px) {
   .bn-resize-handle { display: none !important; }
   .body-file-menu-at, .body-image-more { display: block; }
+  /* Retry and Remove keep a finger's height, and the row's words stay close to the block above them. */
+  .body-file-line { margin-top: -8px; padding: 0; }
+  .body-file-line button { min-height: var(--tap); }
 }
+/* The panel is one card: the tabs on it, and what they open with no second card around it. */
+.bn-panel { width: 320px; max-width: calc(100vw - 16px); padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-block); background: var(--paper); box-shadow: var(--shadow-float); }
 .bn-panel [role=tablist] { background: var(--fill-soft); color: var(--ink-2); }
 .bn-panel [role=tab][data-state=active] { background: var(--app-surface); color: var(--ink); }
-.bn-panel input[type=file] { color: transparent; cursor: pointer; }
+.bn-panel [role=tabpanel] > div { gap: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.bn-panel [role=tabpanel] > div > div { padding: 4px 0 0; }
+.bn-panel input[type=file] { height: auto; padding: 0; border: 0; background: none; box-shadow: none; color: transparent; cursor: pointer; }
 .bn-panel input[type=file]::file-selector-button { padding: 4px 10px; border: 1px solid var(--line); border-radius: var(--radius-inline); background: var(--app-surface); color: var(--ink); font: inherit; cursor: pointer; }
 .body-image-box { width: 100%; aspect-ratio: 16 / 9; max-height: 160px; background: var(--fill-soft); border-radius: var(--radius-row); }
