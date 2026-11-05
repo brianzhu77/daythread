@@ -47,7 +47,7 @@ import { newOperationId, useTaskTick, useWorkspace } from './use-day'
 import { useKeyboardTop } from './keyboard'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { BodyIcon, ImageIcon, PaperclipIcon, BulletListIcon, ButtonIcon, CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HeadingIcon, HideKeyboardIcon, ImportIcon, IndentIcon, LineLinkIcon, LinkIcon, NumberedListIcon, OutdentIcon, PagesIcon, PlusIcon, QuoteIcon, RedoIcon, SeparatorIcon, SyncedIcon, UndoIcon } from './icons'
+import { PageEmoji, BodyIcon, ImageIcon, PaperclipIcon, BulletListIcon, ButtonIcon, CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HeadingIcon, HideKeyboardIcon, ImportIcon, IndentIcon, LineLinkIcon, LinkIcon, NumberedListIcon, OutdentIcon, PagesIcon, PlusIcon, QuoteIcon, RedoIcon, SeparatorIcon, SyncedIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { DatabaseBlock, setDatabasePending, type BlockActions } from './database-block'
@@ -322,7 +322,7 @@ function PageCard({ pageId, cardId, url = '', line = '' }: { pageId: string; car
     {inline && <span className="editor-row-menu editor-card-menu" onKeyDown={e => e.stopPropagation()}><RowMenu label={`Actions for ${title}`} triggerClass="editor-row-more" groups={[{ items: [{ label: 'Turn into inline', onSelect: () => actions.turnIntoInline(cardId, pageId) }] }]} /></span>}
     <button type="button" className={`editor-page-card ${trashed ? 'in-trash' : ''}`} disabled={pending?.state === 'creating'}
       onClick={() => { if (pending) { if (pending.state === 'failed') pending.retry(); return } rememberCard(cardId); void navigate({ to: '/pages', search: { page: pageId } }) }}>
-      <span className="editor-page-card-icon">{link ? <GlobeIcon /> : target && isDatabase(target) ? <DatabaseIcon /> : <PagesIcon />}</span>
+      <span className="editor-page-card-icon">{target?.icon ? <PageEmoji icon={target.icon} /> : link ? <GlobeIcon /> : target && isDatabase(target) ? <DatabaseIcon /> : <PagesIcon />}</span>
       <span className="editor-page-card-text">
         <span className={`editor-page-card-title ${target?.title || link ? '' : 'untitled'}`}>{title}</span>
         {/* Link cards stay one line (A2): they show the domain instead. */}

@@ -5,6 +5,8 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elementScroller, EditorScrollerContext, windowScroller } from './editor-scope'
 import { ArrowLeftIcon, ArrowRightIcon, CloseIcon, ExternalIcon } from './icons'
 import { displayPageTitle } from './page-title'
+import { CommentCount } from './comments-pane'
+import { PageCover } from './page-cover'
 import { noteOpenedHere, peekFloor, peekOpenedHere, peekOrder, sideFloor } from './peek-state'
 import { PageMenu, PagePath } from './page-tree'
 import { PageContent } from './pages-screen'
@@ -126,13 +128,14 @@ function Peek({ rowId, side }: { rowId: string; side: boolean }) {
         </>}
         {/* Tapping a level leaves the peek for a full page: the editor's leaving save takes what's typed, and Back mustn't count as closing it. */}
         <div className="crumbs peek-path" onClickCapture={e => { if ((e.target as Element).closest('a')) noteOpenedHere(false) }}><PagePath page={row} workspace={workspace!} /></div>
+        <CommentCount page={row} />
         <PageMenu page={row} inPeek={id => { if (id) go(id); else close() }} />
         <button type="button" aria-label="Open as a full page" onClick={() => { noteOpenedHere(false); void navigate({ to: '/pages', search: { page: rowId } }) }}><ExternalIcon /></button>
         <button type="button" aria-label="Close" onClick={close}><CloseIcon /></button>
       </header>
       <div className="peek-body">
         {/* A new row is a new editor: what's typed in the last one goes with its leaving save. */}
-        <EditorScrollerContext.Provider key={rowId} value={scroller}><PageContent page={row} workspace={workspace!} /></EditorScrollerContext.Provider>
+        <EditorScrollerContext.Provider key={rowId} value={scroller}><PageCover page={row} place="peek" /><PageContent page={row} workspace={workspace!} /></EditorScrollerContext.Provider>
       </div>
     </div>
   </div>

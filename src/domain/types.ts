@@ -12,6 +12,11 @@ export interface Page {
   title: string;
   /** A bookmark page's URL exactly as pasted; one page per URL (urlKey). */
   url?: string | null;
+  /** An emoji shown wherever the page's name is (icons-covers.md). The title stays words. */
+  icon?: string;
+  /** An image link shown above the head, fetched by the browser (icons-covers.md §7.5), and how far along its crop it sits, 0 to 1; absent is the middle. */
+  cover?: string;
+  coverPosition?: number;
   /** The page it was created in; null or absent = top level. Day pages never have one. */
   parentId?: string | null;
   /** Set while the page is in the trash (ISO time of the delete); null or absent = live. */
@@ -79,6 +84,8 @@ export interface Workspace {
   deletedTasks: Task[];
   /** Synced blocks' lines, once each (synced.ts). Absent until there's one. */
   synced?: import("./synced.ts").SyncedRecord[];
+  /** Comments, in a table of their own (comments.ts). Absent until there's one. */
+  threads?: import("./comments.ts").CommentThread[];
   receipts: Record<string, Receipt>;
   undo?: {
     operationId: string;
@@ -137,6 +144,13 @@ export type Action =
   | { type: "rename-page"; pageId: string; title: string }
   /** A tap on a button: every step in one operation (buttons.md §4). Its `at` and `today` are the tap's, kept by a retry. */
   | { type: "run-button"; pageId: string; blockId: string; stepsKey: string; expectedContent: string; at: string; today: LocalDate }
+  /** A new thread on the page, or with `threadId` a reply on one. */
+  | { type: "add-comment"; pageId: string; threadId: string; commentId: string; body: string; at: string }
+  | { type: "edit-comment"; threadId: string; commentId: string; body: string; version: number; at: string }
+  | { type: "delete-comment"; threadId: string; commentId: string; version: number }
+  | { type: "resolve-thread"; threadId: string; resolved: boolean; version: number; at: string }
+  | { type: "set-page-icon"; pageId: string; icon: string | null }
+  | { type: "set-page-cover"; pageId: string; cover: string | null; position?: number }
   /** `beforeId`: the sibling it goes just before (a drag); absent or null, the end of the parent (Move to…). */
   | { type: "move-page"; pageId: string; parentId: string | null; beforeId?: string | null }
   | { type: "delete-page"; pageId: string; at: string }

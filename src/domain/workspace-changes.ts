@@ -2,6 +2,7 @@
 // workspace (docs/research/database-fit.md §5: every response carried all of it, ~0.85 MB per 1,000 pages). Pure, shared
 // by the server, which makes it, and the browser, which applies it to the copy the command was sent from.
 import { expandedWorkspace, strippedWorkspace, type SyncedRecord } from './synced.ts'
+import type { CommentThread } from './comments.ts'
 import type { Page, Task, Workspace } from './types.ts'
 
 export interface ListChanges<T> {
@@ -24,6 +25,8 @@ export interface WorkspaceChanges {
   deletedTasks?: Task[]
   /** Synced blocks' records, whole, when any changed. Pages travel without their lines: the browser expands them from these. */
   synced?: SyncedRecord[]
+  /** Comments, whole, when any changed. A person's notes stay small, and a tab that doesn't know them ignores this. */
+  threads?: CommentThread[]
 }
 
 /** Existing entries replaced where they are, removed ones dropped, new ones appended in the new list's order. */
@@ -50,9 +53,10 @@ const undoMarker = (ws: Workspace): WorkspaceChanges['undo'] => (ws.undo ? { ope
 export function changesBetween(before: Workspace, after: Workspace): WorkspaceChanges {
   const deleted = JSON.stringify(before.deletedTasks) === JSON.stringify(after.deletedTasks) ? {} : { deletedTasks: after.deletedTasks }
   const synced = JSON.stringify(before.synced ?? []) === JSON.stringify(after.synced ?? []) ? {} : { synced: after.synced ?? [] }
+  const threads = JSON.stringify(before.threads ?? []) === JSON.stringify(after.threads ?? []) ? {} : { threads: after.threads ?? [] }
   return {
     from: before.revision, revision: after.revision, timezone: after.timezone, ...(after.weekStart === 1 ? { weekStart: 1 as const } : {}), undo: undoMarker(after),
-    pages: listChanges(strippedWorkspace(before).pages, strippedWorkspace(after).pages), tasks: listChanges(before.tasks, after.tasks), ...deleted, ...synced,
+    pages: listChanges(strippedWorkspace(before).pages, strippedWorkspace(after).pages), tasks: listChanges(before.tasks, after.tasks), ...deleted, ...synced, ...threads,
   }
 }
 
@@ -68,13 +72,14 @@ function applyList<T extends { id: string }>(before: readonly T[], changes: List
 export function applyChanges(ws: Workspace, changes: WorkspaceChanges): Workspace | null {
   if (ws.revision !== changes.from) return null
   const pages = applyList(ws.pages, changes.pages), tasks = applyList(ws.tasks, changes.tasks)
-  const synced = changes.synced ?? ws.synced
+  const synced = changes.synced ?? ws.synced, threads = changes.threads ?? ws.threads
   if (!pages || !tasks) return null
-  const { undo: _undo, weekStart: _weekStart, ...rest } = ws
+  const { undo: _undo, weekStart: _weekStart, threads: _threads, ...rest } = ws
   return expandedWorkspace({
     ...rest, revision: changes.revision, timezone: changes.timezone, ...(changes.weekStart === 1 ? { weekStart: 1 as const } : {}), pages, tasks,
     deletedTasks: changes.deletedTasks ?? ws.deletedTasks, receipts: {},
     ...(synced ? { synced } : {}),
+    ...(threads?.length ? { threads } : {}),
     ...(changes.undo ? { undo: changes.undo } : {}),
   })
 }
