@@ -1,0 +1,21 @@
+{"events":["save-editor","addProperty","save-editor"],"props":["Property"],"undo":0,"notices":[],"lastReceipts":[{"id":"f4dca919-1930-4b39-8b50-7691f774ca3e","message":"Page saved"},{"id":"ac65ba88-d1d9-4131-b7ff-b5fe1417e2e7","message":"Added Property"},{"id":"d0a3d032-7204-40b3-b088-6e02a9c74c0d","message":"Page saved"}],"storedUndo":"d0a3d032-7204-40b3-b088-6e02a9c74c0d"}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: leaving must preserve the property command as the last Undo
++ actual - expected
+
++ 'd0a3d032-7204-40b3-b088-6e02a9c74c0d'
+- 'ac65ba88-d1d9-4131-b7ff-b5fe1417e2e7'
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-linked-plus/tests/evidence/ratchet-linked-plus/leave.mjs:1:1797 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 'd0a3d032-7204-40b3-b088-6e02a9c74c0d',
+  expected: 'ac65ba88-d1d9-4131-b7ff-b5fe1417e2e7',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

@@ -1,0 +1,19 @@
+{"events":["save-editor","addProperty","save-editor"],"props":["Property"],"undo":0,"notices":[]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: linked + must retain its property Undo after an earlier page save finishes
+
+0 !== 1
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-linked-plus/tests/evidence/ratchet-linked-plus/leave.mjs:1:1668 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 0,
+  expected: 1,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
