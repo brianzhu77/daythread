@@ -247,6 +247,29 @@ export function syncedPlaces(ws: Pick<Workspace, 'pages'>, syncId: string): { pa
   return out
 }
 export const isSyncedBlock = isBlock
+/** A line's own id, wherever it's shown: in a synced block, the id it has in the record. */
+export function sharedLineId(nodes: readonly EditorNode[], id: string): string {
+  let found = id
+  const inside = (list: readonly EditorNode[], block: EditorNode | null) => { for (const n of list) { if (n.id === id && block) found = lineIdOf(id, block.id); inside(n.children ?? [], isBlock(n) ? n : block) } }
+  inside(nodes, null)
+  return found
+}
+/**
+ * The ids a shared line has on this page: one for each place, or its own if it's an ordinary line here. `placesOnly` while it's shared:
+ * a place that's been unsynced has an ordinary line under that same id, and a thread stays with the shared lines, not with that.
+ */
+export function lineIdsOnPage(page: Pick<Page, 'document'>, lineId: string, placesOnly = false): string[] {
+  const out: string[] = []
+  const inside = (list: readonly EditorNode[], block: EditorNode | null) => { for (const n of list) { if (block ? lineIdOf(n.id, block.id) === lineId : !placesOnly && n.id === lineId) out.push(n.id); inside(n.children ?? [], isBlock(n) ? n : block) } }
+  inside(pageNodes(page), null)
+  return out
+}
+/** The record a line's in, if it's shared. */
+export function recordOfLine(ws: Pick<Workspace, 'synced'>, lineId: string): SyncedRecord | undefined {
+  if (!ws.synced?.length) return undefined
+  const has = (list: readonly EditorNode[]): boolean => list.some(n => n.id === lineId || has(n.children ?? []))
+  return ws.synced.find(r => has(pageNodes({ document: r.lines })))
+}
 /** The block a record was made as: on a template or a duplicated row it makes its own block; any other place stays connected (design §7). */
 export const isOriginalBlock = (ws: Pick<Workspace, 'synced'>, n: EditorNode): boolean => ws.synced?.find(r => r.id === n.props?.syncId)?.original === n.id
 /**

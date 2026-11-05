@@ -23,7 +23,7 @@ import { newTodo, taskIdOfRow, todoBarColumns, todoChange, todoMoves, todoRowId,
 import { inView, todosSourceId, changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Receipt, Task, Workspace } from "./types.ts";
-import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, unsyncBlock } from "./synced.ts";
+import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, unsyncBlock, recordOfLine, lineIdsOnPage } from "./synced.ts";
 
 export class DomainError extends Error {}
 export function createEmptyWorkspace(timezone = "America/Vancouver"): Workspace {
@@ -1126,7 +1126,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       }
       const on = page(state, action.pageId);
       if (isTrashed(on)) throw new DomainError("That page is in Trash");
-      (state.threads ??= []).push({ id: action.threadId, pageId: on.id, ...(action.anchor ? { anchor: { blockId: action.anchor.blockId, quote: action.anchor.quote.slice(0, quoteLimit), ...(action.anchor.taskId ? { taskId: action.anchor.taskId } : {}) } } : {}), version: 1, createdAt: at, comments: [{ id: action.commentId, body, at }] });
+      (state.threads ??= []).push({ id: action.threadId, pageId: on.id, ...(action.anchor ? { anchor: { blockId: action.anchor.blockId, quote: action.anchor.quote.slice(0, quoteLimit), ...(action.anchor.taskId ? { taskId: action.anchor.taskId } : {}), ...(action.anchor.at !== undefined ? { at: action.anchor.at } : {}) } } : {}), version: 1, createdAt: at, comments: [{ id: action.commentId, body, at }] });
       return { message: "Comment added", entityId: action.threadId };
     }
     case "edit-comment": {
@@ -1665,6 +1665,20 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
       const home = state.pages.find((p) => p.id === thread.pageId);
       if (!home || !flatNodes(pageNodes(home)).some((n) => n.id === thread.anchor!.blockId)) thread.pageId = savedTo;
     }
+  }
+  // A shared line whose sharing has ended: its thread stays on the line in the page it was made on if that's still there, and otherwise goes to the first place left, whose line is ordinary now (comments.md §4).
+  for (const thread of state.threads ?? []) {
+    const anchor = thread.anchor;
+    if (!anchor || anchor.taskId) continue;
+    const home = state.pages.find((p) => p.id === thread.pageId);
+    // Still shared, but its home's place has gone: the thread stays with the shared lines, and that page's line is ordinary now.
+    if (recordOfLine(state, anchor.blockId)) {
+      if (!home || !lineIdsOnPage(home, anchor.blockId, true).length) { const next = livePages(state).find((p) => lineIdsOnPage(p, anchor.blockId, true).length); if (next) thread.pageId = next.id; }
+      continue;
+    }
+    if (home && flatNodes(pageNodes(home)).some((n) => n.id === anchor.blockId)) continue;
+    const stem = `${anchor.blockId}:`, left = livePages(state).flatMap((p) => flatNodes(pageNodes(p)).filter((n) => n.id.startsWith(stem)).map((n) => ({ page: p, id: n.id })))[0];
+    if (left) { thread.pageId = left.page.id; anchor.blockId = left.id; }
   }
   // A to-do planned to another day is a new line there, so a thread on it goes to that line. Its plan row if it has one, as that's where the to-do is now (Roadbuster, #158).
   for (const thread of state.threads ?? []) {
