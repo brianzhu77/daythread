@@ -27,6 +27,10 @@ import { DatabasePicker } from './database-linked'
 import { holdKeyboard } from './keyboard'
 import { buttonBlockType, blockPlace, editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, rowTaskId, sectionRange, withBlockBack, type BlockPlace, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
+import { ButtonLine, ButtonPage } from './button-block'
+import { ButtonEditorHost, openButtonEditor } from './button-editor'
+import { buttonChanging, useRunButton } from './button-run'
+import { readSteps } from '../domain/buttons'
 import { announceSave, changedBy, claim, clearOwn, landedSave, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn, type DraftSlot } from './draft-slots'
 import { applyCommand, plannedOn, taskRows as rowsOfTask, urlOwner } from '../domain/workspace'
 import { pagePreview } from '../domain/page-tree'
@@ -43,7 +47,7 @@ import { newOperationId, useTaskTick, useWorkspace } from './use-day'
 import { useKeyboardTop } from './keyboard'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { PageEmoji, BodyIcon, ImageIcon, PaperclipIcon, BulletListIcon, CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HeadingIcon, HideKeyboardIcon, ImportIcon, IndentIcon, LineLinkIcon, LinkIcon, NumberedListIcon, OutdentIcon, PagesIcon, PlusIcon, QuoteIcon, RedoIcon, SeparatorIcon, SyncedIcon, UndoIcon } from './icons'
+import { PageEmoji, BodyIcon, ImageIcon, PaperclipIcon, BulletListIcon, ButtonIcon, CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HeadingIcon, HideKeyboardIcon, ImportIcon, IndentIcon, LineLinkIcon, LinkIcon, NumberedListIcon, OutdentIcon, PagesIcon, PlusIcon, QuoteIcon, RedoIcon, SeparatorIcon, SyncedIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { DatabaseBlock, setDatabasePending, type BlockActions } from './database-block'
@@ -92,9 +96,9 @@ const database = createReactBlockSpec({ type: 'database', propSchema: { pageId: 
   toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Database</a></p>,
 })()
 // A button (docs/design/buttons.md §5): known to the editor before anything can make one, so a build at the rollback floor
-// keeps it whole. Its steps are one opaque prop, so what they can do can grow without the floor having to read them. Here a tap does nothing.
+// keeps it whole. Its steps are one opaque prop, so what they can do can grow without the floor having to read them.
 const button = createReactBlockSpec({ type: buttonBlockType, propSchema: { label: { default: '' }, steps: { default: '' } }, content: 'none' }, {
-  render: ({ block }) => <div className="editor-button-line" contentEditable={false}><span className="editor-button">{block.props.label || 'Button'}</span></div>,
+  render: ({ block, editor }) => <ButtonLine blockId={block.id} label={block.props.label} steps={block.props.steps} editor={editor as never} />,
   toExternalHTML: ({ block }) => <p>{block.props.label || 'Button'}</p>,
 })()
 // A synced block (docs/design/synced-blocks.md): the lines shown in several places, as this block's children. Known to the
@@ -448,6 +452,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const runRef = useRef(run); runRef.current = run
   const navigate = useNavigate()
   const key = `daythread:editor:${page.id}`
+  const buttonPage = useMemo(() => ({ pageId: page.id, onTemplate }), [page.id, onTemplate])
+  const runButton = useRunButton(() => undefined)
   const initial = useRef<{ nodes: EditorNode[]; base: string; baseDocument: string; recovered: boolean; cutTaskIds: string[]; detach: string[]; adopt: { blockId: string; pageId: string }[]; sent: DraftSlot['sent'] } | null>(null)
   if (!initial.current) {
     // B40: from here on, a background save of kept drafts leaves this page's draft to this editor.
@@ -923,6 +929,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (left.current || !dirty.current || sending.current || undoingPaste.current) return
     // B35: another tab merged this tab's draft while it was away: never save this copy again.
     if (claimedAway()) return
+    // A button's command is on its way, and this would start from the page before it. What's typed goes just after its reply.
+    if (buttonChanging(page.id)) { clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 300); return }
     // The page moved on only by his own save from when he last left it: start from that.
     // B40: or by another tab saving this tab's own earlier text while this tab was away and then came back.
     if (isOwnLeaveSave(page.id, latestPage.current.document) || savedForMe(page.id, latestPage.current.document)) { base.current = pageContentKey(latestPage.current); baseDoc.current = latestPage.current.document }
@@ -1206,6 +1214,23 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (page.document === lastSent.current) return
     // His own save from when he left this page landed after he came back: carry on from it, it isn't a conflict.
     if (dirty.current && (isOwnLeaveSave(page.id, page.document) || savedForMe(page.id, page.document))) { base.current = next; baseDoc.current = page.document; setFailed(false); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 0); return }
+    // A button of his own changed the page while he went on typing: both stay, with no conflict to answer (buttons.md §4.8).
+    if (dirty.current && buttonChanging(page.id)) {
+      queueMicrotask(() => {
+        // Only what the button added comes in, into what he's typing, so his words and caret stay where they are.
+        const held = new Set(flatNodes(editor.document as never).map(n => n.id))
+        const take = (list: EditorNode[]) => list.forEach((node, i) => {
+          if (held.has(node.id)) { if (node.children?.length) take(node.children); return }
+          const before = list.slice(0, i).reverse().find(n => held.has(n.id)), after = list.slice(i + 1).find(n => held.has(n.id))
+          if (before) editor.insertBlocks([node as never], before.id, 'after')
+          else if (after) editor.insertBlocks([node as never], after.id, 'before')
+          held.add(node.id)
+        })
+        take(pageNodes(page))
+        base.current = next; baseDoc.current = page.document
+      })
+      return
+    }
     if (dirty.current) { debugClient('editor.external-refresh',{operationId:newOperationId(),triggerOperationId:pendingSave.current?.operationId,pageId:page.id,result:'conflict'}); setFailed(true); setUnsaved('refused'); setStatus('Page changed elsewhere · draft kept; copy it before reloading'); return }
     // Deferred: replacing blocks synchronously inside React's commit triggers a flushSync warning from BlockNote's views.
     queueMicrotask(() => {
@@ -2688,6 +2713,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       setTimeout(() => { if (editor.getBlock(ids[0]!)) { editor.setTextCursorPosition(ids[0]!, 'end'); editor.focus() } }, 0)
     }}
     onKeyDownCapture={e => {
+      // Enter runs a button only when it alone was chosen by its handle: arriving by arrow does what other blocks with no text do (G3-7).
+      if (e.key === 'Enter' && !e.nativeEvent.isComposing && selected.current.length === 1 && editor.prosemirrorState.selection instanceof NodeSelection) {
+        const held = editor.getBlock(selected.current[0]!)
+        if (held?.type === buttonBlockType) {
+          e.preventDefault(); e.stopPropagation()
+          if (onTemplate || !readSteps(held.props.steps).length) return
+          void runButton({ id: page.id }, held.id, String(held.props.steps))
+          return
+        }
+      }
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
       if (e.key !== 'Backspace' && e.key !== 'Delete') clickedFile.current = null
       // Keys in a caption's field belong to the field: Backspace there isn't a key on the chosen image.
@@ -2842,6 +2877,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       onClose={() => { setPicker(null); editor.focus() }} />, document.body)}
     <DraftBands draft={draft} workspace={workspace} groups={groups} fills={draftReady ? fillAnchors(draft, draftShown) : []} />
     {createPortal(<EventRows rows={rows} page={page} workspace={workspace} pageEnd={!rowsAnchor.current || rowsAnchor.current.labelled || (rowsAnchor.current.afterId !== null && !editor.getBlock(rowsAnchor.current.afterId))} />, rowsHost)}
+    <ButtonEditorHost pageId={page.id} schema={schema as never} />
+    <ButtonPage.Provider value={buttonPage}>
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} shadCNComponents={doneInputs}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
       {!compact && !selectionLabel && !onDatabase && <FormattingToolbarController formattingToolbar={Toolbar} />}
@@ -2859,6 +2896,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
           const role = insertionRole(currentId)
           insertOrUpdateBlockForSlashMenu(editor, { ...(replaceCurrent ? {} : { id }), type: 'task', props: { taskId: `editor-task:${id}`, role, planDate: role === 'plan' ? page.date ?? '' : '' }, content: '' })
         } }
+        const buttonItem = { title: 'Button', icon: <ButtonIcon />, aliases: ['button', '按钮'], group: 'Suggested', onItemClick: () => {
+          // A new button with no finished step leaves no block (Jazz), so it goes in at Done.
+          const lineId = editor.getTextCursorPosition().block.id
+          openButtonEditor({ pageId: page.id, initial: { label: '', steps: '' }, anchor: document.querySelector(`[data-id="${CSS.escape(lineId)}"]`), onDone: draft => {
+            const line = editor.getBlock(lineId), made = { type: buttonBlockType, props: draft } as never
+            if (!line) { const last = editor.document.at(-1); if (last) editor.insertBlocks([made], last.id, 'after'); return }
+            if (!inlineText(line.content).trim() && line.type === 'paragraph') editor.replaceBlocks([lineId], [made])
+            else editor.insertBlocks([made], lineId, 'after')
+          } })
+        } }
         const syncedItem = { title: 'Synced block', icon: <SyncedIcon />, aliases: ['synced', 'sync', '同步'], group: 'Suggested', onItemClick: () => {
           const lineId = crypto.randomUUID()
           insertOrUpdateBlockForSlashMenu(editor, { type: syncedBlockType, props: { syncId: crypto.randomUUID(), rev: 0, key: '', roles: '' }, children: [{ id: lineId, type: 'paragraph' }] } as never)
@@ -2867,7 +2914,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         const pageItem = { title: 'Page', icon: <PagesIcon />, aliases: ['page', 'subpage', '页面'], group: 'Suggested', onItemClick: () => void createSubpage() }
         // Pick the file, see the preview, and only then does a block appear (R4-8).
         const csvItem = { title: 'CSV', icon: <ImportIcon />, aliases: ['csv', 'import', 'tsv', '导入'], group: 'Other', onItemClick: () => chooseCsv({ kind: 'new', parentId: homeForNew().id, place: placeImportedDatabase }) }
-        const databaseItem = { title: 'Database', icon: <DatabaseIcon />, aliases: ['database', 'table', 'db', '数据库', '表格'], group: 'Suggested', onItemClick: chooseDatabase }
+        const databaseItem = { title: 'Database', icon: <DatabaseIcon />, aliases: ['database', 'table', 'db', 'chart', '数据库', '表格', '图表'], group: 'Suggested', onItemClick: chooseDatabase }
         // A9a §3: the phone's way to `[[` (v0.3's toolbar button), through the same + menu.
         const linkItem = { title: 'Link to page', icon: <LineLinkIcon />, aliases: ['link', '[[', '链接', '引用'], group: 'Suggested', onItemClick: () => {
           if (!linkableLines.has(editor.getTextCursorPosition().block.type)) return
@@ -2876,7 +2923,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         // Every item stays in the list; the menu scrolls past about 8 rows (F13). A cut hid Quote until its name was typed.
         // Database sits after Page and Link to page (design §3.1). In a template, only a linked view can be made, so it
         // needs a database to show (§9.4).
-        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, databaseItem, syncedItem, ...first, ...rest, ...(onTemplate ? [] : [csvItem])], query)
+        return filterSuggestionItems([taskItem, ...(onTemplate ? [] : [pageItem]), linkItem, databaseItem, buttonItem, syncedItem, ...first, ...rest, ...(onTemplate ? [] : [csvItem])], query)
       }} />
       {/* BlockNote would open these by itself on typed `[[` and skip §3's rules (task rows, paste, composition); only
           maybeOpenLinkList opens them (programmatic opening doesn't consult shouldOpen). */}
@@ -2885,6 +2932,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       {hoverPointer && <SideMenuController sideMenu={Handle} floatingUIOptions={sideMenuPosition} />}
       {(hoverPointer || linkTapped) && <LinkToolbarController />}
     </BlockNoteView>
+    </ButtonPage.Provider>
     </DatabaseEditorActions.Provider>
     </SyncedEditorActions.Provider>
     </ChipPageDate.Provider>

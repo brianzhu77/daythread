@@ -146,7 +146,8 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
       moveRow(current.rowId, current.from, target.over, target.before, ordered)
     }
     const cancel = () => { end(); setDrag(null) }
-    const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel() } }
+    // The button's still down, so its click comes when it's let go, and mustn't open the card.
+    const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key !== 'Escape') return; ev.stopPropagation(); finish(); setDrag(null); if (lifted) { justDragged.current = true; document.addEventListener('pointerup', () => setTimeout(() => { justDragged.current = false }), { once: true }) } }
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); window.addEventListener('keydown', esc, true)
   }
   // Only with a card lifted: stops iOS scrolling under the finger. It has to be there, and not passive, before the touch starts.
