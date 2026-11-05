@@ -84,6 +84,8 @@ export interface Workspace {
   deletedTasks: Task[];
   /** Synced blocks' lines, once each (synced.ts). Absent until there's one. */
   synced?: import("./synced.ts").SyncedRecord[];
+  /** Comments, in a table of their own (comments.ts). Absent until there's one. */
+  threads?: import("./comments.ts").CommentThread[];
   receipts: Record<string, Receipt>;
   undo?: {
     operationId: string;
@@ -140,6 +142,11 @@ export type Action =
   /** The page's title and a quote read from the web, applied only while the page is as the paste left it. */
   | { type: "apply-link-preview"; pageId: string; url: string; title: string | null; description: string | null }
   | { type: "rename-page"; pageId: string; title: string }
+  /** A new thread on the page, or with `threadId` a reply on one. */
+  | { type: "add-comment"; pageId: string; threadId: string; commentId: string; body: string; at: string }
+  | { type: "edit-comment"; threadId: string; commentId: string; body: string; version: number; at: string }
+  | { type: "delete-comment"; threadId: string; commentId: string; version: number }
+  | { type: "resolve-thread"; threadId: string; resolved: boolean; version: number; at: string }
   | { type: "set-page-icon"; pageId: string; icon: string | null }
   | { type: "set-page-cover"; pageId: string; cover: string | null; position?: number }
   /** `beforeId`: the sibling it goes just before (a drag); absent or null, the end of the parent (Move to…). */

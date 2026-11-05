@@ -9,6 +9,7 @@ import { fromIso, longLabel, todayIso } from './dates'
 import { ChevronRightIcon, PageEmoji, PageKindIcon, PagesIcon } from './icons'
 import { openIconPicker } from './icon-picker'
 import { coverCanMove, openCoverPanel, startReposition, useCoverCanMove } from './page-cover'
+import { CommentCount, openComments } from './comments-pane'
 import { NewPageMenu } from './new-page-menu'
 import { displayPageTitle } from './page-title'
 import { RowMenu } from './row-menu'
@@ -83,6 +84,7 @@ export function PageHeaderRow({ page, workspace, fromBookmarks = false }: { page
   return (
     <div className="crumbs">
       <PagePath page={page} workspace={workspace} fromBookmarks={fromBookmarks} />
+      <CommentCount page={page} />
       <PageMenu page={page} fromBookmarks={fromBookmarks} />
     </div>
   )
@@ -144,7 +146,7 @@ function HiddenCrumbs({ pages, today }: { pages: Page[]; today: LocalDate }) {
 
 /** ⋯ on a day (B16): Delete, once there's something to delete. */
 export function dayMenuGroups(workspace: Workspace, page: Page, deletePage: () => void): { items: { label: string; danger?: boolean; onSelect: () => void }[] }[] | null {
-  return hasContent(page) || childPages(workspace, page.id).length > 0 ? [lookItems(page), { items: [{ label: 'Delete', danger: true, onSelect: deletePage }] }] : null
+  return hasContent(page) || childPages(workspace, page.id).length > 0 ? [lookItems(page), { items: [{ label: 'Comment', onSelect: () => openComments(page.id, { composing: true }) }] }, { items: [{ label: 'Delete', danger: true, onSelect: deletePage }] }] : null
 }
 /** ⋯'s way to an icon (icons-covers.md §1). Once there is one, a tap on it opens the same picker, with Remove. */
 const lookItems = (page: Pick<Page, 'id' | 'icon' | 'cover'>) => {
@@ -179,13 +181,13 @@ export function PageMenu({ page, fromBookmarks = false, inPeek }: { page: Page; 
       if (inPeek) inPeek(null); else open(pageHref(db))
     }
     return <>
-    <RowMenu label="Row actions" triggerClass="page-more" groups={[lookItems(page), { items: [{ label: 'Copy link', onSelect: copyLink }, { label: 'Duplicate row', onSelect: () => void duplicate() }, { label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete row', danger: true, onSelect: remove }] }]} />
+    <RowMenu label="Row actions" triggerClass="page-more" groups={[lookItems(page), { items: [{ label: 'Comment', onSelect: () => openComments(page.id, { composing: true }) }] }, { items: [{ label: 'Copy link', onSelect: copyLink }, { label: 'Duplicate row', onSelect: () => void duplicate() }, { label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete row', danger: true, onSelect: remove }] }]} />
       {moving && <MoveRowDialog row={page} onClose={() => setMoving(false)} />}
     </>
   }
   return (
     <>
-      <RowMenu label="Page actions" triggerClass="page-more" groups={[lookItems(page), { items: [{ label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void deletePage(page, page.id, fromBookmarks ? '/pages?view=bookmarks' : undefined) }] }]} />
+      <RowMenu label="Page actions" triggerClass="page-more" groups={[lookItems(page), { items: [{ label: 'Comment', onSelect: () => openComments(page.id, { composing: true }) }] }, { items: [{ label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void deletePage(page, page.id, fromBookmarks ? '/pages?view=bookmarks' : undefined) }] }]} />
       {moving && <MovePageDialog page={page} onClose={() => setMoving(false)} />}
     </>
   )

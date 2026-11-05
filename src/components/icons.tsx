@@ -106,6 +106,11 @@ export const PageEmoji = ({ icon, className = 'page-emoji' }: { icon: string; cl
 }
 export const PageKindIcon = ({ url, database, icon }: { url?: string | null; database?: boolean; icon?: string | null | undefined }) => (icon ? <PageEmoji icon={icon} /> : database ? <DatabaseIcon /> : url ? <GlobeIcon /> : <PagesIcon />)
 
+export const CommentIcon = () => (
+  <Icon>
+    <path d="M5 6.5h14v9H10.5L7 18.5v-3H5z" />
+  </Icon>
+)
 /** ↳: a link to one line (A11, Jazz line-links-states §3): "a passage", not a page. */
 export const LineLinkIcon = () => (
   <Icon>

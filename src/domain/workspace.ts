@@ -4,6 +4,7 @@ import { broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyT
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
+import { commentLimit, leavesUndoAlone, type CommentThread } from "./comments.ts";
 import { isPageIcon } from "./page-icon.ts";
 import { coverPlace, isCoverLink } from "./page-look.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
@@ -118,9 +119,22 @@ function tasksOnDay(state: Workspace, day: string): Task[] {
   }
   return out;
 }
-/** A task whose title is empty after trimming: an empty checkbox row left on a page. It stays there, but no list shows it. */
+function commentBody(body: string): string {
+  const words = text(body, 20_000).trim();
+  if (!words) throw new DomainError("A comment needs words");
+  if (words.length > commentLimit) throw new DomainError(`${commentLimit.toLocaleString("en-US")} characters at most`);
+  return words;
+}
+/** A tab that hadn't seen the newest change to this thread can't overwrite it. */
+function threadToChange(state: Workspace, threadId: string, version: number): CommentThread {
+  const thread = state.threads?.find((t) => t.id === threadId);
+  if (!thread) throw new DomainError("That comment's gone");
+  if (thread.version !== version) throw new DomainError("Changed elsewhere");
+  return thread;
+}
 /** What a copy or a page made from a template takes on (P1-7). */
 const lookOf = (from: Page | undefined): Pick<Page, "icon" | "cover" | "coverPosition"> => ({ ...(from?.icon ? { icon: from.icon } : {}), ...(from?.cover ? { cover: from.cover } : {}), ...(from?.coverPosition !== undefined ? { coverPosition: from.coverPosition } : {}) });
+/** A task whose title is empty after trimming: an empty checkbox row left on a page. It stays there, but no list shows it. */
 export function isBlankTask(t: Task): boolean {
   return !t.title.trim();
 }
@@ -309,6 +323,7 @@ function joinNewDayPage(state: Workspace, restored: Page): boolean {
   if (newer.handoffDone) restored.handoffDone = true;
   if (newer.reviewSaved) restored.reviewSaved = true;
   const gone = new Set([newer.id, draftPageId(newer.id)]);
+  for (const thread of state.threads ?? []) if (thread.pageId === newer.id) thread.pageId = restored.id;
   state.pages = state.pages.filter((x) => !gone.has(x.id));
   return joined;
 }
@@ -819,6 +834,44 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (isRow(state, p)) p.editedAt = isoTime(undefined);
       return { message: "Page renamed", entityId: p.id };
     }
+    case "add-comment": {
+      const body = commentBody(action.body), at = isoTime(action.at);
+      const existing = state.threads?.find((t) => t.id === action.threadId);
+      if (existing) {
+        if (existing.pageId !== action.pageId) throw new DomainError("Not a comment on this page");
+        if (existing.comments.some((c) => c.id === action.commentId)) throw new DomainError("Comment id already in use");
+        existing.comments.push({ id: action.commentId, body, at });
+        existing.version++;
+        return { message: "Reply added", entityId: existing.id };
+      }
+      const on = page(state, action.pageId);
+      if (isTrashed(on)) throw new DomainError("That page is in Trash");
+      (state.threads ??= []).push({ id: action.threadId, pageId: on.id, version: 1, createdAt: at, comments: [{ id: action.commentId, body, at }] });
+      return { message: "Comment added", entityId: action.threadId };
+    }
+    case "edit-comment": {
+      const thread = threadToChange(state, action.threadId, action.version), comment = thread.comments.find((c) => c.id === action.commentId);
+      if (!comment) throw new DomainError("That comment's gone");
+      comment.body = commentBody(action.body);
+      comment.editedAt = isoTime(action.at);
+      thread.version++;
+      return { message: "Comment changed", entityId: thread.id };
+    }
+    case "delete-comment": {
+      const thread = threadToChange(state, action.threadId, action.version);
+      if (!thread.comments.some((c) => c.id === action.commentId)) throw new DomainError("That comment's gone");
+      thread.comments = thread.comments.filter((c) => c.id !== action.commentId);
+      thread.version++;
+      // Its last comment takes the thread with it.
+      if (!thread.comments.length) state.threads = state.threads!.filter((t) => t.id !== thread.id);
+      return { message: "Comment deleted", entityId: thread.id };
+    }
+    case "resolve-thread": {
+      const thread = threadToChange(state, action.threadId, action.version);
+      if (action.resolved) thread.resolvedAt = isoTime(action.at); else delete thread.resolvedAt;
+      thread.version++;
+      return { message: action.resolved ? "Resolved" : "Reopened", entityId: thread.id };
+    }
     case "set-page-icon": {
       const p = page(state, action.pageId);
       if (action.icon !== null && !isPageIcon(action.icon)) throw new DomainError("That isn't one emoji or picture");
@@ -1306,6 +1359,9 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   if (command.action.type === "undo") {
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");
+    // Taking away a page made by that change would take the notes written on it since.
+    const pagesBack = new Set(previous.before.pages.map((p) => p.id));
+    if (input.threads?.some((t) => !pagesBack.has(t.pageId))) throw new DomainError("Cannot undo after later changes; current values kept");
     state = expandedWorkspace({ ...structuredClone(previous.before), revision: input.revision, receipts: structuredClone(input.receipts) });
     keepRowNumbers(input, state);
     result = { message: "Previous operation restored" };
@@ -1316,7 +1372,16 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   state.revision = input.revision + 1;
   const receipt = { operationId: command.operationId, ...result, fingerprint };
   state.receipts = compactReceipts({ ...state.receipts, [command.operationId]: receipt });
-  if (!["undo", "ensure-day", "run-repeats"].includes(command.action.type)) state.undo = { operationId: command.operationId, revision: state.revision, before };
+  // A page gone for good takes its threads with it. In Trash they wait for it.
+  if (state.threads?.length) { const held = new Set(state.pages.map((p) => p.id)); state.threads = state.threads.filter((t) => held.has(t.pageId)); }
+  if (state.threads && !state.threads.length) delete state.threads;
+  if (leavesUndoAlone(command.action.type)) {
+    // A note isn't worth Undo, and shouldn't cost the Undo of a table deleted before it (comments.md §2). That Undo brings back what it changed and leaves the note.
+    // If what it changed was comments, it would bring back a thread from before the note, so it goes.
+    const previous = input.undo;
+    if (previous && (!previous.before || JSON.stringify(previous.before.threads ?? []) === JSON.stringify(input.threads ?? []))) state.undo = { ...previous, revision: state.revision, ...(previous.before ? { before: { ...previous.before, threads: state.threads } } : {}) };
+    else delete state.undo;
+  } else if (!["undo", "ensure-day", "run-repeats"].includes(command.action.type)) state.undo = { operationId: command.operationId, revision: state.revision, before };
   else delete state.undo;
   return { workspace: state, receipt };
 }

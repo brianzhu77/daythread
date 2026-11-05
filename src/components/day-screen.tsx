@@ -4,6 +4,7 @@ import { getCalendarTasks } from '../domain/workspace'
 import { longLabel } from './dates'
 import { ContinuousPage } from './continuous-page'
 import { dayMenuGroups, LinkedFrom, Subpages } from './page-tree'
+import { CommentCount } from './comments-pane'
 import { PageIconLine } from './icon-picker'
 import { PageCover, useCoverCanMove } from './page-cover'
 import { RowMenu } from './row-menu'
@@ -64,7 +65,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
     <div className="day-screen">
       {page && <PageCover page={page} place="day" />}
       {page && <PageIconLine page={page} />}
-      <DayHeader date={date} today={today} menu={menuGroups && <RowMenu label="Day actions" triggerClass="page-more" groups={menuGroups} />} />
+      <DayHeader date={date} today={today} menu={menuGroups && <><CommentCount page={page} /><RowMenu label="Day actions" triggerClass="page-more" groups={menuGroups} /></>} />
       {page && <LinkedFrom page={page} workspace={workspace} />}
       {page && isToday && <DraftLine page={page} />}
 
