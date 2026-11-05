@@ -1,0 +1,23 @@
+(node:75388) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ zonedEpoch: a wall-clock time in a zone, DST aware; an unknown zone counts as UTC (0.901291ms)
+✔ dueReminders: a timed chip fires at its time, a date-only chip at 9:00, in the workspace zone; trashed pages never (1.426833ms)
+✔ PushStore: a subscription belongs to one workspace, the same endpoint again moves it, only its own workspace can drop it, RLS is on (728.825208ms)
+✔ runTick: each due reminder once per subscription, never twice; a gone endpoint is dropped; a failed send is tried again next tick (499.513292ms)
+✔ tickAllowed: CRON_SECRET in the header or the query, nothing without it (1.543417ms)
+✔ handleSubscribe and handleUnsubscribe: same-origin JSON for the signed-in account’s workspace; keys required (485.110375ms)
+✔ a chip on a finished to-do stays quiet; an open one reminds (B60 6) (0.812041ms)
+✔ no reminder from a page in Trash, a day template, a row template or a draft; a synced chip opens a page he can see (B60 5, 7) (0.492959ms)
+✔ turning on is a clean start: what fell due before a device signed up stays quiet, after that it fires once; October stays quiet too (B60 3, 4) (515.770625ms)
+✔ a device the push service drops: no more sends, and the account reads as stopped until one signs up; turning off says nothing (B60 8) (448.634667ms)
+✔ a chip moved to another time fires again, once; the same chip shown twice is one reminder (B60 4) (445.490791ms)
+✔ a synced chip read back through the store still opens a page he can see, not the shared record (B60 7) (484.235167ms)
+✔ two ticks at once send one reminder once, and a device moved to another workspace starts clean there (Ratchet, #138) (458.903084ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14292.304
