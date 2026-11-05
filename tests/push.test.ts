@@ -205,4 +205,21 @@ test('a device the push service drops: no more sends, and the account reads as s
   await push.unsubscribe(workspaceId, a.endpoint)
   assert.equal(await push.stopped(workspaceId), false, 'he turned it off himself')
 })
+test('a chip moved to another time fires again, once; the same chip shown twice is one reminder (B60 4)', async () => {
+  const { push, workspaceId } = await tickFixture()
+  await push.subscribe(workspaceId, { endpoint: 'https://push.example/a', p256dh: 'p', auth: 'a' })
+  await push.subscribe(workspaceId, { endpoint: 'https://push.example/b', p256dh: 'p', auth: 'b' })
+  const sent: string[] = [], at = (time: string) => workspace('America/Vancouver', [
+    { id: 'd', type: 'daily', date: '2099-10-28', title: '', nodes: [line('l1', [text('Dentist '), chip('e1', '2099-10-28', time)])] },
+    { id: 'p', type: 'document', date: null, title: 'Copy', nodes: [line('l2', [text('Dentist '), chip('e1', '2099-10-28', time)])] },
+  ])
+  const run = (w: Workspace, now: number) => runTick({ store: push, loadWorkspace: async () => w, send: async (s, p) => { sent.push(`${s.auth}:${p.key}`); return 'ok' }, now: new Date(now) })
+  const fifteen = zonedEpoch('2099-10-28', '15:00', 'America/Vancouver'), sixteen = zonedEpoch('2099-10-28', '16:00', 'America/Vancouver')
+  await run(at('15:00'), fifteen + 60_000)
+  await run(at('15:00'), fifteen + 120_000)
+  assert.deepEqual(sent.sort(), [`a:e1@${fifteen}`, `b:e1@${fifteen}`], 'each device once, however many lines hold it')
+  sent.length = 0
+  await run(at('16:00'), sixteen + 60_000)
+  assert.deepEqual(sent.sort(), [`a:e1@${sixteen}`, `b:e1@${sixteen}`], 'moved, so it fires again')
+})
 
