@@ -396,7 +396,7 @@ function LineMenu({ anchor, onClose, onCopy, onComment }: { anchor: { top: numbe
 /** B35: a failure the network caused (worth retrying), not a refusal from the server (which would refuse again). */
 function CommentWordsButton({ onComment }: { onComment: () => void }) {
   const Components = useComponentsContext()!
-  return <Components.FormattingToolbar.Button className="bn-button" mainTooltip="Comment" label="Comment" icon={<CommentIcon />} onClick={onComment} />
+  return <Components.FormattingToolbar.Button className="bn-button" mainTooltip="Comment" label="Comment" icon={<span className="comment-toolbar-icon"><CommentIcon /></span>} onClick={onComment} />
 }
 /** The words a comment on this line quotes, or what it is if it has none. */
 function lineQuote(node: EditorNode): string {
