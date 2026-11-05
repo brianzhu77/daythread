@@ -200,6 +200,23 @@ for (const id of [groupedId, boardId, listId, galleryId, calendarId, timelineId]
 ws = await run({ type: 'add-row', databaseId: listId, pageId: 'fixture-icon-row', title: 'Fixture icon row', values: { state: 'next' }, at: new Date().toISOString() })
 ws = await run({ type: 'set-page-icon', pageId: 'fixture-icon-row', icon: '🌲' })
 ws = await run({ type: 'delete-page', pageId: iconTrashId, at: new Date().toISOString() })
+// A database's own icon on its title, a page under one for the breadcrumb, one linked from it for Linked from, and a relation's chip.
+ws = await run({ type: 'set-page-icon', pageId: listId, icon: '🌲' })
+ws = await run({ type: 'create-document', title: 'Fixture page under an icon', body: '', pageId: 'fixture-icon-child', parentId: iconPageId })
+{
+  const page = ws.pages.find(p => p.id === iconPageId)!
+  ws = await run({ type: 'save-editor', pageId: iconPageId, expectedContent: pageContentKey(page), document: JSON.stringify([bullet('A first line'), { id: crypto.randomUUID(), type: 'bulletListItem', props: {}, content: [textRun('See '), { type: 'pageRef', props: { pageId: ownIconPageId, refId: crypto.randomUUID(), newTitle: '', lineId: '', taskId: '' } }], children: [] }]), today })
+  const target = ws.pages.find(p => p.parentId === groupedId && p.icon)!
+  ws = await run({ type: 'change-database', pageId: listId, change: { kind: 'addProperty', property: { id: 'rel', name: 'Linked', type: 'relation', target: groupedId } } as never })
+  ws = await run({ type: 'set-values', pageId: 'fixture-icon-row', values: { rel: [target.id] }, expected: { rel: null } } as never)
+  // A Timeline with its table open: the fixture day's is closed.
+  ws = await run({ type: 'create-database', pageId: 'fixture-icon-timeline', parentId: null, homeBlockId: null, title: 'Fixture icon Timeline' } as never)
+  ws = await run({ type: 'change-database', pageId: 'fixture-icon-timeline', change: { kind: 'addProperty', property: { id: 'when', name: 'When', type: 'date' } } as never })
+  ws = await run({ type: 'add-row', databaseId: 'fixture-icon-timeline', pageId: 'fixture-icon-bar', title: 'Fixture icon bar', values: { when: { start: today } }, at: new Date().toISOString() })
+  ws = await run({ type: 'set-page-icon', pageId: 'fixture-icon-bar', icon: '🌲' })
+  const timeline = ws.pages.find(p => p.id === 'fixture-icon-timeline')!.database!.views[0]!
+  ws = await run({ type: 'change-database', pageId: 'fixture-icon-timeline', change: { kind: 'updateView', viewId: timeline.id, layout: 'timeline', dateBy: 'when', timelineTable: true } as never })
+}
 
 const task = (title: string) => {
   const found = ws.tasks.find(t => t.title === title)

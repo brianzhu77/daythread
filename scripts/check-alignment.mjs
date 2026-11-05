@@ -27,7 +27,8 @@
 //   baseline as the plain text beside it (Jazz line-links-states §7 check 10).
 //   Icons (P1-3, icons-covers.md section 7): in a page's, a row's and a day's head, the icon's box 2px back of the title's words, its size and its line, and an
 //   icon of ours (whose ink fills its box, unlike an emoji's) drawn at the words' edge. Before a name wherever one shows, centred on the name's first line (a
-//   [[ link: on where a chip's own icon sits), and the name, or in a database the icon, starting where one with no icon does.
+//   [[ link: on where a chip's own icon sits), and the name, or in a database the icon, starting where one with no icon does. Each place in that section's table is
+//   required: sidebar, Pages, Trash, subpage rows, page cards, [[ links, a relation's chip, search, Linked from, the breadcrumb, Move to, a database's title, and a row in each layout.
 //   3. Coverage. Every row type in REQUIRED must appear on the measured pages; one that doesn't is MISSING, never a
 //      pass. Add it to the data copy (or pass a fixture page) and run again.
 // Tolerance is 1px on unrounded coordinates (output shows one decimal). Exit code 1 on any FAIL or MISSING.
@@ -40,9 +41,9 @@ const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Vancou
 const paths = given.length ? given : ['/day/2026-10-18', '/day/2026-10-19', `/day/${today}`, '/day/2026-12-31']
 const TOLERANCE = 1, NEST_STEP = 24
 // Where an icon sits before a name, and what's measured for each: `row` centres on the whole row, as its name can have a second line under it.
-const ICON_PLACES = [['.tree-row', 'icon: sidebar', 'name'], ['.card-row', 'icon: Pages', 'row'], ['.subpage-row', 'icon: subpage row', 'name'], ['.editor-page-card', 'icon: page card', 'name'], ['.page-ref', 'icon: [[ link', 'chip'], ['.database-title-cell', 'icon: table row', 'start'], ['.database-list-title', 'icon: list row', 'start'], ['.database-card-title', 'icon: board card', 'centre'], ['.database-gallery-title', 'icon: gallery card', 'centre'], ['.database-day-title', 'icon: calendar', 'centre'], ['.database-bar, .database-week-open', 'icon: timeline', 'centre']]
+const ICON_PLACES = [['.tree-row', 'icon: sidebar', 'name'], ['.card-row', 'icon: Pages', 'row'], ['.subpage-row', 'icon: subpage row', 'name'], ['.editor-page-card', 'icon: page card', 'name'], ['.page-ref', 'icon: [[ link', 'chip'], ['.database-title-cell', 'icon: table row', 'start'], ['.database-list-title', 'icon: list row', 'start'], ['.database-card-title', 'icon: board card', 'centre'], ['.database-gallery-title', 'icon: gallery card', 'centre'], ['.database-day-title', 'icon: calendar', 'centre'], ['.database-bar, .database-week-open', 'icon: timeline', 'centre'], ['.database-pane-name', 'icon: timeline table', 'centre'], ['.database-title-row', 'icon: database title', 'input'], ['.crumb', 'icon: breadcrumb', 'centre'], ['.linked-from a', 'icon: Linked from', 'name'], ['.move-row', 'icon: Move to', 'row'], ['.row-property-value, .database-relation-chip', 'icon: relation chip', 'centre']]
 const ICON_HEADS = [{ kind: 'icon: page head', path: '/pages?page=fixture-icon-page', title: '.page-title-field' }, { kind: 'icon: own icon in a head', path: '/pages?page=fixture-own-icon-page', title: '.page-title-field', ink: true }, { kind: 'icon: row page head', path: '/pages?page=fixture-icon-row', title: '.page-title-field' }, { kind: 'icon: day head', path: '/day/2026-12-30', title: '.day-title' }]
-const REQUIRED = ['timeline', 'sub-items', 'peek', 'side peek', 'synced block', 'sub-groups', 'lanes', 'board', 'grouped table', 'list', 'gallery', 'calendar', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day', ...ICON_PLACES.map(([, kind]) => kind), ...ICON_HEADS.map(h => h.kind), 'icon: search']
+const REQUIRED = ['timeline', 'sub-items', 'peek', 'side peek', 'synced block', 'sub-groups', 'lanes', 'board', 'grouped table', 'list', 'gallery', 'calendar', 'heading', 'open task', 'done task', 'cancelled task', 'bullet', 'nested bullet', 'level 3 bullet', 'nested task', 'level 3 task', 'empty row', 'page card with preview', 'page card without preview', 'link card', 'line link', 'table head', ...['title', 'text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `table cell: ${t}`), ...['text', 'number', 'select', 'multiSelect', 'status', 'date', 'checkbox', 'url'].map(t => `row page: ${t}`), 'database table', 'picker dot on a plain day', 'picker dot on today', 'picker dot on the selected day', ...ICON_PLACES.map(([, kind]) => kind), ...ICON_HEADS.map(h => h.kind), 'icon: search', 'icon: Trash']
 
 /** Each icon before a name on this page, against its name, and against a place like it with no icon. */
 function iconPlaces(places) {
@@ -58,15 +59,19 @@ function iconPlaces(places) {
   }
   const out = []
   for (const [selector, kind, how] of places) for (const host of document.querySelectorAll(selector)) {
-    const icon = host.querySelector('.page-emoji, .database-row-icon')
+    const icon = host.querySelector('.page-emoji, .database-row-icon, .database-title-icon')
     if (!icon || !icon.getClientRects().length) continue
-    const box = icon.getBoundingClientRect(), words = wordsOf(host, icon), row = { kind, how, label: words ? host.textContent.replace(icon.textContent, '').trim().slice(0, 24) : '(no name)', size: box.width }
+    const input = how === 'input' ? host.querySelector('input') : null
+    const words = input ? (() => { const r = input.getBoundingClientRect(); return { top: r.top, height: r.height, left: r.left + parseFloat(getComputedStyle(input).paddingLeft) } })() : wordsOf(host, icon)
+    const box = icon.getBoundingClientRect(), row = { kind, how, label: input ? input.value.slice(0, 24) : words ? host.textContent.replace(icon.textContent, '').trim().slice(0, 24) : '(no name)', size: box.width }
     if (!words) { out.push({ ...row, off: null }); continue }
     row.gap = words.left - box.right
-    const plain = [...(host.parentElement?.parentElement?.querySelectorAll(selector) ?? [])].find(h => !h.querySelector('.page-emoji, .database-row-icon') && h.getClientRects().length)
+    const plain = [...(host.parentElement?.parentElement?.querySelectorAll(selector) ?? [])].find(h => !h.querySelector('.page-emoji, .database-row-icon, .database-title-icon') && h.getClientRects().length)
     if (how === 'chip') {
       const plainChip = [...document.querySelectorAll('.page-ref:not(.line-ref)')].find(h => !h.querySelector('.page-emoji')), own = plainChip?.querySelector('.page-ref-icon svg'), ownWords = plainChip && wordsOf(plainChip, own)
-      row.off = own && ownWords ? (cy(box) - cy(words)) - (cy(own.getBoundingClientRect()) - cy(ownWords)) : null
+      // A page with no plain chip to compare with isn't where this is measured: the fixture day is.
+      if (!own || !ownWords) continue
+      row.off = (cy(box) - cy(words)) - (cy(own.getBoundingClientRect()) - cy(ownWords))
     } else row.off = cy(box) - (how === 'row' ? cy(host.getBoundingClientRect()) : cy(words))
     // Same list: the name starts where it would with no icon; in a database's rows, the icon does, as nothing's held for one.
     const plainWords = plain && wordsOf(plain)
@@ -202,6 +207,9 @@ function measure() {
       const title = content.querySelector('.database-title')
       if (!title) return
       Object.assign(row, { kind: 'database table', label: (title.value || '(untitled)').slice(0, 24), ...firstLine(title) })
+      // With an icon before it, the title's row starts at the icon, and that's what lines up.
+      const ownIcon = content.querySelector('.database-title-icon')
+      if (ownIcon) row.left = ownIcon.getBoundingClientRect().left
       const view = content.querySelector('.database-view-name'), chevron = view?.querySelector('svg')
       // A linked view shows its view's name with nothing to open, so no chevron to measure.
       if (view?.classList.contains('is-static')) row.viewChevron = 'none'
@@ -231,8 +239,8 @@ function measure() {
       if (lane) {
         const head = content.querySelector('.database-lane-head-cell .database-column-head'), card = lane.querySelector('.database-card')
         row.lanes = {
-          "lane's chevron on the title": lane.querySelector('.database-group-fold').getBoundingClientRect().left - title.getBoundingClientRect().left,
-          'column head on the title': head ? head.getBoundingClientRect().left - title.getBoundingClientRect().left : null,
+          "lane's chevron on the title": lane.querySelector('.database-group-fold').getBoundingClientRect().left - (title.parentElement.querySelector('.database-title-icon') ?? title).getBoundingClientRect().left,
+          'column head on the title': head ? head.getBoundingClientRect().left - (title.parentElement.querySelector('.database-title-icon') ?? title).getBoundingClientRect().left : null,
           "card's edge on its column head": head && card ? card.getBoundingClientRect().left - head.getBoundingClientRect().left : null,
         }
       }
@@ -269,7 +277,7 @@ function measure() {
         const cappedName = words(capped?.querySelector('.database-card-title'))
         const box = card?.querySelector('.property-checkbox')?.getBoundingClientRect()
         row.board = {
-          'column head on the title': head ? head.getBoundingClientRect().left - title.getBoundingClientRect().left : null,
+          'column head on the title': head ? head.getBoundingClientRect().left - (title.parentElement.querySelector('.database-title-icon') ?? title).getBoundingClientRect().left : null,
           "card's edge on its column head": head && card ? card.getBoundingClientRect().left - head.getBoundingClientRect().left : null,
           // The name's words, not a status's dot before them, which is drawn smaller.
           "count centred on its column's name": mid(words(head?.querySelector('.database-group-count')), words(head?.firstElementChild?.lastChild)),
@@ -290,7 +298,7 @@ function measure() {
         const days = [...calendar.querySelectorAll('.database-day')].map(d => d.getBoundingClientRect().width)
         row.calendar = {
           'month on the title': month ? month.left - title.getBoundingClientRect().left : null,
-          'the grid on the title': calendar.getBoundingClientRect().left - title.getBoundingClientRect().left,
+          'the grid on the title': calendar.getBoundingClientRect().left - (title.parentElement.querySelector('.database-title-icon') ?? title).getBoundingClientRect().left,
           "the grid's right on the page's": calendar.getBoundingClientRect().right - content.getBoundingClientRect().right,
           'every day the same width': days.length ? Math.max(...days) - Math.min(...days) : null,
           'first weekday on its day': weekday && first ? weekday.getBoundingClientRect().left - first.getBoundingClientRect().left : null,
@@ -303,13 +311,13 @@ function measure() {
         const card = gallery.querySelector('.database-gallery-card'), name = words(card?.querySelector('.database-gallery-title'))
         const box = card?.querySelector('.property-checkbox')?.getBoundingClientRect()
         row.gallery = {
-          "card's edge on the title": card ? card.getBoundingClientRect().left - title.getBoundingClientRect().left : null,
+          "card's edge on the title": card ? card.getBoundingClientRect().left - (title.parentElement.querySelector('.database-title-icon') ?? title).getBoundingClientRect().left : null,
           "+ New on a card's words": gap(words(content.querySelector('.database-new.is-under-cards')), name),
           "Show 25 more on a card's words": gap(words(content.querySelector('.database-gallery + .database-more, .database-more.is-under-cards')), name),
           "a value on a card's words": gap(words(card?.querySelector('.database-card-value')), name),
           "a checkbox on a card's words": box && name ? box.left - name.left : null,
           'a checkbox centred on its name': mid(box, words(card?.querySelector('.database-card-check')?.lastChild)),
-          "group's chevron on the title": content.querySelector('.database-group-fold') ? content.querySelector('.database-group-fold').getBoundingClientRect().left - title.getBoundingClientRect().left : null,
+          "group's chevron on the title": content.querySelector('.database-group-fold') ? content.querySelector('.database-group-fold').getBoundingClientRect().left - (title.parentElement.querySelector('.database-title-icon') ?? title).getBoundingClientRect().left : null,
           "Hidden on a card's words": gap(words(content.querySelector('.database-hidden-groups')), name),
         }
       }
@@ -327,14 +335,14 @@ function measure() {
           [narrow ? "a value on a row's words" : 'a value centred on its title']: narrow ? gap(words(value), name) : mid(words(value), name),
           // Beside a value on the phone's second line, so what it's measured against is its own name there.
           [narrow ? 'a checkbox centred on its name' : 'a checkbox centred on its title']: !box || !name ? null : narrow ? mid(box, words(list.querySelector('.database-list-check')?.lastChild)) : cy(box) - cy(name),
-          "group's chevron on the title": list.querySelector('.database-group-fold') ? list.querySelector('.database-group-fold').getBoundingClientRect().left - title.getBoundingClientRect().left : null,
+          "group's chevron on the title": list.querySelector('.database-group-fold') ? list.querySelector('.database-group-fold').getBoundingClientRect().left - (title.parentElement.querySelector('.database-title-icon') ?? title).getBoundingClientRect().left : null,
         }
       }
       const fold = list || gallery ? null : content.querySelector('.database-group-fold')
       if (fold) {
         const label = fold.querySelector('svg + *'), nameText = words(content.querySelector('.database-title-cell > span'))
         row.group = {
-          "fold's chevron on the title": fold.getBoundingClientRect().left - title.getBoundingClientRect().left,
+          "fold's chevron on the title": fold.getBoundingClientRect().left - (title.parentElement.querySelector('.database-title-icon') ?? title).getBoundingClientRect().left,
           'chevron centred on its name': mid(fold.querySelector('svg')?.getBoundingClientRect(), words(label)),
           "count centred on its group's name": mid(words(fold.querySelector('.database-group-count')), words(label)),
           "Show 25 more on Name's text": gap(words(content.querySelector('.database-group-foot .database-more')), nameText),
@@ -460,7 +468,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
     }
     await page.close()
   }
-  for (const [path, label] of [['/pages', 'Pages'], ['/pages?view=trash', 'Trash'], ['/pages?page=fixture-icon-page', 'a page'], ['/day/2026-12-31', 'the fixture day']]) {
+  for (const [path, label] of [['/pages', 'Pages'], ['/pages?view=trash', 'Trash'], ['/pages?page=fixture-icon-page', 'a page'], ['/pages?page=fixture-icon-child', 'a page under one'], ['/pages?page=fixture-own-icon-page', 'a page linked from one'], ['/pages?page=fixture-icon-row', "a row's page"], ['/pages?page=fixture-icon-timeline', "a Timeline's table"], ['/day/2026-12-31', 'the fixture day']]) {
     const page = await browser.newPage({ viewport: { width, height } })
     await page.goto(`${base}${path}`, { waitUntil: 'networkidle' }); await page.waitForTimeout(1000)
     // Layouts draw what's near the screen, so go down it once first.
@@ -473,6 +481,19 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
       results.push(r.off == null ? { at, check: `${kind} ${where}: "${r.label}"`, ok: 'missing', detail: 'nothing to measure it against' } : { at, check: `${kind} ${where}: "${r.label}"`, ok: Math.abs(r.off) <= TOLERANCE, detail: signed(r.off) })
       if (r.gap !== undefined) results.push({ at, check: `${kind} a gap before the name: "${r.label}"`, ok: r.gap >= 2, detail: `${fmt(r.gap)}px` })
       if (r.startsOff !== undefined) results.push({ at, check: `${kind} starts where one with no icon does: "${r.label}"`, ok: Math.abs(r.startsOff) <= TOLERANCE, detail: signed(r.startsOff) })
+    }
+    await page.close()
+  }
+  {
+    const page = await browser.newPage({ viewport: { width, height } })
+    await page.goto(`${base}/pages?page=fixture-icon-child`, { waitUntil: 'networkidle' }); await page.waitForTimeout(800)
+    await page.getByRole('button', { name: 'Page actions' }).first().click(); await page.waitForTimeout(200); await page.getByRole('menuitem', { name: /^Move to/ }).click(); await page.waitForTimeout(500)
+    const at = `${width} Move to`
+    for (const r of await page.evaluate(iconPlaces, ICON_PLACES.filter(([, kind]) => kind === 'icon: Move to'))) {
+      seen.get(width).add(r.kind)
+      results.push(r.off == null ? { at, check: `${r.kind}: "${r.label}"`, ok: 'missing', detail: 'nothing to measure it against' } : { at, check: `${r.kind} centred on the name's first line: "${r.label}"`, ok: Math.abs(r.off) <= TOLERANCE, detail: signed(r.off) })
+      if (r.gap !== undefined) results.push({ at, check: `${r.kind} a gap before the name: "${r.label}"`, ok: r.gap >= 2, detail: `${fmt(r.gap)}px` })
+      if (r.startsOff !== undefined) results.push({ at, check: `${r.kind} starts where one with no icon does: "${r.label}"`, ok: Math.abs(r.startsOff) <= TOLERANCE, detail: signed(r.startsOff) })
     }
     await page.close()
   }
@@ -649,7 +670,7 @@ for (const [width, height] of [[1280, 900], [390, 844]]) {
 }
 await browser.close()
 // 3. Coverage.
-for (const [width, kinds] of seen) for (const kind of REQUIRED) if (!kinds.has(kind) && !((kind === 'peek' || kind === 'side peek' || kind === 'icon: sidebar') && width !== 1280)) results.push({ at: `${width}`, check: `${kind}: not on any measured page`, ok: 'missing', detail: 'add it to the copy and run again' })
+for (const [width, kinds] of seen) for (const kind of REQUIRED) if (!kinds.has(kind) && !((kind === 'peek' || kind === 'side peek' || kind === 'icon: sidebar' || kind === 'icon: timeline table') && width !== 1280)) results.push({ at: `${width}`, check: `${kind}: not on any measured page`, ok: 'missing', detail: 'add it to the copy and run again' })
 
 const label = r => (r.ok === 'missing' ? 'MISSING' : r.ok ? 'ok' : 'FAIL').padEnd(7)
 const show = args.includes('--all') ? results : results.filter(r => r.ok !== true)
