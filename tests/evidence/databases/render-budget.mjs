@@ -24,7 +24,7 @@ const measure = async (variant) => {
   times.sort((a, b) => a - b)
   return { median: times[Math.floor(times.length / 2)], min: times[0], max: times.at(-1) }
 }
-// BUDGET_VARIANTS=relation,todos measures only those, against plain.
+// BUDGET_VARIANTS=relation,todos measures only those, against plain. `cover` isn't in the default set: BUDGET_VARIANTS=table,cover compares a day with a cover to one without.
 const variants = (process.env.BUDGET_VARIANTS ?? 'table,linked,todos,relation,formula,sub-items').split(',')
 const plain = await measure('plain'), out = { runs, plain }
 for (const v of variants) { out[v] = await measure(v); out[`extra_${v}`] = out[v].median - plain.median }
