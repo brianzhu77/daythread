@@ -1,0 +1,21 @@
+// A bar's All on a big view (R3-15, R3-26), at 390, where All is: Edit property and Delete on a table and a board, each with one Undo. Over 200 rows this failed with
+// "Not saved" and a Retry that couldn't work. Usage: node tests/evidence/several-rows/big-view.mjs <base-url> <store-path> [chromium|webkit] [rows]  (a throwaway store)
+import * as pw from '@playwright/test'
+import { execSync } from 'node:child_process'
+const [U,S,engine='chromium',count='250']=process.argv.slice(2)
+if(!U||!S){console.error('Usage: node tests/evidence/several-rows/big-view.mjs <base-url> <store-path> [chromium|webkit] [rows]');process.exit(2)}
+const wait=ms=>new Promise(r=>setTimeout(r,ms))
+const seed=()=>execSync(`rm -f ${S} ${S}-wal ${S}-shm && node --no-warnings tests/evidence/several-rows/seed-big.ts ${S} ${count}`,{stdio:'ignore'})
+const store=()=>JSON.parse(execSync(`sqlite3 ${S} "select data from workspace"`,{maxBuffer:1<<28}).toString())
+const rows=()=>store().pages.filter(p=>p.parentId==='big'&&p.type==='document'), live=()=>rows().filter(p=>!p.trashedAt)
+const b=await pw[engine].launch(); let failed=0
+const sc=async(name,view,act)=>{ seed(); const c=await b.newContext({viewport:{width:390,height:780},hasTouch:true,serviceWorkers:'block'}); const p=await c.newPage(), errors=[]; p.on('pageerror',e=>{if(!/ResizeObserver/.test(e.message))errors.push(e.message.slice(0,120))}); let r; try{ await p.goto(`${U}/pages?page=big`); await p.locator('.database-more-button').first().waitFor(); await wait(1500); if(view){ await p.getByRole('button',{name:/Table/}).first().tap().catch(()=>{}); await wait(300); await p.getByText(view,{exact:true}).first().tap(); await wait(700) } r=await act(p) }catch(e){ r={ok:false,threw:e.message.split('\n').slice(0,2).join(' ').slice(0,200)} } const ok=r.ok&&!errors.length; if(!ok)failed++; console.log(ok?'PASS':'FAIL',name,JSON.stringify({...r,errors}).slice(0,420)); await c.close() }
+const notices=p=>p.locator('[role=alert],[role=status]').allInnerTexts().then(t=>t.join(' | ').replace(/\s+/g,' ').slice(0,120))
+const all=async p=>{ await p.locator('.database-more-button').first().tap(); await wait(300); await p.getByRole('menuitem',{name:'Select rows'}).tap(); await wait(400); await p.locator('.database-picked-bar').getByRole('button',{name:'All'}).tap(); await wait(1500); return (await p.locator('.database-picked-bar').innerText()).split('\n')[0] }
+const edit=(view)=>async p=>{ const r={bar:await all(p)}; const t=Date.now(); await p.locator('.database-picked-bar').getByRole('button',{name:/Edit property/}).tap(); await wait(300); await p.getByRole('menuitem',{name:'N',exact:true}).tap(); await wait(400); await p.keyboard.type('7'); const t1=Date.now(); await p.keyboard.press('Enter'); await p.getByRole('button',{name:'Undo'}).first().waitFor({timeout:60000}).catch(()=>{}); r.toNotice=Date.now()-t1; await p.getByRole('button',{name:/^Done$/}).first().tap().catch(()=>{}); await wait(600); r.notice=await notices(p); r.sevens=rows().filter(x=>x.values?.n===7).length; r.ms=Date.now()-t; const u=p.getByRole('button',{name:'Undo'}); r.undoShown=await u.count(); if(r.undoShown){ await u.first().tap(); for(let i=0;i<60&&rows().filter(x=>x.values?.n===7).length>1;i++) await wait(1000); r.afterUndo=rows().filter(x=>x.values?.n===7).length } r.ok=r.sevens===Number(count)&&r.afterUndo<=1; return r }
+const del=async p=>{ const r={bar:await all(p)}; const t=Date.now(); await p.locator('.database-picked-bar').getByRole('button',{name:'Delete'}).tap(); await p.getByRole('button',{name:'Undo'}).first().waitFor({timeout:60000}).catch(()=>{}); r.toNotice=Date.now()-t; await wait(1500); r.notice=await notices(p); r.live=live().length; r.ms=Date.now()-t; const u=p.getByRole('button',{name:'Undo'}); r.undoShown=await u.count(); if(r.undoShown){ const t2=Date.now(); await u.first().tap(); for(let i=0;i<60&&live().length!==Number(count);i++) await wait(1000); r.undoMs=Date.now()-t2; r.liveAfterUndo=live().length } r.ok=r.live===0&&r.liveAfterUndo===Number(count); return r }
+await sc('Table, All, Edit property',null,edit())
+await sc('Table, All, Delete',null,del)
+await sc('Board, All, Edit property','Board',edit())
+await sc('Board, All, Delete','Board',del)
+await b.close(); console.log(failed?failed+' FAILED':'ALL PASS'); process.exit(failed?1:0)
