@@ -8,7 +8,7 @@ import { columnCalc, databaseRows, inView, isEmptyValue, isReadOnly, propertyOf,
 import { dayWidth, daysBetween, draggedBar, endAt, snapMinutes, startAt, timelineBars, timelineUnits, timelineWeeks, viewDateEnd, type BarPart, type BarWrite, type TimelineBar, type TimelineUnit } from '../domain/timeline.ts'
 import { taskIdOfRow } from '../domain/todos-source'
 import type { LocalDate, Page, WeekStart } from '../domain/types'
-import { blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, setOpenCell, shownRaw, shownValue, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { rowTint, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, setOpenCell, shownRaw, shownValue, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
 import { addDays, fromIso, todayIso } from './dates'
 import { ChevronRightIcon } from './icons'
@@ -85,7 +85,7 @@ export function DatabaseTimeline({ workspace, db, view, changeView, blockId, pag
   if (!wide) return <div className="database-table-wrap" ref={wrap}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     {!property && <p className="database-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'layout')}>Choose a date property</button></p>}
-    <TimelineWeeks bars={bars} undated={undated} from={opensOn} weekStart={weekStart} limit={limit} setLimit={setLimit} returned={returned} openRow={openRow} blockId={blockId} databaseId={db.id} />
+    <TimelineWeeks tintOf={row => rowTint(db.database, view, row, context)} bars={bars} undated={undated} from={opensOn} weekStart={weekStart} limit={limit} setLimit={setLimit} returned={returned} openRow={openRow} blockId={blockId} databaseId={db.id} />
     <button type="button" className="database-new" onClick={() => addRow()}>+ New</button>
     <ViewNotes db={db} view={view} changeView={changeView} empty={rows.length === 0} />
   </div>
@@ -103,13 +103,13 @@ export function DatabaseTimeline({ workspace, db, view, changeView, blockId, pag
 }
 
 /** At 390 (§4): a list by week, from this week down. Tapping opens a row; dates change in its sheet. */
-function TimelineWeeks({ bars, undated, from, weekStart, limit, setLimit, returned, openRow, blockId, databaseId }: { bars: readonly TimelineBar[]; undated: readonly Page[]; from: LocalDate; weekStart: WeekStart; limit: number; setLimit(n: number): void; returned: string | null; openRow(id: string): void; blockId: string; databaseId: string }) {
+function TimelineWeeks({ tintOf, bars, undated, from, weekStart, limit, setLimit, returned, openRow, blockId, databaseId }: { tintOf(row: Page): ReturnType<typeof rowTint>; bars: readonly TimelineBar[]; undated: readonly Page[]; from: LocalDate; weekStart: WeekStart; limit: number; setLimit(n: number): void; returned: string | null; openRow(id: string): void; blockId: string; databaseId: string }) {
   const { weeks, earlier } = timelineWeeks(bars, from, weekStart)
   const [earlierOpen, setEarlierOpen] = useState(false), [undatedOpen, setUndatedOpen] = useState(false)
   // A log that's all in the past shouldn't read as empty.
   const showEarlier = earlierOpen || weeks.length === 0
   const earlierCount = earlier.reduce((n, w) => n + w.bars.length, 0)
-  const line = (bar: TimelineBar) => <div key={bar.row.id} data-row={bar.row.id} className={`database-week-row${returned === bar.row.id ? ' is-returned' : ''}`}>
+  const line = (bar: TimelineBar) => <div key={bar.row.id} data-row={bar.row.id} {...(tintOf(bar.row) ? { style: tintOf(bar.row)!.style } : {})} className={`database-week-row${tintOf(bar.row)?.className ?? ''}${returned === bar.row.id ? ' is-returned' : ''}`}>
     <button type="button" className="database-week-open" data-cell={cellKey({ blockId, databaseId, rowId: bar.row.id, columnId: titleId })} onClick={() => openRow(bar.row.id)}>
       <span className={`database-week-title${bar.row.title ? '' : ' is-placeholder'}`}>{bar.row.title || 'Untitled'}</span>
       <span className={`database-week-dates${bar.shape === 'inverted' ? ' is-error' : ''}`}>{datesOf(bar)}</span>
@@ -129,7 +129,7 @@ function TimelineWeeks({ bars, undated, from, weekStart, limit, setLimit, return
     {total > limit && <button type="button" className="database-more" onClick={() => setLimit(limit + 25)}>Show 25 more</button>}
     {undated.length > 0 && <div className="database-undated">
       <button type="button" className="database-undated-head" aria-expanded={undatedOpen} onClick={() => setUndatedOpen(o => !o)}>No date · {undated.length} ›</button>
-      {undatedOpen && undated.map(row => <div key={row.id} data-row={row.id} className="database-week-row"><button type="button" className="database-week-open" onClick={() => openRow(row.id)}><span className={`database-week-title${row.title ? '' : ' is-placeholder'}`}>{row.title || 'Untitled'}</span></button></div>)}
+      {undatedOpen && undated.map(row => <div key={row.id} data-row={row.id} {...(tintOf(row) ? { style: tintOf(row)!.style } : {})} className={`database-week-row${tintOf(row)?.className ?? ''}`}><button type="button" className="database-week-open" onClick={() => openRow(row.id)}><span className={`database-week-title${row.title ? '' : ' is-placeholder'}`}>{row.title || 'Untitled'}</span></button></div>)}
     </div>}
   </div>
 }
@@ -351,9 +351,10 @@ function TimelineScale({ db, rows, context, addRow, weekStart, cap, bars, undate
     const off = left + barWidth < seen.left ? 'before' : left > seen.left + seen.width ? 'after' : null
     const drawnHere = left + barWidth > seen.left - pad && left < seen.left + seen.width + pad
     const title = bar.row.title || 'Untitled'
+    const tint = rowTint(db.database, view, bar.row, context)
     return <div key={`${group ?? ''}:${bar.row.id}`} className={`database-bar-lane${returned === bar.row.id ? ' is-returned' : ''}${reorder?.before === bar.row.id ? ' is-drop-before' : ''}${reorder?.rowId === bar.row.id ? ' is-dragging' : ''}`} data-row={bar.row.id} {...(group !== undefined ? { 'data-group': group } : {})} style={{ height: rowHeight }}>
       {paneOn && paneRow(bar.row, group)}
-      {drawnHere && <button type="button" className={`database-bar is-${at.shape}${bar.readOnly ? ' is-read-only' : ''}${live ? ' is-dragging' : ''}`} style={{ left: left + pane, width: barWidth }}
+      {drawnHere && <button type="button" className={`database-bar is-${at.shape}${tint?.className ?? ''}${bar.readOnly ? ' is-read-only' : ''}${live ? ' is-dragging' : ''}`} style={{ ...tint?.style, left: left + pane, width: barWidth }}
         data-nav={index === 0 ? '0:0' : undefined} data-cell={cellKey({ blockId, databaseId, rowId: bar.row.id, columnId: titleId })} aria-label={`${title}, ${datesOf(at)}`}
         onPointerDown={e => startDrag(e, bar, 'move')} onMouseDown={e => e.preventDefault()} onClick={() => { if (!justDragged.current) openRow(bar.row.id) }}>
         <span className={`database-bar-title${bar.row.title ? '' : ' is-placeholder'}`}>{title}{unsaved && <span className="database-card-unsaved"> · Not saved</span>}</span>
@@ -364,7 +365,7 @@ function TimelineScale({ db, rows, context, addRow, weekStart, cap, bars, undate
         {live && <span className="database-bar-tip">{datesOf(at)}</span>}
       </button>}
       {/* Its bar is off this way: a jump to it, with its name, so the row isn't a blank line. */}
-      {off && <button type="button" className={`database-bar-off is-${off}`} style={off === 'before' ? { left: pane + 4 } : undefined} aria-label={`Go to ${title}, ${datesOf(at)}`} onClick={() => centre(day(at.start), 'smooth')}>{off === 'before' ? '‹ ' : ''}{paneOn ? '' : title}{off === 'after' ? ' ›' : ''}</button>}
+      {off && <button type="button" className={`database-bar-off is-${off}${tint?.className ?? ''}`} style={{ ...tint?.style, ...(off === 'before' ? { left: pane + 4 } : {}) }} aria-label={`Go to ${title}, ${datesOf(at)}`} onClick={() => centre(day(at.start), 'smooth')}>{off === 'before' ? '‹ ' : ''}{paneOn ? '' : title}{off === 'after' ? ' ›' : ''}</button>}
     </div>
   }
   const undatedLane = (row: Page) => {
@@ -379,7 +380,7 @@ function TimelineScale({ db, rows, context, addRow, weekStart, cap, bars, undate
       onPointerMove={e => { if (canSet && e.pointerType === 'mouse') setHover(dayAtX(e.clientX)) }} onPointerLeave={() => setHover(null)}
       onPointerDown={e => { if (canSet && e.button === 0 && !(e.target as Element).closest('.database-bar-off, .database-pane')) pressed.current = dayAtX(e.clientX) }}
       onPointerUp={e => { if (pressed.current) { const from = pressed.current; pressed.current = null; set(from, dayAtX(e.clientX)) } }}>
-      {paneOn ? paneRow(row) : <button type="button" className={`database-bar-off is-before is-name${row.title ? '' : ' is-placeholder'}`} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}</button>}
+      {paneOn ? paneRow(row) : <button type="button" {...(rowTint(db.database, view, row, context) ? { style: rowTint(db.database, view, row, context)!.style } : {})} className={`database-bar-off is-before is-name${rowTint(db.database, view, row, context)?.className ?? ''}${row.title ? '' : ' is-placeholder'}`} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}</button>}
       {hover && canSet && <span className="database-bar is-ghost" aria-hidden="true" style={{ left: pane + daysBetween(origin, hover) * width, width: Math.max(width, 10) }} />}
     </div>
   }

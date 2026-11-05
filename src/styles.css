@@ -2347,8 +2347,8 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-timeline .database-bar.is-dragging { z-index: 3; border-color: var(--ink-2); cursor: grabbing; }
 .database-timeline .database-bar.is-read-only { cursor: pointer; background: var(--fill-soft); }
 .database-timeline .database-bar.is-ghost { pointer-events: none; background: var(--fill-soft); border-style: dashed; }
-.database-timeline .database-bar.is-open-end { border-right-color: transparent; border-radius: var(--radius-control) 0 0 var(--radius-control); background: linear-gradient(to right, var(--gray-3) 40%, transparent); }
-.database-timeline .database-bar.is-open-start { border-left-color: transparent; border-radius: 0 var(--radius-control) var(--radius-control) 0; background: linear-gradient(to left, var(--gray-3) 40%, transparent); }
+.database-timeline .database-bar.is-open-end { border-right-color: transparent; border-radius: var(--radius-control) 0 0 var(--radius-control); background: linear-gradient(to right, var(--bar-fill, var(--gray-3)) 40%, transparent); }
+.database-timeline .database-bar.is-open-start { border-left-color: transparent; border-radius: 0 var(--radius-control) var(--radius-control) 0; background: linear-gradient(to left, var(--bar-fill, var(--gray-3)) 40%, transparent); }
 .database-timeline .database-bar.is-inverted { border-left: 2px solid var(--formula-red, var(--red)); }
 .database-bar-title { position: sticky; left: 6px; display: inline-block; padding: 0 6px; line-height: 26px; white-space: nowrap; pointer-events: none; }
 .database-bar-title.is-placeholder { color: var(--placeholder); }
@@ -2459,6 +2459,14 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 /* Grey is a step darker than the fill a hovered row gets, so a rule's first result doesn't read as a hover. */
 :root { --tint-gray: var(--gray-4); --tint-brown: var(--formula-brown-tint); --tint-orange: var(--formula-orange-tint); --tint-yellow: var(--formula-yellow-tint); --tint-green: var(--formula-green-tint); --tint-blue: var(--formula-blue-tint); --tint-purple: var(--formula-purple-tint); --tint-pink: var(--formula-pink-tint); --tint-red: var(--formula-red-tint); }
 .database-row.has-tint > td, .database-td.has-tint, .database-list-row.has-tint, .database-card.has-tint, .database-gallery-card.has-tint, .database-day .database-day-title.has-tint { background: var(--row-tint); }
+/* Timeline (design §3): the bar, an off-screen bar's name, and a line at 390. An open end still fades, now from the tint. */
+.database-timeline .database-bar.has-tint { --bar-fill: var(--row-tint); background: var(--row-tint); }
+.database-timeline .database-bar.has-tint.is-open-end { background: linear-gradient(to right, var(--row-tint) 40%, transparent); }
+.database-timeline .database-bar.has-tint.is-open-start { background: linear-gradient(to left, var(--row-tint) 40%, transparent); }
+.database-timeline .database-bar-off.has-tint { background: var(--row-tint); color: var(--ink); }
+.database-week-row.has-tint { border-radius: var(--radius-tight); background: var(--row-tint); }
+.database-week-row.has-tint.is-returned { box-shadow: inset 0 0 0 1px var(--ink-3); }
+@media (hover: hover) { .database-timeline .database-bar.has-tint:not(.is-open-end, .is-open-start):hover, .database-timeline .database-bar-off.has-tint:hover { background-image: linear-gradient(var(--hover-dim), var(--hover-dim)); } }
 .database-row.has-tint.is-picked > td { background: var(--row-tint); box-shadow: inset 0 1px 0 var(--ink-2), inset 0 -1px 0 var(--ink-2); }
 .database-row.has-tint.is-returned > td { box-shadow: inset 0 0 0 1px var(--ink-3); }
 .database-list-row.has-tint.is-returned, .database-card.has-tint.is-returned, .database-gallery-card.has-tint.is-returned { box-shadow: inset 0 0 0 1px var(--ink-3); }
