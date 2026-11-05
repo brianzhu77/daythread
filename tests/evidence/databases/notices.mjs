@@ -16,13 +16,14 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 900 } })
 const errors = []; page.on('pageerror', e => errors.push(e.message))
 const out = {}
 const toasts = async () => (await page.locator('[role=alert], [role=status]').allInnerTexts()).map(t => t.replace(/\s+/g, ' ').trim()).filter(Boolean)
-const selectBlock = async () => { await page.getByText('Before the table').click(); await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.press('ArrowDown'); await page.waitForTimeout(200) }
+// By its handle: arriving at a block by arrow doesn't choose it (B89).
+const selectBlock = async () => { await page.locator('.database-block').first().hover(); await page.waitForTimeout(250); await page.locator('.bn-side-menu [aria-label^="Select or drag"]').first().click(); await page.waitForTimeout(300) }
 await page.goto(`${base}/pages?page=books`); await page.waitForTimeout(2500)
 // Backspace, then Undo from the notice.
 await selectBlock(); await page.keyboard.press('Backspace'); await page.waitForTimeout(2500)
 out.deleteNotice = (await toasts()).find(t => t.includes('moved to Trash')) ?? ''
 out.trashed = Boolean(ws().pages.find(p => p.id === 'list').trashedAt)
-await page.getByRole('button', { name: 'Undo' }).last().click(); await page.waitForTimeout(3000)
+await page.getByRole('button', { name: 'Undo' }).first().click(); await page.waitForTimeout(3000)
 let w = ws()
 out.undone = { trashed: Boolean(w.pages.find(p => p.id === 'list').trashedAt), rows: w.pages.filter(p => p.parentId === 'list' && !p.trashedAt).length, table: await page.locator('.database-row').count() }
 // Back from a row.

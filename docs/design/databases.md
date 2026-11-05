@@ -66,7 +66,8 @@ database meets Daythread's days.
   and opens it, with the caret in its title. This is one entry point, with no condition and no notice. It costs one
   extra tap on every new page, which is acceptable at his rate of about one new page a day (13 documents in about two
   weeks). It answers the case he's most likely to try first, a standalone "Reading list" (Bumblebee 7d888f86).
-- **Where it's not offered:** inside a synced block, and inside a draft band.
+- **Inside a synced block (B21-11):** offered. Its home is on the original's page, whichever place it's made in, and every other place shows a view.
+- **Where it's not offered:** inside a draft band.
 - **In a template:** the database is made there, and the template is its home. Each new page made from the template
   gets a **linked view** of it, never a fresh database (Roadbuster's model). No explanatory line. This comes with
   linked views (§9.4).
@@ -738,7 +739,7 @@ Restore brings back the database with its rows. Nothing else shows, and nothing 
   - ⌘Z in page text stays the editor's own;
   - **The rule he sees: ⌘Z undoes the last thing he did where his focus is.** Roadbuster to confirm the routing.
 - **Text cells save** on Enter, on blur, or after 1 s without typing. A cell edit is never sent per key.
-- **The block moves** by its `⋮⋮` like any block. It can't go into a synced block or a template (§3.1).
+- **The block moves** by its `⋮⋮` like any block, into a synced block too. It can't go into a template (§3.1).
 - **Paste:** pasting text into a cell sets that cell. Pasting several lines or a table (TSV) into the table fills across and down (R4-9, `csv.md` §3).
   In a To-dos view, only the first line goes in, and the notice says "Pasted the first line only".
 
@@ -825,7 +826,7 @@ The estimates are Roadbuster's (`database-fit.md` §7) unless marked as mine.
 | **R3** | **Calendar, List, Gallery**; the filter's **"any rule matches"** switch; **Relation, Rollup**; Created/Edited time, ID, Email, Phone, Files (**needs file uploads, which don't exist anywhere yet: new
   infrastructure**, Roadbuster 13301ca1); row **templates** (`+ New ⌄`, with a default per view); **sub-groups** (a second layer inside a group, Notion research §8; missed until now, Bumblebee); **column calculations** and **two-way relations with a limit** (Notion research §7, §8; same); **wrap** per property; several rows selected on the phone | Ordered by his use after R2 |
 | **R4** | **Timeline, Formula**, **sub-items and dependencies** (Notion research §7; missed until now, Bumblebee), repeating row templates, CSV export/import, pasting TSV, moving a row to another database, **side and center peek** at 1280, **conditional colour** and **freeze columns** (Bumblebee; `first-version-checklist.md` D5) | the largest and least certain |
-| **Next, in this order (Bumblebee, Lead d34dd413, 2026-11-05)** | **First: B60 reminders** (a switch or a rebuild on Cloudflare, Roadbuster). **1. On pages:** page icons and covers, then **Comments** on a line, page or row. **2. Quick database finishes:** nested filter groups, property tokens in the formula field (`formula.md` §2), a dependency between two to-dos (`sub-items.md` §4). **3. Things that do something:** Buttons, Automations. **4. New ways to see data:** Chart, Dashboard, Feed, Place and Map. **5. Last:** Forms' public link, after Ratchet's review and Brian's yes, then Unsplash, as one choice for Brian. | These are in scope, and nothing is cut for lack of evidence (Brian 57deaed7, Bumblebee 3b04290d). Brian has 0 databases and writes on day pages, in Tasks and in Bookmarks (read 2026-11-05), so the order starts there; a change in that use can reorder it. Designs: `icons-covers.md`, `comments.md`, `filter-groups.md`, `buttons.md`, `automations.md`, `chart.md`, `dashboard.md`, `feed.md`, `place.md`, `forms.md`, all for review, which the Lead and Jazz do as each group comes up. Acceptance rows: checklist D7. |
+| **Next, in this order (Bumblebee, Lead d34dd413, 2026-11-05)** | **First: B60 reminders** (a switch or a rebuild on Cloudflare, Roadbuster). **1. On pages:** page icons and covers, then **Comments** on a line, page or row. **2. Quick database finishes:** nested filter groups, property tokens in the formula field (`formula.md` §2). **3. Things that do something:** Buttons, Automations, then a dependency between two to-dos (`todo-dependency.md`, draft, reviewed before anyone builds it; Lead f20f980e, order only). **4. New ways to see data:** Chart, Dashboard, Feed, Place and Map. **5. Last:** Forms' public link, after Ratchet's review and Brian's yes, then Unsplash, as one choice for Brian. | These are in scope, and nothing is cut for lack of evidence (Brian 57deaed7, Bumblebee 3b04290d). Brian has 0 databases and writes on day pages, in Tasks and in Bookmarks (read 2026-11-05), so the order starts there; a change in that use can reorder it. Designs: `icons-covers.md`, `comments.md`, `filter-groups.md`, `buttons.md`, `automations.md`, `chart.md`, `dashboard.md`, `feed.md`, `place.md`, `forms.md`, all for review, which the Lead and Jazz do as each group comes up. Acceptance rows: checklist D7. |
 | **Not planned** | Person, Created by, Edited by, permissions, "only for me" filters, several data sources in one database | Each needs more than one person in a workspace, or the Lead's frame dropped it (several data sources). |
 
 ## 15. How I'll check it (each release, before it goes live)

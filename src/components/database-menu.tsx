@@ -12,7 +12,7 @@ import { databaseSource, readingWorkspace, todosSourceId, todosTitle } from '../
 import { isFormula } from '../domain/formula'
 import { rollupFunctionsFor, withLinks } from '../domain/relations'
 import { FormulaEditor } from './formula-editor'
-import { startPicking, blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange } from './database-block'
+import { startPicking, blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange, afterLinkedColumn } from './database-block'
 import { chooseCsv } from './csv-import'
 import { exportDatabase } from './database-export'
 import { todayIso } from './dates'
@@ -206,7 +206,7 @@ function MoreSettingsPanel({ db, view, back }: { db: DatabasePage; view: View; b
   const change = useChange(db)
   const changeView = useViewChange(db.id, view.id)
   const on = Boolean(db.database.subItems)
-  const nests = view.layout === 'table' || view.layout === 'list'
+  const nests = view.layout === 'table' || view.layout === 'list' || view.layout === 'timeline'
   // Off, and back on, it picks up the same two relations and every link in them.
   const toggle = (next: boolean) => {
     if (!next) { change({ kind: 'setSubItems', on: null }, true); return }
@@ -218,12 +218,12 @@ function MoreSettingsPanel({ db, view, back }: { db: DatabasePage; view: View; b
     <label className="database-menu-row">Sub-items
       <input type="checkbox" checked={on} onChange={e => toggle(e.target.checked)} />
     </label>
-    {on && view.layout !== 'timeline' && <label className="database-menu-row">Show
+    {on && <label className="database-menu-row">Show
       <select aria-label="Show sub-items" value={view.subItemsDisplay ?? 'nested'} onChange={e => { const subItemsDisplay = e.target.value as View['subItemsDisplay']; changeView(() => ({ subItemsDisplay })) }}>
         <option value="nested">{nests ? 'Nested in toggle' : 'On the parent\'s card'}</option><option value="flat">Flattened list</option>
       </select>
     </label>}
-    {on && (nests || view.layout === 'timeline' || view.subItemsDisplay === 'flat') && <label className="database-menu-row">Rows
+    {on && (nests || view.subItemsDisplay === 'flat') && <label className="database-menu-row">Rows
       <select aria-label="Which rows" value={view.subItemsShow ?? 'both'} onChange={e => { const subItemsShow = e.target.value as View['subItemsShow']; changeView(() => ({ subItemsShow })) }}>
         <option value="both">Parents and sub-items</option><option value="parents">Parents only</option><option value="subs">Sub-items only</option>
       </select>
@@ -750,9 +750,13 @@ function NewPropertyPanel({ db, view, go, beforeId }: { db: DatabasePage; view: 
   const make = (type: PropertyType) => {
     const id = newId()
     const linked = isLinkedBlock(blockId)
-    change({ kind: 'addProperty', property: { id, name: name.trim() || typeLabels[type], type, ...linkFields(workspace, db, type) }, ...(linked ? {} : { viewId: view.id, ...(beforeId ? { beforeId } : {}) }) }, true)
-    if (linked) changeView(current => { const at = beforeId ? current.columns.findIndex(c => c.id === beforeId) : -1; return { columns: at < 0 ? [...current.columns, { id }] : [...current.columns.slice(0, at), { id }, ...current.columns.slice(at)] } })
-    go(type === 'formula' ? { formula: id } : { property: id })
+    const add = () => {
+      change({ kind: 'addProperty', property: { id, name: name.trim() || typeLabels[type], type, ...linkFields(workspace, db, type) }, ...(linked ? {} : { viewId: view.id, ...(beforeId ? { beforeId } : {}) }) }, true)
+      go(type === 'formula' ? { formula: id } : { property: id })
+    }
+    if (!linked) { add(); return }
+    changeView(current => { const at = beforeId ? current.columns.findIndex(c => c.id === beforeId) : -1; return { columns: at < 0 ? [...current.columns, { id }] : [...current.columns.slice(0, at), { id }, ...current.columns.slice(at)] } })
+    afterLinkedColumn(blockId, add)
   }
   return <>
     <Head title="New property" back={() => go('properties')} />

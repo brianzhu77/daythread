@@ -27,7 +27,7 @@ Both are ordinary relations, with a behaviour on top. **Turning either on makes 
 - **Making one:** a `+` on a parent's row in a table or list, and the toggle's "New sub-item". On the row's page, the Sub-item property's `+`, which works at 390.
 - **Nesting existing rows:** dragging a row onto another at 1280. Setting Parent item in its cell, at both widths.
 - **Depth:** any, as a tree, but drawn with an indent that stops growing at 4 levels, so 390 stays readable. A row can't be its own ancestor: refused with the reason (R4-4).
-- **A filter or sort on nested rows:** filters apply to each row. A sub-item that matches under a parent that doesn't still shows, with its parent's title above it, dimmed and not counted, so that it isn't an orphan. Sorting applies among siblings.
+- **A filter or sort on nested rows:** filters apply to each row. A sub-item that matches under a parent that doesn't still shows, with its parent's title above it, dimmed and not counted, so that it isn't an orphan. **That parent starts open,** as closed it would read as the filter finding nothing. Closed by hand it stays closed until the filter changes, and none of this is kept: clearing the filter leaves the view as it was. A parent that matches the filter itself stays as it was left, or a broad filter would open everything (Bumblebee and Jazz, 2026-11-05). Sorting applies among siblings.
 - **Counts and calculations:** count the rows shown, and with nested rows, a parent's closed toggle still counts its sub-items if the filter includes them. Caps say which they count (R4-4).
 - **Group:** a sub-item sits in its own group, with no tree across groups. Its parent's title shows on it.
 - **A row template** can't hold sub-items in this pass, since a template isn't a row (R3-12). A later item, not a cut: it goes with repeating templates (R4-6) if wanted.
@@ -61,7 +61,7 @@ Both are ordinary relations, with a behaviour on top. **Turning either on makes 
 
 ## 4. R4-4's open point: To-dos
 
-**I recommend no sub-items or dependencies on To-dos.** To-dos can't have extra properties (`databases.md` §11), and a to-do's nesting already lives on its page, where indenting makes the tree. A second tree would disagree with the first. **For the Lead to confirm, and written down either way:** a relation from a database to To-dos (R3-23) already gives "Project → its to-dos". What's lost against Notion's Tasks database is a dependency between two to-dos. If Brian asks for that, it needs its own design, and it stays listed in §14 as a later item rather than disappearing.
+**I recommend no sub-items or dependencies on To-dos.** To-dos can't have extra properties (`databases.md` §11), and a to-do's nesting already lives on its page, where indenting makes the tree. A second tree would disagree with the first. **For the Lead to confirm, and written down either way:** a relation from a database to To-dos (R3-23) already gives "Project → its to-dos". What's lost against Notion's Tasks database is a dependency between two to-dos. It stays in §14, group 2, and its own design is `todo-dependency.md` (draft, 2026-11-05).
 
 ## 5. On a phone
 

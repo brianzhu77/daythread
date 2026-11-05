@@ -22,6 +22,15 @@ if (process.argv[3] === 'move') {
   await run({ type: 'change-database', pageId: 'archive', change: { kind: 'addProperty', property: { id: 'nThere', name: 'N', type: 'number' } } })
   await run({ type: 'create-database', pageId: 'nested', parentId: 'kid', homeBlockId: null, title: 'Nested' })
 }
+if (process.argv[3] === 'timeline') {
+  // top and kid dated, grand with none under kid; a parent with no date over a dated sub-item; and a loner with none.
+  await change({ kind: 'setSubItems', on: { parent: 'par', sub: 'sub' } })
+  await change({ kind: 'addProperty', property: { id: 'when', name: 'When', type: 'date' } })
+  const on = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10)
+  for (const [id, parent, when] of [['top', null, 1], ['kid', 'top', 2], ['grand', 'kid', null], ['great', null, null], ['deep', 'great', 3], ['deeper', null, null], ['kid2', null, 4], ['other', null, 5]] as const) if (parent || when !== null) await run({ type: 'set-values', pageId: id, values: { ...(parent ? { par: [parent] } : {}), ...(when !== null ? { when: { start: on(when) } } : {}) }, expected: {}, at })
+  const base = ws.pages.find(p => p.id === 'work')!.database!.views[0]!
+  await change({ kind: 'updateView', viewId: base.id, layout: 'timeline', dateBy: 'when', timelineTable: true, name: 'Plan' } as never)
+}
 if (process.argv[3] === 'grouped') {
   await change({ kind: 'setSubItems', on: { parent: 'par', sub: 'sub' } })
   await change({ kind: 'addProperty', property: { id: 'st', name: 'Stage', type: 'select', options: [{ id: 'a', name: 'Now', color: 'gray' }, { id: 'b', name: 'Later', color: 'blue' }] } })

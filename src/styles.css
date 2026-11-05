@@ -1607,6 +1607,8 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 .event-rows.is-page-end .event-rows-list { padding-top: 12px; }
 .event-rows.is-in-section { padding-bottom: 10px; }
 .event-rows-label { font-size: var(--text-meta); color: var(--ink-2); margin-bottom: 2px; }
+.reminders-stopped { margin-top: 2px; font-size: var(--text-meta); color: var(--ink-2); }
+@media (min-width: 900px) { .reminders-stopped button { min-height: 0; } }
 .day-event { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: 8px; padding: 3px 0; line-height: 1.5; }
 .day-event-body { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; min-width: 0; }
 .day-event-time { flex: none; min-width: 4.75em; color: var(--ink-2); font-variant-numeric: tabular-nums; }
@@ -2416,6 +2418,13 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-timeline .database-pane-name, .database-timeline .database-pane-cell { flex: none; min-height: 0; padding: 0 8px; overflow: hidden; border: 0; border-radius: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-small); text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .database-timeline .database-pane-name { padding-left: 16px; }
 .database-pane-name.is-placeholder { color: var(--placeholder); }
+.database-timeline .database-pane > .database-sub-lead { margin-left: calc(16px + var(--sub-depth, 0) * var(--sub-step)); margin-right: -4px; }
+.database-timeline .database-pane > .database-sub-lead + .database-pane-name { padding-left: 4px; }
+.is-context .database-pane-name, .is-context .database-bar { color: var(--ink-3); }
+/* With the table closed a parent's toggle stays in sight at the row's left, whatever's scrolled. */
+.database-lane-lead { position: sticky; left: 18px; z-index: 2; display: block; width: 0; height: 0; }
+.database-lane-lead .database-sub-lead { position: absolute; top: 8px; margin-left: 0; }
+.database-bar-lane:has(> .database-lane-lead) .database-bar-off.is-name, .database-bar-lane:has(> .database-lane-lead):has(> .database-lane-grip) .database-bar-off.is-name { left: 42px; }
 @media (hover: hover) { .database-timeline .database-pane-name:hover, .database-timeline .database-pane-cell:hover { background: var(--hover-dim); } }
 .database-pane-handle { position: absolute; left: 1px; top: 8px; z-index: 1; width: 14px; color: var(--ink-3); font-size: 11px; line-height: 18px; opacity: 0; cursor: grab; touch-action: none; user-select: none; }
 .database-bar-lane:hover .database-pane-handle { opacity: 1; }

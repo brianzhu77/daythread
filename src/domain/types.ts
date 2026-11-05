@@ -184,7 +184,7 @@ export interface CommandResult {
 
 /** One event on a day, read from a `@date` chip; `line` is where the chip is. */
 export interface EventLine { pageId: string; lineId: string }
-export interface DayEvent { id: string; title: string; date: LocalDate; time: string | null; line?: EventLine }
+export interface DayEvent { id: string; title: string; date: LocalDate; time: string | null; line?: EventLine; /** The to-do whose row holds the chip. */ taskId?: string }
 
 export interface DayView {
   page: Page | null;

@@ -124,7 +124,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
     const hold = touch ? window.setTimeout(lift, holdMs) : 0
     const finish = () => {
       clearTimeout(hold); cancelAnimationFrame(frame)
-      document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); document.removeEventListener('keydown', esc, true)
+      document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); window.removeEventListener('keydown', esc, true)
     }
     const move = (ev: PointerEvent) => {
       pointer.current = { x: ev.clientX, y: ev.clientY }
@@ -146,7 +146,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
     }
     const cancel = () => { end(); setDrag(null) }
     const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel() } }
-    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); document.addEventListener('keydown', esc, true)
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); window.addEventListener('keydown', esc, true)
   }
   // Only with a card lifted: stops iOS scrolling under the finger. It has to be there, and not passive, before the touch starts.
   useEffect(() => {

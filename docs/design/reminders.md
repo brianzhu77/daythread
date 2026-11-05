@@ -1,6 +1,6 @@
 # Reminders for `@date` chips, over web push
 
-Status: built Oct 26 (PR 4 of 4). Brian, Oct 26: "for task 4, I'd like to use web push first."
+Status: built Oct 26 (PR 4 of 4) for Vercel's cron, and readied for Cloudflare on Nov 5 (B60). Brian, Oct 26: "for task 4, I'd like to use web push first."
 
 ## The rule
 
@@ -24,31 +24,31 @@ the browser's subscription (`daythread.push_subscriptions`, per workspace) and t
    row reads **Reminders on · Turn off**. Each device is its own subscription; a device that said no shows
    "Reminders blocked in the browser's settings". On an iPhone, Safari has no push outside the Home Screen app, so the
    row says "add Daythread to the Home Screen first" there (iOS 16.4 or later).
-2. **The tick.** A scheduler calls `GET /api/push/tick` with `CRON_SECRET` (`Authorization: Bearer …` as Vercel's cron
-   sends it, or `?token=…`). The tick walks every workspace with a subscription, computes what fell due in the last
+2. **The tick.** A Cron Trigger inside the Worker runs it every minute (`src/server/push/cron.ts` on `infra/cloudflare`), with
+   no outside pinger. `GET /api/push/tick` with `CRON_SECRET` stays for a host with no cron of its own. The tick walks every workspace with a subscription, computes what fell due in the last
    hour, sends what was not sent yet, and records it. A reminder counts as sent once one of the workspace's
    subscriptions took it; when every send failed it stays unsent and the next tick tries again. A subscription the
    push service reports gone (404, 410) is dropped. The response is a count: `{ workspaces, due, sent, gone, failed }`.
+   **Turning on is a clean start:** a device gets only what falls due after it signed up, so a chip from just before stays
+   quiet, and one from October is past the hour anyway. A chip on a ticked or cancelled to-do doesn't remind.
+   **When reminders stop by themselves:** a device the push service drops stays as a row marked gone. If no device is left, a day's
+   Events say "Reminders are off · Turn on here", on any device that can sign up, as long as a chip there is still to come. Turning
+   them off yourself leaves no row, so it says nothing.
 3. **The service worker** (`/sw.js`) shows the notification and opens the page on tap. It caches nothing and handles
    no fetches; the app is unchanged when it is not installed.
 
 Sign-in and reminders both need Postgres: with SQLite (the Mac's 3000) the tick and subscribe answer 503.
 
-## Setting it up (Brian)
+## Setting it up
 
-1. Keys, once: `node scripts/vapid-keys.mjs` prints `DAYTHREAD_VAPID_PUBLIC_KEY` and `DAYTHREAD_VAPID_PRIVATE_KEY`.
-   Put both in Vercel's environment (Production, and Preview if wanted). Optional `DAYTHREAD_VAPID_SUBJECT`
-   (`mailto:you@example.com`); without it the site's address is the subject. Without the keys the app shows no
-   reminders control at all.
-2. `CRON_SECRET`: any long random string, in the same environment. Vercel's cron sends it on its own.
-3. A scheduler, every minute (or every 5 if that is enough):
-   - On a Vercel plan that allows it, `vercel.json`:
-     `{ "crons": [{ "path": "/api/push/tick", "schedule": "* * * * *" }] }`. The Hobby plan runs crons at most once a
-     day, which is useless here.
-   - Otherwise any external pinger (cron-job.org, GitHub Actions every 5 minutes, a Raspberry Pi):
-     `GET https://<the domain>/api/push/tick?token=<CRON_SECRET>`.
-4. Deploy, open the app on the phone's Home Screen app, account row → **Turn on reminders**, allow. Write a line with
-   `@` a time a few minutes ahead and wait.
+The VAPID keys are the Lead's to set, as repository secrets: `node scripts/vapid-keys.mjs` prints `DAYTHREAD_VAPID_PUBLIC_KEY` and
+`DAYTHREAD_VAPID_PRIVATE_KEY`; `DAYTHREAD_VAPID_SUBJECT` (`mailto:…`) is optional, and without it the site's address is the subject.
+The Cloudflare workflow passes them to the Worker. Without the keys the app shows no control and the cron does nothing. Brian then
+taps Turn on reminders in the account row on each device and allows it. On an iPhone that's from the Home Screen app.
+
+**What a tick costs (`tests/evidence/reminders/tick-cost.ts`, Node on local Postgres, a stand-in for the Worker):** about 1 ms of CPU at
+his size (40 day pages of 40 lines) and about 32 ms with 10,000 rows, with nothing to skip because reading is this cheap. A minute's
+cron is about 43,000 runs a month.
 
 Local run without a push service: `DAYTHREAD_PUSH_TRANSPORT=log` makes the tick log each payload instead of sending,
 and `scripts/push-smoke.mjs` drives the whole path in a browser with a stand-in `PushManager`.
