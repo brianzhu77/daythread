@@ -53,6 +53,10 @@ Both are ordinary relations, with a behaviour on top. **Turning either on makes 
 - **A loop** is refused with the reason (R4-5), using the cycle check from R3-7.
 - **Read-only dates** (Created, a Formula or Rollup) can't be the chosen date.
 - **Arrows:** on a Timeline at 1280, from a blocker's bar to the blocked one. Dragging from a bar's dot to another bar links them. Everywhere else, including 390, they're set in the cell.
+  - **The line:** out of the blocker's end and into the blocked bar's start. Where that bar starts too soon, it doubles back between their lines, so an overlap reads by its shape. It goes under the bars and the table, and behind a row's name when its bar is off-screen. A bar far off leaves a line running to the edge, with no head. Hovering a bar darkens its own arrows.
+  - **Only between bars on the scale:** a row with no date, hidden by a filter, past "Show more" or in a folded group has no arrow. A row in two groups goes by its first line.
+  - **Linking:** hovering a bar shows a dot by each end. From its end, this bar blocks the one it's dropped on; from its start, that one blocks this. A dashed line follows the pointer and the bar under it is outlined. The notice says "Ship is blocked by Design", with one Undo. The same link again says "Already linked". A loop says why and changes nothing. Esc, or letting go on nothing or on its own bar, changes nothing. A link added between rows that overlap moves nothing until a date changes (R4-5).
+  - **Unlinking** is in the cell, or Undo. Arrows take no clicks, so they can't get in the way of a bar. Removing one from the arrow itself could come later.
 - **A row in Trash** keeps its links (R3-5) and doesn't shift while there. Restored, it isn't moved to fit, so that a restore never moves other rows.
 
 ## 4. R4-4's open point: To-dos

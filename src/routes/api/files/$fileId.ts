@@ -1,7 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-
-// Only types a browser can't run as a page open in place; anything else downloads, as a stored page or SVG on this origin could read his workspace.
-const shownInPlace = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif', 'image/heic', 'image/heif', 'application/pdf'])
+import { shownInPlace } from '../../../domain/body-files.ts'
 
 // R3-11: a file's bytes. Behind the same sign-in gate as every route; the key comes from the session, so another account's id finds nothing.
 export const Route = createFileRoute('/api/files/$fileId')({
@@ -23,6 +21,14 @@ export const Route = createFileRoute('/api/files/$fileId')({
         const there = await store.get(key)
         await there?.body.cancel()
         return there?.size === size ? Response.json({ id: params.fileId, size, type: there.type }) : Response.json({ error: 'taken' }, { status: 409 })
+      },
+      // Whether a block's file is there, without sending it (B87): a day with several photos mustn't fetch each one to find out.
+      HEAD: async ({ params }) => {
+        const { fileStore, fileKey, fileIdPattern } = await import('../../../server/file-store.ts')
+        if (!fileIdPattern.test(params.fileId)) return new Response(null, { status: 404 })
+        const file = await (await fileStore()).get(fileKey(params.fileId))
+        await file?.body.cancel()
+        return new Response(null, { status: file ? 200 : 404, headers: { 'cache-control': 'no-store' } })
       },
       GET: async ({ request, params }) => {
         const { fileStore, fileKey, fileIdPattern } = await import('../../../server/file-store.ts')

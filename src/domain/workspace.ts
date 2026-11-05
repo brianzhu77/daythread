@@ -5,7 +5,7 @@ import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
-import { hasDependencyLoop, shiftDependents, spanOf } from "./dependencies.ts";
+import { hasDependencyLoop, loopRefusal, shiftDependents, spanOf } from "./dependencies.ts";
 import { descendantsOf, hasLoop, parentIdOf } from "./sub-items.ts";
 import type { SubItems } from "./database.ts";
 import { applyRowMove, movesIntoItself, rowMoveTree } from "./move-row.ts";
@@ -419,7 +419,7 @@ function rowEdit(state: Workspace, edit: RowEdit, at: string): string[] {
   if (!rowTemplateDatabaseId(row)) relations.forEach((p, i) => syncMirror(state, p, row.id, before[i]!, links(p.id), at));
   const tree = db.database.subItems;
   if (tree && edit.values && (tree.parent in edit.values || tree.sub in edit.values) && !rowTemplateDatabaseId(row) && hasLoop(databaseRows(state, db.id), tree, row.id)) throw new DomainError("A row can't be its own ancestor");
-  if (deps && edit.values && (deps.blockedBy in edit.values || deps.blocking in edit.values) && !rowTemplateDatabaseId(row) && hasDependencyLoop(databaseRows(state, db.id), deps, row.id)) throw new DomainError("That would make a loop: a row can't end up blocking itself");
+  if (deps && edit.values && (deps.blockedBy in edit.values || deps.blocking in edit.values) && !rowTemplateDatabaseId(row) && hasDependencyLoop(databaseRows(state, db.id), deps, row.id)) throw new DomainError(loopRefusal);
   return deps && dateChanges ? shiftDependents(db.database, deps, databaseRows(state, db.id), row.id, spanBefore, spanOf(db.database, deps, row), at) : [];
 }
 function addRows(state: Workspace, db: ReturnType<typeof databasePage>, rows: Array<{ pageId: string; title: string; values?: Record<string, import("./database.ts").Json> }>, at: string): void {

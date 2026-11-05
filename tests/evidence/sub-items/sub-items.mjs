@@ -72,6 +72,13 @@ await scenario('Which rows: parents only, opening onto their sub-items, and sub-
   r.ok = r.parents.join() === 'top,other' && r.parentsOpen.join() === 'top,kid,kid2,other' && r.subs.join() === 'kid,grand,great,deep,deeper,kid2'
   return r
 })
+await scenario('In a group a sub-item says whose it is, on every layout; a row with no parent says nothing', 'grouped', async page => {
+  const r = {}
+  r.table = await page.locator('.database-sub-parent').allInnerTexts()
+  for (const name of ['list', 'board', 'gallery', 'timeline']) { await page.locator('.database-view-name').first().click(); await wait(250); await page.locator('.database-view-pick', { hasText: name }).click(); await wait(800); r[name] = await page.locator('.database-sub-parent').allInnerTexts() }
+  r.ok = ['table', 'list', 'board', 'gallery', 'timeline'].every(k => r[k].join() === 'in top')
+  return r
+})
 await scenario('A new sub-item from a parent\'s +', 'on', async page => {
   const r = {}
   await page.locator('.database-row[data-row="other"]').hover(); await wait(150)

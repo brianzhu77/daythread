@@ -59,7 +59,9 @@ export const isTaskRow = (n: EditorNode): boolean => n.type === 'task' && typeof
 export const rowTaskId = (n: EditorNode): string | null => (isTaskRow(n) ? String(n.props!.taskId) : null)
 export const rowRole = (n: EditorNode): 'plan' | 'reference' => (n.props?.role === 'plan' ? 'plan' : 'reference')
 /** No words and nothing else inline (a chip, a link): the empty rows a template or a trailing line leaves. */
-export const isEmptyLine = (n: EditorNode): boolean => n.type !== 'pageLink' && n.type !== 'heading' && !inlineText(n.content).trim() && !(Array.isArray(n.content) && n.content.some(c => c && typeof c === 'object' && (c as { type?: string }).type !== 'text')) && !(n.children?.length)
+/** A picture or file in a page's body (B87): it holds no words, and it isn't an empty line. */
+export const isFileBlock = (n: Pick<EditorNode, 'type'>): boolean => n.type === 'image' || n.type === 'file'
+export const isEmptyLine = (n: EditorNode): boolean => n.type !== 'pageLink' && n.type !== 'heading' && !isFileBlock(n) && !inlineText(n.content).trim() && !(Array.isArray(n.content) && n.content.some(c => c && typeof c === 'object' && (c as { type?: string }).type !== 'text')) && !(n.children?.length)
 
 // The parsed document of a page, kept per document string: readers parse each page once per save.
 const parsed = new Map<string, EditorNode[]>()
@@ -204,11 +206,11 @@ export function withBlockBack(list: readonly EditorNode[], place: BlockPlace): E
   return (place.afterId && beside(list, place.afterId, 1)) || (place.beforeId && beside(list, place.beforeId, 0)) || [...list, place.node]
 }
 
-/** A row's card image (design §7.2): the first image in its body with a web address. Nothing uploads yet, so that's a link to where it lives. */
+/** A row's card image (design §7.2): the first image in its body, a link to where it lives or one uploaded here (B87 9). */
 export function firstImageUrl(page: Pick<Page, 'document'>): string | null {
   for (const n of flatNodes(pageNodes(page))) {
     const url = n.type === 'image' ? n.props?.url : undefined
-    if (typeof url === 'string' && /^https?:\/\//i.test(url)) return url
+    if (typeof url === 'string' && /^(https?:\/\/|\/api\/files\/)/i.test(url)) return url
   }
   return null
 }
