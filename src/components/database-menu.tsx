@@ -4,6 +4,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { filterTree, hasFilter, limits, ruleCount, rulesIn, type FilterGroup, tints, type ColourRule, type Tint, calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type DependencyMode, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View, type Repeat } from '../domain/database.ts'
+import { chartForms, chartKinds, chartSettings, type ChartForm, type ChartKind, type ChartSettings } from '../domain/chart'
 import { addGroup, atPath, canHoldGroup, moveIntoGroup, moveIntoNewGroup, moveOutOfGroup, moveRulesOut, removeGroup, treeFields, withoutRule, type FilterPath } from '../domain/filter-tree'
 import { timelineUnits, viewDateEnd, type TimelineUnit } from '../domain/timeline'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
@@ -179,11 +180,11 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
     <div className="database-menu-tiles">
       <button type="button" onClick={() => go('filter')}>Filter</button>
       <button type="button" onClick={() => go('sort')}>Sort</button>
-      {view.layout !== 'calendar' && <button type="button" onClick={() => go('group')}>Group</button>}
+      {view.layout !== 'calendar' && view.layout !== 'chart' && <button type="button" onClick={() => go('group')}>Group</button>}
     </div>
-    <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
+    {view.layout !== 'chart' && <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>}
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
-    {view.layout !== 'calendar' && view.layout !== 'timeline' && !wide && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}
+    {view.layout !== 'calendar' && view.layout !== 'timeline' && view.layout !== 'chart' && !wide && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}
     {(view.layout === 'table' || view.layout === 'board' || (view.layout === 'timeline' && view.timelineTable)) && <button type="button" role="menuitem" onClick={() => go('calculate')}>Calculate<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('templates')}>Templates<span className="database-menu-chevron">›</span></button>}
     {!db.database.fixed && <button type="button" role="menuitem" onClick={() => go('more')}>More settings<span className="database-menu-chevron">›</span></button>}
@@ -517,7 +518,7 @@ function SortPanel({ db, view, back }: { db: DatabasePage; view: View; back: () 
 // ---------------------------------------------------------------- group and layout (design §7.2, §7.3)
 
 const unitLabels: Record<TimelineUnit, string> = { hours: 'Hours', day: 'Day', week: 'Week', month: 'Month', quarter: 'Quarter', year: 'Year' }
-const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar', timeline: 'Timeline' }
+const layoutLabels: Record<View['layout'], string> = { table: 'Table', board: 'Board', list: 'List', gallery: 'Gallery', calendar: 'Calendar', timeline: 'Timeline', chart: 'Chart' }
 /** "Status", "Status 2", …: never a name the database already has. */
 function newPropertyName(db: Database, base: string): string {
   const taken = new Set(['name', ...db.properties.map(p => p.name.toLocaleLowerCase())])
@@ -612,6 +613,63 @@ function GroupPanel({ db, view, back }: { db: DatabasePage; view: View; back: ()
 
 /** A view named after its type keeps following it; one he named keeps his name. */
 const renamedFor = (view: View, layout: View['layout']) => (view.name === layoutLabels[view.layout] ? { name: layoutLabels[layout] } : {})
+function ChartAxisChoices({ db, onPick }: { db: DatabasePage; onPick: (propertyId: string) => void }) {
+  return <>
+    <p className="database-menu-quiet">What to show</p>
+    {groupableProperties(db.database, 'chart').map(p => <button key={p.id} type="button" role="menuitem" onClick={() => onPick(p.id)}>{p.name}</button>)}
+  </>
+}
+const chartFormLabels: Record<ChartForm, string> = { bar: 'Vertical bars', barHorizontal: 'Horizontal bars', number: 'Number' }
+const chartKindLabels: Record<ChartKind, string> = { sum: 'Sum', average: 'Average', median: 'Median', min: 'Min', max: 'Max', range: 'Range' }
+function ChartSettingsRows({ db, view }: { db: DatabasePage; view: View }) {
+  const changeView = useViewChange(db.id, view.id)
+  const settings = chartSettings(view), numbers = db.database.properties.filter(p => p.type === 'number')
+  const axis = viewGroupBy(db.database, view), held = view.groupBy ? propertyOf(db.database, view.groupBy) : null
+  const choices = groupableProperties(db.database, 'chart')
+  const set = (next: Partial<ChartSettings> | ((c: ChartSettings) => ChartSettings)) => changeView(current => { const now = chartSettings(current); return { chart: typeof next === 'function' ? next(now) : { ...now, ...next } } })
+  const without = <K extends keyof ChartSettings>(c: ChartSettings, key: K): ChartSettings => { const { [key]: _gone, ...rest } = c; return rest as ChartSettings }
+  const isDate = axis?.type === 'date' || axis?.type === 'createdTime' || axis?.type === 'editedTime'
+  const counts = !settings.measure || settings.measure.kind === 'sum'
+  return <>
+    <hr />
+    <label className="database-menu-row">Chart
+      <select aria-label="Chart" value={settings.form} onChange={e => { const form = e.target.value as ChartForm; set({ form }) }}>
+        {chartForms.map(f => <option key={f} value={f}>{chartFormLabels[f]}</option>)}
+      </select>
+    </label>
+    {settings.form !== 'number' && <label className="database-menu-row">What to show
+      <select aria-label="What to show" value={axis?.id ?? ''} onChange={e => { const groupBy = e.target.value; if (groupBy) changeView(() => ({ groupBy })) }}>
+        {!axis && <option value="">{held ? `${held.name} can't be charted` : 'Choose…'}</option>}
+        {choices.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </label>}
+    {settings.form !== 'number' && isDate && <label className="database-menu-row">By
+      <select aria-label="By" value={settings.byYear ? 'year' : view.groupDateBy ?? 'month'} onChange={e => { const by = e.target.value; if (by === 'year') set({ byYear: true }); else changeView(current => ({ groupDateBy: by as NonNullable<View['groupDateBy']>, chart: without(chartSettings(current), 'byYear') })) }}>
+        <option value="day">Day</option><option value="week">Week</option><option value="month">Month</option><option value="year">Year</option>
+      </select>
+    </label>}
+    <label className="database-menu-row">Measure
+      <select aria-label="Measure" value={settings.measure?.by ?? ''} onChange={e => { const by = e.target.value; set(c => (by ? { ...c, measure: { by, kind: c.measure?.kind ?? 'sum' } } : without(c, 'measure'))) }}>
+        <option value="">Count</option>
+        {settings.measure && !numbers.some(p => p.id === settings.measure!.by) && <option value={settings.measure.by}>(deleted)</option>}
+        {numbers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+    </label>
+    {settings.measure && <label className="database-menu-row">Of it
+      <select aria-label="Of it" value={settings.measure.kind} onChange={e => { const kind = e.target.value as ChartKind; set(c => ({ ...c, measure: { by: c.measure!.by, kind } })) }}>
+        {chartKinds.map(k => <option key={k} value={k}>{chartKindLabels[k]}</option>)}
+      </select>
+    </label>}
+    {settings.form !== 'number' && <label className="database-menu-row">Sort by
+      <select aria-label="Sort by" value={settings.sortByValue ? 'value' : 'axis'} onChange={e => { const byValue = e.target.value === 'value'; set(c => (byValue ? { ...without(c, 'cumulative'), sortByValue: true } : without(c, 'sortByValue'))) }}>
+        <option value="axis">Its own order</option><option value="value">Value</option>
+      </select>
+    </label>}
+    {settings.form !== 'number' && !settings.sortByValue && counts && <label className="database-menu-row">Cumulative
+      <input type="checkbox" checked={Boolean(settings.cumulative)} onChange={e => { const on = e.target.checked; set(c => (on ? { ...c, cumulative: true } : without(c, 'cumulative'))) }} />
+    </label>}
+  </>
+}
 function LayoutPanel({ db, view, back, go }: { db: DatabasePage; view: View; back: () => void; go: (p: Panel) => void }) {
   const wrapsAll = view.columns.some(c => c.wrap) && viewColumns(db.database, view).every(c => c.wrap || !canWrap(c.property.type)) && (view.layout !== 'table' || Boolean(view.wrapName))
   const changeView = useViewChange(db.id, view.id)
@@ -619,11 +677,19 @@ function LayoutPanel({ db, view, back, go }: { db: DatabasePage; view: View; bac
   const [askingDate, setAskingDate] = useState<'calendar' | 'timeline' | null>(null)
   const toDated = (layout: 'calendar' | 'timeline', dateBy: string) => { setAskingDate(null); changeView(current => ({ layout, dateBy, ...renamedFor(current, layout) })) }
   const toBoard = (groupBy: string) => { setAsking(false); changeView(current => ({ layout: 'board', groupBy, ...renamedFor(current, 'board') })) }
+  const [askingAxis, setAskingAxis] = useState(false)
+  const toChart = (groupBy?: string) => { setAskingAxis(false); changeView(current => ({ layout: 'chart', ...(groupBy ? { groupBy } : {}), chart: current.chart ?? { form: groupBy ? 'bar' : 'number' }, ...renamedFor(current, 'chart') })) }
   const pick = (layout: View['layout']) => {
     if (layout === view.layout) return
     if (layout === 'calendar' || layout === 'timeline') {
       const kept = viewDateBy(db.database, view), only = dateProperties(db.database)
       if (kept) toDated(layout, kept.id); else if (only.length === 1) toDated(layout, only[0]!.id); else setAskingDate(layout)
+      return
+    }
+    if (layout === 'chart') {
+      // What it can already draw, or the only choice, or the first time, it asks.
+      const kept = viewGroupBy(db.database, { ...view, layout: 'chart' }), only = groupableProperties(db.database, 'chart')
+      if (kept) toChart(kept.id); else if (only.length === 1) toChart(only[0]!.id); else if (!only.length) toChart(); else setAskingAxis(true)
       return
     }
     if (layout !== 'board') { changeView(current => ({ layout, ...renamedFor(current, layout) })); return }
@@ -633,13 +699,15 @@ function LayoutPanel({ db, view, back, go }: { db: DatabasePage; view: View; bac
     if (kept) toBoard(kept.id); else if (only.length === 1) toBoard(only[0]!.id); else setAsking(true)
   }
   if (asking) return <><Head title="Board" back={() => setAsking(false)} /><BoardGroupChoices db={db} onPick={toBoard} /></>
+  if (askingAxis) return <><Head title="Chart" back={() => setAskingAxis(false)} /><ChartAxisChoices db={db} onPick={toChart} /></>
   if (askingDate) return <><Head title={layoutLabels[askingDate]} back={() => setAskingDate(null)} /><CalendarDateChoices db={db} label={`Show ${askingDate} by`} onPick={id => toDated(askingDate, id)} /></>
   return <>
     <Head title="Layout" back={back} />
-    {(['table', 'board', 'list', 'gallery', 'calendar', 'timeline'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
+    {(['table', 'board', 'list', 'gallery', 'calendar', 'timeline', 'chart'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
     {(view.layout === 'table' || view.layout === 'board' || view.layout === 'gallery') && <label className="database-menu-row">Wrap all
       <input type="checkbox" checked={wrapsAll} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ wrapName: on, columns: columns.map(c => withWrap(c, on)) })) }} />
     </label>}
+    {view.layout === 'chart' && <ChartSettingsRows db={db} view={view} />}
     {view.layout === 'gallery' && <label className="database-menu-row">Card image
       <select aria-label="Card image" value={view.cardImage ?? ''} onChange={e => { const cardImage = e.target.value || null; changeView(() => ({ cardImage })) }}>
         <option value="">First in the page</option>
@@ -1109,7 +1177,7 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
   const current = shownView(db.database, blockId)
   const [actions, setActions] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
-  const [adding, setAdding] = useState<null | 'type' | 'board' | 'calendar' | 'timeline'>(null)
+  const [adding, setAdding] = useState<null | 'type' | 'board' | 'calendar' | 'timeline' | 'chart'>(null)
   const views = db.database.views
   const pick = (id: string) => { setShownView(blockId, id); setOpenMenu(null) }
   const add = (from?: View, groupBy?: string, layout: 'table' | 'list' | 'gallery' | 'calendar' | 'timeline' = 'table', dateBy?: string) => {
@@ -1123,7 +1191,14 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
   }
   const addBoard = () => { const only = groupableProperties(db.database, 'board'); if (only.length === 1) add(undefined, only[0]!.id); else setAdding('board') }
   const addTimeline = () => { const only = dateProperties(db.database); if (only.length === 1) add(undefined, undefined, 'timeline', only[0]!.id); else setAdding('timeline') }
+  const addChartBy = (groupBy?: string) => {
+    const id = newId()
+    change({ kind: 'addView', view: { id, name: 'Chart', layout: 'chart', columns: [], sort: [], filter: [], ...(groupBy ? { groupBy } : {}), chart: { form: groupBy ? 'bar' : 'number' } } })
+    setShownView(blockId, id); setActions(null); setAdding(null); setRenaming(id)
+  }
+  const addChart = () => { const only = groupableProperties(db.database, 'chart'); if (only.length > 1) setAdding('chart'); else addChartBy(only[0]?.id) }
   const addCalendar = () => { const only = dateProperties(db.database); if (only.length === 1) add(undefined, undefined, 'calendar', only[0]!.id); else setAdding('calendar') }
+  if (adding === 'chart') return <><Head title="New chart" back={() => setAdding('type')} /><ChartAxisChoices db={db} onPick={id => addChartBy(id)} /></>
   if (adding === 'timeline') return <><Head title="New timeline" back={() => setAdding('type')} /><CalendarDateChoices db={db} label="Show timeline by" onPick={id => add(undefined, undefined, 'timeline', id)} /></>
   if (adding === 'calendar') return <><Head title="New calendar" back={() => setAdding('type')} /><CalendarDateChoices db={db} onPick={id => add(undefined, undefined, 'calendar', id)} /></>
   if (adding === 'board') return <><Head title="New board" back={() => setAdding('type')} /><BoardGroupChoices db={db} onPick={id => add(undefined, id)} /></>
@@ -1135,6 +1210,7 @@ function ViewsPanel({ db, blockId }: { db: DatabasePage; blockId: string }) {
     <button type="button" role="menuitem" onClick={() => add(undefined, undefined, 'gallery')}>Gallery</button>
     <button type="button" role="menuitem" onClick={addCalendar}>Calendar</button>
     <button type="button" role="menuitem" onClick={addTimeline}>Timeline</button>
+    <button type="button" role="menuitem" onClick={addChart}>Chart</button>
   </>
   return <>
     <Head title="Views" />

@@ -1,6 +1,7 @@
 // Databases (docs/design/databases-model.md): a database is a page with `database` (its properties and views); a row
 // is a child page with `values`. Values are read through their property, never trusted as stored, so a schema change
 // rewrites only the database page. Pure: the domain's commands and the browser's views share it.
+import { chartForms, chartKinds, type ChartSettings } from './chart.ts'
 import { rowTemplateTarget } from "./day-template.ts";
 import { formulaProblem, rollupProblem, worldOf } from "./formula.ts";
 import type { LocalDate, Page, WeekStart, Workspace } from "./types.ts";
@@ -71,7 +72,7 @@ export type Json = string | number | boolean | null | Json[] | { [key: string]: 
 export interface Condition { by: string; op: FilterOp; value?: Json }
 export interface Sort { by: string; direction: "asc" | "desc" }
 export type GroupDateBy = "day" | "week" | "month";
-export const viewLayouts = ["table", "board", "list", "gallery", "calendar", "timeline"] as const;
+export const viewLayouts = ["table", "board", "list", "gallery", "calendar", "timeline", "chart"] as const;
 export type ViewLayout = (typeof viewLayouts)[number];
 /** Values a new row takes from a template: not its number, which is its own. */
 export function templateValues(template: Pick<Page, "values">): NonNullable<Page["values"]> {
@@ -100,6 +101,8 @@ export interface View {
   filter: Condition[];
   /** "Any rule matches" (design §7.3, R3-4). */
   filterAny?: true;
+  /** How a Chart layout draws its groups (chart.md). Kept when the layout changes, as a group is. */
+  chart?: ChartSettings;
   /** Groups below the top-level rules (filter-groups.md). A build that doesn't know them applies `filter` alone, and keeps this. */
   filterGroups?: FilterGroup[];
   /** What `+ New` starts from in this view, over the database's own (R3-12). */
@@ -789,7 +792,7 @@ export const noGroupKey = "none";
 const canGroup = (type: PropertyType): boolean => type !== "text" && type !== "id" && type !== "rollup" && type !== "formula";
 const canMakeColumns = (type: PropertyType): boolean => type === "select" || type === "status" || type === "checkbox" || type === "relation";
 /** A rollup groups by what it works out to, whatever that is, though a card can't be dragged there, so it makes no board. */
-const groupsBy = (p: Property, layout: ViewLayout): boolean => (layout === "board" ? !p.rollup && p.formula === undefined && canMakeColumns(p.type) : Boolean(p.rollup) || p.formula !== undefined || canGroup(p.type));
+const groupsBy = (p: Property, layout: ViewLayout): boolean => (layout === "chart" ? !p.rollup && (p.formula !== undefined || (canGroup(p.type) && p.type !== "files")) : layout === "board" ? !p.rollup && p.formula === undefined && canMakeColumns(p.type) : Boolean(p.rollup) || p.formula !== undefined || canGroup(p.type));
 /** What a view of this layout can group by: a board's columns need a value a card can be dragged to (design §7.2). */
 export function groupableProperties(db: Database, layout: ViewLayout): Property[] {
   if (layout === "calendar") return [];
@@ -847,7 +850,7 @@ function dateGroupKey(start: string, by: GroupDateBy, weekStart: WeekStart): str
 }
 const dayLabel = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const monthLabel = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
-function dateGroupName(key: string, by: GroupDateBy): string {
+export function dateGroupName(key: string, by: GroupDateBy): string {
   if (by === "month") return monthLabel.format(new Date(`${key}-01T12:00:00Z`));
   const label = dayLabel.format(new Date(`${key}T12:00:00Z`));
   return by === "week" ? `Week of ${label}` : label;
@@ -986,7 +989,7 @@ export type DatabaseChange =
   | { kind: "duplicateProperty"; propertyId: string; newId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; cardImage?: string | null; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; filterGroups?: FilterGroup[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; openIn?: "center" | "side" | null; colourRules?: ColourRule[]; frozenThrough?: string | null; /** null: back to the default */ nameWidth?: number | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
+  | { kind: "updateView"; viewId: string; cardImage?: string | null; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; filterGroups?: FilterGroup[]; layout?: ViewLayout; chart?: ChartSettings; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; openIn?: "center" | "side" | null; colourRules?: ColourRule[]; frozenThrough?: string | null; /** null: back to the default */ nameWidth?: number | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
   /** null: none */
   | { kind: "setRepeat"; templateId: string; repeat: Omit<Repeat, "last" | "lastRan"> | null }
   | { kind: "setDefaultTemplate"; templateId: string | null }
@@ -1253,6 +1256,15 @@ function cleanFilterGroups(db: Database, input: unknown, before: Condition[], la
 function checkRuleCount(view: Pick<View, "filter" | "filterGroups">) {
   if (ruleCount(view) > limits.conditions || groupsIn(view.filterGroups) > limits.conditions) throw new DatabaseError("Invalid filter");
 }
+function cleanChart(db: Database, input: unknown, before?: ChartSettings): ChartSettings {
+  const c = input as ChartSettings | null
+  if (!c || typeof c !== "object" || !(chartForms as readonly unknown[]).includes(c.form)) throw new DatabaseError("Invalid view");
+  if (c.measure) {
+    const kept = before?.measure?.by === c.measure.by, property = propertyOf(db, c.measure.by);
+    if (!(chartKinds as readonly unknown[]).includes(c.measure.kind) || (!kept && property?.type !== "number")) throw new DatabaseError("Can't chart that");
+  }
+  return { form: c.form, ...(c.measure ? { measure: { by: c.measure.by, kind: c.measure.kind } } : {}), ...(c.sortByValue ? { sortByValue: true as const } : {}), ...(c.cumulative ? { cumulative: true as const } : {}), ...(c.byYear ? { byYear: true as const } : {}) };
+}
 function cleanLayout(input: unknown): ViewLayout {
   if (!(viewLayouts as readonly unknown[]).includes(input)) throw new DatabaseError("Unknown view type");
   return input as ViewLayout;
@@ -1309,7 +1321,7 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
 function cleanView(db: Database, input: View): View {
   if (!input) throw new DatabaseError("Unknown view type");
   const layout = cleanLayout(input.layout);
-  return { ...(input.subItemsDisplay === 'flat' ? { subItemsDisplay: 'flat' as const } : {}), ...(input.subItemsShow === 'parents' || input.subItemsShow === 'subs' ? { subItemsShow: input.subItemsShow } : {}), id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.filterGroups?.length ? { filterGroups: cleanFilterGroups(db, input.filterGroups, []) } : {}), ...(input.wrapName ? { wrapName: true as const } : {}), ...(input.boardCalculation ? { boardCalculation: cleanBoardCalculation(db, input.boardCalculation) } : {}), ...(input.defaultTemplate ? { defaultTemplate: input.defaultTemplate } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...cleanGroup(db, input, layout, input) };
+  return { ...(input.subItemsDisplay === 'flat' ? { subItemsDisplay: 'flat' as const } : {}), ...(input.subItemsShow === 'parents' || input.subItemsShow === 'subs' ? { subItemsShow: input.subItemsShow } : {}), id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.filterGroups?.length ? { filterGroups: cleanFilterGroups(db, input.filterGroups, []) } : {}), ...(input.chart ? { chart: cleanChart(db, input.chart) } : {}), ...(input.wrapName ? { wrapName: true as const } : {}), ...(input.boardCalculation ? { boardCalculation: cleanBoardCalculation(db, input.boardCalculation) } : {}), ...(input.defaultTemplate ? { defaultTemplate: input.defaultTemplate } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...cleanGroup(db, input, layout, input) };
 }
 function move<T extends { id: string }>(list: T[], id: string, beforeId: string | null): T[] {
   const item = list.find((x) => x.id === id);
@@ -1506,7 +1518,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       const old = view(change.viewId);
       // A rule on a deleted property stays where it's moved to: it's only new ones that must be on a column.
       const heldRules = [...old.filter, ...rulesIn(old.filterGroups)];
-      const { filterAny: _filterAny, filterGroups: _filterGroups, cardImage: _cardImage, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, openIn: _openIn, colourRules: _colourRules, frozenThrough: _frozenThrough, nameWidth: _nameWidth, ...rest } = old;
+      const { chart: _chart, filterAny: _filterAny, filterGroups: _filterGroups, cardImage: _cardImage, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, openIn: _openIn, colourRules: _colourRules, frozenThrough: _frozenThrough, nameWidth: _nameWidth, ...rest } = old;
       const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
       const group = cleanGroup(db, {
         groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
@@ -1538,6 +1550,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         ...(change.filter !== undefined ? { filter: cleanFilter(db, change.filter, heldRules) } : {}),
         ...((change.filterAny ?? old.filterAny) ? { filterAny: true as const } : {}),
         ...(() => { const groups = change.filterGroups === undefined ? old.filterGroups : cleanFilterGroups(db, change.filterGroups, heldRules); return groups?.length ? { filterGroups: groups } : {}; })(),
+        ...(() => { const chart = change.chart === undefined ? old.chart : cleanChart(db, change.chart, old.chart); return chart ? { chart } : {}; })(),
         ...((change.wrapName ?? old.wrapName) ? { wrapName: true as const } : {}),
         ...(() => { const chosen = change.boardCalculation === undefined ? old.boardCalculation : change.boardCalculation; return chosen ? { boardCalculation: cleanBoardCalculation(db, chosen) } : {}; })(),
         ...(() => { const template = change.defaultTemplate === undefined ? old.defaultTemplate : change.defaultTemplate; return template ? { defaultTemplate: template } : {}; })(),
