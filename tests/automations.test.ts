@@ -1,8 +1,8 @@
 // Automations (docs/design/automations.md, G3-13 to G3-17): rules run inside the command that set them off, each on its own copy, with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { stepsKey, writeSteps, type ButtonStep } from '../src/domain/buttons.ts'
-import type { Automation } from '../src/domain/automations.ts'
+import { readSteps, stepsKey, writeSteps, type ButtonStep } from '../src/domain/buttons.ts'
+import { withLiveNames, type Automation } from '../src/domain/automations.ts'
 import { pageContentKey } from '../src/domain/editor-document.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { harness } from './v2-helpers.ts'
@@ -164,4 +164,15 @@ test('In a view: only rows it shows; rename keeps it working; rules reorder, run
   edit(h, 'r2', { st: 'done' }, { st: 'todo' })
   assert.equal(val(h, 'r2'), 50, 'in list order, so a runs last')
   assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 0, action: { type: 'change-database', pageId: 'runs', change: { kind: 'addAutomation', automation: rule() } } }).success, true)
+})
+
+test('a rename keeps a rule working and brings its words up to date', () => {
+  const { h, C } = setup([rule({ steps: writeSteps([setN(5)]) })])
+  C({ kind: 'updateProperty', propertyId: 'n', name: 'Count' })
+  C({ kind: 'updateProperty', propertyId: 'st', name: 'Stage' })
+  edit(h, 'r1', { st: 'done' }, { st: 'todo' })
+  assert.equal(val(h, 'r1'), 5)
+  const live = withLiveNames(h.ws, h.page('runs').database!, rules(h)[0]!)
+  assert.equal((readSteps(live.steps)[0] as { set: { name: string }[] }).set[0]!.name, 'Count')
+  assert.equal((live.triggers[0] as { name: string }).name, 'Stage')
 })

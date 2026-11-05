@@ -184,7 +184,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
       <button type="button" onClick={() => go('sort')}>Sort</button>
       {view.layout !== 'calendar' && <button type="button" onClick={() => go('group')}>Group</button>}
     </div>
-    {!db.database.fixed && <button type="button" role="menuitem" onClick={() => { setOpenMenu(null); openAutomations(db.id) }}>Automations{(() => { const n = workspace ? db.database.automations?.filter(r => r.paused || automationProblem(workspace, db.database, r)).length ?? 0 : 0; return n ? ` · ${n} paused` : '' })()}</button>}
+    {!db.database.fixed && <button type="button" role="menuitem" onClick={e => { const anchor = document.querySelector(`[data-database-menu="${CSS.escape(blockId)}"]`) ?? e.currentTarget; setOpenMenu(null); openAutomations(db.id, anchor) }}>Automations{(() => { const n = workspace ? db.database.automations?.filter(r => r.paused || automationProblem(workspace, db.database, r)).length ?? 0 : 0; return n ? ` · ${n} paused` : '' })()}</button>}
     <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
     {view.layout !== 'calendar' && view.layout !== 'timeline' && !wide && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}

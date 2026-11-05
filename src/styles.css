@@ -2837,12 +2837,13 @@ body:has(.button-editor) #bn-suggestion-menu { max-height: min(420px, 45vh); }
 @media (max-width: 899px) { .database-list-row .editor-button-pill.is-cell::after, td .editor-button-pill.is-cell::after { inset: -8px -4px; } }
 
 /* A database's rules (automations.md §2). */
-.automation-row { display: flex; align-items: center; gap: 2px; min-height: 44px; padding: 0 4px; }
+.automation-row { display: flex; align-items: center; gap: 2px; min-height: 44px; margin-bottom: 6px; padding: 0 4px; }
 .database-menu .automation-row button { min-height: 28px; padding: 0 6px; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
 .database-menu .automation-row button:disabled { opacity: 0.4; cursor: default; }
 .database-menu .automation-row .automation-open { display: grid; flex: 1; min-width: 0; color: var(--ink); text-align: left; }
 .automation-open > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.database-menu .automation-row .automation-open { gap: 0; line-height: 1.25; }
 .automation-open > small { color: var(--ink-3); font-size: var(--text-meta); overflow-wrap: anywhere; }
 .automation-open > small.is-broken { color: var(--formula-red); }
-.automation-switch { display: inline-flex; align-items: center; padding: 0 4px; }
+@media (max-width: 899px) { .automation-switch { position: relative; } .automation-switch::after { content: ''; position: absolute; inset: -11px -4px; } }
 .automation-trigger { flex-wrap: wrap; }

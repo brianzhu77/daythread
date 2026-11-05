@@ -74,6 +74,21 @@ await scenario('A broken rule pauses at his edit, which stands, with the name an
   const opened = await sheet(page).count()
   return { ok: value === 17 && undo >= 1 && rule.active === false && /deleted/.test(rule.paused?.reason ?? '') && /Uses a gone one paused/.test(words) && opened === 1, value, rule, words, opened }
 })
+await scenario('A broken rule\'s step says so, and a rename reaches the rule\'s words; the sheet opens by the database\'s menu; a rule\'s two lines sit together', 'rules', async page => {
+  const more = await page.locator('.database-more-button').first().boundingBox()
+  execSync(`node --no-warnings --input-type=module -e "import('${process.cwd()}/src/server/sqlite-repository.ts').then(async ({SqliteWorkspaceRepository:R})=>{const r=new R('${S}',undefined,{allowMissingLegacy:true});const w=await r.load();await r.execute({operationId:crypto.randomUUID(),expectedRevision:w.revision,action:{type:'change-database',pageId:'runs',change:{kind:'updateProperty',propertyId:'n',name:'Count'}}})})"`, { stdio: 'ignore' })
+  await page.reload(); await wait(1800)
+  await openSheet(page)
+  const box = await sheet(page).boundingBox(), first = sheet(page).locator('.automation-row').first()
+  const [name, status] = await Promise.all([first.locator('.automation-open > span').boundingBox(), first.locator('.automation-open > small').boundingBox()]), next = await sheet(page).locator('.automation-row').nth(1).locator('.automation-open > span').boundingBox()
+  const gapInside = status.y - (name.y + name.height), gapAfter = next.y - (status.y + status.height), switchBox = await first.getByRole('switch').boundingBox()
+  await sheet(page).locator('.automation-open').first().click(); await wait(250)
+  const renamed = await sheet(page).locator('.button-step-open').first().textContent()
+  await sheet(page).getByRole('button', { name: 'Back' }).click(); await wait(200)
+  await sheet(page).locator('.automation-open').nth(1).click(); await wait(250)
+  const marked = await sheet(page).locator('.button-step-row.is-incomplete small').textContent(), when = await sheet(page).getByLabel('When').first().evaluate(n => n.selectedOptions[0].textContent)
+  return { ok: Math.abs(box.x - more.x) <= 1 && gapAfter > gapInside && switchBox.width >= 30 && /Count/.test(renamed) && marked === 'Soon gone was deleted' && /Count/.test(when), box, more, gapInside, gapAfter, switchBox, renamed, marked, when }
+})
 await scenario('390: a sheet that fits, with 16 px fields', '', async page => {
   await page.locator('.database-more-button').first().tap(); await wait(300); await page.locator('.database-menu').getByRole('menuitem', { name: /^Automations/ }).tap(); await wait(400)
   await sheet(page).getByRole('menuitem', { name: '+ New automation' }).tap(); await wait(250)

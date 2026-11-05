@@ -1,7 +1,7 @@
 // A database's rules (docs/design/automations.md §2): a list, and each rule's editor, in Buttons' shell. Popover-sized at 1280, a sheet at 390. It's on the database, so every view shares it.
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
-import { automationProblem, automationSteps, type Automation, type AutomationTrigger } from '../domain/automations'
+import { automationProblem, automationSteps, stepBroken, withLiveNames, type Automation, type AutomationTrigger } from '../domain/automations'
 import { readSteps, stepKinds, stepTitle, writeSteps, type ButtonStep } from '../domain/buttons'
 import { isDatabase, propertyOf, titleId, type Condition, type Database, type DatabaseChange, type Property } from '../domain/database'
 import type { Page } from '../domain/types'
@@ -11,12 +11,16 @@ import { useKeyboardTop } from './keyboard'
 import { useWide } from './property-editors'
 import { newOperationId, useWorkspace } from './use-day'
 
-let open: string | null = null
+let open: { id: string; at: { top: number; left: number } | null } | null = null
 const listeners = new Set<() => void>()
 const notify = () => listeners.forEach(l => l())
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
 /** From the database's menu, or a paused rule's notice. */
-export function openAutomations(databaseId: string) { open = databaseId; notify() }
+export function openAutomations(databaseId: string, anchor?: Element | null) {
+  const r = anchor?.getBoundingClientRect()
+  // By what opened it, kept on screen, as other sheets hang from theirs. A notice has nothing to hang from.
+  open = { id: databaseId, at: r ? { top: Math.max(16, Math.min(r.bottom + 6, window.innerHeight - 500)), left: Math.max(16, Math.min(r.left, window.innerWidth - 396)) } : null }; notify()
+}
 const close = () => { open = null; notify() }
 
 const when = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
@@ -29,13 +33,13 @@ export function statusLine(rule: Automation, problem: string | null): { text: st
 }
 
 export function AutomationsHost() {
-  const id = useSyncExternalStore(subscribe, () => open, () => null)
+  const current = useSyncExternalStore(subscribe, () => open, () => null)
   const { workspace } = useWorkspace()
-  const page = id ? workspace?.pages.find(p => p.id === id) : undefined
-  return page && isDatabase(page) && !page.trashedAt ? <Sheet key={page.id} db={page} /> : null
+  const page = current ? workspace?.pages.find(p => p.id === current.id) : undefined
+  return page && isDatabase(page) && !page.trashedAt ? <Sheet key={page.id} db={page} at={current!.at} /> : null
 }
 
-function Sheet({ db }: { db: Page & { database: Database } }) {
+function Sheet({ db, at }: { db: Page & { database: Database }; at: { top: number; left: number } | null }) {
   const { run, workspace } = useWorkspace()
   const wide = useWide(), keyboardTop = useKeyboardTop()
   const [editing, setEditing] = useState<Automation | null>(null), [isNew, setIsNew] = useState(false)
@@ -51,17 +55,17 @@ function Sheet({ db }: { db: Page & { database: Database } }) {
   })
   return createPortal(<>
     <div className="database-menu-scrim" aria-hidden="true" />
-    <div ref={box} className="app-menu database-menu button-editor automation-sheet" role="dialog" aria-label="Automations" style={{ position: 'fixed', ...(wide ? { top: 90, left: Math.max(16, window.innerWidth / 2 - 190) } : {}), ...(!wide && keyboardTop !== null ? { '--keyboard-lift': `${window.innerHeight - keyboardTop}px` } as object : {}) }} onKeyDown={e => e.stopPropagation()}>
+    <div ref={box} className="app-menu database-menu button-editor automation-sheet" role="dialog" aria-label="Automations" style={{ position: 'fixed', ...(wide ? at ?? { top: 90, left: Math.max(16, window.innerWidth / 2 - 190) } : {}), ...(!wide && keyboardTop !== null ? { '--keyboard-lift': `${window.innerHeight - keyboardTop}px` } as object : {}) }} onKeyDown={e => e.stopPropagation()}>
       {editing ? <Editor rule={editing} isNew={isNew} db={db} onCancel={() => setEditing(null)} onDone={rule => { change(isNew ? { kind: 'addAutomation', automation: rule } : { kind: 'updateAutomation', automation: rule }); setEditing(null) }} onDelete={isNew ? null : () => { change({ kind: 'removeAutomation', automationId: editing.id }); setEditing(null) }} /> : <>
         <div className="database-menu-head button-editor-head"><span>Automations</span></div>
         {rules.length === 0 && <p className="database-menu-quiet">No automations</p>}
         {rules.map((rule, i) => {
           const problem = automationProblem(workspace!, db.database, rule), status = statusLine(rule, problem)
           return <div key={rule.id} className="automation-row">
-            <button type="button" className="automation-open" onClick={() => { setIsNew(false); setEditing(rule) }}><span>{rule.name}</span><small className={status.broken ? 'is-broken' : ''}>{status.text}</small></button>
+            <button type="button" className="automation-open" onClick={() => { setIsNew(false); setEditing(withLiveNames(workspace!, db.database, rule)) }}><span>{rule.name}</span><small className={status.broken ? 'is-broken' : ''}>{status.text}</small></button>
             <button type="button" aria-label={`Move ${rule.name} up`} disabled={i === 0} onClick={() => change({ kind: 'moveAutomation', automationId: rule.id, beforeId: rules[i - 1]!.id }, false)}>↑</button>
             <button type="button" aria-label={`Move ${rule.name} down`} disabled={i === rules.length - 1} onClick={() => change({ kind: 'moveAutomation', automationId: rule.id, beforeId: rules[i + 2]?.id ?? null }, false)}>↓</button>
-            <label className="automation-switch"><input type="checkbox" role="switch" aria-label={`${rule.name} on`} checked={rule.active && !rule.paused && !problem} onChange={e => { if (problem) { setIsNew(false); setEditing(rule) } else change({ kind: 'setAutomationActive', automationId: rule.id, active: e.target.checked }) }} /></label>
+            <label className="database-property-switch automation-switch"><input type="checkbox" role="switch" aria-label={`${rule.name} on`} checked={rule.active && !rule.paused && !problem} onChange={() => { if (problem) { setIsNew(false); setEditing(withLiveNames(workspace!, db.database, rule)) } else change({ kind: 'setAutomationActive', automationId: rule.id, active: !(rule.active && !rule.paused) }) }} /></label>
           </div>
         })}
         <button type="button" role="menuitem" onClick={() => { setIsNew(true); setEditing({ id: crypto.randomUUID(), name: '', active: true, triggers: [{ kind: 'row-added' }], steps: writeSteps([]) }) }}>+ New automation</button>
@@ -76,7 +80,8 @@ function Editor({ rule, isNew, db, onCancel, onDone, onDelete }: { rule: Automat
   const [steps, setSteps] = useState<ButtonStep[]>(() => readSteps(rule.steps)), [at, setAt] = useState<number | 'kinds' | null>(null), [asking, setAsking] = useState(false)
   const draft = (): Automation => { const { any: _any, viewId: _view, ...rest } = rule; return { ...rest, name: name.trim() || (steps[0] ? stepTitle(steps[0]) : 'Automation'), triggers, ...(any ? { any: true as const } : {}), ...(viewId ? { viewId } : {}), steps: writeSteps(steps) } }
   const start = useRef(JSON.stringify({ ...rule, any: Boolean(rule.any), viewId: rule.viewId ?? '' })), changedYet = JSON.stringify({ ...rule, name, triggers, any, viewId, steps: writeSteps(steps) }) !== start.current
-  const firstProblem = steps.findIndex((_, i) => problemOf(steps, i))
+  const stepIssue = (i: number) => problemOf(steps, i) ?? (workspace ? stepBroken(workspace, db.database, steps[i]!) : null)
+  const firstProblem = steps.findIndex((_, i) => stepIssue(i))
   // A step or trigger whose target is gone is what a paused rule needs fixed, so saving it as it is wouldn't turn it back on.
   const broken = workspace ? automationProblem(workspace, db.database, draft()) : null
   const ready = steps.length > 0 && firstProblem < 0 && triggers.length > 0 && !broken
@@ -123,7 +128,7 @@ function Editor({ rule, isNew, db, onCancel, onDone, onDelete }: { rule: Automat
       <select className="button-editor-field" aria-label="In" value={viewId} onChange={e => setViewId(e.target.value)}><option value="">The whole database</option>{db.database.views.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
       <p className="button-editor-label">Do</p>
       {steps.map((step, i) => {
-        const problem = problemOf(steps, i)
+        const problem = stepIssue(i)
         return <div key={step.id} className={`button-step-row${problem ? ' is-incomplete' : ''}`}>
           <button type="button" className="button-step-open" onClick={() => setAt(i)}><span>{stepTitle(step)}</span>{problem && <small>{problem}</small>}</button>
           <button type="button" aria-label="Move up" disabled={i === 0} onClick={() => setSteps(list => { const out = [...list]; const [s] = out.splice(i, 1); out.splice(i - 1, 0, s!); return out })}>↑</button>

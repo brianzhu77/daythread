@@ -1,6 +1,6 @@
 // Rules on a database (docs/design/automations.md): when something happens to a row, do these steps, inside the command that made the change. Nothing here writes:
 // `applyCommand` stages each rule on its own copy, so a rule's failure can't touch his edit. A database with no rules costs one look at its field.
-import { readSteps, type ButtonStep } from './buttons.ts'
+import { readSteps, writeSteps, type ButtonStep } from './buttons.ts'
 import { conditionHolds, cellValue, databaseRows, inView, isDatabase, propertyOf, titleId, type Condition, type Database, type ViewContext } from './database.ts'
 import type { Action, Page, Workspace } from './types.ts'
 
@@ -30,17 +30,36 @@ export const firesRules = (action: Pick<Action, 'type'>): boolean => !quietActio
 export function automationProblem(ws: Pick<Workspace, 'pages'>, db: Database, rule: Automation): string | null {
   if (rule.viewId && !db.views.some(v => v.id === rule.viewId)) return 'Its view was deleted'
   for (const t of rule.triggers) if (t.kind === 'property-edited' && t.propertyId !== titleId && !propertyOf(db, t.propertyId)) return `${t.name} was deleted`
-  for (const step of readSteps(rule.steps)) {
-    if (step.kind !== 'edit-property' && step.kind !== 'add-row' && step.kind !== 'edit-rows') continue
-    const target = step.kind === 'edit-property' ? db : (() => { const p = ws.pages.find(x => x.id === step.databaseId); return p && isDatabase(p) && !p.trashedAt ? p.database : null })()
-    if (!target) return `${step.kind === 'edit-property' ? 'That database' : step.databaseName || 'That database'} was deleted`
-    for (const set of step.set) {
-      const property = target.properties.find(p => p.id === set.id)
-      if (!property) return `${set.name} was deleted`
-      if (set.type && property.type !== set.type) return `${set.name} changed type`
-    }
+  for (const step of readSteps(rule.steps)) { const problem = stepBroken(ws, db, step); if (problem) return problem }
+  return null
+}
+const stepDatabase = (ws: Pick<Workspace, 'pages'>, db: Database, step: Extract<ButtonStep, { kind: 'edit-property' | 'add-row' | 'edit-rows' }>): { database: Database; title?: string } | null => {
+  if (step.kind === 'edit-property') return { database: db }
+  const p = ws.pages.find(x => x.id === step.databaseId)
+  return p && isDatabase(p) && !p.trashedAt ? { database: p.database, title: p.title } : null
+}
+/** What's gone from under one step, so its row can say so. */
+export function stepBroken(ws: Pick<Workspace, 'pages'>, db: Database, step: ButtonStep): string | null {
+  if (step.kind !== 'edit-property' && step.kind !== 'add-row' && step.kind !== 'edit-rows') return null
+  const target = stepDatabase(ws, db, step)
+  if (!target) return `${step.kind === 'edit-property' ? 'That database' : step.databaseName || 'That database'} was deleted`
+  for (const set of step.set) {
+    const property = target.database.properties.find(p => p.id === set.id)
+    if (!property) return `${set.name} was deleted`
+    if (set.type && property.type !== set.type) return `${set.name} changed type`
   }
   return null
+}
+/** A rule as it reads now: targets are held by id, so a rename keeps it working, and only its words need bringing up to date (§5.4). */
+export function withLiveNames(ws: Pick<Workspace, 'pages'>, db: Database, rule: Automation): Automation {
+  const steps = readSteps(rule.steps).map(step => {
+    if (step.kind !== 'edit-property' && step.kind !== 'add-row' && step.kind !== 'edit-rows') return step
+    const target = stepDatabase(ws, db, step)
+    if (!target) return step
+    const set = step.set.map(s => ({ ...s, name: target.database.properties.find(p => p.id === s.id)?.name ?? s.name }))
+    return step.kind === 'edit-property' ? { ...step, set } : { ...step, set, databaseName: target.title?.trim() || step.databaseName }
+  })
+  return { ...rule, steps: writeSteps(steps), triggers: rule.triggers.map(t => (t.kind === 'property-edited' ? { ...t, name: propertyOf(db, t.propertyId)?.name ?? t.name } : t)) }
 }
 
 const rawOf = (row: Page, id: string): unknown => (id === titleId ? row.title : row.values?.[id])
