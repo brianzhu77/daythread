@@ -2,7 +2,7 @@
 // changes come back as ordinary lines below their lines, so nothing he typed is lost and nothing the other tab did
 // is undone. His changes are measured against the page as it was when he started (the save's starting point), not
 // against the latest, so a line only the other side changed is left alone.
-import { inlineText, type EditorNode } from './editor-document.ts'
+import { inlineText, isFileBlock, type EditorNode } from './editor-document.ts'
 
 export interface DraftMerge {
   /** The latest page with his lines inserted. */
@@ -18,7 +18,7 @@ const walk = (nodes: EditorNode[], visit: (node: EditorNode, parent: EditorNode 
 const byId = (nodes: EditorNode[]) => { const map = new Map<string, EditorNode>(); walk(nodes, n => map.set(n.id, n)); return map }
 /** What a line says: its kind and words, with links by target (a link's refId is identity, not wording). */
 // A checklist line's tick is part of what it says (Ratchet #97).
-const wording = (node: EditorNode) => JSON.stringify([node.type, node.type === 'heading' ? node.props?.level : null, node.content ?? null, node.type === 'pageLink' ? node.props?.pageId : null, node.type === 'sourceChecklist' ? Boolean(node.props?.checked) : null], (key, value) => (key === 'refId' ? undefined : value))
+const wording = (node: EditorNode) => JSON.stringify([node.type, node.type === 'heading' ? node.props?.level : null, node.content ?? null, node.type === 'pageLink' ? node.props?.pageId : null, isFileBlock(node) ? [node.props?.url, node.props?.caption, node.props?.previewWidth, node.props?.textAlignment] : null, node.type === 'sourceChecklist' ? Boolean(node.props?.checked) : null], (key, value) => (key === 'refId' ? undefined : value))
 /** No words and nothing else inline: a line holding only a `[[` link is not empty (Ratchet #97). */
 const isEmpty = (node: EditorNode) => node.type !== 'pageLink' && !inlineText(node.content).trim() && !(Array.isArray(node.content) && (node.content as { type?: string }[]).some(c => c?.type && c.type !== 'text'))
 const withoutChildren = ({ children: _children, ...node }: EditorNode): EditorNode => ({ ...node, children: [] })
@@ -78,6 +78,16 @@ export function mergeDraft(base: EditorNode[], draft: EditorNode[], latest: Edit
     }
     if (wording(before) === wording(node)) return // he didn't change it
     if (now && wording(now) === wording(node)) return // the other side made the same edit
+    if (isFileBlock(node) || isFileBlock(before)) {
+      // A picture's caption, width or file, or a line that became one, with no words to come back as a line: in place, the block's kind too, or as a second block when the other side changed it as well.
+      if (now && wording(now) === wording(before)) {
+        now.type = node.type; now.props = structuredClone(node.props)
+        if (node.content === undefined) delete now.content; else now.content = structuredClone(node.content)
+        inserted.push(now.id); anchorFor.set(node.id, now.id)
+      }
+      else { const line = { ...withoutChildren(node), id: newId() }; insertAfter(now ? node.id : null, line); inserted.push(line.id); anchorFor.set(node.id, line.id) }
+      return
+    }
     if (now && isEmpty(before) && isEmpty(now) && wording(before) === wording(now)) {
       // A line that was empty on both sides (a template row): his words go in place, with nothing below to repeat.
       now.content = structuredClone(node.content)

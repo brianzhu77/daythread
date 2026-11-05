@@ -7,7 +7,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type K
 import { createPortal } from 'react-dom'
 import { sectionKey, viewSections, viewSubGroups, columnCalc, propertyOf, viewBoardCalculation, canWrap, cellValue, databaseRows, isDatabase, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
 import type { Page } from '../domain/types'
-import { rowTint, CardSubItems, PickedBar, useCardPicking, useMoveRows, useRowPicking, SubGroupHead, HiddenSubGroups, useFolds, NewRow, shownValue, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { rowTint, SubItemParent, CardSubItems, PickedBar, useCardPicking, useMoveRows, useRowPicking, SubGroupHead, HiddenSubGroups, useFolds, NewRow, shownValue, blockActions, blockPlaces, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { calcText } from './property-values'
 import { openDatabaseMenu } from './database-menu'
 import { todayIso } from './dates'
@@ -221,6 +221,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
         data-cell={interactive ? cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, group }) : undefined}
         data-nav={interactive && row.id === firstCard ? '0:0' : undefined}
         onClick={() => { if (!justDragged.current) openRow(row.id) }}>{row.title || 'Untitled'}</button>
+      <SubItemParent workspace={workspace} db={db} row={row} />
       {cardColumns.map(({ property, wrap = false }) => {
         const pending = pendingCells.get(pendingKey(row.id, property.id))
         const value = pending ? readValue(property, pending.raw) : cellValue(db.database, row, property.id)

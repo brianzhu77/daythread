@@ -81,6 +81,11 @@ export function buildSearchIndex(ws: Workspace, dayLabel: (date: LocalDate) => s
         const trimmed = text.trim().replace(/\s+/g, ' ')
         if (trimmed) lines.push({ page, blockId: node.id, sectionTitle: section, taskId, text: trimmed, folded: fold(trimmed), ...(places > 1 ? { places } : {}) })
       }
+      else if (node.type === 'image' || node.type === 'file') {
+        // Its caption and name, never what's in the file (B87 10).
+        const words = `${node.props?.caption ?? ''} ${node.props?.name ?? ''}`.trim().replace(/\s+/g, ' ')
+        if (words) lines.push({ page, blockId: node.id, sectionTitle: section, taskId: null, text: words, folded: fold(words), ...(places > 1 ? { places } : {}) })
+      }
       // A synced block is found once, under the original, or a template copy would add a hit a day (states §7).
       if (isSyncedBlock(node)) {
         const syncId = String(node.props?.syncId)

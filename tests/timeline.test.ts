@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { viewGroupBy, type Database, type Property, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
-import { draggedBar, endAt, shifted, startAt, timelineBars, timelineWeeks, type TimelineBar } from '../src/domain/timeline.ts'
+import { draggedBar, endAt, linkPath, shifted, startAt, timelineBars, timelineWeeks, type TimelineBar } from '../src/domain/timeline.ts'
 import type { Page } from '../src/domain/types.ts'
 
 const properties: Property[] = [{ id: 'when', name: 'When', type: 'date' }, { id: 'from', name: 'From', type: 'date' }, { id: 'to', name: 'To', type: 'date' }, { id: 'made', name: 'Made', type: 'createdTime' }]
@@ -89,4 +89,22 @@ test('a timeline groups like a table, and keeps its own fields', () => {
   assert.equal(viewGroupBy(withKind, { ...v, layout: 'calendar' }), null)
   const r = commandSchema.safeParse({ operationId: 'o', expectedRevision: 1, action: { type: 'change-database', pageId: 'p', change: { kind: 'updateView', viewId: 'v', timelineTable: null, timelineUnit: 'quarter', timelineEnd: null } } })
   assert.ok(r.success)
+})
+
+test('sub-items §3: an arrow goes out of the end and into the start, doubles back when it must, and holds inside what can be drawn', () => {
+  const near = linkPath({ x: 100, y: 18 }, { x: 200, y: 54 }, 0, 1000)
+  assert.ok(near.line.startsWith('M100 18') && near.line.endsWith('L200 54'))
+  assert.ok(near.head)
+  // Not one coordinate of the way left of the end.
+  assert.ok([...near.line.matchAll(/[MLQ ](\d+(?:\.\d+)?) /g)].every(m => Number(m[1]) >= 100))
+  const back = linkPath({ x: 200, y: 18 }, { x: 100, y: 90 }, 0, 1000)
+  assert.ok(back.line.includes('36') && back.line.endsWith('L100 90'), 'doubles back on the line between')
+  const up = linkPath({ x: 200, y: 90 }, { x: 100, y: 18 }, 0, 1000)
+  assert.ok(up.line.includes('72'), 'and upwards too')
+  const far = linkPath({ x: 100, y: 18 }, { x: 7_000_000, y: 54 }, 0, 1000)
+  assert.ok(far.head === null, 'no head off the edge')
+  assert.ok(far.line.endsWith('L1000 54'))
+  assert.ok(![...far.line.matchAll(/\d+/g)].some(m => Number(m[0]) > 1000))
+  const left = linkPath({ x: -5000, y: 18 }, { x: 500, y: 54 }, 0, 1000)
+  assert.ok(left.line.startsWith('M0 18') && left.head)
 })
