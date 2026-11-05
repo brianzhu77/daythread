@@ -29,7 +29,7 @@ const pill = (page, name) => page.locator('.editor-button-pill', { hasText: name
 const isRun = q => q.method() === 'POST' && q.url().includes('_serverFn') && decodeURIComponent(q.postData() ?? '').includes('run-button')
 const editor = page => page.locator('.button-editor')
 const notices = page => page.locator('[role=alert], [role=status]').allTextContents().then(t => t.join(' | ').replace(/\s+/g, ' '))
-const slash = async page => { await page.locator('.bn-inline-content', { hasText: 'Last line' }).click(); await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.press('Enter'); await page.keyboard.type('/button', { delay: 20 }); await wait(400); await page.getByRole('option', { name: /Button/ }).first().click(); await wait(400) }
+const slash = async page => { const last = page.locator('.bn-inline-content', { hasText: 'Last line' }), box = await last.boundingBox(); await page.mouse.click(box.x + box.width - 2, box.y + box.height / 2); await page.keyboard.press('Enter'); await page.keyboard.type('/button', { delay: 20 }); await wait(400); await page.getByRole('option', { name: /Button/ }).first().click(); await wait(400) }
 
 await scenario('/ Button: Done is off with nothing finished and goes to what\'s missing; then a pill that adds a row with one Undo', async page => {
   await slash(page)
