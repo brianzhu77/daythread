@@ -28,7 +28,7 @@ const tryKeys = async (p, wait, name) => {
 }
 // (1) Each block with no text, on a reload, at both widths.
 seed()
-for (const width of [1280, 390]) for (const page of ['home', 'alone', 'linked', 'todos', 'card', 'divider']) {
+for (const width of [1280, 390]) for (const page of ['home', 'alone', 'linked', 'todos', 'card', 'divider', 'synced']) {
   const { c, p, errors, wait } = await fresh(width)
   await p.goto(`${base}/pages?page=${page}`); await wait(2200)
   await tryKeys(p, wait, `${width} ${page}`)

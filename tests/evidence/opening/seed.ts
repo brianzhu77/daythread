@@ -26,6 +26,7 @@ const ending: Record<string, unknown> = {
   todos: { id: 'e-todos', type: 'database', props: { pageId: todosSourceId, view: linkedViewJson({ ...todosDatabase.views[0]!, id: 'tv' }, 'tv') }, children: [] },
   card: { id: 'e-card', type: 'pageLink', props: { pageId: 'elsewhere' }, children: [] },
   divider: { id: 'e-divider', type: 'divider', props: {}, children: [] },
+  synced: { id: 'e-synced', type: 'syncedBlock', props: { syncId: 'standing', roles: '' }, children: [line('e-synced-1', 'A line inside')] },
 }
 for (const [pageId, node] of Object.entries(ending)) { await doc(pageId); await write(pageId, [line(`${pageId}-above`, 'The line above'), node]) }
 await doc('endsline')
