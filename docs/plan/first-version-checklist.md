@@ -669,6 +669,22 @@ Acceptance list by Bumblebee, from `docs/design/buttons.md`, approved to build (
 | G3-9 | **The property.** A Button property on every layout and the row page, with Edit property, not opening the row. Not offered for sort, filter, Group, Chart or Rollup, and left out of CSV export. Several selected rows run on each with one Undo. To-dos can't have one (§11). An older build keeps the property, with a rollback run. | missing |
 | G3-10 | **Variables and formula values** (R4-3 is live). | missing |
 
+## D10. Chart (tracked, not counted)
+
+Acceptance list by Bumblebee, from `docs/design/chart.md`, for the Lead and Jazz to review before building. Group 4 of `databases.md` §14. Notion's page was read, not tried. In order: bars and Number, then Line and Donut, then Group by and Other, then Export and Save as view. Builds on #151.
+
+| ID | Check | Status |
+| --- | --- | --- |
+| G4-1 | **A layout of a view.** From `+ Add view` and Layout, and as a linked view on a page. Read-only. Vertical bar, horizontal bar and Number first. The first time, it asks for What to show and defaults Measure to Count. | missing |
+| G4-2 | **Settings and the numbers.** Count, or Sum, Average, Median, Min, Max or Range of a Number, and Cumulative on a sorted axis. Not offered for Button, ID, Files, Rollup or a list-output Formula. A date axis groups by day, week (Week starts, R3-20), month or year, with empty periods at zero. The view's filter applies, groups included, and a chart's total matches a table and column calculations on the same rows, on a copy of Brian's real data. | missing |
+| G4-3 | **Line and Donut,** with Cumulative on a line and the value in a donut's centre. | missing |
+| G4-4 | **Group by and greys.** Up to 4 greys from the app's tokens, following a value's order, so a filter never repaints a value. Beyond 4, "Other" as an outline, which a tap opens. A legend for 2 or more series, direct labels where they fit, tap to focus, no second y-axis. Readable in both themes, by eye. | missing |
+| G4-5 | **Reading.** Hover at 1280 and tap at 390 show the value, and open that group's rows in a plain read-only table. A table of the data is one tap away, so no number is only in a shape. At 390, full width with no sideways scroll, and labels thin out rather than overlap. A tap raises no keyboard. | missing |
+| G4-6 | **States.** No rows, a property deleted or changed ("Choose what to show", restored by Undo or changing back), blanks not counted as zero except in Count, counted past the row cap, updating without a reload, and a stated limit with a clear refusal on a very large database. | missing |
+| G4-7 | **On a day.** A template with a chart shows each new day's rows, and R2-6 and R2-7 hold. Its code loads only when a chart is on screen. A day with no chart pays nothing. | missing |
+| G4-8 | **Export and Save as view.** PNG or SVG from its own `⋯`, working in the Home Screen app or saying why not. | missing |
+| G4-9 | **An older tab** keeps `layout` and chart settings, with a rollback run on the floor. An older build meeting a layout it doesn't know draws something usable rather than breaking. | missing |
+
 ## C. Open questions for Brian
 
 Asked 2026-10-19 02:18Z (9e538364 572b3c3a); Brian answered 02:20Z (a4fd5686). Re-ask any future question within 24 h if unanswered.
