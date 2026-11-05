@@ -3,7 +3,8 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
-import { tints, type ColourRule, type Tint, calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type DependencyMode, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View, type Repeat } from '../domain/database.ts'
+import { filterTree, hasFilter, limits, ruleCount, rulesIn, type FilterGroup, tints, type ColourRule, type Tint, calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type DependencyMode, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View, type Repeat } from '../domain/database.ts'
+import { addGroup, atPath, canHoldGroup, moveIntoGroup, moveIntoNewGroup, moveOutOfGroup, moveRulesOut, removeGroup, treeFields, withoutRule, type FilterPath } from '../domain/filter-tree'
 import { timelineUnits, viewDateEnd, type TimelineUnit } from '../domain/timeline'
 import { defaultRowTemplate, rowTemplates } from '../domain/day-template'
 import { nextDate } from '../domain/repeats'
@@ -12,7 +13,7 @@ import { databaseSource, readingWorkspace, todosSourceId, todosTitle } from '../
 import { isFormula } from '../domain/formula'
 import { rollupFunctionsFor, withLinks } from '../domain/relations'
 import { FormulaEditor } from './formula-editor'
-import { startPicking, blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange, afterLinkedColumn } from './database-block'
+import { ruleWords, startPicking, blockActions, isLinkedBlock, MenuBlock, setShownView, shownView, useShownViews, useViewChange, afterLinkedColumn } from './database-block'
 import { chooseCsv } from './csv-import'
 import { exportDatabase } from './database-export'
 import { todayIso } from './dates'
@@ -75,9 +76,9 @@ export function DatabaseMenuHost() {
       const top = Math.max(8, Math.min(r.bottom + 4, window.innerHeight - (ref.current?.offsetHeight ?? 0) - 8))
       // Moved left as far as it takes too, for the same reason: "Table ⌄" sits near the page's right edge.
       // Formula's editor is too wide to hang left from `⋯` without covering the sidebar, so it starts at the block's edge.
-      const width = ref.current?.offsetWidth ?? 300, block = anchor.closest('.database-block')?.getBoundingClientRect()
+      const width = ref.current?.offsetWidth ?? 300, block = anchor.closest('.database-block')?.getBoundingClientRect(), editor = Boolean(ref.current?.querySelector('.formula-editor'))
       // Under a column's head it hangs from the head's left edge, as far as the window lets it.
-      const next = open.column && width <= 320 ? { top, left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)) } : width > 320 && block && window.innerWidth >= 900 ? { top, left: Math.max(8, Math.min(block.left, window.innerWidth - width - 8)) } : open.panel === 'views' ? { top, left: Math.max(8, Math.min(r.left, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) } : { top, right: Math.max(8, Math.min(window.innerWidth - r.right, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) }
+      const next = open.column && !editor ? { top, left: Math.max(8, Math.min(r.left, window.innerWidth - width - 8)) } : editor && block && window.innerWidth >= 900 ? { top, left: Math.max(8, Math.min(block.left, window.innerWidth - width - 8)) } : open.panel === 'views' ? { top, left: Math.max(8, Math.min(r.left, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) } : { top, right: Math.max(8, Math.min(window.innerWidth - r.right, window.innerWidth - (ref.current?.offsetWidth ?? 300) - 8)) }
       setAt(a => (a && a.top === next.top && a.left === next.left && a.right === next.right ? a : next))
       frame = requestAnimationFrame(place)
     }
@@ -366,19 +367,34 @@ function ColourPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
 
 function FilterPanel({ db, view, back }: { db: DatabasePage; view: View; back: () => void }) {
   const changeView = useViewChange(db.id, view.id)
-  const save = (build: (filter: Condition[]) => Condition[]) => changeView(current => ({ filter: build(current.filter) }))
-  const set = (i: number, next: Condition) => save(filter => filter.map((c, j) => (j === i ? next : c)))
-  const add = () => save(filter => [...filter, { by: titleId, op: 'contains' }])
-  return <>
+  const edit: EditFilter = (change, notice) => changeView(current => treeFields(change(filterTree(current))), notice)
+  return <div className="database-filter-sheet">
     <Head title="Filter" back={back} />
-    {view.filter.length === 0 && <p className="database-menu-quiet">No filters</p>}
-    {view.filter.length > 1 && <label className="database-menu-row">Show rows where
-      <select aria-label="Show rows where" value={view.filterAny ? 'any' : 'all'} onChange={e => { const filterAny = e.target.value === 'any'; changeView(() => ({ filterAny })) }}>
-        <option value="all">all rules match</option><option value="any">any rule matches</option>
-      </select>
-    </label>}
-    {view.filter.map((c, i) => {
-      const property = propertyOf(db.database, c.by)
+    {!hasFilter(view) && <p className="database-menu-quiet">No filters</p>}
+    <FilterRules db={db} node={filterTree(view)} path={[]} edit={edit} full={ruleCount(view) >= limits.conditions} />
+  </div>
+}
+
+type EditFilter = (change: (top: FilterGroup) => FilterGroup, notice?: string) => void
+/** One layer of the filter: its rules, the groups below them, and what can be added. Its moves open in place, as a menu over a scrolling sheet would be cut off. */
+function FilterRules({ db, node, path, edit, full }: { db: DatabasePage; node: FilterGroup; path: FilterPath; edit: EditFilter; full: boolean }) {
+  const [moves, setMoves] = useState<string | null>(null)
+  // Esc shuts these and leaves the sheet, in any engine, wherever focus is: Safari doesn't focus a button on a click.
+  useEffect(() => {
+    if (moves === null) return
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopImmediatePropagation(); setMoves(null) } }
+    window.addEventListener('keydown', esc, true)
+    return () => window.removeEventListener('keydown', esc, true)
+  }, [moves])
+  const here = (change: (group: FilterGroup) => FilterGroup) => edit(top => atPath(top, path, change))
+  const act = (change: (top: FilterGroup) => FilterGroup) => { setMoves(null); edit(change) }
+  const set = (i: number, next: Condition) => here(g => ({ ...g, rules: g.rules.map((c, j) => (j === i ? next : c)) }))
+  const groups = node.groups ?? [], blank: Condition = { by: titleId, op: 'contains' }
+  const toggle = (key: string) => setMoves(now => (now === key ? null : key))
+  return <>
+    {path.length === 0 && node.rules.length + groups.length > 1 && <label className="database-menu-row">Show rows where<FilterCombine node={node} label="Show rows where" onChange={any => here(g => combined(g, any))} /></label>}
+    {node.rules.map((c, i) => {
+      const property = propertyOf(db.database, c.by), canMove = canHoldGroup(path) || path.length > 0
       return <div key={i} className="database-rule">
         {property ? <>
           <select aria-label="Property" value={c.by} onChange={e => { const p = propertyOf(db.database, e.target.value)!; set(i, { by: p.id, op: opsFor(p.type)[0]!, ...(p.type === 'checkbox' ? { value: true } : {}) }) }}>
@@ -389,11 +405,41 @@ function FilterPanel({ db, view, back }: { db: DatabasePage; view: View; back: (
           </select>
           <RuleValue property={property} condition={c} onChange={value => set(i, value === undefined ? { by: c.by, op: c.op } : { ...c, value })} />
         </> : <span className="database-rule-deleted">(deleted)</span>}
-        <button type="button" className="database-rule-remove" aria-label="Remove filter" onClick={() => save(filter => filter.filter((_, j) => j !== i))}>×</button>
+        {canMove && <button type="button" className="database-rule-more" aria-label="Move rule" aria-expanded={moves === `r${i}`} onClick={() => toggle(`r${i}`)}>⋯</button>}
+        <button type="button" className="database-rule-remove" aria-label="Remove filter" onClick={() => { setMoves(null); edit(top => withoutRule(top, path, i)) }}>×</button>
+        {moves === `r${i}` && <div className="database-rule-moves" role="menu" aria-label="Move rule">
+          {canHoldGroup(path) && <button type="button" role="menuitem" onClick={() => act(top => atPath(top, path, g => moveIntoNewGroup(g, i)))}>Move into a new group</button>}
+          {groups.map((g, k) => <button key={k} type="button" role="menuitem" onClick={() => act(top => atPath(top, path, n => moveIntoGroup(n, i, k)))}>Move in with {g.rules[0] ? ruleWords(db.database, g.rules[0]) : 'that group'}</button>)}
+          {path.length > 0 && <button type="button" role="menuitem" onClick={() => act(top => moveOutOfGroup(top, path, i))}>Move out of this group</button>}
+        </div>}
       </div>
     })}
-    <button type="button" role="menuitem" onClick={add}>+ Add filter</button>
+    {groups.map((g, i) => {
+      const rules = rulesIn([g]).length
+      return <div key={i} className="database-filter-group" role="group" aria-label="Filter group">
+        <div className="database-filter-group-head">
+          <FilterCombine node={g} label="Rows where" onChange={any => here(n => atPath(n, [i], x => combined(x, any)))} />
+          <button type="button" className="database-rule-more" aria-label="Group actions" aria-expanded={moves === `g${i}`} onClick={() => toggle(`g${i}`)}>⋯</button>
+        </div>
+        {moves === `g${i}` && <div className="database-rule-moves" role="menu" aria-label="Group actions">
+          <button type="button" role="menuitem" onClick={() => act(top => atPath(top, path, n => moveRulesOut(n, i)))}>Move rules out</button>
+          <button type="button" role="menuitem" onClick={() => { setMoves(null); edit(top => atPath(top, path, n => removeGroup(n, i)), 'Group removed') }}>Remove group and its {rules === 1 ? '1 rule' : `${rules} rules`}</button>
+        </div>}
+        <FilterRules db={db} node={g} path={[...path, i]} edit={edit} full={full} />
+      </div>
+    })}
+    {full && path.length === 0 && <p className="database-filter-full">{limits.conditions} rules at most</p>}
+    {!full && <div className="database-filter-adds">
+      <button type="button" role="menuitem" className="database-add-rule" onClick={() => here(g => ({ ...g, rules: [...g.rules, blank] }))}>+ Add filter</button>
+      {canHoldGroup(path) && <button type="button" role="menuitem" className="database-add-rule" onClick={() => here(g => addGroup(g, blank))}>+ Add group</button>}
+    </div>}
   </>
+}
+const combined = ({ any: _any, ...group }: FilterGroup, any: boolean): FilterGroup => (any ? { ...group, any: true } : group)
+function FilterCombine({ node, label, onChange }: { node: FilterGroup; label: string; onChange: (any: boolean) => void }) {
+  return <select aria-label={label} value={node.any ? 'any' : 'all'} onChange={e => onChange(e.target.value === 'any')}>
+    <option value="all">all rules match</option><option value="any">any rule matches</option>
+  </select>
 }
 
 export function RuleValue({ property, condition, onChange }: { property: Property; condition: Condition; onChange: (value: Json | undefined) => void }) {

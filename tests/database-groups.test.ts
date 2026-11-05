@@ -2,8 +2,9 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { columnMoved, rowColour, type ColourRule, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
+import { columnMoved, filterTree, hasFilter, rowColour, type ColourRule, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
+import { canHoldGroup, moveIntoGroup, moveIntoNewGroup, moveOutOfGroup, moveRulesOut, removeGroup, treeFields, withoutRule } from '../src/domain/filter-tree.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import type { Action, Page } from '../src/domain/types.ts'
 import { harness, today } from './v2-helpers.ts'
@@ -972,3 +973,112 @@ test('a property inserted beside a column (R4-18): placed there in that view, la
   h.change({ kind: 'addProperty', property: { id: 'n2', name: 'Gone', type: 'text' }, viewId: a, beforeId: 'not-a-column' })
   assert.equal(h.db().views[0]!.columns.at(-1)!.id, 'n2', 'a column gone meanwhile: last')
 })
+
+test('filter groups: all and any across three layers, and what can\'t be read counts neither way (filter-groups.md §3)', () => {
+  const h = reading()
+  const novels = { by: 'kind', op: 'isAnyOf', value: ['novel'] } as const, essays = { by: 'kind', op: 'isAnyOf', value: ['essay'] } as const
+  const long = { by: 'pages', op: 'gt', value: 350 } as const, short = { by: 'pages', op: 'lt', value: 350 } as const
+  const gone = { by: 'gone', op: 'isEmpty' } as const, unfinished = { by: 'note', op: 'contains' } as const
+  const titles = (v: View) => h.rows(v).map(r => r.id)
+  const everything = titles(view())
+  // A top rule and a group: the rule, and one or the other.
+  assert.deepEqual(titles(view({ filter: [novels], filterGroups: [{ any: true, rules: [long, short] }] })), ['dune', 'emma'])
+  assert.deepEqual(titles(view({ filter: [novels], filterGroups: [{ rules: [long] }] })), ['dune'])
+  // Any at the top: the group is one of the choices, and holds together.
+  assert.deepEqual(titles(view({ filter: [essays], filterAny: true, filterGroups: [{ rules: [novels, long] }] })), ['dune', 'ubik'])
+  // A third layer works the same.
+  assert.deepEqual(titles(view({ filterGroups: [{ rules: [novels], groups: [{ any: true, rules: [long, { by: 'pages', op: 'lt', value: 0 }] }] }] })), ['dune'])
+  // An empty group, and a group of only rules that can't be read, count neither way, under all or any.
+  for (const hollow of [{ rules: [] }, { rules: [gone] }, { any: true as const, rules: [gone, unfinished] }, { rules: [], groups: [{ rules: [gone] }] }]) {
+    assert.deepEqual(titles(view({ filterGroups: [hollow] })), everything)
+    assert.deepEqual(titles(view({ filter: [novels], filterAny: true, filterGroups: [hollow] })), titles(view({ filter: [novels], filterAny: true })))
+    assert.deepEqual(titles(view({ filter: [novels], filterGroups: [hollow] })), titles(view({ filter: [novels] })))
+  }
+  // A rule that can't be read beside one that can.
+  assert.deepEqual(titles(view({ filterGroups: [{ any: true, rules: [gone, long] }] })), ['dune'])
+  // No groups: exactly as before.
+  assert.equal(inView(h.db(), h.page('blank'), view({ filter: [novels], filterAny: true }), ctx), false)
+})
+
+test('filter groups: a new row takes a value where one is needed, walking the tree, or none and the notice (§3, §7.4)', () => {
+  const h = reading()
+  const novels = { by: 'kind', op: 'isAnyOf', value: ['novel'] } as const, sf = { by: 'tags', op: 'contains', value: ['sf'] } as const
+  const long = { by: 'pages', op: 'gt', value: 350 } as const, exact = { by: 'pages', op: 'eq', value: 400 } as const
+  // All at the top: the rule's value and the group's.
+  assert.deepEqual(newRowValues(h.db(), view({ filter: [novels], filterGroups: [{ rules: [sf] }] }), ctx), { title: '', values: { kind: 'novel', tags: ['sf'] }, visible: true })
+  // Any in a group: its first single value that works, and only one.
+  assert.deepEqual(newRowValues(h.db(), view({ filter: [novels], filterGroups: [{ any: true, rules: [long, sf, exact] }] }), ctx), { title: '', values: { kind: 'novel', tags: ['sf'] }, visible: true })
+  // Any at the top, and only a group can give one: the whole group's values, as it must hold together.
+  assert.deepEqual(newRowValues(h.db(), view({ filter: [long], filterAny: true, filterGroups: [{ rules: [novels, sf] }] }), ctx), { title: '', values: { kind: 'novel', tags: ['sf'] }, visible: true })
+  // Any at the top, and a group that can't get there: what it tried is put back, and the next one is taken.
+  assert.deepEqual(newRowValues(h.db(), view({ filterAny: true, filter: [], filterGroups: [{ rules: [novels, long] }, { rules: [sf] }] }), ctx), { title: '', values: { tags: ['sf'] }, visible: true })
+  // Nothing gives one: no values, and hidden, so the notice says so.
+  assert.deepEqual(newRowValues(h.db(), view({ filter: [], filterGroups: [{ any: true, rules: [long] }] }), ctx), { title: '', values: {}, visible: false })
+  // Third layer.
+  assert.deepEqual(newRowValues(h.db(), view({ filterGroups: [{ rules: [], groups: [{ any: true, rules: [long, sf] }] }] }), ctx).values, { tags: ['sf'] })
+})
+
+test('filter groups: stored only as far as three layers and twenty rules, held by other edits, and gone when emptied', () => {
+  const h = reading()
+  const v = () => h.db().views[0]!
+  const rule = { by: 'pages', op: 'gt', value: 1 } as const
+  h.change({ kind: 'updateView', viewId: v().id, filterGroups: [{ any: true, rules: [rule], groups: [{ rules: [rule] }] }] })
+  assert.deepEqual(v().filterGroups, [{ any: true, rules: [rule], groups: [{ rules: [rule] }] }])
+  // Another edit, or one to the top rules, leaves them.
+  h.change({ kind: 'updateView', viewId: v().id, name: 'Kept' }); h.change({ kind: 'updateView', viewId: v().id, filter: [rule], filterAny: true })
+  assert.equal(v().filterGroups?.length, 1)
+  assert.equal(hasFilter(v()), true)
+  // A fourth layer, and a rule past twenty, counted across the layers, are refused.
+  assert.throws(() => h.change({ kind: 'updateView', viewId: v().id, filterGroups: [{ rules: [], groups: [{ rules: [], groups: [{ rules: [rule] }] }] }] }), /Invalid filter/)
+  assert.throws(() => h.change({ kind: 'updateView', viewId: v().id, filter: [rule], filterGroups: [{ rules: Array(20).fill(rule) }] }), /Invalid filter/)
+  // A new rule must be on a column; one already there on a deleted property may move into a group.
+  assert.throws(() => h.change({ kind: 'updateView', viewId: v().id, filterGroups: [{ rules: [{ by: 'nope', op: 'isEmpty' }] }] }), /Invalid filter/)
+  h.change({ kind: 'updateView', viewId: v().id, filter: [{ by: 'note', op: 'isEmpty' }], filterGroups: [] })
+  h.change({ kind: 'removeProperty', propertyId: 'note' })
+  h.change({ kind: 'updateView', viewId: v().id, filter: [], filterGroups: [{ rules: [{ by: 'note', op: 'isEmpty' }] }] })
+  assert.equal(v().filterGroups?.[0]?.rules[0]?.by, 'note')
+  // Emptied: the field goes, so the view reads as one with no groups.
+  h.change({ kind: 'updateView', viewId: v().id, filter: [], filterGroups: [] })
+  assert.equal('filterGroups' in v(), false)
+  assert.equal(hasFilter(v()), false)
+  // A view made with them keeps them, as far as the limit.
+  const added = { ...view({ id: 'copied', filterGroups: [{ rules: [rule] }] }) }
+  h.change({ kind: 'addView', view: added })
+  assert.deepEqual(h.db().views.find(x => x.id === 'copied')!.filterGroups, [{ rules: [rule] }])
+  // The command's shape stops at three layers, so nothing deeper reaches the store.
+  const parsed = commandSchema.parse({ operationId: 'a', expectedRevision: 1, action: { type: 'change-database', pageId: 'list', change: { kind: 'updateView', viewId: 'v', filterGroups: [{ rules: [rule], groups: [{ rules: [rule], groups: [{ rules: [rule] }] }] }] } } }) as never as { action: { change: { filterGroups: { groups: object[] }[] } } }
+  assert.equal('groups' in parsed.action.change.filterGroups[0]!.groups[0]!, false)
+})
+
+test('filter groups: the sheet\'s moves keep every rule, and no group stands empty', () => {
+  const a = { by: 'a', op: 'isEmpty' } as const, b = { by: 'b', op: 'isEmpty' } as const, c = { by: 'c', op: 'isEmpty' } as const
+  assert.deepEqual(moveIntoNewGroup({ rules: [a, b] }, 0), { rules: [b], groups: [{ rules: [a] }] })
+  assert.deepEqual(moveIntoGroup({ rules: [a], groups: [{ rules: [b] }] }, 0, 0), { rules: [], groups: [{ rules: [b, a] }] })
+  // Out, and the group goes with its last rule, under any layer.
+  assert.deepEqual(moveOutOfGroup({ rules: [], groups: [{ rules: [a] }] }, [0], 0), { rules: [a] })
+  assert.deepEqual(moveOutOfGroup({ rules: [], groups: [{ rules: [b], groups: [{ rules: [a, c] }] }] }, [0, 0], 1), { rules: [], groups: [{ rules: [b, c], groups: [{ rules: [a] }] }] })
+  assert.deepEqual(withoutRule({ rules: [a], groups: [{ rules: [b] }] }, [0], 0), { rules: [a] })
+  assert.deepEqual(withoutRule({ rules: [], groups: [{ rules: [b], groups: [{ rules: [c] }] }] }, [0, 0], 0), { rules: [], groups: [{ rules: [b] }] })
+  // A group's rules join the layer above, and groups inside it come up too, so they still fit.
+  assert.deepEqual(moveRulesOut({ rules: [a], groups: [{ any: true, rules: [b], groups: [{ rules: [c] }] }] }, 0), { rules: [a, b], groups: [{ rules: [c] }] })
+  assert.deepEqual(removeGroup({ rules: [a], groups: [{ rules: [b] }] }, 0), { rules: [a] })
+  assert.equal(canHoldGroup([]), true); assert.equal(canHoldGroup([0]), true); assert.equal(canHoldGroup([0, 0]), false)
+  assert.deepEqual(treeFields({ any: true, rules: [a] }), { filter: [a], filterAny: true, filterGroups: [] })
+})
+
+test('filter groups: a calendar move, this page\'s day in a group, and the opening day read the same tree (§3)', () => {
+  const h = reading()
+  const novels = { by: 'kind', op: 'isAnyOf', value: ['novel'] } as const
+  const onPageDay = { by: 'due', op: 'is', value: { relative: 'pageDate' } } as const
+  const tree = view({ filter: [novels], filterGroups: [{ any: true, rules: [onPageDay] }] })
+  assert.deepEqual(viewRows(h.ws, 'list', tree, { ...ctx, pageDate: '2026-10-25' }).map(r => r.id), ['dune'])
+  // A page with no day of its own: that rule can't be read, so its group counts neither way, and the top rule decides.
+  assert.deepEqual(viewRows(h.ws, 'list', tree, ctx).map(r => r.id), ['dune', 'emma'])
+  // A row moved out of what a group holds reads as hidden, as a board's or calendar's move checks.
+  const dune = h.page('dune')
+  assert.equal(inView(h.db(), dune, { ...tree }, { ...ctx, pageDate: '2026-10-25' }), true)
+  assert.equal(inView(h.db(), { ...dune, values: { ...dune.values, due: { start: '2026-10-26' } } } as Page, { ...tree }, { ...ctx, pageDate: '2026-10-25' }), false)
+  // The tree is what's looked through for this page's day, at any layer.
+  assert.ok(JSON.stringify(filterTree(tree)).includes('"relative":"pageDate"'))
+})
+

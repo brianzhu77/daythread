@@ -1,7 +1,7 @@
 // Seeds a disposable SQLite store (path as the argument, never his data) for the render budget (R1-18): today's day page
 // with 40 lines and, unless the second argument is `plain`, an inline database of 25 rows with all 8 R1 types. `linked`: the
 // database's home is on another page and today shows a linked view of it, as a view from the Day template does (R2-7). `todos`: a To-dos view of 25 open tasks. `relation`: the table, with a relation and a rollup.
-// Usage: node tests/evidence/databases/seed-day-table.ts <store-path> [plain|linked|todos|relation|formula|sub-items]
+// Usage: node tests/evidence/databases/seed-day-table.ts <store-path> [plain|linked|todos|relation|formula|sub-items|cover]
 import { SqliteWorkspaceRepository } from '../../../src/server/sqlite-repository.ts'
 import { pageContentKey } from '../../../src/domain/editor-document.ts'
 import { storedFormula, worldOf } from '../../../src/domain/formula.ts'
@@ -51,4 +51,6 @@ if (subItems) {
   await run({ type: 'change-database', pageId: 'list', change: { kind: 'setSubItems', on: { parent: 'par', sub: 'sub' } } })
   for (let i = 25; i < 100; i++) await run({ type: 'set-values', pageId: `row${i}`, values: { par: [`row${(i - 25) % 25}`] }, expected: {}, at })
 }
+// A day with a cover from the set, over the same table (P1-6).
+if (process.argv[3] === 'cover') await run({ type: 'set-page-cover', pageId: ws.pages.find(p => p.date === today)!.id, cover: '/covers/ruled.svg', position: 0.5 })
 console.log('seeded', process.argv[3] ?? 'table', today)
