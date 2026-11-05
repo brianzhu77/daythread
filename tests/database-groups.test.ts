@@ -2,7 +2,7 @@
 // the view's group fields, and a card's drop as one change with one Undo.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { columnMoved, hasFilter, rowColour, type ColourRule, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
+import { columnMoved, filterTree, hasFilter, rowColour, type ColourRule, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, viewBoardCalculation, databaseRows, calcChoices, canWrap, calendarRows, cellValue, columnCalc, conditionHolds, inView, lostOnTypeChange, dateProperties, groupableProperties, groupValue, movedDate, startOfWeek, viewDateBy, newRowValues, noGroupKey, valueText, viewGroupBy, viewCalculations, viewGroups, viewColumns, viewRows, type CalcKind, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { canHoldGroup, moveIntoGroup, moveIntoNewGroup, moveOutOfGroup, moveRulesOut, removeGroup, treeFields, withoutRule } from '../src/domain/filter-tree.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
@@ -1064,5 +1064,21 @@ test('filter groups: the sheet\'s moves keep every rule, and no group stands emp
   assert.deepEqual(removeGroup({ rules: [a], groups: [{ rules: [b] }] }, 0), { rules: [a] })
   assert.equal(canHoldGroup([]), true); assert.equal(canHoldGroup([0]), true); assert.equal(canHoldGroup([0, 0]), false)
   assert.deepEqual(treeFields({ any: true, rules: [a] }), { filter: [a], filterAny: true, filterGroups: [] })
+})
+
+test('filter groups: a calendar move, this page\'s day in a group, and the opening day read the same tree (§3)', () => {
+  const h = reading()
+  const novels = { by: 'kind', op: 'isAnyOf', value: ['novel'] } as const
+  const onPageDay = { by: 'due', op: 'is', value: { relative: 'pageDate' } } as const
+  const tree = view({ filter: [novels], filterGroups: [{ any: true, rules: [onPageDay] }] })
+  assert.deepEqual(viewRows(h.ws, 'list', tree, { ...ctx, pageDate: '2026-10-25' }).map(r => r.id), ['dune'])
+  // A page with no day of its own: that rule can't be read, so its group counts neither way, and the top rule decides.
+  assert.deepEqual(viewRows(h.ws, 'list', tree, ctx).map(r => r.id), ['dune', 'emma'])
+  // A row moved out of what a group holds reads as hidden, as a board's or calendar's move checks.
+  const dune = h.page('dune')
+  assert.equal(inView(h.db(), dune, { ...tree }, { ...ctx, pageDate: '2026-10-25' }), true)
+  assert.equal(inView(h.db(), { ...dune, values: { ...dune.values, due: { start: '2026-10-26' } } } as Page, { ...tree }, { ...ctx, pageDate: '2026-10-25' }), false)
+  // The tree is what's looked through for this page's day, at any layer.
+  assert.ok(JSON.stringify(filterTree(tree)).includes('"relative":"pageDate"'))
 })
 
