@@ -145,7 +145,7 @@ export type Action =
   /** A tap on a button: every step in one operation (buttons.md §4). Its `at` and `today` are the tap's, kept by a retry. */
   | { type: "run-button"; pageId: string; blockId: string; stepsKey: string; expectedContent: string; at: string; today: LocalDate }
   /** A new thread on the page, or with `threadId` a reply on one. */
-  | { type: "add-comment"; pageId: string; threadId: string; commentId: string; body: string; at: string }
+  | { type: "add-comment"; pageId: string; threadId: string; commentId: string; body: string; at: string; anchor?: import("./comments.ts").CommentAnchor }
   | { type: "edit-comment"; threadId: string; commentId: string; body: string; version: number; at: string }
   | { type: "delete-comment"; threadId: string; commentId: string; version: number }
   | { type: "resolve-thread"; threadId: string; resolved: boolean; version: number; at: string }

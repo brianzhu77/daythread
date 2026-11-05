@@ -1,4 +1,7 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
+import { quoteLimit } from '../domain/comments'
+import { CommentMarks } from './comment-marks'
+import { openComments } from './comments-pane'
 import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
 import { type ComponentProps, type ReactElement, createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
@@ -363,7 +366,7 @@ function PageRefChip({ pageId, refId, newTitle }: { pageId: string; refId: strin
  * ⌘/ on a line without a ⋯: the row menu's look, with its one item, under the line's box at its text start; above it
  * when there's no room below; never partly off the visible area (Jazz states §1). Esc or a click away closes it.
  */
-function LineMenu({ anchor, onClose, onCopy }: { anchor: { top: number; bottom: number; left: number }; onClose: (refocus: boolean) => void; onCopy: () => void }) {
+function LineMenu({ anchor, onClose, onCopy, onComment }: { anchor: { top: number; bottom: number; left: number }; onClose: (refocus: boolean) => void; onCopy: () => void; onComment?: () => void }) {
   const ref = useRef<HTMLDivElement>(null)
   const close = useRef(onClose); close.current = onClose
   const [at, setAt] = useState<{ top: number; left: number } | null>(null)
@@ -386,9 +389,17 @@ function LineMenu({ anchor, onClose, onCopy }: { anchor: { top: number; bottom: 
   return createPortal(<div ref={ref} className="app-menu line-menu" role="menu" aria-label="Line actions" style={{ position: 'fixed', top: at?.top ?? anchor.bottom + 4, left: at?.left ?? anchor.left, visibility: at ? 'visible' : 'hidden' }}
     onKeyDown={e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(true) } }}>
     <button type="button" role="menuitem" onClick={onCopy}>Copy link to line</button>
+    {onComment && <button type="button" role="menuitem" onClick={onComment}>Comment</button>}
   </div>, document.body)
 }
 /** B35: a failure the network caused (worth retrying), not a refusal from the server (which would refuse again). */
+/** The words a comment on this line quotes, or what it is if it has none. */
+function lineQuote(node: EditorNode): string {
+  const words = inlineText(node.content).trim()
+  if (words) return words.slice(0, quoteLimit)
+  return node.type === 'image' ? 'A picture' : node.type === 'file' ? 'A file' : node.type === 'database' ? 'A database' : node.type === 'pageLink' ? 'A page' : node.type === 'table' ? 'A table' : node.type === 'button' ? String(node.props?.label || 'A button') : ''
+}
+const hostOfMarks = (editor: { domElement?: Element | null }) => editor.domElement?.closest<HTMLElement>('.continuous-editor') ?? null
 /** The host without `www.`, for the card's quiet domain. */
 function hostLabel(url: string): string {
   try { return new URL(url).hostname.replace(/^www\./, '') } catch { return '' }
@@ -2502,13 +2513,22 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const choose = (intent: RowIntent) => { selected.current = []; setSelectionLabel(''); void rowAct(id, t, intent) }
     const keep = (e: { preventDefault(): void }) => e.preventDefault()
     const [tomorrow, ...rest] = model.primary[0]?.label === 'Tomorrow' ? model.primary : [null, ...model.primary]
-    const more = [...menuGroups(model, todayIso(), choose).filter(g => g.title !== 'Another day').map(g => ({ ...g, items: g.items.filter(i => !model.primary.some(p => p.label === i.label) && !i.label.startsWith('Tomorrow')) })).filter(g => g.items.length), { items: [{ label: 'Copy', onSelect: () => { selected.current = []; setSelectionLabel(''); copyRow(id) } }, ...(lineLinkTarget(id) ? [{ label: 'Copy link to line', onSelect: () => { selected.current = []; setSelectionLabel(''); copyLineLink(id) } }] : [])] }, { items: [{ label: 'Delete line', danger: true, onSelect: deleteSelected }] }]
+    const more = [...menuGroups(model, todayIso(), choose).filter(g => g.title !== 'Another day').map(g => ({ ...g, items: g.items.filter(i => !model.primary.some(p => p.label === i.label) && !i.label.startsWith('Tomorrow')) })).filter(g => g.items.length), { items: [{ label: 'Comment', onSelect: () => commentOn(id) }, { label: 'Copy', onSelect: () => { selected.current = []; setSelectionLabel(''); copyRow(id) } }, ...(lineLinkTarget(id) ? [{ label: 'Copy link to line', onSelect: () => { selected.current = []; setSelectionLabel(''); copyLineLink(id) } }] : [])] }, { items: [{ label: 'Delete line', danger: true, onSelect: deleteSelected }] }]
     return <div className="editor-selection-bar is-row-actions" onPointerDown={keep}>
       {tomorrow && <button type="button" onClick={() => choose(tomorrow.intent)}>{tomorrow.label}</button>}
       {model.anotherDay && <RowMenu label="Another day" triggerClass="editor-bar-button" trigger="Another day" groups={menuGroups({ ...model, groups: model.groups.filter(g => g.title === 'Another day') }, todayIso(), choose)} />}
       {rest.map(p => p && <button key={p.label} type="button" onClick={() => choose(p.intent)}>{p.label}</button>)}
       <RowMenu label="More actions" triggerClass="editor-bar-button" groups={more} />
     </div>
+  }
+  /** Comments on a line (comments.md §6, step 2). A synced line's thread belongs to the shared record, which comes on its own; it's on the page until then. */
+  const canComment = (id: string) => { const type = editor.getBlock(id)?.type; return Boolean(type) && type !== syncedBlockType && !insideSyncedBlock(id) }
+  function commentOn(id: string) {
+    const block = editor.getBlock(id) as unknown as EditorNode | undefined
+    if (!block) return
+    selected.current = []; setSelectionLabel('')
+    const taskId = rowTaskId(block)
+    openComments(page.id, { composing: true, anchor: { blockId: id, quote: lineQuote(block), ...(taskId ? { taskId } : {}) } })
   }
   /** A11 §4 (Jazz §1): the line "Copy link to line" points at, or null where it isn't offered. */
   const lineLinkTarget = (blockId: string): LineTarget | null => {
@@ -2774,6 +2794,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         }
       }
       // Tab where nesting would leave the section does nothing (and keeps focus in the editor), as the toolbar's Indent.
+      // ⌘⇧M: the chosen block, or the one at the caret, or else the page (comments.md §2).
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault(); e.stopPropagation()
+        const id = selected.current[0] ?? editor.getTextCursorPosition().block.id
+        if (selected.current.length <= 1 && canComment(id)) commentOn(id); else openComments(page.id, { composing: true })
+        return
+      }
       if (e.key === 'Tab' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && !canIndent()) { e.preventDefault(); e.stopPropagation(); return }
       // A12 keyboard path (Lead b8ec39d5): ⌘/ (Ctrl+/), as Notion's block menu, opens the caret row's ⋯ menu; the
       // context-menu key and Shift+F10 too. Tab keeps indenting.
@@ -2877,6 +2904,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       onClose={() => { setPicker(null); editor.focus() }} />, document.body)}
     <DraftBands draft={draft} workspace={workspace} groups={groups} fills={draftReady ? fillAnchors(draft, draftShown) : []} />
     {createPortal(<EventRows rows={rows} page={page} workspace={workspace} pageEnd={!rowsAnchor.current || rowsAnchor.current.labelled || (rowsAnchor.current.afterId !== null && !editor.getBlock(rowsAnchor.current.afterId))} />, rowsHost)}
+    <CommentMarks pageId={page.id} host={() => hostOfMarks(editor)} onChange={(run: () => void) => editor.onChange(run) as () => void} />
     <ButtonEditorHost pageId={page.id} schema={schema as never} />
     <ButtonPage.Provider value={buttonPage}>
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} shadCNComponents={doneInputs}>
@@ -2965,8 +2993,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       {pausedFor && !saveLineVisible && <div className="editor-unsaved-line" role="status">{pausedFor}</div>}
       {unsaved && !saveLineVisible && <div className="editor-unsaved-line"><span className="editor-unsaved-dot" aria-hidden="true" />{unsavedText}</div>}
       {selectionLabel && chosen.length > 0 && <style>{chosenRule(chosen)}</style>}
-      {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span>{selected.current.length === 1 && editor.getBlock(selected.current[0]!)?.type === 'task' && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyRow(id) }}>Copy</button>}{selected.current.length === 1 && lineLinkTarget(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyLineLink(id) }}>Copy link</button>}{!selected.current.some(id => editor.getBlock(id)?.type === syncedBlockType) && <button onPointerDown={e => e.preventDefault()} onClick={syncSelected}>Sync</button>}<button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
-      {lineMenu && <LineMenu anchor={lineMenu.anchor} onClose={closeLineMenu} onCopy={() => { const id = lineMenu.blockId; closeLineMenu(true); copyLineLink(id) }} />}
+      {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span>{selected.current.length === 1 && editor.getBlock(selected.current[0]!)?.type === 'task' && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyRow(id) }}>Copy</button>}{selected.current.length === 1 && lineLinkTarget(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyLineLink(id) }}>Copy link</button>}{!selected.current.some(id => editor.getBlock(id)?.type === syncedBlockType) && <button onPointerDown={e => e.preventDefault()} onClick={syncSelected}>Sync</button>}{selected.current.length === 1 && canComment(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => commentOn(selected.current[0]!)}>Comment</button>}<button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
+      {lineMenu && <LineMenu anchor={lineMenu.anchor} onClose={closeLineMenu} onCopy={() => { const id = lineMenu.blockId; closeLineMenu(true); copyLineLink(id) }} {...(canComment(lineMenu.blockId) ? { onComment: () => { const id = lineMenu.blockId; closeLineMenu(false); commentOn(id) } } : {})} />}
     {pastedChecklistIds.length > 0 && <div className="editor-paste-notice" role="status">{pastedChecklistIds.length} checklist {pastedChecklistIds.length === 1 ? 'line' : 'lines'} · <button onClick={() => {
       let count = 0, planned = 0
       editor.transact(tr => {

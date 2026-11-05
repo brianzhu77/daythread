@@ -2833,6 +2833,18 @@ body:has(.button-editor) #bn-suggestion-menu { max-height: min(420px, 45vh); }
   .database-menu .button-editor-done { min-height: 36px; height: 36px; }
 }
 /* Comments (comments.md §2). Nothing shows until there's one. */
+.comment-mark { position: absolute; z-index: 2; display: inline-grid; place-items: center; width: 16px; height: 16px; min-height: 0; padding: 0; border: 0; background: none; color: var(--ink-3); cursor: pointer; touch-action: manipulation; }
+.comment-mark svg { width: 14px; height: 14px; }
+@media (hover: hover) { .comment-mark:hover { color: var(--ink); } }
+/* A finger's reach around a small mark, with nothing drawn. */
+/* Lines sit about 30 px apart, so it stops short of the ones above and below. */
+@media (max-width: 899px) { .comment-mark::after { content: ''; position: absolute; inset: -7px -12px; } }
+.comment-quote { display: block; width: 100%; margin: 0 0 4px; padding: 0 0 0 8px; border: 0; border-left: 2px solid var(--line); background: none; color: var(--ink-2); font: inherit; font-size: var(--text-caption); line-height: 1.4; text-align: left; overflow-wrap: anywhere; }
+button.comment-quote { cursor: pointer; }
+@media (hover: hover) { button.comment-quote:hover { color: var(--ink); } }
+.comment-quote.is-gone { color: var(--ink-3); }
+.comment-quote.is-composing { margin: 8px 12px 4px; width: auto; }
+.is-comment-target > .bn-block { background: var(--chosen-fill); transition: background 400ms; }
 .comment-count { display: inline-flex; flex: none; align-items: center; gap: 3px; min-height: 28px; padding: 0 6px; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); cursor: pointer; }
 .comment-count svg { width: 16px; height: 16px; }
 .crumbs .comment-count { margin-left: auto; }
