@@ -124,7 +124,7 @@ function IconPicker({ pageId, anchor }: { pageId: string; anchor: { left: number
   }
   const cell = (icon: string, label: string) => <button key={`${icon}-${label}`} type="button" className="icon-picker-cell" aria-label={label} onClick={() => pick(icon)}>{icon}</button>
   return createPortal(<div ref={panel} className={`icon-picker${phone ? ' is-sheet' : ''}`} role="dialog" aria-label="Choose an icon" onKeyDown={onKeyDown}
-    style={phone ? (keyboardTop !== null ? { bottom: window.innerHeight - keyboardTop } : undefined) : { left: place?.left ?? anchor.left, top: place?.top ?? anchor.bottom + 4, visibility: place ? 'visible' : 'hidden' }}>
+    style={phone ? (keyboardTop !== null ? { bottom: window.innerHeight - keyboardTop, height: Math.min(window.innerHeight * 0.6, (window.visualViewport?.height ?? window.innerHeight) - 8) } : undefined) : { left: place?.left ?? anchor.left, top: place?.top ?? anchor.bottom + 4, visibility: place ? 'visible' : 'hidden' }}>
     <div className="icon-picker-top">
       <input ref={search} className="icon-picker-search" type="text" aria-label="Search emoji" placeholder="Search" value={query} onChange={e => setQuery(e.target.value)} onCompositionStart={() => setComposing(true)} onCompositionEnd={e => { setComposing(false); setQuery(e.currentTarget.value) }} />
       <button type="button" className="app-link" disabled={!emoji} onClick={random}>Random</button>
