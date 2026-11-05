@@ -2528,7 +2528,7 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .bn-shadcn .bn-editor a.body-file-name { color: inherit; text-decoration: underline; text-decoration-color: var(--line); }
 .body-file-size { flex: none; color: var(--ink-3); font-size: var(--text-meta); }
 /* A block's status belongs to it: it sits right under the row, closer than the next block is. */
-.body-file-line { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; padding: 2px 0 0; color: var(--ink-2); font-size: var(--text-meta); }
+.body-file-line { flex-basis: 100%; width: 0; min-width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; padding: 2px 0 0; color: var(--ink-2); font-size: var(--text-meta); }
 .body-file-line button { min-height: 0; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; text-decoration-color: var(--line); cursor: pointer; }
 /* A track, so a picture that hasn't moved yet still reads as on its way, on a dark photo as on a light one. */
 .body-file-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: color-mix(in srgb, var(--app-surface) 75%, transparent); }
@@ -2536,7 +2536,9 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 /* A caption is a line under the picture: read and written in the same place, in the same words' size. */
 [data-content-type="image"] .bn-file-caption { color: var(--ink-2); font-size: var(--text-meta); cursor: text; }
 [data-content-type="image"]:has(.body-image-caption) .bn-file-caption { display: none; }
-.body-image-caption { flex-basis: 100%; min-width: 0; min-height: 0; padding: 4px 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); }
+/* No width of its own (or the status's), or a picture narrower than the words would grow to fit them. */
+.body-image-caption { flex-basis: 100%; width: 0; min-width: 100%; min-height: 0; padding: 4px 0; border: 0; border-radius: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); }
+.body-image-caption, .body-image-caption:focus, .body-image-caption:focus-visible { box-shadow: none; outline: none; }
 .body-image-caption::placeholder { color: var(--ink-3); }
 [data-content-type="image"] .bn-visual-media-wrapper { flex-wrap: wrap; }
 [data-content-type="file"] .bn-file-block-content-wrapper { width: 100%; }

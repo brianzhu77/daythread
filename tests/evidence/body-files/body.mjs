@@ -456,6 +456,7 @@ await scenario('A caption is written in place, under the picture: Enter goes to 
   await page.locator('.bn-visual-media').first().click(); await wait(500)
   await page.locator('.bn-formatting-toolbar [aria-label="Caption"]').click(); await wait(300)
   const r = { inBlock: await page.locator('[data-content-type="image"] .body-image-caption').count(), focused: await field.evaluate(el => el === document.activeElement), popover: await page.locator('input[placeholder="Edit caption"]').count() }
+  r.outline = await field.evaluate(el => getComputedStyle(el).outlineStyle)
   await page.keyboard.type('Written in place', { delay: 30 }); await wait(200)
   r.keptTyping = await field.inputValue()
   await page.keyboard.press('Enter'); await wait(1400)
@@ -470,9 +471,19 @@ await scenario('A caption is written in place, under the picture: Enter goes to 
   await page.keyboard.type(' again'); await page.keyboard.press('Escape'); await wait(1200)
   r.afterEsc = image().props.caption
   await page.locator('.bn-file-caption').click(); await wait(300)
-  await page.keyboard.type(' and more'); await page.locator('.bn-inline-content', { hasText: 'First line' }).click(); await wait(1400)
+  await page.keyboard.type(' and more'); await page.locator('.bn-inline-content', { hasText: 'Third line' }).click(); await wait(1400)
   r.afterAway = image().props.caption
   r.ok = r.inBlock === 1 && r.focused && r.popover === 0 && r.keptTyping === 'Written in place' && r.saved === 'Written in place' && r.gone === 0 && r.below === 'Next' && r.reopened === 'Written in place' && r.oneCaption === 0 && r.afterEsc === 'Written in place' && r.afterAway === 'Written in place and more'
+  return r
+})
+await scenario('A narrow picture keeps its size while its caption is written, and with a status under it', async page => {
+  await caretOn(page, 'Second line'); await paste(page, [png]); await wait(1300)
+  const width = () => page.locator('.bn-visual-media').first().evaluate(el => Math.round(el.getBoundingClientRect().width))
+  const r = { before: await width() }
+  await page.locator('.bn-visual-media').first().click(); await wait(500)
+  await page.locator('.bn-formatting-toolbar [aria-label="Caption"]').click(); await wait(300)
+  r.writing = await width()
+  r.ok = r.before === r.writing
   return r
 })
 await scenario('A file has no caption in its bar, and its status sits by its row: closer than the next block, and its name said once', async page => {
