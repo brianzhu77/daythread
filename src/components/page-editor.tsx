@@ -25,7 +25,7 @@ import { SyncedEditorActions, SyncedLabel, type SyncedActions } from './synced-l
 import { databaseSource, withTodos } from '../domain/todos-source'
 import { DatabasePicker } from './database-linked'
 import { holdKeyboard } from './keyboard'
-import { blockPlace, editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, rowTaskId, sectionRange, withBlockBack, type BlockPlace, type EditorNode } from '../domain/editor-document'
+import { buttonBlockType, blockPlace, editorSeed, flatNodes, inlineText, pageContentKey, pageNodes, rowTaskId, sectionRange, withBlockBack, type BlockPlace, type EditorNode } from '../domain/editor-document'
 import { mergeDraft } from '../domain/draft-merge'
 import { announceSave, changedBy, claim, clearOwn, landedSave, listenForSaves, orphans, ownClaimed, readOwn, savedForMe, sweepClaims, touchOwn, touchTab, withoutSaved, writeOwn, type DraftSlot } from './draft-slots'
 import { applyCommand, plannedOn, taskRows as rowsOfTask, urlOwner } from '../domain/workspace'
@@ -91,6 +91,12 @@ const database = createReactBlockSpec({ type: 'database', propSchema: { pageId: 
   render: ({ block }) => <DatabaseInPage blockId={block.id} pageId={block.props.pageId} viewJson={block.props.view} />,
   toExternalHTML: ({ block }) => <p><a href={`/pages?page=${encodeURIComponent(block.props.pageId)}`}>Database</a></p>,
 })()
+// A button (docs/design/buttons.md §5): known to the editor before anything can make one, so a build at the rollback floor
+// keeps it whole. Its steps are one opaque prop, so what they can do can grow without the floor having to read them. Here a tap does nothing.
+const button = createReactBlockSpec({ type: buttonBlockType, propSchema: { label: { default: '' }, steps: { default: '' } }, content: 'none' }, {
+  render: ({ block }) => <div className="editor-button-line" contentEditable={false}><span className="editor-button">{block.props.label || 'Button'}</span></div>,
+  toExternalHTML: ({ block }) => <p>{block.props.label || 'Button'}</p>,
+})()
 // A synced block (docs/design/synced-blocks.md): the lines shown in several places, as this block's children. Known to the
 // editor before anything can make one, so a build at the rollback floor keeps it whole (docs/plan/b21-sizing.md).
 const syncedBlock = createReactBlockSpec({ type: syncedBlockType, propSchema: { syncId: { default: '' }, rev: { default: 0 }, key: { default: '' }, roles: { default: '' } }, content: 'none' }, {
@@ -147,7 +153,7 @@ const dateMention = createReactInlineContentSpec({ type: 'dateMention', propSche
   render: ({ inlineContent: { props } }) => <DateChipInPage date={props.date} time={props.time || null} />,
   toExternalHTML: ({ inlineContent: { props } }) => <span>{mentionText({ date: props.date, time: props.time || null }, null)}</span>,
 })
-const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, image: bodyImageSpec(), file: bodyFileSpec(), task, sourceChecklist, pageLink, database, [syncedBlockType]: syncedBlock }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef, dateMention } })
+const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, image: bodyImageSpec(), file: bodyFileSpec(), task, sourceChecklist, pageLink, database, button, [syncedBlockType]: syncedBlock }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef, dateMention } })
 // B4 (F13): a plain line is "Body" and the divider is "Separator", in the / menu and the toolbar's line-type menu alike.
 /** The blocks the `/` menu offers from BlockNote's list, each with this app's icon. */
 const slashIcons: Record<string, ReactElement> = {

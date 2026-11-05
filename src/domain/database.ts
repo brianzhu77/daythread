@@ -81,6 +81,12 @@ export function templateValues(template: Pick<Page, "values">): NonNullable<Page
 export const calcKinds = ["countAll", "countValues", "countUnique", "countEmpty", "countNotEmpty", "percentEmpty", "percentNotEmpty", "sum", "average", "median", "min", "max", "range", "earliest", "latest", "dateRange", "checked", "unchecked", "percentChecked", "percentUnchecked", "countPerGroup", "percentPerGroup"] as const;
 export type CalcKind = (typeof calcKinds)[number];
 export interface BoardCalculation { by: string; kind: CalcKind }
+/** Rules that combine on their own, inside a view's filter (filter-groups.md). */
+export interface FilterGroup {
+  any?: true;
+  rules: Condition[];
+  groups?: FilterGroup[];
+}
 export interface View {
   id: string;
   name: string;
@@ -94,6 +100,8 @@ export interface View {
   filter: Condition[];
   /** "Any rule matches" (design §7.3, R3-4). */
   filterAny?: true;
+  /** Groups below the top-level rules (filter-groups.md). A build that doesn't know them applies `filter` alone, and keeps this. */
+  filterGroups?: FilterGroup[];
   /** What `+ New` starts from in this view, over the database's own (R3-12). */
   defaultTemplate?: string;
   /** With sub-items on: nested in toggles (table, list) or flat; and which rows. Absent: nested, both. */
@@ -218,6 +226,8 @@ function localWall(iso: string): string {
 }
 export const databaseBlockType = "database";
 // To-dos have their own limit, below rows': each one's plan rewrites its page and re-reads the workspace, as a single edit does. On a 128 MB heap Planned took 500 and ran out at 1,000 (Roadbuster).
+/** Filter groups nest to this many layers, counting the top one (filter-groups.md §2, as Notion). */
+export const filterLayers = 3;
 export const limits = { formula: 10_000, properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 10_000, todosAtOnce: 500, repeatsAtOnce: 200, hiddenGroups: 200, prefix: 20 } as const;
 
 export const isDatabase = (p: Page | undefined | null): p is Page & { database: Database } => Boolean(p?.database);
@@ -599,14 +609,24 @@ export function rowColour(db: Database, view: View, row: Page, context: ViewCont
   }
   return null;
 }
-export function rowMatches(db: Database, row: Page, filter: readonly Condition[], context: ViewContext, any = false): boolean {
-  // A filter on a deleted property is shown struck through and ignored (design §13), as is one that can't be read.
-  const results = filter.map((c) => { const property = propertyOf(db, c.by); return property ? conditionHolds(property, c, cellValue(db, row, c.by), context) : null; }).filter((r) => r !== null);
-  // With nothing left to read, no rule hides a row, under either.
-  return any && results.length ? results.includes(true) : !results.includes(false);
+/** True or false, or null when nothing in it can be read: a rule on a deleted property or with no value, and a group of only those, count neither way (design §13). */
+function groupHolds(db: Database, row: Page, node: FilterGroup, context: ViewContext): boolean | null {
+  const results = [
+    ...node.rules.map((c) => { const property = propertyOf(db, c.by); return property ? conditionHolds(property, c, cellValue(db, row, c.by), context) : null; }),
+    ...(node.groups ?? []).map((g) => groupHolds(db, row, g, context)),
+  ].filter((r) => r !== null);
+  if (!results.length) return null;
+  return node.any ? results.includes(true) : !results.includes(false);
 }
-/** Whether a row shows in this view, by its rules and how they combine. */
-export const inView = (db: Database, row: Page, view: Pick<View, "filter" | "filterAny">, context: ViewContext): boolean => rowMatches(db, row, view.filter, context, view.filterAny);
+/** A view's rules as one group, the top of its tree. */
+export const filterTree = (view: Pick<View, "filter" | "filterAny" | "filterGroups">): FilterGroup => ({ ...(view.filterAny ? { any: true as const } : {}), rules: view.filter, ...(view.filterGroups?.length ? { groups: view.filterGroups } : {}) });
+/** Whether a row shows in this view, by its rules and how they combine. With nothing left to read, no rule hides a row. */
+export const inView = (db: Database, row: Page, view: Pick<View, "filter" | "filterAny" | "filterGroups">, context: ViewContext): boolean => groupHolds(db, row, filterTree(view), context) !== false;
+export const rulesIn = (groups: readonly FilterGroup[] | undefined): Condition[] => (groups ?? []).flatMap((g) => [...g.rules, ...rulesIn(g.groups)]);
+const groupsIn = (groups: readonly FilterGroup[] | undefined): number => (groups ?? []).reduce((n, g) => n + 1 + groupsIn(g.groups), 0);
+export const hasFilter = (view: Pick<View, "filter" | "filterGroups">): boolean => view.filter.length > 0 || Boolean(view.filterGroups?.length);
+/** How many rules a view holds, in all layers: the limit counts them all. */
+export const ruleCount = (view: Pick<View, "filter" | "filterGroups">): number => view.filter.length + rulesIn(view.filterGroups).length;
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 /** Sort keys compare within one type: text by collation, numbers and dates by value, options by their order. Empty is never compared. */
@@ -703,34 +723,49 @@ export function viewColumns(db: Database, view: View): { property: Property; wid
   return view.columns.flatMap((c) => { const property = db.properties.find((p) => p.id === c.id); return property ? [{ property, ...(c.width !== undefined ? { width: c.width } : {}), ...(c.wrap ? { wrap: true as const } : {}) }] : []; });
 }
 
+/** The one value that meets this rule, for a new row, if there is one. */
+function valueForRule(property: Property, c: Condition, context: ViewContext): Json | undefined {
+  const want = c.value;
+  let value: Json | undefined;
+  if (isTextType(property.type)) { if (c.op === "is" && typeof want === "string") value = want; }
+  else if (property.type === "number") { if (c.op === "eq" && typeof want === "number") value = want; }
+  else if (property.type === "select" || property.type === "status") { const ids = strings(want); if (["isAnyOf", "is"].includes(c.op) && ids.length === 1) value = ids[0]; }
+  else if (property.type === "multiSelect" || property.type === "relation") { const ids = strings(want); if (["isAnyOf", "contains"].includes(c.op) && ids.length === 1) value = [ids[0]!]; }
+  else if (property.type === "checkbox") { if (c.op === "is" && want === true) value = true; }
+  else if (property.type === "date") { const day = c.op === "is" ? resolveDateRef(want, context) : null; if (day) value = { start: day }; }
+  if (value === undefined) return undefined;
+  try { return storedValue(property, value); } catch { return undefined; }
+}
+
 /**
  * A new row in a filtered view (design §7.4): the values that keep it in sight where one value fits a condition, and
  * whether the row will be shown at all ("Added · hidden by this view's filter · Show" when not).
  */
 export function newRowValues(db: Database, view: View, context: ViewContext, groupKey?: string): { title: string; values: RawValues; visible: boolean } {
   let title = "";
-  const values: RawValues = {};
-  const probeOf = (t: string, v: RawValues) => newRowProbe(db, t, v);
-  // Under "any", one rule's value is enough, and only if it makes the row show; if it already shows, it needs none.
-  const any = Boolean(view.filterAny);
-  if (!any || !rowMatches(db, probeOf("", {}), view.filter, context, true)) for (const c of view.filter) {
-    const property = propertyOf(db, c.by);
-    if (!property || isReadOnly(property)) continue;
-    const want = c.value;
-    let value: Json | undefined;
-    if (isTextType(property.type)) { if (c.op === "is" && typeof want === "string") value = want; }
-    else if (property.type === "number") { if (c.op === "eq" && typeof want === "number") value = want; }
-    else if (property.type === "select" || property.type === "status") { const ids = strings(want); if (["isAnyOf", "is"].includes(c.op) && ids.length === 1) value = ids[0]; }
-    else if (property.type === "multiSelect" || property.type === "relation") { const ids = strings(want); if (["isAnyOf", "contains"].includes(c.op) && ids.length === 1) value = [ids[0]]; }
-    else if (property.type === "checkbox") { if (c.op === "is" && want === true) value = true; }
-    else if (property.type === "date") { const day = c.op === "is" ? resolveDateRef(want, context) : null; if (day) value = { start: day }; }
-    if (value === undefined) continue;
-    try { value = storedValue(property, value); } catch { continue; }
-    if (value === undefined) continue;
-    if (any && !rowMatches(db, property.id === titleId ? probeOf(value as string, {}) : probeOf("", { [property.id]: value }), view.filter, context, true)) continue;
-    if (property.id === titleId) title = value as string; else values[property.id] = value;
-    if (any) break;
-  }
+  let values: RawValues = {};
+  const fits = (node: FilterGroup, t: string, v: RawValues) => groupHolds(db, newRowProbe(db, t, v), node, context) !== false;
+  // Under "any", one value is enough, and only if it makes that part hold; if it already holds, it needs none.
+  const fill = (node: FilterGroup): void => {
+    if (node.any && fits(node, title, values)) return;
+    for (const c of node.rules) {
+      const property = propertyOf(db, c.by);
+      const value = property && !isReadOnly(property) ? valueForRule(property, c, context) : undefined;
+      if (value === undefined) continue;
+      const isTitle = property!.id === titleId;
+      if (node.any && !fits(node, isTitle ? (value as string) : title, isTitle ? values : { ...values, [property!.id]: value })) continue;
+      if (isTitle) title = value as string; else values = { ...values, [property!.id]: value };
+      if (node.any) return;
+    }
+    for (const group of node.groups ?? []) {
+      const before = { title, values };
+      fill(group);
+      if (!node.any) continue;
+      if (fits(node, title, values)) return;
+      ({ title, values } = before);
+    }
+  };
+  fill(filterTree(view));
   // A row added under a group starts with that group's value, even where the filter wants another (then it's hidden, and the notice says so).
   const section = groupKey === undefined ? undefined : splitSection(groupKey);
   const grouped = section ? viewGroupBy(db, view) : null;
@@ -951,7 +986,7 @@ export type DatabaseChange =
   | { kind: "duplicateProperty"; propertyId: string; newId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; cardImage?: string | null; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; openIn?: "center" | "side" | null; colourRules?: ColourRule[]; frozenThrough?: string | null; /** null: back to the default */ nameWidth?: number | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
+  | { kind: "updateView"; viewId: string; cardImage?: string | null; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; filterGroups?: FilterGroup[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; openIn?: "center" | "side" | null; colourRules?: ColourRule[]; frozenThrough?: string | null; /** null: back to the default */ nameWidth?: number | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
   /** null: none */
   | { kind: "setRepeat"; templateId: string; repeat: Omit<Repeat, "last" | "lastRan"> | null }
   | { kind: "setDefaultTemplate"; templateId: string | null }
@@ -1206,6 +1241,18 @@ function cleanFilter(db: Database, input: unknown, before: Condition[]): Conditi
     return { by: c.by, op: c.op, value: structuredClone(c.value) as Json };
   });
 }
+/** Three layers with the top one: a group, and a group inside it. */
+function cleanFilterGroups(db: Database, input: unknown, before: Condition[], layer = 2): FilterGroup[] {
+  if (!Array.isArray(input) || input.length > limits.conditions || layer > filterLayers) throw new DatabaseError("Invalid filter");
+  return input.map((g: FilterGroup) => {
+    if (!g || typeof g !== "object") throw new DatabaseError("Invalid filter");
+    const groups = g.groups === undefined ? [] : cleanFilterGroups(db, g.groups, before, layer + 1);
+    return { ...(g.any ? { any: true as const } : {}), rules: cleanFilter(db, g.rules, before), ...(groups.length ? { groups } : {}) };
+  });
+}
+function checkRuleCount(view: Pick<View, "filter" | "filterGroups">) {
+  if (ruleCount(view) > limits.conditions || groupsIn(view.filterGroups) > limits.conditions) throw new DatabaseError("Invalid filter");
+}
 function cleanLayout(input: unknown): ViewLayout {
   if (!(viewLayouts as readonly unknown[]).includes(input)) throw new DatabaseError("Unknown view type");
   return input as ViewLayout;
@@ -1262,7 +1309,7 @@ function cleanGroup(db: Database, input: GroupFields, layout: ViewLayout, before
 function cleanView(db: Database, input: View): View {
   if (!input) throw new DatabaseError("Unknown view type");
   const layout = cleanLayout(input.layout);
-  return { ...(input.subItemsDisplay === 'flat' ? { subItemsDisplay: 'flat' as const } : {}), ...(input.subItemsShow === 'parents' || input.subItemsShow === 'subs' ? { subItemsShow: input.subItemsShow } : {}), id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.wrapName ? { wrapName: true as const } : {}), ...(input.boardCalculation ? { boardCalculation: cleanBoardCalculation(db, input.boardCalculation) } : {}), ...(input.defaultTemplate ? { defaultTemplate: input.defaultTemplate } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...cleanGroup(db, input, layout, input) };
+  return { ...(input.subItemsDisplay === 'flat' ? { subItemsDisplay: 'flat' as const } : {}), ...(input.subItemsShow === 'parents' || input.subItemsShow === 'subs' ? { subItemsShow: input.subItemsShow } : {}), id: checkId(input.id), name: cleanName(input.name, "A view"), layout, columns: cleanColumns(db, input.columns), sort: cleanSort(db, input.sort, []), filter: cleanFilter(db, input.filter, []), ...(input.filterAny ? { filterAny: true as const } : {}), ...(input.filterGroups?.length ? { filterGroups: cleanFilterGroups(db, input.filterGroups, []) } : {}), ...(input.wrapName ? { wrapName: true as const } : {}), ...(input.boardCalculation ? { boardCalculation: cleanBoardCalculation(db, input.boardCalculation) } : {}), ...(input.defaultTemplate ? { defaultTemplate: input.defaultTemplate } : {}), ...(input.calculations && Object.keys(input.calculations).length ? { calculations: cleanCalculations(db, input.calculations) } : {}), ...cleanGroup(db, input, layout, input) };
 }
 function move<T extends { id: string }>(list: T[], id: string, beforeId: string | null): T[] {
   const item = list.find((x) => x.id === id);
@@ -1450,13 +1497,16 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     case "addView": {
       if (db.views.length >= limits.views) throw new DatabaseError("Too many views");
       const added = cleanView(db, change.view);
+      checkRuleCount(added);
       if (db.views.some((v) => v.id === added.id)) throw new DatabaseError("Invalid id");
       db.views.push(added);
       return `Added ${added.name}`;
     }
     case "updateView": {
       const old = view(change.viewId);
-      const { filterAny: _filterAny, cardImage: _cardImage, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, openIn: _openIn, colourRules: _colourRules, frozenThrough: _frozenThrough, nameWidth: _nameWidth, ...rest } = old;
+      // A rule on a deleted property stays where it's moved to: it's only new ones that must be on a column.
+      const heldRules = [...old.filter, ...rulesIn(old.filterGroups)];
+      const { filterAny: _filterAny, filterGroups: _filterGroups, cardImage: _cardImage, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, openIn: _openIn, colourRules: _colourRules, frozenThrough: _frozenThrough, nameWidth: _nameWidth, ...rest } = old;
       const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
       const group = cleanGroup(db, {
         groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
@@ -1485,14 +1535,16 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         ...(change.cardImage !== undefined ? (change.cardImage ? { cardImage: change.cardImage } : {}) : (old.cardImage ? { cardImage: old.cardImage } : {})),
         ...(change.columns !== undefined ? { columns: cleanColumns(db, change.columns) } : {}),
         ...(change.sort !== undefined ? { sort: cleanSort(db, change.sort, old.sort) } : {}),
-        ...(change.filter !== undefined ? { filter: cleanFilter(db, change.filter, old.filter) } : {}),
+        ...(change.filter !== undefined ? { filter: cleanFilter(db, change.filter, heldRules) } : {}),
         ...((change.filterAny ?? old.filterAny) ? { filterAny: true as const } : {}),
+        ...(() => { const groups = change.filterGroups === undefined ? old.filterGroups : cleanFilterGroups(db, change.filterGroups, heldRules); return groups?.length ? { filterGroups: groups } : {}; })(),
         ...((change.wrapName ?? old.wrapName) ? { wrapName: true as const } : {}),
         ...(() => { const chosen = change.boardCalculation === undefined ? old.boardCalculation : change.boardCalculation; return chosen ? { boardCalculation: cleanBoardCalculation(db, chosen) } : {}; })(),
         ...(() => { const template = change.defaultTemplate === undefined ? old.defaultTemplate : change.defaultTemplate; return template ? { defaultTemplate: template } : {}; })(),
         ...(() => { const calculations = change.calculations !== undefined ? cleanCalculations(db, change.calculations) : old.calculations; return calculations && Object.keys(calculations).length ? { calculations } : {}; })(),
         ...group,
       };
+      checkRuleCount(next);
       db.views[db.views.indexOf(old)] = next;
       return "View saved";
     }

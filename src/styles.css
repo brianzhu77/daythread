@@ -870,6 +870,9 @@ button.side-row { width: 100%; justify-content: flex-start; border: 0; backgroun
 /* B19: done rows grey out so open ones stand out. The strikethrough is one value, pending Brian's pick (2ea283a3). */
 :root { --done-decoration: line-through; }
 .continuous-editor .editor-task-title.task-done, .continuous-editor .editor-task-title.task-done * { color:var(--ink-3); text-decoration:var(--done-decoration); }
+/* A button block (docs/design/buttons.md): quiet, as nothing can make one or run it yet. */
+.editor-button-line { display: flex; min-height: 28px; align-items: center; }
+.editor-button { display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-pill); color: var(--ink-2); font-size: var(--text-ui); }
 /* B19: a nested line's text starts one step (24px) right of its parent's text. */
 .continuous-editor .bn-block-group .bn-block-group { margin-left:45px; }
 /* A synced block (states §3): its own row takes no line, and an outline in the margin holds room above and below it, so nothing
@@ -2032,7 +2035,11 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-menu:has(.formula-editor) { width: min(620px, calc(100vw - 16px)); max-height: min(80vh, 560px); }
 .formula-editor { display: flex; gap: 10px; min-height: 0; padding: 2px 6px 6px; }
 .formula-main { display: flex; flex: 1 1 60%; flex-direction: column; gap: 6px; min-width: 0; }
-.formula-field { box-sizing: border-box; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-row); background: transparent; color: var(--ink); font: inherit; resize: vertical; outline: none; }
+.formula-field-box { position: relative; display: flex; min-width: 0; }
+.formula-field { position: relative; z-index: 1; display: block; box-sizing: border-box; width: 100%; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-row); background: transparent; color: var(--ink); font: inherit; white-space: pre-wrap; overflow-wrap: break-word; resize: vertical; outline: none; }
+/* Behind the field, the same box and the same words, with only the tokens seen. Their fill reaches past the words by a shadow, as padding would move every word after them. */
+.formula-backing { position: absolute; inset: 0; box-sizing: border-box; padding: 6px 8px; overflow: hidden; border: 1px solid transparent; color: transparent; font: inherit; white-space: pre-wrap; overflow-wrap: break-word; pointer-events: none; }
+.formula-token { border-radius: 3px; background: var(--fill); box-shadow: 0 0 0 1px var(--fill); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .formula-field:focus, .formula-field:focus-visible { border-color: var(--blue); outline: none; box-shadow: none; }
 .formula-status { min-height: 1.4em; margin: 0; color: var(--ink); font-size: var(--text-meta); overflow-wrap: anywhere; }
 .formula-status.is-error { color: var(--formula-red); }
@@ -2081,6 +2088,26 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-rule button:not(.database-rule-remove) { min-height: 0; width: 28px; height: 28px; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
 .database-rule-remove { display: inline-grid; place-items: center; width: 28px; height: 28px; min-height: 0; margin-left: auto; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
 @media (hover: hover) { .database-rule-remove:hover, .database-menu-back:hover { background: var(--hover-dim); color: var(--ink); } }
+.database-filter-sheet { display: contents; }
+@media (min-width: 900px) { .database-menu:has(.database-filter-sheet) { width: 360px; } }
+/* A line, no box: three layers of boxes would be most of what's in the sheet. */
+.database-filter-group { display: flex; flex-direction: column; gap: 1px; margin: 4px 0 4px 6px; padding-left: 6px; border-left: 1px solid var(--line); }
+.database-filter-group .database-rule + .database-rule { border-top: 0; }
+.database-filter-group-head { display: flex; align-items: center; gap: 6px; padding: 6px 40px 0 10px; }
+.database-filter-group-head select { flex: none; width: auto; field-sizing: content; }
+.database-menu .database-filter-group-head .database-rule-more { justify-content: center; height: 28px; min-height: 0; margin-left: auto; }
+.database-rule-more { display: inline-grid; place-items: center; order: 2; height: 28px; margin-left: auto; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+.database-rule-more + .database-rule-remove { margin-left: 0; }
+.database-filter-sheet button.database-rule-remove:not([role=menuitem]):not([role=menuitemcheckbox]), .database-filter-sheet button.database-rule-more:not([role=menuitem]):not([role=menuitemcheckbox]) { width: 28px; }
+@media (hover: hover) { .database-rule-more:hover { background: var(--hover-dim); color: var(--ink); } }
+.database-rule-moves { display: flex; flex-direction: column; order: 4; width: 100%; padding: 2px 0; }
+/* In a rule's row it wraps below the value; a group's sits right under its head, above the rules. */
+.database-filter-group > .database-rule-moves { order: 0; }
+.database-menu .database-rule-moves button { display: block; width: 100%; height: auto; min-height: 32px; padding: 4px 8px; border: 0; border-radius: var(--radius-row); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; overflow-wrap: anywhere; }
+@media (hover: hover) { .database-rule-moves button:hover { background: var(--hover-dim); } }
+.database-filter-adds { display: flex; flex-wrap: wrap; gap: 4px; }
+.database-filter-full { padding: 8px 10px; color: var(--ink-3); }
+.database-menu .database-filter-adds button[role=menuitem] { flex: none; width: auto; }
 .database-rule-deleted, .database-filter-chip.is-deleted { text-decoration: line-through; color: var(--ink-3); }
 /* Properties (design §7.5): a switch, the name with its type, and a move. */
 .database-property-line { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 6px 0 10px; color: var(--ink); }
@@ -2150,8 +2177,14 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
   .csv-import .formula-actions button { min-height: 44px; }
   /* A sheet above the keyboard: the only panel opened to type at length (design §4). */
   .database-menu:has(.formula-editor) { bottom: var(--keyboard-lift, 0px) !important; width: auto; max-height: calc(85vh - var(--keyboard-lift, 0px)); }
+  .database-menu:has(.database-filter-sheet) { bottom: var(--keyboard-lift, 0px) !important; max-height: calc(85vh - var(--keyboard-lift, 0px)); }
+  .database-filter-sheet button.database-rule-remove:not([role=menuitem]):not([role=menuitemcheckbox]), .database-filter-sheet button.database-rule-more:not([role=menuitem]):not([role=menuitemcheckbox]) { width: 36px; height: 40px; }
+  .database-filter-group-head { padding-right: 48px; }
+  .database-menu .database-rule-moves button { min-height: 44px; }
+  .database-menu .database-filter-group-head .database-rule-more { height: 40px; }
+  .database-filter-adds .database-add-rule { min-height: 44px; }
   .formula-editor { flex-direction: column; padding: 2px 0 6px; }
-  .formula-field { font-size: 16px; }
+  .formula-field, .formula-backing { font-size: 16px; }
   .formula-actions button { min-height: 44px; }
   .database-menu .formula-item { min-height: 44px; }
   .formula-reference { max-height: 40vh; }

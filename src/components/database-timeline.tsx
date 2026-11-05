@@ -4,7 +4,7 @@
 // stay in reach in one line under the scale. Where the scale is left is this device's, as a calendar's month is.
 import { toast } from '@heroui/react'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react'
-import { columnCalc, databaseRows, inView, isEmptyValue, isReadOnly, propertyOf, readValue, startOfWeek, titleId, viewCalculations, viewColumns, viewDateBy, viewGroups, viewRows, type Database, type DateValue, type Json, type Property, type View, type ViewGroups } from '../domain/database.ts'
+import { columnCalc, databaseRows, filterTree, inView, isEmptyValue, isReadOnly, propertyOf, readValue, startOfWeek, titleId, viewCalculations, viewColumns, viewDateBy, viewGroups, viewRows, type Database, type DateValue, type Json, type Property, type View, type ViewGroups } from '../domain/database.ts'
 import { dayWidth, daysBetween, draggedBar, endAt, linkPath, snapMinutes, startAt, timelineBars, timelineUnits, timelineWeeks, viewDateEnd, type BarPart, type BarWrite, type TimelineBar, type TimelineUnit } from '../domain/timeline.ts'
 import { taskIdOfRow } from '../domain/todos-source'
 import type { LocalDate, Page, WeekStart, Workspace } from '../domain/types'
@@ -58,7 +58,7 @@ export function DatabaseTimeline({ workspace, db, view, changeView, blockId, pag
   const groupsNow = viewGroups(db.database, view, withPendingMoves(rows), shownRaw, weekStart)
   const unit: TimelineUnit = view.timelineUnit ?? 'day'
   // A view of this page's day opens on that day (§5); any other opens on today, wherever it sits.
-  const opensOn = pageDate && JSON.stringify(view.filter).includes('"relative":"pageDate"') ? pageDate : today
+  const opensOn = pageDate && JSON.stringify(filterTree(view)).includes('"relative":"pageDate"') ? pageDate : today
   const [limit, setLimit] = useState(cap)
   const [undatedOpen, setUndatedOpen] = useState(false)
   const wrap = useRef<HTMLDivElement>(null)
