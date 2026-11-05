@@ -1039,7 +1039,8 @@ export type CalcResult =
   | { type: "date"; value: string | null }
   | { type: "days"; value: number | null }
   | { type: "groups"; percent: boolean; value: { group: StatusGroup; count: number }[] };
-const clean = (n: number) => Math.round(n * 1e10) / 1e10;
+/** Takes off a float's tail, 0.1 + 0.2's, and only that: multiplying first would change a large number (Jazz, from #157). */
+const clean = (n: number) => (Number.isInteger(n) ? n : Number(n.toPrecision(15)));
 /**
  * One column over these rows: the rows a view shows, or one group's, all of them whatever "Show more" has drawn.
  * `read` lets a cell still saving count as it shows. No rows, or none with a value, has no average or date: null, not 0.

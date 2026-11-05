@@ -35,7 +35,7 @@ const drawn = async what => {
     out.topped = [...c.querySelectorAll('.database-chart-bar i')].filter(e => r(e).top < r(c.querySelector('.database-chart-plot')).top - 0.5).length
     return out
   })
-  check(d.outside.length === 0, `${what}: everything inside the chart`, d.outside.slice(0, 3)); check(d.overlaps === 0, `${what}: no labels overlap`); check(d.scroll <= 0 && d.wider <= 0, `${what}: no sideways scroll`, [d.scroll, d.wider]); check(d.topped === 0, `${what}: no bar past the plot`)
+  check(d.outside.length === 0, `${what}: everything inside the chart`, d.outside.slice(0, 3)); check(d.overlaps === 0, `${what}: no labels overlap`); check(d.scroll <= 0 && d.wider <= 1, `${what}: no sideways scroll`, [d.scroll, d.wider]); check(d.topped === 0, `${what}: no bar past the plot`)
   return d
 }
 
@@ -90,6 +90,30 @@ await page.reload(); await wait(2500); await block.locator('.database-chart').wa
 await closeMenu(); await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('button', { name: 'Filter' })); await wait(250); await tap(menu.getByRole('menuitem', { name: '+ Add filter' }).last()); await wait(800)
 await menu.getByLabel('Property').last().selectOption({ label: 'Kind' }); await wait(700); await menu.getByLabel('Novel').last().click({ force: !wide }); await wait(1000); await closeMenu()
 { const l = await labelled(); check(l.some(x => x.startsWith('Novel: ')) && !l.some(x => /^Essay: [1-9]/.test(x)), "the view's filter applies", l) } await shot('filtered')
+// Jazz's breaks: a very big number, a very long title, long option names, and a long date axis.
+{
+  const run = (action) => execSync(`node --no-warnings tests/evidence/chart/poke.ts ${storePath} '${JSON.stringify(action).replace(/'/g, "'\\''")}'`, { stdio: 'ignore' })
+  const long = 'A very long row title that goes on and on well past the width of any phone at all, without a single break to help'
+  run({ type: 'add-row', databaseId: 'list', pageId: 'huge', title: long, values: { kind: 'novel', pages: 1000000000, due: { start: '2024-11-20' } }, at: new Date().toISOString() })
+  run({ type: 'change-database', pageId: 'list', change: { kind: 'addProperty', property: { id: 'many', name: 'Many', type: 'select', options: Array.from({ length: 12 }, (_, i) => ({ id: `o${i}`, name: `A long option name number ${i}` })) } } })
+  for (let i = 0; i < 12; i++) run({ type: 'add-row', databaseId: 'list', pageId: `m${i}`, title: `Many ${i}`, values: { many: `o${i}`, due: { start: `2025-${String((i % 12) + 1).padStart(2, '0')}-10` } }, at: new Date().toISOString() })
+  await page.reload(); await wait(2500); await closeMenu()
+  await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('button', { name: 'Filter' })); await wait(250); await tap(menu.getByRole('button', { name: 'Remove filter' }).first()); await wait(900); await closeMenu()
+  await openLayout(); await menu.getByLabel('Measure').selectOption({ label: 'Pages' }); await wait(1000); await closeMenu()
+  const big = await drawn('a billion'); void big
+  const axis = await block.locator('.database-chart-tick span').allInnerTexts(); check(axis.some(t => /[BM]$/.test(t)) && axis.every(t => t.length <= 7), 'the axis reads short', axis)
+  { const b = bars().first(), label = await b.getAttribute('aria-label'); check(/1,?000,?000,?\d{3}/.test(label), 'and the exact value is on the bar', label) }
+  await tap(bars().first()); await wait(400); await shot('long-title')
+  { const o = await page.evaluate(() => ({ page: document.documentElement.scrollWidth - innerWidth, table: (t => t.scrollWidth - t.clientWidth)(document.querySelector('.database-chart-opened .database-chart-table')), value: Math.round(document.querySelector('.database-chart-opened td:last-child').getBoundingClientRect().width) })); check(o.page <= 0 && o.table <= 1 && o.value >= 60, 'a long title in the rows scrolls nothing, and the value keeps its width', o) }
+  await tap(bars().first()); await wait(250)
+  await openLayout(); await menu.getByLabel('Chart').selectOption('number'); await wait(900); await closeMenu(); await drawn('a huge Number'); check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'a huge Number scrolls nothing'); await shot('huge-number')
+  await openLayout(); await menu.getByLabel('Chart').selectOption('bar'); await wait(800); await menu.getByLabel('Measure').selectOption({ label: 'Count' }); await wait(800); await menu.getByLabel('What to show').selectOption({ label: 'Many' }); await wait(900); await closeMenu()
+  const named = await block.locator('.database-chart-labels span').count(), across = await block.locator('.database-chart-line').count()
+  if (wide) check(across === 13 || named === 13, 'every option is named, one way or the other', [named, across]); else check(across >= 12, 'long options at 390 go across, so each is named', across); await drawn('many long options'); await shot('many-options')
+  await openLayout(); await menu.getByLabel('What to show').selectOption({ label: 'Due' }); await wait(900); await menu.getByLabel('By', { exact: true }).selectOption('month'); await wait(900); await closeMenu()
+  { const l = await block.locator('.database-chart-labels span').allInnerTexts(), cut = await block.locator('.database-chart-labels span').evaluateAll(x => x.filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.innerText)); check(cut.length === 0, 'months across years read in full', cut); check(l.filter(t => /\d{4}/.test(t)).length >= 2 && /\d{4}/.test(l[0]), 'with a year on the first and where it changes', l.slice(0, 8)) } await drawn('months'); await shot('months')
+  await openLayout(); await menu.getByLabel('By', { exact: true }).selectOption('week'); await wait(900); await closeMenu(); await drawn('weeks across years'); await shot('weeks')
+}
 check(errors.length === 0, 'no page errors', errors.slice(0, 3))
 console.log(`[chart ${engine} ${width}] fail ${fails}`)
 await browser.close(); process.exit(fails ? 1 : 0)

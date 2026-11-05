@@ -112,10 +112,18 @@ export function axisLabels(points: readonly Pick<ChartPoint, 'key' | 'name'>[], 
     return { key: p.key, label: changed ? `${head}${isDay ? ',' : ''} ${y}` : head, full: p.name }
   })
 }
-/** The fewest labels' worth of thinning at which every label has room, at about 6.5 px a character in the axis's size. */
+const labelWidth = (label: string): number => label.length * 7 + 8
+/**
+ * How thinly the axis must label so each has room: a label has the bars up to the next, and the last sits against the edge with what the one before leaves.
+ * About 7 px a character in the axis's size.
+ */
 export function axisStep(points: readonly Pick<ChartPoint, 'key' | 'name'>[], band: number, dateAxis: boolean): number {
   if (!band) return 1
-  for (let step = 1; step < points.length; step++) if (Math.max(0, ...axisLabels(points, step, dateAxis).map(l => l.label.length * 6.5 + 8)) <= band * step) return step
+  for (let step = 1; step < points.length; step++) {
+    const widths = axisLabels(points, step, dateAxis).map(l => labelWidth(l.label)), last = widths.at(-1)!, before = widths.at(-2) ?? 0
+    const barsLeft = points.length - (widths.length - 1) * step
+    if (widths.slice(0, -1).every(w => w <= band * step) && last <= band * barsLeft + (band * step - before)) return step
+  }
   return Math.max(points.length, 1)
 }
 

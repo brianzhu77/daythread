@@ -93,8 +93,8 @@ function VerticalBars({ points, dateAxis, opened, onOpen, textOf }: { points: Ch
       </div>
     </div>
     <div className="database-chart-labels" aria-hidden="true">
-      {/* A label shown takes the room of the bars whose labels gave way to it. */}
-      {shown.map((l, i) => <span key={l.key} className={step > 1 ? (i === shown.length - 1 ? 'is-spanning is-last' : 'is-spanning') : undefined} title={l.full} style={{ flexGrow: step }}>{l.label}</span>)}
+      {/* A label shown takes the room of the bars whose labels gave way to it, so it stays under its own bar. The last reads in full against the edge. */}
+      {shown.map((l, i) => <span key={l.key} className={step > 1 ? (i === shown.length - 1 ? 'is-spanning is-last' : 'is-spanning') : undefined} title={l.full} style={step > 1 && i < shown.length - 1 ? { flex: `0 0 ${(step / points.length) * 100}%` } : undefined}>{l.label}</span>)}
     </div>
   </div>
 }

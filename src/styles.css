@@ -2105,11 +2105,11 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 @media (hover: hover) { .database-chart-bar:hover i, .database-chart-line:hover i { background: var(--ink-2); } }
 /* Too thin for a gap: one would round unevenly into stripes. */
 .database-chart-vertical.is-dense .database-chart-bar i { width: 100%; border-radius: 0; }
-.database-chart-labels { display: flex; margin-left: 44px; }
+.database-chart-labels { position: relative; display: flex; min-height: 16px; margin-left: 44px; }
 .database-chart-labels span { flex: 1 1 0; min-width: 0; padding: 0 2px; overflow: hidden; color: var(--ink-2); font-size: var(--text-caption); line-height: 16px; text-align: center; white-space: nowrap; text-overflow: ellipsis; }
 .database-chart-labels span.is-spanning { text-align: left; }
 /* However few bars are left for it, the last label reads in full, up against the edge. */
-.database-chart-labels span.is-last { flex: 0 0 auto; text-align: right; }
+.database-chart-labels span.is-last { position: absolute; right: 0; text-align: right; }
 .database-chart-horizontal { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .database-chart-line { display: grid; grid-template-columns: minmax(0, 30%) minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 28px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-ui); text-align: left; cursor: pointer; touch-action: manipulation; }
 .database-chart-line-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

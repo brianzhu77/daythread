@@ -97,8 +97,21 @@ test('an axis gives a year on the first label and where it changes, and thins so
   assert.deepEqual(axisLabels([{ key: '2025-12-29', name: 'x' }, { key: '2026-01-05', name: 'y' }, { key: '2026-01-12', name: 'z' }], 1, true).map(l => l.label), ['Dec 29, 2025', 'Jan 5, 2026', 'Jan 12'])
   assert.deepEqual(axisLabels([{ key: 'none', name: 'No value' }, { key: 'novel', name: 'Novel' }], 1, false).map(l => l.label), ['No value', 'Novel'])
   assert.equal(axisStep(months, 100, true), 1)
+  // The last has what's left after the one before: 'No value' on one bar, with a short label beside it, needs no thinning past that.
+  const days = Array.from({ length: 9 }, (_, i) => ({ key: `2026-03-0${i + 1}`, name: 'x' }))
+  assert.equal(axisLabels(days, axisStep(days, 30, true), true).length > 1, true)
   assert.ok(axisStep(months, 20, true) > 1)
   assert.equal(axisStep(months, 0, true), 1)
+})
+test('a calculation keeps a large number exact, and still cleans a float', () => {
+  const h = shelf()
+  h.run({ type: 'add-row', databaseId: 'list', pageId: 'big', title: 'big', values: { pages: 987654321 } as never, at })
+  const big = viewRows(h.ws, 'list', view({ filter: [{ by: 'pages', op: 'gt', value: 900000000 }] }), ctx)
+  assert.deepEqual(columnCalc(h.db(), big, 'pages', 'sum'), { type: 'number', value: 987654321 })
+  h.run({ type: 'set-values', pageId: 'big', values: { pages: 123456789.125 } as never, expected: {}, at } as never)
+  assert.equal((columnCalc(h.db(), [h.page('big')], 'pages', 'sum') as { value: number }).value, 123456789.125)
+  h.run({ type: 'add-row', databaseId: 'list', pageId: 'p1', title: 'p1', values: { pages: 0.1 } as never, at }); h.run({ type: 'add-row', databaseId: 'list', pageId: 'p2', title: 'p2', values: { pages: 0.2 } as never, at })
+  assert.equal((columnCalc(h.db(), [h.page('p1'), h.page('p2')], 'pages', 'sum') as { value: number }).value, 0.3)
 })
 test('a short number for tight places', () => {
   assert.equal(shortNumber(1000000000), '1B'); assert.equal(shortNumber(1234567), '1.2M'); assert.equal(shortNumber(9999), '9,999'); assert.equal(shortNumber(0.5), '0.5'); assert.equal(shortNumber(-25000), '-25K')
