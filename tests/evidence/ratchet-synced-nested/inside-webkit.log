@@ -1,0 +1,7 @@
+PASS Sync a selection holding a database: it goes in, the home stays, and nothing about its rows changes {"refused":false,"record":["database"],"home":"home","rows":2,"rowsShown":2,"ok":true,"errors":[]}
+PASS A copy shows a view of the same rows, the original its home; reading both changes nothing {"rowsOnB":2,"viewOnB":1,"rowsOnA":2,"viewOnA":0,"wrote":0,"ok":true,"errors":[]}
+PASS /Page inside a copy: the page lives on the original's page, the notice says so, and its card is on both {"notice":" | Page made in Page A ","parent":"a","inRecord":true,"cardOnA":1,"cardOnB":1,"ok":true,"errors":[]}
+PASS /Page on the original: no notice, as nothing surprising happened {"notice":"","ok":true,"errors":[]}
+PASS /Database inside a copy: its home is the original's, a view here, and saving either page leaves it alone {"notice":"Saved | Database made in Page A ","parent":"a","home":"2c87889a-56b0-4bcf-940f-d1c0a3d5b941","inRecord":true,"viewsOnB":2,"viewsOnA":0,"alive":true,"ok":true,"errors":[]}
+PASS Deleting the database's line from a copy: it leaves the shared lines, and the database stays with its rows, as a full page {"inRecord":false,"trashed":false,"home":null,"rows":2,"notice":"Saved | Removed from 2 pages | View removed · Books is still in Page A ","ok":true,"errors":[]}
+ALL PASS

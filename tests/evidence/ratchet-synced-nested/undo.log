@@ -1,0 +1,2 @@
+PASS delete original preserves DB and row; immediate Undo restores shared places and home
+PASS later row edit refuses old Undo and keeps current words and full-page database
