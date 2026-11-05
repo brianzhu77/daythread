@@ -1075,6 +1075,7 @@ body:has(.bn-block-outer.has-caret) .editor-touch-handle { background: transpare
 
 /* Pressing the handle tints exactly the blocks the native drag will move (Brian #1). */
 /* Tint the whole block box so consecutive rows join without white seams; hide text-selection boxes on top. */
+.continuous-editor { --chosen-fill: rgb(100 160 255 / .1); --chosen-line: rgb(100 160 255 / .45); }
 .is-picked { background: var(--bn-brand-soft); }
 .bn-block-outer:has(> .is-picked):has(+ .bn-block-outer > .is-picked) { margin-bottom: 0; }
 .is-picked ::selection { background: transparent; }

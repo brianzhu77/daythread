@@ -216,6 +216,12 @@ function rememberedCopy(text: string): string {
 const cutTokens = new Set<string>()
 /** How long a cut line keeps its id when pasted (A11 plan §4): later it's a copy of old words, not this move. */
 const cutKeepsIdMs = 2 * 60_000
+/** A tint over what's chosen, whatever it holds, with an outline when it's one block. Several read as one run, so they don't get a box each. */
+const chosenRule = (ids: readonly string[]) => {
+  const of = (id: string) => `.continuous-editor .bn-block-outer[data-id="${CSS.escape(id)}"]`
+  return `${ids.map(of).join(', ')} { position: relative; }
+${ids.map(id => `${of(id)}::after`).join(', ')} { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; background: var(--chosen-fill); ${ids.length === 1 ? 'border-radius: var(--radius-tight); box-shadow: inset 0 0 0 2px var(--chosen-line);' : ''} }`
+}
 const deepNodes = (nodes: readonly EditorNode[]): EditorNode[] => nodes.flatMap(n => [n, ...deepNodes(n.children ?? [])])
 const checklistIds = (nodes: readonly EditorNode[]): string[] => deepNodes(nodes).filter(n => n.type === 'sourceChecklist' && n.props?.checked !== true).map(n => n.id)
 // A tick is only a tick (Jazz 5612c295, Bumblebee 8f23bd5e): the press's default would focus the editor around the box
@@ -819,6 +825,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
    * and deleting still works, and ⌘Z brings it back with its role. Headings he adds himself edit as usual.
    */
   const selectionFocus = useRef<HTMLDivElement>(null)
+  // What's drawn as chosen, by id: a block's own element can be drawn anew, and a rule by id holds through that.
+  const [chosen, setChosen] = useState<readonly string[]>([])
   // Browser selection can survive React node-view replacement while ProseMirror's selection moves elsewhere.
   // Keep stable block IDs and inline offsets instead of positions tied to the replaced document.
   function browserSelection() {
@@ -1824,6 +1832,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   function select(id: string, ids?: readonly string[]) {
     const range = ids?.length ? deepNodes(nodes()).filter(n => ids.includes(n.id)) : sectionRange(nodes(), id)
     selected.current = range.map(n => n.id)
+    setChosen(selected.current)
     setSelectionLabel(range[0]?.type === 'heading' ? `'${inlineText(range[0].content)}' section selected` : range.length > 1 ? `${range.length} blocks selected` : 'Block selected')
     if (range.length > 1) editor.setSelection(range[0]!.id, range.at(-1)!.id)
     else if (range[0]) {
@@ -2881,6 +2890,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       {/* B38: no role; the header's status line already announces each change. */}
       {pausedFor && !saveLineVisible && <div className="editor-unsaved-line" role="status">{pausedFor}</div>}
       {unsaved && !saveLineVisible && <div className="editor-unsaved-line"><span className="editor-unsaved-dot" aria-hidden="true" />{unsavedText}</div>}
+      {selectionLabel && chosen.length > 0 && <style>{chosenRule(chosen)}</style>}
       {selectionLabel && (phoneRowBar() ?? <div className="editor-selection-bar"><span>{selectionLabel}</span>{selected.current.length === 1 && editor.getBlock(selected.current[0]!)?.type === 'task' && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyRow(id) }}>Copy</button>}{selected.current.length === 1 && lineLinkTarget(selected.current[0]!) && <button onPointerDown={e => e.preventDefault()} onClick={() => { const id = selected.current[0]!; selected.current = []; setSelectionLabel(''); copyLineLink(id) }}>Copy link</button>}{!selected.current.some(id => editor.getBlock(id)?.type === syncedBlockType) && <button onPointerDown={e => e.preventDefault()} onClick={syncSelected}>Sync</button>}<button onPointerDown={e => e.preventDefault()} onClick={deleteSelected}>Delete</button></div>)}
       {lineMenu && <LineMenu anchor={lineMenu.anchor} onClose={closeLineMenu} onCopy={() => { const id = lineMenu.blockId; closeLineMenu(true); copyLineLink(id) }} />}
     {pastedChecklistIds.length > 0 && <div className="editor-paste-notice" role="status">{pastedChecklistIds.length} checklist {pastedChecklistIds.length === 1 ? 'line' : 'lines'} · <button onClick={() => {
