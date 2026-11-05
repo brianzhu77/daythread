@@ -1856,6 +1856,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const before = holds(prevBlock) ? prevBlock : flat[at - 1], after = flat[at + 1]
     const [beside, other] = key === 'Backspace' ? [before, after] : [after, before]
     if (length > 0 || block.type !== 'paragraph') return holds(beside)
+    // An empty first line of a synced block has the block itself above it, which isn't a block beside it: its own rule decides, removing a block that's only here (states §5).
+    if (!held && parentBlock?.type === syncedBlockType && beside?.id === parentBlock.id) return false
     if (!holds(beside) && (beside || !holds(other))) return false
     if (held || holds(parentBlock)) return true
     editor.removeBlocks([block.id])
