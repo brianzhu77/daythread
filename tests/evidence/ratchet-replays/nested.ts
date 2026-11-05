@@ -1,0 +1,1 @@
+import{SqliteWorkspaceRepository}from'../../../src/server/sqlite-repository.ts';const r=new SqliteWorkspaceRepository(process.argv[2]!,undefined,{allowMissingLegacy:true});const ws=await r.load();await r.execute({operationId:crypto.randomUUID(),expectedRevision:ws.revision,action:{type:'create-database',pageId:'nested',parentId:'kid',homeBlockId:null,title:'Nested'}})

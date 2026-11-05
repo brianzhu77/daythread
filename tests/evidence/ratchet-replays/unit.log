@@ -1,0 +1,34 @@
+✔ values with the same name and type come across, options are added, what has no match stays behind, and it says so first (17.195ms)
+✔ a relation to the same database comes along and its two-way partner updates; one Undo brings all of it back (55.353792ms)
+✔ a relation in another database that targets the old one loses its link, named first and restored by Undo (23.394334ms)
+✔ a relation with no match lets go of its partner too, and rollups keep up (11.341416ms)
+✔ refused: the same database, one in Trash, To-dos, and what isn't a row (3.115041ms)
+✔ a tab that missed the move: its cell edit fails with the reason and writes nothing, even where the property id exists on both (5.636958ms)
+✔ a parent takes its whole tree: sub-items turn on there, links are made again in the target, and the old ones are gone (5.966458ms)
+✔ what it says first covers the tree, once each: no word about its own links, and the count leaves out Trash (2.314958ms)
+✔ a sub-item taken alone keeps what's under it and names the parent it leaves (9.459916ms)
+✔ a row in Trash goes with the tree, so restoring it puts it back under its parent (7.703042ms)
+✔ sub-items already on in the target are used, not made twice, with its names taken (16.315917ms)
+✔ a row with no sub-items doesn't turn them on there; a tree that won't fit and To-dos are refused (105.872292ms)
+✔ one Undo puts the whole tree back with its links, and the target's sub-items off (2.927584ms)
+✔ a database inside something moving isn't somewhere it can go: the row, a sub-item or deeper, and nothing changes (3.098042ms)
+✔ the next date: the first still to come, after what it made and not before it was set up; paused has none (0.649916ms)
+✔ occurrences: each kind and interval, and a month keeps its day where it can (3.080375ms)
+✔ a time holds it until then; what it has made and what came before it was set up are never due (0.906417ms)
+✔ weekdays: each one in a week, the week holding the start first, and nothing before the start (0.414042ms)
+✔ every 2 weeks on two days keeps a calendar week's days together, by the week start he chose (0.397875ms)
+✔ it makes one row for a period with the template's title, and running again makes nothing, as a second tab would (7.418875ms)
+✔ away for weeks: the latest only, saying how many it skipped; with the switch, every one; and neither takes the Undo in a way that matters (9.454334ms)
+✔ a row he deleted doesn't come back; paused, in Trash and a database in Trash make nothing; rows stay when it stops (4.25575ms)
+✔ changing the schedule keeps what it made; turning it off clears it; bad values are refused; the schema carries it (9.398708ms)
+✔ weekdays: one row a date, the skipped notice counts rows, and the workspace's week start decides (0.724541ms)
+✔ weekdays: only Weekly keeps them, a bad day is refused, and one weekday still counts weeks (0.510625ms)
+✔ a full database: no row, one notice for the period it lost, and it doesn't come back on the next open (55.580167ms)
+ℹ tests 26
+ℹ suites 0
+ℹ pass 26
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 530.391083

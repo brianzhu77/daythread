@@ -1,0 +1,5 @@
+PASS depth50+Trash+target disabled+one Undo exact pages
+PASS depth50+Trash+target enabled+one Undo exact pages
+PASS exact10000+one Undo restores all rows
+PASS 10001 refused atomically
+PASS stale child title command refused atomically

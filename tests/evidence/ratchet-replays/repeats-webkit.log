@@ -1,0 +1,15 @@
+PASS Set in the template's menu: every field stored, off clears it and leaves the rows {"panel":"‹ Weekly review Edit Default for this view Default for all views Repeat Delete ","stored":{"every":"month","interval":2,"start":"2026-11-04","time":"23:59","notBefore":"2026-11-04T17:56"},"rows":0,"every":true,"paused":true,"off":null,"ok":true,"errors":[]}
+PASS Due today: opening the app makes one row from the template, with its body, unasked and with no notice {"rows":["Weekly review"],"id":"weekly.2026-11-04","body":"What went well","last":"2026-11-04","shown":1,"notice":"","ok":true,"errors":[]}
+PASS Two tabs opening at once make one row {"rows":1,"notice":"","otherNotice":"","ok":true,"errors":[]}
+PASS Away for weeks: the latest only, one notice saying what it skipped {"rows":1,"notice":"Weekly review · 3 earlier weeks skipped ","ok":true,"errors":[]}
+PASS With Make every missed one: all of them {"rows":4,"notice":"","ok":true,"errors":[]}
+PASS Paused: nothing {"rows":0,"ok":true,"errors":[]}
+PASS Turned back on after a pause: nothing for the periods it was paused, no notice, and the next row is named {"listed":"‹ Templates Weekly review · Paused ⋯ + New template ","rows":0,"notice":"Repeat set ","next":true,"ok":true,"errors":[]}
+PASS Every can be emptied while typing: 1, backspace, 2 gives 2; left empty it goes back {"emptied":"","typed":"2","stored":2,"unit":true,"left":"2","ok":true,"errors":[]}
+PASS A row deleted after it's made stays deleted across a reopen {"rows":0,"trashed":true,"ok":true,"errors":[]}
+PASS Weekday buttons: the start's is on, adding one stores it and names the next row, and the last one on can't be turned off {"start":"true","loneDisabled":true,"stored":[3,4],"nextLine":"Next row Thu, Nov 5 at 12:00 AM","after":[4],"disabled":true,"monthlyButtons":0,"rows":1,"ok":true,"errors":[]}
+PASS Away with every weekday on: the latest row, and the notice counts rows {"rows":1,"notice":"Weekly review · 21 earlier rows skipped ","ok":true,"errors":[]}
+PASS 390: seven buttons fit the sheet and take a tap {"count":7,"right":368,"height":44,"width":38,"ok":true,"errors":[]}
+PASS A tab left open: past the time while he's working, no row and his Undo stays; once he stops, one row {"atOpen":0,"undoAfterEdit":true,"whileWorking":0,"undoWhileWorking":true,"afterIdle":1,"undoAfterIdle":false,"ok":true,"errors":[]}
+PASS A tab in the background makes nothing until it's looked at {"hidden":0,"seen":1,"ok":true,"errors":[]}
+ALL PASS
