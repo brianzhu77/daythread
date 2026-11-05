@@ -49,6 +49,8 @@ export function dueReminders(ws: Workspace, from: number, to: number): Reminder[
   for (const event of chipEvents(ws).values()) {
     const fireAt = zonedEpoch(event.date, event.time ?? dateOnlyTime, ws.timezone)
     if (fireAt <= from || fireAt > to) continue
+    // Something already finished needs no reminding (B60 6).
+    if (event.taskId && ws.tasks.some(t => t.id === event.taskId && t.status !== 'open')) continue
     const page = event.line ? ws.pages.find(p => p.id === event.line!.pageId) : undefined
     const url = page ? (page.type === 'daily' && page.date ? `/day/${page.date}` : `/pages?page=${encodeURIComponent(page.id)}`) : '/'
     out.push({
