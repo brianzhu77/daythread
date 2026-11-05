@@ -143,6 +143,39 @@ test('a template doesn\'t run, and a day made from it has its own button', () =>
   assert.notEqual(made[0]!.id, 'in-template')
   assert.equal(made[0]!.props?.steps, writeSteps([addRow()]))
 })
+test('Ratchet: a page Open can\'t reach stops the tap before anything\'s written', () => {
+  const open = (pageId: string): ButtonStep => ({ id: 'o', kind: 'open', target: { kind: 'page', pageId, name: 'Elsewhere' } })
+  const gone = setup([addRow(), open('nothing')]), n = rows(gone).length
+  assert.throws(() => tap(gone), /Elsewhere was deleted/)
+  assert.equal(rows(gone).length, n)
+  const trashed = setup([addRow(), open('other')])
+  trashed.run({ type: 'create-document', title: 'Other', body: '', pageId: 'other' })
+  trashed.run({ type: 'delete-page', pageId: 'other', at })
+  assert.throws(() => tap(trashed), /Other is in Trash/)
+  assert.equal(rows(trashed).length, n)
+  assert.throws(() => tap(setup([addRow(), { id: 'u', kind: 'open', target: { kind: 'url', url: 'javascript:alert(1)' } }])), /can't be opened/)
+})
+test('Ratchet: a to-do that can\'t take the edit stops the whole tap, row and all', () => {
+  const h = setup([addRow(), { id: 's', kind: 'edit-rows', databaseId: todosSourceId, databaseName: 'To-dos', filter: [], set: [{ id: 'planned', name: 'Planned', value: { kind: 'fixed', raw: { start: '2026-11-07' } } }] }])
+  h.run({ type: 'ensure-day', date: '2026-11-06' })
+  h.run({ type: 'add-task', pageId: 'day:2026-11-06', title: 'Open one', plannedOn: '2026-11-06' })
+  h.run({ type: 'add-task', pageId: 'day:2026-11-06', title: 'Finished', plannedOn: '2026-11-06' })
+  h.run({ type: 'task-status', taskId: h.task('Finished').id, status: 'done', today: '2026-11-06' })
+  const n = rows(h).length, revision = h.ws.revision
+  assert.throws(() => tap(h, 'btn', 'p', '2026-11-06'), /1 couldn't be changed/)
+  assert.equal(rows(h).length, n)
+  assert.equal(h.ws.revision, revision)
+  assert.equal(h.ws.pages.some(p => p.date === '2026-11-07'), false, 'the open one wasn\'t moved')
+})
+test('Ratchet: to-dos inserted count against the same 500 across steps', () => {
+  const many = Array.from({ length: 501 }, (_, i) => line(`t${i}`, `To-do ${i}`, 'checkListItem'))
+  const h = setup([{ id: 'i', kind: 'insert', place: 'below', blocks: many }]), tasks = h.ws.tasks.length
+  assert.throws(() => tap(h), /500 to-dos at most/)
+  assert.equal(h.ws.tasks.length, tasks)
+  const half = Array.from({ length: 300 }, (_, i) => line(`u${i}`, `To-do ${i}`, 'checkListItem'))
+  const both = setup([{ id: 'i', kind: 'insert', place: 'below', blocks: half }, { id: 'j', kind: 'insert', place: 'above', blocks: half }])
+  assert.throws(() => tap(both), /500 to-dos at most/)
+})
 test('limits count across steps, and steps from a newer build don\'t run', () => {
   const h = setup([editAll('a'), editAll('b')])
   assert.equal(tap(h).receipt.message, '2 rows changed')

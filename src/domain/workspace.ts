@@ -4,7 +4,7 @@ import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, 
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
-import { changesWords, isTodosTarget, readSteps, stepsKey, stepTitle, valueAtTap, type ButtonStep } from "./buttons.ts";
+import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, valueAtTap, type ButtonStep } from "./buttons.ts";
 import { commentLimit, leavesUndoAlone, type CommentThread } from "./comments.ts";
 import { isPageIcon } from "./page-icon.ts";
 import { coverPlace, isCoverLink } from "./page-look.ts";
@@ -156,6 +156,13 @@ function runButton(state: Workspace, action: Extract<Action, { type: "run-button
       const db = buttonTarget(state, step.databaseId, step.databaseName);
       for (const set of step.set) if (!db.database.properties.some((p) => p.id === set.id)) throw new DomainError(`${set.name} was deleted`);
     }
+    // Opened only after the commit, so a page that can't be opened has to say so before anything's written (§4.7).
+    if (step.kind === "open" && step.target.kind === "page") {
+      const to = state.pages.find((p) => p.id === (step.target as { pageId: string }).pageId);
+      if (!to) throw new DomainError(`${step.target.name || "That page"} was deleted`);
+      if (isTrashed(to)) throw new DomainError(`${to.title.trim() || step.target.name} is in Trash`);
+    }
+    if (step.kind === "open" && step.target.kind === "url" && !safeUrl(step.target.url)) throw new DomainError("That link can't be opened");
   }
   // Counted across the steps, rather than each spending the whole limit (§4.9).
   let rowsLeft = databaseLimits.rowsAtOnce, todosLeft = databaseLimits.todosAtOnce;
@@ -170,6 +177,8 @@ function runButton(state: Workspace, action: Extract<Action, { type: "run-button
   for (const [index, step] of steps.entries()) {
     if (step.kind === "insert") named(step, () => {
       const day = on.date ?? localDay(state, at);
+      // Each of these is a new task.
+      spend(flatNodes(step.blocks).filter((n) => (n.type === "task" || n.type === "checkListItem") && inlineText(n.content).trim()).length, true);
       const fresh = pageFromTemplate({ document: JSON.stringify(step.blocks) } as Page, on.date, (n) => {
         const words = inlineText(n.content).trim();
         if (!words) return emptyTaskRow(on.date);
@@ -212,7 +221,9 @@ function runButton(state: Workspace, action: Extract<Action, { type: "run-button
         if (!rows.length) { matchedNothing = true; return; }
         spend(rows.length, true);
         const items = rows.flatMap((r) => { const taskId = taskIdOfRow(r.id); return taskId ? [{ taskId, changes: step.set.map((set) => ({ columnId: set.id, value: valueAtTap(set.value, todosDatabase.properties.find((p: Property) => p.id === set.id) ?? { type: "text" as const }, on, today) })) }] : []; });
+        // The bar's bulk edit may change some and say the rest couldn't. A tap is all or none, so a to-do that can't take this stops it.
         message = execute(state, { type: "edit-todos", items, today }, operationId).message;
+        if (/ couldn't$/.test(message)) throw new DomainError(`${message.split(" · ")[1]} be changed`);
         return;
       }
       const db = buttonTarget(state, step.databaseId, step.databaseName);
