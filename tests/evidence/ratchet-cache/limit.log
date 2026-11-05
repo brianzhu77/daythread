@@ -1,0 +1,6 @@
+PHASE day ready
+PHASE 500 tasks seeded
+PHASE before Planned command
+PHASE Planned finished
+PHASE Undo finished
+PASS schema/domain 500 accepted,501 refused atomically; Planned500+oneUndo exactpages/tasks; localms (heap mode recorded by invocation) 1139
