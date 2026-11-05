@@ -8,7 +8,7 @@ import type { LocalDate, Page, Workspace } from '../domain/types'
 import { fromIso, longLabel, todayIso } from './dates'
 import { ChevronRightIcon, PageEmoji, PageKindIcon, PagesIcon } from './icons'
 import { openIconPicker } from './icon-picker'
-import { coverCanMove, openCoverPanel, startReposition } from './page-cover'
+import { coverCanMove, openCoverPanel, startReposition, useCoverCanMove } from './page-cover'
 import { NewPageMenu } from './new-page-menu'
 import { displayPageTitle } from './page-title'
 import { RowMenu } from './row-menu'
@@ -159,6 +159,7 @@ const lookItems = (page: Pick<Page, 'id' | 'icon' | 'cover'>) => {
 /** ⋯ on a document page: Move to…, then Delete after a divider (A4 layout §1). A day's is in its header (`dayMenuGroups`). */
 /** `inPeek`: the row's menu in a peek stays in it: a copy opens there, and a row deleted closes it, with the view behind where it was. */
 export function PageMenu({ page, fromBookmarks = false, inPeek }: { page: Page; fromBookmarks?: boolean; inPeek?: (rowId: string | null) => void }) {
+  useCoverCanMove(page.id)
   const [moving, setMoving] = useState(false)
   const deletePage = useDeletePage()
   const { workspace, run } = useWorkspace()

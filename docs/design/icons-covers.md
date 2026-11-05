@@ -119,7 +119,7 @@ To-dos have no icon: a to-do isn't a page. **A day in the sidebar's Days** shows
 ### 7.5 A cover
 
 - **Adding:** `⋯` → Add cover opens a small panel. In the first release it's one field, "Paste an image link", up to 2,000 characters, past which it says "That link is too long". The picture shows in the panel once it loads, and Add is only there then. **A link that doesn't load says "Can't load that image" and isn't saved,** so a dead link can't be added by mistake.
-- **Changing:** hovering at 1280 shows Change and Reposition at its lower right, on a plain backing. At 390 `⋯` has Change cover, Reposition and Remove cover. Change opens the same panel, with Remove.
+- **Changing:** hovering at 1280 shows Change and Reposition at its lower right, on a plain backing. At 390 `⋯` has Change cover and Reposition. Change opens the same panel, with Remove, at both widths.
 - **Reposition:** the picture moves up and down under the pointer or finger, with "Drag to move · Done · Cancel" on it. **Keys too:** ↑ and ↓ move it by 5%, Enter is Done and Esc cancels. Cancel puts back exactly where it was and sends nothing. Done is one change with one Undo.
 - **What's saved is how far along the crop it sits,** 0 at the picture's top and 1 at its bottom, not a share of the picture's height. So the same setting shows the same part of the picture at any size, as far as that size allows: the page, a center peek's 160 px, a side peek's 120 px, and the phone's 120 px. A picture with no height to spare at this size doesn't offer it. To be tried with one portrait and one wide picture in each.
 - **While loading:** the band at its full height in `--fill`, so nothing moves.

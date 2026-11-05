@@ -198,8 +198,8 @@ await scenario('On a written day: the band above the head; an empty day offers n
   await page.goto(`${base}/day/${store().pages.find(p => p.type === 'daily' && p.document.includes('Written today')).date}`); await wait(1800)
   await add(page, PORTRAIT)
   const band = await page.locator('.page-cover').boundingBox(), head = await page.locator('.day-head').boundingBox()
-  const r = { band: band.height, above: band.y + band.height <= head.y + 1, overflow: await page.evaluate(() => document.documentElement.scrollWidth - innerWidth) }
-  r.ok = r.band === 200 && r.above && r.overflow <= 0
+  const r = { band: band.height, top: band.y, above: band.y + band.height <= head.y + 1, overflow: await page.evaluate(() => document.documentElement.scrollWidth - innerWidth) }
+  r.ok = r.band === 200 && r.top === 0 && r.above && r.overflow <= 0
   return r
 }, big, '/')
 await scenario('390: 120 px, edge to edge; ⋯ has Change, Reposition; the title and first lines stay in view', async page => {
@@ -211,6 +211,29 @@ await scenario('390: 120 px, edge to edge; ⋯ has Change, Reposition; the title
   r.ok = r.band[0] === 0 && r.band[1] === 390 && r.band[2] === 120 && r.first < 420 && r.items.includes('Change cover') && r.items.includes('Reposition') && r.overflow <= 0
   return r
 }, phone)
+await scenario('390, opened fresh: ⋯ still offers Reposition, as the picture loads after the menu is drawn, and it works from there', async page => {
+  await page.locator('.page-more').first().tap(); await wait(250); await page.getByRole('menuitem', { name: 'Add cover' }).tap(); await wait(300)
+  await field(page).fill(PORTRAIT); await addButton(page).waitFor(); await addButton(page).tap(); await wait(1000)
+  await page.reload(); await page.locator('.page-cover-image').waitFor(); await wait(1500)
+  await page.locator('.page-more').first().tap(); await wait(250)
+  const r = { items: await page.getByRole('menuitem').allInnerTexts() }
+  await page.getByRole('menuitem', { name: 'Reposition' }).tap(); await wait(300)
+  r.moving = await page.locator('.page-cover-moving').count()
+  r.ok = r.items.includes('Reposition') && r.moving === 1
+  return r
+}, phone)
+await scenario('390, on a written day: the band starts at the top, with the icon below it and the date below that', async page => {
+  await page.goto(`${base}/day/${store().pages.find(p => p.type === 'daily' && p.document.includes('Written today')).date}`); await wait(1800)
+  await page.locator('.page-more').first().tap(); await wait(250); await page.getByRole('menuitem', { name: 'Add cover' }).tap(); await wait(300)
+  await field(page).fill(PORTRAIT); await addButton(page).waitFor(); await addButton(page).tap(); await wait(1000)
+  await page.locator('.page-more').first().tap(); await wait(250); await page.getByRole('menuitem', { name: 'Add icon' }).tap(); await wait(900)
+  await page.locator('.icon-picker-cell').first().tap(); await wait(1000)
+  const box = async s => page.locator(s).first().boundingBox()
+  const band = await box('.page-cover'), icon = await box('.page-icon'), title = await box('.day-title')
+  const r = { band: [band.y, band.height, band.width], icon: icon.y, title: title.y }
+  r.ok = band.y === 0 && band.height === 120 && band.width === 390 && icon.y >= band.y + band.height && title.y >= icon.y + icon.height - 1
+  return r
+}, phone, '/')
 await browser.close()
 console.log(failed ? `${failed} FAILED` : 'ALL PASS')
 process.exit(failed ? 1 : 0)
