@@ -1,0 +1,81 @@
+PASS a parent's bar 10 px from the left: its name starts after the toggle [468,455,430]
+PASS a parent's bar -20 px from the left: its name starts after the toggle [468,455,400]
+PASS a row's bar part off the left: its name starts after the handle [448,437]
+PASS with the table open, a name stays clear of the table too [907,860]
+PASS no page errors []
+PASS dragging a row shows a line 
+PASS Esc takes it away 
+PASS and letting go moves nothing ["top","great","kid2","other"]
+PASS dragging over a sub-item, the line isn't on it ["great"]
+PASS and the row lands where the line was [["top","kid","other","great","kid2"],["great"]]
+PASS with the sub-item still under its parent ["top","kid","other","great","kid2"]
+PASS no page errors []
+PASS Plan: the parent is open, with its sub-items under it ["top","kid","great","kid2","other"]
+PASS Plan: a parent dropped past its own sub-items sends nothing [23,23]
+PASS Plan: and says nothing 
+PASS Plan: and stays put ["top","kid","great","kid2","other"]
+PASS Plan: a parent dropped on its own sub-item sends nothing [23,23]
+PASS Plan: and says nothing 
+PASS Plan: and stays put ["top","kid","great","kid2","other"]
+PASS Plan: no page errors []
+PASS table: the parent is open, with its sub-items under it ["top","kid","great","deeper","kid2","other"]
+PASS table: a parent dropped past its own sub-items sends nothing [23,23]
+PASS table: and says nothing 
+PASS table: and stays put ["top","kid","great","deeper","kid2","other"]
+PASS table: a parent dropped on its own sub-item sends nothing [23,23]
+PASS table: and says nothing 
+PASS table: and stays put ["top","kid","great","deeper","kid2","other"]
+PASS table: no page errors []
+PASS list: the parent is open, with its sub-items under it ["top","kid","great","deeper","kid2","other"]
+PASS list: a parent dropped past its own sub-items sends nothing [23,23]
+PASS list: and says nothing 
+PASS list: and stays put ["top","kid","great","deeper","kid2","other"]
+PASS list: a parent dropped on its own sub-item sends nothing [23,23]
+PASS list: and says nothing 
+PASS list: and stays put ["top","kid","great","deeper","kid2","other"]
+PASS list: no page errors []
+PASS Plan: a filter's only match shows, with its parents open above it ["top","kid","grand"]
+PASS Plan: closed by hand, it closes ["top"]
+PASS Plan: and stays closed ["top"]
+PASS Plan: and opens again ["top","kid","grand"]
+PASS Plan: another filter and back, the parent has started open again ["top","kid","grand"]
+PASS Plan: clearing the filter leaves the parent closed, as it was before ["top","great","kid2","other"]
+PASS Plan: and nothing about it was kept 
+PASS Plan: no page errors []
+PASS table: a filter's only match shows, with its parents open above it ["top","kid","grand"]
+PASS table: closed by hand, it closes ["top"]
+PASS table: and stays closed ["top"]
+PASS table: and opens again ["top","kid","grand"]
+PASS table: another filter and back, the parent has started open again ["top","kid","grand"]
+PASS table: clearing the filter leaves the parent closed, as it was before ["top","great","deeper","kid2","other"]
+PASS table: and nothing about it was kept 
+PASS table: no page errors []
+PASS list: a filter's only match shows, with its parents open above it ["top","kid","grand"]
+PASS list: closed by hand, it closes ["top"]
+PASS list: and stays closed ["top"]
+PASS list: and opens again ["top","kid","grand"]
+PASS list: another filter and back, the parent has started open again ["top","kid","grand"]
+PASS list: clearing the filter leaves the parent closed, as it was before ["top","great","deeper","kid2","other"]
+PASS list: and nothing about it was kept 
+PASS list: no page errors []
+PASS in a peek with the caret in its text: the Timeline shows ["top","great","kid2","other"]
+PASS row drag, with the caret in its text: the line shows 
+PASS row drag, with the caret in its text: Esc leaves the peek open 
+PASS row drag, with the caret in its text: and takes the line away 
+PASS row drag, with the caret in its text: and letting go moves nothing [25,25]
+PASS a bar's drag, with the caret in its text: Esc leaves the peek open 
+PASS a bar's drag, with the caret in its text: and letting go moves nothing ["{\"start\":\"2026-11-06\",\"end\":\"2026-11-14\"}","{\"start\":\"2026-11-06\",\"end\":\"2026-11-14\"}"]
+PASS a bar's drag, with the caret in its text: and opens nothing "http://127.0.0.1:3719/pages?page=work&peek=other"
+PASS with no drag, with the caret in its text: Esc closes the peek as ever 
+PASS with the caret in its text: no page errors []
+PASS in a peek with no caret: the Timeline shows ["top","great","kid2","other"]
+PASS row drag, with no caret: the line shows 
+PASS row drag, with no caret: Esc leaves the peek open 
+PASS row drag, with no caret: and takes the line away 
+PASS row drag, with no caret: and letting go moves nothing [25,25]
+PASS a bar's drag, with no caret: Esc leaves the peek open 
+PASS a bar's drag, with no caret: and letting go moves nothing ["{\"start\":\"2026-11-06\",\"end\":\"2026-11-14\"}","{\"start\":\"2026-11-06\",\"end\":\"2026-11-14\"}"]
+PASS a bar's drag, with no caret: and opens nothing "http://127.0.0.1:3719/pages?page=work&peek=other"
+PASS with no drag, with no caret: Esc closes the peek as ever 
+PASS with no caret: no page errors []
+ALL PASS

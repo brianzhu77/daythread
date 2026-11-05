@@ -1,0 +1,33 @@
+PASS the boxes and Shift-click pick a range "3 to-dos\nEdit property ▾\nDone\n"
+PASS there's no Delete on this bar 
+PASS it offers the four a to-do can change ["Status","Planned","Start","Deadline"]
+PASS Status changes all three [["Book the flights","done"],["Water the plants","done"],["Call the bank","done"],["Pay the rent","open"],["Read the lease","open"],["Paused one","open"],["Cancelled one","cancelled"]]
+PASS and the notice says how many " | 3 to-dos | 3 to-dos changed "
+PASS one Undo puts all three back 
+PASS picks a paused and a cancelled one "2 to-dos\nEdit property ▾\nDone\n"
+PASS the notice says how many changed and how many couldn't " | 2 to-dos | 1 to-do changed · 1 couldn't | Undone "
+PASS the paused one opens, and the cancelled one stays [false,"cancelled"]
+PASS no page errors []
+PASS not in the first moment, so a quick change doesn't flash "3 to-dos\nEdit property ▾\nDone\n"
+PASS then it says so while it's held "Changing 3 to-dos…\nEdit property ▾\nDone\n"
+PASS and goes back to the count when it's done "3 to-dos\nEdit property ▾\nDone\n"
+PASS with the usual notice " | 3 to-dos | 3 to-dos changed "
+PASS no page errors []
+PASS two changes, one sent and one queued ["Changing 3 to-dos…\nEdit property ▾\nDone\n",1]
+PASS the first done, it still says so while the second is held ["Changing 3 to-dos…\nEdit property ▾\nDone\n",2]
+PASS and goes back to the count after the last "3 to-dos\nEdit property ▾\nDone\n"
+PASS no page errors []
+PASS ⌘-click picks cards "2 to-dos\nEdit property ▾\nDone\n"
+PASS dragging one moves both [["Book the flights","cancelled"],["Water the plants","open"],["Call the bank","open"],["Pay the rent","cancelled"],["Read the lease","open"],["Paused one","open"],["Cancelled one","cancelled"]]
+PASS with one notice "Saved | 2 to-dos | 2 to-dos moved to Cancelled "
+PASS and one Undo 
+PASS no page errors on a Board []
+PASS 390: ⋯ → Select rows starts it "0 to-dos\nAll\nDone\n"
+PASS 390: All picks them "7 to-dos\nEdit property ▾\nDone\n"
+PASS 390: no page errors []
+PASS with 505, All takes 500 and says so "500 to-dos · 500 at most\nEdit property ▾\nDone\n"
+PASS and those can still be edited 
+PASS 500 change in one go, with the notice [500," | 500 to-dos · 500 at most | 500 to-dos changed "]
+PASS and one Undo puts all 500 back 0
+PASS limit: no page errors []
+ALL PASS
