@@ -685,6 +685,24 @@ Acceptance list by Bumblebee, from `docs/design/chart.md`, for the Lead and Jazz
 | G4-8 | **Export and Save as view.** PNG or SVG from its own `⋯`, working in the Home Screen app or saying why not. | missing |
 | G4-9 | **An older tab** keeps `layout` and chart settings, with a rollback run on the floor. An older build meeting a layout it doesn't know draws something usable rather than breaking. | missing |
 
+## D11. Automations (tracked, not counted)
+
+Acceptance list by Bumblebee, from `docs/design/automations.md`, approved (Lead 9d5b3c33), with Jazz's read and Ratchet's contracts. After Buttons, in §9's order. Notion's page was read, not tried. Steps reaching outside the app are each the Lead's own decision and aren't here.
+
+| ID | Check | Status |
+| --- | --- | --- |
+| G3-11 | **The list.** Database `⋯` → Automations, at both widths. Two lines per rule, with every status line in §2's table, ↑↓ to reorder, and "No automations". The menu's row reads "Automations · 1 paused". Rules are shared by every view and linked view, and trashed and restored with the database. Undo on adding, changing and deleting a rule. | missing |
+| G3-12 | **The editor.** Buttons' shell, with When, In and Do on the first page. "All" or "any" only with a second trigger. "Every…" with an Edit property step marks it incomplete and says why. A blank name falls back to its first step's words. Fixing a broken rule turns it back on, with a notice and Undo; one switched off by hand stays off. | missing |
+| G3-13 | **Firing.** Row added by `+ New`, Duplicate, a button or a form, and not by Undo, restore, CSV import or a repeat. Property edited on a value change only. "All" needs a watched property to have changed, with all its conditions true, so an unrelated edit doesn't repeat a Done rule. "In" a view limits it. Bulk edits and property conversions are each covered. It fires from an older tab's edit and the phone. | missing |
+| G3-14 | **One command, on real Postgres.** Each rule runs on a disposable copy and is accepted whole. His edit, the successful rules and failed rules' pauses commit together with one Undo that reverses them, shown as "Moved to Done · Log finish · Undo". Matches are frozen from the action's before and after rows, and rules run in list order. A database outage fails the whole commit and says so. | missing |
+| G3-15 | **A rule's failure.** His edit is kept, the rule's steps are dropped whole, and it pauses, with "Moved to Done · Log finish paused · Edit · Undo". A delete or incompatible type change shows broken at once. A rename keeps it working and updates the label. | missing |
+| G3-16 | **No chains and retries.** A rule setting the property it watches runs once. A rule's writes never fire a rule, and a button's direct changes fire rules once. A retry doesn't evaluate rules again, and keeps its ids and date. | missing |
+| G3-17 | **Limits.** Counted across all rules and steps. At the limit, the remaining matched rules pause with "Not run · command limit reached", earlier rules stay applied, his edit is kept, and rules not triggered stay active. | missing |
+| G3-18 | **Days and speed.** A database with no rules pays nothing (R1-18). Measured with rules on: a property edit isn't noticeably slower, and on a copy of Brian's real data R1-18 and R2-7 hold and day pages don't change. | missing |
+| G3-19 | **Scheduled rules (§9 step 2, catch-up on open, with R4-6's path).** Each period runs once across two tabs, a retry and a rollback, with its key, effects and marker committed together. Only the latest missed period runs. A late tick can't run an old schedule. A failure found on opening shows once then, and stays findable in the menu's count. | missing |
+| G3-20 | **To-dos as a source (§9 step 3),** with R2-7's bar on tick speed. | missing |
+| G3-21 | **Rollback.** Rules survive an older tab's save and a rollback, with the floor stated. | missing |
+
 ## C. Open questions for Brian
 
 Asked 2026-10-19 02:18Z (9e538364 572b3c3a); Brian answered 02:20Z (a4fd5686). Re-ask any future question within 24 h if unanswered.
