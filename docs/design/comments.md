@@ -42,16 +42,26 @@ A workspace holds one person, so a comment is a note attached to something, kept
 **I'd keep comments out of the page's document entirely (Lead leans yes, 3f167c20; Roadbuster agrees, 6d11ad9d):** in a table of their own, not page rows as synced records are, because a floor build reads page rows and might show an unknown type, but never touches a table it doesn't know. Each thread holds its page, the block id if any, and the quoted words with their place in the line. The mark and underline are drawn over the document, not written in it.
 
 - **Why:** the document stays byte for byte what it was. So Brian's days don't change, the floor build can't damage a comment by saving over a mark it doesn't know (the B87 condition), a comment causes no document save or conflict, and export, search, the day draft and the sweep don't have to learn a new mark.
-- **The cost:** the underline has to find its words each time. If the words were edited, the thread falls back to the whole line, and the pane shows the words as they were quoted. A mark in the document would follow edits exactly, so this is less precise. I think that's the right trade for a note-to-self.
+- **The cost:** the underline has to find its words each time. It checks the quoted words at their stored place in the line and never searches for them elsewhere, so a repeated phrase can't get underlined in the wrong spot. If the words there no longer match, the thread falls back to the whole line, and the pane keeps the words as they were quoted (Ratchet 858117fa). A mark in the document would follow edits exactly, so this is less precise. I think that's the right trade for a note-to-self.
 - **Alternative:** an inline mark in the document, as Notion's behaviour suggests. More exact, but it needs every build from the floor up to keep an unknown mark, and it writes to the document on every comment. I wouldn't start there.
 - **Loading (Roadbuster):** with the workspace. A person's notes should stay far under the 10 MB ceiling (Lead 6934c378), and loading per page would add a fetch to every page for no gain yet. Usage reads report their bytes alongside the workspace's size.
+
+**Contract for step 1 (Ratchet 858117fa).** A workspace save from an older tab or build never replaces or touches this table. Each thread has its own version, and Edit, Delete, Resolve and their Undo send it, so a late Undo can't erase a newer reply: it reads "Can't undo · edited since", today's rule. Tested with two tabs and a second account, across read, write, search, export and Undo.
 
 ## 4. What happens to it
 
 - **A line moved:** the thread follows it, using the block id and B29's move identity. Cut and paste the same way.
 - **A line deleted:** the thread stays in the pane, reading "Line removed" with its quoted words. Undo of the delete brings the mark back.
 - **A line copied, a page or row duplicated, a template used:** the copy has no comments. A new day never brings a comment from a template.
-- **A synced block:** a comment on a line in a synced block belongs to the shared record, and shows on every copy, as its words do. Please check this reads sensibly in the page that isn't the one it was made on. A line has a different id in each place, so the thread holds the record's line id (Roadbuster).
+- **A synced block:** a comment on a line in a synced block belongs to the shared record, and shows on every copy, as its words do. Please check this reads sensibly in the page that isn't the one it was made on. A line has a different id in each place, so the thread holds the record's line id (Roadbuster). The rules are below, to settle before step 2 of §6.
+- **A thread on a synced line, proposed (Bumblebee, after Ratchet 858117fa, on `synced-blocks.md` §4):** it also stores its home, the page it was made on.
+  - **Shown:** on every page holding a place, in the pane and as a mark.
+  - **Unsync here, or deleting a copy:** the thread stays with the shared lines. That place's lines are ordinary now and carry no thread, as any copy doesn't.
+  - **Unsync all, deleting the original, or Unsync as the only place, so the sharing ends:** the thread moves to its one line in the home page if that place still exists, otherwise to the first remaining place in page order. Other places get no copy of it.
+  - **Deleting the last place:** "Line removed" in its home page's pane, as for any line.
+  - **A place's page in Trash:** the others go on showing it. If every place is in Trash, it goes with them, and comes back with the first restored.
+  - **Undo of any of these:** one Undo puts the thread back on the shared line, with the sync's own rule: "Can't undo · edited since" if a place changed.
+  - **Search and export:** export writes it once, under its home page, or the first remaining place. Search opens the home place if it's live, otherwise the first live place, otherwise the home page's pane.
 - **A page or row in Trash:** its threads go with it and come back with it, and go for good with it. Moving a row to another database keeps them.
 - **Search:** finds a comment's words and opens the thread. Resolved ones too, marked as resolved.
 - **The day draft:** sends the model no comments. They're notes about a line rather than the day's words, and sending them would widen what the model sees.
