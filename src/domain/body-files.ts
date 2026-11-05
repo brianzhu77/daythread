@@ -6,19 +6,21 @@ import type { Page } from './types.ts'
 const pattern = /^\/api\/files\/([A-Za-z0-9_-]{8,64})(?:\?(.*))?$/
 
 export const bodyFileUrl = (id: string, name: string, size: number, type: string) => `/api/files/${id}?name=${encodeURIComponent(name)}&size=${size}&type=${encodeURIComponent(type)}`
+/** A picture's size joins its address when it first draws, so later opens hold its place (design §6). */
+export const bodyFileSized = (url: string, width: number, height: number) => `${url}&w=${width}&h=${height}`
 /** What an address in a block says, when it's one of ours; a link to the web isn't. */
-export function bodyFileOf(url: unknown): { id: string; name: string; size: number | null; type: string } | null {
+export function bodyFileOf(url: unknown): { id: string; name: string; size: number | null; type: string; width: number | null; height: number | null } | null {
   const match = typeof url === 'string' ? pattern.exec(url) : null
   if (!match) return null
   const query = new URLSearchParams(match[2] ?? ''), size = Number(query.get('size'))
-  return { id: match[1]!, name: query.get('name') ?? '', size: query.has('size') && Number.isFinite(size) ? size : null, type: query.get('type') ?? '' }
+  return { id: match[1]!, name: query.get('name') ?? '', size: query.has('size') && Number.isFinite(size) ? size : null, type: query.get('type') ?? '', width: Number(query.get('w')) || null, height: Number(query.get('h')) || null }
 }
 /** Only types a browser can't run as a page open in place; anything else downloads, as a stored page or SVG on this origin could read his workspace. */
 export const shownInPlace = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif', 'image/heic', 'image/heif', 'application/pdf'])
 /** Which block a file makes. SVG can run on our origin, so it's a file. */
 export const showsAsImage = (type: string) => shownInPlace.has(type) && type !== 'application/pdf'
 /** The files in a page's body, with the size each says. */
-export function bodyFilesIn(page: Pick<Page, 'document'>): Array<{ id: string; name: string; size: number | null; type: string }> {
+export function bodyFilesIn(page: Pick<Page, 'document'>): Array<NonNullable<ReturnType<typeof bodyFileOf>>> {
   return flatNodes(pageNodes(page)).flatMap(n => {
     if (n.type !== 'image' && n.type !== 'file') return []
     const file = bodyFileOf(n.props?.url)

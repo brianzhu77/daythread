@@ -1,7 +1,7 @@
 // Files in a page's body (B87): what an address says, what holds a file for the sweep, a Gallery's first image, the export, and what never reaches the model or search.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { bodyFileOf, bodyFileUrl, bodyFilesIn, showsAsImage } from '../src/domain/body-files.ts'
+import { bodyFileOf, bodyFileSized, bodyFileUrl, bodyFilesIn, showsAsImage } from '../src/domain/body-files.ts'
 import { holdsFiles } from '../src/domain/database.ts'
 import { firstImageUrl } from '../src/domain/editor-document.ts'
 import { exportFiles } from '../src/domain/export.ts'
@@ -17,8 +17,9 @@ import { dayId, harness, today } from './v2-helpers.ts'
 const id = 'fileBody0001', url = bodyFileUrl(id, 'My shot, 1.png', 1500, 'image/png')
 const image = (blockId = 'img') => ({ id: blockId, type: 'image', props: { url, name: 'My shot, 1.png', caption: 'A caption' }, children: [] })
 test('an address says its file, and a link to the web isn\'t ours', () => {
-  assert.deepEqual(bodyFileOf(url), { id, name: 'My shot, 1.png', size: 1500, type: 'image/png' })
-  assert.deepEqual(bodyFileOf(`/api/files/${id}`), { id, name: '', size: null, type: '' })
+  assert.deepEqual(bodyFileOf(url), { id, name: 'My shot, 1.png', size: 1500, type: 'image/png', width: null, height: null })
+  assert.deepEqual(bodyFileOf(`/api/files/${id}`), { id, name: '', size: null, type: '', width: null, height: null })
+  assert.deepEqual(bodyFileOf(bodyFileSized(url, 1200, 1600)), { id, name: 'My shot, 1.png', size: 1500, type: 'image/png', width: 1200, height: 1600 })
   for (const other of ['https://example.com/a.png', '/api/files/short', '/api/files/../x', 'blob:http://x/y', '', null, 5]) assert.equal(bodyFileOf(other), null, String(other))
   assert.equal(showsAsImage('image/png'), true)
   assert.equal(showsAsImage('image/svg+xml'), false, 'it could run on our origin')

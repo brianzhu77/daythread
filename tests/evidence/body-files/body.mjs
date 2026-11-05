@@ -300,16 +300,41 @@ await scenario('A full account says so, with Remove', async page => {
   r.ok = /Storage full · 5 GB at most/.test(r.says) && !/Retry/.test(r.says) && r.left === 0
   return r
 })
-await scenario('Loading: a box holds its place in --fill until the picture\'s in', async page => {
-  await pasted(page)
+for (const [label, viewport, w, h] of [['1280, a picture narrower than the column', { width: 1280, height: 900 }, 500, 800], ['390, a portrait photo', { width: 390, height: 780 }, 1200, 1600]]) await scenario(`Loading at ${label}: the box is the picture's shape and size, so the words don't move when it arrives`, async page => {
+  await caretOn(page, 'Second line')
+  // The real size matters here, so it's drawn at full size from a canvas in the page.
+  await page.evaluate(async ([w, h]) => {
+    const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').fillRect(0, 0, w, h)
+    const blob = await new Promise(r => c.toBlob(r, 'image/png')), data = new DataTransfer()
+    data.items.add(new File([blob], 'tall.png', { type: 'image/png' }))
+    document.querySelector('.ProseMirror').dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+  }, [w, h]); await wait(2200)
+  const r = { url: imageBlock().props.url.split('&').slice(-2).join('&') }
   let release; const held = new Promise(res => { release = res })
-  await page.route('**/api/files/*', async route => { if (route.request().method() === 'GET' && route.request().resourceType() === 'image') await held; await route.continue().catch(() => {}) })
+  await page.route('**/api/files/*', async route => { if (route.request().method() === 'GET') await held; await route.continue().catch(() => {}) })
   await page.reload(); await page.locator('.bn-inline-content', { hasText: 'First line' }).waitFor(); await wait(700)
-  const loading = page.locator('.body-image-loading').first(), box = await loading.boundingBox()
-  const r = { box: box && [Math.round(box.width), Math.round(box.height)], below: (await page.locator('.bn-inline-content', { hasText: 'Third' }).first().boundingBox().catch(() => null))?.y }
-  release(); await wait(1000)
-  r.done = await page.locator('.bn-visual-media:not(.body-image-loading)').count()
-  r.ok = Boolean(box) && box.width > 200 && Math.abs(box.width / box.height - 16 / 9) < 0.1 && r.done === 1
+  const third = () => page.locator('.bn-inline-content', { hasText: 'Third line' }).boundingBox(), box = await page.locator('.body-image-loading').first().boundingBox()
+  r.box = [Math.round(box.width), Math.round(box.height)]; const before = (await third()).y
+  release(); await page.locator('.bn-visual-media:not(.body-image-loading)').first().waitFor(); await wait(400)
+  const drawn = await page.locator('.bn-visual-media').first().boundingBox()
+  r.drawn = [Math.round(drawn.width), Math.round(drawn.height)]; r.moved = Math.round((await third()).y - before)
+  r.ok = r.url === `w=${w}&h=${h}` && Math.abs(r.moved) <= 1 && Math.abs(r.box[0] - r.drawn[0]) <= 1 && Math.abs(r.box[1] - r.drawn[1]) <= 1 && (viewport.width === 1280 ? r.drawn[0] === w : r.drawn[0] < 390)
+  return r
+}, { viewport, ...(viewport.width === 390 ? { hasTouch: true } : {}) })
+await scenario('Opening a page holding a sized picture writes nothing', async page => {
+  await pasted(page)
+  const rev = () => store().revision, sized = /&w=1400&h=700$/.test(imageBlock().props.url), before = rev()
+  await page.reload(); await page.locator('.bn-inline-content', { hasText: 'First line' }).waitFor(); await wait(1800)
+  const r = { sized, wrote: rev() - before }
+  r.ok = r.sized && r.wrote === 0
+  return r
+})
+await scenario('One Undo removes a pasted picture even after its size joined the address', async page => {
+  await pasted(page)
+  const r = { sized: /&w=1400&h=700$/.test(imageBlock().props.url) }
+  await page.locator('.bn-inline-content', { hasText: 'First line' }).click(); await undo(page)
+  r.image = types().includes('image')
+  r.ok = r.sized && !r.image
   return r
 })
 await scenario('A link to an image that fails says so, with its address and no broken mark', async page => {

@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom'
 import { createFileBlockConfig, createImageBlockConfig, fileParse, imageParse, type BlockNoteEditor } from '@blocknote/core'
 import { createReactBlockSpec, FileBlockWrapper, ImageToExternalHTML, ResizableFileBlockWrapper, TextAlignButton, useBlockNoteEditor, useComponentsContext, useSelectedBlocks } from '@blocknote/react'
 import { fileLimits } from '../domain/database'
-import { bodyFileOf, bodyFileUrl, shownInPlace, showsAsImage } from '../domain/body-files'
+import { bodyFileOf, bodyFileSized, bodyFileUrl, shownInPlace, showsAsImage } from '../domain/body-files'
 import { fileSizeLabel, putFile, type UploadFailure } from './file-upload'
 import { DownloadIcon, ExternalIcon, ImageIcon, PaperclipIcon } from './icons'
 
@@ -210,9 +210,15 @@ function BodyImageView(props: any) {
   // The picture's own request says whether it's there; asking first would cost every photo on a day a second trip.
   const there = useFileThere(url, Boolean(ours && !up && failedOnce))
   useStopWhenGone(props.block.id, up)
-  useEffect(() => { setBroken(false); setFailedOnce(false); setLoaded(false) }, [url])
+  useEffect(() => { setBroken(false); setFailedOnce(false); setLoaded(false) }, [ours?.id ?? url])
   // Only once it's gone: an error that arrives alongside the file being found mustn't be forgotten, with the same picture never failing again. If it turns up later, the picture's drawn anew.
   useEffect(() => { if (there === false) setBroken(false) }, [there])
+  const editor = useBlockNoteEditor<any, any, any>()
+  // The tab holding the bytes writes the picture's size, once, and not as a step Undo stops at. A tab only reading never saves by opening a page.
+  const drawn = (image: HTMLImageElement) => {
+    setLoaded(true)
+    if (up && ours && !ours.width && image.naturalWidth && image.naturalHeight) editor.transact(tr => { tr.setMeta('addToHistory', false); editor.updateBlock(props.block.id, { props: { url: bodyFileSized(url, image.naturalWidth, image.naturalHeight) } } as never) })
+  }
   // Back online, it tries again: the picture's drawn anew.
   useEffect(() => { const again = () => setBroken(false); window.addEventListener('online', again); return () => window.removeEventListener('online', again) }, [])
   // A tap selects it on a phone, where there's no hover to bring its actions (§5).
@@ -230,7 +236,7 @@ function BodyImageView(props: any) {
       ? <div className="body-image-box" contentEditable={false} />
       : failed
         ? <div className="body-file-line" contentEditable={false}><span>{navigator.onLine ? "Can't load this image" : "Offline · Can't load this image"}</span>{!ours && <a href={url} target="_blank" rel="noreferrer">{url}</a>}</div>
-        : <img className={`bn-visual-media${loaded ? '' : ' body-image-loading'}`} src={up?.preview ?? url} alt={name || ''} width={props.block.props.previewWidth} loading="lazy" decoding="async" contentEditable={false} draggable={false} onLoad={() => setLoaded(true)} onError={() => { setBroken(true); setFailedOnce(true) }} />}
+        : <img className={`bn-visual-media${loaded ? '' : ' body-image-loading'}`} src={up?.preview ?? url} alt={name || ''} width={props.block.props.previewWidth} style={!loaded && ours?.width && ours.height ? { width: props.block.props.previewWidth ?? ours.width, aspectRatio: `${ours.width} / ${ours.height}` } : undefined} loading="lazy" decoding="async" contentEditable={false} draggable={false} onLoad={e => drawn(e.currentTarget)} onError={() => { setBroken(true); setFailedOnce(true) }} />}
     {up?.state === 'uploading' && <div className="body-file-progress" style={{ width: `${up.percent}%` }} />}
     {chosen && <div className="body-image-more"><BodyBlockMenu block={props.block} /></div>}
     <BodyFileLine blockId={props.block.id} up={up} name={name || ours?.name || 'This file'} missing={missing} cantShow={cantShow && uploadDone(url) ? url : undefined} />
