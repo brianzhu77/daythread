@@ -35,7 +35,8 @@ const measure = async (label: string) => {
   let first = 0
   for (let i = 0; i <= runs; i++) {
     const c = process.cpuUsage(), w = performance.now()
-    await tick()
+    const { workspaces } = await tick()
+    if (workspaces !== 1) throw new Error('The tick read nothing, so this measures nothing')
     const used = process.cpuUsage(c)
     if (i) { cpu.push((used.user + used.system) / 1000); wall.push(performance.now() - w) } else first = Math.round((used.user + used.system) / 100) / 10
   }
