@@ -197,7 +197,7 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
       onPress: () => {
         close()
         if (wsRef.current?.undo?.operationId === undoOperationId)
-          void runRef.current?.({ type: 'undo', targetOperationId: undoOperationId }, { text: 'Undone' })
+          void runRef.current?.({ type: 'undo', targetOperationId: undoOperationId }, { text: 'Undone' }, undefined, { inlineRefusal: /Cannot undo|Saved elsewhere/, onRefused: () => toast("Can't undo · edited since", { timeout: 6000 }) })
       },
     }
     const other = extra && { children: extra.label, onPress: () => { close(); extra.run() } }
