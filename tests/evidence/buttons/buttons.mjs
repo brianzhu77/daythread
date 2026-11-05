@@ -212,6 +212,20 @@ await scenario('390: a tap picks from Insert\'s / menu, the sheet\'s handle stay
   const numbered = await page.locator('.button-blocks [data-content-type=numberedListItem]').count()
   return { ok: hit && numbered === 1 && handleAbove && (placeholder === 'none' || placeholder === 'normal'), hit, numbered, handleAbove, placeholder }
 }, phone)
+await scenario('390: on an empty box, / on its first line shows the menu and a tap picks; no explanatory line before or after a tap', async page => {
+  await page.getByRole('button', { name: 'Log a run actions' }).tap(); await wait(250); await page.getByRole('menuitem', { name: 'Edit' }).tap(); await wait(350)
+  await editor(page).getByRole('menuitem', { name: '+ Add step' }).tap(); await wait(200); await editor(page).getByRole('menuitem', { name: 'Insert blocks' }).tap(); await wait(500)
+  const said = () => page.evaluate(() => [...document.querySelectorAll('.button-blocks *')].flatMap(n => ['::before', '::after'].map(p => getComputedStyle(n, p).content)).filter(c => /Enter text|type/i.test(c)).length + (/Enter text/.test(document.querySelector('.button-blocks').textContent) ? 1 : 0))
+  const before = await said()
+  await page.locator('.button-blocks .ProseMirror').tap(); await wait(300)
+  const focused = await said()
+  await page.keyboard.type('/', { delay: 20 }); await wait(600)
+  const shown = await page.locator('#bn-suggestion-menu').evaluate(n => { const r = n.getBoundingClientRect(); return { visibility: getComputedStyle(n).visibility, top: r.top, bottom: r.bottom, height: r.height } })
+  const item = page.locator('#bn-suggestion-menu [role=option]', { hasText: 'Bullet List' }), hit = await item.evaluate(n => { n.scrollIntoView({ block: 'nearest' }); const r = n.getBoundingClientRect(), t = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return Boolean(t && n.contains(t)) })
+  await item.tap(); await wait(400)
+  const bullets = await page.locator('.button-blocks [data-content-type=bulletListItem]').count()
+  return { ok: before === 0 && focused === 0 && shown.visibility === 'visible' && shown.top >= 0 && hit && bullets === 1, before, focused, shown, hit, bullets }
+}, phone)
 await browser.close()
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)
