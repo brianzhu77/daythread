@@ -1,0 +1,19 @@
+{"events":["save-editor FAIL","addProperty","save-editor FAIL","save-editor recovered"],"during":{"props":["Property"],"undo":1,"line":"Not saved yet · trying again\nRetry saving\nCopy draft"},"after":{"props":["Property"],"undo":0,"line":"Saved"}}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: view-save recovery must preserve property Undo
+
+0 !== 1
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-linked-plus/tests/evidence/ratchet-linked-plus/failed.mjs:1:1428 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 0,
+  expected: 1,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
