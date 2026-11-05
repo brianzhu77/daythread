@@ -61,7 +61,9 @@ export const rowRole = (n: EditorNode): 'plan' | 'reference' => (n.props?.role =
 /** No words and nothing else inline (a chip, a link): the empty rows a template or a trailing line leaves. */
 /** A picture or file in a page's body (B87): it holds no words, and it isn't an empty line. */
 export const isFileBlock = (n: Pick<EditorNode, 'type'>): boolean => n.type === 'image' || n.type === 'file'
-export const isEmptyLine = (n: EditorNode): boolean => n.type !== 'pageLink' && n.type !== 'heading' && !isFileBlock(n) && !inlineText(n.content).trim() && !(Array.isArray(n.content) && n.content.some(c => c && typeof c === 'object' && (c as { type?: string }).type !== 'text')) && !(n.children?.length)
+/** A button (docs/design/buttons.md): its words are a label, not a line's, and it isn't an empty line either. */
+export const buttonBlockType = 'button'
+export const isEmptyLine = (n: EditorNode): boolean => n.type !== 'pageLink' && n.type !== 'heading' && n.type !== buttonBlockType && !isFileBlock(n) && !inlineText(n.content).trim() && !(Array.isArray(n.content) && n.content.some(c => c && typeof c === 'object' && (c as { type?: string }).type !== 'text')) && !(n.children?.length)
 
 // The parsed document of a page, kept per document string: readers parse each page once per save.
 const parsed = new Map<string, EditorNode[]>()

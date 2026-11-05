@@ -126,6 +126,9 @@ function blockLines(n: EditorNode, ws: Workspace, names: Map<string, string>, as
     }
     case 'divider':
       return asItem ? [] : ['---']
+    // What it draws, so a page never loses a line on the way out (buttons.md §8). Its steps stay in the app.
+    case 'button':
+      return [`${asItem ? '- ' : ''}${typeof props.label === 'string' && props.label ? props.label : 'Button'}`]
     case 'database': {
       const target = typeof props.pageId === 'string' && props.pageId ? names.get(props.pageId) : undefined
       return target ? [`${asItem ? '- ' : ''}[[${target}]]`] : []
