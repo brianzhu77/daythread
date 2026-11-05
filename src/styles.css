@@ -67,6 +67,7 @@
   --ink: var(--gray-12);
   --ink-2: var(--gray-11);
   --ink-3: var(--gray-9);
+  --comment-underline: var(--line);
   /* A chart's fourth grey: the same step differs between the themes (chart.md §4). */
   --chart-grey-4: var(--gray-8);
   --line: var(--gray-5);
@@ -157,6 +158,7 @@
   :root {
     color-scheme: dark;
     --chart-grey-4: var(--gray-7);
+    --comment-underline: var(--gray-7);
     --gray-1: #111111; --gray-2: #191919; --gray-3: #222222; --gray-4: #2a2a2a; --gray-5: #313131; --gray-6: #3a3a3a;
     --gray-7: #484848; --gray-8: #606060; --gray-9: #6e6e6e; --gray-10: #7b7b7b; --gray-11: #b4b4b4; --gray-12: #eeeeee;
     --blue-1: #0d1520; --blue-2: #111927; --blue-3: #0d2847; --blue-4: #003362; --blue-5: #004074; --blue-6: #104d87;
@@ -2862,7 +2864,10 @@ body:has(.button-editor) #bn-suggestion-menu { max-height: min(420px, 45vh); }
 }
 /* Comments (comments.md §2). Nothing shows until there's one. */
 /* Grey and quiet, so it doesn't read as an underline he made (comments.md §2). */
-.comment-underline { border-bottom: 2px solid var(--line); }
+.comment-underline { border-bottom: 2px solid var(--comment-underline); }
+/* The same size and weight as what's beside it in the bar. */
+.bn-button .comment-toolbar-icon svg { display: block; width: 16px; height: 16px; stroke-width: 1.5; }
+.bn-button .comment-toolbar-icon { display: inline-flex; opacity: .8; }
 .comment-mark { position: absolute; z-index: 2; display: inline-grid; place-items: center; width: 16px; height: 16px; min-height: 0; padding: 0; border: 0; background: none; color: var(--ink-3); cursor: pointer; touch-action: manipulation; }
 .comment-mark svg { width: 14px; height: 14px; }
 @media (hover: hover) { .comment-mark:hover { color: var(--ink); } }
