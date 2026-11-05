@@ -544,6 +544,24 @@ const fold = (s: string): string => s.toLocaleLowerCase();
  * Whether one condition holds for a value of this property. A condition the property's type doesn't offer (after a type
  * change) or one missing its value holds, so a broken rule never hides rows; null says "ignored".
  */
+/** The conditions a property of this type can hold. */
+export function opsFor(type: PropertyType): FilterOp[] {
+  switch (type) {
+    case "text": case "url": case "email": case "phone": return ["contains", "is", "isEmpty", "isNotEmpty"]
+    case "number": return ["eq", "ne", "gt", "lt", "isEmpty"]
+    case "id": return ["eq", "ne", "gt", "lt"]
+    case "createdTime": case "editedTime": return ["is", "before", "after", "within"]
+    case "select": case "status": return ["isAnyOf", "isNoneOf", "isEmpty"]
+    case "relation": case "multiSelect": return ["contains", "doesNotContain", "isEmpty"]
+    case "files": return ["contains", "doesNotContain", "isEmpty", "isNotEmpty"]
+    // Read as the type it works out to (relations.ts), so it never gets here.
+    case "button":
+    case "rollup":
+    case "formula": return []
+    case "date": return ["is", "before", "after", "within", "isEmpty"]
+    case "checkbox": return ["is"]
+  }
+}
 export function conditionHolds(property: Property, condition: Condition, value: CellValue, context: ViewContext): boolean | null {
   const { op } = condition, want = condition.value;
   if (op === "isEmpty") return isEmptyValue(value);

@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readSteps, stepsKey, writeSteps, type ButtonStep } from '../src/domain/buttons.ts'
-import { withLiveNames, type Automation } from '../src/domain/automations.ts'
+import { automationProblem, withLiveNames, type Automation } from '../src/domain/automations.ts'
 import { pageContentKey } from '../src/domain/editor-document.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { harness } from './v2-helpers.ts'
@@ -175,4 +175,20 @@ test('a rename keeps a rule working and brings its words up to date', () => {
   const live = withLiveNames(h.ws, h.page('runs').database!, rules(h)[0]!)
   assert.equal((readSteps(live.steps)[0] as { set: { name: string }[] }).set[0]!.name, 'Count')
   assert.equal((live.triggers[0] as { name: string }).name, 'Stage')
+})
+
+test('Ratchet: a Trash batch restored isn\'t a new row; a condition its property can no longer hold shows broken', () => {
+  const { h, C } = setup([rule({ triggers: [{ kind: 'row-added' }] })])
+  const gone = h.run({ type: 'delete-pages', pageIds: ['r1', 'r2'], at } as never)
+  const trashId = h.page('r1').trashId!
+  assert.ok(gone && trashId)
+  const { receipt } = h.run({ type: 'restore-batch', trashId } as never)
+  assert.equal(receipt.automations, undefined)
+  assert.equal(val(h, 'r1'), 1, 'a restored row isn\'t set off')
+  assert.equal(val(h, 'r2'), 2)
+  const watched = setup([rule()])
+  assert.equal(automationProblem(watched.h.ws, watched.h.page('runs').database!, rules(watched.h)[0]!), null)
+  watched.C({ kind: 'updateProperty', propertyId: 'st', type: 'number' })
+  assert.equal(automationProblem(watched.h.ws, watched.h.page('runs').database!, rules(watched.h)[0]!), 'Status changed type')
+  void C
 })

@@ -1,7 +1,7 @@
 // Rules on a database (docs/design/automations.md): when something happens to a row, do these steps, inside the command that made the change. Nothing here writes:
 // `applyCommand` stages each rule on its own copy, so a rule's failure can't touch his edit. A database with no rules costs one look at its field.
 import { readSteps, writeSteps, type ButtonStep } from './buttons.ts'
-import { conditionHolds, cellValue, databaseRows, inView, isDatabase, propertyOf, titleId, type Condition, type Database, type ViewContext } from './database.ts'
+import { conditionHolds, cellValue, databaseRows, inView, isDatabase, opsFor, propertyOf, titleId, type Condition, type Database, type ViewContext } from './database.ts'
 import type { Action, Page, Workspace } from './types.ts'
 
 export type AutomationTrigger = { kind: 'row-added' } | { kind: 'property-edited'; propertyId: string; name: string; condition?: Condition }
@@ -23,13 +23,19 @@ export interface Automation {
 export const automationSteps: readonly ButtonStep['kind'][] = ['edit-property', 'add-row', 'edit-rows']
 
 /** What's not "a row was made" or "a value was edited": they'd fire hundreds of times, or undo what's being undone (§3, §5.7). A rule's own writes never get here, as matches are frozen first. */
-const quietActions: ReadonlySet<string> = new Set(['undo', 'restore-page', 'restore-pages', 'import-csv', 'add-rows', 'run-repeats', 'change-database', 'move-row', 'move-page', 'delete-page', 'delete-pages', 'ensure-day'])
+const quietActions: ReadonlySet<string> = new Set(['undo', 'restore-page', 'restore-batch', 'import-csv', 'add-rows', 'run-repeats', 'change-database', 'move-row', 'move-page', 'delete-page', 'delete-pages', 'ensure-day'])
 export const firesRules = (action: Pick<Action, 'type'>): boolean => !quietActions.has(action.type)
 
 /** What's wrong with a rule now, in its own words, without its having to run: a delete or a type change shows at once (§5.4). */
 export function automationProblem(ws: Pick<Workspace, 'pages'>, db: Database, rule: Automation): string | null {
   if (rule.viewId && !db.views.some(v => v.id === rule.viewId)) return 'Its view was deleted'
-  for (const t of rule.triggers) if (t.kind === 'property-edited' && t.propertyId !== titleId && !propertyOf(db, t.propertyId)) return `${t.name} was deleted`
+  for (const t of rule.triggers) {
+    if (t.kind !== 'property-edited' || t.propertyId === titleId) continue
+    const property = propertyOf(db, t.propertyId)
+    if (!property) return `${t.name} was deleted`
+    // A condition this type can't hold would just never be met, with the rule looking healthy (Ratchet).
+    if (t.condition && !opsFor(property.type).includes(t.condition.op)) return `${t.name} changed type`
+  }
   for (const step of readSteps(rule.steps)) { const problem = stepBroken(ws, db, step); if (problem) return problem }
   return null
 }
