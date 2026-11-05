@@ -170,11 +170,12 @@ function CommentsPane({ pageId, composing, threadId, anchor }: { pageId: string;
     return () => document.removeEventListener('keydown', esc, true)
   }, [])
   const add = async (body: string, { operationId, threadId, commentId, at }: Stamp) => {
-    const sent = await send(run, { type: 'add-comment', pageId, threadId, commentId, body, at, ...(anchor ? { anchor } : {}) }, { operationId, quiet: true })
-    // Written on that line: the next one in this pane is on the page again, unless a line is asked for.
-    if (sent === 'saved' && anchor) openComments(pageId, { threadId })
-    return sent
+    written.current = threadId
+    return send(run, { type: 'add-comment', pageId, threadId, commentId, body, at, ...(anchor ? { anchor } : {}) }, { operationId, quiet: true })
   }
+  // Written on that line, the next one in this pane is on the page again, unless a line is asked for. Not while there are words typed since: they're for this line (Ratchet).
+  const written = useRef<string | null>(null)
+  const afterSent = (left: string) => { if (anchor && !left && written.current) openComments(pageId, { threadId: written.current }) }
   return createPortal(<aside className={`comments-pane${phone ? ' is-sheet' : ''}`} aria-label="Comments" style={phone && keyboardTop !== null ? { bottom: window.innerHeight - keyboardTop, height: Math.min(window.innerHeight * 0.7, (window.visualViewport?.height ?? window.innerHeight) - 8) } : undefined}>
     <header className="comments-pane-head">
       <h2>Comments</h2>
@@ -189,7 +190,7 @@ function CommentsPane({ pageId, composing, threadId, anchor }: { pageId: string;
       {!shown.length && <p className="comment-note">{show === 'open' ? (other ? `No open comments · ${other} resolved` : 'No comments') : 'Nothing resolved'}</p>}
     </div>
     {show === 'open' && anchor && <p className="comment-quote is-composing">{anchor.quote || 'An empty line'}</p>}
-    {show === 'open' && <CommentField draftKey={anchor ? `new:${pageId}:${anchor.blockId}` : `new:${pageId}`} label="New comment" action="Comment" placeholder={anchor ? 'Comment on this line' : 'Add a comment'} autoFocus={composing && !phone} onDone={add} />}
+    {show === 'open' && <CommentField draftKey={anchor ? `new:${pageId}:${anchor.blockId}` : `new:${pageId}`} label="New comment" action="Comment" placeholder={anchor ? 'Comment on this line' : 'Add a comment'} autoFocus={composing && !phone} onDone={add} onSaved={afterSent} />}
   </aside>, document.body)
 }
 
