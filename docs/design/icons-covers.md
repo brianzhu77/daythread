@@ -64,7 +64,7 @@
 
 ### 7.1 The head
 
-From the top: **cover, then the line with the breadcrumb and `⋯`, then the icon, then the title.** Nothing sits on top of a picture, so nothing depends on its colours.
+From the top: **cover, then the line with the breadcrumb and `⋯`, then the icon, then the title.** Nothing sits on top of a picture, so nothing depends on its colours. **A known difference:** Bumblebee and I both recall Notion's icon overlapping its cover, unconfirmed. Ours doesn't, by choice.
 
 | | 1280 | 390 |
 | --- | --- | --- |
@@ -99,6 +99,8 @@ It takes the place of the page's default icon where there is one, and comes befo
 | Board and Gallery cards | 14 px, before the title | Before the title |
 | Calendar's chips, the phone's Timeline list | The line's text size | Before the title |
 
+**The Name column at 390** already cuts a short name to "First r…" in the sketch, and an icon takes 20 px more. I'd grow the column by 20 px when any row shown has an icon, so a name isn't cut shorter for having one. To be looked at once it's built.
+
 To-dos have no icon: a to-do isn't a page. **A day in the sidebar's Days** shows its icon before its date, if it has one.
 
 ### 7.4 The picker
@@ -107,7 +109,7 @@ To-dos have no icon: a to-do isn't a page. **A day in the sidebar's Days** shows
 
 - **Top line:** Search, Random, and Remove when there's an icon. At 1280 Search has the caret. **At 390 it doesn't until tapped,** so the keyboard stays down (P1-2).
 - **The grid:** 8 across, 36 px squares at 1280 and 44 px at 390. Recent first, on this device, up to two rows, and no Recent line until there's one. Then the usual groups, with their names as you scroll.
-- **Picking** closes it, with the usual notice and Undo. **Random** picks one and stays open, so it can be pressed again. **Remove** closes it. Each is one change with its Undo, as P1-7 says.
+- **Picking** closes it, with the usual notice and Undo. **Random** picks one and stays open, so it can be pressed again: the icon changes at once on each press, and what's sent is the one it settles on, about 300 ms after the last press, so a run of presses is one change and Undo goes back to before the run. **Remove** closes it. Each is one change with its Undo, as P1-7 says. §7.8 says what happens while the page is saving.
 - **Skin tones:** a small swatch at the right of Recent's line, kept on this device, as Notion has one and a person's hands shouldn't only be yellow. Not in Notion's guide as I read it, so this is my call.
 - **Search** covers English and Chinese names. While Pinyin is composing nothing's searched, so results follow the characters once chosen. **Typing or pasting an emoji** offers it as the one result, so nothing a phone can type is out of reach.
 - **Nothing found:** "No emoji for {what's typed}".
@@ -116,9 +118,10 @@ To-dos have no icon: a to-do isn't a page. **A day in the sidebar's Days** shows
 
 ### 7.5 A cover
 
-- **Adding:** `⋯` → Add cover opens a small panel. In the first release it's one field, "Paste an image link". The picture shows in the panel once it loads, and Add is only there then. **A link that doesn't load says "Can't load that image" and isn't saved,** so a dead link can't be added by mistake.
+- **Adding:** `⋯` → Add cover opens a small panel. In the first release it's one field, "Paste an image link", up to 2,000 characters, past which it says "That link is too long". The picture shows in the panel once it loads, and Add is only there then. **A link that doesn't load says "Can't load that image" and isn't saved,** so a dead link can't be added by mistake.
 - **Changing:** hovering at 1280 shows Change and Reposition at its lower right, on a plain backing. At 390 `⋯` has Change cover, Reposition and Remove cover. Change opens the same panel, with Remove.
-- **Reposition:** the picture moves up and down under the pointer or finger, with "Drag to move · Done · Cancel" on it. Esc cancels. Done is one change with one Undo. It's saved as a position within the crop's travel (§7.7), so it holds at both widths. A picture with nothing to spare in height doesn't offer it.
+- **Reposition:** the picture moves up and down under the pointer or finger, with "Drag to move · Done · Cancel" on it. **Keys too:** ↑ and ↓ move it by 5%, Enter is Done and Esc cancels. Cancel puts back exactly where it was and sends nothing. Done is one change with one Undo.
+- **What's saved is how far along the crop it sits,** 0 at the picture's top and 1 at its bottom, not a share of the picture's height. So the same setting shows the same part of the picture at any size, as far as that size allows: the page, a center peek's 160 px, a side peek's 120 px, and the phone's 120 px. A picture with no height to spare at this size doesn't offer it. To be tried with one portrait and one wide picture in each.
 - **While loading:** the band at its full height in `--fill`, so nothing moves.
 
 ### 7.6 A cover that won't load
@@ -132,9 +135,18 @@ To-dos have no icon: a to-do isn't a page. **A day in the sidebar's Days** shows
 ### 7.7 Contracts before building (Ratchet f18d4910, a review of the document and sketches)
 
 - **The preview belongs to the current link.** Load A, change to B before A finishes, then A succeeds: Add stays unavailable until B loads. Closing the panel or removing cancels late replies. The existing cover stays until its replacement is committed. Having loaded once checks that preview, and doesn't promise the link will stay alive.
-- **Reposition's rule.** Stored as a normalized position within the vertical travel the crop allows, not as a share of the picture's height (this replaces §7.5's wording). Tested with one portrait and one wide picture across a full page, center peek and side peek. Cancel or Esc restores the exact earlier position with no command, and Done makes one Undo. Arrow keys move it while the mode is open, so there's a keyboard way.
+- **Reposition's rule.** Stored as a normalized position within the vertical travel the crop allows, not as a share of the picture's height. Tested with one portrait and one wide picture across a full page, center peek and side peek. Cancel or Esc restores the exact earlier position with no command, and Done makes one Undo. Arrow keys move it while the mode is open, so there's a keyboard way.
 - **Icon and cover edits live alongside typing.** Rapid Random presses, a failed icon save, and changing or removing a cover while the body is saving keep both the newest choice and the words. A refused or failed change shows a state, and an older reply never replaces a newer choice. Tested with a held save and a late Undo, as well as an ordinary pick and Undo.
 - **The 390 picker sketch** still shows the editor toolbar. §7.4's written rule, toolbar hidden, is the target.
+
+### 7.8 While the page is saving (Jazz, for §7.7's third contract)
+
+An icon and a cover are changes to the page, separate from its words, and neither waits for the other.
+
+- **The newest choice wins.** What's on screen is the last thing chosen. An older answer arriving late doesn't replace it, and words being saved are kept.
+- **A change that fails** goes back to what's saved, with "Couldn't change the icon · Try again" or the cover's, and Try again sends the choice again. A refused one says why, with no Try again.
+- **Undo reaches the latest change, as everywhere.** If the page saves words after an icon's change, that notice's Undo goes, as it does for any later change. It doesn't undo words.
+- **To test:** a run of Random presses, a failed icon save, changing or removing a cover while words are saving, and a late Undo with a save held back.
 
 ## 8. Later releases, as far as the design goes
 
