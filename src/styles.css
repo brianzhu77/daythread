@@ -1607,6 +1607,8 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 .event-rows.is-page-end .event-rows-list { padding-top: 12px; }
 .event-rows.is-in-section { padding-bottom: 10px; }
 .event-rows-label { font-size: var(--text-meta); color: var(--ink-2); margin-bottom: 2px; }
+.reminders-stopped { margin-top: 2px; font-size: var(--text-meta); color: var(--ink-2); }
+@media (min-width: 900px) { .reminders-stopped button { min-height: 0; } }
 .day-event { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; column-gap: 8px; padding: 3px 0; line-height: 1.5; }
 .day-event-body { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; min-width: 0; }
 .day-event-time { flex: none; min-width: 4.75em; color: var(--ink-2); font-variant-numeric: tabular-nums; }
