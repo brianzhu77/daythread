@@ -36,6 +36,8 @@
 
 ## 4. For Roadbuster and Jazz
 
+**Roadbuster's read of the code, nothing run (5beabee0):** new columns are safe: `writeDiff` updates only the columns a build knows, so an older build's save leaves `icon` and `cover` alone. Add them through `addedPageColumns`, and both `pageOf` and `rowOf` need them or they vanish on the next save. **Accepted limit:** an older build hard-deleting a page and restoring it through Undo rewrites the row without them, which is rare and only during a rollback. A cover link is capped at 2,000 characters. A list response only carries changed pages, so only the first load pays. The sweep holds an uploaded cover or icon automatically, since `heldText` is the whole workspace, which needs a test and no code. Measure the emoji data first, as that decides whether it needs its own file.
+
 - **Storage:** optional `icon` and `cover` on a page, plus cover position. Likely new columns, added the way `week_start` was: additive, and an old build ignores them and leaves them alone. Please confirm the old build's saves keep them, with a rollback run.
 - **Sync:** they should arrive with page lists, because they show in the sidebar. Check the cost of adding them to every page in a list: a long URL on many pages adds up.
 - **Bundle:** the emoji picker's data is large. Load it only when opened, and check iOS's newest emoji draw on his phone.
