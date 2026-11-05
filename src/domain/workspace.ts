@@ -150,7 +150,7 @@ function runButton(state: Workspace, action: Extract<Action, { type: "run-button
   const steps = readSteps(stored);
   if (changesWords(steps) && pageContentKey(on) !== action.expectedContent) throw new DomainError("Changed elsewhere");
   const result = runSteps(state, steps, on, action, operationId, action.blockId, newBudget());
-  if (result.message === null) throw new DomainError(result.matchedNothing ? "No rows matched" : "Nothing to do");
+  if (result.message === null) throw new DomainError(result.because ?? (result.matchedNothing ? "No rows matched" : "Nothing to do"));
   return { message: result.message, ...(result.made ? { entityId: result.made } : {}) };
 }
 /** A tap on a Button property: its steps on each row, in one operation with one Undo, sharing one allowance (§6). */
@@ -161,7 +161,7 @@ function runRowButton(state: Workspace, action: Extract<Action, { type: "run-row
   if (stepsKey(stored) !== action.stepsKey) throw new DomainError("Changed elsewhere");
   if (new Set(action.rowIds).size !== action.rowIds.length) throw new DomainError("Invalid rows");
   const steps = readSteps(stored), budget = newBudget();
-  let message: string | null = null, made: string | undefined, matchedNothing = false;
+  let message: string | null = null, made: string | undefined, matchedNothing = false, because: string | undefined;
   for (const rowId of action.rowIds) {
     const { row } = rowPage(state, rowId);
     if (row.parentId !== db.id) throw new DomainError("That row moved");
@@ -169,15 +169,16 @@ function runRowButton(state: Workspace, action: Extract<Action, { type: "run-row
     const result = runSteps(state, steps, row, action, `${operationId}:${rowId}`, null, budget);
     if (result.message !== null) message = result.message;
     if (result.matchedNothing) matchedNothing = true;
+    because ??= result.because;
     made = result.made ?? made;
   }
-  if (message === null) throw new DomainError(matchedNothing ? "No rows matched" : "Nothing to do");
+  if (message === null) throw new DomainError(because ?? (matchedNothing ? "No rows matched" : "Nothing to do"));
   return { message: action.rowIds.length > 1 && steps.some((s) => s.kind === "edit-property") ? `${action.rowIds.length} rows changed` : message, ...(made ? { entityId: made } : {}) };
 }
 type ButtonBudget = { rows: number; todos: number };
 const newBudget = (): ButtonBudget => ({ rows: databaseLimits.rowsAtOnce, todos: databaseLimits.todosAtOnce });
 /** The steps themselves, on the page or row they're for. */
-function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: string; today: string }, operationId: string, blockId: string | null, budget: ButtonBudget): { message: string | null; made?: string; matchedNothing: boolean } {
+function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: string; today: string }, operationId: string, blockId: string | null, budget: ButtonBudget): { message: string | null; made?: string; because?: string; matchedNothing: boolean } {
   const at = isoTime(stamp.at), today = date(stamp.today);
   // Every target and the whole list are read first, so a broken one says so before anything else (§4.4).
   for (const step of steps) {
@@ -196,7 +197,7 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
   }
   // Counted across the steps, rather than each spending the whole limit (§4.9).
   const spend = (rows: number, todos: boolean) => { if (todos) { budget.todos -= rows; if (budget.todos < 0) throw new DomainError(`${databaseLimits.todosAtOnce} to-dos at most`); } else { budget.rows -= rows; if (budget.rows < 0) throw new DomainError(`${databaseLimits.rowsAtOnce.toLocaleString("en-US")} rows at most`); } };
-  let message: string | null = null, made: string | undefined, matchedNothing = false;
+  let message: string | null = null, made: string | undefined, matchedNothing = false, because: string | undefined;
   const named = <T,>(step: ButtonStep, work: () => T): T => {
     try { return work(); } catch (error) {
       if (error instanceof DomainError && !/ was deleted$| is in Trash$| at most$/.test(error.message)) throw new DomainError(`${stepTitle(step)}: ${error.message}`);
@@ -266,9 +267,11 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
         if (!rows.length) { matchedNothing = true; return; }
         spend(rows.length, true);
         const items = rows.flatMap((r) => { const taskId = taskIdOfRow(r.id); return taskId ? [{ taskId, changes: step.set.map((set) => ({ columnId: set.id, value: valueAtTap(set.value, todosDatabase.properties.find((p: Property) => p.id === set.id) ?? { type: "text" as const }, on, today) })) }] : []; });
-        // The bar's bulk edit may change some and say the rest couldn't. A tap is all or none, so a to-do that can't take this stops it.
-        message = execute(state, { type: "edit-todos", items, today }, operationId).message;
-        if (/ couldn't$/.test(message)) throw new DomainError(`${message.split(" · ")[1]} be changed`);
+        // As the bar's: a to-do that can't take a change, a cancelled one say, is normal here. It reads "3 changed · 1 couldn't", and if none could, later steps carry on, as for no match (Lead 371ebb4b).
+        try { message = execute(state, { type: "edit-todos", items, today }, operationId).message; } catch (error) {
+          if (!(error instanceof DomainError)) throw error;
+          matchedNothing = true; because = error.message;
+        }
         return;
       }
       const db = buttonTarget(state, step.databaseId, step.databaseName);
@@ -280,7 +283,7 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
       message = `${rows.length} row${rows.length === 1 ? "" : "s"} changed`;
     });
   }
-  return { message, ...(made ? { made } : {}), matchedNothing };
+  return { message, ...(made ? { made } : {}), ...(because ? { because } : {}), matchedNothing };
 }
 function commentBody(body: string): string {
   const words = text(body, 20_000).trim();
