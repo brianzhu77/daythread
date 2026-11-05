@@ -61,7 +61,7 @@ export function RemindersStopped() {
   return <div className="reminders-stopped">
     <span>{state === 'failed' ? 'Couldn’t turn on reminders' : 'Reminders are off'}</span>
     <span aria-hidden="true"> · </span>
-    <button type="button" className="link" disabled={state === 'busy'} onClick={() => void turnOn()}>Turn on here</button>
+    <button type="button" className="app-link" disabled={state === 'busy'} onClick={() => void turnOn()}>{state === 'failed' ? 'Try again' : 'Turn on here'}</button>
   </div>
 }
 

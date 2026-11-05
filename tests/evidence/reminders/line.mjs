@@ -32,10 +32,18 @@ const scenario = async (name, seed, stopped, permission, act) => {
 const line = page => page.locator('.reminders-stopped')
 await scenario('Stopped, with a chip to come: the line shows, Turn on here signs this device up, and it goes', '', true, 'default', async (page, posted) => {
   const r = { says: (await line(page).innerText()).replace(/\s+/g, ' ') }
+  r.height = (await line(page).boundingBox()).height
   await page.screenshot({ path: `/tmp/rb-csv/reminders-line-${engine}.png` })
   await line(page).getByRole('button', { name: 'Turn on here' }).click(); await wait(500)
   r.posted = posted.length; r.after = await line(page).count()
-  r.ok = r.says === 'Reminders are off · Turn on here' && r.posted === 1 && r.after === 0
+  r.ok = r.says === 'Reminders are off · Turn on here' && r.height < 30 && r.posted === 1 && r.after === 0
+  return r
+})
+await scenario('A failed try says so, with Try again', '', true, 'default', async page => {
+  await page.unroute('**/api/push/subscribe'); await page.route('**/api/push/subscribe', route => route.fulfill({ status: 503, json: { ok: false } }))
+  await line(page).getByRole('button', { name: 'Turn on here' }).click(); await wait(500)
+  const r = { says: (await line(page).innerText()).replace(/\s+/g, ' ') }
+  r.ok = r.says === 'Couldn’t turn on reminders · Try again'
   return r
 })
 await scenario('Not stopped: nothing shows', '', false, 'default', async page => ({ ok: (await line(page).count()) === 0 }))
