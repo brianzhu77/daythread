@@ -22,4 +22,14 @@ if (process.argv[3] === 'move') {
   await run({ type: 'change-database', pageId: 'archive', change: { kind: 'addProperty', property: { id: 'nThere', name: 'N', type: 'number' } } })
   await run({ type: 'create-database', pageId: 'nested', parentId: 'kid', homeBlockId: null, title: 'Nested' })
 }
+if (process.argv[3] === 'grouped') {
+  await change({ kind: 'setSubItems', on: { parent: 'par', sub: 'sub' } })
+  await change({ kind: 'addProperty', property: { id: 'st', name: 'Stage', type: 'select', options: [{ id: 'a', name: 'Now', color: 'gray' }, { id: 'b', name: 'Later', color: 'blue' }] } })
+  await change({ kind: 'addProperty', property: { id: 'when', name: 'When', type: 'date' } })
+  // Top and its sub-item in different groups, and a row with no parent beside it.
+  for (const [id, parent, st] of [['kid', 'top', 'b'], ['top', null, 'a'], ['other', null, 'b']] as const) await run({ type: 'set-values', pageId: id, values: { ...(parent ? { par: [parent] } : {}), st, when: new Date().toISOString().slice(0, 10) } })
+  const base = ws.pages.find(p => p.id === 'work')!.database!.views[0]!
+  for (const layout of ['list', 'board', 'gallery', 'timeline'] as const) await change({ kind: 'addView', view: { ...base, id: `v-${layout}`, name: layout, layout, groupBy: 'st', ...(layout === 'timeline' ? { dateBy: 'when', timelineTable: true } : {}), ...(layout === 'board' || layout === 'gallery' ? { subItemsDisplay: 'flat' } : {}) } as never })
+  await change({ kind: 'updateView', viewId: base.id, groupBy: 'st' } as never)
+}
 console.log('seeded', process.argv[2])
