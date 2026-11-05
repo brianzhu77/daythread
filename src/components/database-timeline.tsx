@@ -336,6 +336,8 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
   // The table's cells: a tap edits, as in a table. A date changes here at any time, whatever the keys do to a bar (§5).
   const cell = (row: Page, property: Property, group?: string) => {
     const value = shownValue(db.database, row, property.id)
+    // A button can't sit in the cell's own button.
+    if (property.type === 'button') return <span key={property.id} className="database-pane-cell" style={{ width: columnWidth }}><PropertyCell property={property} value={value} row={row} today={today} /></span>
     const open = () => { if (!isReadOnly(property)) setOpenCell({ blockId, databaseId, rowId: row.id, columnId: property.id, ...(group !== undefined ? { group } : {}) }) }
     return <button key={property.id} type="button" className="database-pane-cell" style={{ width: columnWidth }} data-cell={cellKey({ blockId, databaseId, rowId: row.id, columnId: property.id, ...(group !== undefined ? { group } : {}) })} onClick={open}>
       {!isEmptyValue(value) && <PropertyCell property={property} value={value} today={today} />}

@@ -11,6 +11,7 @@ import { WorkspaceProvider, isConflict, useWorkspace } from './use-day'
 import { DatabaseCellEditor } from './database-block'
 import { CsvImportHost } from './csv-import'
 import { PeekHost } from './peek'
+import { ButtonEditorHost } from './button-editor'
 import { CommentsPaneHost } from './comments-pane'
 import { IconPickerHost } from './icon-picker'
 import { CoverPanelHost } from './page-cover'
@@ -97,6 +98,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <CsvImportHost />
         <PeekHost />
         <CommentsPaneHost />
+        <ButtonEditorHost pageId={null} schema={null as never} />
         <IconPickerHost />
         <CoverPanelHost />
         <GlobalSearch />

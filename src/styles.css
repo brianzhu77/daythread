@@ -2917,3 +2917,13 @@ button.comment-quote { cursor: pointer; }
   body:has(.comments-pane.is-sheet) .editor-phone-toolbar { display: none; }
 }
 
+
+/* In a cell, 28 drawn, with the row as its tap area (Jazz). */
+.editor-button-pill.is-cell { position: relative; z-index: 1; flex: 0 1 auto; min-width: 0; height: 28px; padding: 0 10px; overflow: visible; font-size: var(--text-meta); max-width: 100%; }
+/* The tap area reaches past what's drawn, as far as its own row's height allows, so a near miss doesn't open the row (Jazz). */
+.editor-button-pill.is-cell::after { content: ''; position: absolute; inset: -4px -4px; }
+.database-list-value:has(> .is-cell), .database-card-value:has(> .is-cell) { overflow: visible; }
+.database-list-values:has(.is-cell) { overflow-x: clip; overflow-y: visible; }
+.row-property-value:has(> .is-cell) { min-width: 0; }
+.database-pane-cell:has(> .is-cell) { display: inline-flex; align-items: center; }
+@media (max-width: 899px) { .database-list-row .editor-button-pill.is-cell::after, td .editor-button-pill.is-cell::after { inset: -8px -4px; } }

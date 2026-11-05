@@ -120,6 +120,8 @@ function tasksOnDay(state: Workspace, day: string): Task[] {
   }
   return out;
 }
+/** None of a bulk edit's to-dos could take it, so nothing was changed. */
+class NoTodoChanged extends DomainError {}
 /** Where a button sits, with the list holding it, so blocks can go beside it. */
 function buttonPlace(nodes: EditorNode[], id: string): { list: EditorNode[]; index: number } | null {
   for (let index = 0; index < nodes.length; index++) {
@@ -137,18 +139,49 @@ function buttonTarget(state: Workspace, databaseId: string, name: string): Page 
   if (isTrashed(db)) throw new DomainError(`${db.title.trim() || name} is in Trash`);
   return db;
 }
-/** Every step of a tap, in one operation, so they all apply or none do (buttons.md §4.1). A throw here leaves nothing, as a command works on a copy. */
+/** A tap on a button on a page: every step in one operation, so they all apply or none do (buttons.md §4.1). A throw here leaves nothing, as a command works on a copy. */
 function runButton(state: Workspace, action: Extract<Action, { type: "run-button" }>, operationId: string): { message: string; entityId?: string } {
   const on = page(state, action.pageId);
   if (isTrashed(on)) throw new DomainError("That page is in Trash");
   if (isTemplate(on)) throw new DomainError("A template doesn't run its buttons");
-  const doc = docOf(on), held = buttonPlace(doc, action.blockId);
+  const held = buttonPlace(docOf(on), action.blockId);
   const block = held?.list[held.index];
   if (!block || block.type !== buttonBlockType) throw new DomainError("That button's gone");
   const stored = String(block.props?.steps ?? "");
   if (stepsKey(stored) !== action.stepsKey) throw new DomainError("Changed elsewhere");
-  const steps = readSteps(stored), at = isoTime(action.at), today = date(action.today);
+  const steps = readSteps(stored);
   if (changesWords(steps) && pageContentKey(on) !== action.expectedContent) throw new DomainError("Changed elsewhere");
+  const result = runSteps(state, steps, on, action, operationId, action.blockId, newBudget());
+  if (result.message === null) throw new DomainError(result.because ?? (result.matchedNothing ? "No rows matched" : "Nothing to do"));
+  return { message: result.message, ...(result.made ? { entityId: result.made } : {}) };
+}
+/** A tap on a Button property: its steps on each row, in one operation with one Undo, sharing one allowance (§6). */
+function runRowButton(state: Workspace, action: Extract<Action, { type: "run-row-button" }>, operationId: string): { message: string; entityId?: string } {
+  const db = buttonTarget(state, action.databaseId, "That database"), property = db.database.properties.find((p) => p.id === action.propertyId);
+  if (!property || property.type !== "button") throw new DomainError("That button's gone");
+  const stored = property.button?.steps ?? "";
+  if (stepsKey(stored) !== action.stepsKey) throw new DomainError("Changed elsewhere");
+  if (new Set(action.rowIds).size !== action.rowIds.length) throw new DomainError("Invalid rows");
+  const steps = readSteps(stored), budget = newBudget();
+  let message: string | null = null, made: string | undefined, matchedNothing = false, because: string | undefined;
+  for (const rowId of action.rowIds) {
+    const { row } = rowPage(state, rowId);
+    if (row.parentId !== db.id) throw new DomainError("That row moved");
+    if (rowTemplateDatabaseId(row)) throw new DomainError("A template doesn't run its buttons");
+    const result = runSteps(state, steps, row, action, `${operationId}:${rowId}`, null, budget);
+    if (result.message !== null) message = result.message;
+    if (result.matchedNothing) matchedNothing = true;
+    because ??= result.because;
+    made = result.made ?? made;
+  }
+  if (message === null) throw new DomainError(because ?? (matchedNothing ? "No rows matched" : "Nothing to do"));
+  return { message: action.rowIds.length > 1 && steps.some((s) => s.kind === "edit-property") ? `${action.rowIds.length} rows changed` : message, ...(made ? { entityId: made } : {}) };
+}
+type ButtonBudget = { rows: number; todos: number };
+const newBudget = (): ButtonBudget => ({ rows: databaseLimits.rowsAtOnce, todos: databaseLimits.todosAtOnce });
+/** The steps themselves, on the page or row they're for. */
+function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: string; today: string }, operationId: string, blockId: string | null, budget: ButtonBudget): { message: string | null; made?: string; because?: string; matchedNothing: boolean } {
+  const at = isoTime(stamp.at), today = date(stamp.today);
   // Every target and the whole list are read first, so a broken one says so before anything else (§4.4).
   for (const step of steps) {
     if (step.kind === "add-row" || step.kind === "edit-rows") {
@@ -165,8 +198,7 @@ function runButton(state: Workspace, action: Extract<Action, { type: "run-button
     if (step.kind === "open" && step.target.kind === "url" && !safeUrl(step.target.url)) throw new DomainError("That link can't be opened");
   }
   // Counted across the steps, rather than each spending the whole limit (§4.9).
-  let rowsLeft = databaseLimits.rowsAtOnce, todosLeft = databaseLimits.todosAtOnce;
-  const spend = (rows: number, todos: boolean) => { if (todos) { todosLeft -= rows; if (todosLeft < 0) throw new DomainError(`${databaseLimits.todosAtOnce} to-dos at most`); } else { rowsLeft -= rows; if (rowsLeft < 0) throw new DomainError(`${databaseLimits.rowsAtOnce.toLocaleString("en-US")} rows at most`); } };
+  const spend = (rows: number, todos: boolean) => { if (todos) { budget.todos -= rows; if (budget.todos < 0) throw new DomainError(`${databaseLimits.todosAtOnce} to-dos at most`); } else { budget.rows -= rows; if (budget.rows < 0) throw new DomainError(`${databaseLimits.rowsAtOnce.toLocaleString("en-US")} rows at most`); } };
   let message: string | null = null, made: string | undefined, matchedNothing = false, because: string | undefined;
   const named = <T,>(step: ButtonStep, work: () => T): T => {
     try { return work(); } catch (error) {
@@ -186,7 +218,7 @@ function runButton(state: Workspace, action: Extract<Action, { type: "run-button
         return on.date ? planRow(task, on.date) : { id: newId(), type: "task", props: { taskId: task.id, role: "reference", planDate: "" }, content: structuredClone(n.content), children: [] };
       }, (n) => isOriginalBlock(state, n));
       // It's read again each time, as an earlier step of this tap may have changed the page.
-      const now = docOf(on), place = buttonPlace(now, action.blockId);
+      const now = docOf(on), place = blockId ? buttonPlace(now, blockId) : null;
       if (!place) throw new DomainError("That button's gone");
       if (step.place === "above") place.list.splice(place.index, 0, ...fresh);
       else if (step.place === "below") place.list.splice(place.index + 1, 0, ...fresh);
@@ -214,6 +246,22 @@ function runButton(state: Workspace, action: Extract<Action, { type: "run-button
       made = rowId;
       message = `Added to ${db.title.trim() || step.databaseName}`;
     });
+    else if (step.kind === "edit-property") named(step, () => {
+      const owner = databaseOfRow(state, on);
+      if (!owner) throw new DomainError("That row moved");
+      spend(1, false);
+      const properties = step.set.map((set) => owner.database.properties.find((p) => p.id === set.id));
+      const values = Object.fromEntries(step.set.map((set, i) => {
+        const property = properties[i];
+        if (!property) throw new DomainError(`${set.name} was deleted`);
+        const value = valueAtTap(set.value, property, on, today);
+        if (!set.mode) return [set.id, value];
+        const had = Array.isArray(on.values?.[set.id]) ? (on.values![set.id] as string[]) : [], given = Array.isArray(value) ? (value as string[]) : [];
+        return [set.id, set.mode === "add" ? [...new Set([...had, ...given])] : had.filter((x) => !given.includes(x))];
+      }));
+      rowEdit(state, { pageId: on.id, values, expected: Object.fromEntries(properties.map((p) => [p!.id, (on.values?.[p!.id] ?? null) as Json])) }, at);
+      message = "1 row changed";
+    });
     else if (step.kind === "edit-rows") named(step, () => {
       const context = { today, pageDate: on.date };
       if (isTodosTarget(step.databaseId)) {
@@ -222,8 +270,9 @@ function runButton(state: Workspace, action: Extract<Action, { type: "run-button
         spend(rows.length, true);
         const items = rows.flatMap((r) => { const taskId = taskIdOfRow(r.id); return taskId ? [{ taskId, changes: step.set.map((set) => ({ columnId: set.id, value: valueAtTap(set.value, todosDatabase.properties.find((p: Property) => p.id === set.id) ?? { type: "text" as const }, on, today) })) }] : []; });
         // As the bar's: a to-do that can't take a change, a cancelled one say, is normal here. It reads "3 changed · 1 couldn't", and if none could, later steps carry on, as for no match (Lead 371ebb4b).
+        // Only this says nothing changed. Any other refusal can come after some to-dos already have, so it goes up and the whole tap is dropped, as a command works on a copy.
         try { message = execute(state, { type: "edit-todos", items, today }, operationId).message; } catch (error) {
-          if (!(error instanceof DomainError)) throw error;
+          if (!(error instanceof NoTodoChanged)) throw error;
           matchedNothing = true; because = error.message;
         }
         return;
@@ -237,9 +286,7 @@ function runButton(state: Workspace, action: Extract<Action, { type: "run-button
       message = `${rows.length} row${rows.length === 1 ? "" : "s"} changed`;
     });
   }
-  // Nothing changed at all: nothing to Undo, and no operation.
-  if (message === null) throw new DomainError(because ?? (matchedNothing ? "No rows matched" : "Nothing to do"));
-  return { message, ...(made ? { entityId: made } : {}) };
+  return { message, ...(made ? { made } : {}), ...(because ? { because } : {}), matchedNothing };
 }
 function commentBody(body: string): string {
   const words = text(body, 20_000).trim();
@@ -1224,6 +1271,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       return { message: made ? `${made} repeating row${made === 1 ? "" : "s"} made` : "Nothing due", ...(skipped.length ? { skippedRepeats: skipped } : {}) };
     }
     case "run-button": return runButton(state, action, operationId);
+    case "run-row-button": return runRowButton(state, action, operationId);
     case "add-row": {
       const db = databasePage(state, action.databaseId);
       const at = isoTime(action.at);
@@ -1363,7 +1411,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (did) changed++;
         else if (refused) couldnt++;
       }
-      if (!changed) throw new DomainError(because ?? (couldnt ? "Those to-dos are gone" : "Nothing to change"));
+      if (!changed) throw new NoTodoChanged(because ?? (couldnt ? "Those to-dos are gone" : "Nothing to change"));
       return { message: `${changed} to-do${changed === 1 ? "" : "s"} changed${couldnt ? ` · ${couldnt} couldn't` : ""}` };
     }
     case "delete-pages": {

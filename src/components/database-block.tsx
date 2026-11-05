@@ -32,6 +32,7 @@ import { DatabaseGallery } from './database-gallery'
 import { LinkedDatabase } from './database-linked'
 import { DatabaseList } from './database-list'
 import { DatabaseMenuButton, DatabaseViewsButton, openDatabaseMenu } from './database-menu'
+import { useRunRowButton } from './button-run'
 
 const newId = (): string => crypto.randomUUID()
 /** Rows drawn before "Show 25 more" (design §13): inline, and on the full page. */
@@ -1175,7 +1176,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
                       <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} disabled={isReadOnly(property)} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
                     </span>
                   : isReadOnly(property)
-                  ? <span data-nav={navId} tabIndex={0} className="database-cell is-read-only"><PropertyCell property={property} value={value} row={row} today={today} /></span>
+                  ? <span data-nav={navId} tabIndex={0} className="database-cell is-read-only" {...(property.type === 'button' ? { onKeyDown: (e: KeyboardEvent<HTMLSpanElement>) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); e.stopPropagation(); e.currentTarget.querySelector('button')?.click() } } } : {})}><PropertyCell property={property} value={value} row={row} today={today} /></span>
                   : wide && typeof value === 'string' && linkHref(property, value)
                   // At 1280 a link opens from its text, and the pencil edits it (design §6.1, Jazz bf91cb72).
                   ? <span className="database-url-cell">
@@ -1309,6 +1310,7 @@ const keepEditorFocus = (e: ReactMouseEvent) => e.preventDefault()
 const todosAtOnce = databaseLimits.todosAtOnce
 
 export function PickedBar({ picks: { picked, setPicked, picking, stopPicking, deletePicked, pickable, editing, setEditing }, db, floating }: { picks: RowPicking; db: Page & { database: Database }; floating?: boolean }) {
+  const runRowButton = useRunRowButton(() => undefined)
   // A big change takes seconds on the Worker (Planned on 500: about 6 s, Lead's deployed read). It says so, past a moment a small one never reaches, and the notice says when it's done.
   const [changing, setChanging] = useState<string | null>(null)
   const inFlight = useRef(0)
@@ -1332,6 +1334,7 @@ export function PickedBar({ picks: { picked, setPicked, picking, stopPicking, de
   return <div className={`database-picked-bar${picking ? ' is-picking' : floating ? ' is-floating' : ''}`} role="toolbar" aria-label="Selected rows" onMouseDown={keepEditorFocus}>
     <span role="status">{changing ?? (picked.length === 1 ? '1 row' : `${picked.length} rows`)}</span>
     {picked.length > 0 && <EditPickedButton db={db} rowIds={picked} editing={editing} setEditing={setEditing} track={track} />}
+    {picked.length > 0 && db.database.properties.filter(p => p.type === 'button').map(p => <button key={p.id} type="button" className="app-link" onClick={() => track(`Changing ${picked.length === 1 ? '1 row' : `${picked.length} rows`}…`, runRowButton(db.id, p.id, p.button?.steps ?? '', picked))}>{p.button?.label || p.name}</button>)}
     {picked.length > 0 && <button type="button" className="app-link is-danger" onClick={deletePicked}>Delete</button>}
     {picking && (() => { const all = pickable(); return picked.length < all.length && <button type="button" className="app-link" onClick={() => setPicked(all)}>All</button> })()}
     <button type="button" className="app-link" onClick={stopPicking}>Done</button>
@@ -1452,6 +1455,7 @@ function defaultWidth(property: Property): number {
     case 'date': return 110
     case 'select': case 'multiSelect': case 'status': return 140
     case 'relation': case 'files': return 180
+    case 'button':
     case 'rollup':
     case 'formula': return 120
     case 'text': case 'url': case 'email': case 'phone': return 180

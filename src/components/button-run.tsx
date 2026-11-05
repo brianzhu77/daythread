@@ -1,12 +1,12 @@
 // A tap on a button (docs/design/buttons.md §4). Confirmations first, then the words saved, then one command, and anything opened only after it's committed.
-import { useCallback } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { changesStored, readSteps, safeUrl, stepsKey, type ButtonStep } from '../domain/buttons'
 import { pageContentKey } from '../domain/editor-document'
-import type { Page } from '../domain/types'
+import type { Action, Page } from '../domain/types'
 import { todayIso } from './dates'
-import { flushEditor } from './editor-flush'
+import { flushAllEditors, flushEditor } from './editor-flush'
 import { pageHref } from './page-tree'
 import { newOperationId, useWorkspace } from './use-day'
 
@@ -30,34 +30,33 @@ function openUrl(url: string) {
   toast('Opening that was blocked', { timeout: 8000, actionProps: { children: 'Open', onPress: () => { window.open(url, '_blank', 'noopener,noreferrer') } } })
 }
 
-export function useRunButton(onEdit: (blockId: string) => void) {
+/** What's the same for a page's button and a property's: one at a time, confirmations first, the words saved, one command, and anything opened after it. */
+function useTap(onEdit: () => void) {
   const { run, latest } = useWorkspace()
   const navigate = useNavigate()
-  return useCallback(async (page: Pick<Page, 'id'>, blockId: string, stored: string) => {
-    if (running.has(blockId)) return
+  return useCallback(async (key: string, stored: string, pageId: string | null, send: (stamp: { at: string; today: string }) => Action) => {
+    if (running.has(key)) return
     const steps = readSteps(stored)
-    if (!steps.length) { onEdit(blockId); return }
+    if (!steps.length) { onEdit(); return }
     if (!navigator.onLine && steps.some(changesStored)) { toast('Not run · offline', { timeout: 6000 }); return }
-    running.add(blockId); changed()
+    running.add(key); changed()
     try {
       for (const step of steps) if (step.kind === 'confirm' && !await ask(step.text)) return
       let madeRow: string | undefined
       if (steps.some(changesStored)) {
         // The command starts from what he sees, so what's typed goes first, with any save already on its way.
-        if (!await flushEditor(page.id)) { toast('Not run · your words aren\'t saved yet', { timeout: 6000 }); return }
-        arriving.add(page.id)
-        const now = latest()?.pages.find(p => p.id === page.id)
-        if (!now) return
-        const action = { type: 'run-button' as const, pageId: page.id, blockId, stepsKey: stepsKey(stored), expectedContent: pageContentKey(now), at: new Date().toISOString(), today: todayIso() }
+        if (!await (pageId ? flushEditor(pageId) : flushAllEditors())) { toast('Not run · your words aren\'t saved yet', { timeout: 6000 }); return }
+        if (pageId) arriving.add(pageId)
+        const action = send({ at: new Date().toISOString(), today: todayIso() })
         const operationId = newOperationId()
         const last = [...steps].reverse().find(changesStored)
         const notice = (r: { message: string; operationId: string; entityId?: string }) => ({ text: r.message, undoOperationId: r.operationId, ...(last?.kind === 'add-row' && r.entityId ? { extra: { label: 'Open', run: () => { void navigate({ href: `/pages?page=${encodeURIComponent(r.entityId!)}` }) } } } : {}) })
         let refusal: string | null = null
-        const send = () => run(action, notice, operationId, { inlineRefusal: refusals, onRefused: message => { refusal = message } })
-        let receipt = await send()
+        const once = () => run(action, notice, operationId, { inlineRefusal: refusals, onRefused: message => { refusal = message } })
+        let receipt = await once()
         // A tab behind the workspace is refused whatever it sends, and comes back up to date; the keys in the action then decide (§4.8).
-        if (!receipt && refusal !== null && /Saved elsewhere/.test(refusal)) { refusal = null; receipt = await send() }
-        if (!receipt) { if (refusal !== null) refused(refusal, steps, blockId, onEdit, run); return }
+        if (!receipt && refusal !== null && /Saved elsewhere/.test(refusal)) { refusal = null; receipt = await once() }
+        if (!receipt) { if (refusal !== null) refused(refusal, steps, onEdit, run); return }
         madeRow = receipt.entityId
       }
       // After the commit, so a blocked page or popup can't send it again (§4.7).
@@ -71,18 +70,37 @@ export function useRunButton(onEdit: (blockId: string) => void) {
         }
       }
     } finally {
-      running.delete(blockId); changed()
+      running.delete(key); changed()
       // The reply's page arrives with a render just after this.
-      setTimeout(() => arriving.delete(page.id), 300)
+      if (pageId) setTimeout(() => arriving.delete(pageId), 300)
     }
   }, [run, latest, navigate, onEdit])
 }
 
+export function useRunButton(onEdit: (blockId: string) => void) {
+  const { latest } = useWorkspace()
+  const [edit] = useState(() => ({ current: onEdit })); edit.current = onEdit
+  const blockRef = useRef('')
+  const tap = useTap(useCallback(() => edit.current(blockRef.current), [edit]))
+  return useCallback((page: Pick<Page, 'id'>, blockId: string, stored: string) => {
+    blockRef.current = blockId
+    return tap(blockId, stored, page.id, stamp => {
+      const now = latest()?.pages.find(p => p.id === page.id)
+      return { type: 'run-button', pageId: page.id, blockId, stepsKey: stepsKey(stored), expectedContent: now ? pageContentKey(now) : '', ...stamp }
+    })
+  }, [tap, latest])
+}
+/** A Button property, on one row or several chosen ones (§6). */
+export function useRunRowButton(onEdit: () => void) {
+  const tap = useTap(onEdit)
+  return useCallback((databaseId: string, propertyId: string, stored: string, rowIds: string[]) => tap(`${propertyId}:${rowIds.join()}`, stored, null, stamp => ({ type: 'run-row-button', databaseId, propertyId, rowIds, stepsKey: stepsKey(stored), ...stamp })), [tap])
+}
+
 /** A broken target, said at the tap, with the way to mend it (§4.4). */
-function refused(message: string, steps: readonly ButtonStep[], blockId: string, onEdit: (blockId: string) => void, run: ReturnType<typeof useWorkspace>['run']) {
+function refused(message: string, steps: readonly ButtonStep[], onEdit: () => void, run: ReturnType<typeof useWorkspace>['run']) {
   if (/ is in Trash$/.test(message)) {
     const step = steps.find(s => (s.kind === 'add-row' || s.kind === 'edit-rows') && message.startsWith(s.databaseName)) as { databaseId: string } | undefined
     toast(message, { timeout: 8000, ...(step ? { actionProps: { children: 'Restore', onPress: () => { void run({ type: 'restore-page', pageId: step.databaseId }, { text: 'Restored' }) } } } : {}) })
-  } else if (/ was deleted$/.test(message)) toast(message, { timeout: 8000, actionProps: { children: 'Edit', onPress: () => onEdit(blockId) } })
+  } else if (/ was deleted$/.test(message)) toast(message, { timeout: 8000, actionProps: { children: 'Edit', onPress: onEdit } })
   else toast(/elsewhere/.test(message) ? 'Changed in another tab, so nothing ran' : message, { timeout: 6000 })
 }

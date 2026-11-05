@@ -28,6 +28,7 @@ import {
   emailHref, phoneHref, tooLongMessage, urlHref, urlLabel, withoutTime,
 } from './property-values.ts'
 import { fileHref, fileSizeLabel, uploadFile, type FileItem, type UploadFailure } from './file-upload'
+import { ButtonCell } from './button-cell'
 
 export interface CommitInfo {
   /** Show this as the usual Undo notice ("Notes changed · Undo"): phone Text/URL commits only (Lead f1e56ab4). */
@@ -685,6 +686,7 @@ export function PropertyCell({ property, value, row, today = todayIso(), wrap = 
       const option = property.options?.find(o => o.id === read)
       return option ? <OptionLabel option={option} status /> : null
     }
+    case 'button': return row ? <ButtonCell property={property} row={row} /> : <span className="cell-button-label">{property.button?.label || property.name}</span>
     case 'rollup':
     case 'formula': return null
     case 'files': return <span className="cell-chips">{(read as FileValue[]).map(f => <span key={f.id} className="cell-file"><PaperclipIcon /><span>{f.name}</span></span>)}</span>
