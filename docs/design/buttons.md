@@ -1,6 +1,6 @@
 # Buttons: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead and Jazz to review**. Not approved and not built.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **design with the Lead, Jazz and Ratchet to read. Only §5's first step, the block spec with no way to make one, is approved and built (Lead), since it's reversible and sets the floor.** The rest isn't approved or built.
 - Asked by the Lead (3f046122). Scope rule: nothing cut for lack of evidence, and his use only sets the order (Brian 57deaed7). `databases.md` §14 puts Buttons in "Later", waiting for this pass.
 - **Evidence:** Notion's help pages on [page buttons](https://www.notion.com/help/buttons) and [database buttons](https://www.notion.com/help/database-buttons). I read them; I haven't used Notion's buttons. Those pages don't cover the phone, a button in a table cell, or running one on several rows, so those parts below are my proposal, not Notion's behaviour.
 - **His use:** he had no databases at the last read (Nov 2). Nothing here comes from watching him, so the examples are illustrations.
@@ -67,7 +67,7 @@ There's no explanatory line anywhere (Daythread's rule, Brian 1ac6784b).
   - The open editor saves what's been typed before the click, so the command starts from what he sees.
   - The way back is the notice's Undo, not ⌘Z in the editor, and it's refused after later changes, like any notice's Undo.
   - A page open in another tab learns of it when he returns to that tab. Unsaved typing there gets the real conflict notice.
-- **Old tabs and the rollback floor:** the floor rises for the block, so it ships in two steps, as the database block did: first a release with the block spec and no way to make one, which becomes the floor, then the feature. The property type is confirmed by running it, as R3-17 asks.
+- **Old tabs and the rollback floor:** the floor rises for the block, so it ships in two steps, as the database block did: first a release with the block spec and no way to make one, which becomes the floor, then the feature. **Done first (Lead):** the spec is `label` and `steps`, where `steps` is one opaque string, so what steps can do can grow without the floor reading them. A tap on it there does nothing. The property type is confirmed by running it, as R3-17 asks.
 - **Where the steps live:** in the block's props and the property's settings, with ids read at the click (§4.4).
 - **Automations (`automations.md`):** one shared list of steps.
 
