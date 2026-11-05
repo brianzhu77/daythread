@@ -21,6 +21,50 @@ async function registration(): Promise<ServiceWorkerRegistration> {
   return (await navigator.serviceWorker.getRegistration('/')) ?? navigator.serviceWorker.register('/sw.js')
 }
 
+/** Signs this device up. It starts clean: the server sends only what falls due after this. */
+async function subscribeHere(publicKey: string): Promise<'on' | 'denied' | 'failed'> {
+  let sub: PushSubscription | null = null
+  try {
+    const reg = await registration()
+    if ((await Notification.requestPermission()) !== 'granted') return 'denied'
+    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) as BufferSource })
+    const r = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sub.toJSON()) })
+    if (!r.ok) throw new Error(`subscribe ${r.status}`)
+    return 'on'
+  } catch {
+    await sub?.unsubscribe().catch(() => undefined)
+    return 'failed'
+  }
+}
+
+/**
+ * Where a chip's reminder would come from (B60): a quiet line when his reminders stopped by themselves and no device has
+ * them, on whichever device he's on. Nothing shows where this device couldn't sign up.
+ */
+export function RemindersStopped() {
+  const [publicKey, setPublicKey] = useState<string | null>(null)
+  const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle')
+  useEffect(() => {
+    let gone = false
+    void fetch('/api/push/key', { cache: 'no-store' }).then(r => r.json() as Promise<{ publicKey: string | null; stopped?: boolean }>).then(({ publicKey, stopped }) => {
+      if (!gone && stopped && publicKey && supported() && Notification.permission !== 'denied') setPublicKey(publicKey)
+    }, () => undefined)
+    return () => { gone = true }
+  }, [])
+  if (!publicKey) return null
+  const turnOn = async () => {
+    setState('busy')
+    const result = await subscribeHere(publicKey)
+    if (result === 'on' || result === 'denied') setPublicKey(null)
+    else setState('failed')
+  }
+  return <div className="reminders-stopped">
+    <span>{state === 'failed' ? 'Couldn’t turn on reminders' : 'Reminders are off'}</span>
+    <span aria-hidden="true"> · </span>
+    <button type="button" className="app-link" disabled={state === 'busy'} onClick={() => void turnOn()}>{state === 'failed' ? 'Try again' : 'Turn on here'}</button>
+  </div>
+}
+
 export function Reminders() {
   const [state, setState] = useState<State>('loading')
   const [publicKey, setPublicKey] = useState<string | null>(null)
@@ -46,18 +90,7 @@ export function Reminders() {
   async function turnOn() {
     if (!publicKey) return
     setState('busy')
-    let sub: PushSubscription | null = null
-    try {
-      const reg = await registration()
-      if ((await Notification.requestPermission()) !== 'granted') return setState('denied')
-      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) as BufferSource })
-      const r = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(sub.toJSON()) })
-      if (!r.ok) throw new Error(`subscribe ${r.status}`)
-      setState('on')
-    } catch {
-      await sub?.unsubscribe().catch(() => undefined)
-      setState('failed')
-    }
+    setState(await subscribeHere(publicKey))
   }
   async function turnOff() {
     setState('busy')

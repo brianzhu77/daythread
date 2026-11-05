@@ -157,10 +157,26 @@ export function acceptSavedBlocks(state: Workspace, page: Page, nodes: EditorNod
  * After a command: a place whose lines differ from its record is where they changed, and the record takes them. Then every
  * place is written again from the record, its own roles kept, so one command never leaves two places apart.
  */
+/**
+ * A database's home has one place, on the original. When its block has gone from every line and it's still not on the page that holds
+ * the database, a save elsewhere removed it or the original went: the database stays, as a full page there, and any views keep showing it. Deleting never takes more than it says (R2-3, design §6).
+ */
+function detachLostHomes(state: Workspace, lost: readonly EditorNode[]): void {
+  for (const line of lost) {
+    const db = state.pages.find(p => p.id === line.props?.pageId && !p.trashedAt && p.database?.homeBlockId === line.id)
+    if (!db) continue
+    const parent = state.pages.find(p => p.id === db.parentId)
+    let there = false
+    if (parent) walk(pageNodes(parent), n => { if (n.id === line.id) there = true })
+    if (!there) db.database!.homeBlockId = null
+  }
+}
+const databasesIn = (lines: readonly EditorNode[]): EditorNode[] => { const out: EditorNode[] = []; walk(lines as EditorNode[], n => { if (n.type === 'database') out.push(n) }); return out }
 export function settleSynced(state: Workspace): { linesRemovedFrom?: number } {
   // A block only comes from a template or a duplicate where a record exists already, so with none this costs nothing (B21-14).
   if (!hasRecords(state)) return {}
   let linesRemovedFrom: number | undefined
+  const lostHomes: EditorNode[] = []
   // Measured against the record as it was, so the places that haven't changed don't change it back.
   const was = new Map(state.synced!.map(r => [r.id, recordKey(r)]))
   for (const page of state.pages) {
@@ -175,6 +191,8 @@ export function settleSynced(state: Workspace): { linesRemovedFrom?: number } {
         // Fewer lines than it had, on a block shown elsewhere too.
         const count = (list: EditorNode[]): number => list.reduce((sum, l) => sum + 1 + count(l.children ?? []), 0)
         if (count(lines) < count(pageNodes({ document: record.lines }))) { const pages = new Set(syncedPlaces(state, record.id).map(p => p.page.id)).size; if (pages > 1) linesRemovedFrom = pages }
+        const still = new Set(databasesIn(lines).map(l => l.id))
+        lostHomes.push(...databasesIn(pageNodes({ document: record.lines })).filter(l => !still.has(l.id)))
         record.lines = JSON.stringify(lines)
       }
     })
@@ -192,6 +210,7 @@ export function settleSynced(state: Workspace): { linesRemovedFrom?: number } {
     })
     page.document = JSON.stringify(nodes)
   }
+  detachLostHomes(state, lostHomes)
   return linesRemovedFrom ? { linesRemovedFrom } : {}
 }
 
@@ -211,6 +230,12 @@ export function ownLineIds(source: EditorNode, record: SyncedRecord | undefined)
   if (!record || record.original === source.id) return rename
   walk(source.children ?? [], n => { if (!n.id.endsWith(`${separator}${source.id}`)) rename[n.id] = `${n.id}${separator}${source.id}` })
   return rename
+}
+/** Where a page or database made in these lines lives: they have one home, the original's page, whichever place he's typing in (design §6). */
+export function homePageOfRecord(ws: Pick<Workspace, 'pages' | 'synced'>, syncId: string): Page | undefined {
+  const original = ws.synced?.find(r => r.id === syncId)?.original
+  const page = syncedPlaces(ws, syncId).find(p => p.block.id === original)?.page
+  return page && !page.trashedAt ? page : undefined
 }
 /** Every place a record is shown, Trash included, with the page it's on, in the workspace's order. */
 export function syncedPlaces(ws: Pick<Workspace, 'pages'>, syncId: string): { page: Page; block: EditorNode }[] {
@@ -274,8 +299,10 @@ export function deleteBlockPlace(state: Workspace, syncId: string, blockId: stri
   const here = places.find(p => p.block.id === blockId)
   if (!here || !record) return { places: 0, wasOriginal: false }
   const wasOriginal = record.original === blockId
+  const homes = wasOriginal ? databasesIn(pageNodes({ document: record.lines })) : []
   rewrite(here.page, n => n.id === blockId, false)
   if (wasOriginal) for (const { page } of places) if (mentionsBlock(page.document)) rewrite(page, n => n.props?.syncId === syncId, true)
+  detachLostHomes(state, homes)
   return { places: places.length, wasOriginal }
 }
 

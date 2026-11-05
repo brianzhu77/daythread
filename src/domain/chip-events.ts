@@ -1,5 +1,5 @@
 // The events `@date` chips make, read from the documents. Nothing is stored about them.
-import { flatNodes, pageNodes, type EditorNode } from './editor-document.ts'
+import { flatNodes, pageNodes, rowTaskId, type EditorNode } from './editor-document.ts'
 import { readMention, type DateMention } from './date-chip.ts'
 import { liveTitle, type InlineRef } from './page-refs.ts'
 import { isTrashed } from './page-tree.ts'
@@ -21,7 +21,7 @@ function titleOf(content: unknown, ws: Workspace): string {
   return words(content).replace(/\s+/g, ' ').trim()
 }
 
-interface Holder { mention: DateMention; title: string; line: EventLine; pageDate: LocalDate | null; order: number }
+interface Holder { mention: DateMention; title: string; line: EventLine; pageDate: LocalDate | null; order: number; taskId: string | null }
 /**
  * Every chip event in the workspace, one per `eventId`, from the pages that aren't in the trash. The same id in two
  * lines (a brought line keeps its chip) is one event, taken from the holder on the newest day page, else the first
@@ -40,7 +40,7 @@ export function chipEvents(ws: Workspace): Map<string, DayEvent> {
       if (Array.isArray(n.content)) for (const item of n.content) {
         const mention = readMention(item)
         if (!mention) continue
-        const holder = { mention, title: titleOf(n.content, ws), line: { pageId: page.id, lineId: n.id }, pageDate, order: order++ }
+        const holder = { mention, title: titleOf(n.content, ws), line: { pageId: page.id, lineId: n.id }, pageDate, order: order++, taskId: rowTaskId(n) ?? null }
         const seen = best.get(mention.eventId)
         if (!seen || newer(holder, seen)) best.set(mention.eventId, holder)
       }
@@ -48,7 +48,7 @@ export function chipEvents(ws: Workspace): Map<string, DayEvent> {
     })
     walk(pageNodes(page))
   }
-  const events = new Map([...best].map(([id, h]) => [id, { id, title: h.title, date: h.mention.date, time: h.mention.time, line: h.line }]))
+  const events = new Map([...best].map(([id, h]) => [id, { id, title: h.title, date: h.mention.date, time: h.mention.time, line: h.line, ...(h.taskId ? { taskId: h.taskId } : {}) }]))
   cache.set(ws, { revision: ws.revision, events })
   return events
 }

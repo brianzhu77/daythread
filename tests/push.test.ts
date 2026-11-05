@@ -3,12 +3,14 @@ import assert from 'node:assert/strict'
 import { PGlite } from '@electric-sql/pglite'
 import { pgliteClient } from '../src/server/db/sql.ts'
 import { PostgresWorkspaceRepository } from '../src/server/postgres-repository.ts'
-import { PushStore, sentKeepMs } from '../src/server/push/store.ts'
+import { leaseMs, PushStore, sentKeepMs } from '../src/server/push/store.ts'
 import { handleSubscribe, handleUnsubscribe, runTick, tickAllowed, usePushStore, usePushWorkspaceStore } from '../src/server/push/server.ts'
 import type { PushPayload, SendResult } from '../src/server/push/send.ts'
 import { asOwner } from '../src/server/auth/request-owner.ts'
 import { dateOnlyTime, dueReminders, zonedEpoch } from '../src/domain/reminders.ts'
-import type { Workspace } from '../src/domain/types.ts'
+import { expandedWorkspace, syncedBlockType } from '../src/domain/synced.ts'
+import { pageContentKey } from '../src/domain/editor-document.ts'
+import type { Action, Workspace } from '../src/domain/types.ts'
 
 // Reminders for @date chips over web push (docs/design/reminders.md): what is due, what was sent, and the handlers.
 
@@ -73,11 +75,17 @@ test('PushStore: a subscription belongs to one workspace, the same endpoint agai
   assert.deepEqual(await push.subscriptionsOf(wsB), [])
   for (const t of ['push_subscriptions', 'push_sent']) assert.equal((await sql.query<{ rowsecurity: boolean }>(`select rowsecurity from pg_tables where tablename = '${t}'`))[0]!.rowsecurity, true, t)
   // Sent keys: remembered for a week.
-  await push.markSent(wsA, ['k1', 'k2'], new Date('2026-10-28T10:00:00Z'))
-  assert.deepEqual(await push.unsent(wsA, ['k1', 'k2', 'k3']), ['k3'])
-  assert.deepEqual(await push.unsent(wsB, ['k1']), ['k1'], 'per workspace')
-  await push.prune(new Date(Date.parse('2026-10-28T10:00:00Z') + sentKeepMs + 1))
-  assert.deepEqual(await push.unsent(wsA, ['k1']), ['k1'], 'pruned after a week')
+  const at = new Date('2026-10-28T10:00:00Z')
+  assert.deepEqual(await push.claim(wsA, ['k1', 'k2'], at), ['k1', 'k2'])
+  assert.deepEqual(await push.claim(wsA, ['k1'], at), [], 'another tick while the first is sending gets nothing')
+  await push.markSent(wsA, ['k1', 'k2'], at)
+  assert.deepEqual(await push.claim(wsA, ['k1', 'k2', 'k3'], new Date(at.getTime() + 3600_000)), ['k3'], 'sent stays sent, however long after')
+  assert.deepEqual(await push.claim(wsB, ['k1'], at), ['k1'], 'per workspace')
+  assert.deepEqual(await push.claim(wsB, ['k1'], new Date(at.getTime() + leaseMs)), ['k1'], 'a tick that died holds it only until its lease ends')
+  await push.release(wsB, ['k1'])
+  assert.deepEqual(await push.claim(wsB, ['k1'], at), ['k1'], 'failed sends are let go, for the next tick')
+  await push.prune(new Date(at.getTime() + sentKeepMs + 1))
+  assert.deepEqual(await push.claim(wsA, ['k1'], new Date(at.getTime() + sentKeepMs + 1)), ['k1'], 'pruned after a week')
   await db.close()
 })
 
@@ -90,6 +98,8 @@ test('runTick: each due reminder once per subscription, never twice; a gone endp
   const loadWorkspace = async (id: string) => (id === wsA ? ws : workspace('Asia/Shanghai', [{ id: 'd', type: 'daily', date: '2026-10-28', title: 'd', nodes: [line('x', [text('Standup '), chip('e9', '2026-10-28', '10:00')])] }]))
   // 3pm Vancouver on Oct 28 = 22:00Z; Shanghai's 10:00 was 02:00Z, long before.
   const now = new Date(vancouver(2026, 10, 28, 15, 2))
+  // Signed up before this story's October, as the clock here is what the test says it is.
+  await db.query(`update daythread.push_subscriptions set created_at = '2026-10-01'`)
   const first = await runTick({ store: push, loadWorkspace, send, now })
   assert.deepEqual(first, { workspaces: 2, due: 1, sent: 2, gone: 0, failed: 0 })
   assert.deepEqual(sent.map(([e, p]) => [e, p.title, p.body, p.url]), [[sub(1).endpoint, 'Dentist', 'Wed, Oct 28 · 3pm', '/day/2026-10-28'], [sub(2).endpoint, 'Dentist', 'Wed, Oct 28 · 3pm', '/day/2026-10-28']])
@@ -147,3 +157,123 @@ test('handleSubscribe and handleUnsubscribe: same-origin JSON for the signed-in 
     await db.close()
   }
 })
+
+test('a chip on a finished to-do stays quiet; an open one reminds (B60 6)', () => {
+  const task = (id: string, status: string) => ({ id, status, title: 'x' })
+  const row = (id: string, taskId: string, chipId: string) => ({ id, type: 'task', props: { taskId }, content: [text('Call '), chip(chipId, '2026-10-28', '15:00')], children: [] })
+  const w = { ...workspace('America/Vancouver', [{ id: 'd', type: 'daily', date: '2026-10-28', title: '', nodes: [row('r1', 'open', 'e-open'), row('r2', 'done', 'e-done'), row('r3', 'gone', 'e-cancelled')] }]), tasks: [task('open', 'open'), task('done', 'done'), task('gone', 'cancelled')] } as unknown as Workspace
+  assert.deepEqual(dueReminders(w, vancouver(2026, 10, 28, 14), vancouver(2026, 10, 28, 16)).map(r => r.eventId), ['e-open'])
+})
+test('no reminder from a page in Trash, a day template, a row template or a draft; a synced chip opens a page he can see (B60 5, 7)', () => {
+  const at = '2026-10-28', on = (id: string) => [line(`l-${id}`, [text(`${id} `), chip(`e-${id}`, at, '15:00')])]
+  const page = (id: string, extra: object) => ({ id, type: 'document' as const, date: null, title: id, nodes: on(id), ...extra })
+  const w = expandedWorkspace({ ...workspace('America/Vancouver', [
+    page('kept', {}), page('old', { trashedAt: '2026-10-01T00:00:00Z' }),
+    { id: 'tpl', type: 'template' as never, date: null, title: 'T', nodes: on('tpl') },
+    { id: 'rowtpl', type: 'template' as never, date: null, title: 'R', nodes: on('rowtpl'), parentId: 'kept' } as never,
+    { id: 'dr', type: 'draft' as never, date: null, title: 'D', nodes: on('dr') },
+    { id: 'place', type: 'document', date: null, title: 'Holds it', nodes: [{ id: 's1', type: syncedBlockType, props: { syncId: 'r1', rev: 1, key: '', roles: '' }, children: [] }] },
+  ]), synced: [{ id: 'r1', lines: JSON.stringify(on('shared')), rev: 1, original: 's1' }] } as unknown as Workspace)
+  const due = dueReminders(w, vancouver(2026, 10, 28, 14), vancouver(2026, 10, 28, 16))
+  assert.deepEqual(due.map(r => r.eventId).sort(), ['e-kept', 'e-shared'])
+  assert.equal(due.find(r => r.eventId === 'e-shared')!.url, '/pages?page=place')
+})
+
+const tickFixture = async () => { const { sql, repo, push, wsA } = await stores(); return { sql, repo, push, workspaceId: wsA } }
+test('turning on is a clean start: what fell due before a device signed up stays quiet, after that it fires once; October stays quiet too (B60 3, 4)', async () => {
+  const { sql, push, workspaceId } = await tickFixture()
+  await push.subscribe(workspaceId, { endpoint: 'https://push.example/a', p256dh: 'p', auth: 'a' })
+  const [{ created_at }] = await sql.query<{ created_at: string }>(`select created_at from daythread.push_subscriptions`)
+  const signedUp = new Date(created_at).getTime(), sent: string[] = []
+  const w = workspace('America/Vancouver', [{ id: 'd', type: 'daily', date: '2026-10-28', title: '', nodes: [] }])
+  const stamp = (at: number) => new Date(at).toLocaleString('sv-SE', { timeZone: 'America/Vancouver' })
+  const chipAt = (id: string, at: number) => { const [date, time] = stamp(at).split(' ') as [string, string]; return line(`l-${id}`, [text(`${id} `), chip(id, date, time.slice(0, 5))]) }
+  // On whole minutes either side, as a chip's time has no seconds.
+  const whole = (at: number) => Math.floor(at / 60_000) * 60_000
+  const before = whole(signedUp) - 10 * 60_000, after = whole(signedUp) + 10 * 60_000
+  w.pages[0]!.document = JSON.stringify([chipAt('earlier', before), chipAt('later', after), line('o', [text('October '), chip('oct', '2026-10-01', '09:00')])])
+  const run = (now: number) => runTick({ store: push, loadWorkspace: async () => w, send: async (_s, p) => { sent.push(p.title); return 'ok' }, now: new Date(now) })
+  assert.equal((await run(whole(signedUp) + 60_000)).sent, 0, 'an hour back holds one from before he signed up, which stays quiet')
+  assert.equal((await run(after + 60_000)).sent, 1)
+  assert.equal((await run(after + 120_000)).sent, 0, 'once')
+  assert.deepEqual(sent, ['later'])
+})
+test('a device the push service drops: no more sends, and the account reads as stopped until one signs up; turning off says nothing (B60 8)', async () => {
+  const { push, workspaceId } = await tickFixture()
+  const a = { endpoint: 'https://push.example/a', p256dh: 'p', auth: 'a' }
+  assert.equal(await push.stopped(workspaceId), false, 'never on')
+  await push.subscribe(workspaceId, a)
+  assert.equal(await push.stopped(workspaceId), false)
+  await push.remove(a.endpoint)
+  assert.equal(await push.stopped(workspaceId), true)
+  assert.deepEqual(await push.subscribed(), [])
+  await push.subscribe(workspaceId, a)
+  assert.equal(await push.stopped(workspaceId), false, 'signed up again')
+  await push.unsubscribe(workspaceId, a.endpoint)
+  assert.equal(await push.stopped(workspaceId), false, 'he turned it off himself')
+})
+test('a chip moved to another time fires again, once; the same chip shown twice is one reminder (B60 4)', async () => {
+  const { push, workspaceId } = await tickFixture()
+  await push.subscribe(workspaceId, { endpoint: 'https://push.example/a', p256dh: 'p', auth: 'a' })
+  await push.subscribe(workspaceId, { endpoint: 'https://push.example/b', p256dh: 'p', auth: 'b' })
+  const sent: string[] = [], at = (time: string) => workspace('America/Vancouver', [
+    { id: 'd', type: 'daily', date: '2099-10-28', title: '', nodes: [line('l1', [text('Dentist '), chip('e1', '2099-10-28', time)])] },
+    { id: 'p', type: 'document', date: null, title: 'Copy', nodes: [line('l2', [text('Dentist '), chip('e1', '2099-10-28', time)])] },
+  ])
+  const run = (w: Workspace, now: number) => runTick({ store: push, loadWorkspace: async () => w, send: async (s, p) => { sent.push(`${s.auth}:${p.key}`); return 'ok' }, now: new Date(now) })
+  const fifteen = zonedEpoch('2099-10-28', '15:00', 'America/Vancouver'), sixteen = zonedEpoch('2099-10-28', '16:00', 'America/Vancouver')
+  await run(at('15:00'), fifteen + 60_000)
+  await run(at('15:00'), fifteen + 120_000)
+  assert.deepEqual(sent.sort(), [`a:e1@${fifteen}`, `b:e1@${fifteen}`], 'each device once, however many lines hold it')
+  sent.length = 0
+  await run(at('16:00'), sixteen + 60_000)
+  assert.deepEqual(sent.sort(), [`a:e1@${sixteen}`, `b:e1@${sixteen}`], 'moved, so it fires again')
+})
+test('a synced chip read back through the store still opens a page he can see, not the shared record (B60 7)', async () => {
+  const { repo, wsA } = await stores().then(r => r), at = '2099-10-28'
+  await asOwner(A, async () => {
+    let w = await repo.load()
+    const run = async (action: Action) => { w = (await repo.execute({ operationId: crypto.randomUUID(), expectedRevision: w.revision, action })).workspace as Workspace }
+    await run({ type: 'create-document', title: 'Holds it', body: '', pageId: 'place' })
+    const page = () => w.pages.find(p => p.id === 'place')!
+    await run({ type: 'save-editor', pageId: 'place', expectedContent: pageContentKey(page()), document: JSON.stringify([{ id: 's1', type: syncedBlockType, props: { syncId: 'rec-1', rev: 0, key: '', roles: '' }, children: [line('l1', [text('Shared '), chip('e-s', at, '15:00')])] }]) })
+  })
+  const loaded = await repo.loadWorkspace(wsA)
+  const fire = zonedEpoch(at, '15:00', loaded!.timezone)
+  const due = dueReminders(loaded!, fire - 60_000, fire + 60_000)
+  assert.deepEqual(due.map(r => [r.eventId, r.url]), [['e-s', '/pages?page=place']])
+})
+test('two ticks at once send one reminder once, and a device moved to another workspace starts clean there (Ratchet, #138)', async () => {
+  const { push, wsA, wsB } = await stores()
+  const a = { endpoint: 'https://push.example/a', p256dh: 'p', auth: 'a' }
+  await push.subscribe(wsA, a)
+  const [before] = await push.subscribed()
+  await new Promise(r => setTimeout(r, 15))
+  await push.subscribe(wsA, { ...a, auth: 'refreshed' })
+  assert.equal((await push.subscribed())[0]!.subscriptions[0]!.since, before!.subscriptions[0]!.since, 'a refresh keeps its start')
+  await push.subscribe(wsB, a)
+  const moved = await push.subscribed()
+  assert.equal(moved[0]!.workspaceId, wsB)
+  assert.ok(moved[0]!.subscriptions[0]!.since > before!.subscriptions[0]!.since, 'a move starts again')
+})
+test('a slow batch holds each reminder only while it sends it: a second tick takes the later ones, once, and a slow device doesn\'t delay the next (Ratchet, #138)', async () => {
+  const { push, wsA } = await stores()
+  await push.subscribe(wsA, { endpoint: 'https://push.example/a', p256dh: 'p', auth: 'a' })
+  await push.subscribe(wsA, { endpoint: 'https://push.example/b', p256dh: 'p', auth: 'b' })
+  await push.subscribe(wsA, { endpoint: 'https://push.example/c', p256dh: 'p', auth: 'c' })
+  const at = '2099-10-28', w = workspace('UTC', [{ id: 'd', type: 'daily', date: at, title: '', nodes: [line('l1', [text('One '), chip('e1', at, '15:00')]), line('l2', [text('Two '), chip('e2', at, '15:01')])] }])
+  const now = new Date(zonedEpoch(at, '15:02', 'UTC')), sent: string[] = []
+  let release!: () => void
+  const held = new Promise<void>(r => { release = r })
+  let started = 0
+  const first = runTick({ store: push, loadWorkspace: async () => w, send: async (s, p) => { started++; sent.push(`${s.auth}:${p.title}`); if (p.title === 'One') await held; return 'ok' }, now })
+  while (started < 3) await new Promise(r => setTimeout(r, 5))
+  assert.deepEqual(sent.slice().sort(), ['a:One', 'b:One', 'c:One'], 'every device at once: none waits on another')
+  const second = await runTick({ store: push, loadWorkspace: async () => w, send: async (s, p) => { sent.push(`${s.auth}:${p.title}`); return 'ok' }, now })
+  assert.equal(second.sent, 3, 'the later one was never held by the first tick')
+  release()
+  assert.equal((await first).sent, 3, 'and the first tick finds it taken')
+  assert.equal(sent.filter(k => k.endsWith('Two')).length, 3)
+  assert.equal(sent.filter(k => k.endsWith('One')).length, 3)
+})
+
