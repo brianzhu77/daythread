@@ -2403,15 +2403,26 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 @media (hover: hover) { .database-timeline .database-bar-off:hover { background: var(--hover-dim); } }
 /* The table beside the scale, pinned: it and the bars scroll as one and stay on one line. */
 .database-pane { position: sticky; left: 0; z-index: 2; display: flex; align-items: stretch; height: 100%; border-right: 1px solid var(--line); background: var(--bg); }
-.database-scale .database-pane { position: sticky; float: left; }
+/* Floated on a row too, or a jump to its bar off-screen, which follows it, drops onto the next line. */
+.database-scale .database-pane, .database-bar-lane > .database-pane:not(.is-line) { position: sticky; float: left; }
 .database-pane-head { color: var(--ink-3); font-size: var(--text-meta); align-items: flex-end; padding-bottom: 2px; }
-.database-pane-head > span { padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.database-pane-head > span, .database-pane-head .database-pane-track > span { flex: none; padding: 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The table's columns scroll on their own, under Name: each row's move together, by the one bar in the head. */
+.database-pane-columns { position: relative; flex: none; height: 100%; overflow: hidden; }
+.database-pane-track { display: flex; align-items: stretch; height: 100%; transform: translateX(calc(var(--pane-x, 0px) * -1)); }
+.database-pane-head .database-pane-track { align-items: flex-end; }
+.has-pane-more .database-pane-columns::after { content: ''; position: absolute; top: 0; right: 0; bottom: 0; width: 20px; pointer-events: none; background: linear-gradient(to right, transparent, var(--bg)); }
+.database-pane-bar { position: absolute; right: 0; bottom: 0; height: 10px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
 .database-timeline .database-pane-name, .database-timeline .database-pane-cell { flex: none; min-height: 0; padding: 0 8px; overflow: hidden; border: 0; border-radius: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-small); text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .database-timeline .database-pane-name { padding-left: 16px; }
 .database-pane-name.is-placeholder { color: var(--placeholder); }
 @media (hover: hover) { .database-timeline .database-pane-name:hover, .database-timeline .database-pane-cell:hover { background: var(--hover-dim); } }
 .database-pane-handle { position: absolute; left: 1px; top: 8px; z-index: 1; width: 14px; color: var(--ink-3); font-size: 11px; line-height: 18px; opacity: 0; cursor: grab; touch-action: none; user-select: none; }
 .database-bar-lane:hover .database-pane-handle { opacity: 1; }
+/* With the table closed: at the left of what's in view, on a line of its own that takes no room. */
+.database-lane-grip { position: sticky; left: 0; z-index: 2; display: block; width: 0; height: 0; }
+.database-lane-grip .database-pane-handle { width: 16px; border-radius: var(--radius-tight); background: var(--bg); text-align: center; }
+.database-bar-lane:has(> .database-lane-grip) .database-bar-off.is-name { left: 18px; }
 .database-bar-lane.is-drop-before { box-shadow: inset 0 2px 0 var(--ink-2); }
 .database-bar-lane.is-dragging { opacity: .5; }
 .database-bar-lane.is-foot { color: var(--ink-2); }

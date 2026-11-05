@@ -158,10 +158,11 @@ if (wide) {
   check(await lined('trip') && await lined('call'), 'a row and its bar stay on one line')
   const tableW = (await lane('trip').locator('.database-pane').boundingBox()).width, scaleW = (await scroller.boundingBox()).width
   check(tableW <= scaleW * 0.6 + 1, 'the table leaves the bars their room', [tableW, scaleW])
-  check((await block.locator('.database-pane-more').innerText().catch(() => '')).includes('more'), "and names the columns it can't fit, with a way to them", await block.locator('.database-pane-head').innerText())
+  check(await block.locator('.database-pane-more').count() === 0 && await lane('trip').locator('.database-pane-columns .database-pane-cell').count() === await block.locator('.database-pane-head .database-pane-track > span').count(), 'every column is there, with none left out')
   await shot('table')
   const paneX = (await lane('trip').locator('.database-pane').boundingBox()).x, barX = (await bar('trip').boundingBox()).x
-  await scroller.hover(); await page.mouse.wheel(300, 0); await wait(350)
+  // Over the bars: over the table, a sideways scroll moves its columns.
+  await scroller.hover({ position: { x: scaleW - 30, y: 100 } }); await page.mouse.wheel(300, 0); await wait(350)
   check((await lane('trip').locator('.database-pane').boundingBox()).x === paneX && (await bar('trip').boundingBox()).x < barX, 'the table stays while the bars scroll')
   await page.mouse.wheel(-300, 0); await wait(350)
   await tap(lane('trip').locator('.database-pane-cell').filter({ hasText: /^$/ }).first()).catch(() => {}); await wait(300); await page.keyboard.press('Escape'); await wait(200)
