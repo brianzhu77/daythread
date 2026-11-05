@@ -16,7 +16,7 @@ import { applyRowMove, movesIntoItself, rowMoveTree } from "./move-row.ts";
 import { importRefusal } from "./csv.ts";
 import { dueRepeats, periodWord, repeatRowId } from "./repeats.ts";
 import { newTodo, taskIdOfRow, todoBarColumns, todoChange, todoMoves, todoRowId, todosDatabase, todosTitle, withTodos } from "./todos-source.ts";
-import { rowMatches, todosSourceId, changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
+import { inView, todosSourceId, changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
 import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, unsyncBlock } from "./synced.ts";
@@ -262,7 +262,7 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
     else if (step.kind === "edit-rows") named(step, () => {
       const context = { today, pageDate: on.date };
       if (isTodosTarget(step.databaseId)) {
-        const rows = databaseRows(withTodos(state), todosSourceId).filter((r) => rowMatches(todosDatabase, r, step.filter, context, step.any));
+        const rows = databaseRows(withTodos(state), todosSourceId).filter((r) => inView(todosDatabase, r, { filter: step.filter, ...(step.any ? { filterAny: true } : {}) }, context));
         if (!rows.length) { matchedNothing = true; return; }
         spend(rows.length, true);
         const items = rows.flatMap((r) => { const taskId = taskIdOfRow(r.id); return taskId ? [{ taskId, changes: step.set.map((set) => ({ columnId: set.id, value: valueAtTap(set.value, todosDatabase.properties.find((p: Property) => p.id === set.id) ?? { type: "text" as const }, on, today) })) }] : []; });
@@ -272,7 +272,7 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
         return;
       }
       const db = buttonTarget(state, step.databaseId, step.databaseName);
-      const rows = databaseRows(state, db.id).filter((r) => rowMatches(db.database, r, step.filter, context, step.any));
+      const rows = databaseRows(state, db.id).filter((r) => inView(db.database, r, { filter: step.filter, ...(step.any ? { filterAny: true } : {}) }, context));
       if (!rows.length) { matchedNothing = true; return; }
       spend(rows.length, false);
       const properties = step.set.map((set) => db.database.properties.find((p) => p.id === set.id)!);

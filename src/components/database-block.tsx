@@ -9,7 +9,7 @@ import { type CSSProperties, createContext, Fragment, useContext, useEffect, use
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
 import { descendantsOf, parentIdOf, treeEntries, type TreeEntry } from '../domain/sub-items'
-import { limits as databaseLimits, rowColour, showsSubItemsOnCards, databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { filterTree, hasFilter, limits as databaseLimits, rowColour, showsSubItemsOnCards, databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import { loopRefusal } from '../domain/dependencies.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
@@ -86,7 +86,8 @@ export function shownView(db: Database, blockId: string): View {
 }
 export type ViewFields = Omit<Extract<DatabaseChange, { kind: 'updateView' }>, 'kind' | 'viewId'>
 /** A change to a view's own settings: everything that edits one goes through here, built from its latest copy. */
-export type ChangeView = (build: (current: View) => ViewFields) => void
+/** `notice`: says so with an Undo, where a change takes more than one tap's worth away. A linked view's block saves with its page, which has its own way back. */
+export type ChangeView = (build: (current: View) => ViewFields, notice?: string) => void
 /** Which block the menu is open on: a linked view's changes go to its block, not its database. */
 export const MenuBlock = createContext<string | null>(null)
 export function useViewChange(databaseId: string, viewId: string): ChangeView {
@@ -94,10 +95,10 @@ export function useViewChange(databaseId: string, viewId: string): ChangeView {
   const blockId = useContext(MenuBlock)
   const linked = blockId ? linkedBlocks.get(blockId) : undefined
   if (linked) return linked.change
-  return build => void run(ws => {
+  return (build, notice) => void run(ws => {
     const now = ws.pages.find(p => p.id === databaseId), current = isDatabase(now) ? now.database.views.find(v => v.id === viewId) : undefined
     return current ? { type: 'change-database', pageId: databaseId, change: { kind: 'updateView', viewId, ...build(current) } } : null
-  })
+  }, notice ? r => ({ text: notice, undoOperationId: r.operationId }) : undefined)
 }
 
 /** Databases being made by `/` Database in this tab: the block shows "Creating…", then "Not created · Retry". */
@@ -761,7 +762,7 @@ export function ViewNotes({ db, view, changeView, empty }: { db: Page; view: Vie
   usePendingCells()
   const failedHere = [...pendingCells.values()].filter(p => p.failed && !p.part && p.databaseId === db.id)
   return <>
-    {empty && view.filter.length > 0 && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => changeView(() => ({ filter: [] }))}>Clear filter</button></p>}
+    {empty && hasFilter(view) && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => changeView(() => ({ filter: [], filterGroups: [] }), view.filterGroups?.length ? 'Filter cleared' : undefined)}>Clear filter</button></p>}
     {failedHere.length > 0 && <p className="database-unsaved" role="status">{failedHere.length === 1 ? '1 change' : `${failedHere.length} changes`} not saved · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.retry())}>Retry</button> · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.discard())}>Undo</button></p>}
   </>
 }
@@ -798,7 +799,7 @@ export function subItemTree(workspace: Workspace, db: Page & { database: Databas
 const shutUnderFilter = new Map<string, { filter: string; ids: ReadonlySet<string> }>()
 const noneShut: ReadonlySet<string> = new Set()
 export function useSubOpen(blockId: string, view: View, toggle: (key: string) => void) {
-  const key = `${blockId}|${view.id}`, filter = JSON.stringify([view.filter, view.filterAny])
+  const key = `${blockId}|${view.id}`, filter = JSON.stringify(filterTree(view))
   const [, redraw] = useState(0)
   const held = shutUnderFilter.get(key)
   // Until the filter changes, so coming back to it starts open again.
@@ -898,7 +899,7 @@ export function DatabaseHeader({ db, view, changeView, blockId, showTitle, linke
       <DatabaseMenuButton blockId={blockId} databaseId={db.id} />
     </div>}
     {linked?.source}
-    {(view.filter.length > 0 || view.sort.length > 0) && <RulesLine db={db.database} view={view} blockId={blockId} databaseId={db.id} onChange={changeView} />}
+    {(hasFilter(view) || view.sort.length > 0) && <RulesLine db={db.database} view={view} blockId={blockId} databaseId={db.id} onChange={changeView} />}
   </>
 }
 
@@ -1514,8 +1515,13 @@ export function RowProperties({ workspace, row, db }: { workspace: Workspace; ro
  * when tapped, each with its own ×; a rule on a deleted property struck through; one with no value yet reads "…".
  */
 function RulesLine({ db, view, blockId, databaseId, onChange }: { db: Database; view: View; blockId: string; databaseId: string; onChange: (build: (current: View) => { filter?: Condition[]; sort?: View['sort'] }) => void }) {
+  const groups = view.filterGroups?.length ?? 0
   return <div className="database-filter-line">
-    {view.filter.map((c, i) => {
+    {/* A line of chips can't show a tree: with a group it's one chip, which opens the sheet. Nothing to clear from one tap (filter-groups.md §2). */}
+    {groups > 0 && <span className="database-filter-chip">
+      <button type="button" className="database-chip-open" onClick={() => openDatabaseMenu(blockId, databaseId, 'filter')}>{[...view.filter.map(c => ruleWords(db, c)), groups === 1 ? '1 group' : `${groups} groups`].join(view.filterAny ? ' or ' : ' and ')}</button>
+    </span>}
+    {groups === 0 && view.filter.map((c, i) => {
       const property = propertyOf(db, c.by)
       return <Fragment key={`f${i}`}>{view.filterAny && i > 0 && <span className="database-filter-or">or</span>}<span className={`database-filter-chip ${property ? '' : 'is-deleted'}`}>
         <button type="button" className="database-chip-open" onClick={() => openDatabaseMenu(blockId, databaseId, 'filter')}>{property ? property.name : '(deleted)'} {filterWords(c, property)}</button>
@@ -1532,6 +1538,8 @@ function RulesLine({ db, view, blockId, databaseId, onChange }: { db: Database; 
     })}
   </div>
 }
+/** A rule in words, as on the line of chips. */
+export const ruleWords = (db: Database, c: Condition): string => { const property = propertyOf(db, c.by); return `${property ? property.name : '(deleted)'} ${filterWords(c, property)}` }
 function filterWords(c: Condition, property: Property | null): string {
   const op = { contains: 'contains', doesNotContain: "doesn't contain", is: 'is', isNot: 'is not', isEmpty: 'is empty', isNotEmpty: 'is not empty', eq: '=', ne: '≠', gt: '>', lt: '<', gte: '≥', lte: '≤', isAnyOf: 'is', isNoneOf: 'is not', before: 'before', after: 'after', onOrBefore: 'on or before', onOrAfter: 'on or after', within: 'within' }[c.op]
   if (c.op === 'isEmpty' || c.op === 'isNotEmpty') return op
