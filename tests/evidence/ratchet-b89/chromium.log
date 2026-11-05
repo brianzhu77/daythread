@@ -1,0 +1,135 @@
+PASS 1280 home: no caret 
+PASS 1280 home: still on the same page "http://127.0.0.1:3699/pages?page=home"
+PASS 1280 home: Backspace, Delete and a letter change nothing 
+PASS 1280 home: no page errors []
+PASS 1280 alone: no caret 
+PASS 1280 alone: still on the same page "http://127.0.0.1:3699/pages?page=alone"
+PASS 1280 alone: Backspace, Delete and a letter change nothing 
+PASS 1280 alone: no page errors []
+PASS 1280 linked: no caret 
+PASS 1280 linked: still on the same page "http://127.0.0.1:3699/pages?page=linked"
+PASS 1280 linked: Backspace, Delete and a letter change nothing 
+PASS 1280 linked: no page errors []
+PASS 1280 todos: no caret 
+PASS 1280 todos: still on the same page "http://127.0.0.1:3699/pages?page=todos"
+PASS 1280 todos: Backspace, Delete and a letter change nothing 
+PASS 1280 todos: no page errors []
+PASS 1280 card: no caret 
+PASS 1280 card: still on the same page "http://127.0.0.1:3699/pages?page=card"
+PASS 1280 card: Backspace, Delete and a letter change nothing 
+PASS 1280 card: no page errors []
+PASS 1280 divider: no caret 
+PASS 1280 divider: still on the same page "http://127.0.0.1:3699/pages?page=divider"
+PASS 1280 divider: Backspace, Delete and a letter change nothing 
+PASS 1280 divider: no page errors []
+PASS 1280 synced: no caret 
+PASS 1280 synced: still on the same page "http://127.0.0.1:3699/pages?page=synced"
+PASS 1280 synced: Backspace, Delete and a letter change nothing 
+PASS 1280 synced: no page errors []
+PASS 390 home: no caret 
+PASS 390 home: still on the same page "http://127.0.0.1:3699/pages?page=home"
+PASS 390 home: Backspace, Delete and a letter change nothing 
+PASS 390 home: no page errors []
+PASS 390 alone: no caret 
+PASS 390 alone: still on the same page "http://127.0.0.1:3699/pages?page=alone"
+PASS 390 alone: Backspace, Delete and a letter change nothing 
+PASS 390 alone: no page errors []
+PASS 390 linked: no caret 
+PASS 390 linked: still on the same page "http://127.0.0.1:3699/pages?page=linked"
+PASS 390 linked: Backspace, Delete and a letter change nothing 
+PASS 390 linked: no page errors []
+PASS 390 todos: no caret 
+PASS 390 todos: still on the same page "http://127.0.0.1:3699/pages?page=todos"
+PASS 390 todos: Backspace, Delete and a letter change nothing 
+PASS 390 todos: no page errors []
+PASS 390 card: no caret 
+PASS 390 card: still on the same page "http://127.0.0.1:3699/pages?page=card"
+PASS 390 card: Backspace, Delete and a letter change nothing 
+PASS 390 card: no page errors []
+PASS 390 divider: no caret 
+PASS 390 divider: still on the same page "http://127.0.0.1:3699/pages?page=divider"
+PASS 390 divider: Backspace, Delete and a letter change nothing 
+PASS 390 divider: no page errors []
+PASS 390 synced: no caret 
+PASS 390 synced: still on the same page "http://127.0.0.1:3699/pages?page=synced"
+PASS 390 synced: Backspace, Delete and a letter change nothing 
+PASS 390 synced: no page errors []
+PASS moved to it within the app "http://127.0.0.1:3699/pages?page=home"
+PASS moving in the app: no caret 
+PASS moving in the app: still on the same page "http://127.0.0.1:3699/pages?page=home"
+PASS moving in the app: Backspace, Delete and a letter change nothing 
+PASS a row in a center peek 
+PASS center peek: no caret 
+PASS center peek: still on the same page "http://127.0.0.1:3699/pages?page=home&peek=one"
+PASS center peek: Backspace, Delete and a letter change nothing 
+PASS a row in a side peek 
+PASS side peek: no caret 
+PASS side peek: still on the same page "http://127.0.0.1:3699/pages?page=home&peek=one&side=1"
+PASS side peek: Backspace, Delete and a letter change nothing 
+PASS back to the tab (simulated): no caret 
+PASS back to the tab (simulated): still on the same page "http://127.0.0.1:3699/pages?page=home"
+PASS back to the tab (simulated): Backspace, Delete and a letter change nothing 
+PASS ways in: no page errors []
+PASS a page ending in a line opens with the caret 
+PASS and typing goes there 
+PASS clicking just under the block on home gives a line to type in [["paragraph","The line above"],["database",null],["paragraph","Below it"]]
+PASS clicking further down on home gives a line to type in [["paragraph","The line above"],["database",null],["paragraph","Below it"]]
+PASS clicking just under the block on alone gives a line to type in [["database",null],["paragraph","Below it"]]
+PASS clicking further down on alone gives a line to type in [["database",null],["paragraph","Below it"]]
+PASS below a page ending in a line, the caret goes to that line, as before 
+PASS a page holding only a database opens with it not drawn as chosen 
+PASS with the editor focused it is drawn 
+PASS chosen by its handle, the bar says so 
+PASS chosen by its handle, Backspace removes it "Saved | Reading and its 2 rows moved to Trash | Content removed · tasks unchanged"
+PASS one Undo brings back the block, the database and its rows 
+PASS database: Delete on the line above and Backspace on the line below change nothing 
+PASS bdb: no page errors []
+PASS card: Delete on the line above and Backspace on the line below change nothing 
+PASS bcard: no page errors []
+PASS synced block: Delete on the line above and Backspace on the line below change nothing 
+PASS bsynced: no page errors []
+PASS a divider still goes, as it does today ["paragraph","paragraph"]
+PASS bdivider: no page errors []
+PASS an empty line above a database has the caret on opening 
+PASS Delete there removes the line and leaves the database ["database"]
+PASS and pressing on changes nothing ["database"]
+PASS emptyabove: no page errors []
+PASS Backspace on an empty line below a database removes the line ["paragraph","database","paragraph"]
+PASS and again changes nothing: the caret is on the next line ["Above",null,"Below"]
+PASS emptybelow: no page errors []
+PASS Delete on an empty last line below a database removes the line ["database"]
+PASS and leaves no caret 
+PASS and pressing on changes nothing ["database"]
+PASS emptylast: no page errors []
+PASS holding Backspace clears the line below a database and stops [["database",null],["paragraph",null]]
+PASS heldup: no page errors []
+PASS holding Delete clears the line above a database and stops [["paragraph",null],["database",null]]
+PASS helddown: no page errors []
+PASS Bullet below a table becomes a line and stops, words kept [["database",null],["paragraph","Bullet"],["database",null],["heading","Heading"],["paragraph","End"]]
+PASS Heading below a table becomes a line and stops, words kept [["database",null],["paragraph","Bullet"],["database",null],["paragraph","Heading"],["paragraph","End"]]
+PASS kinds: no page errors []
+PASS alone: Tab from the title, then Backspace and Delete, remove nothing 
+PASS alone: the title is unchanged "alone"
+PASS alone: no page errors []
+PASS alone: Enter from the title, then Backspace and Delete, remove nothing 
+PASS alone: the title is unchanged "alone"
+PASS alone: no page errors []
+PASS alone: ArrowDown from the title, then Backspace and Delete, remove nothing 
+PASS alone: the title is unchanged "alone"
+PASS alone: no page errors []
+PASS cardonly: Tab from the title, then Backspace and Delete, remove nothing 
+PASS cardonly: the title is unchanged "cardonly"
+PASS cardonly: no page errors []
+PASS cardonly: Enter from the title, then Backspace and Delete, remove nothing 
+PASS cardonly: the title is unchanged "cardonly"
+PASS cardonly: no page errors []
+PASS cardonly: ArrowDown from the title, then Backspace and Delete, remove nothing 
+PASS cardonly: the title is unchanged "cardonly"
+PASS cardonly: no page errors []
+PASS arriving at a database by arrow, Backspace and Delete remove nothing 
+PASS home: no page errors []
+PASS Esc from the table chooses the block, and the bar says so 
+PASS and Backspace removes it, as chosen ["paragraph"]
+PASS and one Undo brings it back ["paragraph","database"]
+PASS home: no page errors []
+ALL PASS

@@ -1,0 +1,2 @@
+exec(open('scripts/b89-native-calibrate.py').read().split("print('contexts'")[0])
+e=call('/element',{'using':'accessibility id','value':'delete'});call('/element/'+next(iter(e.values()))+'/click',{});time.sleep(.3);call('/context',{'name':json.load(open('/tmp/ratchet131-native-context.json'))['context']});v=js('return document.querySelector("#key-probe").value');print('Native on-screen delete calibration',repr(v));assert v=='A'

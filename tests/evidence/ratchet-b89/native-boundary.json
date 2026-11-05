@@ -1,0 +1,112 @@
+[
+  {
+    "page": "bdb",
+    "before": {
+      "width": 390,
+      "active": "tiptap ProseMirror bn-editor bn-default-styles placeholder-selector-7b025494-689b-4280-82bc-22d518a3cb5e ProseMirror-focused",
+      "offset": 0,
+      "text": "Below"
+    },
+    "events": {
+      "keys": [],
+      "inputs": []
+    },
+    "nodes": [
+      {
+        "id": "bdb-a",
+        "type": "paragraph",
+        "props": {},
+        "content": [
+          {
+            "type": "text",
+            "text": "Above",
+            "styles": {}
+          }
+        ],
+        "children": []
+      },
+      {
+        "id": "bdb-b",
+        "type": "database",
+        "props": {
+          "pageId": "home-db",
+          "view": "{\"id\":\"lv2\",\"name\":\"Table\",\"layout\":\"table\",\"columns\":[],\"sort\":[],\"filter\":[]}"
+        },
+        "children": []
+      },
+      {
+        "id": "bdb-z",
+        "type": "paragraph",
+        "props": {},
+        "content": [
+          {
+            "type": "text",
+            "text": "Below",
+            "styles": {}
+          }
+        ],
+        "children": []
+      }
+    ],
+    "dbLive": true
+  },
+  {
+    "page": "emptybelow",
+    "before": {
+      "width": 390,
+      "active": "tiptap ProseMirror bn-editor bn-default-styles placeholder-selector-c77186aa-0828-4a7a-a73c-7dd690b75fc4 ProseMirror-focused",
+      "offset": 0,
+      "text": ""
+    },
+    "events": {
+      "keys": [],
+      "inputs": []
+    },
+    "nodes": [
+      {
+        "id": "eb-a",
+        "type": "paragraph",
+        "props": {
+          "backgroundColor": "default",
+          "textColor": "default",
+          "textAlignment": "left"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Above",
+            "styles": {}
+          }
+        ],
+        "children": []
+      },
+      {
+        "id": "eb-b",
+        "type": "database",
+        "props": {
+          "pageId": "home-db",
+          "view": "{\"id\":\"lv4\",\"name\":\"Table\",\"layout\":\"table\",\"columns\":[],\"sort\":[],\"filter\":[]}"
+        },
+        "children": []
+      },
+      {
+        "id": "eb-z",
+        "type": "paragraph",
+        "props": {
+          "backgroundColor": "default",
+          "textColor": "default",
+          "textAlignment": "left"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Below",
+            "styles": {}
+          }
+        ],
+        "children": []
+      }
+    ],
+    "dbLive": true
+  }
+]

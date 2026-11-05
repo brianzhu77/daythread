@@ -1,0 +1,9 @@
+opened {
+  active: '<div aria-autocomplete="list" aria-haspopup="listbox" contenteditable="true" role="textbox" tabindex="0" translate="no" class="tiptap ProseMirror bn-editor bn-default-styles placeh',
+  selection: '<div class="bn-block-content" data-content-type="paragraph" data-is-empty-and-focused="true"><p class="bn-inline-content"><br class="ProseMirror-trailingBreak"></p></div>'
+}
+after Delete [
+  { id: 'blank-db', trashed: undefined },
+  { id: 'blank-row', trashed: undefined }
+]
+PASS original blank opening: line removed, DB and row live
