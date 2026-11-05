@@ -7,8 +7,8 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type K
 import { columnCalc, databaseRows, inView, isEmptyValue, isReadOnly, propertyOf, readValue, startOfWeek, titleId, viewCalculations, viewColumns, viewDateBy, viewGroups, viewRows, type Database, type DateValue, type Json, type Property, type View, type ViewGroups } from '../domain/database.ts'
 import { dayWidth, daysBetween, draggedBar, endAt, linkPath, snapMinutes, startAt, timelineBars, timelineUnits, timelineWeeks, viewDateEnd, type BarPart, type BarWrite, type TimelineBar, type TimelineUnit } from '../domain/timeline.ts'
 import { taskIdOfRow } from '../domain/todos-source'
-import type { LocalDate, Page, WeekStart } from '../domain/types'
-import { rowTint, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, setOpenCell, shownRaw, shownValue, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import type { LocalDate, Page, WeekStart, Workspace } from '../domain/types'
+import { rowTint, SubItemParent, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, setOpenCell, shownRaw, shownValue, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
 import { addDays, fromIso, todayIso } from './dates'
 import { ChevronRightIcon } from './icons'
@@ -93,7 +93,7 @@ export function DatabaseTimeline({ workspace, db, view, changeView, blockId, pag
   return <div className="database-table-wrap" ref={wrap}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     {!property && <p className="database-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'layout')}>Choose a date property</button></p>}
-    <TimelineScale db={db} rows={rows} context={context} addRow={addRow} weekStart={weekStart} cap={cap} bars={bars} undated={undated} unit={unit} today={today} opensOn={opensOn} blockId={blockId} view={view} databaseId={db.id} canSet={canSet} limit={limit} setLimit={setLimit} returned={returned}
+    <TimelineScale workspace={workspace} db={db} rows={rows} context={context} addRow={addRow} weekStart={weekStart} cap={cap} bars={bars} undated={undated} unit={unit} today={today} opensOn={opensOn} blockId={blockId} view={view} databaseId={db.id} canSet={canSet} limit={limit} setLimit={setLimit} returned={returned}
       undatedOpen={undatedOpen} setUndatedOpen={setUndatedOpen} openRow={openRow} undoKey={undoKey} changeView={changeView}
       write={write} addOn={from => addRow(undefined, property && canSet ? { [property.id]: { start: from } as unknown as Json } : undefined)} startProperty={property} endProperty={endProperty} />
     {!groupsNow && <button type="button" className="database-new" onClick={() => addRow()}>+ New</button>}
@@ -159,7 +159,7 @@ function ticksFor(unit: TimelineUnit, origin: LocalDate, from: number, to: numbe
 
 const nameWidth = 200, columnWidth = 120
 
-function TimelineScale({ db, rows, context, addRow, weekStart, cap, bars, undated, unit, today, opensOn, blockId, view, databaseId, canSet, limit, setLimit, returned, undatedOpen, setUndatedOpen, openRow, undoKey, changeView, write, addOn, startProperty, endProperty }: {
+function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, bars, undated, unit, today, opensOn, blockId, view, databaseId, canSet, limit, setLimit, returned, undatedOpen, setUndatedOpen, openRow, undoKey, changeView, write, addOn, startProperty, endProperty }: { workspace: Workspace;
   db: Page & { database: Database }; rows: readonly Page[]; context: Parameters<typeof useMoveRow>[2]; addRow: ReturnType<typeof useAddRow>; weekStart: WeekStart; cap: number
   bars: readonly TimelineBar[]; undated: readonly Page[]; unit: TimelineUnit; today: LocalDate; opensOn: LocalDate; blockId: string; view: View; databaseId: string; canSet: boolean; limit: number; setLimit(n: number): void; returned: string | null
   undatedOpen: boolean; setUndatedOpen(open: boolean): void; openRow(id: string): void; undoKey: ReturnType<typeof useUndoKey>; changeView: ChangeView
@@ -304,7 +304,7 @@ function TimelineScale({ db, rows, context, addRow, weekStart, cap, bars, undate
   }
   const paneRow = (row: Page, group?: string) => <div className="database-pane" style={{ width: pane }}>
     {!view.sort.length && !db.database.fixed && <span className="database-pane-handle" role="button" aria-label={`Drag ${row.title || 'Untitled'}`} onPointerDown={e => startReorder(e, row.id, group ?? null)}>⋮⋮</span>}
-    <button type="button" className={`database-pane-name${row.title ? '' : ' is-placeholder'}`} style={{ width: nameWidth }} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}</button>
+    <button type="button" className={`database-pane-name${row.title ? '' : ' is-placeholder'}`} style={{ width: nameWidth }} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}{groups && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
     {columns.map(c => cell(row, c.property, group))}
   </div>
 
@@ -419,7 +419,7 @@ function TimelineScale({ db, rows, context, addRow, weekStart, cap, bars, undate
         {...(deps ? { onPointerEnter: () => showLinks(bar.row.id, true), onPointerLeave: () => showLinks(bar.row.id, false) } : {})}
         data-nav={index === 0 ? '0:0' : undefined} data-cell={cellKey({ blockId, databaseId, rowId: bar.row.id, columnId: titleId })} aria-label={`${title}, ${datesOf(at)}`}
         onPointerDown={e => startDrag(e, bar, 'move')} onMouseDown={e => e.preventDefault()} onClick={() => { if (!justDragged.current) openRow(bar.row.id) }}>
-        <span className={`database-bar-title${bar.row.title ? '' : ' is-placeholder'}`}>{title}{unsaved && <span className="database-card-unsaved"> · Not saved</span>}</span>
+        <span className={`database-bar-title${bar.row.title ? '' : ' is-placeholder'}`}>{title}{groups && !paneOn && <SubItemParent workspace={workspace} db={db} row={bar.row} />}{unsaved && <span className="database-card-unsaved"> · Not saved</span>}</span>
         {!bar.readOnly && <>
           <span className="database-bar-edge is-start" onPointerDown={e => { e.stopPropagation(); startDrag(e, bar, 'start') }} />
           <span className="database-bar-edge is-end" onPointerDown={e => { e.stopPropagation(); startDrag(e, bar, 'end') }} />

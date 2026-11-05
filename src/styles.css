@@ -1975,6 +1975,8 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-row:hover .database-sub-add, .database-sub-add:focus-visible { opacity: 1; }
 .database-sub-add:hover { background: var(--hover-dim); }
 .is-context .database-title-cell, .is-context .database-list-title { color: var(--ink-3); }
+.database-sub-parent { margin-left: 6px; color: var(--ink-3); font-size: var(--text-meta); font-weight: var(--weight-regular); }
+.database-card .database-sub-parent, .database-gallery-card .database-sub-parent { display: block; margin-left: 0; }
 /* Import CSV: every column with its first values and where it goes, then what will happen. */
 .csv-import { position: fixed; top: 10vh; left: 50%; transform: translateX(-50%); width: min(640px, calc(100vw - 16px)); max-height: 80vh; gap: 6px; padding: 8px; }
 .csv-import-scrim { display: block; position: fixed; inset: 0; z-index: 59; background: var(--scrim); }

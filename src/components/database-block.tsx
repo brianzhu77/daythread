@@ -8,7 +8,7 @@ import { createPortal } from 'react-dom'
 import { type CSSProperties, createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
-import { treeEntries, type TreeEntry } from '../domain/sub-items'
+import { parentIdOf, treeEntries, type TreeEntry } from '../domain/sub-items'
 import { limits as databaseLimits, rowColour, showsSubItemsOnCards, databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import { loopRefusal } from '../domain/dependencies.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
@@ -786,6 +786,12 @@ export function subItemTree(workspace: Workspace, db: Page & { database: Databas
   return treeEntries(db.database, rows, databaseRows(workspace, db.id), id => opened.has(subFoldKey(id)), view.subItemsShow === 'parents')
 }
 export const subFoldKey = (rowId: string) => `sub:${rowId}`
+/** A sub-item in a group sits apart from its parent, so it says whose it is (sub-items design §2). */
+export function SubItemParent({ workspace, db, row }: { workspace: Workspace; db: Page & { database: Database }; row: Page }) {
+  const links = db.database.subItems, parentId = links && parentIdOf(row, links)
+  const parent = parentId ? workspace.pages.find(p => p.id === parentId && !p.trashedAt) : undefined
+  return parent ? <span className="database-sub-parent">in {displayPageTitle(parent)}</span> : null
+}
 /** On a parent's card, unless its Sub-item column is already showing there. */
 export function CardSubItems({ db, view, row, today }: { db: Page & { database: Database }; view: View; row: Page; today: string }) {
   const links = db.database.subItems
@@ -1117,6 +1123,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
               {treeOf.has(row.id) && <SubItemLead entry={treeOf.get(row.id)!} label={displayPageTitle(row)} onToggle={() => toggle(subFoldKey(row.id))} />}
               <button type="button" className="database-title-cell" data-cell={key(row.id, titleId, group)} data-nav={`${index}:0`} onPointerDown={e => startHold(e, row.id)} onPointerMove={moveHold} onPointerUp={endHold} onPointerCancel={endHold} onContextMenu={e => { if (!wide) e.preventDefault() }} onClick={() => openRow(row.id)}>
                 <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
+                {group !== undefined && <SubItemParent workspace={workspace} db={db} row={row} />}
               </button>
               {tree && !db.database.fixed && <button type="button" className="database-sub-add" aria-label={`New sub-item in ${displayPageTitle(row)}`} onClick={() => { if (!folded.has(subFoldKey(row.id))) toggle(subFoldKey(row.id)); addRow(undefined, { [db.database.subItems!.parent]: [row.id] }, null) }}>+</button>}
               <button type="button" className="database-open" onClick={() => openRow(row.id)}>Open</button>
