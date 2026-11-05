@@ -286,3 +286,15 @@ test('not for sort, filter, Group or Rollup; a retry on rows makes one change; i
   h.run({ type: 'change-database', pageId: 'runs', change: { kind: 'updateProperty', propertyId: 'go', name: 'Renamed' } } as never)
   assert.equal(h.page('runs').database!.properties.find(p => p.id === 'go')!.button?.steps, stored)
 })
+
+test('a to-do command failing partway drops the whole tap: only "none could" carries on (Lead)', () => {
+  const h = setup([addRow(), { id: 's', kind: 'edit-rows', databaseId: todosSourceId, databaseName: 'To-dos', filter: [], set: [{ id: 'planned', name: 'Planned', value: { kind: 'fixed', raw: { start: 'not a date' } } }] }])
+  h.run({ type: 'ensure-day', date: '2026-11-06' })
+  h.run({ type: 'add-task', pageId: 'day:2026-11-06', title: 'One', plannedOn: '2026-11-06' })
+  h.run({ type: 'add-task', pageId: 'day:2026-11-06', title: 'Two', plannedOn: '2026-11-06' })
+  const n = rows(h).length, revision = h.ws.revision, plans = JSON.stringify(h.ws.tasks)
+  assert.throws(() => tap(h, 'btn', 'p', '2026-11-06'), /Edit rows in To-dos: Invalid calendar date/)
+  assert.equal(h.ws.revision, revision)
+  assert.equal(rows(h).length, n, 'the row before it isn\'t kept')
+  assert.equal(JSON.stringify(h.ws.tasks), plans)
+})

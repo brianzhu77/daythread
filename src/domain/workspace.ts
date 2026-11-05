@@ -120,6 +120,8 @@ function tasksOnDay(state: Workspace, day: string): Task[] {
   }
   return out;
 }
+/** None of a bulk edit's to-dos could take it, so nothing was changed. */
+class NoTodoChanged extends DomainError {}
 /** Where a button sits, with the list holding it, so blocks can go beside it. */
 function buttonPlace(nodes: EditorNode[], id: string): { list: EditorNode[]; index: number } | null {
   for (let index = 0; index < nodes.length; index++) {
@@ -268,8 +270,9 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
         spend(rows.length, true);
         const items = rows.flatMap((r) => { const taskId = taskIdOfRow(r.id); return taskId ? [{ taskId, changes: step.set.map((set) => ({ columnId: set.id, value: valueAtTap(set.value, todosDatabase.properties.find((p: Property) => p.id === set.id) ?? { type: "text" as const }, on, today) })) }] : []; });
         // As the bar's: a to-do that can't take a change, a cancelled one say, is normal here. It reads "3 changed · 1 couldn't", and if none could, later steps carry on, as for no match (Lead 371ebb4b).
+        // Only this says nothing changed. Any other refusal can come after some to-dos already have, so it goes up and the whole tap is dropped, as a command works on a copy.
         try { message = execute(state, { type: "edit-todos", items, today }, operationId).message; } catch (error) {
-          if (!(error instanceof DomainError)) throw error;
+          if (!(error instanceof NoTodoChanged)) throw error;
           matchedNothing = true; because = error.message;
         }
         return;
@@ -1408,7 +1411,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (did) changed++;
         else if (refused) couldnt++;
       }
-      if (!changed) throw new DomainError(because ?? (couldnt ? "Those to-dos are gone" : "Nothing to change"));
+      if (!changed) throw new NoTodoChanged(because ?? (couldnt ? "Those to-dos are gone" : "Nothing to change"));
       return { message: `${changed} to-do${changed === 1 ? "" : "s"} changed${couldnt ? ` · ${couldnt} couldn't` : ""}` };
     }
     case "delete-pages": {
