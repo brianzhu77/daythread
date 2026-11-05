@@ -1,0 +1,5 @@
+PASS Table, All, Edit property {"bar":"250 rows","toNotice":92,"notice":"N set on 250 rows","sevens":250,"ms":1598,"undoShown":1,"afterUndo":1,"ok":true,"errors":[]}
+PASS Table, All, Delete {"bar":"250 rows","toNotice":107,"notice":"250 rows deleted","live":0,"ms":1644,"undoShown":1,"undoMs":52,"liveAfterUndo":250,"ok":true,"errors":[]}
+PASS Board, All, Edit property {"bar":"250 rows","toNotice":47,"notice":"N set on 250 rows","sevens":250,"ms":1505,"undoShown":1,"afterUndo":1,"ok":true,"errors":[]}
+PASS Board, All, Delete {"bar":"250 rows","toNotice":84,"notice":"250 rows deleted","live":0,"ms":1602,"undoShown":1,"undoMs":60,"liveAfterUndo":250,"ok":true,"errors":[]}
+ALL PASS

@@ -1,0 +1,2 @@
+PASS balanced synthetic 10000-row sub-item tree: delete root reaches all, one Undo restores exact pages; local command+Undo ms 79
+PASS stale last edit / missing last delete are atomic
