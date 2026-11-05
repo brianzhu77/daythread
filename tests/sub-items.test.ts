@@ -132,3 +132,15 @@ test('rollups and formulas read them as the relations they are', () => {
   const read = withLinks(s.h.ws)
   assert.equal(cellValue(read.pages.find(p => p.id === 'w')!.database!, read.pages.find(p => p.id === 'top')!, 'count'), 2)
 })
+
+test('a parent only there for a match is told so, so it can start open; a parent that matches itself is not', () => {
+  const s = work(), rows = s.live(), db = s.db(), asked: Record<string, boolean> = {}
+  const kid = rows.find(r => r.id === 'kid')!, top = rows.find(r => r.id === 'top')!
+  const entries = treeEntries(db, [kid], rows, (id, context) => { asked[id] = context; return context })
+  assert.equal(asked.top, true)
+  assert.deepEqual(entries.filter(e => e.row.id === 'top').map(e => [e.context, e.open]), [[true, true]])
+  assert.ok(entries.some(e => e.row.id === 'kid'), 'and the match shows under it')
+  const both = treeEntries(db, [top, kid], rows, (id, context) => { asked[id] = context; return false })
+  assert.equal(asked.top, false)
+  assert.equal(both.find(e => e.row.id === 'top')!.open, false)
+})
