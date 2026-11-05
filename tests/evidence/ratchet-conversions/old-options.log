@@ -1,0 +1,2 @@
+Old-format option rename {"value":null,"text":"","options":[{"id":"p-o0","name":"Purple"}],"raw":"Red, Blue"}
+Text and back after old-format rename {"value":"p-o1","text":"Red, Blue","options":[{"id":"p-o0","name":"Purple"},{"id":"p-o1","name":"Red, Blue","from":"red, blue"}],"raw":"Red, Blue"}

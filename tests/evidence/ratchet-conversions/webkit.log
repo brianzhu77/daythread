@@ -1,0 +1,6 @@
+PASS Text to Select: options made, cells read them, the rows keep their words, and back to Text is what it was {"notice":"Changed to Select ","options":["Alpha","Beta"],"cells":["Alpha","Beta"],"raw":"Alpha","back":"Changed to Text ","cellsBack":["Alpha","Beta"],"ok":true,"errors":[]}
+PASS Renaming an option made from Text keeps its rows, through the menu {"field":"Alpha","options":[["First","alpha"],["Beta","beta"]],"cell":"First","ok":true,"errors":[]}
+PASS Text to Multi-select splits on commas; each shows, and back to Text is what it was {"notice":"Changed to Multi-select ","options":["red","green"],"cell":"red green","back":"red, green","ok":true,"errors":[]}
+PASS Date and Checkbox to Text keep their words, with no count of lost values, and back again {"dueNotice":"Changed to Text ","okNotice":"Changed to Text ","cells":["2026-11-05","2026-11-05 → 2026-11-07","Yes",""],"raw":{"start":"2026-11-05","end":"2026-11-07"},"tick":true,"ok":true,"errors":[]}
+PASS A Select to Relation counts them as lost, and back to Select they return {"notice":"Changed to Relation · 2 values show as empty ","cell":"","back":"Alpha","ok":true,"errors":[]}
+ALL PASS

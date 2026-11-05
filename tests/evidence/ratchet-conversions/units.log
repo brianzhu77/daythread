@@ -1,0 +1,18 @@
+✔ Text to Select: an option for each thing the rows say, once, by first spelling and in order; the rows keep their words and changing back restores them (4.486125ms)
+✔ Text to Multi-select splits on commas; back to Text is what it was (0.693458ms)
+✔ a renamed option keeps its rows, one picked later saves its id, and back to Text reads each (4.187875ms)
+✔ a name already an option takes it; past 200 and too long stay in the row, are counted, and come back (66.920791ms)
+✔ Date and Checkbox to Text keep their words, and changing back restores them (0.967375ms)
+✔ Select or Multi-select to Relation counts as lost, and changing back restores them (0.507583ms)
+✔ a Select from Text groups, filters and takes a Board's move like any other (0.670875ms)
+✔ a Multi-select from Text: a Board's move takes one word out and puts the other in, as ids, reading back right (0.294125ms)
+✔ through more than one change: Text to Select to Multi-select keeps a name with a comma, and Text to Multi-select to Select reads the first, as a list does (0.6505ms)
+✔ renamed along the way, both chains keep their rows (0.729959ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 218.524334
