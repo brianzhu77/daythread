@@ -1,5 +1,5 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
-import { quoteLimit, threadsOn, type CommentAnchor } from '../domain/comments'
+import { quoteLimit, threadsShownOn, type CommentAnchor } from '../domain/comments'
 import { commentUnderlines, firstSelectedLine, selectedWords, underlineKey } from './comment-underlines'
 import { CommentMarks } from './comment-marks'
 import { openComments } from './comments-pane'
@@ -22,7 +22,7 @@ import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
 import { linkedViewJson, linkedViewOf } from '../domain/linked-view'
 import { chooseCsv } from './csv-import'
-import { blockLinesKey, blockUpdates, mirroredLines, ownLineIds, syncedBlockType, homePageOfRecord, syncedPlaces, writtenDocument, type BlockUpdate } from '../domain/synced'
+import { blockLinesKey, blockUpdates, mirroredLines, ownLineIds, syncedBlockType, homePageOfRecord, syncedPlaces, writtenDocument, type BlockUpdate, sharedLineId } from '../domain/synced'
 import { EditorScrollerContext, pageScopeOf } from './editor-scope'
 import { syncedKeys } from './synced-keys'
 import { SyncedEditorActions, SyncedLabel, type SyncedActions } from './synced-label'
@@ -2532,7 +2532,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       <RowMenu label="More actions" triggerClass="editor-bar-button" groups={more} />
     </div>
   }
-  const openAnchors = useMemo(() => threadsOn(workspace.threads, page.id).flatMap(t => (t.anchor && !t.resolvedAt ? [t.anchor] : [])), [workspace.threads, page.id])
+  const openAnchors = useMemo(() => threadsShownOn(workspace, page.id).flatMap(t => (t.anchor && !t.resolvedAt ? [t.anchor] : [])), [workspace, page.id])
   const anchorsKey = JSON.stringify(openAnchors)
   useEffect(() => {
     lineAnchors.current = openAnchors
@@ -2540,13 +2540,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     if (view && !view.isDestroyed && !view.composing) view.dispatch(view.state.tr.setMeta(underlineKey, true))
   }, [anchorsKey]) // eslint-disable-line react-hooks/exhaustive-deps
   /** Comments on a line (comments.md §6, step 2). A synced line's thread belongs to the shared record, which comes on its own; it's on the page until then. */
-  const canComment = (id: string) => { const type = editor.getBlock(id)?.type; return Boolean(type) && type !== syncedBlockType && !insideSyncedBlock(id) }
+  const canComment = (id: string) => { const type = editor.getBlock(id)?.type; return Boolean(type) && type !== syncedBlockType }
   function commentOn(id: string) {
     const block = editor.getBlock(id) as unknown as EditorNode | undefined
     if (!block) return
     selected.current = []; setSelectionLabel('')
     const taskId = rowTaskId(block)
-    openComments(page.id, { composing: true, anchor: { blockId: id, quote: lineQuote(block), ...(taskId ? { taskId } : {}) } })
+    openComments(page.id, { composing: true, anchor: { blockId: sharedLineId(nodes(), id), quote: lineQuote(block), ...(taskId ? { taskId } : {}) } })
   }
   /** Step 3: the selected words of a line, or if a selection runs across lines, the first of them. */
   function commentOnSelection() {
@@ -2555,7 +2555,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const block = editor.getBlock(id) as unknown as EditorNode | undefined
     if (!words || !block) { commentOn(id); return }
     const taskId = rowTaskId(block)
-    openComments(page.id, { composing: true, anchor: { blockId: id, quote: words.quote.slice(0, quoteLimit), at: words.at, ...(taskId ? { taskId } : {}) } })
+    openComments(page.id, { composing: true, anchor: { blockId: sharedLineId(nodes(), id), quote: words.quote.slice(0, quoteLimit), at: words.at, ...(taskId ? { taskId } : {}) } })
   }
   commentSelection.current = commentOnSelection
   /** A11 §4 (Jazz §1): the line "Copy link to line" points at, or null where it isn't offered. */

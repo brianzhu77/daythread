@@ -25,7 +25,8 @@ function decorate(doc: PMNode, anchors: () => readonly CommentAnchor[]): Decorat
   const decorations: Decoration[] = []
   doc.descendants((node, pos) => {
     if (node.type.name !== 'blockContainer') return true
-    const here = wanted.filter(a => a.blockId === node.attrs.id), content = node.firstChild
+    // A shared line's id here is its own with the place after it.
+    const here = wanted.filter(a => a.blockId === node.attrs.id || String(node.attrs.id).startsWith(`${a.blockId}:`)), content = node.firstChild
     if (!here.length || !content?.isTextblock) return true
     const { text, at } = lineText(content, pos + 2)
     for (const a of here) if (text.slice(a.at!, a.at! + a.quote.length) === a.quote) decorations.push(Decoration.inline(at[a.at!]!, at[a.at! + a.quote.length - 1]! + 1, { class: 'comment-underline' }))

@@ -1,7 +1,7 @@
 // The mark on a commented line (docs/design/comments.md §2): in the margin at 1280, at the line's end at 390. Drawn over the page, not in it, so it can't shift a line or
 // touch the document, and with no thread on a line none of this runs.
 import { useLayoutEffect, useMemo, useState } from 'react'
-import { threadsOn } from '../domain/comments'
+import { threadLineIds, threadsShownOn } from '../domain/comments'
 import { openComments } from './comments-pane'
 import { CommentIcon } from './icons'
 import { useWorkspace } from './use-day'
@@ -10,7 +10,7 @@ type Mark = { blockId: string; threadId: string; count: number; top: number; lef
 const markSize = 16
 export function CommentMarks({ pageId, host, onChange }: { pageId: string; host: () => HTMLElement | null; onChange: (run: () => void) => () => void }) {
   const { workspace } = useWorkspace()
-  const open = useMemo(() => threadsOn(workspace?.threads, pageId).filter(t => t.anchor && !t.resolvedAt), [workspace?.threads, pageId])
+  const open = useMemo(() => (workspace ? threadsShownOn(workspace, pageId).filter(t => t.anchor && !t.resolvedAt) : []), [workspace, pageId])
   const [marks, setMarks] = useState<Mark[]>([])
   const key = open.map(t => `${t.id}:${t.anchor!.blockId}`).join()
   useLayoutEffect(() => {
@@ -20,7 +20,8 @@ export function CommentMarks({ pageId, host, onChange }: { pageId: string; host:
       if (!root) return
       const box = root.getBoundingClientRect(), wide = window.matchMedia('(min-width: 900px)').matches, next: Mark[] = []
       for (const t of open) {
-        const blockId = t.anchor!.blockId, have = next.find(m => m.blockId === blockId)
+        // A shared line has an id of its own in each place on this page.
+        const page = workspace!.pages.find(p => p.id === pageId), ids = page ? threadLineIds(workspace!, page, t.anchor!) : [], blockId = ids[0] ?? t.anchor!.blockId, have = next.find(m => m.blockId === blockId)
         if (have) { have.count++; continue }
         const line = root.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(blockId)}"]`), content = line?.querySelector<HTMLElement>('.bn-block-content')
         const lineBox = content?.getBoundingClientRect()

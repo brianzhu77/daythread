@@ -4,8 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from '@heroui/react'
 import { useRouterState } from '@tanstack/react-router'
-import { commentLimit, threadsOn, type Comment, type CommentAnchor, type CommentThread } from '../domain/comments'
-import { flatNodes, pageNodes } from '../domain/editor-document'
+import { commentLimit, threadLineIds, threadsShownOn, type Comment, type CommentAnchor, type CommentThread } from '../domain/comments'
 import type { Page } from '../domain/types'
 import { CloseIcon, CommentIcon } from './icons'
 import { useKeyboardTop } from './keyboard'
@@ -99,7 +98,8 @@ function CommentField({ draftKey, initial = '', label, action, placeholder, onDo
   </div>
 }
 
-const lineOf = (blockId: string) => document.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(blockId)}"]`)
+// Its own id, or as a place of a shared line.
+const lineOf = (blockId: string) => document.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(blockId)}"], [data-node-type="blockContainer"][data-id^="${CSS.escape(blockId)}:"]`)
 /** Goes to the line, and shows which it is for a moment. */
 function goToLine(blockId: string) {
   const line = lineOf(blockId)
@@ -112,7 +112,7 @@ function ThreadView({ thread, focused }: { thread: CommentThread; focused: boole
   const { run, workspace } = useWorkspace()
   const anchor = thread.anchor, page = anchor ? workspace?.pages.find(p => p.id === thread.pageId) : undefined
   // On the page as saved, or on screen, as it may not have been saved yet.
-  const gone = anchor ? !lineOf(anchor.blockId) && !(page && flatNodes(pageNodes(page)).some(n => n.id === anchor.blockId)) : false
+  const gone = anchor && workspace ? !lineOf(anchor.blockId) && !(page && threadLineIds(workspace, page, anchor).length) : false
   const hidden = anchor ? lineOf(anchor.blockId)?.getBoundingClientRect().height === 0 : false
   // What's edited is the thread as it read when Edit was pressed, so a change since is refused rather than written over.
   const [editing, setEditing] = useState<{ id: string; version: number } | null>(null), [replying, setReplying] = useState(false)
@@ -158,7 +158,7 @@ export function CommentsPaneHost() {
 }
 function CommentsPane({ pageId, composing, threadId, anchor }: { pageId: string; composing: boolean; threadId: string | null; anchor: CommentAnchor | null }) {
   const { workspace, run } = useWorkspace()
-  const threads = threadsOn(workspace?.threads, pageId)
+  const threads = workspace ? threadsShownOn(workspace, pageId) : []
   const opened = threads.find(t => t.id === threadId)
   const [show, setShow] = useState<'open' | 'resolved'>(opened?.resolvedAt ? 'resolved' : 'open')
   const shown = threads.filter(t => (show === 'open') === !t.resolvedAt), other = threads.length - shown.length
@@ -197,7 +197,7 @@ function CommentsPane({ pageId, composing, threadId, anchor }: { pageId: string;
 /** How many open comments a page has, in its head. None, nothing's drawn (P2-1). */
 export function CommentCount({ page }: { page: Pick<Page, 'id'> }) {
   const { workspace } = useWorkspace()
-  const count = (workspace?.threads ?? []).filter(t => t.pageId === page.id && !t.resolvedAt).length
+  const count = workspace ? threadsShownOn(workspace, page.id).filter(t => !t.resolvedAt).length : 0
   if (!count) return null
   return <button type="button" className="comment-count" aria-label={`${count} ${count === 1 ? 'comment' : 'comments'}`} onClick={() => openComments(page.id)}><CommentIcon /><span>{count}</span></button>
 }
