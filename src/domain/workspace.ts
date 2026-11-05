@@ -1059,7 +1059,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       }
       const on = page(state, action.pageId);
       if (isTrashed(on)) throw new DomainError("That page is in Trash");
-      (state.threads ??= []).push({ id: action.threadId, pageId: on.id, ...(action.anchor ? { anchor: { blockId: action.anchor.blockId, quote: action.anchor.quote.slice(0, quoteLimit), ...(action.anchor.taskId ? { taskId: action.anchor.taskId } : {}) } } : {}), version: 1, createdAt: at, comments: [{ id: action.commentId, body, at }] });
+      (state.threads ??= []).push({ id: action.threadId, pageId: on.id, ...(action.anchor ? { anchor: { blockId: action.anchor.blockId, quote: action.anchor.quote.slice(0, quoteLimit), ...(action.anchor.taskId ? { taskId: action.anchor.taskId } : {}), ...(action.anchor.at !== undefined ? { at: action.anchor.at } : {}) } } : {}), version: 1, createdAt: at, comments: [{ id: action.commentId, body, at }] });
       return { message: "Comment added", entityId: action.threadId };
     }
     case "edit-comment": {
