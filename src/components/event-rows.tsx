@@ -13,6 +13,7 @@ import { displayPageTitle } from './page-title'
 import { createContext, useContext } from 'react'
 import { useComponentsContext, type DefaultReactSuggestionItem, type SuggestionMenuProps } from '@blocknote/react'
 import { addDays, fromIso, todayIso } from './dates'
+import { RemindersStopped } from './reminders'
 import { CalendarIcon } from './icons'
 import { LineRefChip } from './line-ref-chip'
 
@@ -165,6 +166,7 @@ export function EventRows({ rows, page, workspace, pageEnd }: { rows: DayEvent[]
           </div>
         )
       })}
+      {rows.some(e => e.date >= todayIso()) && <RemindersStopped />}
     </div>
   )
 }

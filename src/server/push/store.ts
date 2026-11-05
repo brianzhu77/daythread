@@ -6,7 +6,7 @@ import type { SqlClient } from '../db/sql.ts'
 import { schemaName } from '../postgres-repository.ts'
 
 export interface PushSubscription { endpoint: string; p256dh: string; auth: string }
-export interface SubscribedWorkspace { workspaceId: string; subscriptions: PushSubscription[] }
+export interface SubscribedWorkspace { workspaceId: string; subscriptions: (PushSubscription & { since: number })[] }
 
 /** How long a sent key is remembered: longer than any window a tick looks back over. */
 export const sentKeepMs = 7 * 24 * 3600_000
@@ -21,7 +21,8 @@ export class PushStore {
   private init(): Promise<void> {
     const exists = async (sql: SqlClient) => (await sql.query<{ n: number }>(
       `select count(*)::int as n from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-        where n.nspname = $1 and c.relname = any($2::text[]) and c.relrowsecurity`, [this.schema, ['push_subscriptions', 'push_sent']]))[0]?.n === 2
+        where n.nspname = $1 and c.relname = any($2::text[]) and c.relrowsecurity
+          and (c.relname <> 'push_subscriptions' or exists (select 1 from pg_catalog.pg_attribute a where a.attrelid = c.oid and a.attname = 'gone_at' and not a.attisdropped))`, [this.schema, ['push_subscriptions', 'push_sent']]))[0]?.n === 2
     this.ready ??= exists(this.sql).then(ok => ok ? undefined : this.sql.transaction(async tx => {
       await tx.query("select pg_advisory_xact_lock(hashtext('daythread.init'))")
       if (await exists(tx)) return
@@ -34,6 +35,7 @@ export class PushStore {
           auth text not null,
           created_at timestamptz not null default now()
         );
+        alter table ${this.t('push_subscriptions')} add column if not exists gone_at timestamptz;
         create index if not exists push_subscriptions_workspace on ${this.t('push_subscriptions')} (workspace_id);
         alter table ${this.t('push_subscriptions')} enable row level security;
         create table if not exists ${this.t('push_sent')} (
@@ -51,28 +53,35 @@ export class PushStore {
   async subscribe(workspaceId: string, sub: PushSubscription): Promise<void> {
     await this.init()
     await this.sql.query(`insert into ${this.t('push_subscriptions')} (endpoint, workspace_id, p256dh, auth) values ($1, $2::uuid, $3, $4)
-      on conflict (endpoint) do update set workspace_id = excluded.workspace_id, p256dh = excluded.p256dh, auth = excluded.auth`, [sub.endpoint, workspaceId, sub.p256dh, sub.auth])
+      on conflict (endpoint) do update set workspace_id = excluded.workspace_id, p256dh = excluded.p256dh, auth = excluded.auth, gone_at = null,
+        created_at = case when ${this.t('push_subscriptions')}.gone_at is null then ${this.t('push_subscriptions')}.created_at else now() end`, [sub.endpoint, workspaceId, sub.p256dh, sub.auth])
   }
   /** Removes the endpoint when it belongs to this workspace (a browser can only drop its own). */
   async unsubscribe(workspaceId: string, endpoint: string): Promise<void> {
     await this.init()
     await this.sql.query(`delete from ${this.t('push_subscriptions')} where endpoint = $1 and workspace_id = $2::uuid`, [endpoint, workspaceId])
   }
-  /** The push service said the endpoint is gone. */
+  /** The push service said the endpoint is gone. Its row stays, marked, so the app can say reminders stopped when he didn't stop them. */
   async remove(endpoint: string): Promise<void> {
     await this.init()
-    await this.sql.query(`delete from ${this.t('push_subscriptions')} where endpoint = $1`, [endpoint])
+    await this.sql.query(`update ${this.t('push_subscriptions')} set gone_at = now() where endpoint = $1`, [endpoint])
+  }
+  /** Reminders stopped by themselves: a device had them, the push service dropped it, and no device has them now. Turning them off leaves no row, so it says nothing. */
+  async stopped(workspaceId: string): Promise<boolean> {
+    await this.init()
+    const [row] = await this.sql.query<{ stopped: boolean }>(`select coalesce(bool_or(gone_at is not null) and bool_and(gone_at is not null), false) as stopped from ${this.t('push_subscriptions')} where workspace_id = $1::uuid`, [workspaceId])
+    return Boolean(row?.stopped)
   }
   async subscriptionsOf(workspaceId: string): Promise<PushSubscription[]> {
     await this.init()
-    return this.sql.query<PushSubscription>(`select endpoint, p256dh, auth from ${this.t('push_subscriptions')} where workspace_id = $1::uuid order by created_at`, [workspaceId])
+    return this.sql.query<PushSubscription>(`select endpoint, p256dh, auth from ${this.t('push_subscriptions')} where workspace_id = $1::uuid and gone_at is null order by created_at`, [workspaceId])
   }
   /** Every workspace with at least one subscription, with its subscriptions. */
   async subscribed(): Promise<SubscribedWorkspace[]> {
     await this.init()
-    const rows = await this.sql.query<PushSubscription & { workspace_id: string }>(`select workspace_id::text as workspace_id, endpoint, p256dh, auth from ${this.t('push_subscriptions')} order by workspace_id, created_at`)
-    const out = new Map<string, PushSubscription[]>()
-    for (const { workspace_id, ...sub } of rows) out.set(workspace_id, [...(out.get(workspace_id) ?? []), sub])
+    const rows = await this.sql.query<PushSubscription & { workspace_id: string; created_at: string | Date }>(`select workspace_id::text as workspace_id, endpoint, p256dh, auth, created_at from ${this.t('push_subscriptions')} where gone_at is null order by workspace_id, created_at`)
+    const out = new Map<string, SubscribedWorkspace['subscriptions']>()
+    for (const { workspace_id, created_at, ...sub } of rows) out.set(workspace_id, [...(out.get(workspace_id) ?? []), { ...sub, since: new Date(created_at).getTime() }])
     return [...out].map(([workspaceId, subscriptions]) => ({ workspaceId, subscriptions }))
   }
   /** Of `keys`, the ones not yet sent to this workspace. */
