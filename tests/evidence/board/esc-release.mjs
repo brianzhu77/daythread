@@ -15,7 +15,8 @@ const path = () => new URL(page.url()).search
 const drill = async (name, target) => {
   const at = path(), rev = store().revision, b = await target.boundingBox()
   await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2); await page.mouse.down(); await page.mouse.move(b.x + b.width / 2 + 60, b.y + b.height / 2 + 40, { steps: 8 }); await wait(150)
-  await page.keyboard.press('Escape'); await wait(150); await page.mouse.up(); await wait(900)
+  // Back over it before letting go: only there does the browser send a click, which is what could open it.
+  await page.keyboard.press('Escape'); await wait(150); await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 4 }); await wait(100); await page.mouse.up(); await wait(900)
   check(path() === at && !/peek=/.test(page.url()), `${name}: Esc then letting go opens nothing`, page.url().slice(-40)); check(store().revision === rev, `${name}: and moves nothing`, store().revision - rev)
   await target.click(); await wait(1200); check(path() !== at, `${name}: a plain click still opens it`, path()); await page.goBack(); await wait(1600)
 }
