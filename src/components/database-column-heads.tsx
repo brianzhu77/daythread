@@ -39,7 +39,7 @@ export function useColumnHeads({ wide, blockId, databaseId, view, changeView, wr
     const startX = e.clientX, from = Math.round(th.getBoundingClientRect().width)
     const widthAt = (x: number) => Math.max(minWidth, Math.min(maxWidth, from + Math.round(x - startX)))
     setSized({ id, width: from })
-    const finish = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); document.removeEventListener('keydown', esc, true) }
+    const finish = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); window.removeEventListener('keydown', esc, true) }
     const move = (ev: PointerEvent) => setSized({ id, width: widthAt(ev.clientX) })
     const up = (ev: PointerEvent) => {
       finish(); swallowClick()
@@ -49,7 +49,7 @@ export function useColumnHeads({ wide, blockId, databaseId, view, changeView, wr
     }
     const cancel = () => { finish(); swallowClick(); setSized(null) }
     const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel() } }
-    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); document.addEventListener('keydown', esc, true)
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); window.addEventListener('keydown', esc, true)
   }
 
   const startMove = (e: ReactPointerEvent<HTMLElement>, id: string, name: string) => {
@@ -77,7 +77,7 @@ export function useColumnHeads({ wide, blockId, databaseId, view, changeView, wr
       }
       frame = requestAnimationFrame(edges)
     }
-    const finish = () => { cancelAnimationFrame(frame); document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); document.removeEventListener('keydown', esc, true) }
+    const finish = () => { cancelAnimationFrame(frame); document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); window.removeEventListener('keydown', esc, true) }
     const move = (ev: PointerEvent) => {
       last = { x: ev.clientX, y: ev.clientY }
       if (!lifted) {
@@ -100,7 +100,7 @@ export function useColumnHeads({ wide, blockId, databaseId, view, changeView, wr
     }
     const cancel = () => { finish(); if (lifted) swallowClick(); setMoving(null) }
     const esc = (ev: globalThis.KeyboardEvent) => { if (lifted && ev.key === 'Escape') { ev.stopPropagation(); cancel() } }
-    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); document.addEventListener('keydown', esc, true)
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); window.addEventListener('keydown', esc, true)
   }
 
   const open = (id: string) => { if (!justDragged.current) openColumnMenu(blockId, databaseId, id) }
