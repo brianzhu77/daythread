@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readSteps, stepsKey, writeSteps, type ButtonStep, type ButtonSet } from '../src/domain/buttons.ts'
 import { automationProblem, type Automation } from '../src/domain/automations.ts'
+import { todosSourceId } from '../src/domain/database.ts'
 import { flatNodes, pageContentKey, pageNodes, type EditorNode } from '../src/domain/editor-document.ts'
 import { checkStepTyped, freshWorldOf, shownFormula } from '../src/domain/formula.ts'
 import { stepFormulaProblems, variableNameProblem, variablesBefore } from '../src/domain/step-formulas.ts'
@@ -146,4 +147,26 @@ test('on a rule: a formula reads the row that set it off, a schedule\'s has no r
   assert.match(automationProblem(h.ws, db, scheduled, 'runs') ?? '', /x: A property this formula reads was deleted/)
   C({ kind: 'removeProperty', propertyId: 'n' })
   assert.match(automationProblem(h.ws, h.page('runs').database!, rule, 'runs') ?? '', /x: A property this formula reads was deleted/)
+})
+
+test('To-dos: a new one takes its name and date from formulas, and Edit rows reads each to-do', () => {
+  const made = setup([{ id: 's', kind: 'add-row', databaseId: todosSourceId, databaseName: 'To-dos', title: '', titleFormula: '"Call " + 2', set: [formula('planned', 'Planned', 'parseDate("2026-11-09")')] }])
+  tap(made.h)
+  const onDay = (h: ReturnType<typeof harness>, date: string, title: string) => pageNodes(h.page(`day:${date}`)).some(x => x.props?.taskId === h.ws.tasks.find(t => t.title === title)!.id)
+  assert.ok(onDay(made.h, '2026-11-09', 'Call 2'))
+
+  const moved = setup([{ id: 's', kind: 'edit-rows', databaseId: todosSourceId, databaseName: 'To-dos', filter: [], set: [formula('planned', 'Planned', 'dateAdd(prop("planned"), 1, "days")')] }])
+  moved.h.run({ type: 'ensure-day', date: '2026-11-06' })
+  moved.h.run({ type: 'add-task', pageId: 'day:2026-11-06', title: 'First', plannedOn: '2026-11-06' })
+  moved.h.run({ type: 'ensure-day', date: '2026-11-08' })
+  moved.h.run({ type: 'add-task', pageId: 'day:2026-11-08', title: 'Second', plannedOn: '2026-11-08' })
+  tap(moved.h)
+  assert.ok(onDay(moved.h, '2026-11-07', 'First'))
+  assert.ok(onDay(moved.h, '2026-11-09', 'Second'))
+
+  const wrong = setup([{ id: 's', kind: 'edit-rows', databaseId: todosSourceId, databaseName: 'To-dos', filter: [], set: [formula('status', 'Status', '"Nope"')] }])
+  wrong.h.run({ type: 'ensure-day', date: '2026-11-06' })
+  wrong.h.run({ type: 'add-task', pageId: 'day:2026-11-06', title: 'Stays', plannedOn: '2026-11-06' })
+  assert.throws(() => tap(wrong.h), /"Nope" isn't one of Status's options/)
+  assert.ok(onDay(wrong.h, '2026-11-06', 'Stays'))
 })

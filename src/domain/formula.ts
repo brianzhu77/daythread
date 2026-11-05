@@ -375,7 +375,7 @@ export function stepCell(value: Value, property: Property): { cell: Json } | { e
   switch (property.type) {
     case 'number': return typeof value === 'number' && Number.isFinite(value) ? { cell: value } : refused
     case 'checkbox': return typeof value === 'boolean' ? { cell: value } : refused
-    case 'date': { if (!(value instanceof FormulaDate)) return refused; const cell = toCell(value, 'date'); return cell === undefined ? refused : { cell } }
+    case 'date': { if (!(value instanceof FormulaDate)) return refused; const cell = toCell(value, 'date'); return cell === undefined ? refused : { cell: typeof cell === 'string' ? { start: cell } : cell } }
     case 'relation': {
       const list = Array.isArray(value) ? value : [value]
       if (!list.every((v): v is FormulaPage => v instanceof FormulaPage)) return refused
