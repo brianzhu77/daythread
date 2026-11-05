@@ -47,7 +47,7 @@ Example: a "Log a run" button in his Day template adds a row to Runs with today'
 | Rows edited | "3 rows changed · Undo" |
 | Blocks inserted | "Inserted · Undo" |
 | Several steps | The last step's words |
-| Filter matched nothing | "No rows matched", and nothing else happens |
+| Filter matched nothing | That step does nothing and later steps carry on. "No rows matched" only if nothing at all changed (Bumblebee, on Ratchet 6c8ed9c9): a button that adds a row and then edits matching ones shouldn't lose the row because nothing matched |
 
 There's no explanatory line anywhere (Daythread's rule, Brian 1ac6784b).
 
@@ -59,6 +59,12 @@ There's no explanatory line anywhere (Daythread's rule, Brian 1ac6784b).
 4. **Broken targets show at the click:** "Runs is in Trash" with Restore, or "Status was deleted" with Edit. The pill stays. Other steps don't run. A deleted database doesn't delete the button.
 5. **Copying:** a copied button is a separate button with the same steps, in a page, a template or a duplicate row's body. In a synced block it's one button (`synced-blocks.md`), and in another app it's its label as text.
 6. **A template doesn't run steps.** The button works on the day made from it. On the template itself a tap opens Edit.
+
+**Contracts before building (Ratchet 6c8ed9c9, a design read, not run):**
+
+7. **Confirmation before writes, navigation after commit.** Every confirmation is collected before anything's committed. Open page or URL happens in the browser after a successful commit, so a blocked popup never retries the data changes. "All or none" means the stored changes; a page already opened can't be rolled back.
+8. **It starts from saved words and the intended button.** The flush has to finish successfully, including a save already in flight (#141 showed awaiting one flush isn't enough). It runs against a stored button identity and the expected content, including a synced record's, and if those changed it refuses or refreshes. Words typed while the command is on its way survive its reply.
+9. **One tap keeps one identity and bounded work.** A retry keeps its operation id, input, generated row, task and event ids, and the tap's date, so `@today` isn't read again after midnight. All targets and the whole step list are checked before anything applies. Limits are counted across steps and selected rows, rather than each step spending the full 500 to-dos or 10,000 rows.
 
 ## 5. Engineering answers (Roadbuster 6ef1eb57, from reading the code, not prototyped)
 
