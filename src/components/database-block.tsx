@@ -125,7 +125,7 @@ export interface BlockActions {
   updateLinkedView(blockId: string, build: (json: string) => string): void
   /** Another block of the same database, right after this one: a linked view (design §9.1). */
   duplicate(blockId: string): void
-  /** Once what the page holds is saved. */
+  /** Once what the page holds now is saved, however long that takes, or the page is left. */
   saved(): Promise<void>
 }
 /** The actions of each block on screen, by block id: the menu lives outside the editor (app shell) and finds them here. */

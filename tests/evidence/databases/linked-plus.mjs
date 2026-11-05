@@ -43,6 +43,35 @@ const undo = p => p.getByRole('button', { name: 'Undo' })
   check((await heads(p)).includes('Property'), 'and the column is there after a reload', await heads(p))
   check(errors.length === 0, 'no page errors', errors)
   await c.close() }
+// Another save of the page already on its way (Ratchet): the property still waits for the column, and keeps its Undo.
+{ const { c, p, errors, wait } = await open('linked')
+  const order = [], held = []
+  await p.route('**/*', async route => { const q = route.request(); if (q.method() === 'POST' && /save-editor|change-database/.test(q.postData() ?? '')) { const kind = /save-editor/.test(q.postData()) ? 'save-editor' : 'addProperty'; order.push(kind); if (held.length === 0) { held.push(1); await new Promise(r => setTimeout(r, 1500)) } } await route.continue() })
+  await p.locator('.bn-inline-content', { hasText: 'The line above' }).click(); await p.keyboard.press(engine === 'webkit' ? 'Meta+ArrowRight' : 'End'); await p.keyboard.type(' more'); await wait(900)
+  await p.locator('.database-th.is-add button').first().click(); await wait(3200)
+  check(order.at(-1) === 'addProperty', 'the property goes last, after the save on its way and the column', order)
+  check((await heads(p)).includes('Property') && await undo(p).count() === 1, 'and keeps its Undo', [await heads(p), await notices(p)])
+  await undo(p).first().click(); await wait(1500)
+  check(!props().includes('Property'), 'one Undo takes it out', props())
+  check(JSON.stringify(data().pages.find(x => x.id === 'linked').document).includes('The line above more'), 'and the words typed before it stay')
+  check(errors.length === 0, 'no page errors', errors)
+  await c.close() }
+// A page that can't save (Ratchet): the property waits for the column, as a later save would take its Undo, and goes when the page saves again.
+{ const { c, p, errors, wait } = await open('linked')
+  const block = route => { const q = route.request(); return q.method() === 'POST' && /save-editor/.test(q.postData() ?? '') ? route.abort() : route.continue() }
+  await p.route('**/*', block)
+  await p.locator('.database-th.is-add button').first().click(); await wait(3000)
+  check(!props().includes('Property'), "with the page's saves failing, the property waits", props())
+  check(/not saved|trying again|couldn|offline|draft/i.test(await p.locator('.editor-save-line').innerText().catch(() => '')), 'and the page says its save failed', await p.locator('.editor-save-line').innerText().catch(() => ''))
+  await p.unroute('**/*', block)
+  for (let i = 0; i < 80 && !props().includes('Property'); i++) await wait(500)
+  await wait(800)
+  check(props().includes('Property') && (await heads(p)).includes('Property'), 'when the page saves again, the column and the property arrive', [props(), await heads(p)])
+  check(await undo(p).count() === 1, 'with Undo', await notices(p))
+  await undo(p).first().click(); await wait(1500)
+  check(!props().includes('Property'), 'one Undo takes it out', props())
+  check(errors.length === 0, 'no page errors', errors)
+  await c.close() }
 // The menu's New property.
 { const { c, p, errors, wait } = await open('linked')
   const menu = p.locator('.database-menu')
