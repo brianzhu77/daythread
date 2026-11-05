@@ -2,7 +2,7 @@
 // changes come back as ordinary lines below their lines, so nothing he typed is lost and nothing the other tab did
 // is undone. His changes are measured against the page as it was when he started (the save's starting point), not
 // against the latest, so a line only the other side changed is left alone.
-import { inlineText, isFileBlock, type EditorNode } from './editor-document.ts'
+import { buttonBlockType, inlineText, isFileBlock, type EditorNode } from './editor-document.ts'
 
 export interface DraftMerge {
   /** The latest page with his lines inserted. */
@@ -18,9 +18,9 @@ const walk = (nodes: EditorNode[], visit: (node: EditorNode, parent: EditorNode 
 const byId = (nodes: EditorNode[]) => { const map = new Map<string, EditorNode>(); walk(nodes, n => map.set(n.id, n)); return map }
 /** What a line says: its kind and words, with links by target (a link's refId is identity, not wording). */
 // A checklist line's tick is part of what it says (Ratchet #97).
-const wording = (node: EditorNode) => JSON.stringify([node.type, node.type === 'heading' ? node.props?.level : null, node.content ?? null, node.type === 'pageLink' ? node.props?.pageId : null, isFileBlock(node) ? [node.props?.url, node.props?.caption, node.props?.previewWidth, node.props?.textAlignment] : null, node.type === 'sourceChecklist' ? Boolean(node.props?.checked) : null], (key, value) => (key === 'refId' ? undefined : value))
+const wording = (node: EditorNode) => JSON.stringify([node.type, node.type === 'heading' ? node.props?.level : null, node.content ?? null, node.type === 'pageLink' ? node.props?.pageId : null, node.type === buttonBlockType ? [node.props?.label, node.props?.steps] : null, isFileBlock(node) ? [node.props?.url, node.props?.caption, node.props?.previewWidth, node.props?.textAlignment] : null, node.type === 'sourceChecklist' ? Boolean(node.props?.checked) : null], (key, value) => (key === 'refId' ? undefined : value))
 /** No words and nothing else inline: a line holding only a `[[` link is not empty (Ratchet #97). */
-const isEmpty = (node: EditorNode) => node.type !== 'pageLink' && !inlineText(node.content).trim() && !(Array.isArray(node.content) && (node.content as { type?: string }[]).some(c => c?.type && c.type !== 'text'))
+const isEmpty = (node: EditorNode) => node.type !== 'pageLink' && node.type !== buttonBlockType && !inlineText(node.content).trim() && !(Array.isArray(node.content) && (node.content as { type?: string }[]).some(c => c?.type && c.type !== 'text'))
 const withoutChildren = ({ children: _children, ...node }: EditorNode): EditorNode => ({ ...node, children: [] })
 /** His text for a line that already exists: a line of the same kind, or a bullet for a task or heading (never a second task or a new section). */
 function copyOf(node: EditorNode, newId: () => string): EditorNode {
