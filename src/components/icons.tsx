@@ -77,6 +77,12 @@ export const DownloadIcon = () => (
     <path d="M12 5v10M7.5 11 12 15.5 16.5 11M6 19h12" />
   </Icon>
 )
+export const CaptionIcon = () => (
+  <Icon>
+    <rect x="5" y="5" width="14" height="9" rx="1.5" />
+    <path d="M7 18.5h10" />
+  </Icon>
+)
 export const ExternalIcon = () => (
   <Icon>
     <path d="M8 16 16.5 7.5M10 7h7v7" />

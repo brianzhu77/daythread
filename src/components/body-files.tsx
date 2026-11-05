@@ -7,7 +7,7 @@ import { createReactBlockSpec, FileBlockWrapper, ImageToExternalHTML, ResizableF
 import { fileLimits } from '../domain/database'
 import { bodyFileOf, bodyFileSized, bodyFileUrl, shownInPlace, showsAsImage } from '../domain/body-files'
 import { fileSizeLabel, putFile, type UploadFailure } from './file-upload'
-import { DownloadIcon, ExternalIcon, ImageIcon, PaperclipIcon } from './icons'
+import { CaptionIcon, DownloadIcon, ExternalIcon, ImageIcon, PaperclipIcon } from './icons'
 
 type UploadState = 'waiting' | 'uploading' | 'failed' | 'offline' | 'refused' | 'done'
 interface Upload { id: string; file: File; preview: string | null; state: UploadState; percent: number; message: string; abort?: () => void }
@@ -57,6 +57,10 @@ export const resolveBodyFile = async (url: string) => { const file = bodyFileOf(
 const useUpload = (id: string | undefined) => useSyncExternalStore(l => { listeners.add(l); return () => listeners.delete(l) }, () => (id ? uploads.get(id) : undefined), () => undefined)
 
 type Editor = BlockNoteEditor<any, any, any>
+// Which image's caption is being written. Out here, as a block's view is drawn anew when focus leaves the editor.
+let writingCaption: string | null = null
+const writeCaption = (blockId: string | null) => { writingCaption = blockId; listeners.forEach(l => l()) }
+const useWritingCaption = (blockId: string) => useSyncExternalStore(l => { listeners.add(l); return () => listeners.delete(l) }, () => writingCaption === blockId, () => false)
 const fileBlock = (file: File, as?: 'file') => ({ type: !as && showsAsImage(file.type) ? 'image' : 'file', props: { url: startBodyUpload(file), name: file.name.slice(0, 255) || 'Untitled' } })
 /** From the block's own panel, or Replace. `/image` given something that isn't an image makes a file block; `/file` given an image stays a file, as asked (§2). */
 export function uploadFromPanel(editor: Editor, file: File, blockId?: string) {
@@ -125,6 +129,12 @@ export function BodyImageAlign() {
   if (block?.type !== 'image' || !narrowerThanColumn(editor, block.id)) return null
   return <><TextAlignButton textAlignment="left" /><TextAlignButton textAlignment="center" /><TextAlignButton textAlignment="right" /></>
 }
+/** Written in place, as a line under the picture (§5). A file is one row, with no caption. */
+export function BodyImageCaptionButton() {
+  const Components = useComponentsContext()!, block = useSelectedFile()
+  if (block?.type !== 'image') return null
+  return <Components.FormattingToolbar.Button className="bn-button" label="Caption" mainTooltip="Caption" icon={<CaptionIcon />} onClick={() => writeCaption(block.id)} />
+}
 /** ↗ and Download, neither until the upload's done (§5). A web link has nothing of ours to save. */
 export function BodyFileOpenButtons() {
   const Components = useComponentsContext()!
@@ -139,15 +149,15 @@ export function BodyFileOpenButtons() {
 /** The phone's way to what a selected block's bar offers at 1280 (§5): there's no bar to hover over, and no resize. Opening it lets the keyboard go, which would leave the menu no room. */
 function BodyBlockMenu({ block }: { block: { id: string; type: string; props: Record<string, any> } }) {
   const editor = useBlockNoteEditor<any, any, any>(), button = useRef<HTMLButtonElement>(null), menu = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false), [captioning, setCaptioning] = useState(false), [at, setAt] = useState<{ top: number; left: number } | null>(null)
+  const [open, setOpen] = useState(false), [at, setAt] = useState<{ top: number; left: number } | null>(null)
   const url: string = block.props.url, ours = bodyFileOf(url), done = uploadDone(url)
-  const close = () => { setOpen(false); setCaptioning(false); setAt(null) }
+  const close = () => { setOpen(false); setAt(null) }
   useLayoutEffect(() => {
     if (!open || !menu.current || !button.current) return
     const box = button.current.getBoundingClientRect(), { height, width } = menu.current.getBoundingClientRect(), edge = 8
     const below = box.bottom + 4, top = below + height <= window.innerHeight - edge ? below : Math.max(edge, box.top - 4 - height)
     setAt({ top, left: Math.max(edge, Math.min(box.right - width, window.innerWidth - width - edge)) })
-  }, [open, captioning])
+  }, [open])
   useEffect(() => {
     if (!open) return
     const away = (e: PointerEvent) => { if (!menu.current?.contains(e.target as Node) && !button.current?.contains(e.target as Node)) close() }
@@ -159,32 +169,51 @@ function BodyBlockMenu({ block }: { block: { id: string; type: string; props: Re
   return <>
     <button ref={button} type="button" className="body-file-more" aria-label="More" aria-expanded={open} contentEditable={false} onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); setOpen(!open) }}>⋯</button>
     {open && createPortal(<div ref={menu} className="app-menu body-file-menu" role="menu" aria-label="File actions" style={{ position: 'fixed', top: at?.top ?? 0, left: at?.left ?? 0, right: 'auto', visibility: at ? 'visible' : 'hidden' }}>
-      {captioning
-        ? <input aria-label="Caption" placeholder="Caption" autoFocus defaultValue={block.props.caption ?? ''} onBlur={close} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); editor.updateBlock(block.id, { props: { caption: e.currentTarget.value } } as never); close() } }} />
-        : <>
-          <button type="button" role="menuitem" onClick={() => setCaptioning(true)}>Caption</button>
-          <button type="button" role="menuitem" onClick={act(() => chooseAgain(editor, block.id))}>Replace</button>
-          {block.type === 'image' && narrowerThanColumn(editor, block.id) && <>
-            <button type="button" role="menuitem" onClick={align('left')}>Align left</button>
-            <button type="button" role="menuitem" onClick={align('center')}>Align centre</button>
-            <button type="button" role="menuitem" onClick={align('right')}>Align right</button>
-          </>}
-          {done && ours && <button type="button" role="menuitem" onClick={act(() => downloadFile(url, block.props.name || ours.name))}>Download</button>}
-          {done && <button type="button" role="menuitem" onClick={act(() => openFile(url))}>Open in a new tab</button>}
-          <button type="button" role="menuitem" onClick={act(() => editor.removeBlocks([block.id]))}>Remove</button>
-        </>}
+      {block.type === 'image' && <button type="button" role="menuitem" onClick={act(() => writeCaption(block.id))}>Caption</button>}
+      <button type="button" role="menuitem" onClick={act(() => chooseAgain(editor, block.id))}>Replace</button>
+      {block.type === 'image' && narrowerThanColumn(editor, block.id) && <>
+        <button type="button" role="menuitem" onClick={align('left')}>Align left</button>
+        <button type="button" role="menuitem" onClick={align('center')}>Align centre</button>
+        <button type="button" role="menuitem" onClick={align('right')}>Align right</button>
+      </>}
+      {done && ours && <button type="button" role="menuitem" onClick={act(() => downloadFile(url, block.props.name || ours.name))}>Download</button>}
+      {done && <button type="button" role="menuitem" onClick={act(() => openFile(url))}>Open in a new tab</button>}
+      <button type="button" role="menuitem" onClick={act(() => editor.removeBlocks([block.id]))}>Remove</button>
     </div>, document.body)}
   </>
 }
+/** The caption's field, in the caption's place. Enter leaves it for a line below, Esc leaves it as it was, and going elsewhere keeps what's written (§5). */
+function BodyCaptionField({ blockId, caption }: { blockId: string; caption: string }) {
+  const editor = useBlockNoteEditor<any, any, any>(), left = useRef(false)
+  const leave = (value: string | null, lineBelow = false) => {
+    if (left.current) return
+    left.current = true
+    writeCaption(null)
+    editor.transact(() => {
+      if (value !== null && value !== caption) editor.updateBlock(blockId, { props: { caption: value } } as never)
+      if (!lineBelow) return
+      const below = editor.getNextBlock(blockId) as { id: string; type: string; content?: unknown } | undefined
+      const line = below?.type === 'paragraph' && Array.isArray(below.content) && !below.content.length ? below : editor.insertBlocks([{ type: 'paragraph' }] as never, blockId, 'after')[0]!
+      editor.setTextCursorPosition(line.id, 'start')
+    })
+    if (lineBelow) editor.focus()
+  }
+  return <input className="body-image-caption" aria-label="Caption" placeholder="Caption" autoFocus defaultValue={caption} maxLength={1000}
+    onBlur={e => leave(e.currentTarget.value)}
+    onKeyDown={e => {
+      if (e.key === 'Enter') { e.preventDefault(); leave(e.currentTarget.value, true) }
+      else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); leave(null) }
+    }} />
+}
 /** The line a block says its state on (§4). It never takes the block's words from the page. */
-function BodyFileLine({ blockId, up, name, missing, cantShow }: { blockId: string; up: Upload | undefined; name: string; missing: boolean; cantShow?: string }) {
+function BodyFileLine({ blockId, up, name, missing, cantShow }: { blockId: string; up: Upload | undefined; name?: string; missing: boolean; cantShow?: string }) {
   const editor = useBlockNoteEditor<any, any, any>()
   const remove = <button type="button" onClick={() => editor.removeBlocks([blockId])}>Remove</button>
   let words: ReactNode = null, action: ReactNode = null
   if (up?.state === 'failed') { words = up.message; action = <button type="button" onClick={() => retry(up.id)}>Retry</button> }
   else if (up?.state === 'offline' || up?.state === 'refused') words = up.message
-  else if (missing) { words = `${name} isn't here`; action = <button type="button" onClick={() => chooseAgain(editor, blockId)}>Choose again</button> }
-  else if (cantShow) return <div className="body-file-line" contentEditable={false} role="status"><span>Can't show this image here</span><button type="button" onClick={() => downloadFile(cantShow, name)}>Download</button></div>
+  else if (missing) { words = name ? `${name} isn't here` : "Isn't here"; action = <button type="button" onClick={() => chooseAgain(editor, blockId)}>Choose again</button> }
+  else if (cantShow) return <div className="body-file-line" contentEditable={false} role="status"><span>Can't show this image here</span><button type="button" onClick={() => downloadFile(cantShow, name ?? '')}>Download</button></div>
   if (!words) return null
   return <div className="body-file-line" contentEditable={false} role="status"><span>{words}</span>{action}{remove}</div>
 }
@@ -211,8 +240,15 @@ function BodyImageView(props: any) {
   const up = useUpload(ours?.id)
   // The picture's own request says whether it's there; asking first would cost every photo on a day a second trip.
   const there = useFileThere(url, Boolean(ours && !up && failedOnce))
+  const writing = useWritingCaption(props.block.id)
   useStopWhenGone(props.block.id, up)
   useEffect(() => { setBroken(false); setFailedOnce(false); setLoaded(false) }, [ours?.id ?? url])
+  // A caption is written where it reads: a click on it edits it.
+  useEffect(() => {
+    const onCaption = (e: MouseEvent) => { const on = e.target as Element; if (on.closest?.('.bn-file-caption') && on.closest('.bn-block')?.getAttribute('data-id') === props.block.id) writeCaption(props.block.id) }
+    document.addEventListener('click', onCaption)
+    return () => document.removeEventListener('click', onCaption)
+  }, [props.block.id])
   // Only once it's gone: an error that arrives alongside the file being found mustn't be forgotten, with the same picture never failing again. If it turns up later, the picture's drawn anew.
   useEffect(() => { if (there === false) setBroken(false) }, [there])
   const editor = useBlockNoteEditor<any, any, any>()
@@ -239,9 +275,10 @@ function BodyImageView(props: any) {
       : failed
         ? <div className="body-file-line" contentEditable={false}><span>{navigator.onLine ? "Can't load this image" : "Offline · Can't load this image"}</span>{!ours && <a href={url} target="_blank" rel="noreferrer">{url}</a>}</div>
         : <img className={`bn-visual-media${loaded ? '' : ' body-image-loading'}`} src={up?.preview ?? url} alt={name || ''} width={props.block.props.previewWidth} style={!loaded && ours?.width && ours.height ? { width: props.block.props.previewWidth ?? ours.width, aspectRatio: `${ours.width} / ${ours.height}` } : undefined} loading="lazy" decoding="async" contentEditable={false} draggable={false} onLoad={e => drawn(e.currentTarget)} onError={() => { setBroken(true); setFailedOnce(true) }} />}
-    {up?.state === 'uploading' && <div className="body-file-progress" style={{ width: `${up.percent}%` }} />}
+    {(up?.state === 'uploading' || up?.state === 'waiting') && <div className="body-file-progress"><div style={{ width: `${up.percent}%` }} /></div>}
     {chosen && <div className="body-image-more"><BodyBlockMenu block={props.block} /></div>}
     <BodyFileLine blockId={props.block.id} up={up} name={name || ours?.name || 'This file'} missing={missing} cantShow={cantShow && uploadDone(url) ? url : undefined} />
+    {writing && <BodyCaptionField blockId={props.block.id} caption={props.block.props.caption ?? ''} />}
   </ResizableFileBlockWrapper>
 }
 function BodyFileView(props: any) {
@@ -261,7 +298,7 @@ function BodyFileView(props: any) {
       {ready && !missing && <a className="body-file-go" href={url} {...opens ? { target: '_blank', rel: 'noreferrer', 'aria-label': `Open ${name}` } : { download: name, 'aria-label': `Download ${name}` }}>{opens ? <ExternalIcon /> : <DownloadIcon />}</a>}
       <span className="body-file-menu-at"><BodyBlockMenu block={props.block} /></span>
     </div>
-    <BodyFileLine blockId={props.block.id} up={up} name={name} missing={missing} />
+    <BodyFileLine blockId={props.block.id} up={up} missing={missing} />
   </FileBlockWrapper>
 }
 

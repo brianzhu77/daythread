@@ -8,11 +8,11 @@ import { type BlockNoteEditor, BlockNoteSchema, blockToNode, defaultBlockSpecs, 
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
 import { en } from '@blocknote/core/locales'
 import { Button, toast } from '@heroui/react'
-import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, FileCaptionButton, FileReplaceButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, LinkToolbarController, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useEditorState, useExtensionState, usePortalElement, useUIMode } from '@blocknote/react'
+import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, FileReplaceButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, LinkToolbarController, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useEditorState, useExtensionState, usePortalElement, useUIMode } from '@blocknote/react'
 import { BlockNoteView, ShadCNDefaultComponents } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
 import { suggestionMenuMiddleware } from './suggestion-menu-placement'
-import { BodyFileOpenButtons, bodyFileSpec, BodyImageAlign, bodyImageSpec, insertBodyFiles, pasteBodyFiles, resolveBodyFile, uploadFromPanel } from './body-files'
+import { BodyFileOpenButtons, BodyImageCaptionButton, bodyFileSpec, BodyImageAlign, bodyImageSpec, insertBodyFiles, pasteBodyFiles, resolveBodyFile, uploadFromPanel } from './body-files'
 import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
@@ -2156,7 +2156,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         <BasicTextStyleButton key="underline" basicTextStyle="underline" />
         <BasicTextStyleButton key="strike" basicTextStyle="strike" />
         <CreateLinkButton key="createLink" />
-        <FileCaptionButton key="fileCaption" />
+        <BodyImageCaptionButton key="fileCaption" />
         <FileReplaceButton key="fileReplace" />
         <BodyImageAlign key="align" />
         <BodyFileOpenButtons key="open" />
@@ -2655,6 +2655,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     onKeyDownCapture={e => {
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
       if (e.key !== 'Backspace' && e.key !== 'Delete') clickedFile.current = null
+      // Keys in a caption's field belong to the field: Backspace there isn't a key on the chosen image.
+      if ((e.target as Element).closest?.('.body-image-caption')) return
       // B44 (Jazz §3): with the paste menu open, ↑/↓ move, Enter picks (Keep is first), Esc keeps; any other key keeps
       // the link and does what it would anyway (⌘Z undoes the paste).
       const menu = pasteMenuRef.current
