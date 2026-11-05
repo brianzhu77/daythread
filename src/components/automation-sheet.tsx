@@ -83,13 +83,20 @@ const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 function EveryFields({ trigger, onChange }: { trigger: Extract<AutomationTrigger, { kind: 'every' }>; onChange(next: Extract<AutomationTrigger, { kind: 'every' }>): void }) {
   const { repeat } = trigger
   const put = (fields: Partial<typeof repeat>) => onChange({ ...trigger, repeat: { ...repeat, ...fields } })
+  // What's typed stays as typed, so it can be cleared on the way to another number. Only a valid one is kept, and leaving goes back to it.
+  const [count, setCount] = useState(String(repeat.interval)), [ending, setEnding] = useState(Boolean(trigger.until))
+  // None chosen means From's weekday, which is how a week runs, so that's what shows.
+  const days = repeat.weekdays?.length ? repeat.weekdays : [new Date(`${repeat.start}T12:00:00Z`).getUTCDay()]
+  const stopUntil = () => { const { until: _u, ...rest } = trigger; onChange(rest); setEnding(false) }
   return <div className="automation-every">
-    <label>Every <input aria-label="How many" inputMode="numeric" value={repeat.interval} onChange={e => { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 1 && n <= 1000) put({ interval: n }) }} /></label>
+    <label>Every <input aria-label="How many" inputMode="numeric" value={count} onChange={e => { setCount(e.target.value); const n = Number(e.target.value); if (e.target.value.trim() && Number.isInteger(n) && n >= 1 && n <= 1000) put({ interval: n }) }} onBlur={() => setCount(String(repeat.interval))} /></label>
     <select aria-label="Period" value={repeat.every} onChange={e => put({ every: e.target.value as typeof repeat.every })}><option value="day">day</option><option value="week">week</option><option value="month">month</option><option value="year">year</option></select>
-    {repeat.every === 'week' && <span className="automation-weekdays" role="group" aria-label="On">{weekdayNames.map((name, day) => { const on = repeat.weekdays?.includes(day) ?? false; return <button key={name} type="button" aria-pressed={on} className={on ? 'is-on' : ''} onClick={() => { const next = (repeat.weekdays ?? []).filter(d => d !== day).concat(on ? [] : [day]).sort(); const { weekdays: _w, ...rest } = repeat; onChange({ ...trigger, repeat: next.length ? { ...rest, weekdays: next } : rest }) }}>{name}</button> })}</span>}
+    {repeat.every === 'week' && <span className="automation-weekdays" role="group" aria-label="On">{weekdayNames.map((name, day) => { const on = days.includes(day); return <button key={name} type="button" aria-pressed={on} className={on ? 'is-on' : ''} onClick={() => { const next = on ? days.filter(d => d !== day) : [...days, day]; if (next.length) put({ weekdays: [...next].sort((x, y) => x - y) }) }}>{name}</button> })}</span>}
     <label>At <input type="time" aria-label="At" value={repeat.time ?? '00:00'} onChange={e => put({ time: e.target.value })} /></label>
     <label>From <input type="date" aria-label="From" value={repeat.start} onChange={e => { if (e.target.value) put({ start: e.target.value }) }} /></label>
-    <label>Until <input type="date" aria-label="Until" value={trigger.until ?? ''} onChange={e => { const { until: _u, ...rest } = trigger; onChange(e.target.value ? { ...rest, until: e.target.value } : rest) }} /></label>
+    {ending
+      ? <span className="automation-until"><label>Until <input type="date" aria-label="Until" value={trigger.until ?? ''} onChange={e => { const { until: _u, ...rest } = trigger; onChange(e.target.value ? { ...rest, until: e.target.value } : rest) }} /></label><button type="button" className="database-rule-remove" aria-label="No end date" onClick={stopUntil}>×</button></span>
+      : <button type="button" className="app-link" onClick={() => setEnding(true)}>+ End date</button>}
   </div>
 }
 
@@ -103,8 +110,9 @@ function Editor({ rule, isNew, db, onCancel, onDone, onDelete }: { rule: Automat
   const firstProblem = steps.findIndex((_, i) => stepIssue(i))
   // A step or trigger whose target is gone is what a paused rule needs fixed, so saving it as it is wouldn't turn it back on.
   const broken = workspace ? automationProblem(workspace, db.database, draft()) : null
-  const ready = steps.length > 0 && firstProblem < 0 && triggers.length > 0 && !broken
-  const done = () => { if (!steps.length) { setAt('kinds'); return } if (firstProblem >= 0) { setAt(firstProblem); return } if (!broken) onDone(draft()) }
+  const every = everyOf({ triggers }), endsEarly = every?.until && every.until < every.repeat.start ? 'It ends before it starts, so it would never run' : null
+  const ready = steps.length > 0 && firstProblem < 0 && triggers.length > 0 && !broken && !endsEarly
+  const done = () => { if (!steps.length) { setAt('kinds'); return } if (firstProblem >= 0) { setAt(firstProblem); return } if (!broken && !endsEarly) onDone(draft()) }
   const leave = () => { if (changedYet && !isNew) setAsking(true); else if (changedYet && (name || steps.length)) setAsking(true); else onCancel() }
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key !== 'Escape') return; e.preventDefault(); e.stopPropagation(); if (at !== null) setAt(null); else leave() }
@@ -121,7 +129,7 @@ function Editor({ rule, isNew, db, onCancel, onDone, onDelete }: { rule: Automat
     </div>
     {asking && <div className="button-editor-discard" role="alert"><span>Discard changes?</span><button type="button" className="app-link" onClick={() => setAsking(false)}>Keep editing</button><button type="button" className="app-link" onClick={onCancel}>Discard</button></div>}
     {at === null && <>
-      {broken && <p className="button-step-problem" role="status">{broken}</p>}
+      {(broken ?? endsEarly) && <p className="button-step-problem" role="status">{broken ?? endsEarly}</p>}
       <input className="button-editor-name" aria-label="Name" placeholder={steps[0] ? stepTitle(steps[0]) : 'Automation'} maxLength={200} value={name} onChange={e => setName(e.target.value)} />
       <p className="button-editor-label">When</p>
       {triggers.length > 1 && <select aria-label="Match" value={any ? 'any' : 'all'} onChange={e => setAny(e.target.value === 'any')}><option value="all">All of these</option><option value="any">Any of these</option></select>}
@@ -163,7 +171,7 @@ function Editor({ rule, isNew, db, onCancel, onDone, onDelete }: { rule: Automat
       <button type="button" role="menuitem" onClick={() => setAt('kinds')}>+ Add step</button>
       {onDelete && <button type="button" role="menuitem" className="is-danger" onClick={onDelete}>Delete</button>}
     </>}
-    {at === 'kinds' && stepKinds.filter(k => automationSteps.includes(k.kind)).map(({ kind, name: label }) => <button key={kind} type="button" role="menuitem" onClick={() => { setSteps(list => [...list, newStep(kind)]); setAt(steps.length) }}>{label}</button>)}
+    {at === 'kinds' && stepKinds.filter(k => automationSteps.includes(k.kind) && !(everyOf({ triggers }) && k.kind === 'edit-property')).map(({ kind, name: label }) => <button key={kind} type="button" role="menuitem" onClick={() => { setSteps(list => [...list, newStep(kind)]); setAt(steps.length) }}>{label}</button>)}
     {typeof at === 'number' && steps[at] && workspace && <StepPage key={steps[at]!.id} step={steps[at]!} problem={problemOf(steps, at)} canOpenMade={false} workspace={workspace} schema={null as never} rowsOf={db.database} onChange={next => setSteps(list => list.map((s, j) => (j === at ? next : s)))} />}
   </>
 }

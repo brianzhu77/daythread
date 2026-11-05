@@ -2903,6 +2903,7 @@ body:has(.button-editor) #bn-suggestion-menu { max-height: min(420px, 45vh); }
 .automation-every { display: flex; flex-basis: 100%; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: var(--text-meta); color: var(--ink-2); }
 .automation-every label { display: inline-flex; align-items: center; gap: 4px; }
 .automation-every input[inputmode] { width: 44px; }
+.automation-until { display: inline-flex; align-items: center; gap: 2px; }
 .automation-weekdays { display: flex; flex-basis: 100%; gap: 2px; }
 .database-menu .automation-weekdays button { min-height: 28px; min-width: 34px; padding: 0 2px; border: 1px solid var(--line); border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; }
 .database-menu .automation-weekdays button.is-on { border-color: var(--ink); background: var(--ink); color: var(--paper); }
