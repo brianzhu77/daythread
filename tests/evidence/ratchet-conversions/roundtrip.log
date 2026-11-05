@@ -1,0 +1,8 @@
+Text -> Select {"value":"p-o0","text":"Red, Blue","options":[{"id":"p-o0","name":"Red, Blue","from":"red, blue"}],"raw":"Red, Blue"}
+Select -> Multi notice Changed to Multi-select · 1 value shows as empty
+Select -> Multi {"value":null,"text":"","options":[{"id":"p-o0","name":"Red, Blue","from":"red, blue"}],"raw":"Red, Blue"}
+Text -> Multi {"value":["p-o1","p-o2"],"text":"Red, Blue","options":[{"id":"p-o0","name":"Red, Blue","from":"red, blue"},{"id":"p-o1","name":"Red","from":"red"},{"id":"p-o2","name":"Blue","from":"blue"}],"raw":"Red, Blue"}
+Multi -> Select notice Changed to Select
+Multi -> Select {"value":"p-o0","text":"Red, Blue","options":[{"id":"p-o0","name":"Red, Blue","from":"red, blue"},{"id":"p-o1","name":"Red","from":"red"},{"id":"p-o2","name":"Blue","from":"blue"}],"raw":"Red, Blue"}
+Fresh Text -> Multi -> multiSelect {"value":["p-o0","p-o1"],"text":"Red, Blue","notice":"Changed to Multi-select","options":[{"id":"p-o0","name":"Red","from":"red"},{"id":"p-o1","name":"Blue","from":"blue"}]}
+Fresh Text -> Multi -> select {"value":null,"text":"","notice":"Changed to Select · 1 value shows as empty","options":[{"id":"p-o0","name":"Red","from":"red"},{"id":"p-o1","name":"Blue","from":"blue"}]}
