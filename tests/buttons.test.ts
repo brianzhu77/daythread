@@ -155,17 +155,24 @@ test('Ratchet: a page Open can\'t reach stops the tap before anything\'s written
   assert.equal(rows(trashed).length, n)
   assert.throws(() => tap(setup([addRow(), { id: 'u', kind: 'open', target: { kind: 'url', url: 'javascript:alert(1)' } }])), /can't be opened/)
 })
-test('Ratchet: a to-do that can\'t take the edit stops the whole tap, row and all', () => {
-  const h = setup([addRow(), { id: 's', kind: 'edit-rows', databaseId: todosSourceId, databaseName: 'To-dos', filter: [], set: [{ id: 'planned', name: 'Planned', value: { kind: 'fixed', raw: { start: '2026-11-07' } } }] }])
-  h.run({ type: 'ensure-day', date: '2026-11-06' })
-  h.run({ type: 'add-task', pageId: 'day:2026-11-06', title: 'Open one', plannedOn: '2026-11-06' })
-  h.run({ type: 'add-task', pageId: 'day:2026-11-06', title: 'Finished', plannedOn: '2026-11-06' })
-  h.run({ type: 'task-status', taskId: h.task('Finished').id, status: 'done', today: '2026-11-06' })
-  const n = rows(h).length, revision = h.ws.revision
-  assert.throws(() => tap(h, 'btn', 'p', '2026-11-06'), /1 couldn't be changed/)
-  assert.equal(rows(h).length, n)
-  assert.equal(h.ws.revision, revision)
-  assert.equal(h.ws.pages.some(p => p.date === '2026-11-07'), false, 'the open one wasn\'t moved')
+test('a to-do that can\'t take the edit reads as the bar\'s does, with one Undo over the rest; if none can, later steps carry on (Lead 371ebb4b)', () => {
+  const step = (filter: unknown[] = []): ButtonStep => ({ id: 's', kind: 'edit-rows', databaseId: todosSourceId, databaseName: 'To-dos', filter, set: [{ id: 'planned', name: 'Planned', value: { kind: 'fixed', raw: { start: '2026-11-07' } } }] }) as ButtonStep
+  const day = (h: ReturnType<typeof harness>) => { h.run({ type: 'ensure-day', date: '2026-11-06' }); h.run({ type: 'add-task', pageId: 'day:2026-11-06', title: 'Open one', plannedOn: '2026-11-06' }); h.run({ type: 'add-task', pageId: 'day:2026-11-06', title: 'Finished', plannedOn: '2026-11-06' }); h.run({ type: 'task-status', taskId: h.task('Finished').id, status: 'done', today: '2026-11-06' }) }
+  const h = setup([addRow(), step()]); day(h)
+  const n = rows(h).length, { receipt } = tap(h, 'btn', 'p', '2026-11-06')
+  assert.match(receipt.message, /1 to-do changed · 1 couldn't/)
+  assert.equal(rows(h).length, n + 1)
+  assert.ok(h.ws.pages.some(p => p.date === '2026-11-07'), 'the open one moved')
+  h.run({ type: 'undo', targetOperationId: receipt.operationId })
+  assert.equal(rows(h).length, n, 'one Undo over both')
+  const none = setup([step(), addRow()])
+  none.run({ type: 'ensure-day', date: '2026-11-06' }); none.run({ type: 'add-task', pageId: 'day:2026-11-06', title: 'Finished', plannedOn: '2026-11-06' }); none.run({ type: 'task-status', taskId: none.task('Finished').id, status: 'done', today: '2026-11-06' })
+  assert.equal(tap(none, 'btn', 'p', '2026-11-06').receipt.message, 'Added to Runs', 'a step none could take doesn\'t stop the next')
+  const alone = setup([step()])
+  alone.run({ type: 'ensure-day', date: '2026-11-06' }); alone.run({ type: 'add-task', pageId: 'day:2026-11-06', title: 'Finished', plannedOn: '2026-11-06' }); alone.run({ type: 'task-status', taskId: alone.task('Finished').id, status: 'done', today: '2026-11-06' })
+  const revision = alone.ws.revision
+  assert.throws(() => tap(alone, 'btn', 'p', '2026-11-06'))
+  assert.equal(alone.ws.revision, revision, 'nothing changed at all is no operation')
 })
 test('Ratchet: to-dos inserted count against the same 500 across steps', () => {
   const many = Array.from({ length: 501 }, (_, i) => line(`t${i}`, `To-do ${i}`, 'checkListItem'))

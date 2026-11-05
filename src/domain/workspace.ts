@@ -167,7 +167,7 @@ function runButton(state: Workspace, action: Extract<Action, { type: "run-button
   // Counted across the steps, rather than each spending the whole limit (§4.9).
   let rowsLeft = databaseLimits.rowsAtOnce, todosLeft = databaseLimits.todosAtOnce;
   const spend = (rows: number, todos: boolean) => { if (todos) { todosLeft -= rows; if (todosLeft < 0) throw new DomainError(`${databaseLimits.todosAtOnce} to-dos at most`); } else { rowsLeft -= rows; if (rowsLeft < 0) throw new DomainError(`${databaseLimits.rowsAtOnce.toLocaleString("en-US")} rows at most`); } };
-  let message: string | null = null, made: string | undefined, matchedNothing = false;
+  let message: string | null = null, made: string | undefined, matchedNothing = false, because: string | undefined;
   const named = <T,>(step: ButtonStep, work: () => T): T => {
     try { return work(); } catch (error) {
       if (error instanceof DomainError && !/ was deleted$| is in Trash$| at most$/.test(error.message)) throw new DomainError(`${stepTitle(step)}: ${error.message}`);
@@ -221,9 +221,11 @@ function runButton(state: Workspace, action: Extract<Action, { type: "run-button
         if (!rows.length) { matchedNothing = true; return; }
         spend(rows.length, true);
         const items = rows.flatMap((r) => { const taskId = taskIdOfRow(r.id); return taskId ? [{ taskId, changes: step.set.map((set) => ({ columnId: set.id, value: valueAtTap(set.value, todosDatabase.properties.find((p: Property) => p.id === set.id) ?? { type: "text" as const }, on, today) })) }] : []; });
-        // The bar's bulk edit may change some and say the rest couldn't. A tap is all or none, so a to-do that can't take this stops it.
-        message = execute(state, { type: "edit-todos", items, today }, operationId).message;
-        if (/ couldn't$/.test(message)) throw new DomainError(`${message.split(" · ")[1]} be changed`);
+        // As the bar's: a to-do that can't take a change, a cancelled one say, is normal here. It reads "3 changed · 1 couldn't", and if none could, later steps carry on, as for no match (Lead 371ebb4b).
+        try { message = execute(state, { type: "edit-todos", items, today }, operationId).message; } catch (error) {
+          if (!(error instanceof DomainError)) throw error;
+          matchedNothing = true; because = error.message;
+        }
         return;
       }
       const db = buttonTarget(state, step.databaseId, step.databaseName);
@@ -236,7 +238,7 @@ function runButton(state: Workspace, action: Extract<Action, { type: "run-button
     });
   }
   // Nothing changed at all: nothing to Undo, and no operation.
-  if (message === null) throw new DomainError(matchedNothing ? "No rows matched" : "Nothing to do");
+  if (message === null) throw new DomainError(because ?? (matchedNothing ? "No rows matched" : "Nothing to do"));
   return { message, ...(made ? { entityId: made } : {}) };
 }
 function commentBody(body: string): string {

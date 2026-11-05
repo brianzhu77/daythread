@@ -200,6 +200,18 @@ await scenario('390: a sheet with Done in its head; a tap raises no keyboard and
   const sheet = await editor(page).boundingBox(), size = await editor(page).getByLabel('Name').evaluate(n => getComputedStyle(n).fontSize)
   return { ok: active !== 'INPUT' && !/TEXTAREA/.test(active) && line.height >= 44 && drawn.height === 36 && sheet.width === 390 && Math.round(sheet.y + sheet.height) >= 778 && size === '16px' && ell && longBox.x + longBox.width <= more.x + 1 && more.x + more.width <= 390, active, line, drawn, sheet, size, longBox, more, ell }
 }, phone)
+await scenario('390: a tap picks from Insert\'s / menu, the sheet\'s handle stays on top, and the box has no explanatory line', async page => {
+  await page.getByRole('button', { name: 'Add lines actions' }).tap(); await wait(250); await page.getByRole('menuitem', { name: 'Edit' }).tap(); await wait(350)
+  await editor(page).locator('.button-step-open').first().tap(); await wait(400)
+  const handleAbove = await editor(page).evaluate(n => { const h = parseFloat(getComputedStyle(n, '::before').order || '0'), b = document.querySelector('.button-blocks'); return h < parseFloat(getComputedStyle(b).order) })
+  const words = page.locator('.button-blocks .ProseMirror')
+  await words.evaluate(n => { const last = [...n.querySelectorAll('.bn-inline-content')].at(-1); const s = getSelection(); s.selectAllChildren(last); s.collapseToEnd(); n.focus() }); await wait(150)
+  await page.keyboard.press('Enter'); const placeholder = await page.evaluate(() => getComputedStyle([...document.querySelectorAll('.button-blocks .bn-inline-content')].at(-1), '::before').content); await page.keyboard.type('/', { delay: 20 }); await wait(500)
+  const item = page.locator('#bn-suggestion-menu [role=option]', { hasText: 'Numbered List' }), hit = await item.evaluate(n => { const r = n.getBoundingClientRect(), t = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return Boolean(t && n.contains(t)) })
+  await item.tap(); await wait(400)
+  const numbered = await page.locator('.button-blocks [data-content-type=numberedListItem]').count()
+  return { ok: hit && numbered === 1 && handleAbove && (placeholder === 'none' || placeholder === 'normal'), hit, numbered, handleAbove, placeholder }
+}, phone)
 await browser.close()
 console.log(failed ? `${failed} failed` : 'all passed')
 process.exit(failed ? 1 : 0)
