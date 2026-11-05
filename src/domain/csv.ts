@@ -74,7 +74,7 @@ export function pastedValue(db: Database, property: Property, line: string): Jso
   if (line.length > 10_000) return undefined
   if (property.id === titleId || property.type === 'text') return line
   if (property.type === 'url' || property.type === 'email' || property.type === 'phone') return text
-  if (isReadOnly(property)) return undefined
+  if (isReadOnly(property) || property.type === 'files') return undefined
   if (property.type === 'number') { const n = Number(text.replace(/,/g, '')); return Number.isFinite(n) ? n : undefined }
   const options = propertyOf(db, property.id)?.options ?? []
   const named = (name: string) => options.find(o => o.name.toLowerCase() === name.trim().toLowerCase())?.id

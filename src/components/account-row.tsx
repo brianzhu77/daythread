@@ -1,4 +1,5 @@
 import { ChevronDownIcon } from './icons'
+import { holdsFiles } from '../domain/database'
 import { useEffect, useState, type FormEvent } from 'react'
 import { AccountItem } from './account-item'
 import { useNavigate } from '@tanstack/react-router'
@@ -98,13 +99,13 @@ export function AccountRow({ className }: { className: string }) {
         {email && <AccountItem><button type="button" className="link" onClick={() => void signOut()}>Sign out</button></AccountItem>}
         {email && !deleting && <AccountItem><button type="button" className="link" onClick={() => setDeleting(true)}>Delete account</button></AccountItem>}
       </span></p>
-      {email && deleting && <DeleteAccount onCancel={() => setDeleting(false)} />}
+      {email && deleting && <DeleteAccount onCancel={() => setDeleting(false)} filesGo={Boolean(workspace && holdsFiles(workspace))} />}
     </div>
   )
 }
 
 /** The password again, then everything goes: pages, tasks, sessions. Export first is the way to keep a copy. */
-function DeleteAccount({ onCancel }: { onCancel: () => void }) {
+function DeleteAccount({ onCancel, filesGo }: { onCancel: () => void; filesGo: boolean }) {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -123,7 +124,7 @@ function DeleteAccount({ onCancel }: { onCancel: () => void }) {
   }
   return (
     <form className="account-delete" onSubmit={submit}>
-      <p>Delete the account and everything in it? Export first to keep a copy. Type the password to confirm.</p>
+      <p>Delete the account and everything in it? Export first to keep a copy.{filesGo && ' Your files aren\'t in the export, so download any you want to keep: they go for good.'} Type the password to confirm.</p>
       <input type="password" autoComplete="current-password" aria-label="Password" value={password} onChange={e => setPassword(e.target.value)} readOnly={busy} />
       {error && <p className="sign-in-error" role="alert">{error}</p>}
       <p>

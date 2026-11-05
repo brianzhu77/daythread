@@ -2,7 +2,7 @@
 // databases it reads before it's saved and again whenever it's read, as a property it reads can change; its value is worked out per row when read.
 import { functionList, formulaFunctions, FormulaDate, FormulaPage, FormulaRich, FormulaRowError, FormulaTooLong, format, formatDate, isList, itemOf, notApplicable, pageTarget, unionType, validDateUnit, type Clock, type FormulaFunction, type RichRun, type RunContext, type Value, type ValueType } from './formula-functions.ts'
 import { FormulaSyntaxError, parseFormula, rewriteRefs, type FormulaNames, type FormulaNode, type PropRef } from './formula-parse.ts'
-import { cellValue, isDatabase, readValue, titleId, type CellValue, type Database, type DateValue, type Json, type Property } from './database.ts'
+import { cellValue, isDatabase, readValue, titleId, type CellValue, type Database, type DateValue, type Json, type Property, type FileValue } from './database.ts'
 import { rollupType } from './relations.ts'
 import { withTodos } from './todos-source.ts'
 import type { Page, Workspace } from './types.ts'
@@ -204,7 +204,7 @@ function plainType(type: Property['type']): ValueType {
     case 'number': return 'number'
     case 'checkbox': return 'boolean'
     case 'date': case 'createdTime': case 'editedTime': return 'date'
-    case 'multiSelect': return 'list:text'
+    case 'multiSelect': case 'files': return 'list:text'
     default: return 'text'
   }
 }
@@ -515,6 +515,7 @@ export class WorkedCells {
     switch (p.type) {
       case 'select': case 'status': return nameOf(String(value))
       case 'multiSelect': return (value as string[]).map(nameOf)
+      case 'files': return (value as FileValue[]).map(f => f.name)
       case 'relation': return (value as string[]).flatMap(id => { const row = this.sources.pages.get(id); return row ? [new FormulaPage(row)] : [] })
       case 'id': return `${p.prefix ?? ''}${String(value)}`
       default: return typeof value === 'object' && !Array.isArray(value) ? dateFrom(value) : (value as Value)

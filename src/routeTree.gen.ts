@@ -28,6 +28,8 @@ import { Route as ApiAuthResetPasswordRouteImport } from './routes/api/auth/rese
 import { Route as ApiAuthSignInRouteImport } from './routes/api/auth/sign-in'
 import { Route as ApiAuthSignOutRouteImport } from './routes/api/auth/sign-out'
 import { Route as ApiAuthSignUpRouteImport } from './routes/api/auth/sign-up'
+import { Route as ApiFilesFileIdRouteImport } from './routes/api/files/$fileId'
+import { Route as ApiFilesSweepRouteImport } from './routes/api/files/sweep'
 import { Route as ApiPushKeyRouteImport } from './routes/api/push/key'
 import { Route as ApiPushSubscribeRouteImport } from './routes/api/push/subscribe'
 import { Route as ApiPushTickRouteImport } from './routes/api/push/tick'
@@ -128,6 +130,16 @@ const ApiAuthSignUpRoute = ApiAuthSignUpRouteImport.update({
   path: '/api/auth/sign-up',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiFilesFileIdRoute = ApiFilesFileIdRouteImport.update({
+  id: '/api/files/$fileId',
+  path: '/api/files/$fileId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiFilesSweepRoute = ApiFilesSweepRouteImport.update({
+  id: '/api/files/sweep',
+  path: '/api/files/sweep',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPushKeyRoute = ApiPushKeyRouteImport.update({
   id: '/api/push/key',
   path: '/api/push/key',
@@ -169,6 +181,8 @@ export interface FileRoutesByFullPath {
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/auth/sign-up': typeof ApiAuthSignUpRoute
+  '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/files/sweep': typeof ApiFilesSweepRoute
   '/api/push/key': typeof ApiPushKeyRoute
   '/api/push/subscribe': typeof ApiPushSubscribeRoute
   '/api/push/tick': typeof ApiPushTickRoute
@@ -194,6 +208,8 @@ export interface FileRoutesByTo {
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/auth/sign-up': typeof ApiAuthSignUpRoute
+  '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/files/sweep': typeof ApiFilesSweepRoute
   '/api/push/key': typeof ApiPushKeyRoute
   '/api/push/subscribe': typeof ApiPushSubscribeRoute
   '/api/push/tick': typeof ApiPushTickRoute
@@ -220,6 +236,8 @@ export interface FileRoutesById {
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/auth/sign-up': typeof ApiAuthSignUpRoute
+  '/api/files/$fileId': typeof ApiFilesFileIdRoute
+  '/api/files/sweep': typeof ApiFilesSweepRoute
   '/api/push/key': typeof ApiPushKeyRoute
   '/api/push/subscribe': typeof ApiPushSubscribeRoute
   '/api/push/tick': typeof ApiPushTickRoute
@@ -247,6 +265,8 @@ export interface FileRouteTypes {
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
     | '/api/auth/sign-up'
+    | '/api/files/$fileId'
+    | '/api/files/sweep'
     | '/api/push/key'
     | '/api/push/subscribe'
     | '/api/push/tick'
@@ -272,6 +292,8 @@ export interface FileRouteTypes {
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
     | '/api/auth/sign-up'
+    | '/api/files/$fileId'
+    | '/api/files/sweep'
     | '/api/push/key'
     | '/api/push/subscribe'
     | '/api/push/tick'
@@ -297,6 +319,8 @@ export interface FileRouteTypes {
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
     | '/api/auth/sign-up'
+    | '/api/files/$fileId'
+    | '/api/files/sweep'
     | '/api/push/key'
     | '/api/push/subscribe'
     | '/api/push/tick'
@@ -323,6 +347,8 @@ export interface RootRouteChildren {
   ApiAuthSignInRoute: typeof ApiAuthSignInRoute
   ApiAuthSignOutRoute: typeof ApiAuthSignOutRoute
   ApiAuthSignUpRoute: typeof ApiAuthSignUpRoute
+  ApiFilesFileIdRoute: typeof ApiFilesFileIdRoute
+  ApiFilesSweepRoute: typeof ApiFilesSweepRoute
   ApiPushKeyRoute: typeof ApiPushKeyRoute
   ApiPushSubscribeRoute: typeof ApiPushSubscribeRoute
   ApiPushTickRoute: typeof ApiPushTickRoute
@@ -464,6 +490,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSignUpRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/files/$fileId': {
+      id: '/api/files/$fileId'
+      path: '/api/files/$fileId'
+      fullPath: '/api/files/$fileId'
+      preLoaderRoute: typeof ApiFilesFileIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/files/sweep': {
+      id: '/api/files/sweep'
+      path: '/api/files/sweep'
+      fullPath: '/api/files/sweep'
+      preLoaderRoute: typeof ApiFilesSweepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/push/key': {
       id: '/api/push/key'
       path: '/api/push/key'
@@ -515,6 +555,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSignInRoute: ApiAuthSignInRoute,
   ApiAuthSignOutRoute: ApiAuthSignOutRoute,
   ApiAuthSignUpRoute: ApiAuthSignUpRoute,
+  ApiFilesFileIdRoute: ApiFilesFileIdRoute,
+  ApiFilesSweepRoute: ApiFilesSweepRoute,
   ApiPushKeyRoute: ApiPushKeyRoute,
   ApiPushSubscribeRoute: ApiPushSubscribeRoute,
   ApiPushTickRoute: ApiPushTickRoute,

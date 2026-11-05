@@ -1,6 +1,6 @@
-import { toIso } from './dates'
 import { dueRepeats } from '../domain/repeats'
 import { Toast } from '@heroui/react'
+import { toIso, todayIso } from './dates'
 import { usePreview } from './preview'
 import { useRouterState } from '@tanstack/react-router'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
@@ -14,6 +14,20 @@ import { PeekHost } from './peek'
 import { DatabaseMenuHost } from './database-menu'
 import { flushAllEditors } from './editor-flush'
 import { useMoveToNewBuild } from './new-build'
+
+/** Files nothing holds any more go from the store when the app opens, at most once a day (R3-11). It can't hurt to miss one: the next open asks again. */
+function SweepFiles() {
+  const { workspace } = useWorkspace()
+  const opened = Boolean(workspace)
+  useEffect(() => {
+    if (!opened || !navigator.onLine) return
+    const key = 'daythread:files:swept', day = todayIso()
+    if (localStorage.getItem(key) === day) return
+    localStorage.setItem(key, day)
+    void fetch('/api/files/sweep', { method: 'POST' }).then(r => r.text()).catch(() => {})
+  }, [opened])
+  return null
+}
 
 const idleBeforeRepeats = 120_000
 /**
@@ -61,6 +75,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <WorkspaceProvider>
       <div className="app">
+        <SweepFiles />
         <Navigation />
         <div className="app-content">
           <PreviewNote />

@@ -1696,6 +1696,19 @@ body:has(.continuous-editor.has-paste-menu) .bn-link-toolbar { display: none !im
 .property-popover.is-over-cell .property-field { min-height: 36px; padding: 6px 8px; border: 0; border-radius: var(--radius-tight); background: var(--paper); box-shadow: none; }
 .property-popover > div { display: grid; gap: 4px; }
 .property-sheet { margin: 0; }
+.property-files { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; }
+.property-file { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 6px; }
+.property-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+a.property-file-name { text-decoration: underline; text-decoration-color: var(--line); }
+.property-file-note { flex: none; color: var(--ink-3); font-size: var(--text-meta); }
+/* What went wrong takes its own line, so a long name and a long message both stay readable beside Retry and ×. */
+.property-file.is-failed { flex-wrap: wrap; row-gap: 0; padding-block: 4px; }
+.property-file.is-failed .property-file-note { order: 3; flex-basis: 100%; color: var(--red, var(--ink-2)); }
+.property-file button { flex: none; min-width: 24px; min-height: 24px; padding: 0 4px; border: 0; background: none; color: var(--ink-2); cursor: pointer; font: inherit; }
+.property-file-add { display: flex; align-items: center; min-height: 36px; padding: 0 6px; color: var(--ink-2); cursor: pointer; border-radius: var(--radius-row); }
+.property-file-add:hover, .property-file-add:focus-within { background: var(--hover-dim); }
+.property-file-add input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+@media (max-width: 899px) { .property-file, .property-file-add { min-height: 44px; } .property-file button { min-width: 44px; min-height: 44px; } }
 .property-sheet-body { display: grid; gap: 8px; }
 .property-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
 .property-sheet-title { display: grid; min-width: 0; }
@@ -1761,6 +1774,11 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .cell-number { display: block; text-align: right; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cell-chips { display: flex; gap: 4px; min-width: 0; overflow: hidden; }
 .cell-chips .property-chip { flex: none; }
+/* A file isn't a tag: no fill, and one long name can't take the whole cell. */
+.cell-file { display: inline-flex; flex: none; align-items: center; gap: 4px; max-width: 160px; }
+.cell-file > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cell-file svg { flex: none; color: var(--ink-3); }
+.is-wrapped .cell-file { max-width: 100%; }
 
 /* The checkbox property: a plain square, not the blue task tick (§6.1, Bumblebee 3b04290d). */
 .property-checkbox { flex: none; display: inline-grid; place-items: center; box-sizing: border-box; width: 16px; height: 16px; min-width: 0; min-height: 0; padding: 0; border: 1.5px solid var(--check); border-radius: var(--radius-tight); background: none; color: var(--ink); cursor: pointer; }
@@ -1824,6 +1842,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-th[data-type="checkbox"]::before { content: '☑'; }
 .database-th[data-type="url"]::before { content: '↗'; }
 .database-th[data-type="email"]::before { content: '@'; }
+.database-th[data-type="files"]::before { content: '▤'; font-size: 11px; }
 .database-th[data-type="phone"]::before { content: '✆'; }
 .database-th[data-type="createdTime"]::before, .database-th[data-type="editedTime"]::before { content: '◔'; }
 .database-th[data-type="id"]::before { content: '№'; font-size: 11px; }
@@ -2101,6 +2120,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .row-property-name[data-type="checkbox"]::before { content: '☑'; }
 .row-property-name[data-type="url"]::before { content: '↗'; }
 .row-property-name[data-type="email"]::before { content: '@'; }
+.row-property-name[data-type="files"]::before { content: '▤'; font-size: 11px; }
 .row-property-name[data-type="phone"]::before { content: '✆'; }
 .row-property-name[data-type="createdTime"]::before, .row-property-name[data-type="editedTime"]::before { content: '◔'; }
 .row-property-name[data-type="id"]::before { content: '№'; font-size: 11px; }

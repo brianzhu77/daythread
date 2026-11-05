@@ -6,6 +6,9 @@ import { clockIn, formulaProblem, shownFormula, storedFormula, WorkedCells, type
 import { LinearRegex, RegexError } from '../src/domain/formula-regex.ts'
 import type { Database, Property } from '../src/domain/database.ts'
 import type { Page } from '../src/domain/types.ts'
+import { harness } from './v2-helpers.ts'
+import { withLinks } from '../src/domain/relations.ts'
+import { dateProperties, isReadOnly, viewDateBy, type DatabaseChange } from '../src/domain/database.ts'
 
 const clock = clockIn('UTC', Date.parse('2023-08-30T17:55:00Z'))
 const properties: Property[] = [
@@ -260,4 +263,28 @@ test('the engine takes time in proportion to the text, and stops when told', () 
   new LinearRegex('^(a+)+$').test(`${'a'.repeat(2000)}b`, count)
   assert.ok(steps < per * 2.2, `${per} then ${steps}`)
   assert.throws(() => new LinearRegex('a*').test('a'.repeat(1000), () => { throw new RangeError('out') }), RangeError)
+})
+
+test('a Calendar or Timeline can sit by a Formula date: the command takes what the menu offers, it reads as a date, and one that stops being a date asks again', () => {
+  const h = harness()
+  const change = (c: DatabaseChange) => h.run({ type: 'change-database', pageId: 'db', change: c })
+  const at = '2026-11-04T10:00:00.000Z'
+  h.run({ type: 'create-database', pageId: 'db', homeBlockId: null, title: 'DB' })
+  change({ kind: 'addProperty', property: { id: 'd', name: 'D', type: 'date' } })
+  change({ kind: 'addProperty', property: { id: 'n', name: 'N', type: 'number' } })
+  change({ kind: 'addProperty', property: { id: 'fd', name: 'FD', type: 'formula', formula: 'prop("d")' } })
+  h.run({ type: 'add-row', databaseId: 'db', pageId: 'row', title: 'Row', values: { d: { start: '2026-11-05' } }, at })
+  const shown = () => withLinks(h.ws).pages.find(p => p.id === 'db')!.database!
+  const viewId = shown().views[0]!.id, view = () => shown().views[0]!
+  assert.ok(dateProperties(shown()).some(p => p.id === 'fd'), 'the menu offers it')
+  change({ kind: 'updateView', viewId, layout: 'calendar', dateBy: 'fd' })
+  assert.equal(viewDateBy(shown(), view())?.id, 'fd')
+  assert.equal(isReadOnly(viewDateBy(shown(), view())!), true, 'nothing can set it: no drag, and a new row has no date')
+  change({ kind: 'updateView', viewId, layout: 'timeline', dateBy: 'd', timelineEnd: 'fd' })
+  assert.equal(view().timelineEnd, 'fd')
+  change({ kind: 'updateProperty', propertyId: 'fd', formula: '1 + 1' })
+  change({ kind: 'updateView', viewId, layout: 'calendar', dateBy: 'fd', timelineEnd: 'fd' })
+  assert.equal(viewDateBy(shown(), view()), null, 'no longer a date: it asks for one')
+  assert.throws(() => change({ kind: 'updateView', viewId, dateBy: 'n' }), /Can't place rows by that/, 'an ordinary property still has to be a date')
+  assert.throws(() => change({ kind: 'updateView', viewId, timelineEnd: 'n' }), /Can't place rows by that/)
 })
