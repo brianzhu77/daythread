@@ -42,11 +42,22 @@ test('independent: a scheduled partial write is discarded on a later invalid val
  assert.equal(reviews(h).length,0);assert.equal(val(h,'r1'),1);assert.ok(rules(h)[0]!.paused);assert.equal((rules(h)[0]!.triggers[0] as any).repeat.last,undefined);
 });
 
-test('independent: fixing a failed rule resumes from now without catching up a past time',()=>{
+test('independent: fixing a failed rule recovers only its latest missed period once',()=>{
  const broken:ButtonStep[]=[{id:'a',kind:'add-row',databaseId:'runs',databaseName:'Runs',title:'Review',set:[{id:'n',name:'N',type:'number',value:{kind:'fixed',raw:'invalid'}}]}] as any;
  const {h,C}=setup([every({steps:writeSteps(broken)}, {every:'day',time:'09:00'})]);
  tick(h,'2026-11-05','10:00');assert.ok(rules(h)[0]!.paused);
  const fixed=structuredClone(rules(h)[0]!);fixed.steps=writeSteps([{id:'a',kind:'add-row',databaseId:'runs',databaseName:'Runs',title:'Review',set:[]}]);(fixed.triggers[0] as any).repeat.notBefore='2026-11-06T12:00';
  C({kind:'updateAutomation',automation:fixed});assert.equal(rules(h)[0]!.active,true);
- tick(h,'2026-11-06','12:05');console.log('FIX_RESUME',{count:reviews(h).length,trigger:rules(h)[0]!.triggers[0]});assert.equal(reviews(h).length,0);
+ tick(h,'2026-11-06','12:05');console.log('FIX_RESUME',{count:reviews(h).length,trigger:rules(h)[0]!.triggers[0]});assert.equal(reviews(h).length,1);tick(h,'2026-11-06','12:10');assert.equal(reviews(h).length,1);
+});
+
+test('independent: explicit off/on and actual schedule edits suppress old missed times',()=>{
+ for(const how of ['off-on','schedule']) {
+ const broken:ButtonStep[]=[{id:'a',kind:'add-row',databaseId:'runs',databaseName:'Runs',title:'Review',set:[{id:'n',name:'N',type:'number',value:{kind:'fixed',raw:'invalid'}}]}] as any;
+ const {h,C}=setup([every({steps:writeSteps(broken)}, {every:'day',time:'09:00'})]);tick(h,'2026-11-05','10:00');assert.ok(rules(h)[0]!.paused);
+ if(how==='off-on') C({kind:'setAutomationActive',automationId:'wk',active:false});
+ const fixed=structuredClone(rules(h)[0]!);fixed.steps=writeSteps([{id:'a',kind:'add-row',databaseId:'runs',databaseName:'Runs',title:'Review',set:[]}]);(fixed.triggers[0] as any).repeat.notBefore='2026-11-06T12:00';if(how==='schedule')(fixed.triggers[0] as any).repeat.time='09:15';
+ C({kind:'updateAutomation',automation:fixed});if(how==='off-on'){assert.equal(rules(h)[0]!.active,false);C({kind:'setAutomationActive',automationId:'wk',active:true,notBefore:'2026-11-06T12:00'});}
+ tick(h,'2026-11-06','11:00');assert.equal(reviews(h).length,0,how+' stale tick');tick(h,'2026-11-06','12:05');assert.equal(reviews(h).length,0,how+' no catch-up');tick(h,'2026-11-07','12:05');assert.equal(reviews(h).length,1,how+' next date');
+ }
 });
