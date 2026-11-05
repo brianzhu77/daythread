@@ -43,7 +43,7 @@ Show rows where: all rules match ⌄
 ## 4. For Roadbuster
 
 - **Storage:** today `filter: Condition[]` plus `filterAny`. I'd add an optional `filterGroups` tree and leave `filter` holding the top-level rules, so that a view with no groups doesn't change.
-- **An older tab** ignores the tree and applies the top-level rules. So it shows **more** rows, unlike R3-4, which reads narrower. A `+ New` there could then add a row that's hidden on the new build. It's harmless, since the row still exists and "hidden by this view's filter" covers it, but state it in the release. It must keep the field when it saves. To be run with a rollback.
+- **An older tab** ignores the tree and applies the top-level rules. **Corrected (Ratchet dbb79fa4; I had said it only shows more):** that shows more rows under a top-level "all", as a group no longer narrows them, and **fewer** under a top-level "any", as `Status = Reading or (Rating = 5)` hides a five-star row that isn't Reading. State both in the release. A `+ New` there can add a row that disappears when the new build opens it. The row still exists, but the old build can't say so, as it doesn't read the tree. It must keep the field when it saves, tested separately for an ordinary edit, Duplicate view and a linked view, as a reconstructed view may take another path. To be run with a rollback.
 - **One evaluator,** shared with `viewRows`, so there's no second copy for charts or automations.
 
 ## 5. Checks before release
