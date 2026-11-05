@@ -1,7 +1,7 @@
 // Comments (docs/design/comments.md): a note attached to a page or row, kept out of its words. In a table of their own, never in a document, so a save can't touch one and a comment causes no save.
 // Each thread has its own version: an edit, a delete or a resolve from a tab that hadn't seen the newest change to it is refused, and says so.
 import { lineIdsOnPage, recordOfLine } from './synced.ts'
-import type { Workspace } from './types.ts'
+import type { Page, Workspace } from './types.ts'
 
 export const commentLimit = 2000
 /** Commands that write a note and leave the one Undo where it was. */
@@ -35,6 +35,8 @@ export const threadsOn = (threads: readonly CommentThread[] | undefined, pageId:
 export function threadsShownOn(ws: Pick<Workspace, 'threads' | 'synced' | 'pages'>, pageId: string): CommentThread[] {
   const page = ws.pages.find(p => p.id === pageId), all = ws.threads ?? []
   if (!ws.synced?.length || !page) return threadsOn(all, pageId)
-  const shown = all.filter(t => t.pageId === pageId || (t.anchor && recordOfLine(ws, t.anchor.blockId) && lineIdsOnPage(page, t.anchor.blockId).length > 0))
+  const shown = all.filter(t => t.pageId === pageId || (t.anchor && recordOfLine(ws, t.anchor.blockId) && lineIdsOnPage(page, t.anchor.blockId, true).length > 0))
   return [...shown].sort((a, b) => lastTouched(b).localeCompare(lastTouched(a)))
 }
+/** A thread's line's ids on this page: its places while the line is shared, its own otherwise. */
+export const threadLineIds = (ws: Pick<Workspace, 'synced'>, page: Pick<Page, 'document'>, anchor: CommentAnchor): string[] => lineIdsOnPage(page, anchor.blockId, Boolean(recordOfLine(ws, anchor.blockId)))

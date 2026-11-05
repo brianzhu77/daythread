@@ -4,8 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from '@heroui/react'
 import { useRouterState } from '@tanstack/react-router'
-import { commentLimit, threadsShownOn, type Comment, type CommentAnchor, type CommentThread } from '../domain/comments'
-import { lineIdsOnPage } from '../domain/synced'
+import { commentLimit, threadLineIds, threadsShownOn, type Comment, type CommentAnchor, type CommentThread } from '../domain/comments'
 import type { Page } from '../domain/types'
 import { CloseIcon, CommentIcon } from './icons'
 import { useKeyboardTop } from './keyboard'
@@ -113,7 +112,7 @@ function ThreadView({ thread, focused }: { thread: CommentThread; focused: boole
   const { run, workspace } = useWorkspace()
   const anchor = thread.anchor, page = anchor ? workspace?.pages.find(p => p.id === thread.pageId) : undefined
   // On the page as saved, or on screen, as it may not have been saved yet.
-  const gone = anchor ? !lineOf(anchor.blockId) && !(page && lineIdsOnPage(page, anchor.blockId).length) : false
+  const gone = anchor && workspace ? !lineOf(anchor.blockId) && !(page && threadLineIds(workspace, page, anchor).length) : false
   const hidden = anchor ? lineOf(anchor.blockId)?.getBoundingClientRect().height === 0 : false
   // What's edited is the thread as it read when Edit was pressed, so a change since is refused rather than written over.
   const [editing, setEditing] = useState<{ id: string; version: number } | null>(null), [replying, setReplying] = useState(false)

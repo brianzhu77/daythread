@@ -254,10 +254,13 @@ export function sharedLineId(nodes: readonly EditorNode[], id: string): string {
   inside(nodes, null)
   return found
 }
-/** The ids a shared line has on this page: one for each place, or its own if it's an ordinary line here. */
-export function lineIdsOnPage(page: Pick<Page, 'document'>, lineId: string): string[] {
+/**
+ * The ids a shared line has on this page: one for each place, or its own if it's an ordinary line here. `placesOnly` while it's shared:
+ * a place that's been unsynced has an ordinary line under that same id, and a thread stays with the shared lines, not with that.
+ */
+export function lineIdsOnPage(page: Pick<Page, 'document'>, lineId: string, placesOnly = false): string[] {
   const out: string[] = []
-  const inside = (list: readonly EditorNode[], block: EditorNode | null) => { for (const n of list) { if (n.id === lineId || (block && lineIdOf(n.id, block.id) === lineId)) out.push(n.id); inside(n.children ?? [], isBlock(n) ? n : block) } }
+  const inside = (list: readonly EditorNode[], block: EditorNode | null) => { for (const n of list) { if (block ? lineIdOf(n.id, block.id) === lineId : !placesOnly && n.id === lineId) out.push(n.id); inside(n.children ?? [], isBlock(n) ? n : block) } }
   inside(pageNodes(page), null)
   return out
 }

@@ -108,7 +108,7 @@ export function buildSearchIndex(ws: Workspace, dayLabel: (date: LocalDate) => s
   // By thread, under the page it's on, Trash left out with its page. Resolved ones too, marked (comments.md §4).
   const live = new Map(pages.map(p => [p.id, p]))
   // A thread on a shared line whose home is in Trash opens on the first place left.
-  const onShared = (t: CommentThread) => (t.anchor && ws.synced?.length && recordOfLine(ws, t.anchor.blockId) ? pages.find(p => lineIdsOnPage(p, t.anchor!.blockId).length > 0) : undefined)
+  const onShared = (t: CommentThread) => (t.anchor && ws.synced?.length && recordOfLine(ws, t.anchor.blockId) ? pages.find(p => lineIdsOnPage(p, t.anchor!.blockId, true).length > 0) : undefined)
   const comments: IndexedComment[] = (ws.threads ?? []).flatMap(t => { const page = live.get(t.pageId) ?? onShared(t), text = t.comments.map(c => c.body).join(' ').replace(/\s+/g, ' ').trim(); return page && text ? [{ page, threadId: t.id, text, resolved: Boolean(t.resolvedAt), folded: fold(text) }] : [] })
   return { pages: indexedPages, lines, tags: tagIndex(ws), comments }
 }

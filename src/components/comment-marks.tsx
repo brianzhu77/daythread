@@ -1,8 +1,7 @@
 // The mark on a commented line (docs/design/comments.md §2): in the margin at 1280, at the line's end at 390. Drawn over the page, not in it, so it can't shift a line or
 // touch the document, and with no thread on a line none of this runs.
 import { useLayoutEffect, useMemo, useState } from 'react'
-import { threadsShownOn } from '../domain/comments'
-import { lineIdsOnPage } from '../domain/synced'
+import { threadLineIds, threadsShownOn } from '../domain/comments'
 import { openComments } from './comments-pane'
 import { CommentIcon } from './icons'
 import { useWorkspace } from './use-day'
@@ -22,7 +21,7 @@ export function CommentMarks({ pageId, host, onChange }: { pageId: string; host:
       const box = root.getBoundingClientRect(), wide = window.matchMedia('(min-width: 900px)').matches, next: Mark[] = []
       for (const t of open) {
         // A shared line has an id of its own in each place on this page.
-        const page = workspace!.pages.find(p => p.id === pageId), ids = page ? lineIdsOnPage(page, t.anchor!.blockId) : [], blockId = ids[0] ?? t.anchor!.blockId, have = next.find(m => m.blockId === blockId)
+        const page = workspace!.pages.find(p => p.id === pageId), ids = page ? threadLineIds(workspace!, page, t.anchor!) : [], blockId = ids[0] ?? t.anchor!.blockId, have = next.find(m => m.blockId === blockId)
         if (have) { have.count++; continue }
         const line = root.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(blockId)}"]`), content = line?.querySelector<HTMLElement>('.bn-block-content')
         const lineBox = content?.getBoundingClientRect()

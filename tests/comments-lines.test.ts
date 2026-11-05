@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { commandSchema } from '../src/domain/command-schema.ts'
-import { threadsShownOn } from '../src/domain/comments.ts'
+import { threadLineIds, threadsShownOn } from '../src/domain/comments.ts'
 import { buildSearchIndex, search } from '../src/domain/search.ts'
 import { lineIdsOnPage, sharedLineId, syncedBlockType } from '../src/domain/synced.ts'
 import type { EditorNode } from '../src/domain/editor-document.ts'
@@ -173,5 +173,14 @@ test('every place in Trash: it comes back with whichever is restored first', () 
   void last
   h.run({ type: 'restore-page', pageId: 'c' } as never)
   assert.deepEqual(shownOn(h, 'c'), ['sh'])
+})
+test('Unsync here on its home: the thread stays with the shared lines, its home moves to a place left, and that page\'s line carries none (Ratchet)', () => {
+  const h = shared()
+  h.run({ type: 'unsync-block', pageId: 'a', blockId: 'sa' })
+  const t = thread(h, 'sh')
+  assert.equal(t.anchor!.blockId, 'l1'); assert.notEqual(t.pageId, 'a')
+  assert.deepEqual(shownOn(h, 'a'), []); assert.deepEqual(shownOn(h, 'b'), ['sh'])
+  assert.deepEqual(threadLineIds(h.ws, h.page('a'), t.anchor!), [])
+  assert.deepEqual(threadLineIds(h.ws, h.page('b'), t.anchor!), ['l1:sb'])
 })
 
