@@ -303,7 +303,7 @@ function ExportPanel({ db, view, blockId, back, close }: { db: DatabasePage; vie
 
 // ---------------------------------------------------------------- filter (design §7.3)
 
-const opLabels: Record<FilterOp, string> = {
+export const opLabels: Record<FilterOp, string> = {
   contains: 'contains', doesNotContain: "doesn't contain", is: 'is', isNot: 'is not', isEmpty: 'is empty', isNotEmpty: 'is not empty',
   eq: '=', ne: '≠', gt: '>', lt: '<', gte: '≥', lte: '≤', isAnyOf: 'is any of', isNoneOf: 'is none of',
   before: 'is before', after: 'is after', onOrBefore: 'is on or before', onOrAfter: 'is on or after', within: 'is within',
@@ -443,7 +443,7 @@ function FilterCombine({ node, label, onChange }: { node: FilterGroup; label: st
   </select>
 }
 
-function RuleValue({ property, condition, onChange }: { property: Property; condition: Condition; onChange: (value: Json | undefined) => void }) {
+export function RuleValue({ property, condition, onChange }: { property: Property; condition: Condition; onChange: (value: Json | undefined) => void }) {
   const { op, value } = condition
   if (op === 'isEmpty' || op === 'isNotEmpty') return null
   switch (property.type) {

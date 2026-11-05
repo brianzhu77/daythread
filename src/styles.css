@@ -2781,6 +2781,57 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 @media (max-width: 899px) { .body-image-caption, .bn-panel input { font-size: 16px; } }
 .body-image-box { width: 100%; aspect-ratio: 16 / 9; max-height: 160px; background: var(--fill-soft); border-radius: var(--radius-row); }
 
+/* Buttons (buttons.md §3). Outlined, black, white and grey; the tap area fills the line and never reaches the next one. */
+.editor-button-line { position: relative; display: flex; align-items: center; gap: 4px; width: 100%; min-width: 0; min-height: 44px; }
+.editor-button-pill { display: inline-flex; flex: 0 1 auto; align-items: center; justify-content: center; min-width: 0; max-width: min(100%, 420px); height: 36px; min-height: 0; padding: 0 12px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-pill); background: none; color: var(--ink); font: inherit; font-size: var(--text-ui); font-weight: var(--weight-medium); white-space: nowrap; text-overflow: ellipsis; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.editor-button-pill > span { overflow: hidden; text-overflow: ellipsis; }
+.editor-button-pill:hover { background: var(--fill-soft); }
+.editor-button-pill.is-waiting { opacity: 0.55; cursor: default; }
+.editor-button-pill .button-spinner { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--ink-2); border-radius: 50%; animation: button-spin 0.8s linear infinite; }
+@keyframes button-spin { to { transform: rotate(360deg); } }
+.editor-button-more { flex: none; display: inline-grid; place-items: center; width: 28px; height: 28px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-3); opacity: 0; cursor: pointer; }
+.editor-button-line:hover .editor-button-more, .editor-button-more:focus-visible, .editor-button-more[aria-expanded=true] { opacity: 1; }
+.database-menu.button-editor { width: 360px; max-height: min(80vh, 560px); padding-bottom: 6px; }
+.button-editor-head { position: sticky; top: 0; z-index: 2; background: var(--paper); }
+.database-menu .button-editor-done { margin-left: auto; min-height: 28px; height: 28px; padding: 0 12px; border: 0; border-radius: var(--radius-control); background: var(--ink); color: var(--paper); font: inherit; font-weight: var(--weight-medium); cursor: pointer; }
+.button-editor-done.is-off { background: var(--fill); color: var(--ink-3); }
+.button-editor-discard { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 6px 10px; background: var(--fill-soft); border-radius: var(--radius-tight); font-size: var(--text-meta); }
+.button-editor-discard span { margin-right: auto; }
+.button-editor-name, .button-editor-field { box-sizing: border-box; width: calc(100% - 12px); margin: 2px 6px 6px; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-control); background: none; color: var(--ink); font: inherit; }
+.button-editor-label { margin: 8px 10px 2px; color: var(--ink-3); font-size: var(--text-meta); }
+.button-step-row { display: flex; align-items: center; gap: 2px; min-height: 36px; padding: 0 4px; }
+.database-menu .button-step-row button { min-height: 28px; padding: 0 6px; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
+.database-menu .button-step-row button:disabled { color: var(--ink-3); opacity: 0.4; cursor: default; }
+.database-menu .button-step-row .button-step-open { display: grid; flex: 1; min-width: 0; color: var(--ink); text-align: left; }
+.button-step-open > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.button-step-open > small, .button-step-problem { color: var(--formula-red); font-size: var(--text-meta); }
+.button-step-problem { margin: 2px 10px 6px; }
+.button-set-name { flex: none; max-width: 90px; overflow: hidden; color: var(--ink-2); white-space: nowrap; text-overflow: ellipsis; }
+.button-blocks { min-height: 120px; max-height: 260px; margin: 2px 6px 6px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-control); }
+/* It starts where the other fields' words do, with no gutter for a handle it doesn't have. */
+.button-blocks .bn-editor { padding-inline: 8px; }
+/* Dark too: the editor's own light theme would glare in the sheet. And no explanatory line (Brian's rule): the step says what's wanted. */
+.button-blocks .bn-container, .button-blocks .bn-editor { background: transparent; color: var(--ink); }
+/* Over the sheet and its scrim, and shown even where the sheet's scrolling box would have the floating menu call its line out of view. */
+body:has(.button-editor) :has(> #bn-suggestion-menu) { z-index: 1200 !important; visibility: visible !important; }
+body:has(.button-editor) #bn-suggestion-menu { max-height: min(420px, 45vh); }
+.button-ask-scrim { position: fixed; inset: 0; z-index: 1300; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / 0.25); }
+.button-ask { width: min(100%, 360px); padding: 16px; background: var(--paper); border-radius: var(--radius-block); box-shadow: var(--shadow-float); }
+.button-ask p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.button-ask-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.button-ask-actions button { min-height: 36px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--radius-control); background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.button-ask-actions .is-primary { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+@media (max-width: 899px) {
+  .database-menu.button-editor { bottom: var(--keyboard-lift, 0px) !important; width: auto; max-height: calc(85vh - var(--keyboard-lift, 0px)); }
+  /* First under the head, as the keyboard and Safari's bars above it take the bottom of the sheet (seen on the Simulator). */
+  .database-menu.button-editor::before { order: -3; }
+  .button-editor-head { order: -2; }
+  .button-blocks { order: -1; min-height: 96px; max-height: 140px; }
+  .editor-button-more { width: 44px; height: 44px; opacity: 1; }
+  .button-editor-name, .button-editor-field, .button-editor select, .button-editor input, .button-blocks { font-size: 16px; }
+  .database-menu .button-step-row button { min-height: 44px; min-width: 36px; }
+  .database-menu .button-editor-done { min-height: 36px; height: 36px; }
+}
 /* Comments (comments.md §2). Nothing shows until there's one. */
 .comment-count { display: inline-flex; flex: none; align-items: center; gap: 3px; min-height: 28px; padding: 0 6px; border: 0; border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); cursor: pointer; }
 .comment-count svg { width: 16px; height: 16px; }

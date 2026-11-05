@@ -83,7 +83,7 @@ There's no explanatory line anywhere (Daythread's rule, Brian 1ac6784b).
   - The open editor saves what's been typed before the click, so the command starts from what he sees.
   - The way back is the notice's Undo, not ⌘Z in the editor, and it's refused after later changes, like any notice's Undo.
   - A page open in another tab learns of it when he returns to that tab. Unsaved typing there gets the real conflict notice.
-- **Old tabs and the rollback floor:** the floor rises for the block, so it ships in two steps, as the database block did: first a release with the block spec and no way to make one, which becomes the floor, then the feature. **Done first (Lead):** the spec is `label` and `steps`, where `steps` is one opaque string, so what steps can do can grow without the floor reading them. A tap on it there does nothing. The property type is confirmed by running it, as R3-17 asks.
+- **Old tabs and the rollback floor:** the floor rises for the block, so it ships in two steps, as the database block did: first a release with the block spec and no way to make one, which becomes the floor, then the feature. The property type is confirmed by running it, as R3-17 asks.
 - **Where the steps live:** in the block's props and the property's settings, with ids read at the click (§4.4).
 - **Automations (`automations.md`):** one shared list of steps.
 
