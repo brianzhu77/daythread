@@ -1,0 +1,26 @@
+✔ a thread: added, replied to, edited, resolved and reopened, each moving its version; the page's document stays byte for byte (3.205ms)
+✔ a tab that hadn't seen the newest change is refused and changes nothing; too long and no words are refused (3.738ms)
+✔ deleting and resolving have one Undo; deleting the last comment takes the thread, and Undo brings it back; a late Undo can't erase a newer reply (0.358417ms)
+✔ adding and editing leave the Undo slot alone, so a note doesn't cost the Undo of what came before, and that Undo leaves the note (comments.md §2) (0.386542ms)
+✔ a note has no Undo of its own, and one on a page that Undo would take away means Can't undo (0.216583ms)
+✔ threads go to Trash with their page and come back; gone for good with it; a duplicate gets none; moving between days keeps them (2.017875ms)
+✔ search finds a comment's words, resolved too and marked; export writes them at the end; the day draft sends none (P2-8) (0.962417ms)
+✔ the browser's copy follows, and a tab that knows nothing of them isn't handed anything it must use (0.4625ms)
+✔ an inverse written by a build before comments leaves the table alone (P2-9) (0.278792ms)
+✔ on the database: a save of a page never touches them, Undo restores them, and another account reads none (1265.137084ms)
+✔ an icon is one emoji as a person sees it, however many code points it takes (2.838458ms)
+✔ adding, changing and removing say so, each with one Undo; what isn't an emoji is refused (2.931667ms)
+✔ a title stays words: search and the title don't change, and export writes the emoji before the heading (1.006625ms)
+✔ Duplicate row copies it, a row template and a day template pass it on (P1-6, P1-7) (1.279583ms)
+✔ it survives the database: written, read back, and a save that doesn't touch it leaves it (1204.460917ms)
+✔ a cover is an http or https link; added, changed, moved and removed each say so, with one Undo; a changed link starts in the middle (1.0485ms)
+✔ a cover goes with a copy and a template, export writes it at the top, and it survives the database (505.298291ms)
+✔ step 3: an icon may be one of ours or an upload, a cover one of ours or an upload; export leaves no dead link and names the files; the sweep holds them; the warning counts them (P1-5) (2.153334ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1909.429625

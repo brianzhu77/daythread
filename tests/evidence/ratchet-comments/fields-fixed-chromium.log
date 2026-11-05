@@ -1,0 +1,2 @@
+PASS words typed during a send stay as the next draft, in a new comment, a reply and an edit (Ratchet) {"ok":true,"replaced":"NEW WORDS typed while sending","first":["First sent"],"reloaded":"NEW WORDS typed while sending","added":"and more","two":2,"replyLeft":"Reply still typing","replied":true,"editLeft":"Edit two","closed":0,"bodies":["First sent","Edit two","Reply sent"],"refused":0,"errors":[]}
+all passed
