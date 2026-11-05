@@ -10,6 +10,8 @@ export interface SubscribedWorkspace { workspaceId: string; subscriptions: (Push
 
 /** How long a sent key is remembered: longer than any window a tick looks back over. */
 export const sentKeepMs = 7 * 24 * 3600_000
+/** How long a tick holds a reminder it's sending: longer than a tick's sends take, and short enough that one that died is retried within the hour it's looked for. */
+export const leaseMs = 5 * 60_000
 
 export class PushStore {
   private ready?: Promise<void>
@@ -22,7 +24,7 @@ export class PushStore {
     const exists = async (sql: SqlClient) => (await sql.query<{ n: number }>(
       `select count(*)::int as n from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
         where n.nspname = $1 and c.relname = any($2::text[]) and c.relrowsecurity
-          and (c.relname <> 'push_subscriptions' or exists (select 1 from pg_catalog.pg_attribute a where a.attrelid = c.oid and a.attname = 'gone_at' and not a.attisdropped))`, [this.schema, ['push_subscriptions', 'push_sent']]))[0]?.n === 2
+          and exists (select 1 from pg_catalog.pg_attribute a where a.attrelid = c.oid and a.attname = case c.relname when 'push_subscriptions' then 'gone_at' else 'lease_until' end and not a.attisdropped)`, [this.schema, ['push_subscriptions', 'push_sent']]))[0]?.n === 2
     this.ready ??= exists(this.sql).then(ok => ok ? undefined : this.sql.transaction(async tx => {
       await tx.query("select pg_advisory_xact_lock(hashtext('daythread.init'))")
       if (await exists(tx)) return
@@ -44,6 +46,7 @@ export class PushStore {
           sent_at timestamptz not null default now(),
           primary key (workspace_id, key)
         );
+        alter table ${this.t('push_sent')} add column if not exists lease_until timestamptz;
         alter table ${this.t('push_sent')} enable row level security;`)
     })).catch(error => { this.ready = undefined; throw error })
     return this.ready
@@ -54,7 +57,7 @@ export class PushStore {
     await this.init()
     await this.sql.query(`insert into ${this.t('push_subscriptions')} (endpoint, workspace_id, p256dh, auth) values ($1, $2::uuid, $3, $4)
       on conflict (endpoint) do update set workspace_id = excluded.workspace_id, p256dh = excluded.p256dh, auth = excluded.auth, gone_at = null,
-        created_at = case when ${this.t('push_subscriptions')}.gone_at is null then ${this.t('push_subscriptions')}.created_at else now() end`, [sub.endpoint, workspaceId, sub.p256dh, sub.auth])
+        created_at = case when ${this.t('push_subscriptions')}.gone_at is null and ${this.t('push_subscriptions')}.workspace_id = excluded.workspace_id then ${this.t('push_subscriptions')}.created_at else now() end`, [sub.endpoint, workspaceId, sub.p256dh, sub.auth])
   }
   /** Removes the endpoint when it belongs to this workspace (a browser can only drop its own). */
   async unsubscribe(workspaceId: string, endpoint: string): Promise<void> {
@@ -84,16 +87,28 @@ export class PushStore {
     for (const { workspace_id, created_at, ...sub } of rows) out.set(workspace_id, [...(out.get(workspace_id) ?? []), { ...sub, since: new Date(created_at).getTime() }])
     return [...out].map(([workspaceId, subscriptions]) => ({ workspaceId, subscriptions }))
   }
-  /** Of `keys`, the ones not yet sent to this workspace. */
-  async unsent(workspaceId: string, keys: string[]): Promise<string[]> {
+  /**
+   * Of `keys`, the ones this tick may send: not sent yet, and not being sent by a tick that's still within its lease. Taking them
+   * here is what stops two ticks sending one reminder (Ratchet, #138). A tick that dies mid-send only holds them until the lease ends.
+   */
+  async claim(workspaceId: string, keys: string[], now: Date): Promise<string[]> {
     await this.init()
     if (!keys.length) return []
-    const sent = new Set((await this.sql.query<{ key: string }>(`select key from ${this.t('push_sent')} where workspace_id = $1::uuid and key = any($2::text[])`, [workspaceId, keys])).map(r => r.key))
-    return keys.filter(k => !sent.has(k))
+    const lease = new Date(now.getTime() + leaseMs)
+    const rows = await this.sql.query<{ key: string }>(`insert into ${this.t('push_sent')} (workspace_id, key, sent_at, lease_until) select $1::uuid, k, $3::timestamptz, $4::timestamptz from unnest($2::text[]) as k
+      on conflict (workspace_id, key) do update set lease_until = excluded.lease_until where ${this.t('push_sent')}.lease_until is not null and ${this.t('push_sent')}.lease_until <= $3::timestamptz returning key`, [workspaceId, keys, now, lease])
+    const taken = new Set(rows.map(r => r.key))
+    return keys.filter(k => taken.has(k))
   }
+  /** Sent: the claim stays as the record that it was. */
   async markSent(workspaceId: string, keys: string[], at: Date): Promise<void> {
     await this.init()
-    for (const key of keys) await this.sql.query(`insert into ${this.t('push_sent')} (workspace_id, key, sent_at) values ($1::uuid, $2, $3) on conflict do nothing`, [workspaceId, key, at])
+    if (keys.length) await this.sql.query(`update ${this.t('push_sent')} set sent_at = $3::timestamptz, lease_until = null where workspace_id = $1::uuid and key = any($2::text[])`, [workspaceId, keys, at])
+  }
+  /** Every send failed: the next tick may try again while the window lasts. */
+  async release(workspaceId: string, keys: string[]): Promise<void> {
+    await this.init()
+    if (keys.length) await this.sql.query(`delete from ${this.t('push_sent')} where workspace_id = $1::uuid and key = any($2::text[]) and lease_until is not null`, [workspaceId, keys])
   }
   /** Sent keys older than `sentKeepMs` go; a tick calls this now and then. */
   async prune(now: Date): Promise<void> {

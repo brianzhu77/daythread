@@ -73,7 +73,7 @@ export const tickWindowMs = 60 * 60_000
 
 export interface TickSummary { workspaces: number; due: number; sent: number; gone: number; failed: number }
 interface TickDeps {
-  store: Pick<PushStore, 'subscribed' | 'unsent' | 'markSent' | 'remove' | 'prune'>
+  store: Pick<PushStore, 'subscribed' | 'claim' | 'markSent' | 'release' | 'remove' | 'prune'>
   loadWorkspace: (id: string) => Promise<Workspace | null>
   send: Sender
   now?: Date
@@ -92,8 +92,8 @@ export async function runTick({ store, loadWorkspace, send, now = new Date(), wi
     const ws = await loadWorkspace(workspaceId)
     if (!ws) continue
     const due = dueReminders(ws, now.getTime() - windowMs, now.getTime())
-    const fresh = new Set(await store.unsent(workspaceId, due.map(r => r.key)))
-    const done: string[] = []
+    const fresh = new Set(await store.claim(workspaceId, due.map(r => r.key), now))
+    const done: string[] = [], again: string[] = []
     let live = subscriptions
     for (const reminder of due.filter(r => fresh.has(r.key))) {
       const signedUp = live.filter(s => s.since <= reminder.fireAt)
@@ -106,9 +106,10 @@ export async function runTick({ store, loadWorkspace, send, now = new Date(), wi
         else if (result === 'gone') { summary.gone++; taken = true; await store.remove(sub.endpoint); live = live.filter(s => s.endpoint !== sub.endpoint) }
         else summary.failed++
       }
-      if (taken || !live.length) done.push(reminder.key)
+      if (taken || !live.length) done.push(reminder.key); else again.push(reminder.key)
     }
-    if (done.length) await store.markSent(workspaceId, done, now)
+    await store.markSent(workspaceId, done, now)
+    await store.release(workspaceId, again)
   }
   if (now.getMinutes() === 0) await store.prune(now)
   return summary

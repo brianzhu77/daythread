@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { PGlite } from '@electric-sql/pglite'
 import { pgliteClient } from '../src/server/db/sql.ts'
 import { PostgresWorkspaceRepository } from '../src/server/postgres-repository.ts'
-import { PushStore, sentKeepMs } from '../src/server/push/store.ts'
+import { leaseMs, PushStore, sentKeepMs } from '../src/server/push/store.ts'
 import { handleSubscribe, handleUnsubscribe, runTick, tickAllowed, usePushStore, usePushWorkspaceStore } from '../src/server/push/server.ts'
 import type { PushPayload, SendResult } from '../src/server/push/send.ts'
 import { asOwner } from '../src/server/auth/request-owner.ts'
@@ -75,11 +75,17 @@ test('PushStore: a subscription belongs to one workspace, the same endpoint agai
   assert.deepEqual(await push.subscriptionsOf(wsB), [])
   for (const t of ['push_subscriptions', 'push_sent']) assert.equal((await sql.query<{ rowsecurity: boolean }>(`select rowsecurity from pg_tables where tablename = '${t}'`))[0]!.rowsecurity, true, t)
   // Sent keys: remembered for a week.
-  await push.markSent(wsA, ['k1', 'k2'], new Date('2026-10-28T10:00:00Z'))
-  assert.deepEqual(await push.unsent(wsA, ['k1', 'k2', 'k3']), ['k3'])
-  assert.deepEqual(await push.unsent(wsB, ['k1']), ['k1'], 'per workspace')
-  await push.prune(new Date(Date.parse('2026-10-28T10:00:00Z') + sentKeepMs + 1))
-  assert.deepEqual(await push.unsent(wsA, ['k1']), ['k1'], 'pruned after a week')
+  const at = new Date('2026-10-28T10:00:00Z')
+  assert.deepEqual(await push.claim(wsA, ['k1', 'k2'], at), ['k1', 'k2'])
+  assert.deepEqual(await push.claim(wsA, ['k1'], at), [], 'another tick while the first is sending gets nothing')
+  await push.markSent(wsA, ['k1', 'k2'], at)
+  assert.deepEqual(await push.claim(wsA, ['k1', 'k2', 'k3'], new Date(at.getTime() + 3600_000)), ['k3'], 'sent stays sent, however long after')
+  assert.deepEqual(await push.claim(wsB, ['k1'], at), ['k1'], 'per workspace')
+  assert.deepEqual(await push.claim(wsB, ['k1'], new Date(at.getTime() + leaseMs)), ['k1'], 'a tick that died holds it only until its lease ends')
+  await push.release(wsB, ['k1'])
+  assert.deepEqual(await push.claim(wsB, ['k1'], at), ['k1'], 'failed sends are let go, for the next tick')
+  await push.prune(new Date(at.getTime() + sentKeepMs + 1))
+  assert.deepEqual(await push.claim(wsA, ['k1'], new Date(at.getTime() + sentKeepMs + 1)), ['k1'], 'pruned after a week')
   await db.close()
 })
 
@@ -236,5 +242,18 @@ test('a synced chip read back through the store still opens a page he can see, n
   const fire = zonedEpoch(at, '15:00', loaded!.timezone)
   const due = dueReminders(loaded!, fire - 60_000, fire + 60_000)
   assert.deepEqual(due.map(r => [r.eventId, r.url]), [['e-s', '/pages?page=place']])
+})
+test('two ticks at once send one reminder once, and a device moved to another workspace starts clean there (Ratchet, #138)', async () => {
+  const { push, wsA, wsB } = await stores()
+  const a = { endpoint: 'https://push.example/a', p256dh: 'p', auth: 'a' }
+  await push.subscribe(wsA, a)
+  const [before] = await push.subscribed()
+  await new Promise(r => setTimeout(r, 15))
+  await push.subscribe(wsA, { ...a, auth: 'refreshed' })
+  assert.equal((await push.subscribed())[0]!.subscriptions[0]!.since, before!.subscriptions[0]!.since, 'a refresh keeps its start')
+  await push.subscribe(wsB, a)
+  const moved = await push.subscribed()
+  assert.equal(moved[0]!.workspaceId, wsB)
+  assert.ok(moved[0]!.subscriptions[0]!.since > before!.subscriptions[0]!.since, 'a move starts again')
 })
 
