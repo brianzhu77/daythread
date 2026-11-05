@@ -343,6 +343,49 @@ await scenario('A file that turns up later shows when the page regains focus', a
   r.ok = /isn't here/.test(r.gone) && r.lines === 0 && r.width === 1400
   return r
 })
+const dayOf = back => new Intl.DateTimeFormat('en-CA').format(new Date(Date.now() - back * 86_400_000))
+const dayDoc = date => JSON.parse(store().pages.find(p => p.date === date && p.type === 'daily').document)
+const rows = list => list.map(n => [n.id, n.type, n.content?.map?.(c => c.text ?? '').join('') ?? null])
+for (const [label, back] of [['today', 0], ['a past day', 3]]) await scenario(`On ${label}: a screenshot lands in the section and typing carries on; after a reload its lines and carry-over are as they were`, async page => {
+  const date = dayOf(back)
+  await page.goto(`${base}/day/${date}`); await page.locator('.bn-editor').first().waitFor(); await wait(2200)
+  const before = rows(dayDoc(date)), tray = () => page.getByText('1 more open').count(), trayBefore = await tray()
+  // On today, the empty bullet at the end of Notes. On a past day, after a written line.
+  if (back) { await page.locator('.bn-inline-content', { hasText: 'And after it' }).first().click(); await page.keyboard.press('Meta+ArrowRight') }
+  else await page.locator('[data-content-type=bulletListItem] .bn-inline-content').last().click()
+  await wait(150)
+  const at = await page.evaluate(() => getSelection().anchorNode?.parentElement?.closest('[data-node-type=blockContainer]')?.getAttribute('data-id'))
+  await paste(page, [png]); await wait(700)
+  await page.keyboard.type('After the picture', { delay: 15 }); await wait(1800)
+  await page.reload(); await page.locator('.bn-editor').first().waitFor(); await wait(2000)
+  const after = rows(dayDoc(date)), added = after.filter(r => !before.some(b => b[0] === r[0]))
+  const r = { added: added.map(a => [a[1], a[2]]), images: await page.locator('.bn-visual-media:not(.body-image-loading)').count(), written: (await page.evaluate(() => document.querySelector('.bn-editor').innerText)).includes('After the picture'), tray: [trayBefore, await tray()] }
+  // Every line that was there still is, in order, apart from the empty one the picture used up.
+  r.sameLines = JSON.stringify(after.filter(a => before.some(b => b[0] === a[0]))) === JSON.stringify(before.filter(b => b[0] !== (back ? null : at)))
+  const headings = list => list.filter(l => l[1] === 'heading').map(l => l[2])
+  r.sections = JSON.stringify(headings(after)) === JSON.stringify(headings(before))
+  const image = after.findIndex(a => a[1] === 'image')
+  r.below = after[image + 1]
+  r.ok = r.added.some(a => a[0] === 'image') && r.images === 1 && r.written && r.sameLines && r.sections && r.below?.[2] === 'After the picture' && r.tray[0] === r.tray[1] && (back ? r.below[1] === 'paragraph' : r.below[1] === 'bulletListItem' && after[image - 1]?.[2] === 'Notes')
+  return r
+})
+await scenario('A /image left empty: Remove takes it, with the panel open or shut, and one Undo brings it back', async page => {
+  await caretOn(page, 'Third line')
+  await page.keyboard.press('Enter'); await page.keyboard.type('/image'); await wait(500); await page.keyboard.press('Enter'); await wait(500)
+  const r = { panel: await page.locator('.bn-panel').count(), held: types().includes('image') }
+  await page.locator('.body-file-empty button', { hasText: 'Remove' }).click(); await wait(1400)
+  r.after = types().includes('image'); r.panelAfter = await page.locator('.bn-panel').count()
+  r.ok = r.panel === 1 && !r.after && r.panelAfter === 0
+  return r
+})
+await scenario('A file block asks for its file without fetching it, and an image asks only once its picture fails', async page => {
+  await caretOn(page, 'Second line'); await paste(page, [pdf]); await wait(500); await paste(page, [big]); await wait(1500)
+  const seen = []; page.on('request', q => { if (q.url().includes('/api/files/')) seen.push([q.method(), q.resourceType()]) })
+  await page.reload(); await page.locator('.bn-inline-content', { hasText: 'First line' }).waitFor(); await wait(1800)
+  const r = { seen }
+  r.ok = seen.filter(s => s[0] === 'HEAD').length === 1 && seen.filter(s => s[0] === 'GET').length === 1 && seen.find(s => s[0] === 'GET')[1] === 'image'
+  return r
+})
 await scenario('Keys on a chosen image: Enter adds a line below, Backspace removes it with one Undo, an arrow moves on, and Esc lets go', async page => {
   await pasted(page)
   const count = () => doc().length, order = () => doc().map(n => n.type).join()
