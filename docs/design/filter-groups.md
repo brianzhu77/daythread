@@ -1,6 +1,6 @@
 # Nested filter groups: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead and Jazz to review**. Not approved and not built.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **approved (Lead 63c58195), with the Lead's decisions in the checklist's D8: the Lead builds it on `feat/filter-groups`, and Jazz and Ratchet read §2 and §4.** Not built.
 - Asked by the Lead (3f046122, b9af4ec7). Nothing is cut for lack of evidence, and his use only sets the order (Brian 57deaed7).
 - **Evidence:** Notion's help page on [views, filters and sorts](https://www.notion.com/help/views-filters-and-sorts), which gives groups mixing "and" and "or", nested up to three layers, and "Add to advanced filter". It doesn't cover how chips look or the phone, so those are my proposal. **Builds on** R3-4 (`View.filterAny`, live 2026-11-03).
 

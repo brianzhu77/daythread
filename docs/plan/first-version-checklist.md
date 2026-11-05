@@ -637,6 +637,21 @@ Acceptance list by Bumblebee (Lead d34dd413, 2026-11-05), from `docs/design/icon
 
 **Not in these rows (Lead 3f167c20):** mentions, Inbox, unread marks, email, push and reactions wait for shared pages, as each needs a second person in a workspace; a cover made from a prompt is Not planned, as a running cost; Unsplash (last in §14).
 
+## D8. Quick database finishes (tracked, not counted)
+
+Acceptance list by Bumblebee, from `docs/design/filter-groups.md` (approved, Lead 63c58195, the Lead building), `docs/design/formula.md` and `docs/design/todo-dependency.md` (draft). Group 2 of `databases.md` §14.
+
+| ID | Check | Status |
+| --- | --- | --- |
+| G2-1 | **Filter groups.** `+ Add group` at the top level and inside a group, up to three layers including the top (Notion), each with its own all or any. A rule's `⋯` has Move into a group and Delete, a group's has Remove group and Move rules out. 20 rules counts the whole tree. One Undo for the sheet's edits. | missing |
+| G2-2 | **Reading a tree.** `inView` stays the only place rules are read: a table of cases over all, any and three layers. A rule that can't be read doesn't count either way, and a group with none left doesn't either. An empty group is ignored and dropped on closing. Every layout, calculations, CSV export, To-dos, and "this page's day" inside a group agree with the rows shown, as do "No rows match" and the opening day on a Timeline. | missing |
+| G2-3 | **On the view.** No groups: chips as today. With a group, one chip, "Status is Reading and 1 group", with no ×, opening the sheet, and its words match the sheet. | missing |
+| G2-4 | **`+ New` and moves under a group.** Takes the first single value that makes the row show, otherwise none, with §7.4's notice. A move on a board or calendar checks the same way. | missing |
+| G2-5 | **At 390.** Three layers leave a value readable, wrapping rather than scrolling sideways. Pinyin in a value, with the sheet above the keyboard. Native check. | missing |
+| G2-6 | **An older tab and rollback (Ratchet reads this closely, Lead).** An older tab ignores the tree, applies the top-level rules and so shows more rows, and keeps the tree when it saves. A row added there can be hidden on the new build, which the release note states. A rollback restores it, in `worker-floor`. | missing |
+| G2-7 | **Property tokens in the formula field** (`formula.md` line 13). A property reads as a token in place of a bare name, at both widths. Typing a name, pasting `prop("Name")` or a bare `Name`, and a misspelt name all behave as today. The composition and phone keyboard are the plain field's riskiest parts, so Pinyin and the on-screen delete key get a native check. An existing formula's stored text doesn't change, and an older tab reads it. | missing |
+| G2-8 | **A dependency between two to-dos: `todo-dependency.md` §6's checks.** Draft, not approved. No date ever moves. | missing |
+
 ## C. Open questions for Brian
 
 Asked 2026-10-19 02:18Z (9e538364 572b3c3a); Brian answered 02:20Z (a4fd5686). Re-ask any future question within 24 h if unanswered.

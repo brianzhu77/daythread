@@ -61,7 +61,7 @@ Both are ordinary relations, with a behaviour on top. **Turning either on makes 
 
 ## 4. R4-4's open point: To-dos
 
-**I recommend no sub-items or dependencies on To-dos.** To-dos can't have extra properties (`databases.md` §11), and a to-do's nesting already lives on its page, where indenting makes the tree. A second tree would disagree with the first. **For the Lead to confirm, and written down either way:** a relation from a database to To-dos (R3-23) already gives "Project → its to-dos". What's lost against Notion's Tasks database is a dependency between two to-dos. If Brian asks for that, it needs its own design, and it stays listed in §14 as a later item rather than disappearing.
+**I recommend no sub-items or dependencies on To-dos.** To-dos can't have extra properties (`databases.md` §11), and a to-do's nesting already lives on its page, where indenting makes the tree. A second tree would disagree with the first. **For the Lead to confirm, and written down either way:** a relation from a database to To-dos (R3-23) already gives "Project → its to-dos". What's lost against Notion's Tasks database is a dependency between two to-dos. It stays in §14, group 2, and its own design is `todo-dependency.md` (draft, 2026-11-05).
 
 ## 5. On a phone
 
