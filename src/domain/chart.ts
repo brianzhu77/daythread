@@ -102,18 +102,26 @@ export function chartData(db: Database, view: View, rows: readonly Page[], weekS
   return { property: groups.property, points, dateAxis, tooMany: tooMany || points.length > chartLimit }
 }
 
-/** A donut's greys, as the app's tokens: a value keeps its own whatever's filtered, and the rest fold into Other, drawn as an outline so it can't pass for a value (§4). */
+/**
+ * A donut's slices: the four largest by name, each with a grey following their order along the axis, and the rest in Other, an outline so it can't pass for a value.
+ * Naming the largest can repaint a value when the top four change, which matters less than a chart whose biggest value has no name (Jazz, Bumblebee, Lead, chart.md §4).
+ */
 export const donutGreys = 4
 export const otherKey = 'other-values'
-export interface DonutSlice { key: string; name: string; rows: Page[]; value: number; share: number; grey: number | null; result: CalcResult }
-export function donutSlices(points: readonly ChartPoint[]): { slices: DonutSlice[]; total: number } {
-  const counted = points.filter(p => p.value !== null && p.value > 0), total = counted.reduce((n, p) => n + p.value!, 0)
-  if (!total) return { slices: [], total: 0 }
-  const named = [...counted].sort((a, b) => a.order - b.order).slice(0, donutGreys), kept = new Set(named.map(p => p.key)), rest = counted.filter(p => !kept.has(p.key))
-  const byGrey = new Map(named.map((p, i) => [p.key, i]))
+export interface DonutSlice { key: string; name: string; rows: Page[]; value: number; share: number; grey: number | null; result: CalcResult; /** Other: which value each row is under. */ from?: Map<string, string> }
+export interface Donut { slices: DonutSlice[]; total: number; /** A value below zero can't be a slice: said in the legend, and then no total. */ undrawn: ChartPoint[] }
+export function donutSlices(points: readonly ChartPoint[]): Donut {
+  const counted = points.filter(p => p.value !== null && p.value > 0), total = counted.reduce((n, p) => n + p.value!, 0), undrawn = points.filter(p => p.value !== null && p.value < 0)
+  if (!total) return { slices: [], total: 0, undrawn }
+  const named = [...counted].sort((a, b) => b.value! - a.value! || a.order - b.order).slice(0, donutGreys), kept = new Set(named.map(p => p.key)), rest = counted.filter(p => !kept.has(p.key))
+  const byGrey = new Map([...named].sort((a, b) => a.order - b.order).map((p, i) => [p.key, i]))
   const slices: DonutSlice[] = counted.filter(p => kept.has(p.key)).map(p => ({ key: p.key, name: p.name, rows: p.rows, value: p.value!, share: p.value! / total, grey: byGrey.get(p.key)!, result: p.result }))
-  if (rest.length) { const value = rest.reduce((n, p) => n + p.value!, 0); slices.push({ key: otherKey, name: `Other (${rest.length})`, rows: [...new Map(rest.flatMap(p => p.rows).map(r => [r.id, r])).values()], value, share: value / total, grey: null, result: { type: 'number', value } }) }
-  return { slices, total }
+  if (rest.length) {
+    const value = rest.reduce((n, p) => n + p.value!, 0), from = new Map<string, string>()
+    for (const p of rest) for (const r of p.rows) from.set(r.id, from.has(r.id) ? `${from.get(r.id)}, ${p.name}` : p.name)
+    slices.push({ key: otherKey, name: `Other (${rest.length})`, rows: [...new Map(rest.flatMap(p => p.rows).map(r => [r.id, r])).values()], value, share: value / total, grey: null, result: { type: 'number', value }, from })
+  }
+  return { slices, total, undrawn }
 }
 
 const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 })

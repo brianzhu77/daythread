@@ -122,14 +122,18 @@ test('a calculation keeps a large number exact, and still cleans a float', () =>
   h.run({ type: 'add-row', databaseId: 'list', pageId: 'p1', title: 'p1', values: { pages: 0.1 } as never, at }); h.run({ type: 'add-row', databaseId: 'list', pageId: 'p2', title: 'p2', values: { pages: 0.2 } as never, at })
   assert.equal((columnCalc(h.db(), [h.page('p1'), h.page('p2')], 'pages', 'sum') as { value: number }).value, 0.3)
 })
-test('a donut: a value keeps its grey whatever is filtered or sorted, a blank or a zero is no slice, and past four the rest fold into Other', () => {
-  const p = (key: string, value: number | null, order: number) => ({ key, name: key, rows: [], value, order, result: { type: 'count' as const, value: value ?? 0 } })
+test('a donut: the four largest are named, with greys in axis order among them, a blank or a zero is no slice, a loss is said, and the rest fold into Other', () => {
+  const p = (key: string, value: number | null, order: number) => ({ key, name: key, rows: [{ id: `r-${key}` }] as never[], value, order, result: { type: 'count' as const, value: value ?? 0 } })
   const { slices, total } = donutSlices([p('a', 3, 0), p('b', 0, 1), p('c', null, 2), p('d', 1, 3)])
   assert.equal(total, 4); assert.deepEqual(slices.map(s => [s.key, s.share, s.grey]), [['a', 0.75, 0], ['d', 0.25, 1]])
+  // The biggest has a name, wherever it comes along the axis.
+  const eight = donutSlices([1, 1, 1, 1, 1, 1, 1, 12].map((v, i) => p(`v${i}`, v, i)))
+  assert.ok(eight.slices.some(s => s.key === 'v7' && s.grey === 3)); assert.equal(eight.slices.at(-1)!.key, otherKey); assert.equal(eight.slices.at(-1)!.value, 4); assert.equal(eight.slices.at(-1)!.name, 'Other (4)')
+  assert.equal(eight.slices.at(-1)!.from!.get('r-v4'), 'v4')
   // Sorted by value, the greys don't move.
   assert.deepEqual(donutSlices([p('z', 9, 2), p('y', 1, 0), p('x', 2, 1)]).slices.map(s => [s.key, s.grey]), [['z', 2], ['y', 0], ['x', 1]])
-  const many = donutSlices(Array.from({ length: 7 }, (_, i) => p(`v${i}`, 1, i)))
-  assert.deepEqual(many.slices.map(s => s.grey), [0, 1, 2, 3, null]); assert.equal(many.slices.at(-1)!.key, otherKey); assert.equal(many.slices.at(-1)!.value, 3); assert.equal(many.slices.at(-1)!.name, 'Other (3)')
+  // A loss can't be a slice: it's listed, for the legend to say.
+  const loss = donutSlices([p('gain', 100, 0), p('loss', -40, 1)]); assert.deepEqual(loss.undrawn.map(u => u.key), ['loss']); assert.equal(loss.slices.length, 1)
   assert.deepEqual(donutSlices([p('a', 0, 0)]).slices, [])
   // Cumulative means nothing on a donut, so it's left out of its values.
   const h = shelf(), v = view({ chart: { form: 'donut', cumulative: true } })
