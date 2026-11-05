@@ -105,15 +105,18 @@ export class StepReading {
   private readonly clock: Clock
   private cells: WorkedCells | null = null
   private readonly programs = new Map<string, { program: FormulaProgram; light: boolean }>()
-  constructor(ws: Workspace, at: string, world: FormulaWorld) {
+  private readonly whole: () => void
+  /** `whole` is told each time the whole workspace is read, which is what such a formula costs. */
+  constructor(ws: Workspace, at: string, world: FormulaWorld, whole: () => void = () => {}) {
     this.ws = ws
+    this.whole = whole
     this.world = world
     this.clock = clockIn(ws.timezone, Date.parse(at))
   }
   /** One that reads only its row gets cells of its own, which cost nothing; anything else reads the whole workspace, once for the step. */
   private cellsFor(light: boolean, databaseId: string): WorkedCells {
     // A copy, as the workspace is changed in place by the steps before, and what's projected from it is kept by identity.
-    if (!light) return (this.cells ??= cellsReading({ ...this.ws }, this.clock, this.world))
+    if (!light) { if (!this.cells) { this.whole(); this.cells = cellsReading({ ...this.ws }, this.clock, this.world) } return this.cells }
     const db = this.world.databases.get(databaseId)
     return new WorkedCells({ world: this.world, pages: new Map(), databases: new Map(db ? [[databaseId, db]] : []), clock: this.clock, rollup: () => undefined })
   }

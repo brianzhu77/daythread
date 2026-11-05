@@ -170,3 +170,22 @@ test('To-dos: a new one takes its name and date from formulas, and Edit rows rea
   assert.throws(() => tap(wrong.h), /"Nope" isn't one of Status's options/)
   assert.ok(onDay(wrong.h, '2026-11-06', 'Stays'))
 })
+
+test('a formula reading other rows reads the whole workspace for each row tapped, so over 100 the whole tap is refused', () => {
+  const steps: ButtonStep[] = [{ id: 'e', kind: 'edit-property', set: [formula('n', 'N', 'prop("twice") + 1')] }]
+  const { h, C } = setup([])
+  C({ kind: 'addProperty', property: { id: 'go', name: 'Go', type: 'button', button: { label: 'Go', steps: writeSteps(steps) } } })
+  for (let i = 0; i < 101; i++) h.run({ type: 'add-row', databaseId: 'runs', pageId: `x${i}`, title: `X${i}`, values: { n: i }, at } as never)
+  const press = (rowIds: string[]) => h.run({ type: 'run-row-button', databaseId: 'runs', propertyId: 'go', stepsKey: stepsKey(writeSteps(steps)), rowIds, at, today } as never)
+  const all = Array.from({ length: 101 }, (_, i) => `x${i}`)
+  assert.throws(() => press(all), /^Error: Too many rows for N's formula · 100 at most$/)
+  assert.equal(h.page('x0').values?.n, 0, 'none of them changed')
+  press(all.slice(0, 100))
+  assert.equal(h.page('x0').values?.n, 1)
+  assert.equal(h.page('x99').values?.n, 199)
+  // One reading only its row costs nothing, so it has no such limit.
+  const cheap: ButtonStep[] = [{ id: 'e', kind: 'edit-property', set: [formula('n', 'N', 'prop("n") + 1')] }]
+  C({ kind: 'updateProperty', propertyId: 'go', button: { label: 'Go', steps: writeSteps(cheap) } })
+  h.run({ type: 'run-row-button', databaseId: 'runs', propertyId: 'go', stepsKey: stepsKey(writeSteps(cheap)), rowIds: all, at, today } as never)
+  assert.equal(h.page('x100').values?.n, 101)
+})

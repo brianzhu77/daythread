@@ -35,6 +35,7 @@ Example: a "Log a run" button in his Day template adds a row to Runs with today'
 - **Time:** `now()` and `today()` are the tap's, in the workspace's zone, on the server. A retry gets the same answer.
 - **Order:** a step reads what the steps before it wrote. Edit rows works out every row before writing any, so rows don't depend on each other's order.
 - **Fit:** the field says what it gives, or why it can't. Done is off until each fits its property. A select takes an option's name, ignoring case; a name that isn't an option refuses the tap rather than adding one. Empty clears the property.
+- **Cost:** a formula reading only its row's own stored values costs about nothing. One reading a formula, rollup or relation property reads the whole workspace again for each row tapped, so a tap may do that 100 times at most. Over that the whole tap is refused, "Too many rows for N's formula · 100 at most", rather than the first rows changed (Ratchet, Bumblebee).
 - **Failing:** one that can't work drops the whole tap and names its step, as any other step's failure does (§4). On a rule that pauses the rule.
 - **Renaming a variable** doesn't rewrite the formulas that use it. They show the error, and Done stays off until they're changed.
 - **Rollback:** a list with a formula or a variable is written as version 2, which a floor build reads as no steps, so it can't run a formula as something else. A list without either stays version 1.

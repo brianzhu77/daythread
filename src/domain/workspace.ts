@@ -181,8 +181,10 @@ function runRowButton(state: Workspace, action: Extract<Action, { type: "run-row
   if (message === null) throw new DomainError(because ?? (matchedNothing ? "No rows matched" : "Nothing to do"));
   return { message: action.rowIds.length > 1 && steps.some((s) => s.kind === "edit-property") ? `${action.rowIds.length} rows changed` : message, ...(made ? { entityId: made } : {}) };
 }
-type ButtonBudget = { rows: number; todos: number };
-const newBudget = (): ButtonBudget => ({ rows: databaseLimits.rowsAtOnce, todos: databaseLimits.todosAtOnce });
+/** `readings`: how many times a formula that reads other rows may read the whole workspace, which each picked row does again (G3-10). */
+type ButtonBudget = { rows: number; todos: number; readings: number };
+export const formulaReadings = 100;
+const newBudget = (): ButtonBudget => ({ rows: databaseLimits.rowsAtOnce, todos: databaseLimits.todosAtOnce, readings: formulaReadings });
 /** The steps themselves, on the page or row they're for. */
 function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: string; today: string }, operationId: string, blockId: string | null, budget: ButtonBudget): { message: string | null; made?: string; because?: string; matchedNothing: boolean } {
   const at = isoTime(stamp.at), today = date(stamp.today);
@@ -206,16 +208,18 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
   const ready = formulas ? preparedSteps(steps, state, scopeId) : null;
   ready?.problems.forEach((problem, i) => { if (problem) throw new DomainError(`${stepTitle(steps[i]!)}: ${problem}`); });
   const variables: StepVariables = new Map();
-  let reading: StepReading | null = null;
-  const worked = (stored: string, row: Page, databaseId: string) => {
-    reading ??= new StepReading(state, at, ready!.world);
+  let reading: StepReading | null = null, readingFor = "";
+  const worked = (stored: string, row: Page, databaseId: string, name: string) => {
+    readingFor = name;
+    // Over it, the whole tap is refused, rather than the first rows changed (Bumblebee).
+    reading ??= new StepReading(state, at, ready!.world, () => { if (--budget.readings < 0) throw new DomainError(`Too many rows for ${readingFor}'s formula · ${formulaReadings} at most`); });
     const result = reading.value(stored, row, databaseId, variables);
     if (result.error) throw new DomainError(result.error);
     return result;
   };
   const tap = (value: ButtonValue, property: Property, row: Page = on, databaseId = scopeId): Json => {
     if (value.kind !== "formula") return valueAtTap(value, property, on, today);
-    const cell = stepCell(worked(value.text, row, databaseId).value, property);
+    const cell = stepCell(worked(value.text, row, databaseId, property.name).value, property);
     if ("error" in cell) throw new DomainError(cell.error);
     return cell.cell;
   };
@@ -231,9 +235,9 @@ function runSteps(state: Workspace, steps: ButtonStep[], on: Page, stamp: { at: 
   for (const [index, step] of steps.entries()) {
     // What a step reads is the workspace as this step finds it.
     reading = null;
-    const nameOf = (s: Extract<ButtonStep, { kind: "add-row" }>) => (s.titleFormula === undefined ? s.title : format(worked(s.titleFormula, on, scopeId).value));
+    const nameOf = (s: Extract<ButtonStep, { kind: "add-row" }>) => (s.titleFormula === undefined ? s.title : format(worked(s.titleFormula, on, scopeId, "the name").value));
     if (step.kind === "variables") named(step, () => {
-      for (const v of step.vars) { const { value, type } = worked(v.formula, on, scopeId); variables.set(v.name, { type, value }); }
+      for (const v of step.vars) { const { value, type } = worked(v.formula, on, scopeId, v.name); variables.set(v.name, { type, value }); }
     });
     else if (step.kind === "insert") named(step, () => {
       const day = on.date ?? localDay(state, at);
