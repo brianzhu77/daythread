@@ -117,7 +117,6 @@ function tasksOnDay(state: Workspace, day: string): Task[] {
   }
   return out;
 }
-/** A task whose title is empty after trimming: an empty checkbox row left on a page. It stays there, but no list shows it. */
 function commentBody(body: string): string {
   const words = text(body, 20_000).trim();
   if (!words) throw new DomainError("A comment needs words");
@@ -131,6 +130,7 @@ function threadToChange(state: Workspace, threadId: string, version: number): Co
   if (thread.version !== version) throw new DomainError("Changed elsewhere");
   return thread;
 }
+/** A task whose title is empty after trimming: an empty checkbox row left on a page. It stays there, but no list shows it. */
 export function isBlankTask(t: Task): boolean {
   return !t.title.trim();
 }
