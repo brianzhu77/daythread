@@ -3,6 +3,7 @@
 // one Undo takes back both. Nothing moves in the page while dragging, only a floating copy: a redraw of the block mid-drag
 // would lose the pointer.
 import { formulaErrorOf } from '../domain/formula'
+import { PageEmoji } from './icons'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type UIEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { sectionKey, viewSections, viewSubGroups, columnCalc, propertyOf, viewBoardCalculation, canWrap, cellValue, databaseRows, isDatabase, isEmptyValue, isReadOnly, readValue, titleId, viewColumns, viewGroups, viewRows, type View, type ViewGroup, type ViewGroups } from '../domain/database.ts'
@@ -220,7 +221,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
       <button type="button" tabIndex={interactive ? 0 : -1} className={`database-card-title${row.title ? '' : ' is-placeholder'}`}
         data-cell={interactive ? cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, group }) : undefined}
         data-nav={interactive && row.id === firstCard ? '0:0' : undefined}
-        onClick={() => { if (!justDragged.current) openRow(row.id) }}>{row.icon && <span className="database-row-icon" aria-hidden="true">{row.icon}</span>}{row.title || 'Untitled'}</button>
+        onClick={() => { if (!justDragged.current) openRow(row.id) }}>{row.icon && <PageEmoji icon={row.icon} className="database-row-icon" />}{row.title || 'Untitled'}</button>
       <SubItemParent workspace={workspace} db={db} row={row} />
       {cardColumns.map(({ property, wrap = false }) => {
         const pending = pendingCells.get(pendingKey(row.id, property.id))

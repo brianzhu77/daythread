@@ -2,7 +2,9 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { PGlite } from '@electric-sql/pglite'
 import { commandSchema } from '../src/domain/command-schema.ts'
-import { pageMarkdown } from '../src/domain/export.ts'
+import { exportFiles, pageMarkdown } from '../src/domain/export.ts'
+import { holdsFiles } from '../src/domain/database.ts'
+import { filesToSweep } from '../src/server/file-store.ts'
 import { isPageIcon } from '../src/domain/page-icon.ts'
 import { buildSearchIndex, search } from '../src/domain/search.ts'
 import { pgliteClient } from '../src/server/db/sql.ts'
@@ -18,7 +20,7 @@ function page() {
 test('an icon is one emoji as a person sees it, however many code points it takes', () => {
   for (const good of ['😀', '👍🏽', '👩‍💻', '🇨🇦', '1️⃣', '❤️']) assert.equal(isPageIcon(good), true, good)
   for (const bad of ['', 'a', 'ab', '😀😀', '😀 ', '<b>', 'x'.repeat(40)]) assert.equal(isPageIcon(bad), false, bad)
-  assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 0, action: { type: 'set-page-icon', pageId: 'p', icon: 'x'.repeat(40) } }).success, false)
+  assert.equal(commandSchema.safeParse({ operationId: 'o', expectedRevision: 0, action: { type: 'set-page-icon', pageId: 'p', icon: 'x'.repeat(400) } }).success, false)
 })
 test('adding, changing and removing say so, each with one Undo; what isn\'t an emoji is refused', () => {
   const h = page()
@@ -113,5 +115,26 @@ test('a cover goes with a copy and a template, export writes it at the top, and 
     assert.deepEqual([back.cover, back.coverPosition], [url, 0.3])
   })
   await db.close()
+})
+test('step 3: an icon may be one of ours or an upload, a cover one of ours or an upload; export leaves no dead link and names the files; the sweep holds them; the warning counts them (P1-5)', async () => {
+  const id = 'fileLook0001', up = `/api/files/${id}?name=me.png`
+  for (const good of ['icon:book-open', up]) assert.equal(isPageIcon(good), true, good)
+  for (const bad of ['icon:', 'icon:Bad Name', 'icon:../x', '/api/files/x', '/api/other/abcdefgh', 'https://example.com/a.png']) assert.equal(isPageIcon(bad), false, bad)
+  const h = page()
+  assert.equal(holdsFiles(h.ws), false)
+  h.run({ type: 'set-page-icon', pageId: 'p', icon: up })
+  assert.equal(holdsFiles(h.ws), true)
+  const store = { list: async () => [{ key: `local/${id}`, size: 1, storedAt: 0 }] } as never
+  assert.equal((await filesToSweep(store, JSON.stringify(h.ws), Date.now())).length, 0, 'an icon holds its file')
+  h.run({ type: 'set-page-icon', pageId: 'p', icon: 'icon:leaf' })
+  h.run({ type: 'set-page-cover', pageId: 'p', cover: up })
+  assert.equal((await filesToSweep(store, JSON.stringify(h.ws), Date.now())).length, 0, 'a cover holds its file')
+  const md = pageMarkdown(h.page('p'), h.ws, new Map([['p', 'Trip']]))
+  assert.doesNotMatch(md, /api\/files|icon:leaf/)
+  assert.match(md, /\(cover, not in this export\)/)
+  assert.match(exportFiles(h.ws, new Date('2026-11-05T10:00:00Z'))[0]!.text, /Trip: me\.png/)
+  h.run({ type: 'set-page-cover', pageId: 'p', cover: '/covers/ruled.svg' })
+  assert.equal(h.page('p').cover, '/covers/ruled.svg')
+  for (const bad of ['/covers/../x.svg', '/covers/x.png', '/other/x.svg']) assert.throws(() => h.run({ type: 'set-page-cover', pageId: 'p', cover: bad }), /image link/, bad)
 })
 

@@ -2434,6 +2434,20 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .cover-panel-preview { width: 100%; height: 120px; object-fit: cover; border-radius: var(--radius-inline); }
 .cover-panel-actions { display: flex; justify-content: flex-end; gap: 12px; font-size: var(--text-meta); }
 .cover-panel-actions:empty { display: none; }
+.is-own-icon { display: inline-block; width: 1em; height: 1em; background: var(--ink-2); -webkit-mask: var(--own-icon) center / contain no-repeat; mask: var(--own-icon) center / contain no-repeat; vertical-align: -0.125em; }
+.is-uploaded-icon { display: inline-flex; vertical-align: -0.125em; }
+.is-uploaded-icon img { width: 1em; height: 1em; border-radius: 3px; object-fit: cover; }
+.page-icon-glyph { display: inline-block; line-height: inherit; }
+.icon-picker-tabs { display: flex; flex: none; gap: 12px; padding-bottom: 6px; font-size: var(--text-meta); }
+.icon-picker-tabs button { min-height: 0; padding: 2px 0; border: 0; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+.icon-picker-tabs button.is-on { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.icon-picker-upload { display: grid; align-content: start; gap: 8px; padding: 8px 4px; }
+.icon-picker-choose, .cover-panel-choose { position: relative; justify-self: start; font-size: var(--text-meta); cursor: pointer; }
+.icon-picker-choose input, .cover-panel-choose input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.icon-picker-track { height: 2px; background: var(--fill); }
+.icon-picker-track > div { height: 100%; background: var(--ink-2); transition: width .15s; }
+.cover-panel-set { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.cover-panel-set button { height: 40px; min-height: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-inline); background-size: cover; background-position: center; cursor: pointer; }
 .page-icon-line { height: 52px; margin-left: -2px; }
 /* Above "Today" and the date (§7.2), whatever order the day's head is drawn in. */
 .day-screen > .page-icon-line { order: -3; margin-top: 24px; }
