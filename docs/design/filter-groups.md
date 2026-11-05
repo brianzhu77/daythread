@@ -40,7 +40,8 @@ Show rows where: all rules match ⌄
 - **`+ New` (§7.4):** the row takes a value only where it's needed, and only one way, by walking the tree with R3-4's rule: the first single value that makes it show. If none does, it takes none, with §7.4's notice. A move on a board or calendar checks the same way.
 - **Every place that reads a filter follows it:** every layout, calculations (R3-8), Chart, automations' "In a view", Dashboard, and CSV export of a view.
 - **On To-dos** too, since it's a view filter, and "this page's day" works inside a group.
-- **Undo, as filters behave today:** changing a rule offers none, so neither does a group's own all/any or a move. **Corrected (Lead, from Jazz 35291f4c):** I'd said one Undo for the sheet's edits, but filters have no Undo today. Removing a group takes more than a rule's worth away, so it has a notice with Undo. In a linked view that saves with its page, which has no notice.
+- **Undo, as filters behave today:** changing a rule offers none, so neither does a group's own all/any or a move. **Corrected (Lead, from Jazz 35291f4c):** I'd said one Undo for the sheet's edits, but filters have no Undo today. Removing a group, and Clear filter when the view has a group, take more than a rule's worth away, so they have a notice with Undo (Jazz aeb631bc). In a linked view that saves with its page, which has no notice.
+- **At 20 rules** the two `+` buttons give way to one quiet line, "20 rules at most".
 
 ## 4. For Roadbuster
 

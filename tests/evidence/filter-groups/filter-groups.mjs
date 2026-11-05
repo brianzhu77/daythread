@@ -21,11 +21,23 @@ const block = page.locator('.database-block').first(), menu = page.locator('.dat
 const view = () => store().pages.find(p => p.id === 'list').database.views[0]
 const closeMenu = async () => { await page.keyboard.press('Escape'); await wait(250); if (await menu.count()) { await page.locator('.database-menu-scrim').click({ force: true }).catch(() => {}); await wait(250) } }
 const shown = async () => new Set(await block.locator('tr.database-row').evaluateAll(l => l.map(e => e.dataset.row)))
-const openFilter = async () => { await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('button', { name: 'Filter' })); await wait(200) }
+const clearNotices = async () => { for (const c of await page.locator('[data-slot="toast-close"]').all()) await c.click({ force: true }).catch(() => {}); await wait(300) }
+const openFilter = async () => { await clearNotices(); await tap(block.locator('.database-more-button')); await wait(300); await tap(menu.getByRole('button', { name: 'Filter' })); await wait(200) }
 const chips = () => block.locator('.database-filter-line .database-filter-chip').allInnerTexts()
 const sameRows = (a, ...want) => a.size === want.length && want.every(w => a.has(w))
 const addTo = (l, name) => tap(l.getByRole('menuitem', { name, exact: true }).last())
 const inGroup = n => menu.getByRole('group', { name: 'Filter group' }).nth(n)
+// Where the moves are drawn: every word inside the sheet, right under what opened them, and at the sheet's left and right edges.
+const drawnMoves = async (opener, what) => {
+  const m = await menu.boundingBox(), o = await opener.boundingBox(), items = menu.getByRole('menu').getByRole('menuitem')
+  const n = await items.count(); check(n > 0, `${what}: the moves open`, n)
+  for (let i = 0; i < n; i++) {
+    const it = items.nth(i), box = await it.boundingBox(), words = await it.evaluate(e => { const r = document.createRange(); r.selectNodeContents(e); const b = r.getBoundingClientRect(); return { l: b.left, r: b.right } })
+    check(words.l >= m.x && words.r <= m.x + m.width, `${what}: "${await it.innerText()}" is inside the sheet`, [Math.round(words.l), Math.round(words.r), m.x, m.x + m.width])
+    if (i === 0) check(box.y >= o.y && box.y - (o.y + o.height) < 120, `${what}: right under what opened it`, [Math.round(o.y + o.height), Math.round(box.y)])
+  }
+}
+const dotsAt = l => l.evaluate(e => { const r = document.createRange(); r.selectNodeContents(e); const b = r.getBoundingClientRect(); return (b.left + b.right) / 2 })
 const setPagesOver = async (l, n) => { await l.getByLabel('Property').last().selectOption({ label: 'Pages' }); await wait(500); await l.getByLabel('Condition').last().selectOption('gt'); await wait(400); await l.getByLabel('Value').last().fill(String(n)); await page.keyboard.press('Enter'); await wait(800) }
 
 await page.goto(`${base}/pages?page=books`); await wait(2500)
@@ -59,6 +71,13 @@ check(await inGroup(1).getByRole('menuitem', { name: 'Move into a new group' }).
 await page.keyboard.press('Escape'); await wait(250)
 check(await menu.count() === 1 && await inGroup(1).getByRole('menuitem', { name: 'Move out of this group' }).count() === 0, "Esc shuts the moves and leaves the sheet")
 await shot('three-layers')
+{
+  const rule = inGroup(0).getByRole('button', { name: 'Move rule' }).first(), head = inGroup(0).getByRole('button', { name: 'Group actions' }).first()
+  check(Math.abs(await dotsAt(rule) - await dotsAt(head)) < 0.6, "a group's dots are in line with its rules'", [await dotsAt(rule), await dotsAt(head)])
+  if (wide) check((await head.boundingBox()).height === 28, "and its button is the rules' height", (await head.boundingBox()).height)
+  await menu.evaluate(m => { m.scrollTop = 0 }); await tap(rule); await wait(250); await drawnMoves(rule, "a rule's"); await shot('rule-moves'); await tap(rule); await wait(200)
+  await tap(head); await wait(250); await drawnMoves(head, "a group's"); await shot('group-moves'); await tap(head); await wait(200)
+}
 if (!wide) {
   const fits = await menu.evaluate(m => m.scrollWidth <= m.clientWidth + 1)
   check(fits, '390: three layers without sideways scrolling')
@@ -113,11 +132,14 @@ const plain = await chips(); check(plain.length === 3 && await block.locator('.d
 // Clear filter clears a tree as well.
 await openFilter(); await menu.getByLabel('Show rows where').selectOption('all'); await wait(600)
 await addTo(menu, '+ Add group'); await wait(700); await setPagesOver(inGroup(0), 100000); await closeMenu()
-check((await shown()).size === 0, 'nothing matches'); await tap(block.getByRole('button', { name: 'Clear filter' })); await wait(900)
+check((await shown()).size === 0, 'nothing matches'); const cleared = JSON.stringify(view().filterGroups); await tap(block.getByRole('button', { name: 'Clear filter' })); await wait(900)
+check(!('filterGroups' in view()) && await page.getByRole('button', { name: 'Undo' }).count() === 1, 'Clear filter says so with an Undo')
+await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(1000); check(JSON.stringify(view().filterGroups) === cleared, 'which brings the tree back'); await tap(block.getByRole('button', { name: 'Clear filter' })); await wait(900)
 check(sameRows(await shown(), ...all, made.id) || (await shown()).size >= all.size, 'Clear filter brings them all back'); check(view().filter.length === 0 && !('filterGroups' in view()), 'and empties it')
 // At the limit it stops offering.
 await openFilter(); for (let i = 0; i < 20; i++) { await addTo(menu, '+ Add filter'); await wait(250) } await wait(600)
 check(view().filter.length === 20 && await menu.getByRole('menuitem', { name: '+ Add filter' }).count() === 0 && await menu.getByRole('menuitem', { name: '+ Add group' }).count() === 0, 'at twenty rules it offers no more', view().filter.length)
+check(await menu.getByText('20 rules at most').count() === 1, 'and says why')
 check(errors.length === 0, 'no page errors', errors.slice(0, 3))
 console.log(`[filter-groups ${engine} ${width}] fail ${fails}`)
 await browser.close()

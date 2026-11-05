@@ -761,7 +761,7 @@ export function ViewNotes({ db, view, changeView, empty }: { db: Page; view: Vie
   usePendingCells()
   const failedHere = [...pendingCells.values()].filter(p => p.failed && !p.part && p.databaseId === db.id)
   return <>
-    {empty && hasFilter(view) && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => changeView(() => ({ filter: [], filterGroups: [] }))}>Clear filter</button></p>}
+    {empty && hasFilter(view) && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => changeView(() => ({ filter: [], filterGroups: [] }), view.filterGroups?.length ? 'Filter cleared' : undefined)}>Clear filter</button></p>}
     {failedHere.length > 0 && <p className="database-unsaved" role="status">{failedHere.length === 1 ? '1 change' : `${failedHere.length} changes`} not saved · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.retry())}>Retry</button> · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.discard())}>Undo</button></p>}
   </>
 }

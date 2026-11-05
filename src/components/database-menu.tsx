@@ -428,6 +428,7 @@ function FilterRules({ db, node, path, edit, full }: { db: DatabasePage; node: F
         <FilterRules db={db} node={g} path={[...path, i]} edit={edit} full={full} />
       </div>
     })}
+    {full && path.length === 0 && <p className="database-filter-full">{limits.conditions} rules at most</p>}
     {!full && <div className="database-filter-adds">
       <button type="button" role="menuitem" className="database-add-rule" onClick={() => here(g => ({ ...g, rules: [...g.rules, blank] }))}>+ Add filter</button>
       {canHoldGroup(path) && <button type="button" role="menuitem" className="database-add-rule" onClick={() => here(g => addGroup(g, blank))}>+ Add group</button>}
