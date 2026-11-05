@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readSteps, stepsKey, writeSteps, type ButtonStep } from '../src/domain/buttons.ts'
-import { automationProblem, nextRun, withLiveNames, type Automation } from '../src/domain/automations.ts'
+import { automationProblem, nextRun, withLiveNames, type Automation, runsOnFix } from '../src/domain/automations.ts'
 import { pageContentKey } from '../src/domain/editor-document.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { harness } from './v2-helpers.ts'
@@ -277,4 +277,39 @@ test('Every…: an edit counts from that moment, with at most one run on a date 
   const next = (rules(h)[0]!.triggers[0] as Extract<Automation['triggers'][number], { kind: 'every' }>)
   assert.equal(nextRun(next, '2026-11-12', '13:00'), '2026-11-19')
   assert.equal(nextRun({ ...next, until: '2026-11-15' }, '2026-11-12', '13:00'), null)
+})
+
+test('saving a fix to a failed schedule runs its latest missed period once; a real schedule change, or off and on by hand, counts from then', () => {
+  const broken: ButtonStep[] = [{ id: 'a', kind: 'add-row', databaseId: 'runs', databaseName: 'Runs', title: 'Review', set: [{ id: 'n', name: 'N', type: 'number', value: { kind: 'fixed', raw: 'invalid' } }] }]
+  const good = writeSteps([{ id: 'a', kind: 'add-row', databaseId: 'runs', databaseName: 'Runs', title: 'Review', set: [] }])
+  const failed = () => { const s = setup([every({ steps: writeSteps(broken) }, { every: 'day', time: '09:00' })]); tick(s.h, '2026-11-05', '10:00'); assert.ok(rules(s.h)[0]!.paused); return s }
+  const noon = '2026-11-06T12:00', repeatOf = (r: Automation) => (r.triggers[0] as { repeat: { time?: string; notBefore?: string } }).repeat
+  const fixedRule = (h: ReturnType<typeof harness>) => { const r = structuredClone(rules(h)[0]!); r.steps = good; repeatOf(r).notBefore = noon; return r }
+
+  const fix = failed()
+  assert.equal(runsOnFix(rules(fix.h)[0]!, rules(fix.h)[0]!.triggers[0] as never, '2026-11-06', '12:00'), '2026-11-06', 'the editor says so before the save')
+  fix.C({ kind: 'updateAutomation', automation: fixedRule(fix.h) })
+  assert.equal(rules(fix.h)[0]!.active, true)
+  tick(fix.h, '2026-11-06', '12:05')
+  assert.equal(reviews(fix.h).length, 1, 'the latest missed period, once')
+  tick(fix.h, '2026-11-06', '12:10')
+  assert.equal(reviews(fix.h).length, 1, 'and not again on another tick')
+
+  const moved = failed(), later = fixedRule(moved.h)
+  repeatOf(later).time = '10:00'
+  assert.equal(runsOnFix(rules(moved.h)[0]!, later.triggers[0] as never, '2026-11-06', '12:00'), null)
+  moved.C({ kind: 'updateAutomation', automation: later })
+  tick(moved.h, '2026-11-06', '12:05')
+  assert.equal(reviews(moved.h).length, 0, 'a real schedule change counts from the save')
+
+  const hand = failed()
+  hand.C({ kind: 'setAutomationActive', automationId: 'wk', active: false })
+  assert.equal(rules(hand.h)[0]!.paused, undefined)
+  hand.C({ kind: 'updateAutomation', automation: fixedRule(hand.h) })
+  assert.equal(rules(hand.h)[0]!.active, false, 'off by hand stays off through a fix')
+  hand.C({ kind: 'setAutomationActive', automationId: 'wk', active: true, notBefore: noon })
+  tick(hand.h, '2026-11-06', '12:05')
+  assert.equal(reviews(hand.h).length, 0, 'turning it on counts from then')
+  tick(hand.h, '2026-11-07', '09:00')
+  assert.equal(reviews(hand.h).length, 1)
 })

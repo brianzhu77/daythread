@@ -108,6 +108,12 @@ export function nextRun(every: Extract<AutomationTrigger, { kind: 'every' }>, to
   const next = nextDate(every.repeat, today, time, weekStart)
   return next && (!every.until || next <= every.until) ? next : null
 }
+/** A rule that failed and is being fixed: saved with its schedule as it was, this period runs once, as they still wanted it and it shows the fix held. A real schedule change counts from the save (§6). */
+export function runsOnFix(rule: Automation, every: Extract<AutomationTrigger, { kind: 'every' }>, today: string, time: string, weekStart: WeekStart = 0): string | null {
+  const was = everyOf(rule)
+  if (!rule.paused || !was || !sameSchedule(every, was)) return null
+  return dueDates(was.repeat, today, time, weekStart).filter(d => !was.until || d <= was.until).at(-1) ?? null
+}
 export interface DueRule { database: Page & { database: Database }; rule: Automation; date: string; skipped: number }
 /** What's due by the wall clock it's asked at: the latest missed period only, as five rows at once on his return is clutter (§6). */
 export function dueRules(ws: Workspace, today: string, time: string): DueRule[] {

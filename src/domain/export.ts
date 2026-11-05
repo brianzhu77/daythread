@@ -74,7 +74,7 @@ export function pageMarkdown(p: Page, ws: Workspace, names: Map<string, string>)
 function commentsMarkdown(ws: Workspace, p: Page): string {
   const threads = threadsOn(ws.threads, p.id)
   if (!threads.length) return ''
-  return `\n## Comments\n\n${threads.map(t => `${t.comments.map(c => `- ${c.at.slice(0, 16).replace('T', ' ')}${t.resolvedAt ? ' (resolved)' : ''}: ${c.body.replace(/\n+/g, ' ')}`).join('\n')}`).join('\n\n')}\n`
+  return `\n## Comments\n\n${threads.map(t => `${t.anchor?.quote ? `> ${t.anchor.quote.replace(/\n+/g, ' ')}\n` : ''}${t.comments.map(c => `- ${c.at.slice(0, 16).replace('T', ' ')}${t.resolvedAt ? ' (resolved)' : ''}: ${c.body.replace(/\n+/g, ' ')}`).join('\n')}`).join('\n\n')}\n`
 }
 
 export function blocksMarkdown(nodes: EditorNode[], ws: Workspace, names: Map<string, string>): string {
