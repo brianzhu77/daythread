@@ -171,6 +171,12 @@ await scenario('Keys: Enter runs it only when chosen by its handle; a long label
   const long = page.locator('.editor-button-pill', { hasText: 'A very long label' }), ell = await long.locator('span').evaluate(n => n.scrollWidth > n.clientWidth), box = await long.boundingBox()
   return { ok: ran === before + 1 && arrowed === ran && ell && box.height === 36 && pillBox.height === 36, ran, arrowed, before, ell, box }
 })
+await scenario('To-dos: Add row is its + New, with Open and one Undo', async page => {
+  await pill(page, 'New to-do').click(); await wait(1000)
+  const made = store().tasks.filter(t => t.title === 'From a button').length, words = await notices(page)
+  await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(900)
+  return { ok: made === 1 && /Added to To-dos/.test(words) && store().tasks.filter(t => t.title === 'From a button').length === 0, made, words, after: store().tasks.filter(t => t.title === 'From a button').length }
+})
 await scenario('390: a sheet with Done in its head; a tap raises no keyboard and takes no caret; ⋯ edits', async page => {
   await pill(page, 'Log a run').tap(); await wait(800)
   const active = await page.evaluate(() => document.activeElement?.tagName), line = await page.locator('.bn-block-outer[data-id="b-add"] .editor-button-line').boundingBox(), drawn = await pill(page, 'Log a run').boundingBox()

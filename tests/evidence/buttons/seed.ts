@@ -28,6 +28,7 @@ const nodes = [
   button('b-open', 'Go to Other', [add, { id: 's-o', kind: 'open', target: { kind: 'page', pageId: 'other', name: 'Other' } }]),
   button('b-url', 'To a link', [add, { id: 's-u', kind: 'open', target: { kind: 'url', url: 'https://buttons.test/x' } }]),
   button('b-gone', 'Gone prop', [{ ...add, set: [{ id: 'nope', name: 'Status', value: { kind: 'fixed', raw: 1 } }] }]),
+  button('b-todo', 'New to-do', [{ id: 's-t', kind: 'add-row', databaseId: 'source:tasks', databaseName: 'To-dos', title: 'From a button', set: [] }]),
   button('', 'x', []),
 ].filter(n => n.id)
 nodes.push({ id: 'b-long', type: 'button', props: { label: 'A very long label that goes on and on and on, far past what any line can hold at either width of this app', steps: writeSteps([add]) }, children: [] } as never)

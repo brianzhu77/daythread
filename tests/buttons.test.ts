@@ -163,3 +163,37 @@ test('what a step needs, and links that can\'t run script', () => {
   assert.equal(safeUrl('mailto:a@b.c'), 'mailto:a@b.c')
   assert.deepEqual(valueAtTap({ kind: 'page' }, { type: 'relation' }, { id: 'p', date: null, title: 'T' }, today), ['p'])
 })
+test('in a synced block it\'s one button: a tap in another place runs, and what it inserts reaches every place', () => {
+  const block = (id: string, syncId: string, children: EditorNode[] = []): EditorNode => ({ id, type: 'syncedBlock', props: { syncId, roles: '' }, children })
+  const h = harness()
+  for (const [id, title] of [['a', 'A'], ['b', 'B']] as const) h.run({ type: 'create-document', title, body: '', pageId: id })
+  const steps: ButtonStep[] = [{ id: 'i', kind: 'insert', place: 'below', blocks: [line('new', 'From the synced button')] }]
+  h.save('a', d => [...d, block('sa', 's1', [button(steps, 'shared')])])
+  h.save('b', d => [...d, block('sb', 's1')])
+  const inB = flatNodes(pageNodes(h.page('b'))).find(n => n.type === 'button')!
+  assert.ok(inB, 'it shows in the other place')
+  const { receipt } = tap(h, inB.id, 'b')
+  assert.equal(receipt.message, 'Inserted')
+  // By line, as the button's own steps hold the same words.
+  const read = (id: string) => flatNodes(pageNodes(h.page(id))).filter(n => n.type !== 'button').map(n => JSON.stringify(n.content ?? '')).join()
+  for (const id of ['a', 'b']) assert.ok(read(id).includes('From the synced button'), id)
+  assert.equal(flatNodes(pageNodes(h.page('a'))).filter(n => n.type === 'button').length, 1)
+  h.run({ type: 'undo', targetOperationId: receipt.operationId })
+  for (const id of ['a', 'b']) assert.equal(read(id).includes('From the synced button'), false, id)
+})
+test('in the Day template: new days have their own, a tap on one writes to that day, and the day draft holds it as a line, not a slot', () => {
+  const h = harness()
+  h.run({ type: 'create-database', pageId: 'runs', homeBlockId: null, title: 'Runs' })
+  h.run({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'when', name: 'When', type: 'date' } } } as never)
+  h.run({ type: 'create-template', title: 'Day', pageId: 'tpl', dayPage: true })
+  const on: ButtonStep[] = [{ id: 'a', kind: 'add-row', databaseId: 'runs', databaseName: 'Runs', title: 'Run', set: [{ id: 'when', name: 'When', value: { kind: 'day' } }] }]
+  h.save('tpl', () => [button(on, 'in-template'), line('t1', 'Notes')])
+  assert.throws(() => tap(h, 'in-template', 'tpl'), /template doesn't run/)
+  const day1 = h.day('2026-11-05'), day2 = h.day('2026-11-06')
+  const of = (p: { document: string }) => pageNodes(p).find(n => n.type === 'button')!
+  assert.ok(of(day1) && of(day2))
+  assert.notEqual(of(day1).id, of(day2).id)
+  assert.equal(of(day1).props?.steps, writeSteps(on))
+  const { receipt } = tap(h, of(day2).id, day2.id, '2026-11-20')
+  assert.deepEqual(h.page(receipt.entityId!).values?.when, { start: '2026-11-06' }, 'that day, not the day it was tapped')
+})
