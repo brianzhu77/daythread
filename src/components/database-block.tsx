@@ -1282,9 +1282,12 @@ const todosAtOnce = databaseLimits.todosAtOnce
 export function PickedBar({ picks: { picked, setPicked, picking, stopPicking, deletePicked, pickable, editing, setEditing }, db, floating }: { picks: RowPicking; db: Page & { database: Database }; floating?: boolean }) {
   // A big change takes seconds on the Worker (Planned on 500: about 6 s, Lead's deployed read). It says so, past a moment a small one never reaches, and the notice says when it's done.
   const [changing, setChanging] = useState<string | null>(null)
+  const inFlight = useRef(0)
   const track = useCallback((words: string, work: Promise<unknown>) => {
+    inFlight.current++
     const timer = setTimeout(() => setChanging(words), 400)
-    void work.finally(() => { clearTimeout(timer); setChanging(null) })
+    // A second change queues behind the first, so the words stay until the last one is done.
+    void work.finally(() => { clearTimeout(timer); if (--inFlight.current === 0) setChanging(null) })
   }, [])
   if (!picked.length && !picking) return null
   // To-dos (R4-17): no Delete, as it would take lines off day pages not in view; a to-do can still be deleted from its line.
