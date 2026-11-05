@@ -28,7 +28,7 @@ Notion's five: **Vertical bar, Horizontal bar, Line, Donut, Number.** Number is 
 | **Style** | Height, grid lines, labels on or off, legend | Value in the centre | n/a |
 
 - **The first time,** like Board's "Columns come from": it asks for What to show, listing the properties it can use, and defaults Measure to Count.
-- **What can be charted,** following Notion: not Button, ID, Files, Rollup or a list-output Formula. A date axis groups by day, week (from his Week starts setting, R3-20), month or year, and shows empty periods as zero so a line doesn't lie about gaps.
+- **What can be charted,** following Notion: not Button, ID, Files, Rollup or a list-output Formula. A date axis groups by day, week (from his Week starts setting, R3-20), month or year, and shows every period between the first and the last. **A period with no numbers depends on the Measure (corrected 2026-11-05, Jazz 60daebcf, as #162 is built):** Count draws zero, as nothing was counted. Sum and the rest have no value, so a line breaks and a bar is absent, because a blank isn't a zero (§6). Cumulative carries its running total flat. A line never joins across a gap.
 - **Same numbers as everywhere:** the view's filter applies, and Sum and the rest match column calculations (R3-8) on the same rows.
 
 ## 4. Colour (Jazz's call, fb7d3274, reading only, not prototyped)

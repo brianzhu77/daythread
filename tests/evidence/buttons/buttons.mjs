@@ -129,7 +129,7 @@ await scenario('Notices: rows edited, nothing matched, Undo brings it back', asy
   await pill(page, 'Set all').click(); await wait(800)
   const set = await notices(page), value = pageOf('r1').values.n
   await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(800)
-  return { ok: /No rows matched/.test(none) && /1 row changed/.test(set) && value === 7 && pageOf('r1').values.n === 1, none, set, value, back: pageOf('r1').values.n }
+  return { ok: /No rows matched/.test(none) && /2 rows changed/.test(set) && value === 7 && pageOf('r1').values.n === 1, none, set, value, back: pageOf('r1').values.n }
 })
 await scenario('Broken targets: Trash with Restore, a deleted property with Edit, and the pill stays', async page => {
   await pill(page, 'Gone prop').click(); await wait(700)
@@ -191,6 +191,19 @@ await scenario('To-dos: Add row is its + New, with Open and one Undo', async pag
   const made = store().tasks.filter(t => t.title === 'From a button').length, words = await notices(page)
   await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(900)
   return { ok: made === 1 && /Added to To-dos/.test(words) && store().tasks.filter(t => t.title === 'From a button').length === 0, made, words, after: store().tasks.filter(t => t.title === 'From a button').length }
+})
+await scenario('To-dos Edit rows: one that can\'t take it reads "1 couldn\'t", with one Undo over the rest', async page => {
+  const before = rows().length, planned = () => { const d = store().pages.find(p => p.date === '2031-03-04'); return d ? d.document.includes(store().tasks.find(t => t.title === 'Open to-do').id) : false }
+  await pill(page, 'Plan to-dos').click(); await wait(1000)
+  const words = await notices(page), moved = planned(), added = rows().length
+  await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(900)
+  return { ok: /to-do changed/.test(words) && /couldn't/.test(words) && moved && added === before + 1 && !planned() && rows().length === before, words, moved, added, before, after: rows().length }
+})
+await scenario('To-dos Edit rows: an invalid value refuses the whole tap and leaves nothing', async page => {
+  const before = rows().length, tasks = JSON.stringify(store().tasks)
+  await pill(page, 'Bad plan').click(); await wait(1000)
+  const words = await notices(page)
+  return { ok: /Invalid calendar date/.test(words) && rows().length === before && JSON.stringify(store().tasks) === tasks, words, rows: rows().length, before, same: JSON.stringify(store().tasks) === tasks }
 })
 await scenario('390: a sheet with Done in its head; a tap raises no keyboard and takes no caret; ⋯ edits', async page => {
   await pill(page, 'Log a run').tap(); await wait(800)
