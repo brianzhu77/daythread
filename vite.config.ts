@@ -12,6 +12,7 @@ const target = process.env.DAYTHREAD_TARGET ?? (process.env.VERCEL === '1' ? 've
 const hosting = target === 'cloudflare'
   ? [nitro({
       preset: 'cloudflare-module',
+      plugins: ['./src/server/push/cron.ts'],
       cloudflare: {
         deployConfig: true,
         nodeCompat: true,
@@ -19,6 +20,8 @@ const hosting = target === 'cloudflare'
           name: 'daythread',
           placement: { region: 'aws:us-east-1' },
           observability: { enabled: true },
+          // Reminders fall due on the minute (B60).
+          triggers: { crons: ['* * * * *'] },
           // Files are served at their own names: the Home Screen worker caches /offline.html, and a redirect to /offline
           // can't stand in for a navigation.
           assets: { html_handling: 'none' },

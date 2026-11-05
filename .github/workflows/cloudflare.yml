@@ -122,7 +122,7 @@ jobs:
       - name: App secrets
         run: |
           [ "$NAME" = daythread-preview ] || unset DAYTHREAD_INVITES
-          node -e 'const k=["DATABASE_URL","SUPABASE_URL","SUPABASE_PUBLISHABLE_KEY","OPENROUTER_API_KEY","OPENROUTER_MODEL","DAYTHREAD_INVITES","DAYTHREAD_DRAFT_EMAILS"];process.stdout.write(JSON.stringify(Object.fromEntries(k.filter(n=>process.env[n]).map(n=>[n,process.env[n]]))))' > "$RUNNER_TEMP/secrets.json"
+          node -e 'const k=["DATABASE_URL","SUPABASE_URL","SUPABASE_PUBLISHABLE_KEY","OPENROUTER_API_KEY","OPENROUTER_MODEL","DAYTHREAD_INVITES","DAYTHREAD_DRAFT_EMAILS","DAYTHREAD_VAPID_PUBLIC_KEY","DAYTHREAD_VAPID_PRIVATE_KEY","DAYTHREAD_VAPID_SUBJECT"];process.stdout.write(JSON.stringify(Object.fromEntries(k.filter(n=>process.env[n]).map(n=>[n,process.env[n]]))))' > "$RUNNER_TEMP/secrets.json"
           npx wrangler@4 secret bulk "$RUNNER_TEMP/secrets.json" -c .output/server/wrangler.json --name "$NAME"
           rm "$RUNNER_TEMP/secrets.json"
         env:
@@ -135,6 +135,10 @@ jobs:
           DAYTHREAD_INVITES: ${{ secrets.PREVIEW_INVITES }}
           # B76 day draft: only these accounts get the model; everyone else gets the fallback draft.
           DAYTHREAD_DRAFT_EMAILS: ${{ secrets.DRAFT_EMAILS }}
+          # B60 reminders: without the two keys the app shows no control and the cron does nothing.
+          DAYTHREAD_VAPID_PUBLIC_KEY: ${{ secrets.DAYTHREAD_VAPID_PUBLIC_KEY }}
+          DAYTHREAD_VAPID_PRIVATE_KEY: ${{ secrets.DAYTHREAD_VAPID_PRIVATE_KEY }}
+          DAYTHREAD_VAPID_SUBJECT: ${{ secrets.DAYTHREAD_VAPID_SUBJECT }}
 
   domain:
     if: inputs.action == 'domain-to-worker' || inputs.action == 'domain-to-vercel'
