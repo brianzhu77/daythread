@@ -132,3 +132,27 @@ export function timelineWeeks(bars: readonly TimelineBar[], from: LocalDate, wee
   const inOrder = (map: Map<LocalDate, TimelineBar[]>) => [...map].sort(([a], [b]) => (a < b ? -1 : 1)).map(([week, bars]) => ({ week, bars }))
   return { weeks: inOrder(weeks), earlier: inOrder(earlier) }
 }
+
+const linkStep = 8, linkCorner = 4
+/**
+ * An arrow from a blocker's bar to the one it blocks, in the body's pixels: out of the end, down, and into the start. Where the blocked bar
+ * starts too soon for that, it doubles back in the space between their lines. Its ends are held inside `[low, high]`, so a bar far off-screen
+ * leaves a line running to the edge rather than a path a page can't draw. There's no head while the arrow's end is out of reach.
+ */
+export function linkPath(from: { x: number; y: number }, to: { x: number; y: number }, low: number, high: number): { line: string; head: string | null } {
+  const between = from.y + (to.y > from.y ? 18 : -18)
+  const route: [number, number][] = to.x - from.x >= linkStep * 2
+    ? [[from.x, from.y], [from.x + linkStep, from.y], [from.x + linkStep, to.y], [to.x, to.y]]
+    : [[from.x, from.y], [from.x + linkStep, from.y], [from.x + linkStep, between], [to.x - linkStep, between], [to.x - linkStep, to.y], [to.x, to.y]]
+  const held = route.map(([x, y]): [number, number] => [Math.min(high, Math.max(low, x)), y]).filter(([x, y], i, all) => i === 0 || x !== all[i - 1]![0] || y !== all[i - 1]![1])
+  const towards = ([ax, ay]: [number, number], [bx, by]: [number, number], by_: number): string => { const len = Math.hypot(bx - ax, by - ay) || 1; return `${ax + ((bx - ax) / len) * by_} ${ay + ((by - ay) / len) * by_}` }
+  let line = `M${held[0]![0]} ${held[0]![1]}`
+  for (let i = 1; i < held.length - 1; i++) {
+    const at = held[i]!, before = held[i - 1]!, after = held[i + 1]!
+    const corner = Math.min(linkCorner, Math.hypot(at[0] - before[0], at[1] - before[1]) / 2, Math.hypot(after[0] - at[0], after[1] - at[1]) / 2)
+    line += `L${towards(at, before, corner)}Q${at[0]} ${at[1]} ${towards(at, after, corner)}`
+  }
+  const last = held.at(-1)!
+  line += `L${last[0]} ${last[1]}`
+  return { line, head: to.x >= low && to.x <= high ? `M${to.x - 5} ${to.y - 3.5}L${to.x} ${to.y}L${to.x - 5} ${to.y + 3.5}Z` : null }
+}
