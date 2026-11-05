@@ -315,6 +315,7 @@ export function opsFor(type: PropertyType): FilterOp[] {
     case 'createdTime': case 'editedTime': return ['is', 'before', 'after', 'within']
     case 'select': case 'status': return ['isAnyOf', 'isNoneOf', 'isEmpty']
     case 'relation': case 'multiSelect': return ['contains', 'doesNotContain', 'isEmpty']
+    case 'files': return ['contains', 'doesNotContain', 'isEmpty', 'isNotEmpty']
     // Read as the type it works out to (relations.ts), so it never gets here.
     case 'rollup':
     case 'formula': return []
@@ -399,7 +400,7 @@ function RuleValue({ property, condition, onChange }: { property: Property; cond
   const { op, value } = condition
   if (op === 'isEmpty' || op === 'isNotEmpty') return null
   switch (property.type) {
-    case 'text': case 'url': case 'email': case 'phone':
+    case 'text': case 'url': case 'email': case 'phone': case 'files':
       return <CommitInput key={String(value ?? '')} initial={typeof value === 'string' ? value : ''} onCommit={v => onChange(v || undefined)} />
     case 'number': case 'id':
       // An ID can be typed as it shows, "BK-12": the prefix isn't part of its number.
@@ -592,6 +593,12 @@ function LayoutPanel({ db, view, back, go }: { db: DatabasePage; view: View; bac
     {(['table', 'board', 'list', 'gallery', 'calendar', 'timeline'] as const).map(layout => <button key={layout} type="button" role="menuitemradio" aria-checked={view.layout === layout} onClick={() => pick(layout)}>{layoutLabels[layout]}{view.layout === layout && <span aria-hidden="true">✓</span>}</button>)}
     {(view.layout === 'table' || view.layout === 'board' || view.layout === 'gallery') && <label className="database-menu-row">Wrap all
       <input type="checkbox" checked={wrapsAll} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ wrapName: on, columns: columns.map(c => withWrap(c, on)) })) }} />
+    </label>}
+    {view.layout === 'gallery' && db.database.properties.some(p => p.type === 'files') && <label className="database-menu-row">Card image
+      <select aria-label="Card image" value={view.cardImage ?? ''} onChange={e => { const cardImage = e.target.value || null; changeView(() => ({ cardImage })) }}>
+        <option value="">First in the page</option>
+        {db.database.properties.filter(p => p.type === 'files').map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
     </label>}
     {!db.database.fixed && <label className="database-menu-row">Open pages in
       <select aria-label="Open pages in" value={view.openIn ?? 'page'} onChange={e => { const v = e.target.value, openIn = v === 'center' || v === 'side' ? v : null; changeView(() => ({ openIn })) }}>

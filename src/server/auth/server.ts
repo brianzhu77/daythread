@@ -275,7 +275,14 @@ export async function handleDeleteAccount(request: Request): Promise<Response> {
   if (attempt.outcome !== 'ok') return refuse(401, 'wrong')
   let login: 'deleted' | 'kept' = 'kept'
   if (config.secretKey) { try { await supabase.deleteUser(config, session.userId); login = 'deleted' } catch (error) { console.error(JSON.stringify({ level: 'error', event: 'auth.delete-login', error: error instanceof Error ? error.message : String(error) })) } }
-  return Response.json({ ok: true, login }, { headers: { ...noStore, 'set-cookie': sessionCookie(request, '', null) } })
+  // No later sweep runs for an account that's gone, so they go now, and the answer says if they didn't.
+  let files: 'deleted' | 'kept' = 'kept'
+  try {
+    const { fileStore, ownerPrefix } = await import('../file-store.ts'), store = await fileStore()
+    await store.delete((await store.list(ownerPrefix(session.userId))).map(f => f.key))
+    files = 'deleted'
+  } catch (error) { console.error(JSON.stringify({ level: 'error', event: 'auth.delete-files', error: error instanceof Error ? error.message : String(error) })) }
+  return Response.json({ ok: true, login, files }, { headers: { ...noStore, 'set-cookie': sessionCookie(request, '', null) } })
 }
 
 /**
