@@ -63,9 +63,10 @@ test('a date axis fills empty periods, by month, week, day and year, and rows wi
 test('sorting by value, and cumulative along the axis, with no cumulative when sorted', () => {
   const h = shelf()
   assert.deepEqual(pairs(of(h, view({ chart: { form: 'bar', sortByValue: true } }))).map(x => x[0]), ['Novel', 'Essay', 'No value', 'Poem'])
-  assert.deepEqual(pairs(of(h, view({ chart: { form: 'bar', cumulative: true } }))).map(x => x[1]), [2, 3, 3, 4])
+  assert.deepEqual(pairs(of(h, view({ chart: { form: 'bar', cumulative: true } }))).map(x => x[1]), [2, 3, 3, 1])
   assert.deepEqual(pairs(of(h, view({ chart: { form: 'bar', sortByValue: true, cumulative: true } }))).map(x => x[1]), [2, 1, 1, 0])
-  assert.deepEqual(pairs(of(h, view({ chart: { form: 'bar', cumulative: true, measure: { by: 'pages', kind: 'sum' } } }))).map(x => x[1]), [700, 800, 800, 800])
+  // No value keeps its own number, out of the running total (Roadbuster).
+  assert.deepEqual(pairs(of(h, view({ chart: { form: 'bar', cumulative: true, measure: { by: 'pages', kind: 'sum' } } }))).map(x => x[1]), [700, 800, 800, null])
 })
 test('a property gone asks again, and Undo or changing back restores it', () => {
   const h = shelf(), rows = () => viewRows(h.ws, 'list', view(), ctx)
@@ -86,9 +87,13 @@ test('Ratchet: by year goes through months, whatever the axis was; a hidden grou
   h.run({ type: 'add-row', databaseId: 'list', pageId: 'newyear', title: 'newyear', values: { due: { start: '2027-01-01' } } as never, at })
   assert.deepEqual(pairs(of(h, view({ groupBy: 'due', groupDateBy: 'week', chart: { form: 'bar', byYear: true } }))), [['2026', 3], ['2027', 1], ['No value', 1]])
   assert.deepEqual(pairs(of(h, view({ groupBy: 'due', hiddenGroups: ['2026-02'], filter: [{ by: 'due', op: 'before', value: { date: '2026-12-01' } }] }))).map(x => x[0]), ['January 2026', 'March 2026'])
+  // By year, a month hidden in a month view doesn't take from the year, and hiding empty groups drops an empty year (Roadbuster).
+  h.run({ type: 'add-row', databaseId: 'list', pageId: 'later', title: 'later', values: { due: { start: '2029-06-01' } } as never, at })
+  assert.deepEqual(pairs(of(h, view({ groupBy: 'due', hiddenGroups: ['2026-01'], chart: { form: 'bar', byYear: true }, filter: [{ by: 'due', op: 'isNotEmpty' }] }))), [['2026', 3], ['2027', 1], ['2028', 0], ['2029', 1]])
+  assert.deepEqual(pairs(of(h, view({ groupBy: 'due', hideEmptyGroups: true, chart: { form: 'bar', byYear: true }, filter: [{ by: 'due', op: 'isNotEmpty' }] }))).map(x => x[0]), ['2026', '2027', '2029'])
   const days = view({ groupBy: 'due', groupDateBy: 'day' }), d = chartData(h.db(), days, viewRows(h.ws, 'list', days, ctx))
   assert.ok(d && d !== 'choose'); assert.equal(d.tooMany, true)
-  assert.deepEqual(d.points.filter(p => p.value).map(p => p.key), ['2026-01-15', '2026-03-02', '2026-03-20', '2027-01-01', 'none'])
+  assert.deepEqual(d.points.filter(p => p.value).map(p => p.key), ['2026-01-15', '2026-03-02', '2026-03-20', '2027-01-01', '2029-06-01', 'none'])
 })
 test('an axis gives a year on the first label and where it changes, and thins so every label has room', () => {
   const months = ['2025-11', '2025-12', '2026-01', '2026-02'].map(key => ({ key, name: key }))
@@ -143,5 +148,6 @@ test('ticks are round, hold zero and every value', () => {
   assert.deepEqual(chartTicks([]), [0, 1])
   assert.deepEqual(chartTicks([2, 1]), [0, 1, 2])
   assert.deepEqual(chartTicks([712]), [0, 500, 1000])
+  assert.equal(new Set(chartTicks([1e-10])).size, chartTicks([1e-10]).length)
   for (const values of [[3], [0.4], [-5, 12], [1234567], [99, 100]]) { const t = chartTicks(values); assert.ok(t.includes(0)); assert.ok(t[0]! <= Math.min(...values)); assert.ok(t.at(-1)! >= Math.max(...values)) }
 })

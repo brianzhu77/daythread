@@ -54,7 +54,8 @@ export function chartData(db: Database, view: View, rows: readonly Page[], weekS
   if (settings.form === 'number') return null
   if (measure === 'gone') return 'choose'
   // By year goes through months, as a year must hold whole months: a week's key is its first day, which can be in the year before.
-  const groups = viewGroups(db, settings.byYear ? { ...view, groupDateBy: 'month' } : view, rows, undefined, weekStart)
+  // Nor can a month hidden in a month view quietly take from a year.
+  const groups = viewGroups(db, settings.byYear ? { ...view, groupDateBy: 'month', hiddenGroups: [] } : view, rows, undefined, weekStart)
   if (!groups) return 'choose'
   let shown = groups.shown.map(g => ({ key: g.key, name: g.name, rows: g.rows }))
   const dateAxis = isDateAxis(groups.property)
@@ -67,8 +68,8 @@ export function chartData(db: Database, view: View, rows: readonly Page[], weekS
       const years = new Map<string, Page[]>()
       for (const g of dated) { const y = g.key.slice(0, 4); years.set(y, [...(years.get(y) ?? []), ...g.rows]) }
       const list = [...years.keys()].sort()
-      if (list.length && Number(list.at(-1)) - Number(list[0]) < chartLimit) { filled = []; for (let y = Number(list[0]); y <= Number(list.at(-1)); y++) filled.push({ key: String(y), name: String(y), rows: years.get(String(y)) ?? [] }) }
-      else { filled = list.map(y => ({ key: y, name: y, rows: years.get(y)! })); tooMany = list.length > 1 }
+      if (list.length && !view.hideEmptyGroups && Number(list.at(-1)) - Number(list[0]) < chartLimit) { filled = []; for (let y = Number(list[0]); y <= Number(list.at(-1)); y++) filled.push({ key: String(y), name: String(y), rows: years.get(String(y)) ?? [] }) }
+      else { filled = list.map(y => ({ key: y, name: y, rows: years.get(y)! })); tooMany = !view.hideEmptyGroups && list.length > 1 }
     } else if (dated.length > 1 && !view.hideEmptyGroups) {
       // Every period between the first and the last, so a gap reads as a gap (§3), but for one he hid. A view that hides its empty groups has asked not to.
       // Past the limit it can't be drawn anyway, and only real values go to the table of data.
@@ -85,8 +86,9 @@ export function chartData(db: Database, view: View, rows: readonly Page[], weekS
   shown = shown.filter(g => g.key !== noValue || g.rows.length > 0)
   let points: ChartPoint[] = shown.map(g => { const result = chartValue(db, g.rows, measure); return { ...g, result, value: numberOf(result) } })
   if (settings.cumulative && !settings.sortByValue && (kindOf(measure) === 'countAll' || kindOf(measure) === 'sum')) {
+    // No value isn't a point along the axis: it keeps its own number, and stays out of the running total.
     let total = 0, any = false
-    points = points.map(p => { if (p.value !== null) { total += p.value; any = true } const value = any ? total : null; return { ...p, value, result: measure ? { type: 'number', value } : { type: 'count', value: value ?? 0 } } })
+    points = points.map(p => { if (p.key === noValue) return p; if (p.value !== null) { total += p.value; any = true } const value = any ? total : null; return { ...p, value, result: measure ? { type: 'number', value } : { type: 'count', value: value ?? 0 } } })
   }
   if (settings.sortByValue) points = [...points].sort((a, b) => (b.value ?? -Infinity) - (a.value ?? -Infinity))
   return { property: groups.property, points, dateAxis, tooMany: tooMany || points.length > chartLimit }
@@ -136,6 +138,6 @@ export function chartTicks(values: readonly number[], count = 3): number[] {
   const rough = (high - low) / count, power = 10 ** Math.floor(Math.log10(rough)), scaled = rough / power
   const step = (scaled <= 1 ? 1 : scaled <= 2 ? 2 : scaled <= 5 ? 5 : 10) * power
   const out: number[] = []
-  for (let n = Math.floor(low / step); n * step < high + step * 0.999; n++) out.push(Math.round(n * step * 1e9) / 1e9)
+  for (let n = Math.floor(low / step); n * step < high + step * 0.999; n++) out.push(Number((n * step).toPrecision(12)))
   return out
 }
