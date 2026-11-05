@@ -9,8 +9,8 @@ const plan = () => store().pages.find(p => p.id === 'plan').database
 const wait = ms => new Promise(r => setTimeout(r, ms))
 const browser = await pw[engine].launch({ headless: true })
 let failed = 0
-const scenario = async (name, act, options = { viewport: { width: 1280, height: 900 } }) => {
-  execSync(`rm -f ${S} ${S}-wal ${S}-shm && node --no-warnings tests/evidence/formula-dates/seed.ts ${S}`, { stdio: 'ignore' })
+const scenario = async (name, act, options = { viewport: { width: 1280, height: 900 } }, seed = '') => {
+  execSync(`rm -f ${S} ${S}-wal ${S}-shm && node --no-warnings tests/evidence/formula-dates/seed.ts ${S} ${seed}`, { stdio: 'ignore' })
   const context = await browser.newContext({ ...options, serviceWorkers: 'block' }), page = await context.newPage(), errors = []
   page.on('pageerror', e => { if (!/ResizeObserver loop/.test(e.message)) errors.push(e.message) })
   let r
@@ -65,6 +65,21 @@ await scenario('A new row on a Formula Timeline: it makes the row, sets no date 
   r.ok = r.button === 1 && r.rows === 1 && !r.values.includes('when') && !/Not saved/.test(r.notice)
   return r
 })
+await scenario('A Formula Calendar has no add on a day: the row couldn\'t land there', async page => {
+  await layout(page, 'Calendar')
+  const r = { adds: await page.locator('.database-day-add').count(), days: await page.locator('.database-calendar-day, [data-day]').count() }
+  r.ok = r.adds === 0 && r.days > 0
+  return r
+})
+await scenario('A Rollup with latest: offered, taken, on its day, read-only', async page => {
+  const r = await layout(page, 'Calendar')
+  r.notice = await notices(page); r.dateBy = plan().views[0].dateBy; r.shown = await page.getByText('Today row', { exact: true }).count(); r.adds = await page.locator('.database-day-add').count()
+  const a = await page.getByText('Today row', { exact: true }).first().boundingBox().catch(() => null)
+  if (a) { await page.mouse.move(a.x + 5, a.y + 5); await page.mouse.down(); await page.mouse.move(a.x + 120, a.y + 5, { steps: 6 }); await page.mouse.up(); await wait(800) }
+  r.after = await notices(page); r.stored = Object.keys(store().pages.find(p => p.id === 'a').values).join()
+  r.ok = r.dateBy === 'roll' && !/Not saved/.test(r.notice) && r.shown === 1 && r.adds === 0 && !/Not saved/.test(r.after) && !r.stored.includes('roll')
+  return r
+}, { viewport: { width: 1280, height: 900 } }, 'rollup')
 await scenario('390: the Timeline reads as its list, by week, with the Formula date', async page => {
   await page.locator('.database-more-button').first().click(); await wait(350)
   await menu(page).getByRole('menuitem', { name: 'Layout' }).click(); await wait(300)
