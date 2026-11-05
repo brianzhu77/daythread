@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { threadsShownOn } from '../src/domain/comments.ts'
+import { buildSearchIndex, search } from '../src/domain/search.ts'
 import { lineIdsOnPage, sharedLineId, syncedBlockType } from '../src/domain/synced.ts'
 import type { EditorNode } from '../src/domain/editor-document.ts'
 import { exportFiles } from '../src/domain/export.ts'
@@ -156,5 +157,21 @@ test('one Undo takes the anchor back with the sharing', () => {
   assert.equal(thread(h, 'sh').pageId, 'b')
   h.run({ type: 'undo', targetOperationId: receipt.operationId })
   assert.equal(thread(h, 'sh').pageId, 'a'); assert.equal(thread(h, 'sh').anchor!.blockId, 'l1'); assert.deepEqual(shownOn(h, 'c'), ['sh'])
+})
+test('its home in Trash: the other places still show it, and search opens the first of them (Bumblebee)', () => {
+  const h = shared()
+  h.run({ type: 'delete-page', pageId: 'a', at } as never)
+  assert.deepEqual(shownOn(h, 'b'), ['sh'])
+  const hit = search(buildSearchIndex(h.ws), 'shared line').comments.find(c => c.threadId === 'sh')
+  assert.equal(hit?.page.id, 'b')
+})
+test('every place in Trash: it comes back with whichever is restored first', () => {
+  const h = shared()
+  const trash = (id: string) => h.run({ type: 'delete-page', pageId: id, at } as never)
+  trash('a'); const last = trash('b'); trash('c')
+  assert.equal(thread(h, 'sh').comments.length, 1)
+  void last
+  h.run({ type: 'restore-page', pageId: 'c' } as never)
+  assert.deepEqual(shownOn(h, 'c'), ['sh'])
 })
 

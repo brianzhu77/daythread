@@ -1,6 +1,6 @@
 import { Fragment, Slice } from '@tiptap/pm/model'
 import { quoteLimit, threadsShownOn, type CommentAnchor } from '../domain/comments'
-import { commentUnderlines, selectedWords, underlineKey } from './comment-underlines'
+import { commentUnderlines, firstSelectedLine, selectedWords, underlineKey } from './comment-underlines'
 import { CommentMarks } from './comment-marks'
 import { openComments } from './comments-pane'
 import { NodeSelection, Selection, TextSelection, type Transaction } from '@tiptap/pm/state'
@@ -2550,7 +2550,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   }
   /** Step 3: the selected words of a line, or if a selection runs across lines, the first of them. */
   function commentOnSelection() {
-    const words = selectedWords(editor.prosemirrorState), id = words?.blockId ?? selected.current[0] ?? editor.getTextCursorPosition().block.id
+    const words = selectedWords(editor.prosemirrorState), id = words?.blockId ?? selected.current[0] ?? firstSelectedLine(editor.prosemirrorState) ?? editor.getTextCursorPosition().block.id
     if (!canComment(id)) { openComments(page.id, { composing: true }); return }
     const block = editor.getBlock(id) as unknown as EditorNode | undefined
     if (!words || !block) { commentOn(id); return }

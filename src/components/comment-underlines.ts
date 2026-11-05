@@ -54,6 +54,13 @@ export const commentUnderlines = (anchors: () => readonly CommentAnchor[]) => cr
     },
   })],
 })
+/** The first line of a selection in the document's order, whichever way it was dragged. */
+export function firstSelectedLine(state: EditorState): string | null {
+  const { empty, $from } = state.selection
+  if (empty) return null
+  for (let depth = $from.depth; depth > 0; depth--) if ($from.node(depth).type.name === 'blockContainer') return String($from.node(depth).attrs.id)
+  return null
+}
 /** The selected words of one line, with their place in it. Null with nothing selected, or a selection across lines, which goes on its first line whole. */
 export function selectedWords(state: EditorState): { blockId: string; quote: string; at: number } | null {
   const { from, to, empty, $from, $to } = state.selection

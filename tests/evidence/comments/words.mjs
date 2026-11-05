@@ -43,6 +43,14 @@ await page.reload(); await page.locator('.bn-editor').first().waitFor({ timeout:
 await line.evaluate(n => { const text = document.createTreeWalker(n, NodeFilter.SHOW_TEXT).nextNode(), r = document.createRange(); r.setStart(text, 0); r.setEnd(text, 0); const s = getSelection(); s.removeAllRanges(); s.addRange(r) }); await wait(300); await page.keyboard.type('X '); await wait(2600)
 check(notes().document.includes('X A line'), 'typed before them'); check(await under.count() === 0, 'with the words moved, no underline, and none on the wrong words', await under.allInnerTexts()); check(await mark.count() === 1, 'the mark stays'); await shot('fallback')
 await (wide ? mark.click() : mark.tap()); await wait(400); check((await pane.locator('.comment-quote').first().innerText()) === 'notes', 'and the pane keeps what was quoted', await pane.locator('.comment-quote').allInnerTexts())
+// A selection across lines, dragged backwards: on the first line in the document's order (Ratchet).
+if (wide) {
+  await pane.getByRole('button', { name: 'Close comments' }).click(); await wait(300)
+  await line.evaluate(n => { const text = document.createTreeWalker(n, NodeFilter.SHOW_TEXT).nextNode(), r = document.createRange(); r.setStart(text, text.length); r.setEnd(text, text.length); const s = getSelection(); s.removeAllRanges(); s.addRange(r) }); await wait(200); await page.keyboard.press('Enter'); await page.keyboard.type('A second line'); await wait(2600)
+  const second = page.locator('.bn-inline-content', { hasText: 'A second line' }).first()
+  await page.evaluate(() => { const lines = [...document.querySelectorAll('.bn-inline-content')].filter(n => /X A line|A second line/.test(n.textContent)), first = document.createTreeWalker(lines[0], NodeFilter.SHOW_TEXT).nextNode(), last = document.createTreeWalker(lines[1], NodeFilter.SHOW_TEXT).nextNode(), s = getSelection(); s.removeAllRanges(); s.setBaseAndExtent(last, last.length, first, 2) }); await wait(400); void second
+  await page.keyboard.press(`${mod}+Shift+M`); await wait(450); const q = await pane.locator('.comment-quote.is-composing').innerText().catch(() => ''); check(q.startsWith('X A line'), 'a backwards selection across lines goes on the first of them', q)
+}
 check(errors.length === 0, 'no page errors', errors.slice(0, 3))
 console.log(`[comments words ${engine} ${width}] fail ${fails}`)
 await browser.close(); process.exit(fails ? 1 : 0)
