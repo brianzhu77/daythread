@@ -1,6 +1,6 @@
 // Moving a row to another database (docs/design/move-row.md). Not `move-page`: a row's values are keyed by its database's property ids,
 // so they have to be read across, by name and type. The page keeps its id, so links, line links and its body need nothing.
-import { changeDatabase, isReadOnly, rowNumberKey, syncMirror, type Database, type Json, type Option, type Property } from './database.ts'
+import { changeDatabase, isReadOnly, readValue, rowNumberKey, syncMirror, type Database, type Json, type Option, type Property } from './database.ts'
 import { descendantsOf, parentIdOf } from './sub-items.ts'
 import type { Page, Workspace } from './types.ts'
 
@@ -54,7 +54,9 @@ function work(ws: Workspace, row: Page, from: DatabasePage, to: DatabasePage, tr
     const match = to.database.properties.find(x => fold(x.name) === fold(p.name) && x.type === p.type && !isReadOnly(x))
     if (!match || (p.type === 'relation' && match.target !== p.target)) { out.leftBehind.push(p.name); continue }
     if (!hasOptions(p)) { out.carried.push({ from: p, to: match }); continue }
-    const names = (Array.isArray(raw) ? raw as string[] : [raw as string]).flatMap(id => p.options?.find(o => o.id === id) ?? [])
+    // As it reads, as the row may still hold the words a Text property's option was made from.
+    const read = readValue(p, raw)
+    const names = (Array.isArray(read) ? read as string[] : read === null ? [] : [read as string]).flatMap(id => p.options?.find(o => o.id === id) ?? [])
     const added = adding.get(match.id) ?? new Set<string>()
     const add = names.filter(o => !match.options?.some(x => fold(x.name) === fold(o.name)) && !added.has(fold(o.name)))
     if (add.length > optionLimit - (match.options?.length ?? 0) - added.size) { out.leftBehind.push(p.name); continue }
@@ -122,8 +124,8 @@ function moveOne(ws: Workspace, row: Page, from: DatabasePage, to: DatabasePage,
   }
   const values: Record<string, Json> = {}
   for (const { from: p, to: q, add } of carried) {
-    const raw = row.values![p.id]!
-    if (!hasOptions(p)) { values[q.id] = raw; continue }
+    if (!hasOptions(p)) { values[q.id] = row.values![p.id]!; continue }
+    const raw = readValue(p, row.values![p.id]) as Json
     for (const option of add ?? []) {
       const groups = new Set(q.options?.map(o => o.group))
       q.options = [...(q.options ?? []), { id: newId(), name: option.name, ...(q.type === 'status' ? { group: option.group && groups.has(option.group) ? option.group : 'todo' as const } : {}) }]

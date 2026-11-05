@@ -20,6 +20,8 @@ export const newTodoRowId = todoRowId('new')
 
 export const todoStatus = { id: 'status', open: 'open', done: 'done', paused: 'paused', cancelled: 'cancelled' } as const
 const planned = 'planned', start = 'start', deadline = 'deadline', page = 'page'
+/** What several to-dos can change at once (R4-17, §11). Their words are each their own. */
+export const todoBarColumns: ReadonlySet<string> = new Set([todoStatus.id, planned, start, deadline])
 const properties: Property[] = [
   { id: todoStatus.id, name: 'Status', type: 'status', options: [
     { id: todoStatus.open, name: 'Open', group: 'todo' },

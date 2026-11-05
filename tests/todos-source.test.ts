@@ -1,13 +1,14 @@
 // To-dos as a source (design §11, R2-8, R2-9, R2-11): his tasks read as a database's rows, and an edit is the task's own command.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { cellValue, databaseRows, newRowValues, viewRows } from '../src/domain/database.ts'
+import { cellValue, databaseRows, limits, newRowValues, viewRows } from '../src/domain/database.ts'
 import { buildSearchIndex, search } from '../src/domain/search.ts'
 import { exportFiles } from '../src/domain/export.ts'
 import { listedPages } from '../src/domain/page-tree.ts'
 import { newTodo, todoChange, todoMoves, todoLine, todoRowId, todosDatabase, todosSourceId, withTodos } from '../src/domain/todos-source.ts'
 import type { Page } from '../src/domain/types.ts'
 import { draftView } from '../src/domain/day-draft.ts'
+import { commandSchema } from '../src/domain/command-schema.ts'
 import { dayId, harness, heading, nodesOf, todo, today, tomorrow } from './v2-helpers.ts'
 
 const context = { today, pageDate: null }
@@ -133,3 +134,100 @@ test('R3-13: a drag across Status and Planned sends only what a to-do can hold',
   h.run({ type: 'not-today', taskId: task.id, date: '2026-11-03' })
   assert.deepEqual(ids([status('open'), day]), ['planned'], 'planning a paused to-do opens it')
 })
+
+// R4-17: several to-dos in one change.
+const tid = (id: string) => `editor-task:${id}`
+function several() {
+  const h = harness()
+  h.day(today)
+  h.save(dayId(today), d => [...d, todo('a', 'A'), todo('b', 'B'), todo('c', 'C')])
+  const task = (id: string) => h.ws.tasks.find(t => t.id === tid(id))!
+  const edit = (items: Array<{ taskId: string; changes: Array<{ columnId: string; value: unknown }> }>) => h.run({ type: 'edit-todos', items: items.map(i => ({ ...i, taskId: tid(i.taskId) })), today } as never)
+  // Without `h.day`, which is a command and would take the Undo slot. A new day's own empty first to-do isn't one of these.
+  const lines = (date: string) => { const p = h.ws.pages.find(x => x.id === dayId(date)); return (p ? nodesOf(p) : []).filter(n => n.type === 'task').map(n => String(n.props?.taskId).replace('editor-task:', '')).filter(id => ['a', 'b', 'c'].includes(id)) }
+  return { h, task, edit, lines }
+}
+const all = (s: ReturnType<typeof several>, columnId: string, value: unknown, taskIds = ['a', 'b', 'c']) => s.edit(taskIds.map(taskId => ({ taskId, changes: [{ columnId, value }] })))
+test('edit-todos: status across several, in one change, and one Undo takes all of it back', () => {
+  const s = several()
+  const before = structuredClone(s.h.ws.tasks)
+  const r = all(s, 'status', 'done')
+  assert.equal(r.receipt.message, '3 to-dos changed')
+  for (const id of ['a', 'b', 'c']) { assert.equal(s.task(id).status, 'done'); assert.equal(s.task(id).doneOn, today) }
+  s.h.run({ type: 'undo', targetOperationId: r.receipt.operationId })
+  assert.deepEqual(s.h.ws.tasks, before)
+})
+test('edit-todos: Planned moves each line and keeps it, Start and Deadline set and clear, and Undo brings every page back', () => {
+  const s = several()
+  const before = s.lines(today)
+  const r = all(s, 'planned', { start: tomorrow })
+  assert.equal(r.receipt.message, '3 to-dos changed')
+  assert.deepEqual(s.lines(tomorrow).sort(), ['a', 'b', 'c'])
+  s.h.run({ type: 'undo', targetOperationId: r.receipt.operationId })
+  assert.deepEqual(s.lines(today), before)
+  all(s, 'deadline', { start: tomorrow })
+  assert.deepEqual(['a', 'b', 'c'].map(id => s.task(id).deadlineOn), [tomorrow, tomorrow, tomorrow])
+  all(s, 'deadline', null)
+  assert.equal(s.task('a').deadlineOn, null)
+  all(s, 'start', { start: tomorrow })
+  assert.equal(s.task('c').attentionOn, tomorrow)
+})
+test('edit-todos: each ends as if edited alone: planning a paused one opens it, a finished one says it couldn\'t, a cancelled one stays', () => {
+  const s = several()
+  s.h.run({ type: 'not-today', taskId: tid('a'), date: today })
+  assert.equal(s.task('a').paused, true)
+  s.h.run({ type: 'task-status', taskId: tid('b'), status: 'done', today })
+  s.h.run({ type: 'task-status', taskId: tid('c'), status: 'cancelled' })
+  const r = all(s, 'planned', { start: tomorrow })
+  assert.equal(r.receipt.message, "1 to-do changed · 2 couldn't")
+  assert.equal(s.task('a').paused, false)
+  assert.deepEqual(s.lines(tomorrow), ['a'])
+  assert.equal(s.task('b').status, 'done')
+  assert.equal(s.task('c').status, 'cancelled')
+})
+test('edit-todos: already that way isn\'t a change and isn\'t a failure; a gone task couldn\'t; nothing changing refuses and leaves Undo', () => {
+  const s = several()
+  s.h.run({ type: 'task-status', taskId: tid('a'), status: 'done', today })
+  assert.equal(all(s, 'status', 'done').receipt.message, '2 to-dos changed')
+  const last = s.h.ws.undo?.operationId
+  assert.throws(() => all(s, 'status', 'done'), /Nothing to change/)
+  assert.equal(s.h.ws.undo?.operationId, last, 'the slot stays')
+  assert.throws(() => all(s, 'planned', { start: tomorrow }), /Reopen it first/)
+  const fresh = several()
+  assert.equal(fresh.edit([{ taskId: 'a', changes: [{ columnId: 'status', value: 'done' }] }, { taskId: 'gone', changes: [{ columnId: 'status', value: 'done' }] }]).receipt.message, "1 to-do changed · 1 couldn't")
+  assert.throws(() => fresh.edit([{ taskId: 'gone', changes: [{ columnId: 'status', value: 'done' }] }]), /gone/)
+})
+test('edit-todos: #92\'s exception in one command: a finished one to Open on a day, with one Undo', () => {
+  const s = several()
+  s.h.run({ type: 'task-status', taskId: tid('a'), status: 'done', today })
+  const before = structuredClone(s.task('a'))
+  const r = s.edit([{ taskId: 'a', changes: [{ columnId: 'status', value: 'open' }, { columnId: 'planned', value: { start: tomorrow } }] }])
+  assert.equal(r.receipt.message, '1 to-do changed')
+  assert.equal(s.task('a').status, 'open')
+  assert.deepEqual(s.lines(tomorrow), ['a'])
+  s.h.run({ type: 'undo', targetOperationId: r.receipt.operationId })
+  assert.deepEqual(s.task('a'), before)
+  assert.equal(s.lines(tomorrow).includes('a'), false)
+})
+test('edit-todos: only the bar\'s columns, each task once, up to the limit, and the schema agrees', () => {
+  const s = several()
+  assert.throws(() => all(s, 'title', 'New words'), /Invalid to-dos/)
+  assert.throws(() => s.edit([{ taskId: 'a', changes: [{ columnId: 'status', value: 'done' }] }, { taskId: 'a', changes: [{ columnId: 'status', value: 'open' }] }]), /Invalid to-dos/)
+  assert.throws(() => s.edit([]), /Invalid to-dos/)
+  assert.throws(() => s.edit([{ taskId: 'a', changes: [{ columnId: 'status', value: 'done' }] }, { taskId: 'b', changes: [{ columnId: 'planned', value: { start: '2026-13-45' } }] }]))
+  assert.deepEqual(['a', 'b', 'c'].map(id => s.task(id).status), ['open', 'open', 'open'], 'a refusal changes nothing')
+  const parse = (items: unknown[]) => commandSchema.safeParse({ operationId: 'o', expectedRevision: 0, action: { type: 'edit-todos', items, today } }).success
+  assert.ok(parse([{ taskId: 'a', changes: [{ columnId: 'status', value: 'done' }] }]))
+  assert.ok(parse([{ taskId: 'a', changes: [{ columnId: 'deadline', value: null }] }]))
+  assert.equal(parse([]), false)
+  // The limit is To-dos' own, not rows': the schema and the command agree on it, at the boundary.
+  const items = (length: number, first = 't') => Array.from({ length }, (_, n) => ({ taskId: n === 0 ? first : `t${n}`, changes: [{ columnId: 'status', value: 'done' }] }))
+  assert.equal(limits.todosAtOnce, 500)
+  assert.ok(limits.todosAtOnce < limits.rowsAtOnce)
+  assert.ok(parse(items(limits.todosAtOnce)))
+  assert.equal(parse(items(limits.todosAtOnce + 1)), false)
+  assert.throws(() => s.edit(items(limits.todosAtOnce + 1, 'a')), /Invalid to-dos/)
+  s.edit(items(limits.todosAtOnce, 'a'))
+  assert.equal(s.task('a').status, 'done', 'at the limit it goes through, and the ones that are gone just couldn\'t')
+})
+
