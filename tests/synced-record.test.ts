@@ -471,10 +471,21 @@ test('moving the home line out of the block on the original keeps it the home (B
 })
 test('deleting the original: the database stays as a full page, and the other places keep a view of it (B21-11)', () => {
   const h = withDatabase()
-  h.run({ type: 'delete-synced-place', pageId: 'a', blockId: 'sa' })
+  const gone = h.run({ type: 'delete-synced-place', pageId: 'a', blockId: 'sa' })
   assert.equal(h.page('db').trashedAt ?? null, null)
   assert.equal(h.page('db').database!.homeBlockId, null)
   assert.equal(flatNodes(pageNodes(h.page('b'))).find(n => n.type === 'database')?.props?.pageId, 'db')
+  h.run({ type: 'undo', targetOperationId: gone.receipt.operationId })
+  assert.equal(holder(h, 'home'), true, 'Undo on the notice puts it all back, the home with it')
+})
+test('a page\'s Undo of the line taken from a copy brings it back as a view; the rows were never touched (B21-11)', () => {
+  const h = withDatabase()
+  const before = pageNodes(h.page('b'))
+  h.save('b', nodes => nodes.map(n => n.type === syncedBlockType ? { ...n, children: n.children!.filter(c => c.type !== 'database') } : n))
+  h.save('b', () => before.map(n => ({ ...n, props: { ...n.props, rev: h.ws.synced![0]!.rev, key: blockOf(h.page('b')).props!.key } })))
+  assert.equal(h.page('db').database!.homeBlockId, null)
+  assert.equal(flatNodes(pageNodes(h.page('a'))).find(n => n.type === 'database')?.props?.pageId, 'db', 'on the original, as a view')
+  assert.equal(h.page('r1').trashedAt ?? null, null)
 })
 test('deleting a copy place leaves the home alone (B21-11)', () => {
   const h = withDatabase()
