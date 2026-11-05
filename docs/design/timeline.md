@@ -93,7 +93,8 @@ Add to R4-1 and R4-2 when built:
 ## 10. As built, step 2 (Jazz)
 
 - **The table:** `«` and `»` beside the scale, saved on the view. It shows Name and the view's properties, and it's pinned, so a row and its bar stay on one line and scroll as one. A tap on a cell edits it, as in a table.
-- **It takes at most 60% of the width,** so the bars keep room. Columns past that aren't drawn: the head says "· 3 more", which opens Properties. **Not as Notion:** its table scrolls on its own, and I didn't build that first.
+- **It takes at most 60% of the width,** so the bars keep room. Past that its columns scroll on their own under Name, as Notion's do: by the thin bar under the head, a sideways scroll over the table, or a cell reached by a key. A fade on the right says there's more. A scroll over the table doesn't move the bars, and where it was left isn't kept.
+- **Rows move up and down** by the handle at the start of a line, with the table open or closed, when the view isn't sorted. Closed, the handle stays at the left of what's in view, over the bars, and a name off-screen sits just after it.
 - **Calculations** sit at the table's foot, each group with its own, as a table's do. `⋯` → Calculate shows only while the table does.
 - **Rows up and down** drag by the table's handle when the view isn't sorted, across groups too. With the table closed there's no handle: a bar's drag is along the scale.
 - **Group** works as in a list: a section each, its fold, its cap and its `+ New`. Rows with no dates stay on the one "No date" line, not in their groups.

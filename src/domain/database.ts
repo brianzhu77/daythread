@@ -645,7 +645,7 @@ function compareValues(property: Property, a: CellValue, b: CellValue): number {
   }
 }
 /** The rows a view shows: live rows, filtered (all conditions), then sorted by each key in turn; empty last; ties keep page order. */
-/** Layouts with no room for a tree: unless it's flat, a parent carries its sub-items on its card (sub-items design §2). A Timeline lists them flat for now: nesting its bars isn't built yet. */
+/** Layouts with no room for a tree: unless it's flat, a parent carries its sub-items on its card (sub-items design §2). A Timeline nests at 1280, and lists them by week at 390. */
 export const showsSubItemsOnCards = (db: Database, view: Pick<View, "layout" | "subItemsDisplay">): boolean =>
   Boolean(db.subItems) && view.layout !== "table" && view.layout !== "list" && view.layout !== "timeline" && view.subItemsDisplay !== "flat";
 /** Parents only, or sub-items only. A row whose parent has gone reads as a parent. */
