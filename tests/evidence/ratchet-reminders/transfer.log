@@ -1,0 +1,19 @@
+{"movedSubscriptionSince":"2026-10-28T08:00:00.000Z","newWorkspaceSignup":"2026-11-05T05:39:26.780Z","earlierEventSent":1}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: a device signing up on another workspace must start clean
+
+1 !== 0
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-reminders/tests/evidence/ratchet-reminders/transfer.ts:1:1949 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 1,
+  expected: 0,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1

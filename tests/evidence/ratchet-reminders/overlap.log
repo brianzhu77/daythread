@@ -1,0 +1,19 @@
+{"sendCalls":2,"keys":["event@1793178000000","event@1793178000000"]}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: overlapping ticks must not both send the same event
+
+2 !== 1
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-reminders/tests/evidence/ratchet-reminders/overlap.ts:1:1666 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 2,
+  expected: 1,
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
