@@ -8,6 +8,7 @@ import type { LocalDate, Page, Workspace } from '../domain/types'
 import { fromIso, longLabel, todayIso } from './dates'
 import { ChevronRightIcon, PageEmoji, PageKindIcon, PagesIcon } from './icons'
 import { openIconPicker } from './icon-picker'
+import { coverCanMove, openCoverPanel, startReposition, useCoverCanMove } from './page-cover'
 import { NewPageMenu } from './new-page-menu'
 import { displayPageTitle } from './page-title'
 import { RowMenu } from './row-menu'
@@ -146,11 +147,19 @@ export function dayMenuGroups(workspace: Workspace, page: Page, deletePage: () =
   return hasContent(page) || childPages(workspace, page.id).length > 0 ? [lookItems(page), { items: [{ label: 'Delete', danger: true, onSelect: deletePage }] }] : null
 }
 /** ⋯'s way to an icon (icons-covers.md §1). Once there is one, a tap on it opens the same picker, with Remove. */
-const lookItems = (page: Pick<Page, 'id' | 'icon'>) => ({ items: [{ label: page.icon ? 'Change icon' : 'Add icon', onSelect: () => openIconPicker(page.id, document.querySelector('.page-more')) }] })
+const lookItems = (page: Pick<Page, 'id' | 'icon' | 'cover'>) => {
+  const anchor = () => document.querySelector('.peek .page-more') ?? document.querySelector('.page-more')
+  return { items: [
+    { label: page.icon ? 'Change icon' : 'Add icon', onSelect: () => openIconPicker(page.id, anchor()) },
+    { label: page.cover ? 'Change cover' : 'Add cover', onSelect: () => openCoverPanel(page.id, anchor()) },
+    ...(page.cover && coverCanMove(page.id) ? [{ label: 'Reposition', onSelect: () => startReposition(page.id) }] : []),
+  ] }
+}
 
 /** ⋯ on a document page: Move to…, then Delete after a divider (A4 layout §1). A day's is in its header (`dayMenuGroups`). */
 /** `inPeek`: the row's menu in a peek stays in it: a copy opens there, and a row deleted closes it, with the view behind where it was. */
 export function PageMenu({ page, fromBookmarks = false, inPeek }: { page: Page; fromBookmarks?: boolean; inPeek?: (rowId: string | null) => void }) {
+  useCoverCanMove(page.id)
   const [moving, setMoving] = useState(false)
   const deletePage = useDeletePage()
   const { workspace, run } = useWorkspace()

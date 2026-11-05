@@ -5,6 +5,7 @@ import { longLabel } from './dates'
 import { ContinuousPage } from './continuous-page'
 import { dayMenuGroups, LinkedFrom, Subpages } from './page-tree'
 import { PageIconLine } from './icon-picker'
+import { PageCover, useCoverCanMove } from './page-cover'
 import { RowMenu } from './row-menu'
 import { useDeletePage, useRestore, useRunFromButton } from './trash'
 import { FactsStrip } from './facts-strip'
@@ -19,6 +20,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
   const { run } = useWorkspace()
   const { view, workspace } = useDay(date)
   const page = view?.page ?? null
+  useCoverCanMove(page?.id ?? '')
   const deletePage = useDeletePage()
   const restore = useRestore()
   const runFromButton = useRunFromButton()
@@ -60,6 +62,7 @@ export function DayScreen({ date, today }: { date: LocalDate; today: LocalDate }
 
   return (
     <div className="day-screen">
+      {page && <PageCover page={page} place="day" />}
       {page && <PageIconLine page={page} />}
       <DayHeader date={date} today={today} menu={menuGroups && <RowMenu label="Day actions" triggerClass="page-more" groups={menuGroups} />} />
       {page && <LinkedFrom page={page} workspace={workspace} />}

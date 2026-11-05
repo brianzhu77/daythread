@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { elementScroller, EditorScrollerContext, windowScroller } from './editor-scope'
 import { ArrowLeftIcon, ArrowRightIcon, CloseIcon, ExternalIcon } from './icons'
 import { displayPageTitle } from './page-title'
+import { PageCover } from './page-cover'
 import { noteOpenedHere, peekFloor, peekOpenedHere, peekOrder, sideFloor } from './peek-state'
 import { PageMenu, PagePath } from './page-tree'
 import { PageContent } from './pages-screen'
@@ -132,7 +133,7 @@ function Peek({ rowId, side }: { rowId: string; side: boolean }) {
       </header>
       <div className="peek-body">
         {/* A new row is a new editor: what's typed in the last one goes with its leaving save. */}
-        <EditorScrollerContext.Provider key={rowId} value={scroller}><PageContent page={row} workspace={workspace!} /></EditorScrollerContext.Provider>
+        <EditorScrollerContext.Provider key={rowId} value={scroller}><PageCover page={row} place="peek" /><PageContent page={row} workspace={workspace!} /></EditorScrollerContext.Provider>
       </div>
     </div>
   </div>

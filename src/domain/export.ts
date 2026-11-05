@@ -66,7 +66,7 @@ export function pageMarkdown(p: Page, ws: Workspace, names: Map<string, string>)
   const title = p.type === 'daily' && p.date ? p.date : p.title || 'Untitled'
   const body = [p.url ? `<${p.url}>` : '', isDatabase(p) ? databaseMarkdown(ws, p, names) : '', blocksMarkdown(editorSeed(p, ws), ws, names)].filter(Boolean).join('\n\n')
   // Before the heading, so the title stays words.
-  return `${front.join('\n')}\n\n${p.icon ? `${p.icon}\n\n` : ''}# ${title}\n${body ? `\n${body}\n` : ''}`
+  return `${front.join('\n')}\n\n${p.cover ? `![](${p.cover})\n\n` : ''}${p.icon ? `${p.icon}\n\n` : ''}# ${title}\n${body ? `\n${body}\n` : ''}`
 }
 
 export function blocksMarkdown(nodes: EditorNode[], ws: Workspace, names: Map<string, string>): string {
