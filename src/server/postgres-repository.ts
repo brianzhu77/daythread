@@ -10,7 +10,7 @@ import { todayIn, type ServerRepository } from './repository.ts'
 import type { SqlClient } from './db/sql.ts'
 import { commandLogFields, debugLog } from './debug-log.ts'
 import { currentOwner } from './auth/request-owner.ts'
-import { applyDiff, planWrites, rowsOf, workspaceOf, type DeletedRow, type PageRow, type RowDiff, type Rows, type TaskRow } from './workspace-rows.ts'
+import { applyDiff, planWrites, rowsOf, workspaceOf, type DeletedRow, type ThreadRow, type PageRow, type RowDiff, type Rows, type TaskRow } from './workspace-rows.ts'
 
 export function schemaName(value = process.env.DAYTHREAD_PG_SCHEMA ?? 'daythread'): string {
   if (!/^[a-z_][a-z0-9_]{0,62}$/.test(value)) throw new Error('DAYTHREAD_PG_SCHEMA must be a lowercase SQL identifier')
@@ -26,6 +26,7 @@ export const pruneEvery = 25
 interface Scope extends WorkspaceInfo { userId: string | null }
 
 const upsertBatch = 500
+const threadColumns = ['id', 'page_id', 'version', 'created_at', 'resolved_at', 'comments'] as const
 const pageColumns = ['id', 'position', 'type', 'date', 'title', 'url', 'parent_id', 'trashed_at', 'trash_id', 'document', 'handoff_done', 'review_saved', 'database_json', 'row_values', 'created_at', 'edited_at'] as const
 /** Columns added to `pages` after its first release (databases): added on start when missing, before any build writes them. */
 const addedPageColumns = ['database_json', 'row_values', 'created_at', 'edited_at'] as const
@@ -58,7 +59,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
         where n.nspname = $1 and c.relname = $2 and a.attnum > 0 and not a.attisdropped`, [this.schema, table])).map(r => r.attname)
     const complete = async (sql: SqlClient) => {
       const have = await tables(sql)
-      if (!['workspaces', 'pages', 'tasks', 'deleted_tasks', 'operations'].every(t => have.includes(t)) || have.includes('workspace')) return false
+      if (!['workspaces', 'pages', 'tasks', 'deleted_tasks', 'operations', 'comment_threads'].every(t => have.includes(t)) || have.includes('workspace')) return false
       const columns = await columnsOf(sql, 'pages')
       return addedPageColumns.every(c => columns.includes(c)) && (await columnsOf(sql, 'workspaces')).includes('week_start')
     }
@@ -99,6 +100,12 @@ export class PostgresWorkspaceRepository implements ServerRepository {
             primary key (workspace_id, id)
           );
           alter table ${s}.deleted_tasks enable row level security;
+          create table if not exists ${s}.comment_threads (
+            workspace_id uuid not null references ${s}.workspaces (id) on delete cascade,
+            id text not null, page_id text not null, version integer not null, created_at text not null, resolved_at text, comments text not null,
+            primary key (workspace_id, id)
+          );
+          alter table ${s}.comment_threads enable row level security;
           create table if not exists ${s}.operations (
             workspace_id uuid not null references ${s}.workspaces (id) on delete cascade,
             operation_id text not null, revision integer not null, type text not null, receipt json not null, inverse json,
@@ -207,12 +214,13 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     return { ...row, userId: owner }
   }
   private async readRows(tx: SqlClient, scope: Scope): Promise<Rows> {
-    const [pages, tasks, deleted] = await Promise.all([
+    const [pages, tasks, deleted, threads] = await Promise.all([
       tx.query<PageRow>(`select ${pageColumns.join(', ')} from ${this.t('pages')} where workspace_id = $1::uuid order by position`, [scope.id]),
       tx.query<TaskRow>(`select ${taskColumns.join(', ')} from ${this.t('tasks')} where workspace_id = $1::uuid order by position`, [scope.id]),
       tx.query<DeletedRow>(`select id, position, data::text as data from ${this.t('deleted_tasks')} where workspace_id = $1::uuid order by position`, [scope.id]),
+      tx.query<ThreadRow>(`select ${threadColumns.join(', ')} from ${this.t('comment_threads')} where workspace_id = $1::uuid`, [scope.id]),
     ])
-    return { revision: scope.revision, timezone: scope.timezone, weekStart: scope.weekStart, pages, tasks, deleted }
+    return { revision: scope.revision, timezone: scope.timezone, weekStart: scope.weekStart, pages, tasks, deleted, threads }
   }
   /** The Undo marker: the newest operation, when it has an inverse and nothing came after it. */
   private async undoMarker(tx: SqlClient, scope: Scope): Promise<Workspace['undo']> {
@@ -240,6 +248,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     await upsert('pages', pageColumns, diff.pages.upsert); await remove('pages', diff.pages.remove)
     await upsert('tasks', taskColumns, diff.tasks.upsert); await remove('tasks', diff.tasks.remove)
     await upsert('deleted_tasks', deletedColumns, diff.deleted.upsert); await remove('deleted_tasks', diff.deleted.remove)
+    if (diff.threads) { await upsert('comment_threads', threadColumns, diff.threads.upsert); await remove('comment_threads', diff.threads.remove) }
   }
   /** Operations older than `operationKeepMs` go, except the newest of the workspace (the Undo marker). */
   async pruneOperations(tx: SqlClient, workspaceId: string, now: Date): Promise<void> {

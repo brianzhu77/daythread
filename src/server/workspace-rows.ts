@@ -2,6 +2,7 @@
 // its rows with their positions; a command's result is turned back into rows, and the difference is what gets written,
 // with the rows as they were as the operation's inverse (what Undo puts back). The domain never sees positions.
 import { expandedWorkspace, storedDocument, type SyncedRecord } from '../domain/synced.ts'
+import type { CommentThread } from '../domain/comments.ts'
 import type { Page, Task, Workspace, WeekStart } from '../domain/types.ts'
 
 export interface PageRow {
@@ -16,11 +17,13 @@ export interface TaskRow {
 }
 /** A tombstone, kept as the task's exact JSON. */
 export interface DeletedRow { id: string; position: number; data: string }
+/** A thread of comments: its own table, which no save of a page touches and an older build never reads. */
+export interface ThreadRow { id: string; page_id: string; version: number; created_at: string; resolved_at: string | null; comments: string }
 
-export interface Rows { revision: number; timezone: string; /** Absent or 0: Sunday. */ weekStart?: WeekStart; pages: PageRow[]; tasks: TaskRow[]; deleted: DeletedRow[] }
+export interface Rows { revision: number; timezone: string; /** Absent or 0: Sunday. */ weekStart?: WeekStart; pages: PageRow[]; tasks: TaskRow[]; deleted: DeletedRow[]; threads: ThreadRow[] }
 export interface RowSet<R extends { id: string }> { upsert: R[]; remove: string[] }
 /** What a save writes, or what an Undo puts back: rows whole, by id, plus the time zone when it changed. */
-export interface RowDiff { timezone?: string; weekStart?: WeekStart; pages: RowSet<PageRow>; tasks: RowSet<TaskRow>; deleted: RowSet<DeletedRow> }
+export interface RowDiff { timezone?: string; weekStart?: WeekStart; pages: RowSet<PageRow>; tasks: RowSet<TaskRow>; deleted: RowSet<DeletedRow>; /** Absent in an inverse written by a build before comments. */ threads?: RowSet<ThreadRow> }
 
 /** A text column refuses U+0000; the domain drops it on the way in, and rows written from older data drop it here. */
 const clean = (s: string): string => s.includes('\u0000') ? s.replace(/\u0000/g, '') : s
@@ -52,6 +55,8 @@ const deletedRow = (t: Task, position: number): DeletedRow => ({ id: t.id, posit
 const byPosition = <R extends { position: number }>(rows: R[]): R[] => [...rows].sort((a, b) => a.position - b.position)
 
 /** The workspace the domain works on, from its rows: receipts and the Undo marker are the store's to add. */
+const threadRow = (t: CommentThread): ThreadRow => ({ id: t.id, page_id: t.pageId, version: t.version, created_at: t.createdAt, resolved_at: t.resolvedAt ?? null, comments: JSON.stringify(t.comments) })
+const threadOf = (r: ThreadRow): CommentThread => ({ id: r.id, pageId: r.page_id, version: r.version, createdAt: r.created_at, ...(r.resolved_at ? { resolvedAt: r.resolved_at } : {}), comments: JSON.parse(r.comments) as CommentThread['comments'] })
 export function workspaceOf(rows: Rows): Workspace {
   const sorted = byPosition(rows.pages), synced = sorted.filter(r => r.type === 'synced').map(recordOf)
   return expandedWorkspace({
@@ -59,6 +64,7 @@ export function workspaceOf(rows: Rows): Workspace {
     ...(synced.length ? { synced } : {}),
     pages: sorted.filter(r => r.type !== 'synced').map(pageOf), tasks: byPosition(rows.tasks).map(taskOf),
     deletedTasks: byPosition(rows.deleted).map(r => JSON.parse(r.data) as Task), receipts: {},
+    ...(rows.threads.length ? { threads: [...rows.threads].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id)).map(threadOf) } : {}),
   })
 }
 
@@ -82,6 +88,7 @@ export function rowsOf(ws: Workspace): Rows {
   return {
     revision: ws.revision, timezone: ws.timezone, weekStart: ws.weekStart ?? 0,
     pages: pageEntities(ws).map((e, i) => e.row(i)), tasks: ws.tasks.map((t, i) => taskRow(t, i)), deleted: ws.deletedTasks.map((t, i) => deletedRow(t, i)),
+    threads: (ws.threads ?? []).map(threadRow),
   }
 }
 
@@ -126,14 +133,14 @@ export function planWrites(before: Rows, after: Workspace): { write: RowDiff; in
   }
   const rows: Rows = {
     revision: after.revision, timezone: after.timezone, weekStart: after.weekStart ?? 0,
-    pages: positions(pageEntities(after), before.pages, (e, position) => e.row(position)), tasks: positions(after.tasks, before.tasks, taskRow), deleted: positions(after.deletedTasks, before.deleted, deletedRow),
+    pages: positions(pageEntities(after), before.pages, (e, position) => e.row(position)), tasks: positions(after.tasks, before.tasks, taskRow), deleted: positions(after.deletedTasks, before.deleted, deletedRow), threads: (after.threads ?? []).map(threadRow),
   }
-  const pages = diffSet(before.pages, rows.pages), tasks = diffSet(before.tasks, rows.tasks), deleted = diffSet(before.deleted, rows.deleted)
+  const pages = diffSet(before.pages, rows.pages), tasks = diffSet(before.tasks, rows.tasks), deleted = diffSet(before.deleted, rows.deleted), threads = diffSet(before.threads, rows.threads)
   const timezone = before.timezone !== after.timezone
   const weekStart = (before.weekStart ?? 0) !== (after.weekStart ?? 0)
   return {
-    write: { ...(timezone ? { timezone: after.timezone } : {}), ...(weekStart ? { weekStart: after.weekStart ?? 0 } : {}), pages: pages.write, tasks: tasks.write, deleted: deleted.write },
-    inverse: { ...(timezone ? { timezone: before.timezone } : {}), ...(weekStart ? { weekStart: before.weekStart ?? 0 } : {}), pages: pages.inverse, tasks: tasks.inverse, deleted: deleted.inverse },
+    write: { ...(timezone ? { timezone: after.timezone } : {}), ...(weekStart ? { weekStart: after.weekStart ?? 0 } : {}), pages: pages.write, tasks: tasks.write, deleted: deleted.write, threads: threads.write },
+    inverse: { ...(timezone ? { timezone: before.timezone } : {}), ...(weekStart ? { weekStart: before.weekStart ?? 0 } : {}), pages: pages.inverse, tasks: tasks.inverse, deleted: deleted.inverse, threads: threads.inverse },
     rows,
   }
 }
@@ -147,6 +154,6 @@ function applySet<R extends { id: string }>(rows: R[], set: RowSet<R>): R[] {
 export function applyDiff(rows: Rows, diff: RowDiff): Rows {
   return {
     revision: rows.revision, timezone: diff.timezone ?? rows.timezone, weekStart: diff.weekStart ?? rows.weekStart ?? 0,
-    pages: applySet(rows.pages, diff.pages), tasks: applySet(rows.tasks, diff.tasks), deleted: applySet(rows.deleted, diff.deleted),
+    pages: applySet(rows.pages, diff.pages), tasks: applySet(rows.tasks, diff.tasks), deleted: applySet(rows.deleted, diff.deleted), threads: diff.threads ? applySet(rows.threads, diff.threads) : rows.threads,
   }
 }

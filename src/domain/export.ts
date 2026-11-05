@@ -1,6 +1,7 @@
 import { editorSeed, inlineText, pageNodes, type EditorNode } from './editor-document.ts'
 import type { Page, Workspace } from './types.ts'
 import { bodyFilesIn, bodyFileOf } from './body-files.ts'
+import { threadsOn } from './comments.ts'
 import { isTemplate } from './day-template.ts'
 import { isDraft } from './day-draft.ts'
 import { clockIn } from './formula.ts'
@@ -65,7 +66,14 @@ export function pageMarkdown(p: Page, ws: Workspace, names: Map<string, string>)
   const front = ['---', `daythread-id: ${yamlString(p.id)}`, ...(p.date ? [`date: ${p.date}`] : []), ...(p.url ? [`url: ${yamlString(p.url)}`] : []), ...(parent ? [`parent: ${yamlString(`[[${parent}]]`)}`] : []), ...(template && p.parentId ? [`template-for: ${yamlString(p.parentId)}`] : []), ...values, '---']
   const title = p.type === 'daily' && p.date ? p.date : p.title || 'Untitled'
   const body = [p.url ? `<${p.url}>` : '', isDatabase(p) ? databaseMarkdown(ws, p, names) : '', blocksMarkdown(editorSeed(p, ws), ws, names)].filter(Boolean).join('\n\n')
-  return `${front.join('\n')}\n\n# ${title}\n${body ? `\n${body}\n` : ''}`
+  return `${front.join('\n')}\n\n# ${title}\n${body ? `\n${body}\n` : ''}${commentsMarkdown(ws, p)}`
+}
+
+/** A page's comments at the end of its file, so a note stays with its page, with nothing left out (comments.md §4). */
+function commentsMarkdown(ws: Workspace, p: Page): string {
+  const threads = threadsOn(ws.threads, p.id)
+  if (!threads.length) return ''
+  return `\n## Comments\n\n${threads.map(t => `${t.comments.map(c => `- ${c.at.slice(0, 16).replace('T', ' ')}${t.resolvedAt ? ' (resolved)' : ''}: ${c.body.replace(/\n+/g, ' ')}`).join('\n')}`).join('\n\n')}\n`
 }
 
 export function blocksMarkdown(nodes: EditorNode[], ws: Workspace, names: Map<string, string>): string {

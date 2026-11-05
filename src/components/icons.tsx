@@ -99,6 +99,11 @@ export const DatabaseIcon = () => (
 )
 export const PageKindIcon = ({ url, database }: { url?: string | null; database?: boolean }) => (database ? <DatabaseIcon /> : url ? <GlobeIcon /> : <PagesIcon />)
 
+export const CommentIcon = () => (
+  <Icon>
+    <path d="M5 6.5h14v9H10.5L7 18.5v-3H5z" />
+  </Icon>
+)
 /** ↳: a link to one line (A11, Jazz line-links-states §3): "a passage", not a page. */
 export const LineLinkIcon = () => (
   <Icon>

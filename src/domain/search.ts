@@ -15,10 +15,13 @@ export interface PageHit { page: Page; /** "Pages › Work" for a nested page, t
 /** A line whose words match. `text` is the task's current title for a to-do row. */
 export interface LineHit { page: Page; blockId: string; date: LocalDate | null; sectionTitle: string; taskId: string | null; text: string; /** In a synced block shown on this many pages. */ places?: number }
 export interface TagHit { key: string; tag: string; count: number }
+export interface CommentHit { page: Page; threadId: string; text: string; resolved: boolean }
 export interface SearchResults {
   pages: PageHit[]
   tags: TagHit[]
   lines: LineHit[]
+  /** Comments that matched, resolved ones too (comments.md §4). */
+  comments: CommentHit[]
   /** Lines that matched beyond `lines` (the list stops at `lineLimit`). */
   moreLines: number
 }
@@ -29,7 +32,8 @@ export const tagLimit = 5
 
 interface IndexedLine { page: Page; blockId: string; sectionTitle: string; taskId: string | null; text: string; folded: string; /** In a synced block shown on this many pages. */ places?: number }
 interface IndexedPage { page: Page; path: string; folded: string; /** Day pages: their date words ("sun, oct 18", "october 18, 2026", "2026-10-18"). */ dayWords: string }
-export interface SearchIndex { pages: IndexedPage[]; lines: IndexedLine[]; tags: TagEntry[] }
+interface IndexedComment extends CommentHit { folded: string }
+export interface SearchIndex { pages: IndexedPage[]; lines: IndexedLine[]; tags: TagEntry[]; comments: IndexedComment[] }
 
 /** Case, width and accents folded, so "Café" finds "cafe" and full-width letters find their ASCII twins. */
 export const fold = (s: string): string => s.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
@@ -99,7 +103,10 @@ export function buildSearchIndex(ws: Workspace, dayLabel: (date: LocalDate) => s
     }
     pageNodes(page).forEach(visit)
   }
-  return { pages: indexedPages, lines, tags: tagIndex(ws) }
+  // By thread, under the page it's on, Trash left out with its page. Resolved ones too, marked (comments.md §4).
+  const live = new Map(pages.map(p => [p.id, p]))
+  const comments: IndexedComment[] = (ws.threads ?? []).flatMap(t => { const page = live.get(t.pageId), text = t.comments.map(c => c.body).join(' ').replace(/\s+/g, ' ').trim(); return page && text ? [{ page, threadId: t.id, text, resolved: Boolean(t.resolvedAt), folded: fold(text) }] : [] })
+  return { pages: indexedPages, lines, tags: tagIndex(ws), comments }
 }
 
 /** The words typed, folded; a `#word` keeps its mark so it can prefer tags, and matches lines by the word. */
@@ -120,7 +127,7 @@ const matchesWords = (folded: string, terms: readonly string[]) => { const words
  */
 export function search(index: SearchIndex, query: string, today: LocalDate, yesterday?: LocalDate): SearchResults {
   const terms = queryTerms(query)
-  if (terms.length === 0) return { pages: [], tags: [], lines: [], moreLines: 0 }
+  if (terms.length === 0) return { pages: [], tags: [], lines: [], comments: [], moreLines: 0 }
   const q = terms.map(bare).join(' ')
   const relative = q === 'today' ? today : q === 'yesterday' && yesterday ? yesterday : null
   const pageHits = index.pages
@@ -144,7 +151,8 @@ export function search(index: SearchIndex, query: string, today: LocalDate, yest
     if (lineHits.length < lineLimit) lineHits.push({ page: line.page, blockId: line.blockId, date: line.page.date, sectionTitle: line.sectionTitle, taskId: line.taskId, text: line.text, ...(line.places ? { places: line.places } : {}) })
     else moreLines++
   }
-  return { pages: pageHits, tags: tagHits, lines: lineHits, moreLines }
+  const commentHits = index.comments.filter(c => matchesAll(c.folded, terms)).slice(0, pageLimit).map(({ folded: _folded, ...hit }) => hit)
+  return { pages: pageHits, tags: tagHits, lines: lineHits, comments: commentHits, moreLines }
 }
 
 /** The matched lines under the page each was written on, in the order they came (newest day first, document order). */
