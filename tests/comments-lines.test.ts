@@ -2,6 +2,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { commandSchema } from '../src/domain/command-schema.ts'
+import { threadLineIds, threadsShownOn } from '../src/domain/comments.ts'
+import { buildSearchIndex, search } from '../src/domain/search.ts'
+import { lineIdsOnPage, sharedLineId, syncedBlockType } from '../src/domain/synced.ts'
+import type { EditorNode } from '../src/domain/editor-document.ts'
 import { exportFiles } from '../src/domain/export.ts'
 import { applyDiff, rowsOf, workspaceOf } from '../src/server/workspace-rows.ts'
 import { dayId, flat, harness, nodesOf, para, text, today, todo, tomorrow } from './v2-helpers.ts'
@@ -86,5 +90,97 @@ test('a to-do planned to another day takes its thread to its new line (Roadbuste
   const t = thread(h, 'td'), moved = flat(nodesOf(h.page(t.pageId))).find(n => n.id === t.anchor!.blockId)
   assert.equal(h.page(t.pageId).date, tomorrow); assert.ok(moved, 'on its new line')
   assert.equal(String(moved!.props!.taskId), taskId)
+})
+
+// comments.md §4: a thread on a synced line belongs to the shared lines.
+const syncedBlock = (id: string, syncId: string, children: EditorNode[] = []): EditorNode => ({ id, type: syncedBlockType, props: { syncId, roles: '' }, children })
+function shared() {
+  const h = harness()
+  for (const [id, title] of [['a', 'A'], ['b', 'B'], ['c', 'C']] as const) h.run({ type: 'create-document', title, body: '', pageId: id })
+  h.save('a', d => [...d, para('before', text('Before')), syncedBlock('sa', 's1', [para('l1', text('First')), para('l2', text('Second'))])])
+  h.save('b', d => [...d, para('kept', text('Kept')), syncedBlock('sb', 's1')])
+  h.save('c', d => [...d, syncedBlock('sc', 's1')])
+  h.run({ type: 'add-comment', pageId: 'a', threadId: 'sh', commentId: 'shc', body: 'On a shared line', at, anchor: { blockId: 'l1', quote: 'First' } })
+  return h
+}
+const shownOn = (h: ReturnType<typeof shared>, id: string) => threadsShownOn(h.ws, id).map(t => t.id)
+test('a thread on a synced line shows on every page holding a place, under the place\'s own id, and its home keeps it', () => {
+  const h = shared()
+  for (const id of ['a', 'b', 'c']) assert.deepEqual(shownOn(h, id), ['sh'], id)
+  assert.deepEqual(lineIdsOnPage(h.page('b'), 'l1'), ['l1:sb'])
+  assert.equal(thread(h, 'sh').pageId, 'a')
+  // Written from a copy's id, it still belongs to the shared line.
+  assert.equal(sharedLineId(nodesOf(h.page('b')), 'l1:sb'), 'l1')
+  assert.equal(sharedLineId(nodesOf(h.page('a')), 'kept'), 'kept')
+})
+test('export writes it once, under its home', () => {
+  const h = shared()
+  const says = exportFiles(h.ws, new Date(at)).filter(f => f.text.includes('On a shared line')).map(f => f.path)
+  assert.equal(says.length, 1); assert.ok(says[0]!.includes('/A'), says[0])
+})
+test('Unsync here: the thread stays with the shared lines, and that place carries none', () => {
+  const h = shared()
+  h.run({ type: 'unsync-block', pageId: 'b', blockId: 'sb' })
+  assert.deepEqual(shownOn(h, 'b'), []); assert.deepEqual(shownOn(h, 'c'), ['sh']); assert.equal(thread(h, 'sh').anchor!.blockId, 'l1')
+})
+test('Unsync all: it stays on its line in its home', () => {
+  const h = shared()
+  h.run({ type: 'unsync-block', pageId: 'a', blockId: 'sa', all: true })
+  assert.equal(thread(h, 'sh').pageId, 'a'); assert.equal(thread(h, 'sh').anchor!.blockId, 'l1'); assert.deepEqual(shownOn(h, 'a'), ['sh']); assert.deepEqual(shownOn(h, 'b'), [])
+})
+test('the original deleted: it goes to the first place left, whose line is ordinary now (Ratchet\'s case)', () => {
+  const h = shared()
+  h.run({ type: 'delete-synced-place', pageId: 'a', blockId: 'sa' })
+  const t = thread(h, 'sh')
+  assert.equal(t.pageId, 'b'); assert.equal(t.anchor!.blockId, 'l1:sb')
+  assert.ok(flat(nodesOf(h.page('b'))).some(n => n.id === 'l1:sb'))
+  assert.equal(t.comments[0]!.body, 'On a shared line')
+})
+test('the last place deleted: it stays on its home, with its words, for the pane to say Line removed', () => {
+  const h = shared()
+  h.run({ type: 'delete-synced-place', pageId: 'b', blockId: 'sb' }); h.run({ type: 'delete-synced-place', pageId: 'c', blockId: 'sc' }); h.run({ type: 'delete-synced-place', pageId: 'a', blockId: 'sa' })
+  const t = thread(h, 'sh')
+  assert.equal(t.pageId, 'a'); assert.equal(t.anchor!.quote, 'First'); assert.deepEqual(lineIdsOnPage(h.page('a'), t.anchor!.blockId), [])
+})
+test('Ratchet: an ordinary line with a comment, then synced and its original removed, keeps its thread on a line', () => {
+  const h = pages()
+  add(h)
+  h.save('one', () => [syncedBlock('so', 's2', [para('l1', text('A line'))])])
+  h.save('two', d => [...d, syncedBlock('st', 's2')])
+  assert.deepEqual(threadsShownOn(h.ws, 'two').map(t => t.id), ['th'])
+  h.run({ type: 'delete-synced-place', pageId: 'one', blockId: 'so' })
+  const t = thread(h); assert.equal(t.pageId, 'two'); assert.equal(t.anchor!.blockId, 'l1:st')
+})
+test('one Undo takes the anchor back with the sharing', () => {
+  const h = shared()
+  const { receipt } = h.run({ type: 'delete-synced-place', pageId: 'a', blockId: 'sa' })
+  assert.equal(thread(h, 'sh').pageId, 'b')
+  h.run({ type: 'undo', targetOperationId: receipt.operationId })
+  assert.equal(thread(h, 'sh').pageId, 'a'); assert.equal(thread(h, 'sh').anchor!.blockId, 'l1'); assert.deepEqual(shownOn(h, 'c'), ['sh'])
+})
+test('its home in Trash: the other places still show it, and search opens the first of them (Bumblebee)', () => {
+  const h = shared()
+  h.run({ type: 'delete-page', pageId: 'a', at } as never)
+  assert.deepEqual(shownOn(h, 'b'), ['sh'])
+  const hit = search(buildSearchIndex(h.ws), 'shared line').comments.find(c => c.threadId === 'sh')
+  assert.ok(hit && ['b', 'c'].includes(hit.page.id), hit?.page.id)
+})
+test('every place in Trash: it comes back with whichever is restored first', () => {
+  const h = shared()
+  const trash = (id: string) => h.run({ type: 'delete-page', pageId: id, at } as never)
+  trash('a'); const last = trash('b'); trash('c')
+  assert.equal(thread(h, 'sh').comments.length, 1)
+  void last
+  h.run({ type: 'restore-page', pageId: 'c' } as never)
+  assert.deepEqual(shownOn(h, 'c'), ['sh'])
+})
+test('Unsync here on its home: the thread stays with the shared lines, its home moves to a place left, and that page\'s line carries none (Ratchet)', () => {
+  const h = shared()
+  h.run({ type: 'unsync-block', pageId: 'a', blockId: 'sa' })
+  const t = thread(h, 'sh')
+  assert.equal(t.anchor!.blockId, 'l1'); assert.notEqual(t.pageId, 'a')
+  assert.deepEqual(shownOn(h, 'a'), []); assert.deepEqual(shownOn(h, 'b'), ['sh'])
+  assert.deepEqual(threadLineIds(h.ws, h.page('a'), t.anchor!), [])
+  assert.deepEqual(threadLineIds(h.ws, h.page('b'), t.anchor!), ['l1:sb'])
 })
 

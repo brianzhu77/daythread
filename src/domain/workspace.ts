@@ -4,7 +4,7 @@ import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, 
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
-import { automationProblem, firedRules, type FiredRule } from "./automations.ts";
+import { automationProblem, dueRules, firedRules, type FiredRule } from "./automations.ts";
 import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, valueAtTap, type ButtonStep } from "./buttons.ts";
 import { commentLimit, leavesUndoAlone, type CommentThread, quoteLimit } from "./comments.ts";
 import { isPageIcon } from "./page-icon.ts";
@@ -20,7 +20,7 @@ import { newTodo, taskIdOfRow, todoBarColumns, todoChange, todoMoves, todoRowId,
 import { inView, todosSourceId, changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Receipt, Task, Workspace } from "./types.ts";
-import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, unsyncBlock } from "./synced.ts";
+import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, unsyncBlock, recordOfLine, lineIdsOnPage } from "./synced.ts";
 
 export class DomainError extends Error {}
 export function createEmptyWorkspace(timezone = "America/Vancouver"): Workspace {
@@ -346,6 +346,44 @@ function runAutomations(start: Workspace, fired: FiredRule[], operationId: strin
     }
   }
   return { state, automations: { databaseId: fired[0]!.databaseId, ran, paused } };
+}
+/**
+ * Scheduled rules, in the command that catches up on opening (automations.md §6). The period's marker commits with what it did, so two tabs, a retry or a rollback can't run it twice.
+ * Each is taken whole, as on a change, here by writing the copy's result back over this command's state, which `execute` holds by reference.
+ */
+function runScheduledRules(state: Workspace, action: Extract<Action, { type: "run-repeats" }>, operationId: string): NonNullable<Receipt["automations"]> | null {
+  const due = dueRules(state, action.today, action.time);
+  if (!due.length) return null;
+  const budget = newBudget(), ran: string[] = [], paused: { name: string; reason: string }[] = [], at = isoTime(action.at);
+  let spent = false;
+  const stop = (databaseId: string, ruleId: string, reason: string, limit: boolean, name: string) => {
+    const db = state.pages.find((p) => p.id === databaseId)!.database!;
+    db.automations = db.automations!.map((r) => (r.id === ruleId ? { ...r, active: false, paused: { reason, ...(limit ? { limit: true as const } : {}) } } : r));
+    paused.push({ name, reason });
+  };
+  for (const { database, rule, date } of due) {
+    if (spent) { stop(database.id, rule.id, "Not run · command limit reached", true, rule.name); continue; }
+    const live = state.pages.find((p) => p.id === database.id)!;
+    const problem = automationProblem(state, live.database!, rule);
+    if (problem) { stop(database.id, rule.id, problem, false, rule.name); continue; }
+    const copy = structuredClone(state), before = { ...budget };
+    try {
+      // A row dates itself to its period through @today (§6), and its id to the rule and period.
+      const result = runSteps(copy, readSteps(rule.steps), copy.pages.find((p) => p.id === database.id)!, { at, today: date }, `every:${rule.id}:${date}`, null, budget);
+      const db = copy.pages.find((p) => p.id === database.id)!.database!;
+      db.automations = db.automations!.map((r) => (r.id === rule.id ? { ...r, ...(result.message !== null ? { lastRanAt: at } : {}), triggers: r.triggers.map((t) => (t.kind === "every" ? { ...t, repeat: { ...t.repeat, last: date, lastRan: at } } : t)) } : r));
+      settleSynced(copy);
+      Object.assign(state, copy);
+      if (result.message !== null) ran.push(rule.name);
+    } catch (error) {
+      if (!(error instanceof DomainError)) throw error;
+      Object.assign(budget, before);
+      const limit = / at most$/.test(error.message);
+      if (limit) spent = true;
+      stop(database.id, rule.id, limit ? "Not run · command limit reached" : error.message, limit, rule.name);
+    }
+  }
+  return { databaseId: due[0]!.database.id, ran, paused, scheduled: true };
 }
 /** A task whose title is empty after trimming: an empty checkbox row left on a page. It stays there, but no list shows it. */
 export function isBlankTask(t: Task): boolean {
@@ -1059,7 +1097,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       }
       const on = page(state, action.pageId);
       if (isTrashed(on)) throw new DomainError("That page is in Trash");
-      (state.threads ??= []).push({ id: action.threadId, pageId: on.id, ...(action.anchor ? { anchor: { blockId: action.anchor.blockId, quote: action.anchor.quote.slice(0, quoteLimit), ...(action.anchor.taskId ? { taskId: action.anchor.taskId } : {}) } } : {}), version: 1, createdAt: at, comments: [{ id: action.commentId, body, at }] });
+      (state.threads ??= []).push({ id: action.threadId, pageId: on.id, ...(action.anchor ? { anchor: { blockId: action.anchor.blockId, quote: action.anchor.quote.slice(0, quoteLimit), ...(action.anchor.taskId ? { taskId: action.anchor.taskId } : {}), ...(action.anchor.at !== undefined ? { at: action.anchor.at } : {}) } } : {}), version: 1, createdAt: at, comments: [{ id: action.commentId, body, at }] });
       return { message: "Comment added", entityId: action.threadId };
     }
     case "edit-comment": {
@@ -1312,7 +1350,8 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         if (noRoom) skipped.push({ title: template.title.trim() || "Untitled", earlier: periodWord(repeat, noRoom, ""), full: true });
         if (missed) skipped.push({ title: template.title.trim() || "Untitled", earlier: periodWord(repeat, missed) });
       }
-      return { message: made ? `${made} repeating row${made === 1 ? "" : "s"} made` : "Nothing due", ...(skipped.length ? { skippedRepeats: skipped } : {}) };
+      const rules = runScheduledRules(state, action, operationId);
+      return { message: made ? `${made} repeating row${made === 1 ? "" : "s"} made` : "Nothing due", ...(skipped.length ? { skippedRepeats: skipped } : {}), ...(rules ? { automations: rules } : {}) };
     }
     case "run-button": return runButton(state, action, operationId);
     case "run-row-button": return runRowButton(state, action, operationId);
@@ -1597,6 +1636,20 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
       const home = state.pages.find((p) => p.id === thread.pageId);
       if (!home || !flatNodes(pageNodes(home)).some((n) => n.id === thread.anchor!.blockId)) thread.pageId = savedTo;
     }
+  }
+  // A shared line whose sharing has ended: its thread stays on the line in the page it was made on if that's still there, and otherwise goes to the first place left, whose line is ordinary now (comments.md §4).
+  for (const thread of state.threads ?? []) {
+    const anchor = thread.anchor;
+    if (!anchor || anchor.taskId) continue;
+    const home = state.pages.find((p) => p.id === thread.pageId);
+    // Still shared, but its home's place has gone: the thread stays with the shared lines, and that page's line is ordinary now.
+    if (recordOfLine(state, anchor.blockId)) {
+      if (!home || !lineIdsOnPage(home, anchor.blockId, true).length) { const next = livePages(state).find((p) => lineIdsOnPage(p, anchor.blockId, true).length); if (next) thread.pageId = next.id; }
+      continue;
+    }
+    if (home && flatNodes(pageNodes(home)).some((n) => n.id === anchor.blockId)) continue;
+    const stem = `${anchor.blockId}:`, left = livePages(state).flatMap((p) => flatNodes(pageNodes(p)).filter((n) => n.id.startsWith(stem)).map((n) => ({ page: p, id: n.id })))[0];
+    if (left) { thread.pageId = left.page.id; anchor.blockId = left.id; }
   }
   // A to-do planned to another day is a new line there, so a thread on it goes to that line. Its plan row if it has one, as that's where the to-do is now (Roadbuster, #158).
   for (const thread of state.threads ?? []) {

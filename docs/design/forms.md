@@ -1,6 +1,6 @@
 # Forms: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design for Lead and Jazz to review**. Not approved and not built. §5 updated from Ratchet's review and accepted by the Lead; the public link stays off.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **"Only me" approved to build with the changes below (Lead f9bab535, from Jazz's read and Ratchet's `docs/reviews/feed-dashboard-forms-ratchet.md`, 5a4b7af8, both from reading only).** Not built. Roadbuster's, after To-dos as a source, unless swapped with Feed. **The public link stays off,** and comes to Brian as one choice once its quotas are designed.
 - Asked by the Lead (3f046122). Nothing is cut for lack of evidence, and his use only sets the order (Brian 57deaed7).
 - **Evidence:** Notion's help page on [forms](https://www.notion.com/help/forms), which I read but haven't used. His use: no databases at the last read (Nov 2), so the examples are illustrations.
 
@@ -25,10 +25,11 @@ No Respondent property, since Person and Created by aren't planned. Every public
 
 ## 3. Building one
 
+- **On the form itself, not a side panel (Jazz),** so what's seen is what's answered, at both widths. A tap on a question opens it in place: wording, description, Required as a switch, ↑↓ and ×. A sheet is only for adding: `+ Add question` lists properties not yet asked and "New property". The head has "12 responses" linking to Responses, the state, and Preview, which is marked and adds nothing.
 - **Made from** `+ Add view` → Form, or `⋯` → Layout. `/` stays one Database item, with `form` added as an alias. **Unlike Notion, it can be built on the phone too,** since the phone is one of his two main widths.
 - **It opens with one question per property,** which he removes or reorders. A new database starts with Name.
 - **Each question:** its wording, Description, Required. Multiple choice shows as a list or dropdown; text as short or long answer; Multi-select and Relation have a maximum.
-- **Wording and property are linked by default.** Editing the wording renames the property, and adding a question adds a property, as Notion. "Sync with property name" off lets the wording differ.
+- **Wording stops renaming a property (decided, Lead f9bab535, Jazz's challenge; a difference from Notion, for the release note).** A new question names its new property from the wording as first typed. After that, editing the wording changes only the wording, on an existing property too, and the property's name shows quietly under the question. A rename would change every table, filter and chart from a screen about how a question reads. There's no "Sync with property name" switch.
 - **What can't be a question:** read-only types (Formula, Rollup, ID, Created time, Edited time) and Button. Files only once R3-11 exists, and not on a public form until uploads have had their own decision.
 - **A Relation on a public form would show his row titles to a stranger.** It's refused on "Anyone with the link", and the editor marks that question.
 - **Conditional logic:** a multiple-choice answer can lead to follow-up questions. Paid-only in Notion; included here, in the last release of this feature.
@@ -41,6 +42,8 @@ No Respondent property, since Person and Created by aren't planned. Every public
 - **The form's own header** shows data, not instructions: "12 responses", and the state "Only me · Anyone with the link · Closed" with Copy link.
 - **Trying it:** Preview at both widths, which doesn't add a row.
 
+**Answering is a page, not a sheet (Jazz),** one column up to 560 px at both widths. No asterisks: a missing answer is marked with its field's border and "Needs an answer", and the page scrolls to the first. On a phone, 16 px fields 44 px tall, the right keyboard for numbers and dates, Return to the next field, choices as rows up to about 6 and a dropdown beyond, and Send above the keyboard. Needs a native check.
+
 **While answering:**
 
 | State | He or they see |
@@ -48,8 +51,9 @@ No Respondent property, since Person and Created by aren't planned. Every public
 | A required answer is missing | The question is marked; the answers stay |
 | Failed or offline | "Not sent · Try again", and every answer stays on the screen |
 | Double tap or retry | One row, by an id made when the form opened |
+| Typing during a send (Ratchet) | A send holds its answers and key, and a lost reply retries that same payload. New words stay as an unsent draft, and a late success doesn't clear them. Send another gets a fresh key |
 | A question was removed while open | Sends the others |
-| A required one was added while open | Asks for it |
+| A required one was added while open | Asks for it, losing no answers |
 | Sent | The confirmation, and "Send another" on Only me |
 
 ## 5. The public link, for the Lead
@@ -76,6 +80,8 @@ Today every write needs a signed-in session, and the app is invite-only. A publi
 4. **The public page reads only an allowlist,** rebuilt from the current state on every request: wording, question type, Required, and option names. A question that has become a Relation, Files or read-only stops being offered, and a form in a trashed database is closed. Closed, deleted and nonexistent all look the same to a visitor.
 5. **Tests before Brian is asked,** as the review lists them: the race at the last slot, Reset during a held submission, a question changed during a held submission, and a copied answer reaching a day.
 
+6. **Added by Ratchet's second read (5a4b7af8):** accepted answers bound what's stored, not the cost of unlimited reads, bad posts or new retry keys, so read and attempt limits and how long replay keys are kept are chosen ahead of loading a workspace. And since Row added rules are live, the public path's bar on them is enforced on the trusted command path rather than by a flag from the page, as is never inheriting a default template, Button step or scheduled action.
+
 **Running cost:** none expected beyond Worker and database use, but abuse could raise both, which is what the cap is for.
 
 **Then:** on for Brian's account only at first, as the day draft model was, and for invitees if it holds up.
@@ -95,6 +101,8 @@ Today every write needs a signed-in session, and the app is invite-only. A publi
 ## 8. Checks before release
 
 - One answer makes one row with the right values for each type, including Chinese typed with Pinyin in the Home Screen app.
+- A late success after more typing keeps the new words, and a question renamed or removed, or newly required, loses no answers.
+- Editing a question's wording leaves the property's name, and every view, unchanged.
 - Answers survive failure and offline.
 - A closed, deleted and never-existing form read the same.
 - **Public link, on real Postgres, by the reviewer:** no way to read rows, another form's questions or another workspace; a wrong type or an extra field is refused; limits and cap work; reset stops the old link.

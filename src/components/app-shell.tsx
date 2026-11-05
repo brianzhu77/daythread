@@ -19,6 +19,7 @@ import { CoverPanelHost } from './page-cover'
 import { DatabaseMenuHost } from './database-menu'
 import { flushAllEditors } from './editor-flush'
 import { useMoveToNewBuild } from './new-build'
+import { dueRules } from '../domain/automations'
 
 /** Files nothing holds any more go from the store when the app opens, at most once a day (R3-11). It can't hurt to miss one: the next open asks again. */
 function SweepFiles() {
@@ -65,7 +66,7 @@ function RepeatingRows() {
     opened.current = true
     if (!opening && Date.now() - lastInput.current < idleBeforeRepeats) return
     const now = new Date(), today = toIso(now), time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-    if (!dueRepeats(workspace, today, time).length) return
+    if (!dueRepeats(workspace, today, time).length && !dueRules(workspace, today, time).length) return
     void run({ type: 'run-repeats', today, time, at: now.toISOString() }, r => (r.skippedRepeats?.length ? { text: r.skippedRepeats.map(s => `${s.title} · ${s.earlier} skipped${s.full ? ' · database full' : ''}`).join(' · ') } : null), undefined, { quiet: true, inlineRefusal: /Saved elsewhere/, onRefused: () => {} })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick, revision])

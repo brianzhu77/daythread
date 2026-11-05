@@ -45,6 +45,9 @@ I ran the dataviz skill's palette validator on four greys, `#111111, #555555, #8
 - **Up to 4 greys, from the app's tokens** (`--ink`, `--ink-2`, `--ink-3` and a lighter grey, not hex), so a chart follows the theme.
 - **Which values get a grey follows size, and which grey follows order (changed 2026-11-05, Lead 836135d4, from Jazz 60daebcf):** the four largest are named, ranked by value on a donut and by a series' total under Group by. Among those four, a grey follows the axis's order: a Select or Status's option order, and other values their sorted order. So a filter repaints a value only when the top four change, which is the accepted cost: folding by order could leave the biggest value unnamed, inside an Other covering most of the ring.
 - **Beyond 4 values:** the smaller ones fold into "Other", which a tap opens, with the whole list in the table below. It's drawn as an outline with no fill, not a fifth grey, so it can't be mistaken for a value. Nothing's missing, though Notion would draw up to 50.
+- **When any row sits in more than one series, as with a Multi-select, the series draw side by side rather than stacked (decided, Lead f9bab535, from Jazz and Ratchet):** a stack's height says the parts add up to a whole, and there they don't. A line is fine as it stands.
+- **Bands in a stack (Jazz, Lead f9bab535):** no 2 px gap. A 1 px line in the page's colour inside the upper band's own space, skipping bands under 4 px, so nothing moves. Across, only the last band is rounded.
+- **A blank stays a blank per series (Ratchet, Lead f9bab535):** a Sum with no numbers in a period breaks that series, as §3 says, and Count stays zero.
 - **Tap to focus:** tapping a series or legend entry dims the rest, since greys are hardest to follow on a line chart.
 - **Always:** a legend for 2 or more series, direct labels where they fit, and a 2 px gap between fills. A donut's lightest slice needs its label outside.
 - **No two y-axes,** ever.
@@ -67,6 +70,8 @@ No editing from a chart, as Notion.
 | State | He sees |
 | --- | --- |
 | No rows, or none after the filter | The axes and "No rows", with the filter chips |
+| Rows, but all zero or blank | "Nothing to show" (Jazz, #162) |
+| A negative on a donut | No slice. It stays in the legend with its value and no swatch, and the centre has no total when anything isn't drawn (Jazz, #162) |
 | Its property deleted or changed to one it can't use | "Choose what to show", as a board's "Group by" link. Undo or changing the type back restores it |
 | A Measure with blanks | Blanks don't count as zero, except in Count |
 | Rows beyond the cap | Counted in full: a chart shows the whole result, not the first 25 |
@@ -81,7 +86,7 @@ No editing from a chart, as Notion.
 
 ## 8. Release order, within Chart
 
-Vertical and horizontal bars and Number first, since they prove the settings and the rows it opens. Then Line and Donut. Then Group by and Other. Then Export and Save as view. All in scope.
+Vertical and horizontal bars and Number first, since they prove the settings and the rows it opens. Then Line and Donut. Then Group by and Other. Then **G4-7, a chart on a day (Lead f9bab535, ahead of Export, as it's Brian's main path).** Then Export and Save as view. All in scope.
 
 ## 9. Checks before release
 

@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readSteps, stepsKey, writeSteps, type ButtonStep } from '../src/domain/buttons.ts'
-import { automationProblem, withLiveNames, type Automation } from '../src/domain/automations.ts'
+import { automationProblem, nextRun, withLiveNames, type Automation, runsOnFix } from '../src/domain/automations.ts'
 import { pageContentKey } from '../src/domain/editor-document.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import { harness } from './v2-helpers.ts'
@@ -191,4 +191,125 @@ test('Ratchet: a Trash batch restored isn\'t a new row; a condition its property
   watched.C({ kind: 'updateProperty', propertyId: 'st', type: 'number' })
   assert.equal(automationProblem(watched.h.ws, watched.h.page('runs').database!, rules(watched.h)[0]!), 'Status changed type')
   void C
+})
+
+const every = (over: object = {}, repeat: object = {}): Automation => rule({ id: 'wk', name: 'Weekly review', triggers: [{ kind: 'every', repeat: { every: 'week', interval: 1, start: '2026-11-02', notBefore: '2026-11-02T00:00', ...repeat } as never }], steps: writeSteps([{ id: 'a', kind: 'add-row', databaseId: 'runs', databaseName: 'Runs', title: 'Review', set: [] }]), ...over })
+const tick = (h: ReturnType<typeof harness>, today: string, time = '09:00', op?: string) => h.run({ type: 'run-repeats', today, time, at: `${today}T${time}:00.000Z` }, op)
+const reviews = (h: ReturnType<typeof harness>) => h.ws.pages.filter(p => p.title === 'Review' && !p.trashedAt)
+test('Every…: a period runs once, across a second tick and a retry, and only the latest missed one', () => {
+  const { h } = setup([every()])
+  assert.equal(tick(h, '2026-11-01').receipt.automations, undefined, 'not before its first')
+  const first = tick(h, '2026-11-03', '09:00', 'tick-1')
+  assert.deepEqual(first.receipt.automations?.ran, ['Weekly review'])
+  assert.equal(reviews(h).length, 1)
+  tick(h, '2026-11-04')
+  assert.equal(reviews(h).length, 1, 'a second tick in the period')
+  const again = h.run({ type: 'run-repeats', today: '2026-11-03', time: '09:00', at: '2026-11-03T09:00:00.000Z' }, 'tick-1')
+  assert.deepEqual(again.receipt.automations, first.receipt.automations)
+  assert.equal(reviews(h).length, 1, 'a retry')
+  tick(h, '2026-12-01')
+  assert.equal(reviews(h).length, 2, 'five weeks away makes one row')
+  const marker = (rules(h)[0]!.triggers[0] as { repeat: { last: string } }).repeat.last
+  assert.equal(marker, '2026-11-30')
+})
+test('Every…: an edit doesn\'t set it off, its until stops it, off counts from turning on, and no Undo is taken', () => {
+  const { h, C } = setup([every({}, {})])
+  edit(h, 'r1', { n: 9 }, { n: 1 })
+  assert.equal(reviews(h).length, 0)
+  C({ kind: 'setAutomationActive', automationId: 'wk', active: false })
+  tick(h, '2026-11-10')
+  assert.equal(reviews(h).length, 0, 'off makes none')
+  C({ kind: 'setAutomationActive', automationId: 'wk', active: true, notBefore: '2026-11-10T12:00' })
+  tick(h, '2026-11-10', '13:00')
+  assert.equal(reviews(h).length, 0, 'turned on again counts from then')
+  tick(h, '2026-11-16', '13:00')
+  assert.equal(reviews(h).length, 1)
+  assert.equal(h.ws.undo, undefined, 'catching up takes no Undo')
+  const ending = setup([every({ triggers: [{ kind: 'every', until: '2026-11-08', repeat: { every: 'week', interval: 1, start: '2026-11-02', notBefore: '2026-11-02T00:00' } }] })])
+  tick(ending.h, '2026-11-20')
+  assert.equal(reviews(ending.h).length, 1)
+  assert.equal(new Date(reviews(ending.h)[0]!.createdAt!).getFullYear() > 2000, true)
+})
+test('Every…: a failure pauses with its reason, what else was due still runs, and an Edit property step reads as broken', () => {
+  const bad = every({ id: 'bad', name: 'Bad', steps: writeSteps([{ id: 'a', kind: 'add-row', databaseId: 'gone', databaseName: 'Old', title: 'x', set: [] }]) })
+  const { h } = setup([bad, every()])
+  const { receipt } = tick(h, '2026-11-03')
+  assert.deepEqual(receipt.automations?.paused, [{ name: 'Bad', reason: 'Old was deleted' }])
+  assert.deepEqual(receipt.automations?.ran, ['Weekly review'])
+  assert.equal(rules(h)[0]!.active, false)
+  const wrong = setup([every({ steps: writeSteps([setN(5)]) })])
+  assert.equal(automationProblem(wrong.h.ws, wrong.h.page('runs').database!, rules(wrong.h)[0]!), 'Every… has no row to edit')
+})
+
+test('Every…: an edit counts from that moment, with at most one run on a date (Bumblebee)', () => {
+  const daily = (time: string, last = false) => { const { h, C } = setup([every({}, { every: 'day', start: '2026-11-03', time, notBefore: '2026-11-03T00:00' })]); if (last) tick(h, '2026-11-03', '09:05'); return { h, C, moveTo: (repeat: object) => C({ kind: 'updateAutomation', automation: { ...rules(h)[0]!, triggers: [{ kind: 'every', repeat: { every: 'day', interval: 1, start: '2026-11-03', notBefore: '2026-11-03T09:30', ...repeat } }] } }) } }
+  const ran = daily('09:00', true)
+  assert.equal(reviews(ran.h).length, 1)
+  ran.moveTo({ time: '10:00' })
+  tick(ran.h, '2026-11-03', '10:05')
+  assert.equal(reviews(ran.h).length, 1, 'ran at 09:00, moved to 10:00: nothing more today')
+  tick(ran.h, '2026-11-04', '10:05')
+  assert.equal(reviews(ran.h).length, 2, 'and 10:00 from tomorrow')
+  const later = daily('09:45')
+  later.moveTo({ time: '10:00' })
+  tick(later.h, '2026-11-03', '09:50')
+  assert.equal(reviews(later.h).length, 0, 'a late tick can\'t run it before its new time')
+  tick(later.h, '2026-11-03', '10:05')
+  assert.equal(reviews(later.h).length, 1, 'hadn\'t run, moved to 10:00: runs today')
+  const past = daily('09:45')
+  past.moveTo({ time: '09:15' })
+  tick(past.h, '2026-11-03', '10:05')
+  assert.equal(reviews(past.h).length, 0, 'moved to a time just gone: no catching up')
+  tick(past.h, '2026-11-04', '09:20')
+  assert.equal(reviews(past.h).length, 1, 'so tomorrow')
+  const { h, C } = setup([every({}, { start: '2026-11-02', weekdays: [1], notBefore: '2026-11-02T00:00' })])
+  tick(h, '2026-11-02')
+  C({ kind: 'updateAutomation', automation: { ...rules(h)[0]!, name: 'Renamed' } })
+  tick(h, '2026-11-02', '10:00')
+  assert.equal(reviews(h).length, 1, 'a rename doesn\'t run it again')
+  C({ kind: 'updateAutomation', automation: { ...rules(h)[0]!, triggers: [{ kind: 'every', repeat: { every: 'week', interval: 1, start: '2026-11-02', weekdays: [4], notBefore: '2026-11-02T10:00' } }] } })
+  tick(h, '2026-11-05')
+  assert.equal(reviews(h).length, 2, 'ran Monday, moved to Thursday: runs this Thursday')
+  C({ kind: 'setAutomationActive', automationId: 'wk', active: false })
+  C({ kind: 'setAutomationActive', automationId: 'wk', active: true, notBefore: '2026-11-12T12:00' })
+  tick(h, '2026-11-12', '13:00')
+  assert.equal(reviews(h).length, 2, 'a resume counts from then too')
+  const next = (rules(h)[0]!.triggers[0] as Extract<Automation['triggers'][number], { kind: 'every' }>)
+  assert.equal(nextRun(next, '2026-11-12', '13:00'), '2026-11-19')
+  assert.equal(nextRun({ ...next, until: '2026-11-15' }, '2026-11-12', '13:00'), null)
+})
+
+test('saving a fix to a failed schedule runs its latest missed period once; a real schedule change, or off and on by hand, counts from then', () => {
+  const broken: ButtonStep[] = [{ id: 'a', kind: 'add-row', databaseId: 'runs', databaseName: 'Runs', title: 'Review', set: [{ id: 'n', name: 'N', type: 'number', value: { kind: 'fixed', raw: 'invalid' } }] }]
+  const good = writeSteps([{ id: 'a', kind: 'add-row', databaseId: 'runs', databaseName: 'Runs', title: 'Review', set: [] }])
+  const failed = () => { const s = setup([every({ steps: writeSteps(broken) }, { every: 'day', time: '09:00' })]); tick(s.h, '2026-11-05', '10:00'); assert.ok(rules(s.h)[0]!.paused); return s }
+  const noon = '2026-11-06T12:00', repeatOf = (r: Automation) => (r.triggers[0] as { repeat: { time?: string; notBefore?: string } }).repeat
+  const fixedRule = (h: ReturnType<typeof harness>) => { const r = structuredClone(rules(h)[0]!); r.steps = good; repeatOf(r).notBefore = noon; return r }
+
+  const fix = failed()
+  assert.equal(runsOnFix(rules(fix.h)[0]!, rules(fix.h)[0]!.triggers[0] as never, '2026-11-06', '12:00'), '2026-11-06', 'the editor says so before the save')
+  fix.C({ kind: 'updateAutomation', automation: fixedRule(fix.h) })
+  assert.equal(rules(fix.h)[0]!.active, true)
+  tick(fix.h, '2026-11-06', '12:05')
+  assert.equal(reviews(fix.h).length, 1, 'the latest missed period, once')
+  tick(fix.h, '2026-11-06', '12:10')
+  assert.equal(reviews(fix.h).length, 1, 'and not again on another tick')
+
+  const moved = failed(), later = fixedRule(moved.h)
+  repeatOf(later).time = '10:00'
+  assert.equal(runsOnFix(rules(moved.h)[0]!, later.triggers[0] as never, '2026-11-06', '12:00'), null)
+  moved.C({ kind: 'updateAutomation', automation: later })
+  tick(moved.h, '2026-11-06', '12:05')
+  assert.equal(reviews(moved.h).length, 0, 'a real schedule change counts from the save')
+
+  const hand = failed()
+  hand.C({ kind: 'setAutomationActive', automationId: 'wk', active: false })
+  assert.equal(rules(hand.h)[0]!.paused, undefined)
+  hand.C({ kind: 'updateAutomation', automation: fixedRule(hand.h) })
+  assert.equal(rules(hand.h)[0]!.active, false, 'off by hand stays off through a fix')
+  hand.C({ kind: 'setAutomationActive', automationId: 'wk', active: true, notBefore: noon })
+  tick(hand.h, '2026-11-06', '12:05')
+  assert.equal(reviews(hand.h).length, 0, 'turning it on counts from then')
+  tick(hand.h, '2026-11-07', '09:00')
+  assert.equal(reviews(hand.h).length, 1)
 })
