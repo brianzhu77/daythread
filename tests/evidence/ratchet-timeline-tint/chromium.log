@@ -1,0 +1,19 @@
+PASS light: a bar takes its rule's tint "rgb(230, 244, 254)"
+PASS light: another rule, another tint "rgb(230, 246, 235)"
+PASS light: a bar with no match stays grey "rgb(240, 240, 240)"
+PASS light: its title stays readable 14.5
+PASS light: a hover still shows on the tint 
+PASS light: an open end fades from the tint ["database-bar is-open-end has-tint","linear-gradient(to right, rgb(230, 244, 254) 40%, rgba(0, 0, 0, 0))"]
+PASS light: a row with no date shows the tint on its name "rgb(230, 244, 254)"
+PASS light: no page errors []
+PASS dark: a bar takes its rule's tint "rgb(13, 40, 71)"
+PASS dark: another rule, another tint "rgb(19, 45, 33)"
+PASS dark: a bar with no match stays grey "rgb(34, 34, 34)"
+PASS dark: its title stays readable 12.8
+PASS dark: a hover still shows on the tint 
+PASS dark: an open end fades from the tint ["database-bar is-open-end has-tint","linear-gradient(to right, rgb(13, 40, 71) 40%, rgba(0, 0, 0, 0))"]
+PASS dark: a row with no date shows the tint on its name "rgb(13, 40, 71)"
+PASS dark: no page errors []
+PASS 390: a line takes the tint 
+PASS 390: a line with no match stays plain "rgba(0, 0, 0, 0)"
+ALL PASS
