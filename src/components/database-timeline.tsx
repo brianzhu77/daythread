@@ -5,10 +5,10 @@
 import { toast } from '@heroui/react'
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react'
 import { columnCalc, databaseRows, inView, isEmptyValue, isReadOnly, propertyOf, readValue, startOfWeek, titleId, viewCalculations, viewColumns, viewDateBy, viewGroups, viewRows, type Database, type DateValue, type Json, type Property, type View, type ViewGroups } from '../domain/database.ts'
-import { dayWidth, daysBetween, draggedBar, endAt, snapMinutes, startAt, timelineBars, timelineUnits, timelineWeeks, viewDateEnd, type BarPart, type BarWrite, type TimelineBar, type TimelineUnit } from '../domain/timeline.ts'
+import { dayWidth, daysBetween, draggedBar, endAt, linkPath, snapMinutes, startAt, timelineBars, timelineUnits, timelineWeeks, viewDateEnd, type BarPart, type BarWrite, type TimelineBar, type TimelineUnit } from '../domain/timeline.ts'
 import { taskIdOfRow } from '../domain/todos-source'
-import type { LocalDate, Page, WeekStart } from '../domain/types'
-import { rowTint, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, setOpenCell, shownRaw, shownValue, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import type { LocalDate, Page, WeekStart, Workspace } from '../domain/types'
+import { rowTint, SubItemParent, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, setOpenCell, shownRaw, shownValue, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
 import { addDays, fromIso, todayIso } from './dates'
 import { ChevronRightIcon } from './icons'
@@ -93,7 +93,7 @@ export function DatabaseTimeline({ workspace, db, view, changeView, blockId, pag
   return <div className="database-table-wrap" ref={wrap}>
     <DatabaseHeader db={db} view={view} changeView={changeView} blockId={blockId} showTitle={showTitle} linked={linked} onTitleEnter={() => { if (!databaseRows(workspace, db.id).length) addRow() }} />
     {!property && <p className="database-empty"><button type="button" className="app-link" onClick={() => openDatabaseMenu(blockId, db.id, 'layout')}>Choose a date property</button></p>}
-    <TimelineScale db={db} rows={rows} context={context} addRow={addRow} weekStart={weekStart} cap={cap} bars={bars} undated={undated} unit={unit} today={today} opensOn={opensOn} blockId={blockId} view={view} databaseId={db.id} canSet={canSet} limit={limit} setLimit={setLimit} returned={returned}
+    <TimelineScale workspace={workspace} db={db} rows={rows} context={context} addRow={addRow} weekStart={weekStart} cap={cap} bars={bars} undated={undated} unit={unit} today={today} opensOn={opensOn} blockId={blockId} view={view} databaseId={db.id} canSet={canSet} limit={limit} setLimit={setLimit} returned={returned}
       undatedOpen={undatedOpen} setUndatedOpen={setUndatedOpen} openRow={openRow} undoKey={undoKey} changeView={changeView}
       write={write} addOn={from => addRow(undefined, property && canSet ? { [property.id]: { start: from } as unknown as Json } : undefined)} startProperty={property} endProperty={endProperty} />
     {!groupsNow && <button type="button" className="database-new" onClick={() => addRow()}>+ New</button>}
@@ -159,12 +159,13 @@ function ticksFor(unit: TimelineUnit, origin: LocalDate, from: number, to: numbe
 
 const nameWidth = 200, columnWidth = 120
 
-function TimelineScale({ db, rows, context, addRow, weekStart, cap, bars, undated, unit, today, opensOn, blockId, view, databaseId, canSet, limit, setLimit, returned, undatedOpen, setUndatedOpen, openRow, undoKey, changeView, write, addOn, startProperty, endProperty }: {
+function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, bars, undated, unit, today, opensOn, blockId, view, databaseId, canSet, limit, setLimit, returned, undatedOpen, setUndatedOpen, openRow, undoKey, changeView, write, addOn, startProperty, endProperty }: { workspace: Workspace;
   db: Page & { database: Database }; rows: readonly Page[]; context: Parameters<typeof useMoveRow>[2]; addRow: ReturnType<typeof useAddRow>; weekStart: WeekStart; cap: number
   bars: readonly TimelineBar[]; undated: readonly Page[]; unit: TimelineUnit; today: LocalDate; opensOn: LocalDate; blockId: string; view: View; databaseId: string; canSet: boolean; limit: number; setLimit(n: number): void; returned: string | null
   undatedOpen: boolean; setUndatedOpen(open: boolean): void; openRow(id: string): void; undoKey: ReturnType<typeof useUndoKey>; changeView: ChangeView
   write(row: Page, writes: readonly BarWrite[], words: string): void; addOn(day: LocalDate): void; startProperty: Property | null; endProperty: Property | null
 }) {
+  const commit = useCommitCell()
   const width = dayWidth[unit]
   // The table beside the scale: pinned, so it and the bars scroll as one and stay in line.
   // It takes at most 60% of the width, so the bars keep theirs; columns past that are named in its head, and Properties reaches them.
@@ -226,6 +227,7 @@ function TimelineScale({ db, rows, context, addRow, weekStart, cap, bars, undate
   useEffect(() => () => cancelAnimationFrame(frame.current), [])
 
   const pad = 900
+  const body = useRef<HTMLDivElement>(null)
   const fromDay = Math.max(0, (seen.left - pad) / width), toDay = Math.min(total, (seen.left + seen.width + pad) / width)
   const { upper, lower } = ticksFor(unit, origin, fromDay, toDay)
   // Today's line is the day's middle, or the time now at Hours.
@@ -302,7 +304,7 @@ function TimelineScale({ db, rows, context, addRow, weekStart, cap, bars, undate
   }
   const paneRow = (row: Page, group?: string) => <div className="database-pane" style={{ width: pane }}>
     {!view.sort.length && !db.database.fixed && <span className="database-pane-handle" role="button" aria-label={`Drag ${row.title || 'Untitled'}`} onPointerDown={e => startReorder(e, row.id, group ?? null)}>⋮⋮</span>}
-    <button type="button" className={`database-pane-name${row.title ? '' : ' is-placeholder'}`} style={{ width: nameWidth }} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}</button>
+    <button type="button" className={`database-pane-name${row.title ? '' : ' is-placeholder'}`} style={{ width: nameWidth }} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}{groups && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
     {columns.map(c => cell(row, c.property, group))}
   </div>
 
@@ -324,6 +326,68 @@ function TimelineScale({ db, rows, context, addRow, weekStart, cap, bars, undate
     document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel)
   }
 
+  // Where a bar is, as it's being dragged too, so an arrow goes with it.
+  const barBox = (bar: TimelineBar) => {
+    const live = drag?.rowId === bar.row.id ? draggedBar(bar, drag.part, drag.minutes, p => rawValue(bar.row, p)) : null
+    const at = live ?? bar
+    const left = startAt(at.start, origin, unit) * width, right = endAt(at.end, origin, unit, at.start) * width
+    return { live, at, left, barWidth: Math.max(right - left, 10) }
+  }
+
+  // ------------------------------------------------------------ dependencies' arrows (sub-items §3)
+  // A row's line can be anywhere, with groups and "Show more" among them, so it's read from the page. A row in two groups goes by its first.
+  const deps = db.database.dependencies ?? null
+  const [lines, setLines] = useState<Record<string, number>>({})
+  useLayoutEffect(() => {
+    if (!deps || !body.current) return
+    const next: Record<string, number> = {}
+    body.current.querySelectorAll<HTMLElement>('.database-bar-lane[data-row]:not(.is-undated)').forEach(l => { next[l.dataset.row!] ??= l.offsetTop + rowHeight / 2 })
+    if (JSON.stringify(next) !== JSON.stringify(lines)) setLines(next)
+  })
+  const blockersOf = (row: Page) => { const raw = deps ? shownRaw(row, deps.blockedBy) : null; return Array.isArray(raw) ? (raw as string[]) : [] }
+  const linked = deps ? bars.flatMap(bar => (lines[bar.row.id] === undefined ? [] : blockersOf(bar.row).flatMap(id => {
+    const blocker = bars.find(b => b.row.id === id)
+    return blocker && id !== bar.row.id && lines[id] !== undefined ? [{ from: blocker, to: bar }] : []
+  }))) : []
+  const low = seen.left + pane - pad, high = seen.left + pane + seen.width + pad
+  const showLinks = (rowId: string, on: boolean) => { body.current?.querySelectorAll(`.database-link[data-from="${rowId}"], .database-link[data-to="${rowId}"]`).forEach(l => l.classList.toggle('is-hot', on)) }
+
+  // A drag from a bar's dot to another bar links them: from its end, this blocks that; from its start, that blocks this.
+  const [linking, setLinking] = useState<{ from: TimelineBar; side: 'start' | 'end'; x: number; y: number; over: string | null } | null>(null)
+  const startLink = (e: ReactPointerEvent, bar: TimelineBar, side: 'start' | 'end') => {
+    if (e.button !== 0 || e.pointerType !== 'mouse') return
+    e.preventDefault(); e.stopPropagation()
+    let pointerX = e.clientX, pointerY = e.clientY, over: string | null = null, auto = 0
+    const show = () => {
+      const el = scroller.current, box = body.current?.getBoundingClientRect()
+      if (!el || !box) return
+      const onto = document.elementFromPoint(pointerX, pointerY)?.closest('.database-bar')?.closest<HTMLElement>('.database-bar-lane[data-row]')?.dataset.row ?? null
+      over = onto === bar.row.id ? null : onto
+      setLinking({ from: bar, side, x: pointerX - box.left, y: pointerY - box.top, over })
+    }
+    const edges = () => {
+      const el = scroller.current
+      if (el) { const r = el.getBoundingClientRect(); if (pointerX < r.left + pane + 40) el.scrollLeft -= 12; else if (pointerX > r.right - 40) el.scrollLeft += 12 }
+      show()
+      auto = requestAnimationFrame(edges)
+    }
+    const finish = () => { cancelAnimationFrame(auto); document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); document.removeEventListener('keydown', esc, true); setLinking(null); justDragged.current = true; setTimeout(() => { justDragged.current = false }) }
+    const move = (ev: PointerEvent) => { pointerX = ev.clientX; pointerY = ev.clientY }
+    const up = () => {
+      finish()
+      const other = over && bars.find(b => b.row.id === over)
+      if (!other || !deps) return
+      const [blocker, blocked] = side === 'end' ? [bar.row, other.row] : [other.row, bar.row]
+      const now = blockersOf(blocked)
+      if (now.includes(blocker.id)) { toast('Already linked', { timeout: 3000 }); return }
+      commit(db, blocked, deps.blockedBy, [...now, blocker.id], `${blocked.title || 'Untitled'} is blocked by ${blocker.title || 'Untitled'}`)
+    }
+    const cancel = () => finish()
+    const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel() } }
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); document.addEventListener('keydown', esc, true)
+    auto = requestAnimationFrame(edges)
+  }
+
   const calculations = viewCalculations(db.database, view)
   const footColumns = [propertyOf(db.database, titleId)!, ...columns.map(c => c.property)]
   const hasFoot = paneOn && footColumns.some(p => calculations[p.id])
@@ -343,10 +407,7 @@ function TimelineScale({ db, rows, context, addRow, weekStart, cap, bars, undate
     {paneOn ? <div className="database-pane is-line" style={{ width: pane }}>{content}</div> : <span className="database-timeline-line">{content}</span>}
   </div>
   const barLine = (bar: TimelineBar, index: number, group?: string) => {
-    const live = drag?.rowId === bar.row.id ? draggedBar(bar, drag.part, drag.minutes, p => rawValue(bar.row, p)) : null
-    const at = live ?? bar
-    const left = startAt(at.start, origin, unit) * width, right = endAt(at.end, origin, unit, at.start) * width
-    const barWidth = Math.max(right - left, 10)
+    const { live, at, left, barWidth } = barBox(bar)
     const unsaved = [...pendingCells.values()].some(p => p.failed && p.rowId === bar.row.id)
     const off = left + barWidth < seen.left ? 'before' : left > seen.left + seen.width ? 'after' : null
     const drawnHere = left + barWidth > seen.left - pad && left < seen.left + seen.width + pad
@@ -354,13 +415,18 @@ function TimelineScale({ db, rows, context, addRow, weekStart, cap, bars, undate
     const tint = rowTint(db.database, view, bar.row, context)
     return <div key={`${group ?? ''}:${bar.row.id}`} className={`database-bar-lane${returned === bar.row.id ? ' is-returned' : ''}${reorder?.before === bar.row.id ? ' is-drop-before' : ''}${reorder?.rowId === bar.row.id ? ' is-dragging' : ''}`} data-row={bar.row.id} {...(group !== undefined ? { 'data-group': group } : {})} style={{ height: rowHeight }}>
       {paneOn && paneRow(bar.row, group)}
-      {drawnHere && <button type="button" className={`database-bar is-${at.shape}${tint?.className ?? ''}${bar.readOnly ? ' is-read-only' : ''}${live ? ' is-dragging' : ''}`} style={{ ...tint?.style, left: left + pane, width: barWidth }}
+      {drawnHere && <button type="button" className={`database-bar is-${at.shape}${tint?.className ?? ''}${bar.readOnly ? ' is-read-only' : ''}${live ? ' is-dragging' : ''}${linking?.over === bar.row.id ? ' is-link-target' : ''}`} style={{ ...tint?.style, left: left + pane, width: barWidth }}
+        {...(deps ? { onPointerEnter: () => showLinks(bar.row.id, true), onPointerLeave: () => showLinks(bar.row.id, false) } : {})}
         data-nav={index === 0 ? '0:0' : undefined} data-cell={cellKey({ blockId, databaseId, rowId: bar.row.id, columnId: titleId })} aria-label={`${title}, ${datesOf(at)}`}
         onPointerDown={e => startDrag(e, bar, 'move')} onMouseDown={e => e.preventDefault()} onClick={() => { if (!justDragged.current) openRow(bar.row.id) }}>
-        <span className={`database-bar-title${bar.row.title ? '' : ' is-placeholder'}`}>{title}{unsaved && <span className="database-card-unsaved"> · Not saved</span>}</span>
+        <span className={`database-bar-title${bar.row.title ? '' : ' is-placeholder'}`}>{title}{groups && !paneOn && <SubItemParent workspace={workspace} db={db} row={bar.row} />}{unsaved && <span className="database-card-unsaved"> · Not saved</span>}</span>
         {!bar.readOnly && <>
           <span className="database-bar-edge is-start" onPointerDown={e => { e.stopPropagation(); startDrag(e, bar, 'start') }} />
           <span className="database-bar-edge is-end" onPointerDown={e => { e.stopPropagation(); startDrag(e, bar, 'end') }} />
+        </>}
+        {deps && !drag && <>
+          <span className="database-bar-dot is-start" onPointerDown={e => startLink(e, bar, 'start')} onClick={e => e.stopPropagation()} />
+          <span className="database-bar-dot is-end" onPointerDown={e => startLink(e, bar, 'end')} onClick={e => e.stopPropagation()} />
         </>}
         {live && <span className="database-bar-tip">{datesOf(at)}</span>}
       </button>}
@@ -395,7 +461,7 @@ function TimelineScale({ db, rows, context, addRow, weekStart, cap, bars, undate
       <button type="button" className="database-calendar-today" disabled={showsToday} onClick={goToday}>Today</button>
     </div>
     <div className="database-timeline" ref={scroller} onScroll={onScroll} onKeyDown={onKeyDown} role="group" aria-label="Timeline">
-      <div className="database-timeline-body" style={{ width: scaleWidth }}>
+      <div className="database-timeline-body" ref={body} style={{ width: scaleWidth }}>
         <div className="database-scale" onPointerMove={e => { if (canSet && e.pointerType === 'mouse') setHover(dayAtX(e.clientX)) }} onPointerLeave={() => setHover(null)}>
           {paneOn && <div className="database-pane database-pane-head" style={{ width: pane, height: 44 }}><span style={{ width: nameWidth }}>Name{hiddenColumns > 0 && <button type="button" className="app-link database-pane-more" onClick={() => openDatabaseMenu(blockId, databaseId, 'properties')}> · {hiddenColumns} more</button>}</span>{columns.map(c => <span key={c.property.id} style={{ width: columnWidth }}>{c.property.name}</span>)}</div>}
           <div className="database-scale-upper">{upper.map((t, i) => <span key={t.at} className="database-scale-label" style={{ left: pane + Math.max(0, t.at) * width, width: ((upper[i + 1]?.at ?? total) - Math.max(0, t.at)) * width }}><span>{t.label}</span></span>)}</div>
@@ -406,6 +472,18 @@ function TimelineScale({ db, rows, context, addRow, weekStart, cap, bars, undate
           {lower.map(t => <span key={t.at} className="database-grid-line" style={{ left: t.at * width }} />)}
           <span className="database-today-line" style={{ left: todayAt }} />
         </div>
+        {/* Before the lines, so bars and their names sit on top. It only draws: a link changes by a bar's dot or in the cell. */}
+        {deps && <svg className="database-links" aria-hidden="true" width="1" height="1">
+          {linked.map(({ from, to }) => {
+            const a = barBox(from), b = barBox(to)
+            const { line, head } = linkPath({ x: pane + a.left + a.barWidth + 1, y: lines[from.row.id]! }, { x: pane + b.left - 1, y: lines[to.row.id]! }, low, high)
+            return <g key={`${from.row.id}>${to.row.id}`} className="database-link" data-from={from.row.id} data-to={to.row.id}><path d={line} />{head && <path className="database-link-head" d={head} />}</g>
+          })}
+          {linking && (() => {
+            const box = barBox(linking.from), start = { x: pane + box.left + (linking.side === 'end' ? box.barWidth + 1 : -1), y: lines[linking.from.row.id] ?? linking.y }
+            return <path className="database-link-draft" d={`M${start.x} ${start.y}L${linking.x} ${linking.y}`} />
+          })()}
+        </svg>}
         {groups ? groups.shown.map(group => {
           const isFolded = folded.has(group.key), here = bars.filter(b => group.rows.includes(b.row)), shown = here.slice(0, limitOf(group.key))
           return <Fragment key={group.key}>

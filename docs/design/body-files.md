@@ -1,7 +1,7 @@
 # Images and files in a page's body (B87): the states
 
-- Author: Jazz (Design) · 2026-11-04 · status: **reviewed by Bumblebee and Roadbuster, not built.** Build waits for Files (R3-11), as B87 says.
-- Nothing here has been prototyped or tried on a real screen. "Recommend" means my judgement; the only evidence used is the code and `docs/plan/files-sizing.md`.
+- Author: Jazz (Design) · 2026-11-05 · status: **built in #134,** with the changes in §9 after looking at it in Chromium at 1280 and 390. Not looked at on a real phone.
+- "Recommend" means my judgement; the evidence before the build was the code and `docs/plan/files-sizing.md`.
 
 ## 1. Where it starts
 
@@ -94,5 +94,13 @@ None open.
 **Settled (Bumblebee, 2026-11-04):** the main decision in §4, the words "Too large · 25 MB at most" and "Storage full · 5 GB at most", and accepting an old build's broken image, as an old build only exists during a rollback (Roadbuster agrees).
 
 **Settled (Roadbuster, 2026-11-04, for `feat/files`):** `PUT /api/files/:id` takes an id the client makes and never overwrites. If the key is taken, a retry of the same size returns 200 and different bytes return 409, with what's there untouched. Files' cell saves its value only after the bytes are in, so it doesn't use §4's pending shape, only its words.
+
+## 9. What changed from this once built (2026-11-05)
+
+- **§3, the panel at 390:** it floats by the block rather than being a sheet, so it clears the keyboard. `/image` opens the panel, not the picker straight away, at both widths.
+- **§5, the bar:** it shows when the block is chosen by a click, not on hover, because a hover bar would flicker over every picture passed. It sits above the block, as the text bar does, and has no `⋯` at 1280.
+- **§5, the caption:** as designed, written in place under the picture. A click on a caption edits it, Esc leaves it as it was, and clicking away keeps it. A file has no caption, as it's one row.
+- **§4, a file's status:** "Isn't here" rather than "{name} isn't here", as its row already has the name. An image still says the name.
+- **§6, loading:** 16:9 only held its place for a 16:9 picture, so the block keeps the picture's width and height (Roadbuster, in #134).
 
 **Left out, for §14 Later:** crop and mask, alt text, comments on an image, columns, Unsplash (B87's own list). Also a lightbox: ↗ covers looking closely for now.
