@@ -1,0 +1,18 @@
+✔ an address says its file, and a link to the web isn't ours (0.643042ms)
+✔ a page's file counts: bodyFilesIn, a Gallery's first image, the workspace holding files (2.880708ms)
+✔ the export names it, says it isn't included, and leaves no link pointing nowhere (1.026666ms)
+✔ search finds a block by its caption and name, never by its address (1.524708ms)
+✔ the day draft sends the model no file, name or address (B87 10) (0.740667ms)
+✔ the sweep holds a file in a day, a template, a page in Trash, and a copy on another page; past those, nothing does (B87 8) (0.735167ms)
+✔ the sweep holds a file through a template, a copy on another page and a synced block, and a copy outlives the block it came from (B87 8) (1.09375ms)
+✔ a picture is writing, not an empty line: a day holding only one is written, and a row goes below it (B87 13) (0.464125ms)
+✔ Load latest keeps a caption and a replaced file, and a picture both sides changed comes back beside it (B23) (0.384708ms)
+✔ restoring a day from Trash onto a newer one keeps a picture that was all the newer one held (B87 13) (0.602875ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 119.122625

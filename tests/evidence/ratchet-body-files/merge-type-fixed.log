@@ -1,0 +1,31 @@
+{
+  "document": [
+    {
+      "id": "target",
+      "type": "image",
+      "props": {
+        "url": "/api/files/image1234?name=photo.png&size=70&type=image%2Fpng",
+        "name": "photo.png",
+        "caption": ""
+      },
+      "children": []
+    },
+    {
+      "id": "remote",
+      "type": "paragraph",
+      "props": {},
+      "content": [
+        {
+          "type": "text",
+          "text": "Other tab words",
+          "styles": {}
+        }
+      ],
+      "children": []
+    }
+  ],
+  "inserted": [
+    "target"
+  ],
+  "placed": {}
+}

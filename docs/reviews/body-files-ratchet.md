@@ -1,6 +1,6 @@
 # Independent PR134 review
 
-Candidate cdd82377. Changes requested: Load latest can discard a newly chosen image when the block changed type.
+Initial candidate cdd82377 had a confirmed Load latest defect. It is fixed and independently retested on 921c6d4c; see the fix retest below.
 
 ## Confirmed defect
 
@@ -15,4 +15,14 @@ The isolated `merge-type.ts` fixture demonstrates the cause: the file-block merg
 
 Evidence: `tests/evidence/ratchet-body-files/merge-type.ts`, `merge-type.log`, `edit.ts`, `merge-type.mjs`, and `merge-browser.log`. The browser fixture uses its separate store `/tmp/ratchet134-race.sqlite` and server on port 3700; the standard script uses port 3699 and a different store.
 
-Build and body-files domain tests passed independently. Full standard browser scripts are running; results will be appended. No production writes, actual R2 bucket, physical device, Take Photo or cross-app native clipboard test performed by this reviewer.
+Build and body-files domain tests passed independently. The full Chromium baseline passed all 47 scenarios. No production writes, actual R2 bucket, physical device, Take Photo or cross-app native clipboard test performed by this reviewer.
+
+## Fix retest
+
+On 921c6d4c, the isolated fixture and body-file tests pass. The exact browser conflict flow now keeps both the remote words and the photo, independently in Chromium and WebKit, with assertions on the saved block kind and visible image. Fixed browser logs are named `merge-browser-fixed-*`.
+
+The full Chromium standard run passed all 47 scenarios on cdd82377. Its WebKit baseline was interrupted after the initial scenarios so the final fix could be built; that partial log is explicitly labeled. A fresh complete WebKit run on the fixed build is completing; its result is recorded below. The only application change between those candidates is draft-merge.ts; remaining changes are its test and documentation.
+
+## Final conclusion
+
+Cleared the confirmed finding on 921c6d4c. All 46 full WebKit standard scenarios pass on that fixed build. Together with the 47-scenario Chromium baseline, independent exact conflict-flow retests in both engines, ten passing domain tests and the fixed build, no remaining confirmed blocker was found in this review. The explicit environment limits above remain.
