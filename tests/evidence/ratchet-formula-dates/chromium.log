@@ -1,0 +1,7 @@
+PASS Calendar, with a Formula the only date: tapping it works, rows sit on their days, and a drag is refused {"menuOffers":["Full page","Side peek","Center peek"],"notice":"","dateBy":"when","layout":"calendar","shown":[1,1],"apart":119,"moved":0,"noticeAfterDrag":"","stored":"n","ok":true,"errors":[]}
+PASS Timeline, with a Formula the only date: bars are drawn read-only, a drag changes nothing, and it never says Not saved {"menuOffers":["Full page","Side peek","Center peek"],"notice":"","dateBy":"when","bars":2,"readOnly":2,"noticeAfterDrag":"When can't be changed","stored":"n","ok":true,"errors":[]}
+PASS A new row on a Formula Timeline: it makes the row, sets no date of its own, and nothing refuses {"button":1,"rows":1,"values":[],"notice":"","ok":true,"errors":[]}
+PASS A Formula Calendar has no add on a day: the row couldn't land there {"adds":0,"days":35,"ok":true,"errors":[]}
+PASS A Rollup with latest: offered, taken, on its day, read-only {"menuOffers":["Full page","Side peek","Center peek"],"notice":"","dateBy":"roll","shown":1,"adds":0,"after":"","stored":"n,link","ok":true,"errors":[]}
+PASS 390: the Timeline reads as its list, by week, with the Formula date {"notice":"","dateBy":"when","rows":true,"overflow":0,"ok":true,"errors":[]}
+ALL PASS
