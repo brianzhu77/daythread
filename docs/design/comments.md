@@ -57,10 +57,10 @@ A workspace holds one person, so a comment is a note attached to something, kept
 - **A thread on a synced line, proposed (Bumblebee, after Ratchet 858117fa, on `synced-blocks.md` §4):** it also stores its home, the page it was made on.
   - **Shown:** on every page holding a place, in the pane and as a mark.
   - **Unsync here, or deleting a copy:** the thread stays with the shared lines. That place's lines are ordinary now and carry no thread, as any copy doesn't.
-  - **Unsync all, deleting the original, or Unsync as the only place, so the sharing ends:** the thread moves to its one line in the home page if that place still exists, otherwise to the first remaining place in page order. Other places get no copy of it.
+  - **Unsync all, deleting the original, or Unsync as the only place, so the sharing ends:** the thread moves to its one line in the home page if that line can still be identified, otherwise to the first remaining place in page order, otherwise the home page's pane. After Unsync here, the home page's old mapping may be gone (Ratchet dcd7619a). Other places get no copy of it.
   - **Deleting the last place:** "Line removed" in its home page's pane, as for any line.
   - **A place's page in Trash:** the others go on showing it. If every place is in Trash, it goes with them, and comes back with the first restored.
-  - **Undo of any of these:** one Undo puts the thread back on the shared line, with the sync's own rule: "Can't undo · edited since" if a place changed.
+  - **Undo of any of these:** one Undo moves the thread's anchor back to the shared line, with the sync's own rule: "Can't undo · edited since" if a place changed. It never restores an old copy of the replies (Ratchet dcd7619a). Step 2's checks include: unsync the home, edit and reply, end the sharing elsewhere, then Undo.
   - **Search and export:** export writes it once, under its home page, or the first remaining place. Search opens the home place if it's live, otherwise the first live place, otherwise the home page's pane.
 - **A page or row in Trash:** its threads go with it and come back with it, and go for good with it. Moving a row to another database keeps them.
 - **Search:** finds a comment's words and opens the thread. Resolved ones too, marked as resolved.
