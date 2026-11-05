@@ -101,6 +101,7 @@ await scenario('Every…: chosen, on its own, with no Edit property offered, its
   // From's weekday shows, and the last can't be turned off.
   const dayOn = () => sheet(page).locator('.automation-weekdays button.is-on').allTextContents(), dayShown = await dayOn()
   await sheet(page).locator('.automation-weekdays button.is-on').click(); await wait(80); const stillOn = await dayOn()
+  const nextLine = await sheet(page).getByText(/^Next: /).textContent()
   // An end date is asked for, and one before From says so and holds Done.
   const noUntil = await sheet(page).getByLabel('Until').count()
   await sheet(page).getByRole('button', { name: '+ End date' }).click(); await wait(80); await sheet(page).getByLabel('Until').fill('2020-01-01'); await wait(80)
@@ -122,7 +123,7 @@ await scenario('Every…: chosen, on its own, with no Edit property offered, its
   await page.reload(); await wait(2600)
   const still = rows().filter(r => r.title === 'Scheduled').length
   const says = offered.join()
-  return { ok: noMore === 0 && cleared === '' && typed === '2' && back === '2' && dayShown.length === 1 && stillOn.join() === dayShown.join() && noUntil === 0 && /never run/.test(early) && !says.includes('Edit property') && rule.name === 'Weekly' && one === 1 && still === 1 && Boolean(last) && !/Weekly/.test(words), noMore, cleared, typed, back, dayShown, stillOn, noUntil, early, says, name: rule.name, one, still, last, words }
+  return { ok: /^Next: .+, 09:00$/.test(nextLine) && noMore === 0 && cleared === '' && typed === '2' && back === '2' && dayShown.length === 1 && stillOn.join() === dayShown.join() && noUntil === 0 && /never run/.test(early) && !says.includes('Edit property') && rule.name === 'Weekly' && one === 1 && still === 1 && Boolean(last) && !/Weekly/.test(words), nextLine, noMore, cleared, typed, back, dayShown, stillOn, noUntil, early, says, name: rule.name, one, still, last, words }
 })
 await scenario('390: a sheet that fits, with 16 px fields', '', async page => {
   await page.locator('.database-more-button').first().tap(); await wait(300); await page.locator('.database-menu').getByRole('menuitem', { name: /^Automations/ }).tap(); await wait(400)

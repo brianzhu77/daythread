@@ -1,7 +1,7 @@
 // A database's rules (docs/design/automations.md §2): a list, and each rule's editor, in Buttons' shell. Popover-sized at 1280, a sheet at 390. It's on the database, so every view shares it.
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
-import { automationProblem, automationSteps, everyOf, everyProblem, stepBroken, withLiveNames, type Automation, type AutomationTrigger } from '../domain/automations'
+import { automationProblem, automationSteps, everyOf, everyProblem, nextRun, stepBroken, withLiveNames, type Automation, type AutomationTrigger } from '../domain/automations'
 import { readSteps, stepKinds, stepTitle, writeSteps, type ButtonStep } from '../domain/buttons'
 import { isDatabase, propertyOf, titleId, type Condition, type Database, type DatabaseChange, type Property } from '../domain/database'
 import type { Page } from '../domain/types'
@@ -76,6 +76,7 @@ function Sheet({ db, at }: { db: Page & { database: Database }; at: { top: numbe
 }
 
 const everyValue = '__every'
+const nextWords = (date: string, today: string) => { const tomorrow = new Date(`${today}T12:00:00Z`); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); return date === today ? 'today' : date === tomorrow.toISOString().slice(0, 10) ? 'tomorrow' : new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }) }
 const pad = (n: number) => String(n).padStart(2, '0')
 /** As schedules compare, in his own wall clock: "YYYY-MM-DDTHH:mm". */
 const wallClock = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
@@ -104,7 +105,7 @@ function Editor({ rule, isNew, db, onCancel, onDone, onDelete }: { rule: Automat
   const { workspace } = useWorkspace()
   const [name, setName] = useState(rule.name), [triggers, setTriggers] = useState(rule.triggers), [any, setAny] = useState(Boolean(rule.any)), [viewId, setViewId] = useState(rule.viewId ?? '')
   const [steps, setSteps] = useState<ButtonStep[]>(() => readSteps(rule.steps)), [at, setAt] = useState<number | 'kinds' | null>(null), [asking, setAsking] = useState(false)
-  const draft = (): Automation => { const { any: _any, viewId: _view, ...rest } = rule; return { ...rest, name: name.trim() || (steps[0] ? stepTitle(steps[0]) : 'Automation'), triggers, ...(any ? { any: true as const } : {}), ...(viewId ? { viewId } : {}), steps: writeSteps(steps) } }
+  const draft = (): Automation => { const { any: _any, viewId: _view, ...rest } = rule; return { ...rest, /* From now, if this edit changes the schedule. */ name: name.trim() || (steps[0] ? stepTitle(steps[0]) : 'Automation'), triggers: triggers.map(t => (t.kind === 'every' ? { ...t, repeat: { ...t.repeat, notBefore: wallClock(new Date()) } } : t)), ...(any ? { any: true as const } : {}), ...(viewId ? { viewId } : {}), steps: writeSteps(steps) } }
   const start = useRef(JSON.stringify({ ...rule, any: Boolean(rule.any), viewId: rule.viewId ?? '' })), changedYet = JSON.stringify({ ...rule, name, triggers, any, viewId, steps: writeSteps(steps) }) !== start.current
   const stepIssue = (i: number) => problemOf(steps, i) ?? (everyOf({ triggers }) ? everyProblem(steps[i]!) : null) ?? (workspace ? stepBroken(workspace, db.database, steps[i]!) : null)
   const firstProblem = steps.findIndex((_, i) => stepIssue(i))
@@ -155,7 +156,12 @@ function Editor({ rule, isNew, db, onCancel, onDone, onDelete }: { rule: Automat
           {triggers.length > 1 && <button type="button" className="database-rule-remove" aria-label="Remove trigger" onClick={() => setTriggers(list => list.filter((_, j) => j !== i))}>×</button>}
         </div>
       })}
-      {!everyOf({ triggers }) && <button type="button" role="menuitem" onClick={() => setTriggers(list => [...list, { kind: 'row-added' }])}>+ Add trigger</button>}
+      {every && (() => {
+        const now = new Date(), clock = wallClock(now), repeat = { ...every.repeat, notBefore: every.repeat.notBefore && JSON.stringify(rule.triggers[0]) === JSON.stringify(every) ? every.repeat.notBefore : clock }
+        const next = nextRun({ ...every, repeat }, clock.slice(0, 10), clock.slice(11), workspace?.weekStart ?? 0)
+        return <p className="button-editor-label" role="status">{next ? `Next: ${nextWords(next, clock.slice(0, 10))}, ${repeat.time ?? '00:00'}` : 'No more runs'}</p>
+      })()}
+      {!every && <button type="button" role="menuitem" onClick={() => setTriggers(list => [...list, { kind: 'row-added' }])}>+ Add trigger</button>}
       <p className="button-editor-label">In</p>
       <select className="button-editor-field" aria-label="In" value={viewId} onChange={e => setViewId(e.target.value)}><option value="">The whole database</option>{db.database.views.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}</select>
       <p className="button-editor-label">Do</p>
