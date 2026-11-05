@@ -68,10 +68,10 @@ await dragTo('Post the letter', `open${SEP}${otherLane}`)
 now = await cellOf('Post the letter')
 check(same(now, ['open', otherLane]) && await refused() === 0, 'a finished to-do dropped on Open in a day is reopened on that day', now)
 if (shots) await page.screenshot({ path: `${shots}/${engine}-1280-todos-lanes-after.png`, fullPage: true })
-// One level of Undo: it takes back the day, and the to-do stays reopened on the day it had.
+// One change now (R4-17, closing #92's exception): one Undo puts it back as it was, finished on its day.
 await undo(1)
 now = await cellOf('Post the letter')
-check(same(now, ['open', doneAt]) && await page.getByRole('button', { name: 'Undo' }).count() === 0, "Undo takes back the last change", now)
+check(same(now, ['done', doneAt]), 'one Undo takes back both', now)
 check(errors.length === 0, 'no page errors', errors)
 console.log(fails ? `${fails} FAILED` : 'ALL PASS')
 await browser.close()
