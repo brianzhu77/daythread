@@ -40,14 +40,15 @@ const toneMarks = ['✋', '✋🏻', '✋🏼', '✋🏽', '✋🏾', '✋🏿']
 const emojiLike = /\p{Extended_Pictographic}|\p{Regional_Indicator}|⃣/u
 const singleEmoji = (text: string) => { const parts = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(text.trim())]; return parts.length === 1 && emojiLike.test(parts[0]!.segment) ? parts[0]!.segment : null }
 
+/** How many choices each page has had sent. Beside the drafts and as long-lived, as a picker closed and opened again mustn't take an older reply for the newest. */
+const sendsOf = new Map<string, number>()
 /** One choice saved: the newest sent is the only one that may settle what shows. */
 function useIconSender() {
   const { run } = useWorkspace()
-  const latest = useRef(new Map<string, number>())
   return useCallback(function send(pageId: string, icon: string | null) {
-    const sent = (latest.current.get(pageId) ?? 0) + 1
-    latest.current.set(pageId, sent)
-    const newest = () => latest.current.get(pageId) === sent
+    const sent = (sendsOf.get(pageId) ?? 0) + 1
+    sendsOf.set(pageId, sent)
+    const newest = () => sendsOf.get(pageId) === sent
     let failed = false
     void run({ type: 'set-page-icon', pageId, icon }, r => ({ text: r.message, undoOperationId: r.operationId }), undefined, {
       quiet: true,
