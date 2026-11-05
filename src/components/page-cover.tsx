@@ -32,14 +32,15 @@ function useLook(page: Pick<Page, 'id' | 'cover' | 'coverPosition'>): Look {
   return page.cover ? { cover: page.cover, position: page.coverPosition ?? 0.5 } : null
 }
 
+/** How many choices each page has had sent. Beside the drafts and as long-lived, as a panel closed and opened again mustn't take an older reply for the newest. */
+const sendsOf = new Map<string, number>()
 /** One choice saved: only the newest may settle what shows. A failure goes back to what's saved and says so; a refusal would only be refused again, so it says why. */
 function useCoverSender() {
   const { run } = useWorkspace()
-  const latest = useRef(new Map<string, number>())
   return useCallback(function send(pageId: string, look: Look, moved = false) {
-    const sent = (latest.current.get(pageId) ?? 0) + 1
-    latest.current.set(pageId, sent)
-    const newest = () => latest.current.get(pageId) === sent
+    const sent = (sendsOf.get(pageId) ?? 0) + 1
+    sendsOf.set(pageId, sent)
+    const newest = () => sendsOf.get(pageId) === sent
     setDraft(pageId, look)
     let failed = false
     void run({ type: 'set-page-cover', pageId, cover: look?.cover ?? null, ...(look && moved ? { position: look.position } : {}) }, r => ({ text: r.message, undoOperationId: r.operationId }), undefined, {
