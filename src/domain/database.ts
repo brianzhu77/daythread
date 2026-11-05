@@ -5,7 +5,7 @@ import { rowTemplateTarget } from "./day-template.ts";
 import { formulaProblem, rollupProblem, worldOf } from "./formula.ts";
 import type { LocalDate, Page, WeekStart, Workspace } from "./types.ts";
 
-export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url", "email", "phone", "createdTime", "editedTime", "id", "relation", "rollup", "formula"] as const;
+export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url", "email", "phone", "createdTime", "editedTime", "id", "relation", "rollup", "formula", "files"] as const;
 export type PropertyType = (typeof propertyTypes)[number];
 export type NumberFormat = "plain" | "comma" | "percent" | "currency";
 export type StatusGroup = "todo" | "active" | "done";
@@ -91,6 +91,8 @@ export interface View {
   defaultTemplate?: string;
   /** With sub-items on: nested in toggles (table, list) or flat; and which rows. Absent: nested, both. */
   subItemsDisplay?: SubItemsDisplay;
+  /** Gallery: the Files property a card shows; the first image in the row's body when absent. */
+  cardImage?: string;
   subItemsShow?: SubItemsShow;
   /** A table's foot: what each column adds up to, by column id (design §4.1a, R3-8). */
   calculations?: Record<string, CalcKind>;
@@ -174,7 +176,17 @@ export interface Database {
 }
 export type RawValues = Record<string, Json>;
 /** What a cell shows: the typed value, or null for empty (checkbox: false). */
-export type CellValue = string | number | string[] | DateValue | boolean | null;
+export type CellValue = string | number | string[] | DateValue | boolean | FileValue[] | null;
+/** One file in a Files cell (R3-11). The bytes are in the file store under its id; this travels with the row, so Undo, Trash and a moved row need nothing else. */
+export interface FileValue { id: string; name: string; size: number; type: string; thumb?: string }
+/** Whether anything here holds a file, Trash included. */
+export const holdsFiles = (ws: Pick<Workspace, "pages">): boolean => ws.pages.some((p) => isDatabase(p) && p.database.properties.some((x) => x.type === "files" && databaseRowsOf(ws, p.id).some((r) => Array.isArray(r.values?.[x.id]) && (r.values![x.id] as unknown[]).length > 0)));
+const databaseRowsOf = (ws: Pick<Workspace, "pages">, id: string) => ws.pages.filter((r) => r.parentId === id);
+export const fileLimits = { size: 25 * 1024 * 1024, perCell: 50, account: 5 * 1024 * 1024 * 1024 };
+const isFileValue = (x: unknown): x is FileValue => {
+  const f = x as FileValue | null;
+  return !!f && typeof f === "object" && typeof f.id === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(f.id) && typeof f.name === "string" && f.name.length > 0 && f.name.length <= 255 && Number.isInteger(f.size) && f.size >= 0 && f.size <= fileLimits.size && typeof f.type === "string" && f.type.length <= 100 && (f.thumb === undefined || (typeof f.thumb === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(f.thumb)));
+};
 
 /** The column id of a row's title, in views, sorts, filters and `set-values`. */
 export const titleId = "title";
@@ -275,6 +287,10 @@ export function readValue(property: Property, raw: unknown): CellValue {
     case "rollup":
     case "formula":
       return null;
+    case "files": {
+      const files = Array.isArray(raw) ? raw.filter(isFileValue) : [];
+      return files.length ? files : null;
+    }
     case "text":
     case "url":
     case "email":
@@ -331,6 +347,12 @@ export function storedValue(property: Property, input: unknown): Json | undefine
     case "rollup":
     case "formula":
       return refuse();
+    case "files": {
+      if (!Array.isArray(input) || input.length > fileLimits.perCell || !input.every(isFileValue)) refuse();
+      const seen = new Set<string>();
+      const files = (input as FileValue[]).filter((f) => !seen.has(f.id) && seen.add(f.id)).map((f) => ({ id: f.id, name: f.name, size: f.size, type: f.type, ...(f.thumb ? { thumb: f.thumb } : {}) }));
+      return files.length ? (files as unknown as Json) : undefined;
+    }
     case "relation": {
       if (!Array.isArray(input) || input.length > limits.multi) refuse();
       const list = [...new Set(input as unknown[])];
@@ -416,7 +438,7 @@ export function lostOnTypeChange(ws: Workspace, databaseId: string, property: Pr
 export function rowsWithOption(ws: Workspace, databaseId: string, property: Property, optionId: string): number {
   return databaseRows(ws, databaseId).filter((r) => {
     const v = readValue(property, r.values?.[property.id]);
-    return v === optionId || (Array.isArray(v) && v.includes(optionId));
+    return v === optionId || (Array.isArray(v) && (v as string[]).includes(optionId));
   }).length;
 }
 
@@ -465,6 +487,11 @@ export function conditionHolds(property: Property, condition: Condition, value: 
     case "rollup":
     case "formula":
       return null;
+    case "files": {
+      if (typeof want !== "string") return null;
+      const has = Array.isArray(value) && (value as FileValue[]).some((f) => fold(f.name).includes(fold(want)));
+      return op === "contains" ? has : op === "doesNotContain" ? !has : null;
+    }
     case "text":
     case "url":
     case "email":
@@ -546,6 +573,8 @@ function compareValues(property: Property, a: CellValue, b: CellValue): number {
     case "rollup":
     case "formula":
       return 0;
+    case "files":
+      return collator.compare((a as FileValue[])[0]?.name ?? "", (b as FileValue[])[0]?.name ?? "");
     case "text":
     case "url":
     case "email":
@@ -879,7 +908,7 @@ export type DatabaseChange =
   | { kind: "duplicateProperty"; propertyId: string; newId: string }
   | { kind: "moveProperty"; propertyId: string; beforeId: string | null }
   | { kind: "addView"; view: View }
-  | { kind: "updateView"; viewId: string; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; openIn?: "center" | "side" | null; colourRules?: ColourRule[]; frozenThrough?: string | null; /** null: back to the default */ nameWidth?: number | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
+  | { kind: "updateView"; viewId: string; cardImage?: string | null; subItemsDisplay?: SubItemsDisplay; subItemsShow?: SubItemsShow; name?: string; columns?: View["columns"]; sort?: Sort[]; filter?: Condition[]; layout?: ViewLayout; /** null: no groups */ groupBy?: string | null; groupDateBy?: GroupDateBy; hideEmptyGroups?: boolean; hiddenGroups?: string[]; /** null: none */ subGroupBy?: string | null; subGroupDateBy?: GroupDateBy; hiddenSubGroups?: string[]; dateBy?: string; /** null: back to a month */ calendarSpan?: "week" | null; timelineEnd?: string | null; timelineUnit?: View["timelineUnit"]; timelineTable?: true | null; openIn?: "center" | "side" | null; colourRules?: ColourRule[]; frozenThrough?: string | null; /** null: back to the default */ nameWidth?: number | null; filterAny?: boolean; wrapName?: boolean; calculations?: Record<string, CalcKind>; /** null: the count */ boardCalculation?: BoardCalculation | null; /** null: none of its own */ defaultTemplate?: string | null }
   /** null: none */
   | { kind: "setRepeat"; templateId: string; repeat: Omit<Repeat, "last" | "lastRan"> | null }
   | { kind: "setDefaultTemplate"; templateId: string | null }
@@ -946,7 +975,7 @@ export function columnCalc(db: Database, rows: readonly Page[], columnId: string
   switch (kind) {
     case "countAll": return count(rows.length);
     case "countValues": return count(filled.reduce<number>((n, v) => n + (Array.isArray(v) ? v.length : 1), 0));
-    case "countUnique": return count(new Set(filled.flatMap((v) => (Array.isArray(v) ? v : [JSON.stringify(v)]))).size);
+    case "countUnique": return count(new Set(filled.flatMap((v) => (Array.isArray(v) ? (v as Array<string | FileValue>).map((x) => (typeof x === "string" ? x : x.id)) : [JSON.stringify(v)]))).size);
     case "countEmpty": return count(rows.length - filled.length);
     case "countNotEmpty": return count(filled.length);
     case "percentEmpty": return percent(rows.length - filled.length);
@@ -987,7 +1016,7 @@ function cleanCalculations(db: Database, input: unknown): Record<string, CalcKin
   return out;
 }
 
-export const typeLabels: Record<PropertyType, string> = { text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", relation: "Relation", rollup: "Rollup", formula: "Formula", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
+export const typeLabels: Record<PropertyType, string> = { text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", relation: "Relation", files: "Files", rollup: "Rollup", formula: "Formula", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
 const hasOptions = (type: PropertyType): boolean => type === "select" || type === "multiSelect" || type === "status";
 
 function cleanName(value: unknown, what: string): string {
@@ -1383,7 +1412,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     }
     case "updateView": {
       const old = view(change.viewId);
-      const { filterAny: _filterAny, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, openIn: _openIn, colourRules: _colourRules, frozenThrough: _frozenThrough, nameWidth: _nameWidth, ...rest } = old;
+      const { filterAny: _filterAny, cardImage: _cardImage, wrapName: _wrapName, boardCalculation: _boardCalculation, defaultTemplate: _defaultTemplate, calculations: _calculations, groupBy: _groupBy, groupDateBy: _groupDateBy, hideEmptyGroups: _hideEmptyGroups, hiddenGroups: _hiddenGroups, subGroupBy: _subGroupBy, subGroupDateBy: _subGroupDateBy, hiddenSubGroups: _hiddenSubGroups, dateBy: _dateBy, calendarSpan: _calendarSpan, timelineEnd: _timelineEnd, timelineUnit: _timelineUnit, timelineTable: _timelineTable, openIn: _openIn, colourRules: _colourRules, frozenThrough: _frozenThrough, nameWidth: _nameWidth, ...rest } = old;
       const layout = change.layout !== undefined ? cleanLayout(change.layout) : old.layout;
       const group = cleanGroup(db, {
         groupBy: change.groupBy === null ? undefined : change.groupBy ?? old.groupBy,
@@ -1409,6 +1438,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
         ...(change.name !== undefined ? { name: cleanName(change.name, "A view") } : {}),
         ...(change.subItemsDisplay ? { subItemsDisplay: change.subItemsDisplay } : {}),
         ...(change.subItemsShow ? { subItemsShow: change.subItemsShow } : {}),
+        ...(change.cardImage !== undefined ? (change.cardImage ? { cardImage: change.cardImage } : {}) : (old.cardImage ? { cardImage: old.cardImage } : {})),
         ...(change.columns !== undefined ? { columns: cleanColumns(db, change.columns) } : {}),
         ...(change.sort !== undefined ? { sort: cleanSort(db, change.sort, old.sort) } : {}),
         ...(change.filter !== undefined ? { filter: cleanFilter(db, change.filter, old.filter) } : {}),
@@ -1506,7 +1536,8 @@ export function valueText(db: Database, columnId: string, value: CellValue): str
   if (property?.type === 'createdTime' || property?.type === 'editedTime') return (value as DateValue).start.replace('T', ' ')
   if (property?.type === 'id') return `${property.prefix ?? ''}${value}`
   if (value === true) return 'Yes'
-  if (Array.isArray(value)) return value.map(name).filter(Boolean).join(', ')
+  if (property?.type === 'files') return (value as FileValue[]).map(f => f.name).join(', ')
+  if (Array.isArray(value)) return (value as string[]).map(name).filter(Boolean).join(', ')
   if (typeof value === 'object') return value.end ? `${value.start} → ${value.end}` : value.start
   if (property && (property.type === 'select' || property.type === 'status')) return name(String(value))
   return String(value)

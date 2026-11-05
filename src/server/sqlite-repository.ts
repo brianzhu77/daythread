@@ -88,6 +88,7 @@ export class SqliteWorkspaceRepository implements ServerRepository {
     const undo = stored.undo?.before ? { ...stored.undo, before: strippedWorkspace(stored.undo.before as Workspace) } : stored.undo
     db.prepare('UPDATE workspace SET revision = ?, data = ? WHERE id = 1').run(workspace.revision, JSON.stringify({ ...stored, ...(undo ? { undo } : {}) }))
   }
+  async heldText(): Promise<string> { return JSON.stringify(await this.load()) }
   async load(): Promise<Workspace> {
     const started = performance.now(), operationId = logOperationId() ?? crypto.randomUUID(); let db: DatabaseSync | undefined
     try {

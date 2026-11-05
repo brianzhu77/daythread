@@ -133,6 +133,12 @@ export const ChevronDownIcon = () => (
   </Icon>
 )
 
+export const PaperclipIcon = () => (
+  <Icon size={14}>
+    <path d="m20 11.5-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6l8.3-8.3" />
+  </Icon>
+)
+
 export const ChevronRightIcon = () => (
   <Icon size={14}>
     <path d="m9 6 6 6-6 6" strokeWidth={2} />

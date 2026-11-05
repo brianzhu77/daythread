@@ -416,6 +416,7 @@ export function DatabaseCellEditor() {
       const sent = typeof raw === 'string' ? raw : ''
       commit(db, row, cell.columnId, cell.columnId === titleId ? (raw ?? '') : raw, info?.notice, keeps ? () => dropDraft(row.id, cell.columnId, sent) : undefined)
     }}
+    onKeep={raw => commit(db, row, cell.columnId, raw)}
     onCancel={() => { setOpenCell(null); if (keeps) dropDraft(row.id, cell.columnId) }}
     onCreateOption={db.database.fixed ? undefined : property.target === todosSourceId ? namedTodo : name => createOption(run, db, property, name)}
     onRestoreTarget={property.target ? () => void run({ type: 'restore-page', pageId: property.target! }) : undefined} />
@@ -1375,7 +1376,7 @@ function defaultWidth(property: Property): number {
     case 'number': return 90
     case 'date': return 110
     case 'select': case 'multiSelect': case 'status': return 140
-    case 'relation': return 180
+    case 'relation': case 'files': return 180
     case 'rollup':
     case 'formula': return 120
     case 'text': case 'url': case 'email': case 'phone': return 180
