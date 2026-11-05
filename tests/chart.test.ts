@@ -149,6 +149,11 @@ test('Group by: a value in each series, four largest named and the rest in Other
   const d = chartData(h.db(), v(), viewRows(h.ws, 'list', v(), ctx)); assert.ok(d && d !== 'choose')
   assert.deepEqual(d.series!.map(s => [s.name, s.total, s.grey]), [['SF', 2, 0], ['History', 1, 1], ['No value', 2, 2]])
   assert.deepEqual(d.points.find(p => p.name === 'Novel')!.parts, [{ key: 'sf', value: 2 }, { key: 'hist', value: 1 }, { key: 'none', value: 0 }])
+  // A row under SF and History: the parts don't add up to a whole, so it's flagged to draw side by side (Jazz, Ratchet).
+  assert.equal(d.overlapping, true)
+  const single = v({ groupBy: 'tags', subGroupBy: 'kind' }), ds0 = chartData(h.db(), single, viewRows(h.ws, 'list', single, ctx)); assert.ok(ds0 && ds0 !== 'choose'); assert.equal(ds0.overlapping, false)
+  // A blank Sum stays a blank in its series, and Count's stays zero (Ratchet).
+  const blankSum = v({ chart: { form: 'line', measure: { by: 'pages', kind: 'sum' } } }), db = chartData(h.db(), blankSum, viewRows(h.ws, 'list', blankSum, ctx)); assert.ok(db && db !== 'choose'); assert.equal(db.points.find(p => p.name === 'Essay')!.parts!.find(x => x.key === 'sf')!.value, null)
   // A multi-select counts a row under each of its values, as Group does, so a stack can reach past its count; the bar's own value doesn't change.
   assert.equal(d.points.find(p => p.name === 'Novel')!.value, 2)
   // A sum stacks; an average doesn't, and a Cumulative doesn't.

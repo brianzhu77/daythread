@@ -30,11 +30,11 @@ export interface ChartPoint {
   /** Its place along the axis before any sort, so a value keeps its grey (§4). */
   order: number
   /** With Group by, its value in each series, by the series' key. */
-  parts?: { key: string; value: number }[]
+  parts?: { key: string; value: number | null }[]
 }
 /** One value of Group by, drawn in its own grey. Other has none, as an outline can't pass for a value. */
 export interface ChartSeries { key: string; name: string; grey: number | null; total: number }
-export interface ChartData { property: Property; points: ChartPoint[]; dateAxis: boolean; tooMany: boolean; series?: ChartSeries[] }
+export interface ChartData { property: Property; points: ChartPoint[]; dateAxis: boolean; tooMany: boolean; series?: ChartSeries[]; /** A row sits in more than one series, so the parts don't add up to a whole: side by side, not stacked. */ overlapping?: boolean }
 
 export const chartSettings = (view: Pick<View, 'chart'>): ChartSettings => view.chart ?? { form: 'bar' }
 /** What's measured: null for a count. `gone` when its property was deleted or stopped being a number, so it asks again rather than counting instead. */
@@ -105,7 +105,7 @@ export function chartData(db: Database, view: View, rows: readonly Page[], weekS
   const series = chartHasSeries(view) && !settings.cumulative ? withSeries(db, view, rows, points, measure, weekStart) : undefined
   if (series) points = series.points
   if (settings.sortByValue) points = [...points].sort((a, b) => (b.value ?? -Infinity) - (a.value ?? -Infinity))
-  return { property: groups.property, points, dateAxis, tooMany: tooMany || points.length > chartLimit, ...(series ? { series: series.series } : {}) }
+  return { property: groups.property, points, dateAxis, tooMany: tooMany || points.length > chartLimit, ...(series ? { series: series.series, overlapping: series.overlapping } : {}) }
 }
 
 /**
@@ -136,14 +136,18 @@ export function chartHasSeries(view: Pick<View, 'chart' | 'subGroupBy'>): boolea
   return Boolean(view.subGroupBy) && (settings.form === 'bar' || settings.form === 'barHorizontal' || settings.form === 'line') && (!kind || kind === 'sum')
 }
 /** The four largest series by total, in greys following their order, and the rest in Other (§4, as a donut's slices). */
-function withSeries(db: Database, view: View, rows: readonly Page[], points: ChartPoint[], measure: { property: Property; kind: ChartKind } | null, weekStart: WeekStart): { series: ChartSeries[]; points: ChartPoint[] } | undefined {
+function withSeries(db: Database, view: View, rows: readonly Page[], points: ChartPoint[], measure: { property: Property; kind: ChartKind } | null, weekStart: WeekStart): { series: ChartSeries[]; points: ChartPoint[]; overlapping: boolean } | undefined {
   const groups = viewSubGroups(db, view, rows, undefined, weekStart)
   if (!groups) return undefined
-  const valueIn = (p: ChartPoint, held: ReadonlySet<string>) => numberOf(chartValue(db, p.rows.filter(r => held.has(r.id)), measure)) ?? 0
-  const all = groups.shown.filter(g => g.rows.length).map((g, order) => { const held = new Set(g.rows.map(r => r.id)); return { key: g.key, name: g.name, order, held, total: points.reduce((n, p) => n + valueIn(p, held), 0) } })
+  // A blank stays a blank in each series too: a Count's empty period is zero, and a Sum's has no value (§3).
+  const valueIn = (p: ChartPoint, held: ReadonlySet<string>) => numberOf(chartValue(db, p.rows.filter(r => held.has(r.id)), measure))
+  const all = groups.shown.filter(g => g.rows.length).map((g, order) => { const held = new Set(g.rows.map(r => r.id)); return { key: g.key, name: g.name, order, held, total: points.reduce((n, p) => n + (valueIn(p, held) ?? 0), 0) } })
   const named = [...all].sort((a, b) => Math.abs(b.total) - Math.abs(a.total) || a.order - b.order).slice(0, donutGreys).sort((a, b) => a.order - b.order), kept = new Set(named.map(g => g.key)), rest = all.filter(g => !kept.has(g.key))
   const series: ChartSeries[] = [...named.map((g, grey) => ({ key: g.key, name: g.name, grey, total: g.total })), ...(rest.length ? [{ key: otherKey, name: `Other (${rest.length})`, grey: null, total: rest.reduce((n, g) => n + g.total, 0) }] : [])]
-  return { series, points: points.map(p => ({ ...p, parts: [...named.map(g => ({ key: g.key, value: valueIn(p, g.held) })), ...(rest.length ? [{ key: otherKey, value: rest.reduce((n, g) => n + valueIn(p, g.held), 0) }] : [])] })) }
+  const seen = new Set<string>(); let overlapping = false
+  for (const g of all) for (const id of g.held) { if (seen.has(id)) overlapping = true; seen.add(id) }
+  const otherIn = (p: ChartPoint) => { const values = rest.map(g => valueIn(p, g.held)).filter((v): v is number => v !== null); return values.length ? values.reduce((n, v) => n + v, 0) : null }
+  return { series, overlapping, points: points.map(p => ({ ...p, parts: [...named.map(g => ({ key: g.key, value: valueIn(p, g.held) })), ...(rest.length ? [{ key: otherKey, value: otherIn(p) }] : [])] })) }
 }
 
 const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 })

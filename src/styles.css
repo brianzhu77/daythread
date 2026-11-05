@@ -2152,6 +2152,17 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-chart-bar u.is-other { box-sizing: border-box; border: 1px solid var(--ink-3); background: var(--bg-doc); }
 .database-chart-bar i[class*="is-"].is-dim, .database-chart-line-track i.is-dim, .database-chart-bar u.is-dim, .database-chart-line-path path.is-dim { opacity: .25; }
 .database-chart-bar i { border-radius: 0; }
+/* Stacked bands apart: a line in the page's colour inside the upper one's own space, so nothing moves, and none on a band too thin to spare it. */
+.database-chart-bar > i + i { box-shadow: inset 0 -1px 0 var(--bg-doc); }
+.database-chart-line-track i { border-radius: 0; }
+.database-chart-line-track > i:last-child { border-radius: 0 2px 2px 0; }
+.database-chart-line-track > i + i { box-shadow: inset 1px 0 0 var(--bg-doc); }
+/* Side by side, when a row sits in more than one series and the parts don't add up. */
+.database-chart-side { position: absolute; inset: 0; left: 50%; display: flex; width: min(70%, 48px); gap: 1px; transform: translateX(-50%); }
+.database-chart-side-slot { position: relative; flex: 1 1 0; min-width: 0; height: 100%; }
+.database-chart-bar .database-chart-side-slot i { left: 0; right: 0; width: auto; transform: none; }
+.database-chart-line-track.is-side { display: flex; flex-direction: column; justify-content: center; gap: 1px; height: auto; }
+.database-chart-line-track.is-side i { position: static; display: block; height: 4px; min-height: 0; }
 .database-chart-line-path .is-grey-1 { stroke: var(--ink-2); } .database-chart-line-path .is-grey-2 { stroke: var(--ink-3); } .database-chart-line-path .is-grey-3 { stroke: var(--chart-grey-4); }
 .database-chart-line-path .is-other { stroke: var(--ink-3); stroke-dasharray: 4 3; }
 /* Under the chart, in a column, so its basis would be a height. */
