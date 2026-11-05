@@ -7,7 +7,7 @@ export interface UploadFailure { message: string; retry: boolean }
 export const fileHref = (file: Pick<FileValue, 'id' | 'name'>) => `/api/files/${file.id}?name=${encodeURIComponent(file.name)}`
 export const fileSizeLabel = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`)
 
-function put(id: string, body: Blob, type: string, onProgress?: (percent: number) => void) {
+export function putFile(id: string, body: Blob, type: string, onProgress?: (percent: number) => void) {
   const request = new XMLHttpRequest()
   const done = new Promise<void>((resolve, reject) => {
     request.open('PUT', `/api/files/${id}`)
@@ -42,7 +42,7 @@ async function smallCopy(file: File): Promise<Blob | null> {
 
 export function uploadFile(file: File, onProgress: (percent: number) => void): { done: Promise<FileValue>; abort: () => void } {
   const id = crypto.randomUUID(), type = file.type || 'application/octet-stream'
-  const main = put(id, file, type, onProgress)
+  const main = putFile(id, file, type, onProgress)
   let stopped = false
   const done = main.done.then(async (): Promise<FileValue> => {
     const value: FileValue = { id, name: file.name.slice(0, 255) || 'Untitled', size: file.size, type: type.slice(0, 100) }
@@ -50,7 +50,7 @@ export function uploadFile(file: File, onProgress: (percent: number) => void): {
     if (!small) return value
     const thumb = crypto.randomUUID()
     // The file's in, so a card with no small copy is still a card.
-    return put(thumb, small, 'image/jpeg').done.then(() => ({ ...value, thumb }), () => value)
+    return putFile(thumb, small, 'image/jpeg').done.then(() => ({ ...value, thumb }), () => value)
   })
   return { done, abort: () => { stopped = true; main.abort() } }
 }

@@ -1,5 +1,6 @@
 import { editorSeed, inlineText, pageNodes, type EditorNode } from './editor-document.ts'
 import type { Page, Workspace } from './types.ts'
+import { bodyFilesIn, bodyFileOf } from './body-files.ts'
 import { isTemplate } from './day-template.ts'
 import { isDraft } from './day-draft.ts'
 import { clockIn } from './formula.ts'
@@ -132,6 +133,8 @@ function blockLines(n: EditorNode, ws: Workspace, names: Map<string, string>, as
       const url = String(props.url ?? '')
       if (!url) return []
       const label = String(props.caption || props.name || n.type)
+      // Not in the export, so no link that would point nowhere: its name, and the README lists it.
+      if (bodyFileOf(url)) return [`${asItem ? '- ' : ''}${label} (file, not in this export)`]
       return [`${asItem ? '- ' : ''}${n.type === 'image' ? '!' : ''}[${label}](${url})`]
     }
     case 'table': {
@@ -200,9 +203,10 @@ export function exportJson(ws: Workspace, now: Date, names = fileNames(ws)) {
 /** Files aren't in the zip, which is built in memory: each is named, so what's missing is plain. */
 function filesLeftOut(ws: Workspace): string[] {
   return ws.pages.flatMap(row => {
-    const db = !row.trashedAt ? databaseOfRow(ws, row) : null
-    if (!db) return []
-    return db.database.properties.filter(p => p.type === 'files').flatMap(p => ((cellValue(db.database, row, p.id) ?? []) as FileValue[]).map(f => `- ${row.title.trim() || 'Untitled'}: ${f.name} (${(f.size / 1024 / 1024).toFixed(1)} MB)`))
+    if (row.trashedAt) return []
+    const where = row.title.trim() || row.date || 'Untitled', sized = (f: { name: string; size: number | null }) => `- ${where}: ${f.name}${f.size === null ? '' : ` (${(f.size / 1024 / 1024).toFixed(1)} MB)`}`
+    const db = databaseOfRow(ws, row)
+    return [...(db ? db.database.properties.filter(p => p.type === 'files').flatMap(p => (cellValue(db.database, row, p.id) ?? []) as FileValue[]) : []), ...bodyFilesIn(row)].map(sized)
   })
 }
 function readme(day: string, timezone: string, leftOut: string[]): string {
