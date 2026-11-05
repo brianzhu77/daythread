@@ -103,15 +103,15 @@ await scenario('Two choices through two pickers, each save held: the first reply
   const holds = []
   await page.route('**/_serverFn/**', async route => { if (isIconCommand(route.request())) await new Promise(res => holds.push(res)); await route.continue().catch(() => {}) })
   await openPicker(page); await page.locator('.icon-picker-search').fill('koala'); await wait(150); await page.locator('.icon-picker-cell').first().click(); await wait(500)
-  const first = await page.locator('.page-icon').innerText()
+  const first = await page.locator('.page-icon').textContent()
   await page.keyboard.press('Escape'); await wait(200)
   await page.locator('.page-icon').click(); await wait(300); await page.locator('.icon-picker-search').fill('tree'); await wait(150); await page.locator('.icon-picker-cell').first().click(); await wait(500)
-  const second = await page.locator('.page-icon').innerText()
+  const second = await page.locator('.page-icon').textContent()
   const r = { first, second, sends: holds.length }
   holds[0](); await wait(900)
-  r.afterFirst = await page.locator('.page-icon').innerText(); r.sends2 = holds.length
+  r.afterFirst = await page.locator('.page-icon').textContent(); r.sends2 = holds.length
   holds[1](); await wait(1000)
-  r.afterSecond = await page.locator('.page-icon').innerText(); r.saved = iconOf('notes')
+  r.afterSecond = await page.locator('.page-icon').textContent(); r.saved = iconOf('notes')
   r.ok = first === '🐨' && second !== first && r.afterFirst === second && r.afterSecond === second && r.saved === second
   return r
 })
