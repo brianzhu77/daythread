@@ -60,7 +60,7 @@ await scenario('A screenshot pasted lands as an image with its address, the care
   const r = { types: types(), urls: urls(), words: doc().map(n => n.content?.[0]?.text ?? null), stored: stored().length, blob: JSON.stringify(doc()).includes('blob:') }
   await page.reload(); await page.locator('.bn-visual-media').first().waitFor(); await wait(800)
   r.width = await page.locator('.bn-visual-media').first().evaluate(i => i.naturalWidth)
-  r.ok = r.types.join() === 'paragraph,paragraph,image,paragraph,paragraph' && /^\/api\/files\/[\w-]+\?name=shot\.png&size=70&type=image%2Fpng$/.test(r.urls[0]) && r.words[3] === 'typed after' && r.stored === 1 && !r.blob && r.width === 1
+  r.ok = r.types.join() === 'paragraph,paragraph,image,paragraph,paragraph' && /^\/api\/files\/[\w-]+\?name=shot\.png&size=70&type=image%2Fpng&w=1&h=1$/.test(r.urls[0]) && r.words[3] === 'typed after' && r.stored === 1 && !r.blob && r.width === 1
   return r
 })
 await scenario('A clipboard holding text and an image: the text wins, as it does for a table from a sheet', async page => {
