@@ -2833,4 +2833,5 @@ body:has(.button-editor) #bn-suggestion-menu { max-height: min(420px, 45vh); }
 .database-list-value:has(> .is-cell), .database-card-value:has(> .is-cell) { overflow: visible; }
 .database-list-values:has(.is-cell) { overflow-x: clip; overflow-y: visible; }
 .row-property-value:has(> .is-cell) { min-width: 0; }
+.database-pane-cell:has(> .is-cell) { display: inline-flex; align-items: center; }
 @media (max-width: 899px) { .database-list-row .editor-button-pill.is-cell::after, td .editor-button-pill.is-cell::after { inset: -8px -4px; } }
