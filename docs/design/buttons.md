@@ -1,6 +1,6 @@
 # Buttons: design
 
-- Author: Bumblebee (Product) · 2026-11-03 · status: **design with the Lead, Jazz and Ratchet to read. Only §5's first step, the block spec with no way to make one, is approved and built (Lead), since it's reversible and sets the floor.** The rest isn't approved or built.
+- Author: Bumblebee (Product) · 2026-11-03 · status: **approved to build, in §7's order (Lead 962245dd, 2026-11-05); Roadbuster builds.** Steps that reach outside the app stay undecided, one at a time. #152 goes out first, and the first build that can make a button waits until it's live. Not built past #152.
 - Asked by the Lead (3f046122). Scope rule: nothing cut for lack of evidence, and his use only sets the order (Brian 57deaed7). `databases.md` §14 puts Buttons in "Later", waiting for this pass.
 - **Evidence:** Notion's help pages on [page buttons](https://www.notion.com/help/buttons) and [database buttons](https://www.notion.com/help/database-buttons). I read them; I haven't used Notion's buttons. Those pages don't cover the phone, a button in a table cell, or running one on several rows, so those parts below are my proposal, not Notion's behaviour.
 - **His use:** he had no databases at the last read (Nov 2). Nothing here comes from watching him, so the examples are illustrations.
@@ -39,6 +39,15 @@ Example: a "Log a run" button in his Day template adds a row to Runs with today'
 - **Editing:** a small `⋯` on hover at 1280 and on the block's selected bar at 390, with Edit, Duplicate and Delete. A tap on the pill always runs it.
 - **Keys at 1280:** it's a block that can be selected whole. Enter from there runs it, and keys don't leak (R1-26).
 
+**Jazz's answers (36161d64, decided by the Lead 962245dd; these replace what's above where they differ):**
+
+- **Leaving the editor.** With no changes, a tap outside or Esc closes it, and a new button with no finished step leaves no block. With changes, a tap outside does nothing, and Esc or back asks one line: "Discard changes? Keep editing · Discard".
+- **Steps as a list.** One row per step, such as "Add row to Runs", with ↑↓ and ×. Tapping a row opens that step's own page with a back arrow, as the Filter and property sheets do. An incomplete step says what's missing. Done sits in the sheet's head, and tapping it while it's off goes to the first incomplete step.
+- **Waiting.** Same place and size at reduced opacity, as the sign-in button does. After about 300 ms, a spinner replaces the label with its width held.
+- **Size.** "44 px" means the tap area. Drawn 36 on a page line and 28 in a cell, with the tap area filling its line or row and never reaching the next. A press doesn't start a card's drag or a line's swipe-to-select, and a swipe or scroll doesn't run it. A long label ends in an ellipsis.
+- **Enter.** It runs a button only when the button alone was selected by its handle. Arriving by arrow does what other blocks with no text do. In a table cell, Enter runs it, and Delete and paste do nothing.
+- **A blank label** reads "Button", on the page and in export. Button version data stays inside `steps`, as that string is all the floor can keep (Lead).
+
 **After a tap:** the usual notice, naming the result, with Undo. Each reads from what ran:
 
 | Result | Notice |
@@ -47,7 +56,7 @@ Example: a "Log a run" button in his Day template adds a row to Runs with today'
 | Rows edited | "3 rows changed · Undo" |
 | Blocks inserted | "Inserted · Undo" |
 | Several steps | The last step's words |
-| Filter matched nothing | "No rows matched", and nothing else happens |
+| Filter matched nothing | That step does nothing and later steps carry on. "No rows matched" only if nothing at all changed (Bumblebee, on Ratchet 6c8ed9c9): a button that adds a row and then edits matching ones shouldn't lose the row because nothing matched |
 
 There's no explanatory line anywhere (Daythread's rule, Brian 1ac6784b).
 
@@ -59,6 +68,12 @@ There's no explanatory line anywhere (Daythread's rule, Brian 1ac6784b).
 4. **Broken targets show at the click:** "Runs is in Trash" with Restore, or "Status was deleted" with Edit. The pill stays. Other steps don't run. A deleted database doesn't delete the button.
 5. **Copying:** a copied button is a separate button with the same steps, in a page, a template or a duplicate row's body. In a synced block it's one button (`synced-blocks.md`), and in another app it's its label as text.
 6. **A template doesn't run steps.** The button works on the day made from it. On the template itself a tap opens Edit.
+
+**Contracts before building (Ratchet 6c8ed9c9, a design read, not run):**
+
+7. **Confirmation before writes, navigation after commit.** Every confirmation is collected before anything's committed. Open page or URL happens in the browser after a successful commit, so a blocked popup never retries the data changes. "All or none" means the stored changes; a page already opened can't be rolled back.
+8. **It starts from saved words and the intended button.** The flush has to finish successfully, including a save already in flight (#141 showed awaiting one flush isn't enough). It runs against a stored button identity and the expected content, including a synced record's, and if those changed it refuses or refreshes. Words typed while the command is on its way survive its reply.
+9. **One tap keeps one identity and bounded work.** A retry keeps its operation id, input, generated row, task and event ids, and the tap's date, so `@today` isn't read again after midnight. All targets and the whole step list are checked before anything applies. Limits are counted across steps and selected rows, rather than each step spending the full 500 to-dos or 10,000 rows.
 
 ## 5. Engineering answers (Roadbuster 6ef1eb57, from reading the code, not prototyped)
 
