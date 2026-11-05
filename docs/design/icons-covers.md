@@ -1,6 +1,6 @@
 # Page icons and covers: design
 
-- Author: Bumblebee (Product) · 2026-11-03, §7 and §8 by Jazz (Design) · 2026-11-05 · status: **for Lead and Ratchet to review**. Not approved and not built.
+- Author: Bumblebee (Product) · 2026-11-03, §7 and §8 by Jazz (Design) · 2026-11-05 · status: **approved to build with §7.7 (Lead c2262558); Roadbuster builds, and Jazz checks it against §7**. Not built.
 - Asked by the Lead (3f046122, b9af4ec7). Nothing is cut for lack of evidence, and his use only sets the order (Brian 57deaed7).
 - **Evidence:** Notion's guide on [page icons and covers](https://www.notion.com/ja/help/guides/page-icons-and-covers), read through search results rather than in full. It gives: an emoji, a native icon or an uploaded image; a cover by upload, image link or Notion's gallery, with Unsplash; icons showing in the sidebar and wherever the page is mentioned. I found nothing on a row's icon in a table, so that's my proposal.
 - **Read directly 2026-11-05 ([English guide](https://www.notion.com/help/guides/page-icons-and-covers), through a fetch and summary):** an icon is added by clicking the default image beside the title, from emoji or an icon set, with a **Random** button, or by uploading. A cover is added inside the page by "Add cover", then "Change cover": Gallery, upload, an image link, Unsplash, or Notion AI from a prompt. It doesn't give sizes, Reposition, or where icons show beyond the title. **New here:** Random is small, and I'd take it with the emoji picker. A cover from a prompt would mean paying a model to make pictures, so it's Not planned (Lead 3f167c20). R3-11's Files is live, so uploads are no longer waiting on it.
@@ -18,7 +18,7 @@
 | Source | Needs | When |
 | --- | --- | --- |
 | **Emoji** | Nothing stored but the character. A picker, with search in English and Chinese | First. No infrastructure |
-| **Image link** (cover or icon) | A pasted URL. Stored as a link, not a copy, like images in a body (R3-3): it may vanish | First. A failed one leaves no cover, with no frame, and the words stay where they'd be |
+| **Image link** (cover or icon) | A pasted URL. Stored as a link, not a copy, like images in a body (R3-3): it may vanish | First. A failed one keeps its place as a plain band with no broken-image mark, and the words stay where they are (§7.6) |
 | **Upload** | Files (R3-11), the same store and limits. Icons small, covers wide | After R3-11 |
 | **Gallery of covers** | Images we'd host, or ones we pick | With upload. A small set of plain greys and textures suits his look, at no real cost |
 | **Unsplash** | Its API, with a key and required attribution | **In scope and last (Lead 4a1712e6).** A new outside service that would see what Brian searches, so at the front of the queue it goes to Brian as one choice. Its terms must be checked by then: not checked yet, and no running cost that I know of |
@@ -32,9 +32,11 @@
 - **Copying:** Duplicate row copies them. A template row's icon and cover go to rows made from it (R3-12).
 - **Export:** an icon's emoji is written before the page's heading. A cover link is written as an image at the top. Uploads follow R3-11's rule for files.
 - **Another account can never read an upload** (R3-11). A pasted link is fetched by his browser with `no-referrer`, as Gallery's cards are. The server fetches nothing.
-- **Offline:** an emoji always shows. A cover that can't load leaves no gap.
+- **Offline:** an emoji always shows. A cover that can't load keeps its place, as §7.6 settles.
 
 ## 4. For Roadbuster and Jazz
+
+**Roadbuster's read of the code, nothing run (5beabee0):** new columns are safe: `writeDiff` updates only the columns a build knows, so an older build's save leaves `icon` and `cover` alone. Add them through `addedPageColumns`, and both `pageOf` and `rowOf` need them or they vanish on the next save. **Accepted limit:** an older build hard-deleting a page and restoring it through Undo rewrites the row without them, which is rare and only during a rollback. A cover link is capped at 2,000 characters. A list response only carries changed pages, so only the first load pays. The sweep holds an uploaded cover or icon automatically, since `heldText` is the whole workspace, which needs a test and no code. Measure the emoji data first, as that decides whether it needs its own file.
 
 - **Storage:** optional `icon` and `cover` on a page, plus cover position. Likely new columns, added the way `week_start` was: additive, and an old build ignores them and leaves them alone. Please confirm the old build's saves keep them, with a rollback run.
 - **Sync:** they should arrive with page lists, because they show in the sidebar. Check the cost of adding them to every page in a list: a long URL on many pages adds up.
@@ -53,7 +55,7 @@
 - A page with no icon or cover looks exactly as today, pixel for pixel, on a copy of his real data (R1-18).
 - An emoji lines up with the title and in the sidebar, `[[` links and a row's Name at both widths, with the alignment gate on.
 - The picker at 390 in the Home Screen app: keyboard comes up only for search, Pinyin works.
-- A dead image link: no broken frame, and nothing moves once it fails.
+- A dead image link: no broken-image mark, and nothing moves once it fails (§7.6). The panel's check loads the picture the same way the band does, with `no-referrer`, so a picture that passes in the panel can't fail on the page for that reason.
 - An older tab keeps both, with a rollback run.
 
 ## 7. How it looks and behaves (Jazz, 2026-11-05)
@@ -62,7 +64,7 @@
 
 ### 7.1 The head
 
-From the top: **cover, then the line with the breadcrumb and `⋯`, then the icon, then the title.** Nothing sits on top of a picture, so nothing depends on its colours.
+From the top: **cover, then the line with the breadcrumb and `⋯`, then the icon, then the title.** Nothing sits on top of a picture, so nothing depends on its colours. **A known difference:** Bumblebee and I both recall Notion's icon overlapping its cover, unconfirmed. Ours doesn't, by choice.
 
 | | 1280 | 390 |
 | --- | --- | --- |
@@ -78,7 +80,9 @@ From the top: **cover, then the line with the breadcrumb and `⋯`, then the ico
 
 ### 7.2 A day
 
-The cover goes above the head and the icon above "Today" and the date, at the title's left edge, with the arrows where they are. **A day has its `⋯` only once it holds something** (`dayMenuGroups`), so an empty day needs one for these. Added to the Day template, every new day has them (P1-6). At 390 with a cover, the day's first section starts about 120 px lower. That's his choice, and worth stating in the budget.
+The cover goes above the head and the icon above "Today" and the date, at the title's left edge, with the arrows where they are. **A day has its `⋯` only once it holds something** (`dayMenuGroups`). Added to the Day template, every new day has them (P1-6). At 390 with a cover, the day's first section starts about 120 px lower. That's his choice, and worth stating in the budget.
+
+**Decided (Lead c2262558, with Bumblebee, Jazz and Roadbuster): an empty day doesn't get a `⋯` for this.** A `⋯` on an empty day would change that screen for everyone, against P1-1's "exactly as today", to offer something nobody has asked for there. A day made from the template holds something, so it has its `⋯` already, and the template itself takes them. The cost: a day with nothing written can't take a cover until it has a line.
 
 ### 7.3 Where an icon shows
 
@@ -95,6 +99,8 @@ It takes the place of the page's default icon where there is one, and comes befo
 | Board and Gallery cards | 14 px, before the title | Before the title |
 | Calendar's chips, the phone's Timeline list | The line's text size | Before the title |
 
+**The Name column at 390** already cuts a short name to "First r…" in the sketch, and an icon takes 20 px more. I'd grow the column by 20 px when any row shown has an icon, so a name isn't cut shorter for having one. To be looked at once it's built.
+
 To-dos have no icon: a to-do isn't a page. **A day in the sidebar's Days** shows its icon before its date, if it has one.
 
 ### 7.4 The picker
@@ -103,7 +109,7 @@ To-dos have no icon: a to-do isn't a page. **A day in the sidebar's Days** shows
 
 - **Top line:** Search, Random, and Remove when there's an icon. At 1280 Search has the caret. **At 390 it doesn't until tapped,** so the keyboard stays down (P1-2).
 - **The grid:** 8 across, 36 px squares at 1280 and 44 px at 390. Recent first, on this device, up to two rows, and no Recent line until there's one. Then the usual groups, with their names as you scroll.
-- **Picking** closes it, with the usual notice and Undo. **Random** picks one and stays open, so it can be pressed again. **Remove** closes it. Each is one change with its Undo, as P1-7 says.
+- **Picking** closes it, with the usual notice and Undo. **Random** picks one and stays open, so it can be pressed again: the icon changes at once on each press, and what's sent is the one it settles on, about 300 ms after the last press, so a run of presses is one change and Undo goes back to before the run. **Remove** closes it. Each is one change with its Undo, as P1-7 says. §7.8 says what happens while the page is saving.
 - **Skin tones:** a small swatch at the right of Recent's line, kept on this device, as Notion has one and a person's hands shouldn't only be yellow. Not in Notion's guide as I read it, so this is my call.
 - **Search** covers English and Chinese names. While Pinyin is composing nothing's searched, so results follow the characters once chosen. **Typing or pasting an emoji** offers it as the one result, so nothing a phone can type is out of reach.
 - **Nothing found:** "No emoji for {what's typed}".
@@ -112,16 +118,35 @@ To-dos have no icon: a to-do isn't a page. **A day in the sidebar's Days** shows
 
 ### 7.5 A cover
 
-- **Adding:** `⋯` → Add cover opens a small panel. In the first release it's one field, "Paste an image link". The picture shows in the panel once it loads, and Add is only there then. **A link that doesn't load says "Can't load that image" and isn't saved,** so a dead link can't be added by mistake.
+- **Adding:** `⋯` → Add cover opens a small panel. In the first release it's one field, "Paste an image link", up to 2,000 characters, past which it says "That link is too long". The picture shows in the panel once it loads, and Add is only there then. **A link that doesn't load says "Can't load that image" and isn't saved,** so a dead link can't be added by mistake.
 - **Changing:** hovering at 1280 shows Change and Reposition at its lower right, on a plain backing. At 390 `⋯` has Change cover, Reposition and Remove cover. Change opens the same panel, with Remove.
-- **Reposition:** the picture moves up and down under the pointer or finger, with "Drag to move · Done · Cancel" on it. Esc cancels. Done is one change with one Undo. It's saved as a share of the picture's height, so it holds at both widths. A picture with nothing to spare in height doesn't offer it.
+- **Reposition:** the picture moves up and down under the pointer or finger, with "Drag to move · Done · Cancel" on it. **Keys too:** ↑ and ↓ move it by 5%, Enter is Done and Esc cancels. Cancel puts back exactly where it was and sends nothing. Done is one change with one Undo.
+- **What's saved is how far along the crop it sits,** 0 at the picture's top and 1 at its bottom, not a share of the picture's height. So the same setting shows the same part of the picture at any size, as far as that size allows: the page, a center peek's 160 px, a side peek's 120 px, and the phone's 120 px. A picture with no height to spare at this size doesn't offer it. To be tried with one portrait and one wide picture in each.
 - **While loading:** the band at its full height in `--fill`, so nothing moves.
 
-### 7.6 A question for Bumblebee: a cover that won't load
+### 7.6 A cover that won't load
+
+**Settled (Bumblebee, 2026-11-05): it keeps its place, as Jazz recommends below.** It's state, which the minimal look allows, and a page that jumps 200 px under someone reading is the worse failure. The cost is a grey band on every open until it's changed or removed, which is why Change and Remove stay reachable.
 
 §3 says it "leaves no gap", and P1-4 and §6 say "nothing moves once it fails". **Both can't hold,** since the band holds its place while it loads.
 
 **I recommend it keeps its place:** the band stays in `--fill`, with "Can't load this cover" in small grey words, or "Offline", and Change and Remove reachable as usual. There's no broken-image mark. The words on the page don't jump a second after he starts reading, and he can see why the cover's gone. **The other way:** the band closes when it fails, which leaves no sign but moves every word up 200 px while he's reading.
+
+### 7.7 Contracts before building (Ratchet f18d4910, a review of the document and sketches)
+
+- **The preview belongs to the current link.** Load A, change to B before A finishes, then A succeeds: Add stays unavailable until B loads. Closing the panel or removing cancels late replies. The existing cover stays until its replacement is committed. Having loaded once checks that preview, and doesn't promise the link will stay alive.
+- **Reposition's rule.** Stored as a normalized position within the vertical travel the crop allows, not as a share of the picture's height. Tested with one portrait and one wide picture across a full page, center peek and side peek. Cancel or Esc restores the exact earlier position with no command, and Done makes one Undo. Arrow keys move it while the mode is open, so there's a keyboard way.
+- **Icon and cover edits live alongside typing.** Rapid Random presses, a failed icon save, and changing or removing a cover while the body is saving keep both the newest choice and the words. A refused or failed change shows a state, and an older reply never replaces a newer choice. Tested with a held save and a late Undo, as well as an ordinary pick and Undo.
+- **The 390 picker sketch** still shows the editor toolbar. §7.4's written rule, toolbar hidden, is the target.
+
+### 7.8 While the page is saving (Jazz, for §7.7's third contract)
+
+An icon and a cover are changes to the page, separate from its words, and neither waits for the other.
+
+- **The newest choice wins.** What's on screen is the last thing chosen. An older answer arriving late doesn't replace it, and words being saved are kept.
+- **A change that fails** goes back to what's saved, with "Couldn't change the icon · Try again" or the cover's, and Try again sends the choice again. A refused one says why, with no Try again.
+- **Undo reaches the latest change, as everywhere.** If the page saves words after an icon's change, that notice's Undo goes, as it does for any later change. It doesn't undo words.
+- **To test:** a run of Random presses, a failed icon save, changing or removing a cover while words are saving, and a late Undo with a save held back.
 
 ## 8. Later releases, as far as the design goes
 

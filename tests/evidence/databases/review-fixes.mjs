@@ -24,7 +24,8 @@ async function open(opts = {}) {
 }
 const toasts = page => page.locator('[role=alert], [role=status]').allInnerTexts().then(t => [...new Set(t.map(x => x.trim().replace(/\s+/g, ' ')).filter(Boolean))].join(' | ').slice(0, 300))
 const turnIntoPage = async page => { await page.locator('.database-more-button').first().click(); await page.locator('.database-menu').getByRole('menuitem', { name: 'Turn into page' }).click() }
-const selectBlock = async page => { await page.getByText('Before the table').click(); await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.press('ArrowDown'); await page.waitForTimeout(200) }
+// By its handle: arriving at a block by arrow doesn't choose it (B89).
+const selectBlock = async page => { await page.locator('.database-block').first().hover(); await page.waitForTimeout(250); await page.locator('.bn-side-menu [aria-label^="Select or drag"]').first().click(); await page.waitForTimeout(300) }
 const scenarios = {
   // Turn into inline, then ⌘Z in the page: expected back to a card, database not trashed.
   async inlineUndo() {
