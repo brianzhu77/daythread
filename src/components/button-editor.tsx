@@ -1,7 +1,7 @@
 // A button's editor (docs/design/buttons.md §3): a popover at 1280, a sheet at 390, with its steps as a list and each on its own page. It writes nothing until Done.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
-import { filterSuggestionItems } from '@blocknote/core/extensions'
+import { filterSuggestionItems, SuggestionMenu } from '@blocknote/core/extensions'
 import { getDefaultReactSlashMenuItems, SuggestionMenuController, useCreateBlockNote } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/shadcn'
 import { isTodosTarget, pageKinds, propertyKinds, readSteps, safeUrl, stepKinds, stepProblem, stepTitle, tapValueName, tapValues, writeSteps, type ButtonSet, type ButtonStep, type ButtonValue, type StepKind } from '../domain/buttons'
@@ -72,7 +72,13 @@ function Editor({ open: { initial, anchor, onDone, rowsOf }, schema }: { open: O
     closeEditor(); onDone({ label: label.trim(), steps: writeSteps(steps) })
   }
   useEffect(() => {
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (at !== null) setAt(null); else leave() } }
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault(); e.stopPropagation()
+      // One Esc per layer: a menu open in the blocks' editor goes first.
+      if (closeBlocksMenu?.()) return
+      if (at !== null) setAt(null); else leave()
+    }
     const away = (e: PointerEvent) => { const t = e.target as Element; if (!changedYet && !box.current?.contains(t) && !t.closest?.('.button-ask, .bn-suggestion-menu, [data-floating-ui-portal]')) closeEditor() }
     document.addEventListener('keydown', esc, true); document.addEventListener('pointerdown', away, true)
     return () => { document.removeEventListener('keydown', esc, true); document.removeEventListener('pointerdown', away, true) }
@@ -221,14 +227,21 @@ function FixedValue({ property, raw, onChange }: { property: Property; raw: Json
   }
 }
 
+// Over the sheet, which clips what's inside it. Fixed takes it out of the sheet's scrolling box.
+const overSheet = { useFloatingOptions: { strategy: 'fixed' as const } }
+let closeBlocksMenu: (() => boolean) | null = null
 const slashKinds = new Set(['paragraph', 'heading', 'heading_2', 'heading_3', 'bullet_list', 'numbered_list', 'check_list', 'quote'])
 /** What Insert blocks puts in, written as on a page: to-dos and `@date` chips come out new each tap (§2). It saves nowhere but the step. */
 function BlocksField({ schema, blocks, onChange }: { schema: never; blocks: EditorNode[]; onChange(blocks: EditorNode[]): void }) {
   const editor = useCreateBlockNote({ schema, ...(blocks.length ? { initialContent: blocks as never } : {}) })
+  useEffect(() => {
+    closeBlocksMenu = () => { const menu = editor.getExtension(SuggestionMenu); if (!menu?.shown()) return false; menu.closeMenu(); return true }
+    return () => { closeBlocksMenu = null }
+  }, [editor])
   return <div className="button-blocks" aria-label="Blocks to insert">
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} onChange={() => onChange(editor.document as never)}>
-      <SuggestionMenuController triggerCharacter="/" getItems={async query => filterSuggestionItems(getDefaultReactSlashMenuItems(editor).filter(item => slashKinds.has((item as { key?: string }).key ?? '')), query)} />
-      <SuggestionMenuController triggerCharacter="@" getItems={async query => {
+      <SuggestionMenuController triggerCharacter="/" floatingUIOptions={overSheet} getItems={async query => filterSuggestionItems(getDefaultReactSlashMenuItems(editor).filter(item => slashKinds.has((item as { key?: string }).key ?? '')), query)} />
+      <SuggestionMenuController triggerCharacter="@" floatingUIOptions={overSheet} getItems={async query => {
         const reading = readDate(query || 'today', todayIso())
         return reading ? [{ title: reading.date, onItemClick: () => { editor.insertInlineContent([{ type: 'dateMention', props: { date: reading.date, time: reading.time ?? '' } } as never, ' ']) } }] : []
       }} />
