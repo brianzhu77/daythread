@@ -291,6 +291,8 @@ function optionsFromText(ws: Workspace, databaseId: string, old: Property, type:
   for (const row of databaseRows(ws, databaseId)) {
     const raw = row.values?.[old.id];
     if (typeof raw !== "string") continue;
+    // Already an option whole, from Select earlier: it reads as that, and needs no parts.
+    if (options.some((o) => o.from === fold(raw.trim()))) continue;
     for (const text of type === "multiSelect" ? textParts(raw) : [raw.trim()]) {
       const words = fold(text);
       if (!words || text.length > limits.name || options.some((o) => o.from === words)) continue;

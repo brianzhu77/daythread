@@ -123,6 +123,8 @@ test('through more than one change: Text to Select to Multi-select keeps a name 
   assert.equal(s.words('t', 0), 'Red, Blue')
   s.type('t', 'text')
   assert.equal(cellValue(s.db(), s.row(0), 't'), 'Red, Blue')
+  s.type('t', 'multiSelect')
+  assert.deepEqual(s.prop('t').options!.map(o => o.name), ['Red, Blue'], 'no parts made for words that are already an option')
   const other = shelf([{ t: 'Red, Blue' }])
   other.type('t', 'multiSelect')
   assert.equal(other.words('t', 0), 'Red, Blue')
