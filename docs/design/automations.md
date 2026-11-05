@@ -74,7 +74,7 @@ Notion runs these some time after the edit. **I'd run row and property triggers 
 
 ## 6. Scheduled rules
 
-**Decided (Lead f5362d4f): A, catch-up on open, for scheduled rules and repeating templates.** **Corrected 2026-11-05 (Ratchet 2dcbd199, Lead 7b6bbb77's question):** since B60 the Worker's cron runs every minute on Workers Paid, so price and "nothing runs without a request" are no longer the reason. **Catch-up stays for the first scheduled release, because of Undo and unattended writes:** repeating rows wait for a visible, idle tab, as `run-repeats` clears Undo, and a cron would run past that protection every minute. The cron also only walks workspaces with a push subscription today, so scheduled rules can't simply join that loop. Cron gets its own decision if a scheduled step ever has to reach outside the app (Lead 9d5b3c33). **Either way:** a rule and period's key, its effects and its progress marker commit together under the workspace lock, and cron and open share them. Time zone and period rules are fixed, and the schedule has a version, changed on an edit or a resume, so a late tick can't run an old schedule. Reaching outside the app needs its own delivery design, as the push lease isn't exactly-once.
+**Decided (Lead f5362d4f): A, catch-up on open, for scheduled rules and repeating templates.** **Corrected 2026-11-05 (Ratchet 2dcbd199, Lead 7b6bbb77's question):** since B60 the Worker's cron runs every minute on Workers Paid, so price and "nothing runs without a request" are no longer the reason. **Catch-up stays for the first scheduled release, because of Undo and unattended writes:** repeating rows wait for a visible, idle tab, as `run-repeats` clears Undo, and a cron would run past that protection every minute. The cron also only walks workspaces with a push subscription today, so scheduled rules can't simply join that loop. Cron gets its own decision if a scheduled step ever has to reach outside the app (Lead 9d5b3c33). **Either way:** a rule and period's key, its effects and its progress marker commit together under the workspace lock, and cron and open share them. Time zone and period rules are fixed, and **a schedule edit or a resume counts from that moment, with at most one run on a date** (Bumblebee, in #163 at 377abec8; replaces a version number, which Ratchet and Roadbuster agree isn't needed). The server reads the current schedule, and the stored boundary stops an older clock reading, so a late tick can't run an old schedule. A name-only edit leaves the boundary alone. Reaching outside the app needs its own delivery design, as the push lease isn't exactly-once.
 
 Days are made by an open tab at midnight (`ensure-day`), and **"Every Monday" and repeating templates (R4-6) need a way to wake up.**
 
@@ -94,6 +94,16 @@ Days are made by an open tab at midnight (`ensure-day`), and **"Every Monday" an
 - **Pausing a repeating template (Jazz 2e2f4ee4, Bumblebee yes):** turning Paused off counts from that moment. Someone back from a holiday doesn't want those rows, so none are made and no "skipped" notice appears, even with Make every missed one on. Notion's guide only describes turning Repeat off, so this one is ours.
 - **Weekdays (R4-6):** Weekly can pick its weekdays, as in Notion's "on Tuesday and Thursday every week". A skipped notice counts rows, not weeks, when there's more than one weekday. With Every above 1, weeks are calendar weeks by the Week starts setting, so "every 2 weeks on Tue and Thu" keeps that week's two days together (Roadbuster 3afc01a9).
 - **A row made while Brian is working (Roadbuster 3afc01a9):** a run clears Undo, and keeping it would mean changing Undo in both stores. So opening the app runs at once, and after that a run waits for a visible tab with no typing or clicks for 2 minutes. A row can arrive a little after its time, with a true Created time. Two visible windows, or a tab open on another device, can still take the Undo.
+- **Editing a schedule:** at 09:30, for a daily rule:
+
+| Edit | What happens |
+| --- | --- |
+| Ran at 09:00 today, moved to 10:00 | Nothing more today, and 10:00 from tomorrow |
+| Hasn't run today, moved to 10:00 | Runs at 10:00 today |
+| Hasn't run today, moved to 09:15 | Tomorrow at 09:15, with no catch-up for a time set in the past |
+| Ran Monday, moved to Thursday | Runs this Thursday, a different date |
+
+  The usual reason to move a time is that it was wrong, not that the work is wanted again. Moving it forward to watch a rule run does nothing if it has already run today, so the editor shows "Next: tomorrow, 10:00" or "No more runs" under the fields. My judgement from the flow, with no use behind it yet.
 - **What he sees:** the rule's line shows "Last ran" with its real time, and a row's Created time is true. No notice unless it failed.
 
 ## 7. To-dos as a source
