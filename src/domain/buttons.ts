@@ -7,7 +7,7 @@ import type { LocalDate, Page } from './types.ts'
 /** What a step sets: fixed, or read at the tap (§2). */
 export type ButtonValue = { kind: 'fixed'; raw: Json } | { kind: 'today' } | { kind: 'day' } | { kind: 'page' } | { kind: 'row'; id: string }
 /** A property a step sets. Its name is kept for when the property's gone: "Status was deleted" (§4.4). */
-export interface ButtonSet { id: string; name: string; value: ButtonValue; /** Multi-select and Relation: add to what's there or take away, rather than replace. */ mode?: 'add' | 'remove' }
+export interface ButtonSet { id: string; name: string; /** Its type when written, so a change of type shows on a rule at once. */ type?: Property['type']; value: ButtonValue; /** Multi-select and Relation: add to what's there or take away, rather than replace. */ mode?: 'add' | 'remove' }
 export type InsertPlace = 'above' | 'below' | 'top' | 'bottom'
 export type ButtonStep = { id: string } & (
   | { kind: 'insert'; place: InsertPlace; blocks: EditorNode[] }

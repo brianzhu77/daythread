@@ -4,6 +4,7 @@ import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, 
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
+import { automationProblem, firedRules, type FiredRule } from "./automations.ts";
 import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, valueAtTap, type ButtonStep } from "./buttons.ts";
 import { commentLimit, leavesUndoAlone, type CommentThread, quoteLimit } from "./comments.ts";
 import { isPageIcon } from "./page-icon.ts";
@@ -18,7 +19,7 @@ import { dueRepeats, periodWord, repeatRowId } from "./repeats.ts";
 import { newTodo, taskIdOfRow, todoBarColumns, todoChange, todoMoves, todoRowId, todosDatabase, todosTitle, withTodos } from "./todos-source.ts";
 import { inView, todosSourceId, changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
-import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
+import type { Action, Command, CommandResult, DayView, Page, Receipt, Task, Workspace } from "./types.ts";
 import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, unsyncBlock } from "./synced.ts";
 
 export class DomainError extends Error {}
@@ -303,6 +304,49 @@ function threadToChange(state: Workspace, threadId: string, version: number): Co
 }
 /** What a copy or a page made from a template takes on (P1-7). */
 const lookOf = (from: Page | undefined): Pick<Page, "icon" | "cover" | "coverPosition"> => ({ ...(from?.icon ? { icon: from.icon } : {}), ...(from?.cover ? { cover: from.cover } : {}), ...(from?.coverPosition !== undefined ? { coverPosition: from.coverPosition } : {}) });
+/**
+ * The rules a command set off, in order. Each runs on its own copy and is taken whole or not at all, so his edit stands whatever a rule does (automations.md §5.1, §5.5).
+ * The allowance is the command's, across them all. Once it's spent, the rest pause, and those that already ran stay (§5.8).
+ */
+function runAutomations(start: Workspace, fired: FiredRule[], operationId: string): { state: Workspace; automations: NonNullable<Receipt["automations"]> } {
+  let state = start;
+  const budget = newBudget(), ran: string[] = [], paused: { name: string; reason: string }[] = [], at = isoTime(undefined), today = localDay(state, at);
+  let spent = false;
+  const pause = (on: Workspace, databaseId: string, ruleId: string, reason: string, limit: boolean) => {
+    const db = on.pages.find((p) => p.id === databaseId)!.database!;
+    db.automations = db.automations!.map((r) => (r.id === ruleId ? { ...r, active: false, paused: { reason, ...(limit ? { limit: true as const } : {}) } } : r));
+  };
+  for (const { databaseId, ruleId, rowIds } of fired) {
+    const database = state.pages.find((p) => p.id === databaseId)!.database!, rule = database.automations!.find((r) => r.id === ruleId)!;
+    if (spent) { pause(state, databaseId, ruleId, "Not run · command limit reached", true); paused.push({ name: rule.name, reason: "Not run · command limit reached" }); continue; }
+    const problem = automationProblem(state, database, rule);
+    if (problem) { pause(state, databaseId, ruleId, problem, false); paused.push({ name: rule.name, reason: problem }); continue; }
+    const copy = structuredClone(state), spentBefore = { ...budget }, steps = readSteps(rule.steps);
+    try {
+      let changed = false;
+      for (const rowId of rowIds) {
+        const row = copy.pages.find((p) => p.id === rowId);
+        if (row && runSteps(copy, steps, row, { at, today }, `${operationId}:${rule.id}:${rowId}`, null, budget).message !== null) changed = true;
+      }
+      settleSynced(copy);
+      if (changed) {
+        const db = copy.pages.find((p) => p.id === databaseId)!.database!;
+        db.automations = db.automations!.map((r) => (r.id === ruleId ? { ...r, lastRanAt: at } : r));
+        state = copy;
+        ran.push(rule.name);
+      }
+    } catch (error) {
+      if (!(error instanceof DomainError)) throw error;
+      Object.assign(budget, spentBefore);
+      const limit = / at most$/.test(error.message);
+      if (limit) spent = true;
+      const reason = limit ? "Not run · command limit reached" : error.message;
+      pause(state, databaseId, ruleId, reason, limit);
+      paused.push({ name: rule.name, reason });
+    }
+  }
+  return { state, automations: { databaseId: fired[0]!.databaseId, ran, paused } };
+}
 /** A task whose title is empty after trimming: an empty checkbox row left on a page. It stays there, but no list shows it. */
 export function isBlankTask(t: Task): boolean {
   return !t.title.trim();
@@ -1526,7 +1570,7 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   let state = structuredClone(input);
   const { undo: _previousUndo, receipts: _receipts, ...rest } = input;
   const before = { ...structuredClone(rest), receipts: {} as Workspace["receipts"] };
-  let result: { message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number; shifted?: string[]; skippedRepeats?: Array<{ title: string; earlier: string; full?: true }> };
+  let result: { automations?: NonNullable<Receipt["automations"]>; message: string; entityId?: string; renamed?: Record<string, string>; conflicted?: string[]; linesRemovedFrom?: number; shifted?: string[]; skippedRepeats?: Array<{ title: string; earlier: string; full?: true }> };
   if (command.action.type === "undo") {
     const previous = input.undo;
     if (!previous?.before || previous.operationId !== command.action.targetOperationId || previous.revision !== input.revision) throw new DomainError("Cannot undo after later changes; current values kept");
@@ -1539,6 +1583,8 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   } else {
     result = execute(state, command.action, command.operationId);
     result = { ...result, ...settleSynced(state) };
+    const fired = firedRules(input, state, command.action, { today: localDay(state, isoTime(undefined)), pageDate: null });
+    if (fired.length) { const run = runAutomations(state, fired, command.operationId); state = run.state; result = { ...result, automations: run.automations }; }
   }
   state.revision = input.revision + 1;
   const receipt = { operationId: command.operationId, ...result, fingerprint };

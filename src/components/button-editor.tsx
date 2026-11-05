@@ -29,7 +29,7 @@ const subscribe = (l: () => void) => { listeners.add(l); return () => { listener
 export function openButtonEditor(next: Open) { open = next; notify() }
 const closeEditor = () => { open = null; notify() }
 
-const newStep = (kind: StepKind): ButtonStep => {
+export const newStep = (kind: StepKind): ButtonStep => {
   const id = crypto.randomUUID()
   switch (kind) {
     case 'insert': return { id, kind, place: 'below', blocks: [] }
@@ -40,7 +40,7 @@ const newStep = (kind: StepKind): ButtonStep => {
     case 'confirm': return { id, kind, text: '' }
   }
 }
-const problemOf = (steps: readonly ButtonStep[], i: number) => stepProblem(steps[i]!, steps.slice(0, i))
+export const problemOf = (steps: readonly ButtonStep[], i: number) => stepProblem(steps[i]!, steps.slice(0, i))
 
 /** The open editor and any confirmation. One per page editor, drawing only what's for its page. */
 export function ButtonEditorHost({ pageId, schema }: { pageId: string | null; schema: never }) {
@@ -124,7 +124,7 @@ const fromDatabase = (workspace: Workspace, id: string): { title: string; databa
 }
 const settable = (database: Database): Property[] => database.fixed ? database.properties.filter(p => todoBarColumns.has(p.id)) : database.properties.filter(p => !isReadOnly(p) && p.id !== titleId)
 
-function StepPage({ step, problem, canOpenMade, workspace, schema, rowsOf, onChange }: { step: ButtonStep; problem: string | null; canOpenMade: boolean; workspace: Workspace; schema: never; rowsOf?: Database; onChange(next: ButtonStep): void }) {
+export function StepPage({ step, problem, canOpenMade, workspace, schema, rowsOf, onChange }: { step: ButtonStep; problem: string | null; canOpenMade: boolean; workspace: Workspace; schema: never; rowsOf?: Database; onChange(next: ButtonStep): void }) {
   const said = problem && <p className="button-step-problem" role="status">{problem}</p>
   switch (step.kind) {
     case 'edit-property': return <>{said}{rowsOf && <SetList database={rowsOf} set={step.set} onChange={set => onChange({ ...step, set })} />}</>
@@ -211,7 +211,7 @@ function SetList({ database, set, onChange }: { database: Database; set: ButtonS
         <button type="button" className="database-rule-remove" aria-label={`Stop setting ${s.name}`} onClick={() => onChange(set.filter((_, j) => j !== i))}>×</button>
       </div>
     })}
-    {free.length > 0 && <select aria-label="Set a property" value="" onChange={e => { const p = free.find(x => x.id === e.target.value); if (p) onChange([...set, { id: p.id, name: p.name, value: firstValue(p) }]) }}><option value="">+ Set a property…</option>{free.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+    {free.length > 0 && <select aria-label="Set a property" value="" onChange={e => { const p = free.find(x => x.id === e.target.value); if (p) onChange([...set, { id: p.id, name: p.name, type: p.type, value: firstValue(p) }]) }}><option value="">+ Set a property…</option>{free.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
   </>
 }
 

@@ -11,6 +11,7 @@ import { WorkspaceProvider, isConflict, useWorkspace } from './use-day'
 import { DatabaseCellEditor } from './database-block'
 import { CsvImportHost } from './csv-import'
 import { PeekHost } from './peek'
+import { AutomationsHost } from './automation-sheet'
 import { ButtonEditorHost } from './button-editor'
 import { CommentsPaneHost } from './comments-pane'
 import { IconPickerHost } from './icon-picker'
@@ -99,6 +100,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <PeekHost />
         <CommentsPaneHost />
         <ButtonEditorHost pageId={null} schema={null as never} />
+        <AutomationsHost />
         <IconPickerHost />
         <CoverPanelHost />
         <GlobalSearch />

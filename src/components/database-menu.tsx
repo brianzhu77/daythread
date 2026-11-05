@@ -3,6 +3,9 @@
 // shell), so a redraw of the block never closes it; only which menu is open is shared.
 import { useNavigate } from '@tanstack/react-router'
 import { useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
+import { automationProblem } from '../domain/automations'
+import { opsFor } from '../domain/database'
+import { openAutomations } from './automation-sheet'
 import { openButtonEditor } from './button-editor'
 import { filterTree, hasFilter, limits, ruleCount, rulesIn, type FilterGroup, tints, type ColourRule, type Tint, calcChoices, canWrap, calcLabels, databaseRows, dateProperties, groupableProperties, isDatabase, isTimeType, viewDateBy, propertyOf, titleId, typeLabels, propertyTypes, viewSubGroupBy, viewSubGroups, viewBoardCalculation, viewCalculations, viewColumns, viewGroupBy, viewGroups, type CalcKind, type Condition, type GroupDateBy, type Database, type DatabaseChange, type DependencyMode, type FilterOp, type Json, type Property, type Rollup, type RollupFunction, type PropertyType, type Sort, type View, type Repeat } from '../domain/database.ts'
 import { chartForms, chartKinds, chartSettings, type ChartForm, type ChartKind, type ChartSettings } from '../domain/chart'
@@ -164,7 +167,7 @@ function Head({ title, back }: { title: string; back?: () => void }) {
 }
 
 function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; blockId: string; go: (p: Panel) => void }) {
-  const { run } = useWorkspace()
+  const { run, workspace } = useWorkspace()
   const navigate = useNavigate()
   const inline = !blockId.startsWith('page:') && db.database.homeBlockId === blockId
   const linked = isLinkedBlock(blockId)
@@ -183,6 +186,7 @@ function RootPanel({ db, view, blockId, go }: { db: DatabasePage; view: View; bl
       <button type="button" onClick={() => go('sort')}>Sort</button>
       {view.layout !== 'calendar' && view.layout !== 'chart' && <button type="button" onClick={() => go('group')}>Group</button>}
     </div>
+    {!db.database.fixed && <button type="button" role="menuitem" onClick={e => { const anchor = document.querySelector(`[data-database-menu="${CSS.escape(blockId)}"]`) ?? e.currentTarget; setOpenMenu(null); openAutomations(db.id, anchor) }}>Automations{(() => { const n = workspace ? db.database.automations?.filter(r => r.paused || automationProblem(workspace, db.database, r)).length ?? 0 : 0; return n ? ` · ${n} paused` : '' })()}</button>}
     {view.layout !== 'chart' && <button type="button" role="menuitem" onClick={() => go('properties')}>Properties<span className="database-menu-chevron">›</span></button>}
     <button type="button" role="menuitem" onClick={() => go('layout')}>Layout<span className="database-menu-chevron">{layoutLabels[view.layout]} ›</span></button>
     {view.layout !== 'calendar' && view.layout !== 'timeline' && view.layout !== 'chart' && !wide && <button type="button" role="menuitem" onClick={() => { close(); startPicking(blockId) }}>Select rows</button>}
@@ -310,23 +314,7 @@ export const opLabels: Record<FilterOp, string> = {
   before: 'is before', after: 'is after', onOrBefore: 'is on or before', onOrAfter: 'is on or after', within: 'is within',
 }
 /** The conditions each type offers (design §7.3). */
-export function opsFor(type: PropertyType): FilterOp[] {
-  switch (type) {
-    case 'text': case 'url': case 'email': case 'phone': return ['contains', 'is', 'isEmpty', 'isNotEmpty']
-    case 'number': return ['eq', 'ne', 'gt', 'lt', 'isEmpty']
-    case 'id': return ['eq', 'ne', 'gt', 'lt']
-    case 'createdTime': case 'editedTime': return ['is', 'before', 'after', 'within']
-    case 'select': case 'status': return ['isAnyOf', 'isNoneOf', 'isEmpty']
-    case 'relation': case 'multiSelect': return ['contains', 'doesNotContain', 'isEmpty']
-    case 'files': return ['contains', 'doesNotContain', 'isEmpty', 'isNotEmpty']
-    // Read as the type it works out to (relations.ts), so it never gets here.
-    case 'button':
-    case 'rollup':
-    case 'formula': return []
-    case 'date': return ['is', 'before', 'after', 'within', 'isEmpty']
-    case 'checkbox': return ['is']
-  }
-}
+export { opsFor }
 const titleProperty: Property = { id: titleId, name: 'Name', type: 'text' }
 /** What a rule or a sort can be on: a button has no value to read. */
 function columnsOf(db: Database): Property[] { return [titleProperty, ...db.properties.filter(p => p.type !== 'button')] }
