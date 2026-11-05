@@ -62,6 +62,8 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("edit-comment"), threadId: id, commentId: id, body: z.string().max(20_000), version: z.number().int().nonnegative(), at: z.string().max(40) }),
   z.object({ type: z.literal("delete-comment"), threadId: id, commentId: id, version: z.number().int().nonnegative() }),
   z.object({ type: z.literal("resolve-thread"), threadId: id, resolved: z.boolean(), version: z.number().int().nonnegative(), at: z.string().max(40) }),
+  z.object({ type: z.literal("set-page-icon"), pageId: id, icon: z.string().max(300).nullable() }),
+  z.object({ type: z.literal("set-page-cover"), pageId: id, cover: z.string().max(2000).nullable(), position: z.number().min(0).max(1).optional() }),
   z.object({ type: z.literal("move-page"), pageId: id, parentId: id.nullable(), beforeId: id.nullable().optional() }),
   z.object({ type: z.literal("delete-page"), pageId: id, at: z.string().max(40) }),
   z.object({ type: z.literal("restore-page"), pageId: id }),

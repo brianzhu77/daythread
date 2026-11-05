@@ -5,6 +5,8 @@ import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { commentLimit, leavesUndoAlone, type CommentThread } from "./comments.ts";
+import { isPageIcon } from "./page-icon.ts";
+import { coverPlace, isCoverLink } from "./page-look.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
 import { hasDependencyLoop, loopRefusal, shiftDependents, spanOf } from "./dependencies.ts";
 import { descendantsOf, hasLoop, parentIdOf } from "./sub-items.ts";
@@ -130,6 +132,8 @@ function threadToChange(state: Workspace, threadId: string, version: number): Co
   if (thread.version !== version) throw new DomainError("Changed elsewhere");
   return thread;
 }
+/** What a copy or a page made from a template takes on (P1-7). */
+const lookOf = (from: Page | undefined): Pick<Page, "icon" | "cover" | "coverPosition"> => ({ ...(from?.icon ? { icon: from.icon } : {}), ...(from?.cover ? { cover: from.cover } : {}), ...(from?.coverPosition !== undefined ? { coverPosition: from.coverPosition } : {}) });
 /** A task whose title is empty after trimming: an empty checkbox row left on a page. It stays there, but no list shows it. */
 export function isBlankTask(t: Task): boolean {
   return !t.title.trim();
@@ -273,7 +277,7 @@ function ensureDay(state: Workspace, day: string): Page {
     for (let n = 2; state.pages.some((x) => x.id === id && x.type === "daily" && isTrashed(x)); n++) id = `day:${day}:${n}`;
     if (state.pages.some((x) => x.id === id)) throw new DomainError("Page id already in use");
     const template = defaultTemplate(state, dayPagesTarget);
-    p = { id, type: "daily", date: day, title: day, document: JSON.stringify(template ? pageFromTemplate(template, day, undefined, (n) => isOriginalBlock(state, n)) : templateDocument(id, day)) };
+    p = { id, type: "daily", date: day, title: day, ...lookOf(template), document: JSON.stringify(template ? pageFromTemplate(template, day, undefined, (n) => isOriginalBlock(state, n)) : templateDocument(id, day)) };
     state.pages.push(p);
   }
   return p;
@@ -774,7 +778,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       // title isn't copied. Only a page made with words keeps them and gets no template.
       const template = !body ? newPageTemplate(state, parent) : undefined;
       const nodes = template ? pageFromTemplate(template, null, undefined, (n) => isOriginalBlock(state, n)) : [line];
-      state.pages.push({ id, type: "document", date: null, title: text(action.title, 1000), ...(action.parentId ? { parentId: action.parentId } : {}), document: JSON.stringify(nodes) });
+      state.pages.push({ id, type: "document", date: null, title: text(action.title, 1000), ...(action.parentId ? { parentId: action.parentId } : {}), ...lookOf(template), document: JSON.stringify(nodes) });
       return { message: "Page saved", entityId: id };
     }
     case "make-link-pages": {
@@ -867,6 +871,25 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       if (action.resolved) thread.resolvedAt = isoTime(action.at); else delete thread.resolvedAt;
       thread.version++;
       return { message: action.resolved ? "Resolved" : "Reopened", entityId: thread.id };
+    }
+    case "set-page-icon": {
+      const p = page(state, action.pageId);
+      if (action.icon !== null && !isPageIcon(action.icon)) throw new DomainError("That isn't one emoji or picture");
+      const had = Boolean(p.icon);
+      if (action.icon === null) delete p.icon; else p.icon = action.icon;
+      if (isRow(state, p)) p.editedAt = isoTime(undefined);
+      return { message: action.icon === null ? "Icon removed" : had ? "Icon changed" : "Icon added", entityId: p.id };
+    }
+    case "set-page-cover": {
+      const p = page(state, action.pageId);
+      if (action.cover !== null && !isCoverLink(action.cover)) throw new DomainError("That isn't an image link");
+      const had = p.cover, moved = action.cover !== null && action.cover === had;
+      if (action.cover === null) { delete p.cover; delete p.coverPosition; } else {
+        p.cover = action.cover;
+        if (action.position !== undefined) p.coverPosition = coverPlace(action.position); else if (!moved) delete p.coverPosition;
+      }
+      if (isRow(state, p)) p.editedAt = isoTime(undefined);
+      return { message: action.cover === null ? "Cover removed" : moved ? "Cover moved" : had ? "Cover changed" : "Cover added", entityId: p.id };
     }
     case "move-page": {
       const refusal = moveRefusal(state, action.pageId, action.parentId, action.beforeId);
@@ -1106,7 +1129,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         }
         if (Object.keys(merged).length) values = merged;
       }
-      const row: Page = { id: action.pageId, type: "document", date: null, title: source ? `${source.row.title} (copy)`.trim() : text(action.title, 1000).trim(), parentId: db.id, document: JSON.stringify([emptyLine("paragraph")]), ...(values ? { values } : {}), createdAt: at, editedAt: at };
+      const row: Page = { id: action.pageId, type: "document", date: null, title: source ? `${source.row.title} (copy)`.trim() : text(action.title, 1000).trim(), parentId: db.id, ...lookOf(source?.row ?? template), document: JSON.stringify([emptyLine("paragraph")]), ...(values ? { values } : {}), createdAt: at, editedAt: at };
       if (source) row.document = JSON.stringify(copiedBody(state, source.row, row, localDay(state, at)));
       if (template) {
         if (!row.title) row.title = template.title;

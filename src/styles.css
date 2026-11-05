@@ -2425,6 +2425,85 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-lane-lead { position: sticky; left: 18px; z-index: 2; display: block; width: 0; height: 0; }
 .database-lane-lead .database-sub-lead { position: absolute; top: 8px; margin-left: 0; }
 .database-bar-lane:has(> .database-lane-lead) .database-bar-off.is-name, .database-bar-lane:has(> .database-lane-lead):has(> .database-lane-grip) .database-bar-off.is-name { left: 42px; }
+/* A page's emoji (icons-covers.md §7). In the box a page's icon has, so a row's words stay where they are. */
+.page-emoji { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 16px; height: 16px; font-size: 14px; line-height: 1; font-style: normal; }
+.database-row-icon { margin-right: 6px; font-size: 14px; font-style: normal; }
+.database-title-icon { flex: none; margin-right: 6px; font-size: 17px; line-height: 1; }
+/* A cover holds its height whatever the picture does, so the words never move (§7.5, §7.6). From the sidebar's edge to the window's at 1280, edge to edge at 390. */
+.page-cover { position: relative; height: 200px; overflow: hidden; background: var(--fill); margin: -24px calc(50% - (100vw - 260px) / 2) 0; }
+.page-cover.is-peek { height: 160px; margin: 0 -40px 16px; }
+.peek.is-side .page-cover.is-peek { height: 120px; margin: 0 -32px 16px; }
+/* A day has no 24 px of its own for the band to pull back over. Before the icon, however the head is ordered. */
+.page-cover.is-day { order: -4; margin-top: 0; }
+.page-cover-image { display: block; width: 100%; height: 100%; object-fit: cover; user-select: none; -webkit-user-drag: none; }
+.page-cover.is-moving { cursor: grab; touch-action: none; outline: none; }
+.page-cover-failed { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--ink-2); font-size: var(--text-meta); }
+.page-cover-actions, .page-cover-moving { position: absolute; right: 12px; bottom: 12px; display: flex; align-items: center; gap: 4px; padding: 2px 4px; border-radius: var(--radius-inline); background: var(--paper); color: var(--ink-2); font-size: var(--text-meta); }
+.page-cover-moving { right: 50%; transform: translateX(50%); }
+.page-cover-actions { opacity: 0; }
+.page-cover:hover .page-cover-actions, .page-cover:focus-within .page-cover-actions { opacity: 1; }
+.page-cover-actions button, .page-cover-moving button { min-height: 28px; padding: 0 8px; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.cover-panel { position: fixed; z-index: 1200; display: grid; gap: 8px; width: min(360px, calc(100vw - 16px)); padding: 10px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-block); box-shadow: var(--shadow-float); }
+.cover-panel-field { min-height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-control); background: none; color: var(--ink); font: inherit; }
+.cover-panel-note { color: var(--ink-2); font-size: var(--text-meta); }
+.cover-panel-preview { width: 100%; height: 120px; object-fit: cover; border-radius: var(--radius-inline); }
+.cover-panel-actions { display: flex; justify-content: flex-end; gap: 12px; font-size: var(--text-meta); }
+.cover-panel-actions:empty { display: none; }
+.is-own-icon { display: inline-block; width: 1em; height: 1em; background: var(--ink-2); -webkit-mask: var(--own-icon) center / contain no-repeat; mask: var(--own-icon) center / contain no-repeat; vertical-align: -0.125em; }
+.is-uploaded-icon { display: inline-flex; vertical-align: -0.125em; }
+.is-uploaded-icon img { width: 1em; height: 1em; border-radius: 3px; object-fit: cover; }
+/* In the box an emoji has, so a row's words stay where they are. */
+.page-emoji.is-own-icon { width: 16px; height: 16px; -webkit-mask-size: 14px; mask-size: 14px; }
+.page-emoji.is-uploaded-icon { align-items: center; justify-content: center; width: 16px; height: 16px; }
+/* Before a name in a path, with a gap. */
+.crumb .page-emoji { margin-right: 4px; vertical-align: -0.15em; }
+/* Links in a note are its size. */
+.cover-panel-note .app-link, .icon-picker-note .app-link { font-size: inherit; font-weight: inherit; }
+.page-icon-glyph { display: inline-block; line-height: inherit; }
+.icon-picker-remove { margin-left: auto; }
+.icon-picker-tabs { display: flex; flex: none; gap: 12px; padding-bottom: 6px; font-size: var(--text-meta); }
+.icon-picker-tabs button { min-height: 0; padding: 2px 0; border: 0; background: none; color: var(--ink-3); font: inherit; cursor: pointer; }
+.icon-picker-tabs button.is-on { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.icon-picker-upload { display: grid; align-content: start; gap: 8px; padding: 8px 4px; }
+.icon-picker-choose, .cover-panel-choose { position: relative; justify-self: start; font-size: var(--text-meta); cursor: pointer; }
+.icon-picker-choose input, .cover-panel-choose input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.icon-picker-track { height: 2px; background: var(--fill); }
+.icon-picker-track > div { height: 100%; background: var(--ink-2); transition: width .15s; }
+.cover-panel-set { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.cover-panel-set button { height: 40px; min-height: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius-inline); background-size: cover; background-position: center; cursor: pointer; }
+.page-icon-line { height: 52px; margin-left: -2px; }
+/* Above "Today" and the date (§7.2), whatever order the day's head is drawn in. */
+.day-screen > .page-icon-line { order: -3; margin-top: 24px; }
+.day-screen > .page-icon-line + .day-head { padding-top: 4px; }
+/* In a chip, an emoji takes the 14 px its icon has, so the gap after it holds. */
+.page-ref-icon:has(.page-emoji) { vertical-align: 0; }
+.page-ref-icon .page-emoji { width: 14px; height: 14px; font-size: 13px; }
+.page-icon { height: 52px; min-height: 0; padding: 0; border: 0; background: none; font-size: 44px; line-height: 52px; cursor: pointer; }
+.icon-picker { position: fixed; z-index: 1200; display: flex; flex-direction: column; width: 352px; height: 400px; padding: 8px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius-block); box-shadow: var(--shadow-float); }
+.icon-picker.is-sheet { left: 0; right: 0; bottom: 0; width: auto; height: 60vh; border-width: 1px 0 0; border-radius: var(--radius-block) var(--radius-block) 0 0; }
+.icon-picker-top { display: flex; flex: none; align-items: center; gap: 10px; padding-bottom: 8px; }
+.icon-picker-search { flex: 1; min-width: 0; min-height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-control); background: none; color: var(--ink); font: inherit; }
+.icon-picker-top .app-link { flex: none; font-size: var(--text-meta); }
+.icon-picker-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.icon-picker-section { content-visibility: auto; contain-intrinsic-size: auto 600px; }
+.icon-picker-group-head { display: flex; align-items: center; justify-content: space-between; min-height: 26px; color: var(--ink-3); font-size: var(--text-meta); }
+.icon-picker-tone { max-width: 120px; border: 0; background: none; color: var(--ink-2); font: inherit; }
+.icon-picker-grid { display: grid; grid-template-columns: repeat(8, 1fr); }
+.icon-picker-cell { display: flex; align-items: center; justify-content: center; height: 36px; min-height: 0; padding: 0; border: 0; border-radius: var(--radius-inline); background: none; font-size: 22px; line-height: 1; cursor: pointer; }
+.icon-picker-cell:hover, .icon-picker-cell:focus-visible { background: var(--fill-soft); outline: none; }
+.icon-picker-blank { height: 28px; margin: 4px; border-radius: var(--radius-inline); background: var(--fill-soft); }
+.icon-picker-note { padding: 16px 4px; color: var(--ink-2); font-size: var(--text-meta); }
+@media (max-width: 899px) {
+  .page-cover { height: 120px; margin: -24px -20px 0; }
+  .page-cover.is-peek { height: 120px; }
+  .page-cover-actions { display: none; }
+  .cover-panel-field { font-size: 16px; }
+  .page-icon-line { height: 44px; }
+  .page-icon { height: 44px; font-size: 36px; line-height: 44px; }
+  .icon-picker-search { font-size: 16px; }
+  .icon-picker-cell { height: 44px; }
+  body:has(.icon-picker.is-sheet) .editor-phone-toolbar { display: none; }
+}
 @media (hover: hover) { .database-timeline .database-pane-name:hover, .database-timeline .database-pane-cell:hover { background: var(--hover-dim); } }
 .database-pane-handle { position: absolute; left: 1px; top: 8px; z-index: 1; width: 14px; color: var(--ink-3); font-size: 11px; line-height: 18px; opacity: 0; cursor: grab; touch-action: none; user-select: none; }
 .database-bar-lane:hover .database-pane-handle { opacity: 1; }

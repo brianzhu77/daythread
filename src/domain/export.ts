@@ -66,7 +66,8 @@ export function pageMarkdown(p: Page, ws: Workspace, names: Map<string, string>)
   const front = ['---', `daythread-id: ${yamlString(p.id)}`, ...(p.date ? [`date: ${p.date}`] : []), ...(p.url ? [`url: ${yamlString(p.url)}`] : []), ...(parent ? [`parent: ${yamlString(`[[${parent}]]`)}`] : []), ...(template && p.parentId ? [`template-for: ${yamlString(p.parentId)}`] : []), ...values, '---']
   const title = p.type === 'daily' && p.date ? p.date : p.title || 'Untitled'
   const body = [p.url ? `<${p.url}>` : '', isDatabase(p) ? databaseMarkdown(ws, p, names) : '', blocksMarkdown(editorSeed(p, ws), ws, names)].filter(Boolean).join('\n\n')
-  return `${front.join('\n')}\n\n# ${title}\n${body ? `\n${body}\n` : ''}${commentsMarkdown(ws, p)}`
+  // Before the heading, so the title stays words.
+  return `${front.join('\n')}\n\n${p.cover ? (p.cover.startsWith('/') ? '(cover, not in this export)\n\n' : `![](${p.cover})\n\n`) : ''}${p.icon && !p.icon.startsWith('/') && !p.icon.startsWith('icon:') ? `${p.icon}\n\n` : ''}# ${title}\n${body ? `\n${body}\n` : ''}${commentsMarkdown(ws, p)}`
 }
 
 /** A page's comments at the end of its file, so a note stays with its page, with nothing left out (comments.md §4). */
@@ -214,7 +215,7 @@ function filesLeftOut(ws: Workspace): string[] {
     if (row.trashedAt) return []
     const where = row.title.trim() || row.date || 'Untitled', sized = (f: { name: string; size: number | null }) => `- ${where}: ${f.name}${f.size === null ? '' : ` (${(f.size / 1024 / 1024).toFixed(1)} MB)`}`
     const db = databaseOfRow(ws, row)
-    return [...(db ? db.database.properties.filter(p => p.type === 'files').flatMap(p => (cellValue(db.database, row, p.id) ?? []) as FileValue[]) : []), ...bodyFilesIn(row)].map(sized)
+    return [...(db ? db.database.properties.filter(p => p.type === 'files').flatMap(p => (cellValue(db.database, row, p.id) ?? []) as FileValue[]) : []), ...bodyFilesIn(row), ...[row.icon, row.cover].flatMap(url => { const file = bodyFileOf(url); return file ? [{ name: file.name || (url === row.icon ? 'Its icon' : 'Its cover'), size: file.size }] : [] })].map(sized)
   })
 }
 function readme(day: string, timezone: string, leftOut: string[]): string {

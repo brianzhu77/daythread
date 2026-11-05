@@ -16,6 +16,8 @@ import { DatabasePage, RowProperties } from './database-block'
 import { NewPageMenu } from './new-page-menu'
 import { databaseOfRow, isDatabase } from '../domain/database'
 import { RowMenu } from './row-menu'
+import { openIconPicker, PageIconLine } from './icon-picker'
+import { openCoverPanel, PageCover } from './page-cover'
 import { flushEditor } from './editor-flush'
 import { dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, rowTemplateDatabaseId, templates, templateTarget, topLevelTarget } from '../domain/day-template'
 
@@ -55,7 +57,7 @@ export function PagesScreen() {
   if (p && isTrashed(p)) return <TrashedPage key={p.id} page={p} workspace={workspace} />
   // A day page opened from the trash and just restored (B16): its home is its date.
   if (p?.type === 'daily' && p.date) return <Navigate to="/day/$date" params={{ date: p.date }} replace />
-  if (p) return <div className="doc-screen"><PageHeaderRow page={p} workspace={workspace} {...(search.from === 'bookmarks' ? { fromBookmarks: true } : {})} /><PageContent page={p} workspace={workspace} focus={search.focus} /></div>
+  if (p) return <div className="doc-screen"><PageCover page={p} place="page" /><PageHeaderRow page={p} workspace={workspace} {...(search.from === 'bookmarks' ? { fromBookmarks: true } : {})} /><PageContent page={p} workspace={workspace} focus={search.focus} /></div>
   // Top-level pages, then pages made inside day pages by day (Lead 02cbc559); deeper pages are reached through each
   // page's Subpages list (layout §6).
   const documents = childPages(workspace, null)
@@ -91,7 +93,7 @@ function PageRows({ pages, workspace, onOpen, detail }: { pages: Page[]; workspa
         return (
           <li key={p.id}>
             <button type="button" className="card-row" onClick={() => onOpen(p.id)}>
-              <span className="card-row-icon"><PageKindIcon url={p.url} database={Boolean(p.database)} /></span>
+              <span className="card-row-icon"><PageKindIcon url={p.url} database={Boolean(p.database)} icon={p.icon} /></span>
               <span className="card-row-text">
                 <span className={`card-row-title ${p.title ? '' : 'untitled'}`}>{displayPageTitle(p)}</span>
                 {detail && <span className="card-row-detail">{detail(p)}</span>}
@@ -214,8 +216,9 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
             : <PageLink className="crumb" href="/pages?view=templates">Templates</PageLink>}
         </nav>
         {/* Delete sits in the ⋯ where a document page has it (Jazz dbb8b038). */}
-        <RowMenu label="Template actions" triggerClass="page-more" groups={[{ items: [{ label: 'Delete', danger: true, onSelect: () => void remove() }] }]} />
+        <RowMenu label="Template actions" triggerClass="page-more" groups={[{ items: [{ label: page.icon ? 'Change icon' : 'Add icon', onSelect: () => openIconPicker(page.id, document.querySelector('.page-more')) }, { label: page.cover ? 'Change cover' : 'Add cover', onSelect: () => openCoverPanel(page.id, document.querySelector('.page-more')) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void remove() }] }]} />
       </div>
+      <PageIconLine page={page} />
       <div className="page-head">
         <PageTitleField key={page.id} page={page} autoFocus={autoFocusTitle} />
         {!owner && <p className="template-note">
@@ -244,6 +247,7 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
 export function PageContent({ page: p, workspace, focus }: { page: Page; workspace: Workspace; focus?: 'title' | undefined }) {
   const rowOf = databaseOfRow(workspace, p)
   return <>
+    <PageIconLine page={p} />
     <div className="page-head">
       {p.type === 'document' ? <PageTitleField key={p.id} page={p} autoFocus={focus === 'title'} /> : <h1 className="large-title">{p.title}</h1>}
       {!isDatabase(p) && <LinkUrlRow page={p} />}

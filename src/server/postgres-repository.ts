@@ -28,9 +28,9 @@ interface Scope extends WorkspaceInfo { userId: string | null }
 
 const upsertBatch = 500
 const threadColumns = ['id', 'page_id', 'version', 'created_at', 'resolved_at', 'comments'] as const
-const pageColumns = ['id', 'position', 'type', 'date', 'title', 'url', 'parent_id', 'trashed_at', 'trash_id', 'document', 'handoff_done', 'review_saved', 'database_json', 'row_values', 'created_at', 'edited_at'] as const
+const pageColumns = ['id', 'position', 'type', 'date', 'title', 'url', 'parent_id', 'trashed_at', 'trash_id', 'document', 'handoff_done', 'review_saved', 'database_json', 'row_values', 'created_at', 'edited_at', 'icon', 'cover', 'cover_position'] as const
 /** Columns added to `pages` after its first release (databases): added on start when missing, before any build writes them. */
-const addedPageColumns = ['database_json', 'row_values', 'created_at', 'edited_at'] as const
+const addedPageColumns = ['database_json', 'row_values', 'created_at', 'edited_at', 'icon', 'cover', 'cover_position'] as const
 const taskColumns = ['id', 'position', 'title', 'status', 'version', 'paused', 'deadline_on', 'attention_on', 'created_on', 'source_page_id', 'done_on'] as const
 const deletedColumns = ['id', 'position', 'data'] as const
 

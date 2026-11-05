@@ -187,7 +187,7 @@ export type CellValue = string | number | string[] | DateValue | boolean | FileV
 /** One file in a Files cell (R3-11). The bytes are in the file store under its id; this travels with the row, so Undo, Trash and a moved row need nothing else. */
 export interface FileValue { id: string; name: string; size: number; type: string; thumb?: string }
 /** Whether anything here holds a file, Trash included: a Files value, or one in a page's body. */
-export const holdsFiles = (ws: Pick<Workspace, "pages">): boolean => ws.pages.some((p) => (p.document ?? "").includes("/api/files/") || (isDatabase(p) && p.database.properties.some((x) => x.type === "files" && ws.pages.some((r) => r.parentId === p.id && Array.isArray(r.values?.[x.id]) && (r.values![x.id] as unknown[]).length > 0))));
+export const holdsFiles = (ws: Pick<Workspace, "pages">): boolean => ws.pages.some((p) => (p.document ?? "").includes("/api/files/") || p.icon?.startsWith("/api/files/") || p.cover?.startsWith("/api/files/") || (isDatabase(p) && p.database.properties.some((x) => x.type === "files" && ws.pages.some((r) => r.parentId === p.id && Array.isArray(r.values?.[x.id]) && (r.values![x.id] as unknown[]).length > 0))));
 export const fileLimits = { size: 25 * 1024 * 1024, perCell: 50, account: 5 * 1024 * 1024 * 1024 };
 const isFileValue = (x: unknown): x is FileValue => {
   const f = x as FileValue | null;
