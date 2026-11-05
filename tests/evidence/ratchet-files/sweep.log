@@ -1,0 +1,3 @@
+{"level":"info","event":"storage.initialize","result":"empty","pages":0}
+PASS sqlite report removes nothing; apply only old unheld; Trash/type change/day body/Undo/recent/other account kept
+PASS pglite report removes nothing; apply only old unheld; Trash/type change/day body/Undo/recent/other account kept
