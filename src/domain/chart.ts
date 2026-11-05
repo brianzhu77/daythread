@@ -4,7 +4,7 @@ import { calcChoices, columnCalc, dateGroupName, propertyOf, viewGroups, type Ca
 import type { WeekStart } from './types.ts'
 import type { Page } from './types.ts'
 
-export const chartForms = ['bar', 'barHorizontal', 'number'] as const
+export const chartForms = ['bar', 'barHorizontal', 'line', 'donut', 'number'] as const
 export type ChartForm = (typeof chartForms)[number]
 export const chartKinds = ['sum', 'average', 'median', 'min', 'max', 'range'] as const
 export type ChartKind = (typeof chartKinds)[number]
@@ -21,7 +21,15 @@ export interface ChartSettings {
 /** More values than can be told apart, as Notion's limit. It says so, and the table of data still has them all. */
 export const chartLimit = 200
 
-export interface ChartPoint { key: string; name: string; rows: Page[]; value: number | null; result: CalcResult }
+export interface ChartPoint {
+  key: string
+  name: string
+  rows: Page[]
+  value: number | null
+  result: CalcResult
+  /** Its place along the axis before any sort, so a value keeps its grey (§4). */
+  order: number
+}
 export interface ChartData { property: Property; points: ChartPoint[]; dateAxis: boolean; tooMany: boolean }
 
 export const chartSettings = (view: Pick<View, 'chart'>): ChartSettings => view.chart ?? { form: 'bar' }
@@ -84,14 +92,28 @@ export function chartData(db: Database, view: View, rows: readonly Page[], weekS
   }
   // No value only where a row has none: a select always has the group, for a board to drop on, but it isn't a bar.
   shown = shown.filter(g => g.key !== noValue || g.rows.length > 0)
-  let points: ChartPoint[] = shown.map(g => { const result = chartValue(db, g.rows, measure); return { ...g, result, value: numberOf(result) } })
-  if (settings.cumulative && !settings.sortByValue && (kindOf(measure) === 'countAll' || kindOf(measure) === 'sum')) {
+  let points: ChartPoint[] = shown.map((g, order) => { const result = chartValue(db, g.rows, measure); return { ...g, order, result, value: numberOf(result) } })
+  if (settings.cumulative && settings.form !== 'donut' && !settings.sortByValue && (kindOf(measure) === 'countAll' || kindOf(measure) === 'sum')) {
     // No value isn't a point along the axis: it keeps its own number, and stays out of the running total.
     let total = 0, any = false
     points = points.map(p => { if (p.key === noValue) return p; if (p.value !== null) { total += p.value; any = true } const value = any ? total : null; return { ...p, value, result: measure ? { type: 'number', value } : { type: 'count', value: value ?? 0 } } })
   }
   if (settings.sortByValue) points = [...points].sort((a, b) => (b.value ?? -Infinity) - (a.value ?? -Infinity))
   return { property: groups.property, points, dateAxis, tooMany: tooMany || points.length > chartLimit }
+}
+
+/** A donut's greys, as the app's tokens: a value keeps its own whatever's filtered, and the rest fold into Other, drawn as an outline so it can't pass for a value (§4). */
+export const donutGreys = 4
+export const otherKey = 'other-values'
+export interface DonutSlice { key: string; name: string; rows: Page[]; value: number; share: number; grey: number | null; result: CalcResult }
+export function donutSlices(points: readonly ChartPoint[]): { slices: DonutSlice[]; total: number } {
+  const counted = points.filter(p => p.value !== null && p.value > 0), total = counted.reduce((n, p) => n + p.value!, 0)
+  if (!total) return { slices: [], total: 0 }
+  const named = [...counted].sort((a, b) => a.order - b.order).slice(0, donutGreys), kept = new Set(named.map(p => p.key)), rest = counted.filter(p => !kept.has(p.key))
+  const byGrey = new Map(named.map((p, i) => [p.key, i]))
+  const slices: DonutSlice[] = counted.filter(p => kept.has(p.key)).map(p => ({ key: p.key, name: p.name, rows: p.rows, value: p.value!, share: p.value! / total, grey: byGrey.get(p.key)!, result: p.result }))
+  if (rest.length) { const value = rest.reduce((n, p) => n + p.value!, 0); slices.push({ key: otherKey, name: `Other (${rest.length})`, rows: [...new Map(rest.flatMap(p => p.rows).map(r => [r.id, r])).values()], value, share: value / total, grey: null, result: { type: 'number', value } }) }
+  return { slices, total }
 }
 
 const compact = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 })
