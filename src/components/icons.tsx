@@ -227,6 +227,11 @@ export const HideKeyboardIcon = () => (
   </Icon>
 )
 
+export const ButtonIcon = () => (
+  <Icon size={18}>
+    <rect x="3" y="7" width="18" height="10" rx="5" />
+  </Icon>
+)
 export const CheckboxIcon = () => (
   <Icon size={18}>
     <rect x="4" y="4" width="16" height="16" rx="4" />

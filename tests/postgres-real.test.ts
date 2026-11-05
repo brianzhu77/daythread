@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import postgres from 'postgres'
 import { PostgresWorkspaceRepository } from '../src/server/postgres-repository.ts'
 import { asOwner } from '../src/server/auth/request-owner.ts'
+import { stepsKey, writeSteps } from '../src/domain/buttons.ts'
+import { pageContentKey } from '../src/domain/editor-document.ts'
 import { postgresClient } from '../src/server/db/sql.ts'
 
 // The Postgres store (rows, shot 2) through postgres-js on a real Postgres, as Vercel runs it: separate connections, prepare: false.
@@ -180,6 +182,50 @@ test('real Postgres: comments in their own table, a page save leaves them, a rep
     })
     assert.equal((await a.unsafe(`select count(*)::int as n from ${schema}.comment_threads`))[0]!.n, 2)
     assert.equal((await a.unsafe(`select relrowsecurity from pg_class where oid = '${schema}.comment_threads'::regclass`))[0]!.relrowsecurity, true)
+  } finally {
+    await a.unsafe(`drop schema if exists ${schema} cascade`)
+    await a.end()
+  }
+})
+
+test('real Postgres: a button\'s steps in one operation, all or none, one Undo, and a retry makes one row', { skip }, async () => {
+  const schema = `daythread_test_button_${process.pid}`, a = connect()
+  try {
+    const repo = new PostgresWorkspaceRepository(postgresClient(a), schema)
+    let ws = await repo.load()
+    const run = async (operationId: string, action: unknown) => { ws = (await repo.execute({ operationId, expectedRevision: ws.revision, action: action as never })).workspace; return ws }
+    const at = '2026-11-05T10:00:00.000Z', today = '2026-11-05'
+    await run('db', { type: 'create-database', pageId: 'runs', homeBlockId: null, title: 'Runs' })
+    await run('n', { type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'n', name: 'N', type: 'number' } } })
+    await run('r1', { type: 'add-row', databaseId: 'runs', pageId: 'r1', title: 'One', values: { n: 1 }, at })
+    await run('p', { type: 'create-document', title: 'Notes', body: '', pageId: 'p' })
+    const steps = writeSteps([
+      { id: 'i', kind: 'insert', place: 'below', blocks: [{ id: 'x', type: 'paragraph', props: {}, content: [{ type: 'text', text: 'Inserted', styles: {} }], children: [] }, { id: 't', type: 'checkListItem', props: {}, content: [{ type: 'text', text: 'To do', styles: {} }], children: [] }] },
+      { id: 'a', kind: 'add-row', databaseId: 'runs', databaseName: 'Runs', title: 'Made', set: [] },
+      { id: 'e', kind: 'edit-rows', databaseId: 'runs', databaseName: 'Runs', filter: [], set: [{ id: 'n', name: 'N', value: { kind: 'fixed', raw: 9 } }] },
+    ])
+    const key = () => pageContentKey(ws.pages.find(p => p.id === 'p')!)
+    await run('save', { type: 'save-editor', pageId: 'p', expectedContent: key(), document: JSON.stringify([{ id: 'btn', type: 'button', props: { label: 'Go', steps }, children: [] }]) })
+    const before = JSON.stringify([ws.pages.find(p => p.id === 'p')!.document, ws.tasks.length, ws.pages.length])
+    const tap = { type: 'run-button', pageId: 'p', blockId: 'btn', stepsKey: stepsKey(steps), expectedContent: key(), at, today }
+    await run('tap', tap)
+    const rows = () => ws.pages.filter(p => p.parentId === 'runs' && !p.trashedAt)
+    assert.equal(rows().length, 2)
+    assert.deepEqual(rows().map(r => r.values?.n), [9, 9])
+    assert.equal(ws.tasks.filter(t => t.title === 'To do').length, 1)
+    await repo.execute({ operationId: 'tap', expectedRevision: ws.revision, action: tap as never })
+    ws = await repo.load()
+    assert.equal(rows().length, 2, 'a retry after a lost reply makes one row')
+    await run('back', { type: 'undo', targetOperationId: 'tap' })
+    assert.equal(JSON.stringify([ws.pages.find(p => p.id === 'p')!.document, ws.tasks.length, ws.pages.length]), before)
+    assert.deepEqual(rows().map(r => r.values?.n), [1])
+    // A failing step leaves nothing behind in any table.
+    const bad = writeSteps([{ id: 'a', kind: 'add-row', databaseId: 'runs', databaseName: 'Runs', title: 'No', set: [] }, { id: 'e', kind: 'edit-rows', databaseId: 'runs', databaseName: 'Runs', filter: [], set: [{ id: 'n', name: 'N', value: { kind: 'fixed', raw: 'words' } }] }])
+    await run('save2', { type: 'save-editor', pageId: 'p', expectedContent: key(), document: JSON.stringify([{ id: 'btn', type: 'button', props: { label: 'Go', steps: bad }, children: [] }]) })
+    const count = (await a.unsafe(`select count(*)::int as n from ${schema}.pages`))[0]!.n, revision = ws.revision
+    await assert.rejects(run('bad', { type: 'run-button', pageId: 'p', blockId: 'btn', stepsKey: stepsKey(bad), expectedContent: key(), at, today }), /Edit rows in Runs/)
+    assert.equal((await a.unsafe(`select count(*)::int as n from ${schema}.pages`))[0]!.n, count)
+    assert.equal((await repo.load()).revision, revision)
   } finally {
     await a.unsafe(`drop schema if exists ${schema} cascade`)
     await a.end()

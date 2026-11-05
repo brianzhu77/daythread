@@ -1,21 +1,22 @@
 // The domain: commands over the workspace (pure, one at a time, with receipts for replay and one Undo slot) and the
 // views every screen reads. Pages and tasks are stored; what a page says about its tasks is read from its document.
-import { broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
+import { buttonBlockType, broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyTaskRow, flatNodes, inlineText, isEmptyLine, isTaskRow, pageContentKey, pageNodes, rowInsertIndex, rowRole, rowTaskId, sectionInsertIndex, templateDocument, textDate, textRun, type EditorNode } from "./editor-document.ts";
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
+import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, valueAtTap, type ButtonStep } from "./buttons.ts";
 import { commentLimit, leavesUndoAlone, type CommentThread, quoteLimit } from "./comments.ts";
 import { isPageIcon } from "./page-icon.ts";
 import { coverPlace, isCoverLink } from "./page-look.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
 import { hasDependencyLoop, loopRefusal, shiftDependents, spanOf } from "./dependencies.ts";
 import { descendantsOf, hasLoop, parentIdOf } from "./sub-items.ts";
-import type { SubItems } from "./database.ts";
+import type { Database, Json, Property, SubItems } from "./database.ts";
 import { applyRowMove, movesIntoItself, rowMoveTree } from "./move-row.ts";
 import { importRefusal } from "./csv.ts";
 import { dueRepeats, periodWord, repeatRowId } from "./repeats.ts";
-import { todoBarColumns, todoChange, todoMoves } from "./todos-source.ts";
-import { changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
+import { newTodo, taskIdOfRow, todoBarColumns, todoChange, todoMoves, todoRowId, todosDatabase, todosTitle, withTodos } from "./todos-source.ts";
+import { inView, todosSourceId, changeDatabase, syncMirror, databaseBlockType, databaseOfRow, databaseRows, editRow, isDatabase, limits as databaseLimits, newDatabase, newRowStored, type RowEdit, keepRowNumbers, numberNewRow, isRow, templateValues } from "./database.ts";
 import { defaultLinkTitle, urlKey } from "./url-key.ts";
 import type { Action, Command, CommandResult, DayView, Page, Task, Workspace } from "./types.ts";
 import { acceptSavedBlocks, deleteBlockPlace, expandedWorkspace, isOriginalBlock, isSyncedBlock, settleSynced, unsyncBlock } from "./synced.ts";
@@ -118,6 +119,127 @@ function tasksOnDay(state: Workspace, day: string): Task[] {
     seen.add(id); out.push(t);
   }
   return out;
+}
+/** Where a button sits, with the list holding it, so blocks can go beside it. */
+function buttonPlace(nodes: EditorNode[], id: string): { list: EditorNode[]; index: number } | null {
+  for (let index = 0; index < nodes.length; index++) {
+    const node = nodes[index]!;
+    if (node.id === id) return { list: nodes, index };
+    const inner = node.children?.length ? buttonPlace(node.children, id) : null;
+    if (inner) return inner;
+  }
+  return null;
+}
+/** A database a step reads from, or why it can't: what's said at the tap, with the pill left as it is (buttons.md §4.4). */
+function buttonTarget(state: Workspace, databaseId: string, name: string): Page & { database: Database } {
+  const db = state.pages.find((p) => p.id === databaseId);
+  if (!db || !isDatabase(db)) throw new DomainError(`${name || "That database"} was deleted`);
+  if (isTrashed(db)) throw new DomainError(`${db.title.trim() || name} is in Trash`);
+  return db;
+}
+/** Every step of a tap, in one operation, so they all apply or none do (buttons.md §4.1). A throw here leaves nothing, as a command works on a copy. */
+function runButton(state: Workspace, action: Extract<Action, { type: "run-button" }>, operationId: string): { message: string; entityId?: string } {
+  const on = page(state, action.pageId);
+  if (isTrashed(on)) throw new DomainError("That page is in Trash");
+  if (isTemplate(on)) throw new DomainError("A template doesn't run its buttons");
+  const doc = docOf(on), held = buttonPlace(doc, action.blockId);
+  const block = held?.list[held.index];
+  if (!block || block.type !== buttonBlockType) throw new DomainError("That button's gone");
+  const stored = String(block.props?.steps ?? "");
+  if (stepsKey(stored) !== action.stepsKey) throw new DomainError("Changed elsewhere");
+  const steps = readSteps(stored), at = isoTime(action.at), today = date(action.today);
+  if (changesWords(steps) && pageContentKey(on) !== action.expectedContent) throw new DomainError("Changed elsewhere");
+  // Every target and the whole list are read first, so a broken one says so before anything else (§4.4).
+  for (const step of steps) {
+    if (step.kind === "add-row" || step.kind === "edit-rows") {
+      if (isTodosTarget(step.databaseId)) continue;
+      const db = buttonTarget(state, step.databaseId, step.databaseName);
+      for (const set of step.set) if (!db.database.properties.some((p) => p.id === set.id)) throw new DomainError(`${set.name} was deleted`);
+    }
+    // Opened only after the commit, so a page that can't be opened has to say so before anything's written (§4.7).
+    if (step.kind === "open" && step.target.kind === "page") {
+      const to = state.pages.find((p) => p.id === (step.target as { pageId: string }).pageId);
+      if (!to) throw new DomainError(`${step.target.name || "That page"} was deleted`);
+      if (isTrashed(to)) throw new DomainError(`${to.title.trim() || step.target.name} is in Trash`);
+    }
+    if (step.kind === "open" && step.target.kind === "url" && !safeUrl(step.target.url)) throw new DomainError("That link can't be opened");
+  }
+  // Counted across the steps, rather than each spending the whole limit (§4.9).
+  let rowsLeft = databaseLimits.rowsAtOnce, todosLeft = databaseLimits.todosAtOnce;
+  const spend = (rows: number, todos: boolean) => { if (todos) { todosLeft -= rows; if (todosLeft < 0) throw new DomainError(`${databaseLimits.todosAtOnce} to-dos at most`); } else { rowsLeft -= rows; if (rowsLeft < 0) throw new DomainError(`${databaseLimits.rowsAtOnce.toLocaleString("en-US")} rows at most`); } };
+  let message: string | null = null, made: string | undefined, matchedNothing = false, because: string | undefined;
+  const named = <T,>(step: ButtonStep, work: () => T): T => {
+    try { return work(); } catch (error) {
+      if (error instanceof DomainError && !/ was deleted$| is in Trash$| at most$/.test(error.message)) throw new DomainError(`${stepTitle(step)}: ${error.message}`);
+      throw error;
+    }
+  };
+  for (const [index, step] of steps.entries()) {
+    if (step.kind === "insert") named(step, () => {
+      const day = on.date ?? localDay(state, at);
+      // Each of these is a new task.
+      spend(flatNodes(step.blocks).filter((n) => (n.type === "task" || n.type === "checkListItem") && inlineText(n.content).trim()).length, true);
+      const fresh = pageFromTemplate({ document: JSON.stringify(step.blocks) } as Page, on.date, (n) => {
+        const words = inlineText(n.content).trim();
+        if (!words) return emptyTaskRow(on.date);
+        const task = createTask(state, words, on, day);
+        return on.date ? planRow(task, on.date) : { id: newId(), type: "task", props: { taskId: task.id, role: "reference", planDate: "" }, content: structuredClone(n.content), children: [] };
+      }, (n) => isOriginalBlock(state, n));
+      // It's read again each time, as an earlier step of this tap may have changed the page.
+      const now = docOf(on), place = buttonPlace(now, action.blockId);
+      if (!place) throw new DomainError("That button's gone");
+      if (step.place === "above") place.list.splice(place.index, 0, ...fresh);
+      else if (step.place === "below") place.list.splice(place.index + 1, 0, ...fresh);
+      else if (step.place === "top") now.unshift(...fresh);
+      else { const end = now.length && isEmptyLine(now[now.length - 1]!) ? now.length - 1 : now.length; now.splice(end, 0, ...fresh); }
+      setDocument(on, now);
+      message = "Inserted";
+    });
+    else if (step.kind === "add-row") named(step, () => {
+      spend(1, isTodosTarget(step.databaseId));
+      if (isTodosTarget(step.databaseId)) {
+        const title = text(step.title, 1000).trim();
+        if (!title) throw new DomainError("A to-do needs words");
+        const values = Object.fromEntries(step.set.flatMap((set) => { const property = todosDatabase.properties.find((p: Property) => p.id === set.id); return property ? [[set.id, valueAtTap(set.value, property, on, today)]] : []; }));
+        const placed = newTodo(todosDatabase.views[0]!, { today, pageDate: on.date }, undefined, values);
+        const dayPage = ensureDay(state, placed.date);
+        const task = addTask(state, dayPage, { title, plannedOn: placed.date, ...(placed.attentionOn ? { attentionOn: placed.attentionOn } : {}), ...(placed.deadlineOn ? { deadlineOn: placed.deadlineOn } : {}) });
+        made = todoRowId(task.id);
+        message = `Added to ${todosTitle}`;
+        return;
+      }
+      const db = buttonTarget(state, step.databaseId, step.databaseName), rowId = `${operationId}:${index}`;
+      const values = Object.fromEntries(step.set.map((set) => [set.id, valueAtTap(set.value, db.database.properties.find((p) => p.id === set.id)!, on, today)]));
+      execute(state, { type: "add-row", databaseId: db.id, pageId: rowId, title: step.title, values, at }, operationId);
+      made = rowId;
+      message = `Added to ${db.title.trim() || step.databaseName}`;
+    });
+    else if (step.kind === "edit-rows") named(step, () => {
+      const context = { today, pageDate: on.date };
+      if (isTodosTarget(step.databaseId)) {
+        const rows = databaseRows(withTodos(state), todosSourceId).filter((r) => inView(todosDatabase, r, { filter: step.filter, ...(step.any ? { filterAny: true } : {}) }, context));
+        if (!rows.length) { matchedNothing = true; return; }
+        spend(rows.length, true);
+        const items = rows.flatMap((r) => { const taskId = taskIdOfRow(r.id); return taskId ? [{ taskId, changes: step.set.map((set) => ({ columnId: set.id, value: valueAtTap(set.value, todosDatabase.properties.find((p: Property) => p.id === set.id) ?? { type: "text" as const }, on, today) })) }] : []; });
+        // As the bar's: a to-do that can't take a change, a cancelled one say, is normal here. It reads "3 changed · 1 couldn't", and if none could, later steps carry on, as for no match (Lead 371ebb4b).
+        try { message = execute(state, { type: "edit-todos", items, today }, operationId).message; } catch (error) {
+          if (!(error instanceof DomainError)) throw error;
+          matchedNothing = true; because = error.message;
+        }
+        return;
+      }
+      const db = buttonTarget(state, step.databaseId, step.databaseName);
+      const rows = databaseRows(state, db.id).filter((r) => inView(db.database, r, { filter: step.filter, ...(step.any ? { filterAny: true } : {}) }, context));
+      if (!rows.length) { matchedNothing = true; return; }
+      spend(rows.length, false);
+      const properties = step.set.map((set) => db.database.properties.find((p) => p.id === set.id)!);
+      for (const row of rows) rowEdit(state, { pageId: row.id, values: Object.fromEntries(step.set.map((set, i) => [set.id, valueAtTap(set.value, properties[i]!, on, today)])), expected: Object.fromEntries(properties.map((p) => [p.id, (row.values?.[p.id] ?? null) as Json])) }, at);
+      message = `${rows.length} row${rows.length === 1 ? "" : "s"} changed`;
+    });
+  }
+  // Nothing changed at all: nothing to Undo, and no operation.
+  if (message === null) throw new DomainError(because ?? (matchedNothing ? "No rows matched" : "Nothing to do"));
+  return { message, ...(made ? { entityId: made } : {}) };
 }
 function commentBody(body: string): string {
   const words = text(body, 20_000).trim();
@@ -1101,6 +1223,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       }
       return { message: made ? `${made} repeating row${made === 1 ? "" : "s"} made` : "Nothing due", ...(skipped.length ? { skippedRepeats: skipped } : {}) };
     }
+    case "run-button": return runButton(state, action, operationId);
     case "add-row": {
       const db = databasePage(state, action.databaseId);
       const at = isoTime(action.at);
