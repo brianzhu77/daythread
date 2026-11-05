@@ -2536,8 +2536,9 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .bn-shadcn .bn-editor a.body-file-go:hover { color: var(--ink); }
 .body-file-menu-at { display: none; flex: none; margin-left: auto; }
 .body-file-go + .body-file-menu-at { margin-left: 0; }
-.body-file-more { width: 28px; height: 28px; border: 0; border-radius: var(--radius-inline); background: none; color: var(--ink-2); cursor: pointer; }
+.body-file-more { width: 44px; height: 44px; border: 0; border-radius: var(--radius-inline); background: none; color: var(--ink-2); cursor: pointer; }
 .body-image-more { display: none; position: absolute; top: 4px; right: 4px; border-radius: var(--radius-inline); background: var(--app-surface); }
+.body-file-menu { z-index: 1000; width: max-content; min-width: 180px; max-width: calc(100vw - 16px); }
 .body-file-menu input { width: 240px; max-width: calc(100vw - 48px); min-height: 38px; padding: 0 8px; border: 0; background: none; font: inherit; color: var(--ink); outline: none; }
 [data-file-block] .body-image-loading { width: 100vw; max-width: 100%; aspect-ratio: 16 / 9; background: var(--fill); color: transparent; }
 /* 120 is the smallest a picture gets, however far an edge is dragged (§5). No column is narrower. */

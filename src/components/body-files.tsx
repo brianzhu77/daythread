@@ -135,7 +135,7 @@ export function BodyFileOpenButtons() {
     <Components.FormattingToolbar.Button className="bn-button" label="Open in a new tab" mainTooltip="Open in a new tab" icon={<ExternalIcon />} onClick={() => openFile(block.props.url)} />
   </>
 }
-/** The phone's way to what a selected block's bar offers at 1280 (§5): there's no bar to hover over, and no resize. */
+/** The phone's way to what a selected block's bar offers at 1280 (§5): there's no bar to hover over, and no resize. Opening it lets the keyboard go, which would leave the menu no room. */
 function BodyBlockMenu({ block }: { block: { id: string; type: string; props: Record<string, any> } }) {
   const editor = useBlockNoteEditor<any, any, any>(), button = useRef<HTMLButtonElement>(null), menu = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false), [captioning, setCaptioning] = useState(false), [at, setAt] = useState<{ top: number; left: number } | null>(null)
@@ -156,10 +156,10 @@ function BodyBlockMenu({ block }: { block: { id: string; type: string; props: Re
   const act = (run: () => void) => () => { close(); run() }
   const align = (textAlignment: string) => act(() => editor.updateBlock(block.id, { props: { textAlignment } } as never))
   return <>
-    <button ref={button} type="button" className="body-file-more" aria-label="More" aria-expanded={open} contentEditable={false} onClick={() => setOpen(!open)}>⋯</button>
-    {open && createPortal(<div ref={menu} className="app-menu body-file-menu" role="menu" aria-label="File actions" style={{ position: 'fixed', top: at?.top ?? 0, left: at?.left ?? 0, visibility: at ? 'visible' : 'hidden' }}>
+    <button ref={button} type="button" className="body-file-more" aria-label="More" aria-expanded={open} contentEditable={false} onClick={() => { (document.activeElement as HTMLElement | null)?.blur(); setOpen(!open) }}>⋯</button>
+    {open && createPortal(<div ref={menu} className="app-menu body-file-menu" role="menu" aria-label="File actions" style={{ position: 'fixed', top: at?.top ?? 0, left: at?.left ?? 0, right: 'auto', visibility: at ? 'visible' : 'hidden' }}>
       {captioning
-        ? <input aria-label="Caption" autoFocus defaultValue={block.props.caption ?? ''} onBlur={close} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); editor.updateBlock(block.id, { props: { caption: e.currentTarget.value } } as never); close() } }} />
+        ? <input aria-label="Caption" placeholder="Caption" autoFocus defaultValue={block.props.caption ?? ''} onBlur={close} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); editor.updateBlock(block.id, { props: { caption: e.currentTarget.value } } as never); close() } }} />
         : <>
           <button type="button" role="menuitem" onClick={() => setCaptioning(true)}>Caption</button>
           <button type="button" role="menuitem" onClick={act(() => chooseAgain(editor, block.id))}>Replace</button>
@@ -202,7 +202,9 @@ function BodyImageView(props: any) {
   const up = useUpload(ours?.id), there = useFileThere(url, Boolean(ours), Boolean(up))
   const [broken, setBroken] = useState(false), [loaded, setLoaded] = useState(false), [chosen, setChosen] = useState(false)
   useStopWhenGone(props.block.id, up)
-  useEffect(() => { setBroken(false); setLoaded(false) }, [url, there])
+  useEffect(() => { setBroken(false); setLoaded(false) }, [url])
+  // Only once it's gone: an error that arrives alongside the file being found mustn't be forgotten, with the same picture never failing again. If it turns up later, the picture's drawn anew.
+  useEffect(() => { if (there === false) setBroken(false) }, [there])
   // Back online, it tries again: the picture's drawn anew.
   useEffect(() => { const again = () => setBroken(false); window.addEventListener('online', again); return () => window.removeEventListener('online', again) }, [])
   // A tap selects it on a phone, where there's no hover to bring its actions (§5).

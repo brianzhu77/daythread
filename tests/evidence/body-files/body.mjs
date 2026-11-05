@@ -14,6 +14,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms))
 const browser = await pw[engine].launch({ headless: true })
 let failed = 0
 const scenario = async (name, act, options = { viewport: { width: 1280, height: 900 } }) => {
+  if (process.env.ONLY && !name.includes(process.env.ONLY)) return
   execSync(`rm -rf ${S} ${S}-wal ${S}-shm ${folder} && node --no-warnings tests/evidence/body-files/seed.ts ${S}`, { stdio: 'ignore' })
   const context = await browser.newContext({ ...options, serviceWorkers: 'block' }), page = await context.newPage(), errors = []
   page.on('pageerror', e => { if (!/ResizeObserver loop/.test(e.message)) errors.push(e.message) })
@@ -323,10 +324,23 @@ await scenario('A link to an image that fails says so, with its address and no b
 })
 await scenario('A format the browser can\'t draw: Can\'t show this image here, with Download; and the same after a reload', async page => {
   await caretOn(page, 'Second line'); await paste(page, [['phone.heic', 'image/heic', 'not a picture this browser draws']]); await wait(1800)
-  const r = { says: await page.locator('.body-file-line').first().innerText() }
+  const r = { says: await page.locator('.body-file-line').first().innerText({ timeout: 8000 }) }
   await page.reload(); await page.locator('.bn-inline-content', { hasText: 'First line' }).waitFor(); await wait(1500)
-  r.again = await page.locator('.body-file-line').first().innerText()
+  r.state = await page.locator('[data-content-type=image]').first().evaluate(n => n.innerHTML.slice(0, 300))
+  r.again = await page.locator('.body-file-line').first().innerText({ timeout: 8000 }).catch(e => 'none')
   r.ok = /Can't show this image here/.test(r.says) && /Download/.test(r.says) && /Can't show this image here/.test(r.again)
+  return r
+})
+await scenario('A file that turns up later shows when the page regains focus', async page => {
+  await pasted(page)
+  const id = urls()[0].match(/files\/([\w-]+)/)[1], at = join(folder, 'local', id)
+  execSync(`mv ${at} ${at}.away`)
+  await page.reload(); await page.locator('.bn-inline-content', { hasText: 'First line' }).waitFor(); await wait(1500)
+  const r = { gone: await page.locator('.body-file-line').first().innerText({ timeout: 8000 }) }
+  execSync(`mv ${at}.away ${at}`)
+  await page.evaluate(() => window.dispatchEvent(new Event('focus'))); await wait(1500)
+  r.lines = await page.locator('.body-file-line').count(); r.width = await page.locator('.bn-visual-media').first().evaluate(i => i.naturalWidth)
+  r.ok = /isn't here/.test(r.gone) && r.lines === 0 && r.width === 1400
   return r
 })
 await scenario('Keys on a chosen image: Enter adds a line below, Backspace removes it with one Undo, and arrows move on', async page => {
