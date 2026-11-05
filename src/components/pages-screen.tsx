@@ -16,6 +16,7 @@ import { DatabasePage, RowProperties } from './database-block'
 import { NewPageMenu } from './new-page-menu'
 import { databaseOfRow, isDatabase } from '../domain/database'
 import { RowMenu } from './row-menu'
+import { openIconPicker, PageIconLine } from './icon-picker'
 import { flushEditor } from './editor-flush'
 import { dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, rowTemplateDatabaseId, templates, templateTarget, topLevelTarget } from '../domain/day-template'
 
@@ -91,7 +92,7 @@ function PageRows({ pages, workspace, onOpen, detail }: { pages: Page[]; workspa
         return (
           <li key={p.id}>
             <button type="button" className="card-row" onClick={() => onOpen(p.id)}>
-              <span className="card-row-icon"><PageKindIcon url={p.url} database={Boolean(p.database)} /></span>
+              <span className="card-row-icon"><PageKindIcon url={p.url} database={Boolean(p.database)} icon={p.icon} /></span>
               <span className="card-row-text">
                 <span className={`card-row-title ${p.title ? '' : 'untitled'}`}>{displayPageTitle(p)}</span>
                 {detail && <span className="card-row-detail">{detail(p)}</span>}
@@ -214,8 +215,9 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
             : <PageLink className="crumb" href="/pages?view=templates">Templates</PageLink>}
         </nav>
         {/* Delete sits in the ⋯ where a document page has it (Jazz dbb8b038). */}
-        <RowMenu label="Template actions" triggerClass="page-more" groups={[{ items: [{ label: 'Delete', danger: true, onSelect: () => void remove() }] }]} />
+        <RowMenu label="Template actions" triggerClass="page-more" groups={[{ items: [{ label: page.icon ? 'Change icon' : 'Add icon', onSelect: () => openIconPicker(page.id, document.querySelector('.page-more')) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void remove() }] }]} />
       </div>
+      <PageIconLine page={page} />
       <div className="page-head">
         <PageTitleField key={page.id} page={page} autoFocus={autoFocusTitle} />
         {!owner && <p className="template-note">
@@ -244,6 +246,7 @@ function TemplateScreen({ page, workspace, today, autoFocusTitle, onDeleted }: {
 export function PageContent({ page: p, workspace, focus }: { page: Page; workspace: Workspace; focus?: 'title' | undefined }) {
   const rowOf = databaseOfRow(workspace, p)
   return <>
+    <PageIconLine page={p} />
     <div className="page-head">
       {p.type === 'document' ? <PageTitleField key={p.id} page={p} autoFocus={focus === 'title'} /> : <h1 className="large-title">{p.title}</h1>}
       {!isDatabase(p) && <LinkUrlRow page={p} />}

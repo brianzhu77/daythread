@@ -220,7 +220,7 @@ export function DatabaseBoard({ workspace, db, view, changeView, blockId, pageDa
       <button type="button" tabIndex={interactive ? 0 : -1} className={`database-card-title${row.title ? '' : ' is-placeholder'}`}
         data-cell={interactive ? cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, group }) : undefined}
         data-nav={interactive && row.id === firstCard ? '0:0' : undefined}
-        onClick={() => { if (!justDragged.current) openRow(row.id) }}>{row.title || 'Untitled'}</button>
+        onClick={() => { if (!justDragged.current) openRow(row.id) }}>{row.icon && <span className="database-row-icon" aria-hidden="true">{row.icon}</span>}{row.title || 'Untitled'}</button>
       <SubItemParent workspace={workspace} db={db} row={row} />
       {cardColumns.map(({ property, wrap = false }) => {
         const pending = pendingCells.get(pendingKey(row.id, property.id))

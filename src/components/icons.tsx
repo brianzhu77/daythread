@@ -97,7 +97,9 @@ export const DatabaseIcon = () => (
     <path d="M4 9.5h16M4 14.5h16M10 9.5v10" />
   </Icon>
 )
-export const PageKindIcon = ({ url, database }: { url?: string | null; database?: boolean }) => (database ? <DatabaseIcon /> : url ? <GlobeIcon /> : <PagesIcon />)
+/** A page's emoji in place of its kind, when it has one. Text in the same box, so the row's words don't move (icons-covers.md §7.3). */
+export const PageEmoji = ({ icon }: { icon: string }) => <span className="page-emoji" aria-hidden="true">{icon}</span>
+export const PageKindIcon = ({ url, database, icon }: { url?: string | null; database?: boolean; icon?: string | null | undefined }) => (icon ? <PageEmoji icon={icon} /> : database ? <DatabaseIcon /> : url ? <GlobeIcon /> : <PagesIcon />)
 
 /** ↳: a link to one line (A11, Jazz line-links-states §3): "a passage", not a page. */
 export const LineLinkIcon = () => (

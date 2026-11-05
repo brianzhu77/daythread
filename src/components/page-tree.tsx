@@ -6,7 +6,8 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type R
 import { cardTo, childPages, hasContent, linkedFrom, moveRefusal, moveTargets, pageAncestors, pagePathTo, pagesInDays, parentOf, sidebarDays, subtreeIds } from '../domain/page-tree'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { fromIso, longLabel, todayIso } from './dates'
-import { ChevronRightIcon, PageKindIcon, PagesIcon } from './icons'
+import { ChevronRightIcon, PageEmoji, PageKindIcon, PagesIcon } from './icons'
+import { openIconPicker } from './icon-picker'
 import { NewPageMenu } from './new-page-menu'
 import { displayPageTitle } from './page-title'
 import { RowMenu } from './row-menu'
@@ -115,7 +116,7 @@ export function PagePath({ page, workspace, fromBookmarks = false }: { page: Pag
   const items: (Page | 'pages')[] = [...(chain[0]?.type === 'daily' ? [] : ['pages' as const]), ...chain]
   const crumb = (item: Page | 'pages', last: boolean) => item === 'pages'
     ? <PageLink key="pages" className="crumb" href="/pages">Pages</PageLink>
-    : <PageLink key={item.id} className={`crumb ${last ? 'crumb-last' : ''}`} href={pageHref(item, last ? card?.id : undefined)} title={pageLabel(item, today)}><span className="crumb-words">{pageLabel(item, today)}</span></PageLink>
+    : <PageLink key={item.id} className={`crumb ${last ? 'crumb-last' : ''}`} href={pageHref(item, last ? card?.id : undefined)} title={pageLabel(item, today)}>{item.icon && <PageEmoji icon={item.icon} />}<span className="crumb-words">{pageLabel(item, today)}</span></PageLink>
   // With no parent, there's no path to show beside the way back.
   const shown = fromBookmarks && !chain.length ? [] : items
   const crumbs = folded && shown.length > 2
@@ -142,8 +143,10 @@ function HiddenCrumbs({ pages, today }: { pages: Page[]; today: LocalDate }) {
 
 /** ⋯ on a day (B16): Delete, once there's something to delete. */
 export function dayMenuGroups(workspace: Workspace, page: Page, deletePage: () => void): { items: { label: string; danger?: boolean; onSelect: () => void }[] }[] | null {
-  return hasContent(page) || childPages(workspace, page.id).length > 0 ? [{ items: [{ label: 'Delete', danger: true, onSelect: deletePage }] }] : null
+  return hasContent(page) || childPages(workspace, page.id).length > 0 ? [lookItems(page), { items: [{ label: 'Delete', danger: true, onSelect: deletePage }] }] : null
 }
+/** ⋯'s way to an icon (icons-covers.md §1). Once there is one, a tap on it opens the same picker, with Remove. */
+const lookItems = (page: Pick<Page, 'id' | 'icon'>) => ({ items: [{ label: page.icon ? 'Change icon' : 'Add icon', onSelect: () => openIconPicker(page.id, document.querySelector('.page-more')) }] })
 
 /** ⋯ on a document page: Move to…, then Delete after a divider (A4 layout §1). A day's is in its header (`dayMenuGroups`). */
 /** `inPeek`: the row's menu in a peek stays in it: a copy opens there, and a row deleted closes it, with the view behind where it was. */
@@ -167,13 +170,13 @@ export function PageMenu({ page, fromBookmarks = false, inPeek }: { page: Page; 
       if (inPeek) inPeek(null); else open(pageHref(db))
     }
     return <>
-    <RowMenu label="Row actions" triggerClass="page-more" groups={[{ items: [{ label: 'Copy link', onSelect: copyLink }, { label: 'Duplicate row', onSelect: () => void duplicate() }, { label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete row', danger: true, onSelect: remove }] }]} />
+    <RowMenu label="Row actions" triggerClass="page-more" groups={[lookItems(page), { items: [{ label: 'Copy link', onSelect: copyLink }, { label: 'Duplicate row', onSelect: () => void duplicate() }, { label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete row', danger: true, onSelect: remove }] }]} />
       {moving && <MoveRowDialog row={page} onClose={() => setMoving(false)} />}
     </>
   }
   return (
     <>
-      <RowMenu label="Page actions" triggerClass="page-more" groups={[{ items: [{ label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void deletePage(page, page.id, fromBookmarks ? '/pages?view=bookmarks' : undefined) }] }]} />
+      <RowMenu label="Page actions" triggerClass="page-more" groups={[lookItems(page), { items: [{ label: 'Move to…', onSelect: () => setMoving(true) }] }, { items: [{ label: 'Delete', danger: true, onSelect: () => void deletePage(page, page.id, fromBookmarks ? '/pages?view=bookmarks' : undefined) }] }]} />
       {moving && <MovePageDialog page={page} onClose={() => setMoving(false)} />}
     </>
   )
@@ -194,7 +197,7 @@ export function LinkedFrom({ page, workspace }: { page: Page; workspace: Workspa
       {/* A4: a source page in the trash reads "(removed)" and doesn't open (layout §2, N-5). */}
       {shown.map(({ page: p, removed }) => removed
         ? <span key={p.id} className="linked-from-removed">{pageLabel(p, today)} (removed)</span>
-        : <PageLink key={p.id} href={pageHref(p)}>{pageLabel(p, today)}</PageLink>)}
+        : <PageLink key={p.id} href={pageHref(p)}>{p.icon && <PageEmoji icon={p.icon} />}{pageLabel(p, today)}</PageLink>)}
       {entries.length > shown.length && <button type="button" className="linked-from-more" onClick={() => setAll(true)}>{entries.length - shown.length} more</button>}
     </p>
   )
@@ -214,7 +217,7 @@ export function Subpages({ page, workspace }: { page: Page; workspace: Workspace
           return (
             <li key={c.id}>
               <PageLink className="subpage-row" href={pageHref(c)} title={pageLabel(c, today)}>
-                <PageKindIcon url={c.url} database={Boolean(c.database)} />
+                <PageKindIcon url={c.url} database={Boolean(c.database)} icon={c.icon} />
                 <span className={`subpage-title ${c.title ? '' : 'untitled'}`}>{pageLabel(c, today)}</span>
                 {n > 0 && <span className="subpage-count">{n}</span>}
                 <ChevronRightIcon />
@@ -262,7 +265,7 @@ const dropRefusals = new RegExp(`${moveRefusals.source}|Page is in trash`)
 const dropOrStale = new RegExp(`${dropRefusals.source}|Saved elsewhere`)
 const refusalCopy = (m: string) => m === 'Page not found' ? 'That page is gone' : m.startsWith("Can't move") ? "Can't move into its own subpage" : m === 'Already there' ? 'Already here' : m
 
-type Option = { key: string; parentId: string | null; label: string; path: string; current: boolean; icon: 'page' | 'day' | 'top' }
+type Option = { key: string; parentId: string | null; label: string; path: string; current: boolean; icon: 'page' | 'day' | 'top'; emoji?: string }
 
 /**
  * Layout §5: a dialog on desktop, a sheet on the phone. Search is focused; the page and its subpages aren't listed;
@@ -280,7 +283,7 @@ export function MovePageDialog({ page, onClose }: { page: Page; onClose: () => v
   const current = parentOf(workspace, page)
   const excluded = subtreeIds(workspace, page.id).size - 1
   const option = (p: Page | null, current: boolean): Option => p
-    ? { key: p.id, parentId: p.id, label: pageLabel(p, today), path: pathText(workspace, p), current, icon: p.type === 'daily' ? 'day' : 'page' }
+    ? { key: p.id, parentId: p.id, label: pageLabel(p, today), path: pathText(workspace, p), current, icon: p.type === 'daily' ? 'day' : 'page', ...(p.icon ? { emoji: p.icon } : {}) }
     : { key: 'top', parentId: null, label: 'Top level', path: 'Shows in Pages', current, icon: 'top' }
   const candidates = [...moveTargets(workspace, page.id), ...(current ? [current] : [])]
   const q = query.trim().toLowerCase()
@@ -343,7 +346,7 @@ export function MovePageDialog({ page, onClose }: { page: Page; onClose: () => v
                 {g.options.map(o => (
                   <button key={o.key} type="button" role="option" aria-selected={o.key === activeKey} aria-disabled={o.current || undefined}
                     className={`move-row ${o.current ? 'current' : ''} ${o.key === activeKey ? 'active' : ''}`} onClick={() => void move(o)}>
-                    <span className="move-row-icon">{o.icon === 'page' ? <PagesIcon /> : o.icon === 'day' ? <DayIcon /> : <TopIcon />}</span>
+                    <span className="move-row-icon">{o.emoji ? <PageEmoji icon={o.emoji} /> : o.icon === 'page' ? <PagesIcon /> : o.icon === 'day' ? <DayIcon /> : <TopIcon />}</span>
                     <span className="move-row-text">
                       <span><Highlight text={o.label} query={query.trim()} /></span>
                       {(refused?.key === o.key || o.path) && <small className={refused?.key === o.key ? 'refused' : undefined}>{refused?.key === o.key ? refused.text : o.path}</small>}
@@ -471,7 +474,7 @@ export function SidebarTree({ workspace, activeId, today, footer }: { workspace:
           {children.length > 0
             ? <button type="button" className="disclose" aria-expanded={isOpen} aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${pageLabel(p, today)}`} onClick={() => toggle(p.id)}><ChevronRightIcon /></button>
             : <span className="disclose none" aria-hidden="true" />}
-          <PageLink className="tree-title" href={pageHref(p)} title={pageLabel(p, today)}>{!day && <PageKindIcon url={p.url} database={Boolean(p.database)} />}<span>{pageLabel(p, today)}</span></PageLink>
+          <PageLink className="tree-title" href={pageHref(p)} title={pageLabel(p, today)}>{day ? p.icon && <PageEmoji icon={p.icon} /> : <PageKindIcon url={p.url} database={Boolean(p.database)} icon={p.icon} />}<span>{pageLabel(p, today)}</span></PageLink>
           <span className="tree-acts">
             <button type="button" aria-label={`New subpage in ${pageLabel(p, today)}`} onClick={() => void newPage(p)}>+</button>
             {!day && <RowMenu label={`Actions for ${pageLabel(p, today)}`} triggerClass="tree-more"

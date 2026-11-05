@@ -12,6 +12,8 @@ export interface Page {
   title: string;
   /** A bookmark page's URL exactly as pasted; one page per URL (urlKey). */
   url?: string | null;
+  /** An emoji shown wherever the page's name is (icons-covers.md). The title stays words. */
+  icon?: string;
   /** The page it was created in; null or absent = top level. Day pages never have one. */
   parentId?: string | null;
   /** Set while the page is in the trash (ISO time of the delete); null or absent = live. */
@@ -135,6 +137,7 @@ export type Action =
   /** The page's title and a quote read from the web, applied only while the page is as the paste left it. */
   | { type: "apply-link-preview"; pageId: string; url: string; title: string | null; description: string | null }
   | { type: "rename-page"; pageId: string; title: string }
+  | { type: "set-page-icon"; pageId: string; icon: string | null }
   /** `beforeId`: the sibling it goes just before (a drag); absent or null, the end of the parent (Move to…). */
   | { type: "move-page"; pageId: string; parentId: string | null; beforeId?: string | null }
   | { type: "delete-page"; pageId: string; at: string }

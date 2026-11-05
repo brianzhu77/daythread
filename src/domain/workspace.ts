@@ -4,6 +4,7 @@ import { broughtInsertIndex, broughtPrefix, dayRowInsertIndex, emptyLine, emptyT
 import { dayEvents } from "./chip-events.ts";
 import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDraftItems, placeItem, type DayDraft } from "./day-draft.ts";
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
+import { isPageIcon } from "./page-icon.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
 import { hasDependencyLoop, loopRefusal, shiftDependents, spanOf } from "./dependencies.ts";
 import { descendantsOf, hasLoop, parentIdOf } from "./sub-items.ts";
@@ -259,7 +260,7 @@ function ensureDay(state: Workspace, day: string): Page {
     for (let n = 2; state.pages.some((x) => x.id === id && x.type === "daily" && isTrashed(x)); n++) id = `day:${day}:${n}`;
     if (state.pages.some((x) => x.id === id)) throw new DomainError("Page id already in use");
     const template = defaultTemplate(state, dayPagesTarget);
-    p = { id, type: "daily", date: day, title: day, document: JSON.stringify(template ? pageFromTemplate(template, day, undefined, (n) => isOriginalBlock(state, n)) : templateDocument(id, day)) };
+    p = { id, type: "daily", date: day, title: day, ...(template?.icon ? { icon: template.icon } : {}), document: JSON.stringify(template ? pageFromTemplate(template, day, undefined, (n) => isOriginalBlock(state, n)) : templateDocument(id, day)) };
     state.pages.push(p);
   }
   return p;
@@ -759,7 +760,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       // title isn't copied. Only a page made with words keeps them and gets no template.
       const template = !body ? newPageTemplate(state, parent) : undefined;
       const nodes = template ? pageFromTemplate(template, null, undefined, (n) => isOriginalBlock(state, n)) : [line];
-      state.pages.push({ id, type: "document", date: null, title: text(action.title, 1000), ...(action.parentId ? { parentId: action.parentId } : {}), document: JSON.stringify(nodes) });
+      state.pages.push({ id, type: "document", date: null, title: text(action.title, 1000), ...(action.parentId ? { parentId: action.parentId } : {}), ...(template?.icon ? { icon: template.icon } : {}), document: JSON.stringify(nodes) });
       return { message: "Page saved", entityId: id };
     }
     case "make-link-pages": {
@@ -814,6 +815,14 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       p.title = text(action.title, 1000).trim();
       if (isRow(state, p)) p.editedAt = isoTime(undefined);
       return { message: "Page renamed", entityId: p.id };
+    }
+    case "set-page-icon": {
+      const p = page(state, action.pageId);
+      if (action.icon !== null && !isPageIcon(action.icon)) throw new DomainError("That isn't one emoji");
+      const had = Boolean(p.icon);
+      if (action.icon === null) delete p.icon; else p.icon = action.icon;
+      if (isRow(state, p)) p.editedAt = isoTime(undefined);
+      return { message: action.icon === null ? "Icon removed" : had ? "Icon changed" : "Icon added", entityId: p.id };
     }
     case "move-page": {
       const refusal = moveRefusal(state, action.pageId, action.parentId, action.beforeId);
@@ -1053,7 +1062,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
         }
         if (Object.keys(merged).length) values = merged;
       }
-      const row: Page = { id: action.pageId, type: "document", date: null, title: source ? `${source.row.title} (copy)`.trim() : text(action.title, 1000).trim(), parentId: db.id, document: JSON.stringify([emptyLine("paragraph")]), ...(values ? { values } : {}), createdAt: at, editedAt: at };
+      const row: Page = { id: action.pageId, type: "document", date: null, title: source ? `${source.row.title} (copy)`.trim() : text(action.title, 1000).trim(), parentId: db.id, ...(source?.row.icon ?? template?.icon ? { icon: (source?.row.icon ?? template?.icon)! } : {}), document: JSON.stringify([emptyLine("paragraph")]), ...(values ? { values } : {}), createdAt: at, editedAt: at };
       if (source) row.document = JSON.stringify(copiedBody(state, source.row, row, localDay(state, at)));
       if (template) {
         if (!row.title) row.title = template.title;
