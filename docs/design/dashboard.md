@@ -35,7 +35,7 @@ In Notion a widget shows an existing view, and editing it can change that view e
 ## 4. Filters across widgets
 
 - **From the dashboard's header:** filter chips, with "Filter multiple sources" in Notion's words; I'd just call it the same Filter sheet. It lists properties by **name and type** across its widgets.
-- **What a rule means across widgets (decided, Lead f9bab535, on Ratchet's question):** a rule applies where a property of the same name and type exists. **Options match by their names,** as two Status properties can both say Done with different ids. An option a widget doesn't have makes that rule unreadable there: it counts neither way, and the widget shows a quiet "Not filtered" beside its name, which is state, not instruction. A Relation pointing at a different database is unreadable in the same way (my reading of Ratchet's point). Once saved, a rule stays on the property it was bound to, so a rename or delete can't move it to another.
+- **What a rule means across widgets (decided, Lead f9bab535, on Ratchet's question):** a rule applies where a property of the same name and type exists. **Options match by their names,** as two Status properties can both say Done with different ids. An option a widget doesn't have makes that rule unreadable there, and it counts neither way. A Relation pointing at a different database is unreadable in the same way (Ratchet's point, Lead 495829a7). **Beside a widget's name, as state and not instruction (Lead 495829a7):** "Not filtered" where no rule applies, and "Partly filtered" where some do, which opens the sheet to show which. Once saved, a rule stays on the property it was bound to, so a rename or delete can't move it to another.
 - **It adds to a widget's own filter** with "and", as whole groups: an "any" group is never flattened, and the combination is never saved back into the widget (Ratchet).
 - **Saved with the dashboard,** and restored when he returns.
 - **"This page's day"** is available when a dashboard sits on a day page.
@@ -69,7 +69,7 @@ Depends on Chart for its most useful widget. First: rows of widgets, edit mode, 
 - 12 widgets at 1280, and at 390 with 4× slowdown: measure and state it.
 - A row edited in one widget updates others showing it.
 - Removing a widget, or the whole dashboard, leaves every row, says so, and has Undo.
-- A global filter leaves widgets without that property alone, and they show it. Two Status properties with different ids filter by name, and an option one lacks reads "Not filtered" there.
+- A global filter leaves widgets without that property alone, and they show it. Two Status properties with different ids filter by name, and an option one lacks counts neither way there. "Not filtered" only where nothing applies, and "Partly filtered" where some rules do, opening the sheet.
 - A widget's source deleted or in Trash doesn't break the others.
 - A move in one tab and a filter edit in another both survive.
 - An older tab keeps the dashboard, with a rollback run.
