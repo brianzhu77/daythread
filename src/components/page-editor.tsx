@@ -8,10 +8,11 @@ import { type BlockNoteEditor, BlockNoteSchema, blockToNode, defaultBlockSpecs, 
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
 import { en } from '@blocknote/core/locales'
 import { Button, toast } from '@heroui/react'
-import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, LinkToolbarController, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useEditorState, useExtensionState, usePortalElement, useUIMode } from '@blocknote/react'
+import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, FileReplaceButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, LinkToolbarController, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useEditorState, useExtensionState, usePortalElement, useUIMode } from '@blocknote/react'
 import { BlockNoteView, ShadCNDefaultComponents } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
 import { suggestionMenuMiddleware } from './suggestion-menu-placement'
+import { BodyFileOpenButtons, BodyImageCaptionButton, bodyFileSpec, BodyImageAlign, bodyImageSpec, insertBodyFiles, pasteBodyFiles, resolveBodyFile, uploadFromPanel } from './body-files'
 import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
@@ -42,7 +43,7 @@ import { newOperationId, useTaskTick, useWorkspace } from './use-day'
 import { useKeyboardTop } from './keyboard'
 import { debugClient } from '../lib/debug'
 import { DateTag } from './date-tag'
-import { BodyIcon, BulletListIcon, CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HeadingIcon, HideKeyboardIcon, ImportIcon, IndentIcon, LineLinkIcon, LinkIcon, NumberedListIcon, OutdentIcon, PagesIcon, PlusIcon, QuoteIcon, RedoIcon, SeparatorIcon, SyncedIcon, UndoIcon } from './icons'
+import { BodyIcon, ImageIcon, PaperclipIcon, BulletListIcon, CheckboxIcon, ChevronRightIcon, DatabaseIcon, ExternalIcon, GlobeIcon, GripIcon, HeadingIcon, HideKeyboardIcon, ImportIcon, IndentIcon, LineLinkIcon, LinkIcon, NumberedListIcon, OutdentIcon, PagesIcon, PlusIcon, QuoteIcon, RedoIcon, SeparatorIcon, SyncedIcon, UndoIcon } from './icons'
 import { useNavigate } from '@tanstack/react-router'
 import { displayPageTitle, focusAtEnd } from './page-title'
 import { DatabaseBlock, setDatabasePending, type BlockActions } from './database-block'
@@ -146,14 +147,14 @@ const dateMention = createReactInlineContentSpec({ type: 'dateMention', propSche
   render: ({ inlineContent: { props } }) => <DateChipInPage date={props.date} time={props.time || null} />,
   toExternalHTML: ({ inlineContent: { props } }) => <span>{mentionText({ date: props.date, time: props.time || null }, null)}</span>,
 })
-const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, task, sourceChecklist, pageLink, database, [syncedBlockType]: syncedBlock }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef, dateMention } })
+const schema = BlockNoteSchema.create({ blockSpecs: { ...defaultBlockSpecs, image: bodyImageSpec(), file: bodyFileSpec(), task, sourceChecklist, pageLink, database, [syncedBlockType]: syncedBlock }, inlineContentSpecs: { ...defaultInlineContentSpecs, pageRef, dateMention } })
 // B4 (F13): a plain line is "Body" and the divider is "Separator", in the / menu and the toolbar's line-type menu alike.
 /** The blocks the `/` menu offers from BlockNote's list, each with this app's icon. */
 const slashIcons: Record<string, ReactElement> = {
   'Heading 1': <HeadingIcon level={1} />, 'Heading 2': <HeadingIcon level={2} />, 'Heading 3': <HeadingIcon level={3} />,
-  Body: <BodyIcon />, 'Bullet List': <BulletListIcon />, 'Numbered List': <NumberedListIcon />, Quote: <QuoteIcon />, Separator: <SeparatorIcon />,
+  Image: <ImageIcon />, File: <PaperclipIcon />, Body: <BodyIcon />, 'Bullet List': <BulletListIcon />, 'Numbered List': <NumberedListIcon />, Quote: <QuoteIcon />, Separator: <SeparatorIcon />,
 }
-const dictionary = { ...en, slash_menu: { ...en.slash_menu,
+const dictionary = { ...en, file_panel: { ...en.file_panel, embed: { ...en.file_panel.embed, title: 'Paste a link' } }, slash_menu: { ...en.slash_menu,
   paragraph: { ...en.slash_menu.paragraph, title: 'Body', aliases: [...en.slash_menu.paragraph.aliases, 'body', 'text', '正文'] },
   divider: { ...en.slash_menu.divider, title: 'Separator', aliases: [...en.slash_menu.divider.aliases, 'separator', '---', '分隔线'] },
 } }
@@ -483,7 +484,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   rowsAnchor.current = rows.length ? eventsAnchor(pageNodes(page), new Set(workspace.tasks.map(t => t.id))) : undefined
   // separatorShortcut needs the editor it is part of; a ref breaks the type cycle of passing `editor` itself.
   const editorRef = useRef<BlockNoteEditor<any, any, any> | null>(null)
-  const editor = useCreateBlockNote({ schema, dictionary, disableExtensions: ['gapCursor', 'divider-block-shortcuts'], extensions: [databaseKeys(), syncedKeys(blockId => {
+  const editor = useCreateBlockNote({ schema, dictionary, uploadFile: (file: File, blockId?: string) => Promise.resolve(uploadFromPanel(editorRef.current!, file, blockId)), resolveFileUrl: resolveBodyFile, disableExtensions: ['gapCursor', 'divider-block-shortcuts'], extensions: [databaseKeys(), syncedKeys(blockId => {
     const block = deepNodes(editorRef.current!.document as never).find(n => n.id === blockId)
     const syncId = block?.props?.syncId
     if (typeof syncId !== 'string' || syncedPlaces(latestWorkspace.current, syncId).filter(p => !p.page.trashedAt).length > 1) return
@@ -493,6 +494,14 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     // A9a §3: `[[` that arrives by paste doesn't open the list; only typing does.
     pastingNow.current = true; setTimeout(() => { pastingNow.current = false }, 0)
     if (!data) return defaultPasteHandler()
+    // A screenshot lands as a block. Text wins over a file on the same clipboard: a table copied from a sheet can come with a picture of itself (B87 §3).
+    const copiedText = data.getData('text/plain') || data.getData('text/html')
+    if (data.files.length && !copiedText) { pasteBodyFiles(editor as never, [...data.files]); return true }
+    if (data.files.length) {
+      const html = data.getData('text/html')
+      if (html) editor.pasteHTML(html); else editor.pasteText(copiedText)
+      return true
+    }
     const insert = (blocks: EditorNode[]) => {
       // ProseMirror fits a block slice at the actual selection, preserving both sides of a split paragraph.
       // Building the nodes directly also keeps each new Task's block ID and derived Task ID together.
@@ -778,6 +787,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   useEffect(() => { const media = window.matchMedia('(max-width: 899px)'); const update = () => setCompact(media.matches); media.addEventListener('change', update); return () => media.removeEventListener('change', update) }, [])
   const [touchHandle, setTouchHandle] = useState<{ id: string; top: number } | null>(null)
   const [touchDragging, setTouchDragging] = useState(false)
+  const clickedFile = useRef<string | null>(null)
+  const [fileDropLine, setFileDropLine] = useState<{ top: number; left: number; width: number } | null>(null)
   const dropRef = useRef<typeof drop>(null)
   // Edit notices ("Deleted 'Notes' · Undo") are HeroUI toasts. Undo only applies while the document is still the
   // one the notice describes; any later edit retires the notice.
@@ -1844,6 +1855,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     const { selection } = editor.prosemirrorState
     if (selection instanceof NodeSelection) {
       const inner = selection.node.type.name === 'blockContainer' ? selection.node.firstChild! : selection.node
+      // A picture or file clicked on is chosen, as by its handle (B87 §5), and so is an Add image nobody filled. One an arrow arrived at stays.
+      if (clickedFile.current && clickedFile.current === editor.getTextCursorPosition().block.id) return false
       return inner.isBlock && !inner.inlineContent && inner.type.name !== 'divider' && inner.type.name !== 'table'
     }
     const { $from } = selection, length = $from.parent.content.size
@@ -2142,6 +2155,21 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const isRoleHeading = (_blockId: string) => false
   // canIndent's rule from the other side: a line that is indented, or has lines indented under it, can't become a heading.
   const canHoldHeading = (blockId: string) => !editor.getParentBlock(blockId) && !editor.getBlock(blockId)?.children.length
+  // Stable, as Handle is: a new component each render would close a caption's field after its first letter, which saves and renders.
+  const toolbarFacts = useRef({ isRoleHeading, canHoldHeading })
+  toolbarFacts.current = { isRoleHeading, canHoldHeading }
+  const Toolbar = useMemo(() => function StableToolbar() { return <FormattingToolbar>
+        <LineTypeSelect key="blockTypeSelect" isRoleHeading={toolbarFacts.current.isRoleHeading} canHoldHeading={toolbarFacts.current.canHoldHeading} />
+        <BasicTextStyleButton key="bold" basicTextStyle="bold" />
+        <BasicTextStyleButton key="italic" basicTextStyle="italic" />
+        <BasicTextStyleButton key="underline" basicTextStyle="underline" />
+        <BasicTextStyleButton key="strike" basicTextStyle="strike" />
+        <CreateLinkButton key="createLink" />
+        <BodyImageCaptionButton key="fileCaption" />
+        <FileReplaceButton key="fileReplace" />
+        <BodyImageAlign key="align" />
+        <BodyFileOpenButtons key="open" />
+      </FormattingToolbar> }, []) // eslint-disable-line react-hooks/exhaustive-deps
   // Whether the phone toolbar's indent / outdent can act on the caret's line, and the line's style for Aa (F16).
   const [nesting, setNesting] = useState({ in: false, out: false })
   const [lineStyle, setLineStyle] = useState<LineStyle | null>(null)
@@ -2518,12 +2546,23 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const conflictText = changedBy(page.id) === 'tab' ? 'Changed in another tab · draft kept' : 'Changed on another device · draft kept'
   // B38: the dock line's words stay steady while typing flips the header between "Unsaved changes" and "Saving…".
   const unsavedText = conflict ? conflictText : !online ? "Offline · saves when you're back" : unsaved === 'network' ? 'Not saved yet · trying again' : "Couldn't save · draft kept"
+  /** Where a file let go here would land. A title or a cell being edited takes nothing, and neither does a table's Files column, which adds through its own cell. Anywhere else on a table, it goes beside it. */
+  function fileDropAt(e: { target: EventTarget; clientY: number }) {
+    if ((e.target as Element).closest('input, textarea, .cell-file, .property-files')) return null
+    const rows = [...editor.prosemirrorView.dom.querySelectorAll<HTMLElement>(':scope > .bn-block-group > .bn-block-outer')]
+    const row = rows.find(r => e.clientY < r.getBoundingClientRect().bottom) ?? rows.at(-1)
+    const id = row?.querySelector('[data-node-type="blockContainer"]')?.getAttribute('data-id')
+    if (!row || !id) return null
+    const box = row.getBoundingClientRect(), before = e.clientY < box.top + box.height / 2
+    return { id, placement: before ? 'before' as const : 'after' as const, top: before ? box.top : box.bottom, left: box.left, width: box.width }
+  }
   return <div className={`continuous-editor ${keyboardShown ? 'is-keyboard-up' : ''} ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''} ${pasteMenu ? 'has-paste-menu' : ''} ${styleOpen && lineStyle ? 'has-style-panel' : ''} ${pausedFor ? 'is-paused' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onBlur={e => { if (e.target === editor.domElement) setStyleOpen(false) }}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
     onMouseDownCapture={e => {
       const target = e.target as Element
       if (target.closest('.bn-editor') && !target.closest('.bn-side-menu')) { selected.current = []; extendedIds.current = []; setSelectionLabel('') }
+      clickedFile.current = target.closest('[data-file-block]')?.closest('[data-node-type="blockContainer"]')?.getAttribute('data-id') ?? null
       // The space below a last block with no text gives a line, as the strip just under it does. Left alone, the press goes to the nearest text, a line further up, or selects the block whole, and a key then removes it (B88).
       const last = editor.document.at(-1), lastEl = last && !Array.isArray(last.content) ? editor.domElement?.querySelector(`.bn-block[data-id="${last.id}"]`) : null
       if (target === editor.domElement && e.button === 0 && last && lastEl && e.clientY > lastEl.getBoundingClientRect().bottom) {
@@ -2568,7 +2607,25 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     onMouseMoveCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
     // A9a §3: after the composition, once ProseMirror has finished it (its DOM and decorations are drawn again).
     onCompositionEndCapture={() => { composing.current = false; if (editor.getExtension(SuggestionMenu)?.shown()) requestAnimationFrame(() => setCompositionsEnded(n => n + 1)); setTimeout(repairComposition, 0); setTimeout(maybeOpenLinkList, 50); setTimeout(reopenDateListAfterComposition, 80); requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
+    onDragOverCapture={e => {
+      if (!e.dataTransfer.types.includes('Files')) return
+      // A file has no place inside a line: the line shows the boundary it'll land at, not ProseMirror's caret.
+      e.preventDefault(); e.stopPropagation()
+      const at = fileDropAt(e)
+      e.dataTransfer.dropEffect = at ? 'copy' : 'none'
+      setFileDropLine(at && { top: at.top, left: at.left, width: at.width })
+    }}
+    onDragLeaveCapture={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFileDropLine(null) }}
     onDropCapture={e => {
+      const dropped = [...e.dataTransfer.files]
+      if (dropped.length) {
+        // One block per file, in the order dropped, at the boundary the pointer's at (B87 §3).
+        e.preventDefault(); e.stopPropagation()
+        setFileDropLine(null)
+        const at = fileDropAt(e)
+        if (at) insertBodyFiles(editor as never, dropped, at.id, at.placement)
+        return
+      }
       // Drops go to the row boundary under the pointer at release. BlockNote's line can lag the pointer when
       // dragover events stop arriving (Ratchet task #49: a long drag stayed put, the line stuck near the start),
       // and ProseMirror's own drop can land a block away from the line; the pointer is what Brian aims with, and
@@ -2606,6 +2663,9 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }}
     onKeyDownCapture={e => {
       if (e.nativeEvent.isComposing || e.keyCode === 229) return
+      if (e.key !== 'Backspace' && e.key !== 'Delete') clickedFile.current = null
+      // Keys in a caption's field belong to the field: Backspace there isn't a key on the chosen image.
+      if ((e.target as Element).closest?.('.body-image-caption')) return
       // B44 (Jazz §3): with the paste menu open, ↑/↓ move, Enter picks (Keep is first), Esc keeps; any other key keeps
       // the link and does what it would anyway (⌘Z undoes the paste).
       const menu = pasteMenuRef.current
@@ -2694,6 +2754,13 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         })
         return
       }
+      // Esc lets go of a chosen image or file, as of a picked line (B87 §5): the caret goes to the nearest line.
+      if (e.key === 'Escape' && editor.prosemirrorState.selection instanceof NodeSelection && /^(image|file)$/.test(editor.prosemirrorState.selection.node.firstChild?.type.name ?? editor.prosemirrorState.selection.node.type.name)) {
+        e.preventDefault(); e.stopPropagation()
+        const { doc, selection, tr } = editor.prosemirrorState
+        editor.prosemirrorView.dispatch(tr.setSelection(Selection.near(doc.resolve(selection.to))))
+        return
+      }
       // A handle selection is for moving and deleting, not typing (editor spec §1, design 4a45305): printable keys
       // do nothing, Enter goes into the heading's text, Escape lets go. Arrows, copy, cut and undo work as before.
       if (selected.current.length && !e.metaKey && !e.ctrlKey) {
@@ -2751,14 +2818,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     {createPortal(<EventRows rows={rows} page={page} workspace={workspace} pageEnd={!rowsAnchor.current || rowsAnchor.current.labelled || (rowsAnchor.current.afterId !== null && !editor.getBlock(rowsAnchor.current.afterId))} />, rowsHost)}
     <BlockNoteView editor={editor} theme="light" formattingToolbar={false} sideMenu={false} slashMenu={false} linkToolbar={false} shadCNComponents={doneInputs}>
       {/* Trimmed to what a day note uses (Jazz, #6): no alignment, indent or colour buttons. */}
-      {!compact && !selectionLabel && !onDatabase && <FormattingToolbarController formattingToolbar={() => <FormattingToolbar>
-        <LineTypeSelect key="blockTypeSelect" isRoleHeading={isRoleHeading} canHoldHeading={canHoldHeading} />
-        <BasicTextStyleButton key="bold" basicTextStyle="bold" />
-        <BasicTextStyleButton key="italic" basicTextStyle="italic" />
-        <BasicTextStyleButton key="underline" basicTextStyle="underline" />
-        <BasicTextStyleButton key="strike" basicTextStyle="strike" />
-        <CreateLinkButton key="createLink" />
-      </FormattingToolbar>} />}
+      {!compact && !selectionLabel && !onDatabase && <FormattingToolbarController formattingToolbar={Toolbar} />}
       <SuggestionMenuController triggerCharacter="/" floatingUIOptions={menuOptions} shouldOpen={() => !composing.current && editor.getTextCursorPosition().block.type !== 'task'} getItems={async query => {
         // The items Brian uses most come first. Titles only, no second line (Brian 1ac6784b: no descriptions).
         const suggested = ['Bullet List', 'Heading 2']
@@ -2851,6 +2911,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }}>Turn into tasks</button></div>}
     </>, dock)}
     {drop && <div className="editor-drop-line" style={{ top: drop.top }} />}
+    {fileDropLine && <div className="editor-drop-line" style={{ ...fileDropLine, right: 'auto' }} />}
   </div>
 }
 /**

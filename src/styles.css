@@ -2524,3 +2524,56 @@ tbody.is-drop-end > tr:last-child > td { box-shadow: inset 0 -2px 0 var(--blue);
 .database-td.is-frozen { position: sticky; z-index: 1; background: var(--bg-doc); }
 .database-row.has-tint > td.is-frozen, .database-td.is-frozen.has-tint { background: var(--row-tint); }
 .database-th.is-frozen-last, .database-td.is-frozen-last { box-shadow: inset -1px 0 0 var(--line); }
+
+/* Files in a page's body (B87): a block's own line for what's happening to it, in the words the design gives. */
+.body-file { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; color: var(--ink); }
+.body-file svg { flex: none; color: var(--ink-3); }
+.body-file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bn-shadcn .bn-editor a.body-file-name { color: inherit; text-decoration: underline; text-decoration-color: var(--line); }
+.body-file-size { flex: none; color: var(--ink-3); font-size: var(--text-meta); }
+/* A block's status belongs to it: it sits right under the row, closer than the next block is. */
+.body-file-line { flex-basis: 100%; width: 0; min-width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 0 10px; padding: 2px 0 0; color: var(--ink-2); font-size: var(--text-meta); }
+.body-file-line button { min-height: 0; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; text-decoration: underline; text-decoration-color: var(--line); cursor: pointer; }
+/* A track, so a picture that hasn't moved yet still reads as on its way, on a dark photo as on a light one. */
+.body-file-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: color-mix(in srgb, var(--app-surface) 75%, transparent); }
+.body-file-progress > div { height: 100%; background: var(--ink); transition: width .15s; }
+/* A caption is a line under the picture: read and written in the same place, in the same words' size. */
+[data-content-type="image"] .bn-file-caption { color: var(--ink-2); font-size: var(--text-meta); cursor: text; }
+[data-content-type="image"]:has(.body-image-caption) .bn-file-caption { display: none; }
+/* No width of its own (or the status's), or a picture narrower than the words would grow to fit them. */
+.body-image-caption { flex-basis: 100%; width: 0; min-width: 100%; min-height: 0; padding: 4px 0; border: 0; border-radius: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); }
+.body-image-caption, .body-image-caption:focus, .body-image-caption:focus-visible { box-shadow: none; outline: none; }
+.body-image-caption::placeholder { color: var(--ink-3); }
+[data-content-type="image"] .bn-visual-media-wrapper { flex-wrap: wrap; }
+[data-content-type="file"] .bn-file-block-content-wrapper { width: 100%; }
+.bn-shadcn .bn-editor a.body-file-go { flex: none; display: inline-flex; color: var(--ink-3); margin-left: auto; }
+.bn-shadcn .bn-editor a.body-file-go:hover { color: var(--ink); }
+.body-file-menu-at { display: none; flex: none; margin-left: auto; }
+.body-file-go + .body-file-menu-at { margin-left: 0; }
+.body-file-more { width: 44px; height: 44px; border: 0; border-radius: var(--radius-inline); background: none; color: var(--ink-2); cursor: pointer; }
+.body-image-more { display: none; position: absolute; top: 4px; right: 4px; border-radius: var(--radius-inline); background: var(--app-surface); }
+.body-file-menu { z-index: 1000; width: max-content; min-width: 180px; max-width: calc(100vw - 16px); }
+.body-file-menu input { width: 240px; max-width: calc(100vw - 48px); min-height: 38px; padding: 0 8px; border: 0; background: none; font: inherit; color: var(--ink); outline: none; }
+[data-file-block] .body-image-loading { width: 100vw; max-width: 100%; aspect-ratio: 16 / 9; background: var(--fill); color: transparent; }
+/* 120 is the smallest a picture gets, however far an edge is dragged (§5). No column is narrower. */
+[data-content-type="image"] .bn-visual-media-wrapper { min-width: 120px; }
+@media (max-width: 899px) {
+  .bn-resize-handle { display: none !important; }
+  .body-file-menu-at, .body-image-more { display: block; }
+  /* Retry and Remove keep a finger's height, and the row's words stay close to the block above them. */
+  .body-file-line { margin-top: -8px; padding: 0; }
+  .body-file-line button { min-height: var(--tap); }
+}
+/* The panel is one card: the tabs on it, and what they open with no second card around it. */
+.bn-panel { width: 320px; max-width: calc(100vw - 16px); padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-block); background: var(--paper); box-shadow: var(--shadow-float); }
+.bn-panel [role=tablist] { background: var(--fill-soft); color: var(--ink-2); }
+.bn-panel [role=tab][data-state=active] { background: var(--app-surface); color: var(--ink); }
+.bn-panel [role=tabpanel] > div { gap: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.bn-panel [role=tabpanel] > div > div { padding: 4px 0 0; }
+.bn-panel input[type=file] { height: auto; padding: 0; border: 0; background: none; box-shadow: none; color: transparent; cursor: pointer; }
+.bn-panel input[type=file]::file-selector-button { padding: 4px 10px; border: 1px solid var(--line); border-radius: var(--radius-inline); background: var(--app-surface); color: var(--ink); font: inherit; cursor: pointer; }
+.body-file-empty { position: relative; width: 100%; }
+.body-file-empty > button { position: absolute; top: 50%; right: 12px; transform: translateY(-50%); padding: 4px; border: 0; background: none; color: var(--ink-2); font: inherit; font-size: var(--text-meta); text-decoration: underline; text-decoration-color: var(--line); cursor: pointer; }
+/* Safari on a phone zooms the page into any field under 16 px, and stays zoomed. */
+@media (max-width: 899px) { .body-image-caption, .bn-panel input { font-size: 16px; } }
+.body-image-box { width: 100%; aspect-ratio: 16 / 9; max-height: 160px; background: var(--fill-soft); border-radius: var(--radius-row); }
