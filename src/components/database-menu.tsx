@@ -594,9 +594,10 @@ function LayoutPanel({ db, view, back, go }: { db: DatabasePage; view: View; bac
     {(view.layout === 'table' || view.layout === 'board' || view.layout === 'gallery') && <label className="database-menu-row">Wrap all
       <input type="checkbox" checked={wrapsAll} onChange={e => { const on = e.target.checked; changeView(({ columns }) => ({ wrapName: on, columns: columns.map(c => withWrap(c, on)) })) }} />
     </label>}
-    {view.layout === 'gallery' && db.database.properties.some(p => p.type === 'files') && <label className="database-menu-row">Card image
+    {view.layout === 'gallery' && <label className="database-menu-row">Card image
       <select aria-label="Card image" value={view.cardImage ?? ''} onChange={e => { const cardImage = e.target.value || null; changeView(() => ({ cardImage })) }}>
         <option value="">First in the page</option>
+        <option value="cover">Cover</option>
         {db.database.properties.filter(p => p.type === 'files').map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>
     </label>}

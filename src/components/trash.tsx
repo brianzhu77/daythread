@@ -135,7 +135,7 @@ export function TrashScreen() {
             return (
               <li key={b.trashId} className="trash-row">
                 <PageLink className="card-row" href={pageHref(b.top)}>
-                  <span className="card-row-icon">{b.top.type === 'daily' ? <CalendarIcon /> : <PageKindIcon url={b.top.url} database={isDb} />}</span>
+                  <span className="card-row-icon">{b.top.type === 'daily' ? <CalendarIcon /> : <PageKindIcon url={b.top.url} database={isDb} icon={b.top.icon} />}</span>
                   <span className="card-row-text">
                     <span className={`card-row-title ${b.top.title ? '' : 'untitled'}`}>{pageLabel(b.top, today)}</span>
                     <span className="card-row-detail">{[`From ${oldParentLabel(workspace, b.top, today)}`, n > 0 && (isDb ? `with ${n} row${n === 1 ? '' : 's'}` : `with ${n} subpage${n === 1 ? '' : 's'}`), when(b.trashedAt, today)].filter(Boolean).join(' · ')}</span>
@@ -177,7 +177,7 @@ export function TrashedPage({ page, workspace }: { page: Page; workspace: Worksp
           <ul className="plain">
             {children.map(c => (
               <li key={c.id}><PageLink className="subpage-row" href={pageHref(c)} title={displayPageTitle(c)}>
-                <PageKindIcon url={c.url} /><span className={`subpage-title ${c.title ? '' : 'untitled'}`}>{displayPageTitle(c)}</span><ChevronRightIcon />
+                <PageKindIcon url={c.url} icon={c.icon} /><span className={`subpage-title ${c.title ? '' : 'untitled'}`}>{displayPageTitle(c)}</span><ChevronRightIcon />
               </PageLink></li>
             ))}
           </ul>

@@ -9,7 +9,7 @@ import type { LocalDate, Page, WeekStart } from '../domain/types'
 import { rowTint, blockActions, cellKey, DatabaseHeader, pendingCells, setOpenCell, shownRaw, useAddRow, useCommitCell, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
 import { addDays, fromIso, longLabel, todayIso } from './dates'
-import { ArrowLeftIcon, ArrowRightIcon } from './icons'
+import { ArrowLeftIcon, ArrowRightIcon, PageEmoji } from './icons'
 import { useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
@@ -149,7 +149,7 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
     const tint = rowTint(db.database, view, row, context)
     return <div key={row.id} className={`database-day-row${returned === row.id ? ' is-returned' : ''}`} data-row={row.id}>
       <button type="button" {...(tint ? { style: tint.style } : {})} className={`database-day-title${tint ? tint.className : ''}${row.title ? '' : ' is-placeholder'}`} data-chip={row.id} data-from={from ?? undefined} data-cell={cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId })}
-        onPointerDown={e => startDrag(e, row, from)} onMouseDown={e => e.preventDefault()} onClick={() => { if (!justDragged.current) openRow(row.id) }}>{row.title || 'Untitled'}</button>
+        onPointerDown={e => startDrag(e, row, from)} onMouseDown={e => e.preventDefault()} onClick={() => { if (!justDragged.current) openRow(row.id) }}>{row.icon && <PageEmoji icon={row.icon} className="database-row-icon" />}{row.title || 'Untitled'}</button>
       {unsaved && <span className="database-card-unsaved">Not saved</span>}
     </div>
   }

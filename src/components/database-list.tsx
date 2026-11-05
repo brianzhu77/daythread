@@ -7,7 +7,7 @@ import { sectionKey, viewSections, viewSubGroups, cellValue, databaseRows, isEmp
 import type { Page } from '../domain/types'
 import { useSubOpen, rowTint, SubItemParent, PickedBar, useCardPicking, useRowPicking, SubGroupHead, HiddenSubGroups, NewRow, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, pendingKey, setOpenCell, shownRaw, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, TodoTick, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps, SubItemLead, subFoldKey, subItemTree, treeUpTo } from './database-block'
 import { todayIso } from './dates'
-import { ChevronRightIcon } from './icons'
+import { ChevronRightIcon, PageEmoji } from './icons'
 import { displayPageTitle } from './page-title'
 import { PropertyCell, PropertyCheckbox, useWide } from './property-editors'
 import { useWorkspace } from './use-day'
@@ -101,7 +101,7 @@ export function DatabaseList({ workspace, db, view, changeView, blockId, pageDat
       {wide && !view.sort.length && !db.database.fixed && !treeOf.get(row.id)?.depth && <span className="database-list-handle" role="button" aria-label={`Drag ${displayPageTitle(row)}`} onPointerDown={e => startDrag(e, row.id, group ?? null)}>⋮⋮</span>}
       <TodoTick row={row} />
       {treeOf.has(row.id) && <SubItemLead entry={treeOf.get(row.id)!} label={displayPageTitle(row)} onToggle={() => toggleSub(treeOf.get(row.id)!)} />}
-      <button type="button" className={`database-list-title${row.title ? '' : ' is-placeholder'}`} data-nav={nav} data-cell={cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, ...(group !== undefined ? { group } : {}) })} onClick={() => openRow(row.id)}>{row.title || 'Untitled'}{group !== undefined && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
+      <button type="button" className={`database-list-title${row.title ? '' : ' is-placeholder'}`} data-nav={nav} data-cell={cellKey({ blockId, databaseId: db.id, rowId: row.id, columnId: titleId, ...(group !== undefined ? { group } : {}) })} onClick={() => openRow(row.id)}>{row.icon && <PageEmoji icon={row.icon} className="database-row-icon" />}{row.title || 'Untitled'}{group !== undefined && <SubItemParent workspace={workspace} db={db} row={row} />}</button>
       <span className="database-list-values">
         {columns.map(({ property }) => {
           const pending = pendingCells.get(pendingKey(row.id, property.id))

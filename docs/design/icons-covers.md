@@ -68,7 +68,7 @@ From the top: **cover, then the line with the breadcrumb and `⋯`, then the ico
 
 | | 1280 | 390 |
 | --- | --- | --- |
-| **Icon** | 44 px, on a line 52 px tall, 2 px above the title | 36 px, on a line 44 px tall |
+| **Icon** | 44 px, on a line 52 px tall, just above the title | 36 px, on a line 44 px tall |
 | **Its left edge** | The title's edge, by eye: an emoji has a little space of its own, so 2 px back | The same |
 | **Cover** | 200 px, whatever the window's height, from the sidebar's edge to the window's | 120 px, edge to edge |
 | **First line of the body, with both** | About 365 px down | About 280 px down, with the title and first lines above the toolbar |
@@ -99,7 +99,7 @@ It takes the place of the page's default icon where there is one, and comes befo
 | Board and Gallery cards | 14 px, before the title | Before the title |
 | Calendar's chips, the phone's Timeline list | The line's text size | Before the title |
 
-**The Name column at 390** already cuts a short name to "First r…" in the sketch, and an icon takes 20 px more. I'd grow the column by 20 px when any row shown has an icon, so a name isn't cut shorter for having one. To be looked at once it's built.
+**The Name column at 390** stays as it is, looked at on #144. The cut name in my sketch came from the sketch: on the built table "Second book" fits with its icon. A long name is cut 20 px sooner with an icon, which I'd accept.
 
 To-dos have no icon: a to-do isn't a page. **A day in the sidebar's Days** shows its icon before its date, if it has one.
 
@@ -119,7 +119,7 @@ To-dos have no icon: a to-do isn't a page. **A day in the sidebar's Days** shows
 ### 7.5 A cover
 
 - **Adding:** `⋯` → Add cover opens a small panel. In the first release it's one field, "Paste an image link", up to 2,000 characters, past which it says "That link is too long". The picture shows in the panel once it loads, and Add is only there then. **A link that doesn't load says "Can't load that image" and isn't saved,** so a dead link can't be added by mistake.
-- **Changing:** hovering at 1280 shows Change and Reposition at its lower right, on a plain backing. At 390 `⋯` has Change cover, Reposition and Remove cover. Change opens the same panel, with Remove.
+- **Changing:** hovering at 1280 shows Change and Reposition at its lower right, on a plain backing. At 390 `⋯` has Change cover and Reposition. Change opens the same panel, with Remove, at both widths.
 - **Reposition:** the picture moves up and down under the pointer or finger, with "Drag to move · Done · Cancel" on it. **Keys too:** ↑ and ↓ move it by 5%, Enter is Done and Esc cancels. Cancel puts back exactly where it was and sends nothing. Done is one change with one Undo.
 - **What's saved is how far along the crop it sits,** 0 at the picture's top and 1 at its bottom, not a share of the picture's height. So the same setting shows the same part of the picture at any size, as far as that size allows: the page, a center peek's 160 px, a side peek's 120 px, and the phone's 120 px. A picture with no height to spare at this size doesn't offer it. To be tried with one portrait and one wide picture in each.
 - **While loading:** the band at its full height in `--fill`, so nothing moves.
@@ -150,6 +150,6 @@ An icon and a cover are changes to the page, separate from its words, and neithe
 
 ## 8. Later releases, as far as the design goes
 
-- **Upload (P1-5)** uses the states in `body-files.md` §4 on the band or the icon: a progress track, "Not uploaded · Retry", "Too large · 25 MB at most". An uploaded icon draws in the same box as an emoji, with its corners slightly rounded.
+- **Upload (P1-5)** shows its states in the panel, not on the band or the icon as I first wrote: "Uploading {name} · Cancel" with a progress track, "Not uploaded · Retry", "Too large · 25 MB at most". The page holds the picture only once its bytes are in, so a failed upload leaves nothing behind (Roadbuster, #147, which is simpler). So a click elsewhere doesn't close the panel while a picture's on its way; Cancel and Esc do, and leaving the page does, and each stops the upload. An uploaded icon draws in the same box as an emoji, with its corners slightly rounded.
 - **Our own icons** are a tab in the picker, in `--ink-2`.
 - **Unsplash** is a tab in Change, with the credit its terms ask for.

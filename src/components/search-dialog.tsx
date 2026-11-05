@@ -1,11 +1,13 @@
 import { Modal, SearchField } from '@heroui/react'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useRouter } from '@tanstack/react-router'
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { buildSearchIndex, linesByPage, matchRanges, search, snippet, type LineHit, type PageHit, type TagHit } from '../domain/search'
 import type { LocalDate, Page, Workspace } from '../domain/types'
 import { addDays, fromIso, longLabel } from './dates'
 import { CalendarIcon, PageKindIcon, SearchIcon, TagsIcon } from './icons'
 import { pageHref, pageLabel, recentIds, useToday } from './page-tree'
+import { openComments, placeOf } from './comments-pane'
+import { displayPageTitle } from './page-title'
 import { useWorkspace } from './use-day'
 
 // Search (docs/design/search-states.md): one field over everything written, in the dialog Move to… uses (a dialog
@@ -74,7 +76,7 @@ function dayWord(date: LocalDate, today: LocalDate): string {
 /** "Oct 18", for a path or a detail where the weekday would be noise. */
 const shortDay = (date: LocalDate, today: LocalDate) => date === today ? 'Today' : fromIso(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 
-type Row = { key: string; href: string; render: (active: boolean) => ReactNode }
+type Row = { key: string; href: string; /** Told whether the row goes to another page, so what it opens waits for that. */ onOpen?: (going: boolean) => void; render: (active: boolean) => ReactNode }
 
 function lineHref(hit: LineHit): string {
   return hit.page.type === 'daily' && hit.date
@@ -84,7 +86,7 @@ function lineHref(hit: LineHit): string {
 
 export function SearchDialog({ onClose }: { onClose: () => void }) {
   const { workspace } = useWorkspace()
-  const navigate = useNavigate()
+  const navigate = useNavigate(), router = useRouter()
   const phone = usePhone()
   const today = useToday()
   const [query, setQuery] = useState('')
@@ -94,7 +96,11 @@ export function SearchDialog({ onClose }: { onClose: () => void }) {
   const trimmed = query.trim()
   const results = useMemo(() => index && trimmed ? search(index, trimmed, today, addDays(today, -1)) : null, [index, trimmed, today])
 
-  const go = (href: string) => { onClose(); void navigate({ href, resetScroll: !href.includes('block=') }) }
+  const go = (href: string, onOpen?: Row['onOpen']) => {
+    onClose()
+    onOpen?.(placeOf(router.buildLocation({ href } as never)) !== placeOf(router.state.location))
+    void navigate({ href, resetScroll: !href.includes('block=') })
+  }
 
   const groups = useMemo(() => build(workspace, results, trimmed, today), [workspace, results, trimmed, today])
   const rows = groups.flatMap(g => g.rows)
@@ -106,7 +112,7 @@ export function SearchDialog({ onClose }: { onClose: () => void }) {
   // react-aria stops a key at this handler unless told otherwise; Escape must still reach the field and the dialog.
   const onKeyDown = (e: React.KeyboardEvent & { continuePropagation: () => void }) => {
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setActive(i => Math.max(0, Math.min(rows.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))) }
-    else if (e.key === 'Enter' && !e.nativeEvent.isComposing && rows[active]) { e.preventDefault(); go(rows[active]!.href) }
+    else if (e.key === 'Enter' && !e.nativeEvent.isComposing && rows[active]) { e.preventDefault(); go(rows[active]!.href, rows[active]!.onOpen) }
     else e.continuePropagation()
   }
 
@@ -134,7 +140,7 @@ export function SearchDialog({ onClose }: { onClose: () => void }) {
                 {g.page && <PageHeading page={g.page} workspace={workspace!} today={today} />}
                 {g.rows.map(r => (
                   <button key={r.key} type="button" role="option" aria-selected={r.key === activeKey} className={`search-row ${r.key === activeKey ? 'active' : ''}`}
-                    onClick={() => go(r.href)} onMouseMove={() => { const i = rows.findIndex(x => x.key === r.key); if (i >= 0 && i !== active) setActive(i) }}>
+                    onClick={() => go(r.href, r.onOpen)} onMouseMove={() => { const i = rows.findIndex(x => x.key === r.key); if (i >= 0 && i !== active) setActive(i) }}>
                     {r.render(r.key === activeKey)}
                   </button>
                 ))}
@@ -174,6 +180,7 @@ function build(workspace: Workspace | null, results: ReturnType<typeof search> |
   if (results.pages.length) groups.push({ title: 'Pages', rows: results.pages.map((h: PageHit) => ({ key: `p:${h.page.id}`, href: pageHref(h.page), render: () => <PageRow page={h.page} today={today} path={h.path} query={query} /> })) })
   if (results.tags.length) groups.push({ title: 'Tags', rows: results.tags.map((t: TagHit) => ({ key: `t:${t.key}`, href: `/tags/${encodeURIComponent(t.key)}`, render: () => <TagRow hit={t} query={query} /> })) })
   // Lines sit under the page they were written on (Brian: grouped by page, a day page being a page), newest day first.
+  if (results.comments.length) groups.push({ title: 'Comments', rows: results.comments.map(c => ({ key: `c:${c.threadId}`, href: pageHref(c.page), onOpen: going => openComments(c.page.id, { threadId: c.threadId, afterGoing: going }), render: () => <span className="search-row-text">{c.text}{c.resolved ? ' · resolved' : ''}<span className="search-row-where"> · {displayPageTitle(c.page)}</span></span> })) })
   if (results.lines.length) {
     groups.push({ title: 'Lines', count: results.lines.length + results.moreLines, rows: [] })
     for (const g of linesByPage(results.lines))
@@ -192,7 +199,7 @@ function pathOf(workspace: Workspace, p: Page, today: LocalDate): string {
 function PageRow({ page, today, path, query }: { page: Page; today: LocalDate; path: string; query: string }) {
   return (
     <>
-      <span className="search-row-icon">{page.type === 'daily' ? <CalendarIcon /> : <PageKindIcon url={page.url} database={Boolean(page.database)} />}</span>
+      <span className="search-row-icon">{page.type === 'daily' && !page.icon ? <CalendarIcon /> : <PageKindIcon url={page.url} database={Boolean(page.database)} icon={page.icon} />}</span>
       <span className="search-row-text">
         <span className={`search-row-title ${page.type === 'document' && !page.title ? 'untitled' : ''}`}><Marked text={pageLabel(page, today)} query={page.type === 'daily' ? '' : query} /></span>
         {path && <small>{path}</small>}
@@ -218,7 +225,7 @@ function PageHeading({ page, workspace, today }: { page: Page; workspace: Worksp
   const path = pathOf(workspace, page, today)
   return (
     <p className="search-page">
-      <span className="search-row-icon">{page.type === 'daily' ? <CalendarIcon /> : <PageKindIcon url={page.url} database={Boolean(page.database)} />}</span>
+      <span className="search-row-icon">{page.type === 'daily' && !page.icon ? <CalendarIcon /> : <PageKindIcon url={page.url} database={Boolean(page.database)} icon={page.icon} />}</span>
       <span className={`search-page-title ${page.type === 'document' && !page.title ? 'untitled' : ''}`}>{page.type === 'daily' && page.date ? dayWord(page.date, today) : pageLabel(page, today)}</span>
       {path && <small>{path}</small>}
     </p>
