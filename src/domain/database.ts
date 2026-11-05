@@ -340,7 +340,8 @@ export function readValue(property: Property, raw: unknown): CellValue {
       return typeof raw === "string" ? parseNumber(raw) : null;
     case "select":
     case "status": {
-      const picked = typeof raw === "string" ? (ids.has(raw) ? raw : optionFromText(property, raw)) : Array.isArray(raw) ? raw.find((x) => typeof x === "string" && ids.has(x)) ?? null : null;
+      // A list's first item, as an array of options reads here: Text to Multi-select to Select.
+      const picked = typeof raw === "string" ? (ids.has(raw) ? raw : optionFromText(property, raw) ?? (textParts(raw)[0] ? optionFromText(property, textParts(raw)[0]!) : null)) : Array.isArray(raw) ? raw.find((x) => typeof x === "string" && ids.has(x)) ?? null : null;
       // The design (§6.1): a status always has a value, the first To-do option.
       if (picked === null && property.type === "status") return property.options?.find((o) => o.group === "todo")?.id ?? property.options?.[0]?.id ?? null;
       return picked;
@@ -348,7 +349,9 @@ export function readValue(property: Property, raw: unknown): CellValue {
     // A relation's options are its target's rows (`withLinks`), so a link to a row that's gone reads without it, and comes back with it.
     case "relation":
     case "multiSelect": {
-      const list = typeof raw === "string" ? (ids.has(raw) || property.type === "relation" ? [raw] : textParts(raw).flatMap((part) => optionFromText(property, part) ?? [])) : Array.isArray(raw) ? raw : [];
+      // The whole words first: Text to Select to Multi-select keeps an option whose name has a comma in it.
+      const whole = typeof raw === "string" && property.type === "multiSelect" ? optionFromText(property, raw) : null;
+      const list = whole ? [whole] : typeof raw === "string" ? (ids.has(raw) || property.type === "relation" ? [raw] : textParts(raw).flatMap((part) => optionFromText(property, part) ?? [])) : Array.isArray(raw) ? raw : [];
       const picked = [...new Set(list.filter((x): x is string => typeof x === "string" && ids.has(x)))];
       return picked.length ? picked : null;
     }
