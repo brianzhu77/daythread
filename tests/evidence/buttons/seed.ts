@@ -40,9 +40,16 @@ const nodes = [
   button('b-url', 'To a link', [add, { id: 's-u', kind: 'open', target: { kind: 'url', url: 'https://buttons.test/x' } }]),
   button('b-gone', 'Gone prop', [{ ...add, set: [{ id: 'nope', name: 'Status', value: { kind: 'fixed', raw: 1 } }] }]),
   button('b-todo', 'New to-do', [{ id: 's-t', kind: 'add-row', databaseId: 'source:tasks', databaseName: 'To-dos', title: 'From a button', set: [] }]),
+  button('b-plan', 'Plan to-dos', [add, { id: 's-p', kind: 'edit-rows', databaseId: 'source:tasks', databaseName: 'To-dos', filter: [], set: [{ id: 'planned', name: 'Planned', value: { kind: 'fixed', raw: { start: '2031-03-04' } } }] }]),
+  button('b-bad', 'Bad plan', [add, { id: 's-b', kind: 'edit-rows', databaseId: 'source:tasks', databaseName: 'To-dos', filter: [], set: [{ id: 'status', name: 'Status', value: { kind: 'fixed', raw: 'open' } }, { id: 'planned', name: 'Planned', value: { kind: 'fixed', raw: { start: 'not a date' } } }] }]),
   button('', 'x', []),
 ].filter(n => n.id)
 nodes.push({ id: 'b-long', type: 'button', props: { label: 'A very long label that goes on and on and on, far past what any line can hold at either width of this app', steps: writeSteps([add]) }, children: [] } as never)
 nodes.push(line('l2', 'Last line') as never)
 await run({ type: 'save-editor', pageId: 'notes', expectedContent: pageContentKey(ws.pages.find(p => p.id === 'notes')!), document: JSON.stringify(nodes) } as never)
+for (const [title, done] of [['Open to-do', false], ['Cancelled to-do', true]] as const) {
+  await run({ type: 'ensure-day', date: '2031-03-01' })
+  await run({ type: 'add-task', pageId: 'day:2031-03-01', title, plannedOn: '2031-03-01' })
+  if (done) await run({ type: 'task-status', taskId: ws.tasks.find(t => t.title === title)!.id, status: 'cancelled', today: '2031-03-01' })
+}
 console.log('seeded', process.argv[2])
