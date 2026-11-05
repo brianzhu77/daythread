@@ -1,0 +1,14 @@
+FAIL 1280: a one-way relation shows its row on the target ""
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('.linked-from').getByRole('link', { name: 'Something else' })
+
+    at /Users/dogrod/Developer/daythread-ratchet-reference-gaps/tests/evidence/references/gaps.mjs:22:60 {
+  name: 'TimeoutError'
+}
+
+Node.js v24.14.1

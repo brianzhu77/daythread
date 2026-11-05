@@ -1,0 +1,5 @@
+PASS valid relation
+PASS old target omitted
+PASS linked view live
+PASS linked source in Trash is removed
+PASS trashed target scanner remains safe; Trash UI separately hides line
