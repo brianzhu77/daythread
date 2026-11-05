@@ -72,6 +72,11 @@ export const BookmarkIcon = () => (
 )
 
 /** ↗: opens the website in a new tab, the only thing on a link card that leaves the app. */
+export const DownloadIcon = () => (
+  <Icon>
+    <path d="M12 5v10M7.5 11 12 15.5 16.5 11M6 19h12" />
+  </Icon>
+)
 export const ExternalIcon = () => (
   <Icon>
     <path d="M8 16 16.5 7.5M10 7h7v7" />

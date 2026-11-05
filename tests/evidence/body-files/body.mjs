@@ -4,6 +4,7 @@ import * as pw from '@playwright/test'
 import { execSync } from 'node:child_process'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
+import { crc32, deflateSync } from 'node:zlib'
 const [base, S, folder, engine = 'chromium'] = process.argv.slice(2)
 if (!base || !S || !folder) { console.error('Usage: node tests/evidence/body-files/body.mjs <base-url> <store-path> <files-folder> [chromium|webkit]'); process.exit(2) }
 const store = () => JSON.parse(execSync(`sqlite3 ${S} "select data from workspace"`, { maxBuffer: 1 << 26 }).toString())
@@ -24,7 +25,15 @@ const scenario = async (name, act, options = { viewport: { width: 1280, height: 
   await context.close()
 }
 const pixel = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAEBgIApD5fRAAAAABJRU5ErkJggg=='
-const files = `(list) => list.map(([name, type, content]) => new File([content === 'PIXEL' ? Uint8Array.from(atob('${pixel}'), c => c.charCodeAt(0)) : content], name, { type }))`
+// A real picture wider than the column, for what depends on its size.
+const pngOf = (w, h) => {
+  const chunk = (type, data) => { const body = Buffer.concat([Buffer.from(type), data]), len = Buffer.alloc(4), crc = Buffer.alloc(4); len.writeUInt32BE(data.length); crc.writeUInt32BE(crc32(body)); return Buffer.concat([len, body, crc]) }
+  const head = Buffer.alloc(13); head.writeUInt32BE(w, 0); head.writeUInt32BE(h, 4); head[8] = 8; head[9] = 2
+  const rows = Buffer.alloc((w * 3 + 1) * h, 120); for (let y = 0; y < h; y++) rows[y * (w * 3 + 1)] = 0
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', head), chunk('IDAT', deflateSync(rows)), chunk('IEND', Buffer.alloc(0))]).toString('base64')
+}
+const wide = pngOf(1400, 700)
+const files = `(list) => list.map(([name, type, content]) => new File([content === 'PIXEL' ? Uint8Array.from(atob('${pixel}'), c => c.charCodeAt(0)) : content === 'WIDE' ? Uint8Array.from(atob('${wide}'), c => c.charCodeAt(0)) : content], name, { type }))`
 const paste = (page, list, extra = {}) => page.evaluate(([list, extra, make]) => {
   const data = new DataTransfer()
   for (const f of eval(make)(list)) data.items.add(f)
@@ -40,7 +49,7 @@ const drop = (page, list, selector) => page.evaluate(([list, selector, make]) =>
 const caretOn = async (page, text) => { await page.locator('.bn-inline-content', { hasText: text }).first().click(); await page.keyboard.press('Meta+ArrowRight'); await wait(120) }
 const types = () => doc().map(n => n.type)
 const urls = () => doc().filter(n => n.type === 'image' || n.type === 'file').map(n => n.props.url)
-const png = ['shot.png', 'image/png', 'PIXEL'], txt = ['notes.txt', 'text/plain', 'some words'], pdf = ['report.pdf', 'application/pdf', 'x'.repeat(2000)]
+const big = ['big.png', 'image/png', 'WIDE'], png = ['shot.png', 'image/png', 'PIXEL'], txt = ['notes.txt', 'text/plain', 'some words'], pdf = ['report.pdf', 'application/pdf', 'x'.repeat(2000)]
 const holdPut = async page => { let release, seen, count = 0; const arrived = new Promise(r => { seen = r }), held = new Promise(r => { release = r }); await page.route('**/api/files/*', async route => { if (route.request().method() === 'PUT' && ++count === 1) { seen(); await held } await route.continue().catch(() => {}) }); return { release, arrived } }
 
 await scenario('A screenshot pasted lands as an image with its address, the caret goes below, typing carries on, and it reads back after a reload', async page => {
@@ -50,7 +59,7 @@ await scenario('A screenshot pasted lands as an image with its address, the care
   const r = { types: types(), urls: urls(), words: doc().map(n => n.content?.[0]?.text ?? null), stored: stored().length, blob: JSON.stringify(doc()).includes('blob:') }
   await page.reload(); await page.locator('.bn-visual-media').first().waitFor(); await wait(800)
   r.width = await page.locator('.bn-visual-media').first().evaluate(i => i.naturalWidth)
-  r.ok = r.types.join() === 'paragraph,paragraph,image,paragraph,paragraph' && /^\/api\/files\/[\w-]+\?name=shot\.png&size=70$/.test(r.urls[0]) && r.words[3] === 'typed after' && r.stored === 1 && !r.blob && r.width === 1
+  r.ok = r.types.join() === 'paragraph,paragraph,image,paragraph,paragraph' && /^\/api\/files\/[\w-]+\?name=shot\.png&size=70&type=image%2Fpng$/.test(r.urls[0]) && r.words[3] === 'typed after' && r.stored === 1 && !r.blob && r.width === 1
   return r
 })
 await scenario('A clipboard holding text and an image: the text wins, as it does for a table from a sheet', async page => {
@@ -191,6 +200,219 @@ await scenario('390: a screenshot pasted fits the column and nothing runs past t
   await paste(page, [png]); await wait(1200)
   const r = { types: types(), overflow: await page.evaluate(() => document.documentElement.scrollWidth - innerWidth) }
   r.ok = r.types.includes('image') && r.overflow <= 0
+  return r
+}, { viewport: { width: 390, height: 780 }, hasTouch: true })
+const imageBlock = () => doc().find(n => n.type === 'image')
+const pasted = async (page, file = big) => { await caretOn(page, 'Second line'); await paste(page, [file]); await page.locator('.bn-visual-media:not(.body-image-loading)').first().waitFor(); await wait(1300) }
+const undo = async page => { await page.keyboard.press('Meta+z'); await wait(1400) }
+const toolbarLabels = page => page.locator('.bn-formatting-toolbar button').evaluateAll(l => l.map(b => b.getAttribute('aria-label') || b.getAttribute('data-test') || b.textContent).filter(Boolean))
+await scenario('Resize by an edge saves when released with one Undo; the smallest holds at 120; Align shows only once it\'s narrower than the column', async page => {
+  await pasted(page)
+  const image = page.locator('.bn-visual-media').first()
+  await image.click(); await wait(500)
+  const r = { fullBar: await toolbarLabels(page) }, box = await image.boundingBox()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await wait(200)
+  const handle = page.locator('.bn-resize-handle').last(), h = await handle.boundingBox()
+  await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2); await page.mouse.down(); await page.mouse.move(h.x - 200, h.y + 10, { steps: 6 }); await page.mouse.up(); await wait(1400)
+  r.width = imageBlock().props.previewWidth; r.drawn = (await image.boundingBox()).width
+  await image.click(); await wait(500)
+  r.narrowBar = await toolbarLabels(page)
+  await page.locator('.bn-formatting-toolbar [data-test="alignTextRight"]').click(); await wait(1300)
+  const column = await page.locator('.bn-inline-content', { hasText: 'First line' }).evaluate(n => n.closest('.bn-block-content').getBoundingClientRect().right), drawnBox = await image.boundingBox()
+  r.rightGap = Math.round(column - (drawnBox.x + drawnBox.width))
+  await page.screenshot({ path: '/tmp/rb-csv/body-right.png' })
+  await page.keyboard.press('Meta+z'); await wait(1400)
+  await page.mouse.click(5, 5); await page.locator('.bn-inline-content', { hasText: 'First line' }).click(); await wait(200)
+  await page.keyboard.press('Meta+z'); await wait(1400)
+  r.undone = imageBlock().props.previewWidth
+  const big2 = await image.boundingBox(); await page.mouse.move(big2.x + big2.width / 2, big2.y + big2.height / 2); await wait(200)
+  const h2 = await page.locator('.bn-resize-handle').last().boundingBox()
+  await page.mouse.move(h2.x + h2.width / 2, h2.y + h2.height / 2); await page.mouse.down(); await page.mouse.move(big2.x - 400, h2.y, { steps: 8 }); await page.mouse.up(); await wait(1200)
+  r.smallest = (await image.boundingBox()).width
+  const align = list => list.filter(l => /lign/i.test(l)).length
+  r.ok = r.width < box.width - 150 && Math.abs(r.drawn - r.width) < 3 && !align(r.fullBar) && align(r.narrowBar) === 3 && Math.abs(r.rightGap) < 3 && r.undone !== r.width && r.smallest >= 119
+  return r
+})
+await scenario('A line of text gets no alignment or file buttons in its bar', async page => {
+  await page.locator('.bn-inline-content', { hasText: 'First line' }).click({ clickCount: 3 }); await wait(500)
+  const r = { bar: await toolbarLabels(page) }
+  r.ok = r.bar.length > 0 && !r.bar.some(l => /lign|ownload|new tab|aption|eplace/i.test(l))
+  return r
+})
+await scenario('Replace keeps the block, its width and its caption, and one Undo brings the old file back', async page => {
+  await pasted(page)
+  const before = imageBlock(), image = page.locator('.bn-visual-media').first()
+  await page.evaluate(() => {})
+  await image.click(); await wait(500)
+  await page.locator('.bn-formatting-toolbar [data-test="editcaption"], .bn-formatting-toolbar [aria-label*="aption"]').first().click(); await wait(300)
+  await page.keyboard.type('Kept', { delay: 40 }); await page.keyboard.press('Enter'); await wait(1400)
+  await image.click(); await wait(500)
+  await page.locator('.bn-formatting-toolbar [data-test="replaceFile"], .bn-formatting-toolbar [aria-label*="eplace"]').first().click(); await wait(400)
+  await page.locator('.bn-panel input[type=file], .bn-popover-content input[type=file], input[type=file]').first().setInputFiles({ name: 'other.png', mimeType: 'image/png', buffer: Buffer.from(pixel, 'base64') }); await wait(1800)
+  const after = imageBlock(), r = { sameBlock: after.id === before.id, caption: after.props.caption, name: after.props.name, changed: after.props.url !== before.props.url }
+  await page.keyboard.press('Meta+z'); await wait(1400)
+  r.back = imageBlock().props.url === before.props.url
+  r.ok = r.sameBlock && r.caption === 'Kept' && r.name === 'other.png' && r.changed && r.back
+  return r
+})
+await scenario('↗ and Download show only once the upload\'s done; Download saves it under its name, and ↗ opens the original', async (page, context) => {
+  const hold = await holdPut(page)
+  await caretOn(page, 'Second line'); await paste(page, [big]); await hold.arrived
+  await page.locator('.bn-visual-media').first().click(); await wait(500)
+  const r = { during: await toolbarLabels(page) }
+  await page.screenshot({ path: '/tmp/rb-csv/body-uploading.png' })
+  await hold.release(); await wait(1500)
+  await page.locator('.bn-visual-media').first().click(); await wait(500)
+  r.after = await toolbarLabels(page)
+  const [download] = await Promise.all([page.waitForEvent('download'), page.locator('.bn-formatting-toolbar button[aria-label="Download"]').click()])
+  r.saved = download.suggestedFilename()
+  await page.locator('.bn-visual-media').first().click(); await wait(500)
+  const [tab] = await Promise.all([context.waitForEvent('page'), page.locator('.bn-formatting-toolbar button[aria-label="Open in a new tab"]').click()])
+  await wait(500); r.opened = tab.url().includes('/api/files/'); await tab.close()
+  r.ok = !r.during.some(l => /ownload|new tab/i.test(l)) && r.after.includes('Download') && r.saved === 'big.png' && r.opened
+  return r
+})
+await scenario('A file reads as a row: ↗ for what opens in place, ↓ for what downloads', async page => {
+  await caretOn(page, 'Second line'); await paste(page, [pdf]); await wait(800); await paste(page, [txt]); await wait(1400)
+  await page.screenshot({ path: '/tmp/rb-csv/body-files.png' })
+  const row = name => page.locator('.body-file', { hasText: name }).locator('.body-file-go')
+  const r = { pdfOpens: await row('report.pdf').getAttribute('target'), pdfSaves: await row('report.pdf').getAttribute('download'), txtOpens: await row('notes.txt').getAttribute('target'), txtSaves: await row('notes.txt').getAttribute('download') }
+  r.ok = r.pdfOpens === '_blank' && r.pdfSaves === null && r.txtOpens === null && r.txtSaves === 'notes.txt'
+  return r
+})
+await scenario('Offline: the block says so, then retries by itself on coming back', async (page, context) => {
+  await caretOn(page, 'Second line')
+  await context.setOffline(true)
+  await paste(page, [png]); await wait(900)
+  const r = { says: await page.locator('.body-file-line').first().innerText(), stored: stored().length }
+  await context.setOffline(false); await wait(2000)
+  r.after = await page.locator('.body-file-line').count(); r.storedAfter = stored().length
+  r.ok = /Offline/.test(r.says) && /back/.test(r.says) && r.stored === 0 && r.after === 0 && r.storedAfter === 1
+  return r
+})
+await scenario('A full account says so, with Remove', async page => {
+  await page.route('**/api/files/*', route => route.request().method() === 'PUT' ? route.fulfill({ status: 507, contentType: 'application/json', body: '{"error":"full"}' }) : route.continue())
+  await caretOn(page, 'Second line'); await paste(page, [png]); await wait(900)
+  const r = { says: await page.locator('.body-file-line').first().innerText() }
+  await page.locator('.body-file-line button', { hasText: 'Remove' }).click(); await wait(1200)
+  r.left = urls().length
+  r.ok = /Storage full · 5 GB at most/.test(r.says) && !/Retry/.test(r.says) && r.left === 0
+  return r
+})
+await scenario('Loading: a box holds its place in --fill until the picture\'s in', async page => {
+  await pasted(page)
+  let release; const held = new Promise(res => { release = res })
+  await page.route('**/api/files/*', async route => { if (route.request().method() === 'GET' && route.request().resourceType() === 'image') await held; await route.continue().catch(() => {}) })
+  await page.reload(); await page.locator('.bn-inline-content', { hasText: 'First line' }).waitFor(); await wait(700)
+  const loading = page.locator('.body-image-loading').first(), box = await loading.boundingBox()
+  const r = { box: box && [Math.round(box.width), Math.round(box.height)], below: (await page.locator('.bn-inline-content', { hasText: 'Third' }).first().boundingBox().catch(() => null))?.y }
+  release(); await wait(1000)
+  r.done = await page.locator('.bn-visual-media:not(.body-image-loading)').count()
+  r.ok = Boolean(box) && box.width > 200 && Math.abs(box.width / box.height - 16 / 9) < 0.1 && r.done === 1
+  return r
+})
+await scenario('A link to an image that fails says so, with its address and no broken mark', async page => {
+  await caretOn(page, 'Second line')
+  await page.keyboard.press('Enter'); await page.keyboard.type('/image', { delay: 30 }); await wait(400); await page.keyboard.press('Enter'); await wait(500)
+  await page.getByRole('tab', { name: 'Paste a link' }).click(); await wait(200)
+  await page.locator('input[data-test="embed-input"], .bn-panel input[type=text], .bn-panel input:not([type=file])').first().fill('http://127.0.0.1:9/gone.png')
+  await page.keyboard.press('Enter'); await wait(1500)
+  const r = { says: await page.locator('.body-file-line').first().innerText(), imgs: await page.locator('.bn-visual-media').count() }
+  r.ok = /Can't load this image/.test(r.says) && /gone\.png/.test(r.says) && r.imgs === 0
+  return r
+})
+await scenario('A format the browser can\'t draw: Can\'t show this image here, with Download; and the same after a reload', async page => {
+  await caretOn(page, 'Second line'); await paste(page, [['phone.heic', 'image/heic', 'not a picture this browser draws']]); await wait(1800)
+  const r = { says: await page.locator('.body-file-line').first().innerText() }
+  await page.reload(); await page.locator('.bn-inline-content', { hasText: 'First line' }).waitFor(); await wait(1500)
+  r.again = await page.locator('.body-file-line').first().innerText()
+  r.ok = /Can't show this image here/.test(r.says) && /Download/.test(r.says) && /Can't show this image here/.test(r.again)
+  return r
+})
+await scenario('Keys on a chosen image: Enter adds a line below, Backspace removes it with one Undo, and arrows move on', async page => {
+  await pasted(page)
+  const count = () => doc().length, order = () => doc().map(n => n.type).join()
+  await page.locator('.bn-visual-media').first().click(); await wait(400)
+  const r = { start: order() }
+  await page.keyboard.press('Enter'); await wait(1300)
+  r.enter = order()
+  await page.locator('.bn-visual-media').first().click(); await wait(400)
+  await page.keyboard.press('Backspace'); await wait(1300)
+  r.backspace = order()
+  await undo(page)
+  r.undo = order()
+  r.ok = !r.backspace.includes('image') && r.undo.includes('image') && r.enter.split(',').length === r.start.split(',').length + 1 && r.enter.split(',')[r.start.split(',').indexOf('image') + 1] === 'paragraph'
+  return r
+})
+await scenario('Moved by its handle: the block goes, its address with it', async page => {
+  await pasted(page)
+  const before = doc().map(n => n.type).join(), box = await page.locator('.bn-visual-media').first().boundingBox()
+  await page.mouse.move(box.x + 30, box.y + 30); await wait(400)
+  const grip = await page.locator('.bn-side-menu [draggable="true"], .bn-side-menu button').first().boundingBox()
+  const top = await page.locator('.bn-inline-content', { hasText: 'First line' }).boundingBox()
+  await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2); await page.mouse.down(); await page.mouse.move(grip.x, top.y + 2, { steps: 10 }); await wait(200); await page.mouse.up(); await wait(1500)
+  const r = { before, after: doc().map(n => n.type).join(), url: Boolean(imageBlock().props.url.includes('/api/files/')) }
+  r.ok = r.after !== before && r.after.startsWith('image') && r.url
+  return r
+})
+await scenario('A file dropped on a table goes beside it, not into it', async page => {
+  await page.goto(`${base}/pages?page=with-table`); await page.locator('.database-block').first().waitFor(); await wait(1200)
+  const r = { ids: await page.evaluate(([list, make]) => {
+    const data = new DataTransfer(); for (const f of eval(make)(list)) data.items.add(f)
+    const el = document.querySelector('.database-block'), box = el.getBoundingClientRect()
+    el.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true, cancelable: true, clientX: box.x + 40, clientY: box.bottom - 2 }))
+    return true
+  }, [[png], files]) }
+  await wait(1400)
+  r.types = JSON.parse(store().pages.find(p => p.id === 'with-table').document).map(n => n.type)
+  r.ok = r.types.indexOf('image') === r.types.indexOf('database') + 1
+  return r
+})
+if (engine === 'chromium') await scenario('A real drag of files from the desktop: the drop line shows, each lands in order, and letting go beside the column stays on the page', async (page, context) => {
+  const { mkdtempSync, writeFileSync } = await import('node:fs'), dir = mkdtempSync('/tmp/rb-drop-')
+  writeFileSync(join(dir, 'one.png'), Buffer.from(pixel, 'base64')); writeFileSync(join(dir, 'two.txt'), 'words')
+  const cdp = await context.newCDPSession(page), paths = [join(dir, 'one.png'), join(dir, 'two.txt')]
+  const at = await page.locator('.bn-inline-content', { hasText: 'Second line' }).boundingBox(), x = at.x + 40, y = at.y + at.height - 2
+  const drag = (type, x, y) => cdp.send('Input.dispatchDragEvent', { type, x, y, data: { items: [], files: paths, dragOperationsMask: 1 } })
+  await drag('dragEnter', x, y); await drag('dragOver', x, y); await wait(300); await drag('dragOver', x + 1, y); await wait(300)
+  const r = { line: await page.evaluate(() => [...document.querySelectorAll('.editor-drop-line')].filter(e => e.getBoundingClientRect().width > 100).length), caret: await page.locator('[class*=dropcursor]').count() }
+  await page.screenshot({ path: '/tmp/rb-csv/body-dropline.png' })
+  await drag('drop', x, y); await wait(1800)
+  r.types = types(); r.url = page.url().startsWith(base)
+  await drag('dragEnter', 8, 300); await drag('dragOver', 8, 300); await drag('drop', 8, 300); await wait(800)
+  r.stillHere = page.url().startsWith(base) && (await page.locator('.bn-inline-content', { hasText: 'First line' }).count()) === 1
+  r.ok = r.line === 1 && r.caret === 0 && r.types.includes('image') && r.types.indexOf('file') === r.types.indexOf('image') + 1 && r.stillHere
+  return r
+})
+await scenario('390: a tap brings ⋯, with what the bar offers; no resize; a saved width stays inside the column; a caption and Remove work from it', async page => {
+  await caretOn(page, 'Second line'); await paste(page, [big]); await page.locator('.bn-visual-media:not(.body-image-loading)').first().waitFor(); await wait(1300)
+  const image = page.locator('.bn-visual-media').first()
+  const r = { before: await page.locator('.body-file-more').count() }
+  await image.tap(); await wait(400)
+  r.afterTap = await page.locator('.body-file-more').count()
+  r.handles = await page.locator('.bn-resize-handle').evaluateAll(l => l.filter(h => getComputedStyle(h).display !== 'none').length)
+  r.bar = await page.locator('.bn-formatting-toolbar').count()
+  await page.locator('.body-file-more').tap(); await wait(300)
+  r.menu = await page.locator('.body-file-menu [role=menuitem]').allInnerTexts()
+  await page.screenshot({ path: '/tmp/rb-csv/body-menu-390.png' })
+  const menu = await page.locator('.body-file-menu').boundingBox(); r.menuFits = menu.x >= 0 && menu.x + menu.width <= 390
+  await page.locator('.body-file-menu [role=menuitem]', { hasText: 'Caption' }).tap(); await wait(200)
+  await page.keyboard.type('From the phone', { delay: 30 }); await page.keyboard.press('Enter'); await wait(1400)
+  r.caption = imageBlock().props.caption
+  r.overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)
+  r.ok = r.before === 0 && r.afterTap === 1 && r.handles === 0 && r.bar === 0 && r.menu.includes('Replace') && r.menu.includes('Download') && r.menu.includes('Remove') && r.menuFits && r.caption === 'From the phone' && r.overflow <= 0
+  return r
+}, { viewport: { width: 390, height: 780 }, hasTouch: true })
+await scenario('390: a file row has its ⋯, and /image\'s panel fits the screen', async page => {
+  await caretOn(page, 'Second line'); await paste(page, [txt]); await wait(1300)
+  const r = { more: await page.locator('.body-file .body-file-more').count() }
+  await page.locator('.bn-inline-content', { hasText: 'First line' }).tap(); await wait(200)
+  await page.keyboard.press('Meta+ArrowRight'); await page.keyboard.press('Enter'); await page.keyboard.type('/image', { delay: 30 }); await wait(500); await page.keyboard.press('Enter'); await wait(600)
+  const panel = await page.locator('.bn-panel').first().boundingBox()
+  r.panel = panel && [Math.round(panel.x), Math.round(panel.width)]
+  r.overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)
+  await page.screenshot({ path: '/tmp/rb-csv/body-panel-390.png' })
+  r.ok = r.more === 1 && Boolean(panel) && panel.x >= 0 && panel.x + panel.width <= 390 && r.overflow <= 0
   return r
 }, { viewport: { width: 390, height: 780 }, hasTouch: true })
 await browser.close()

@@ -8,11 +8,11 @@ import { type BlockNoteEditor, BlockNoteSchema, blockToNode, defaultBlockSpecs, 
 import { SideMenuExtension, SuggestionMenu } from '@blocknote/core/extensions'
 import { en } from '@blocknote/core/locales'
 import { Button, toast } from '@heroui/react'
-import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, FileCaptionButton, FileDownloadButton, FileReplaceButton, TextAlignButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, LinkToolbarController, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useEditorState, useExtensionState, usePortalElement, useUIMode } from '@blocknote/react'
+import { BasicTextStyleButton, blockTypeSelectItems, CreateLinkButton, FileCaptionButton, FileReplaceButton, createReactBlockSpec, createReactInlineContentSpec, FormattingToolbar, FormattingToolbarController, getDefaultReactSlashMenuItems, LinkToolbarController, SideMenu, SuggestionMenuController, SideMenuController, useBlockNoteEditor, useComponentsContext, useCreateBlockNote, useEditorState, useExtensionState, usePortalElement, useUIMode } from '@blocknote/react'
 import { BlockNoteView, ShadCNDefaultComponents } from '@blocknote/shadcn'
 import { offset } from '@floating-ui/react'
 import { suggestionMenuMiddleware } from './suggestion-menu-placement'
-import { bodyFileSpec, bodyImageSpec, insertBodyFiles, pasteBodyFiles, resolveBodyFile, uploadFromPanel } from './body-files'
+import { BodyFileOpenButtons, bodyFileSpec, BodyImageAlign, bodyImageSpec, insertBodyFiles, pasteBodyFiles, resolveBodyFile, uploadFromPanel } from './body-files'
 import { insertSeparator, separatorShortcut } from './separator'
 import '@blocknote/shadcn/style.css'
 import type { Action, Page, Receipt, Task, Workspace } from '../domain/types'
@@ -781,6 +781,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   useEffect(() => { const media = window.matchMedia('(max-width: 899px)'); const update = () => setCompact(media.matches); media.addEventListener('change', update); return () => media.removeEventListener('change', update) }, [])
   const [touchHandle, setTouchHandle] = useState<{ id: string; top: number } | null>(null)
   const [touchDragging, setTouchDragging] = useState(false)
+  const [fileDropLine, setFileDropLine] = useState<{ top: number; left: number; width: number } | null>(null)
   const dropRef = useRef<typeof drop>(null)
   // Edit notices ("Deleted 'Notes' · Undo") are HeroUI toasts. Undo only applies while the document is still the
   // one the notice describes; any later edit retires the notice.
@@ -2116,10 +2117,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
         <CreateLinkButton key="createLink" />
         <FileCaptionButton key="fileCaption" />
         <FileReplaceButton key="fileReplace" />
-        <TextAlignButton key="alignLeft" textAlignment="left" />
-        <TextAlignButton key="alignCenter" textAlignment="center" />
-        <TextAlignButton key="alignRight" textAlignment="right" />
-        <FileDownloadButton key="fileDownload" />
+        <BodyImageAlign key="align" />
+        <BodyFileOpenButtons key="open" />
       </FormattingToolbar> }, []) // eslint-disable-line react-hooks/exhaustive-deps
   // Whether the phone toolbar's indent / outdent can act on the caret's line, and the line's style for Aa (F16).
   const [nesting, setNesting] = useState({ in: false, out: false })
@@ -2497,6 +2496,16 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
   const conflictText = changedBy(page.id) === 'tab' ? 'Changed in another tab · draft kept' : 'Changed on another device · draft kept'
   // B38: the dock line's words stay steady while typing flips the header between "Unsaved changes" and "Saving…".
   const unsavedText = conflict ? conflictText : !online ? "Offline · saves when you're back" : unsaved === 'network' ? 'Not saved yet · trying again' : "Couldn't save · draft kept"
+  /** Where a file let go here would land. A title or a cell being edited takes nothing, and neither does a table's Files column, which adds through its own cell. Anywhere else on a table, it goes beside it. */
+  function fileDropAt(e: { target: EventTarget; clientY: number }) {
+    if ((e.target as Element).closest('input, textarea, .cell-file, .property-files')) return null
+    const rows = [...editor.prosemirrorView.dom.querySelectorAll<HTMLElement>(':scope > .bn-block-group > .bn-block-outer')]
+    const row = rows.find(r => e.clientY < r.getBoundingClientRect().bottom) ?? rows.at(-1)
+    const id = row?.querySelector('[data-node-type="blockContainer"]')?.getAttribute('data-id')
+    if (!row || !id) return null
+    const box = row.getBoundingClientRect(), before = e.clientY < box.top + box.height / 2
+    return { id, placement: before ? 'before' as const : 'after' as const, top: before ? box.top : box.bottom, left: box.left, width: box.width }
+  }
   return <div className={`continuous-editor ${keyboardShown ? 'is-keyboard-up' : ''} ${touchDragging ? 'is-touch-drag' : ''} ${selectionLabel ? 'has-selection' : ''} ${pasteMenu ? 'has-paste-menu' : ''} ${styleOpen && lineStyle ? 'has-style-panel' : ''} ${pausedFor ? 'is-paused' : ''}`} aria-label="Page editor" aria-busy={historyBusy}
     onBlur={e => { if (e.target === editor.domElement) setStyleOpen(false) }}
     onCopyCapture={e => copyBlocks(e, false)} onCutCapture={e => copyBlocks(e, true)}
@@ -2536,18 +2545,23 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     onMouseMoveCapture={e => { if (!hoverPointer || lastPointer.current === 'touch') e.stopPropagation() }}
     // A9a §3: after the composition, once ProseMirror has finished it (its DOM and decorations are drawn again).
     onCompositionEndCapture={() => { composing.current = false; if (editor.getExtension(SuggestionMenu)?.shown()) requestAnimationFrame(() => setCompositionsEnded(n => n + 1)); setTimeout(repairComposition, 0); setTimeout(maybeOpenLinkList, 50); setTimeout(reopenDateListAfterComposition, 80); requestAnimationFrame(() => { stash(); clearTimeout(timer.current); timer.current = setTimeout(() => void flushRef.current(), 450) }) }}
+    onDragOverCapture={e => {
+      if (!e.dataTransfer.types.includes('Files')) return
+      // A file has no place inside a line: the line shows the boundary it'll land at, not ProseMirror's caret.
+      e.preventDefault(); e.stopPropagation()
+      const at = fileDropAt(e)
+      e.dataTransfer.dropEffect = at ? 'copy' : 'none'
+      setFileDropLine(at && { top: at.top, left: at.left, width: at.width })
+    }}
+    onDragLeaveCapture={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFileDropLine(null) }}
     onDropCapture={e => {
       const dropped = [...e.dataTransfer.files]
       if (dropped.length) {
-        // One block per file, in the order dropped, at the boundary the pointer's at. On a table it's a cell's business, and nothing lands (B87 §3).
+        // One block per file, in the order dropped, at the boundary the pointer's at (B87 §3).
         e.preventDefault(); e.stopPropagation()
-        if ((e.target as Element).closest('.database-block, input, textarea')) return
-        const rows = [...editor.prosemirrorView.dom.querySelectorAll<HTMLElement>(':scope > .bn-block-group > .bn-block-outer')]
-        const row = rows.find(r => { const box = r.getBoundingClientRect(); return e.clientY < box.bottom }) ?? rows.at(-1)
-        const id = row?.querySelector('[data-node-type="blockContainer"]')?.getAttribute('data-id')
-        if (!row || !id) return
-        const box = row.getBoundingClientRect()
-        insertBodyFiles(editor as never, dropped, id, e.clientY < box.top + box.height / 2 ? 'before' : 'after')
+        setFileDropLine(null)
+        const at = fileDropAt(e)
+        if (at) insertBodyFiles(editor as never, dropped, at.id, at.placement)
         return
       }
       // Drops go to the row boundary under the pointer at release. BlockNote's line can lag the pointer when
@@ -2822,6 +2836,7 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     }}>Turn into tasks</button></div>}
     </>, dock)}
     {drop && <div className="editor-drop-line" style={{ top: drop.top }} />}
+    {fileDropLine && <div className="editor-drop-line" style={{ ...fileDropLine, right: 'auto' }} />}
   </div>
 }
 /**

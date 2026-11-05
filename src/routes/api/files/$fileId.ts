@@ -1,7 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-
-// Only types a browser can't run as a page open in place; anything else downloads, as a stored page or SVG on this origin could read his workspace.
-const shownInPlace = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif', 'image/heic', 'image/heif', 'application/pdf'])
+import { shownInPlace } from '../../../domain/body-files.ts'
 
 // R3-11: a file's bytes. Behind the same sign-in gate as every route; the key comes from the session, so another account's id finds nothing.
 export const Route = createFileRoute('/api/files/$fileId')({
