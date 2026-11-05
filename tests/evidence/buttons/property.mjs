@@ -38,6 +38,13 @@ for (const layout of ['list', 'board', 'gallery']) await scenario(`On ${layout}:
   await pills(page).first().click(); await wait(900)
   return { ok: count === 2 && page.url() === at && await page.locator('.peek').count() === 0 && (valueOf('r1') === 5 || valueOf('r2') === 5), count, r1: valueOf('r1'), r2: valueOf('r2') }
 })
+await scenario('In a table cell: Enter runs it, and Delete does nothing', async page => {
+  const cell = page.locator('.database-cell.is-read-only', { has: page.locator('.editor-button-pill') }).first()
+  await cell.focus(); await page.keyboard.press('Delete'); await wait(400)
+  const untouched = valueOf('r1')
+  await page.keyboard.press('Enter'); await wait(900)
+  return { ok: untouched === 1 && valueOf('r1') === 5, untouched, after: valueOf('r1') }
+})
 await scenario('On the row page: in the property list, and it runs on that row', async page => {
   const count = await page.locator('.editor-button-pill').count()
   await page.locator('.editor-button-pill').first().click(); await wait(900)

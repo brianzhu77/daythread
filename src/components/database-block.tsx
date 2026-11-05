@@ -5,7 +5,7 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createPortal } from 'react-dom'
-import { type CSSProperties, createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent, useCallback } from 'react'
+import { type CSSProperties, createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent, useCallback } from 'react'
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
 import { descendantsOf, parentIdOf, treeEntries, type TreeEntry } from '../domain/sub-items'
@@ -1173,7 +1173,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
                       <PropertyCheckbox checked={value === true} label={`${property.name}: ${displayPageTitle(row)}`} disabled={isReadOnly(property)} onToggle={next => commit(db, row, property.id, next ? true : undefined)} />
                     </span>
                   : isReadOnly(property)
-                  ? <span data-nav={navId} tabIndex={0} className="database-cell is-read-only"><PropertyCell property={property} value={value} row={row} today={today} /></span>
+                  ? <span data-nav={navId} tabIndex={0} className="database-cell is-read-only" {...(property.type === 'button' ? { onKeyDown: (e: ReactKeyboardEvent<HTMLSpanElement>) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); e.stopPropagation(); e.currentTarget.querySelector('button')?.click() } } } : {})}><PropertyCell property={property} value={value} row={row} today={today} /></span>
                   : wide && typeof value === 'string' && linkHref(property, value)
                   // At 1280 a link opens from its text, and the pencil edits it (design §6.1, Jazz bf91cb72).
                   ? <span className="database-url-cell">
