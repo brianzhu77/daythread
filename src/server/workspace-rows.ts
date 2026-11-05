@@ -2,7 +2,7 @@
 // its rows with their positions; a command's result is turned back into rows, and the difference is what gets written,
 // with the rows as they were as the operation's inverse (what Undo puts back). The domain never sees positions.
 import { expandedWorkspace, storedDocument, type SyncedRecord } from '../domain/synced.ts'
-import type { CommentThread } from '../domain/comments.ts'
+import type { CommentThread, CommentAnchor } from '../domain/comments.ts'
 import type { Page, Task, Workspace, WeekStart } from '../domain/types.ts'
 
 export interface PageRow {
@@ -18,7 +18,7 @@ export interface TaskRow {
 /** A tombstone, kept as the task's exact JSON. */
 export interface DeletedRow { id: string; position: number; data: string }
 /** A thread of comments: its own table, which no save of a page touches and an older build never reads. */
-export interface ThreadRow { id: string; page_id: string; version: number; created_at: string; resolved_at: string | null; comments: string }
+export interface ThreadRow { id: string; page_id: string; version: number; created_at: string; resolved_at: string | null; comments: string; /** Absent in a row from before anchors. */ anchor?: string | null }
 
 export interface Rows { revision: number; timezone: string; /** Absent or 0: Sunday. */ weekStart?: WeekStart; pages: PageRow[]; tasks: TaskRow[]; deleted: DeletedRow[]; threads: ThreadRow[] }
 export interface RowSet<R extends { id: string }> { upsert: R[]; remove: string[] }
@@ -56,8 +56,8 @@ const deletedRow = (t: Task, position: number): DeletedRow => ({ id: t.id, posit
 const byPosition = <R extends { position: number }>(rows: R[]): R[] => [...rows].sort((a, b) => a.position - b.position)
 
 /** The workspace the domain works on, from its rows: receipts and the Undo marker are the store's to add. */
-const threadRow = (t: CommentThread): ThreadRow => ({ id: t.id, page_id: t.pageId, version: t.version, created_at: t.createdAt, resolved_at: t.resolvedAt ?? null, comments: JSON.stringify(t.comments) })
-const threadOf = (r: ThreadRow): CommentThread => ({ id: r.id, pageId: r.page_id, version: r.version, createdAt: r.created_at, ...(r.resolved_at ? { resolvedAt: r.resolved_at } : {}), comments: JSON.parse(r.comments) as CommentThread['comments'] })
+const threadRow = (t: CommentThread): ThreadRow => ({ anchor: t.anchor ? JSON.stringify(t.anchor) : null, id: t.id, page_id: t.pageId, version: t.version, created_at: t.createdAt, resolved_at: t.resolvedAt ?? null, comments: JSON.stringify(t.comments) })
+const threadOf = (r: ThreadRow): CommentThread => ({ ...(r.anchor ? { anchor: JSON.parse(r.anchor) as CommentAnchor } : {}), id: r.id, pageId: r.page_id, version: r.version, createdAt: r.created_at, ...(r.resolved_at ? { resolvedAt: r.resolved_at } : {}), comments: JSON.parse(r.comments) as CommentThread['comments'] })
 export function workspaceOf(rows: Rows): Workspace {
   const sorted = byPosition(rows.pages), synced = sorted.filter(r => r.type === 'synced').map(recordOf)
   return expandedWorkspace({

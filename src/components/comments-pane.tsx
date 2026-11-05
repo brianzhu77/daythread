@@ -4,21 +4,22 @@ import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from '@heroui/react'
 import { useRouterState } from '@tanstack/react-router'
-import { commentLimit, threadsOn, type Comment, type CommentThread } from '../domain/comments'
+import { commentLimit, threadsOn, type Comment, type CommentAnchor, type CommentThread } from '../domain/comments'
+import { flatNodes, pageNodes } from '../domain/editor-document'
 import type { Page } from '../domain/types'
 import { CloseIcon, CommentIcon } from './icons'
 import { useKeyboardTop } from './keyboard'
 import { newOperationId, useWorkspace, workspaceOwner } from './use-day'
 
-type Open = { pageId: string; composing: boolean; threadId: string | null }
+type Open = { pageId: string; composing: boolean; threadId: string | null; anchor: CommentAnchor | null }
 let open: Open | null = null
 /** A pane waiting for the page it's about, as a search hit opens it and goes there. */
 let arriving: Open | null = null
 const listeners = new Set<() => void>()
 const changed = () => listeners.forEach(l => l())
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
-export function openComments(pageId: string, options: { composing?: boolean; threadId?: string; afterGoing?: boolean } = {}) {
-  const opening = { pageId, composing: Boolean(options.composing), threadId: options.threadId ?? null }
+export function openComments(pageId: string, options: { composing?: boolean; threadId?: string; afterGoing?: boolean; anchor?: CommentAnchor } = {}) {
+  const opening = { pageId, composing: Boolean(options.composing), threadId: options.threadId ?? null, anchor: options.anchor ?? null }
   if (options.afterGoing) { arriving = opening; return }
   open = opening; changed()
 }
@@ -98,8 +99,20 @@ function CommentField({ draftKey, initial = '', label, action, placeholder, onDo
   </div>
 }
 
+const lineOf = (blockId: string) => document.querySelector<HTMLElement>(`[data-node-type="blockContainer"][data-id="${CSS.escape(blockId)}"]`)
+/** Goes to the line, and shows which it is for a moment. */
+function goToLine(blockId: string) {
+  const line = lineOf(blockId)
+  if (!line) return
+  line.scrollIntoView({ block: 'center' })
+  line.classList.add('is-comment-target')
+  setTimeout(() => line.classList.remove('is-comment-target'), 1600)
+}
 function ThreadView({ thread, focused }: { thread: CommentThread; focused: boolean }) {
-  const { run } = useWorkspace()
+  const { run, workspace } = useWorkspace()
+  const anchor = thread.anchor, page = anchor ? workspace?.pages.find(p => p.id === thread.pageId) : undefined
+  // On the page as saved, or on screen, as it may not have been saved yet.
+  const gone = anchor ? !lineOf(anchor.blockId) && !(page && flatNodes(pageNodes(page)).some(n => n.id === anchor.blockId)) : false
   // What's edited is the thread as it read when Edit was pressed, so a change since is refused rather than written over.
   const [editing, setEditing] = useState<{ id: string; version: number } | null>(null), [replying, setReplying] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -107,6 +120,9 @@ function ThreadView({ thread, focused }: { thread: CommentThread; focused: boole
   /** From a button, with no field to say so: a failure is the header's, with its Retry. */
   const act = (action: Parameters<Run>[0]) => void send(run, action, { notice: r => ({ text: r.message, undoOperationId: r.operationId }), quiet: false })
   return <div ref={box} className={`comment-thread${focused ? ' is-focused' : ''}`}>
+    {anchor && (gone
+      ? <p className="comment-quote is-gone">Line removed{anchor.quote ? ` · ${anchor.quote}` : ''}</p>
+      : <button type="button" className="comment-quote" onClick={() => goToLine(anchor.blockId)}>{anchor.quote || 'An empty line'}</button>)}
     {thread.comments.map((comment: Comment) => <div key={comment.id} className="comment">
       <div className="comment-head">
         <time dateTime={comment.at}>{when(comment.at)}{comment.editedAt ? ' · edited' : ''}</time>
@@ -135,9 +151,9 @@ export function CommentsPaneHost() {
     seen.current = place
     open = arriving; arriving = null; changed()
   }, [place])
-  return current ? <CommentsPane key={current.pageId} pageId={current.pageId} composing={current.composing} threadId={current.threadId} /> : null
+  return current ? <CommentsPane key={`${current.pageId}|${current.anchor?.blockId ?? ''}`} pageId={current.pageId} composing={current.composing} threadId={current.threadId} anchor={current.anchor} /> : null
 }
-function CommentsPane({ pageId, composing, threadId }: { pageId: string; composing: boolean; threadId: string | null }) {
+function CommentsPane({ pageId, composing, threadId, anchor }: { pageId: string; composing: boolean; threadId: string | null; anchor: CommentAnchor | null }) {
   const { workspace, run } = useWorkspace()
   const threads = threadsOn(workspace?.threads, pageId)
   const opened = threads.find(t => t.id === threadId)
@@ -150,7 +166,12 @@ function CommentsPane({ pageId, composing, threadId }: { pageId: string; composi
     document.addEventListener('keydown', esc, true)
     return () => document.removeEventListener('keydown', esc, true)
   }, [])
-  const add = (body: string, { operationId, threadId, commentId, at }: Stamp) => send(run, { type: 'add-comment', pageId, threadId, commentId, body, at }, { operationId, quiet: true })
+  const add = async (body: string, { operationId, threadId, commentId, at }: Stamp) => {
+    const sent = await send(run, { type: 'add-comment', pageId, threadId, commentId, body, at, ...(anchor ? { anchor } : {}) }, { operationId, quiet: true })
+    // Written on that line: the next one in this pane is on the page again, unless a line is asked for.
+    if (sent === 'saved' && anchor) openComments(pageId, { threadId })
+    return sent
+  }
   return createPortal(<aside className={`comments-pane${phone ? ' is-sheet' : ''}`} aria-label="Comments" style={phone && keyboardTop !== null ? { bottom: window.innerHeight - keyboardTop, height: Math.min(window.innerHeight * 0.7, (window.visualViewport?.height ?? window.innerHeight) - 8) } : undefined}>
     <header className="comments-pane-head">
       <h2>Comments</h2>
@@ -164,7 +185,8 @@ function CommentsPane({ pageId, composing, threadId }: { pageId: string; composi
       {shown.map(t => <ThreadView key={t.id} thread={t} focused={t.id === threadId} />)}
       {!shown.length && <p className="comment-note">{show === 'open' ? (other ? `No open comments · ${other} resolved` : 'No comments') : 'Nothing resolved'}</p>}
     </div>
-    {show === 'open' && <CommentField draftKey={`new:${pageId}`} label="New comment" action="Comment" placeholder="Add a comment" autoFocus={composing && !phone} onDone={add} />}
+    {show === 'open' && anchor && <p className="comment-quote is-composing">{anchor.quote || 'An empty line'}</p>}
+    {show === 'open' && <CommentField draftKey={anchor ? `new:${pageId}:${anchor.blockId}` : `new:${pageId}`} label="New comment" action="Comment" placeholder={anchor ? 'Comment on this line' : 'Add a comment'} autoFocus={composing && !phone} onDone={add} />}
   </aside>, document.body)
 }
 

@@ -143,7 +143,7 @@ export type Action =
   | { type: "apply-link-preview"; pageId: string; url: string; title: string | null; description: string | null }
   | { type: "rename-page"; pageId: string; title: string }
   /** A new thread on the page, or with `threadId` a reply on one. */
-  | { type: "add-comment"; pageId: string; threadId: string; commentId: string; body: string; at: string }
+  | { type: "add-comment"; pageId: string; threadId: string; commentId: string; body: string; at: string; anchor?: import("./comments.ts").CommentAnchor }
   | { type: "edit-comment"; threadId: string; commentId: string; body: string; version: number; at: string }
   | { type: "delete-comment"; threadId: string; commentId: string; version: number }
   | { type: "resolve-thread"; threadId: string; resolved: boolean; version: number; at: string }

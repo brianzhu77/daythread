@@ -5,9 +5,13 @@ export const commentLimit = 2000
 export const noteCommands = ['add-comment', 'edit-comment']
 export const leavesUndoAlone = (type: string): boolean => noteCommands.includes(type)
 export interface Comment { id: string; body: string; at: string; editedAt?: string }
+/** A thread on a line: its block's id, which a move and a cut keep, and the words it was on, for when the line's gone (comments.md §4). */
+export interface CommentAnchor { blockId: string; quote: string }
+export const quoteLimit = 300
 export interface CommentThread {
   id: string
   pageId: string
+  anchor?: CommentAnchor
   version: number
   createdAt: string
   resolvedAt?: string
