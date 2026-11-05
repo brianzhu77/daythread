@@ -55,7 +55,7 @@ export function exportedRows(ws: Workspace, databaseId: string, scope: ExportSco
   const page = ws.pages.find(p => p.id === databaseId)
   if (!isDatabase(page)) return { rows: [], columns: [] }
   if (scope === 'whole') return { rows: databaseRows(ws, databaseId), columns: page.database.properties }
-  return { rows: viewRows(ws, databaseId, scope.view, scope.context), columns: viewColumns(page.database, scope.view).map(c => c.property).filter(p => p.id !== titleId) }
+  return { rows: viewRows(ws, databaseId, scope.view, scope.context), columns: viewColumns(page.database, scope.view).map(c => c.property).filter(p => p.type !== 'button' && p.id !== titleId) }
 }
 
 // ---------------------------------------------------------------- pasting a grid (design §3)

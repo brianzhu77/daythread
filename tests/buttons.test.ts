@@ -2,7 +2,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readSteps, safeUrl, stepProblem, stepsKey, valueAtTap, writeSteps, type ButtonStep } from '../src/domain/buttons.ts'
-import { todosSourceId } from '../src/domain/database.ts'
+import { calcChoices, cellValue, groupableProperties, todosSourceId } from '../src/domain/database.ts'
 import { pageFromTemplate } from '../src/domain/day-template.ts'
 import { flatNodes, pageContentKey, pageNodes, type EditorNode } from '../src/domain/editor-document.ts'
 import { harness, today } from './v2-helpers.ts'
@@ -236,4 +236,65 @@ test('in the Day template: new days have their own, a tap on one writes to that 
   assert.equal(of(day1).props?.steps, writeSteps(on))
   const { receipt } = tap(h, of(day2).id, day2.id, '2026-11-20')
   assert.deepEqual(h.page(receipt.entityId!).values?.when, { start: '2026-11-06' }, 'that day, not the day it was tapped')
+})
+
+const rowButton = (steps: ButtonStep[]) => (h: ReturnType<typeof harness>) => { h.run({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'go', name: 'Go', type: 'button', button: { label: 'Bump', steps: writeSteps(steps) } } } } as never); return writeSteps(steps) }
+const tapRows = (h: ReturnType<typeof harness>, stored: string, rowIds: string[], tapDay = today) => h.run({ type: 'run-row-button', databaseId: 'runs', propertyId: 'go', rowIds, stepsKey: stepsKey(stored), at, today: tapDay })
+const setN = (raw: number): ButtonStep => ({ id: 'e', kind: 'edit-property', set: [{ id: 'n', name: 'N', value: { kind: 'fixed', raw } }] })
+test('the property: Edit property on its row, on several with one Undo, reading the row\'s own values; it holds no value and reads its label', () => {
+  const h = setup([]), stored = rowButton([setN(5)])(h)
+  assert.equal(tapRows(h, stored, ['r1']).receipt.message, '1 row changed')
+  assert.deepEqual(rows(h).map(r => r.values?.n), [5, 2])
+  assert.equal('go' in (h.page('r1').values ?? {}), false)
+  const both = tapRows(h, stored, ['r1', 'r2'])
+  assert.equal(both.receipt.message, '2 rows changed')
+  assert.deepEqual(rows(h).map(r => r.values?.n), [5, 5])
+  h.run({ type: 'undo', targetOperationId: both.receipt.operationId })
+  assert.deepEqual(rows(h).map(r => r.values?.n), [5, 2], 'one Undo, across both')
+  assert.equal(cellValue(h.page('runs').database!, h.page('r1'), 'go'), 'Bump')
+})
+test('the property: a row\'s own date with @this page, a Multi-select added to and taken from, and Add row linking back', () => {
+  const h = setup([])
+  h.run({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'tags', name: 'Tags', type: 'multiSelect', options: [{ id: 'a', name: 'A', color: 'gray' }, { id: 'b', name: 'B', color: 'gray' }] } } } as never)
+  const adds = rowButton([{ id: 'e', kind: 'edit-property', set: [{ id: 'tags', name: 'Tags', value: { kind: 'fixed', raw: ['a'] }, mode: 'add' }, { id: 'when', name: 'When', value: { kind: 'today' } }] }])(h)
+  tapRows(h, adds, ['r1'], '2026-11-05'); tapRows(h, adds, ['r1'], '2026-11-05')
+  assert.deepEqual(h.page('r1').values?.tags, ['a'])
+  assert.deepEqual(h.page('r1').values?.when, { start: '2026-11-05' })
+  const removes = writeSteps([{ id: 'e', kind: 'edit-property', set: [{ id: 'tags', name: 'Tags', value: { kind: 'fixed', raw: ['a'] }, mode: 'remove' }] }])
+  h.run({ type: 'change-database', pageId: 'runs', change: { kind: 'updateProperty', propertyId: 'go', button: { label: 'Bump', steps: removes } } } as never)
+  tapRows(h, removes, ['r1'])
+  assert.deepEqual(h.page('r1').values?.tags ?? [], [])
+})
+test('the property: all or none across rows, a changed button refused, a broken property named, a trashed row refused, and limits across rows', () => {
+  const h = setup([]), stored = rowButton([setN(5)])(h), rev = h.ws.revision
+  assert.throws(() => h.run({ type: 'run-row-button', databaseId: 'runs', propertyId: 'go', rowIds: ['r1'], stepsKey: 'old', at, today }), /Changed elsewhere/)
+  assert.throws(() => tapRows(h, stored, ['r1', 'nothing']), /./)
+  assert.deepEqual(rows(h).map(r => r.values?.n), [1, 2], 'the first row isn\'t kept')
+  assert.equal(h.ws.revision, rev)
+  h.run({ type: 'change-database', pageId: 'runs', change: { kind: 'removeProperty', propertyId: 'n' } } as never)
+  assert.throws(() => tapRows(h, stored, ['r1']), /N was deleted/)
+})
+test('not for sort, filter, Group or Rollup; a retry on rows makes one change; it survives a save and a rename', () => {
+  const h = setup([]), stored = rowButton([{ ...addRow(), id: 'a' }])(h)
+  const db = h.page('runs').database!
+  assert.equal(groupableProperties(db, 'board').some(p => p.id === 'go'), false)
+  assert.deepEqual(calcChoices('button'), [])
+  const action = { type: 'run-row-button' as const, databaseId: 'runs', propertyId: 'go', rowIds: ['r1'], stepsKey: stepsKey(stored), at, today }
+  const before = rows(h).length, first = h.run(action, 'tap-rows'), second = h.run(action, 'tap-rows')
+  assert.equal(second.receipt.entityId, first.receipt.entityId)
+  assert.equal(rows(h).length, before + 1)
+  h.run({ type: 'change-database', pageId: 'runs', change: { kind: 'updateProperty', propertyId: 'go', name: 'Renamed' } } as never)
+  assert.equal(h.page('runs').database!.properties.find(p => p.id === 'go')!.button?.steps, stored)
+})
+
+test('a to-do command failing partway drops the whole tap: only "none could" carries on (Lead)', () => {
+  const h = setup([addRow(), { id: 's', kind: 'edit-rows', databaseId: todosSourceId, databaseName: 'To-dos', filter: [], set: [{ id: 'planned', name: 'Planned', value: { kind: 'fixed', raw: { start: 'not a date' } } }] }])
+  h.run({ type: 'ensure-day', date: '2026-11-06' })
+  h.run({ type: 'add-task', pageId: 'day:2026-11-06', title: 'One', plannedOn: '2026-11-06' })
+  h.run({ type: 'add-task', pageId: 'day:2026-11-06', title: 'Two', plannedOn: '2026-11-06' })
+  const n = rows(h).length, revision = h.ws.revision, plans = JSON.stringify(h.ws.tasks)
+  assert.throws(() => tap(h, 'btn', 'p', '2026-11-06'), /Edit rows in To-dos: Invalid calendar date/)
+  assert.equal(h.ws.revision, revision)
+  assert.equal(rows(h).length, n, 'the row before it isn\'t kept')
+  assert.equal(JSON.stringify(h.ws.tasks), plans)
 })

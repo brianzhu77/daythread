@@ -62,6 +62,8 @@ export interface Receipt {
   renamed?: Record<string, string>;
   /** save-editor: synced blocks that changed elsewhere meanwhile, where his version went below them. */
   conflicted?: string[];
+  /** What rules this command set off did, for its notice (automations.md §5). */
+  automations?: { databaseId: string; ran: string[]; paused: { name: string; reason: string }[] };
   /** run-repeats: what it left out, for one notice. */
   skippedRepeats?: Array<{ title: string; earlier: string; full?: true }>;
   /** save-editor: lines left a synced block shown on this many pages. */
@@ -143,9 +145,11 @@ export type Action =
   | { type: "apply-link-preview"; pageId: string; url: string; title: string | null; description: string | null }
   | { type: "rename-page"; pageId: string; title: string }
   /** A tap on a button: every step in one operation (buttons.md §4). Its `at` and `today` are the tap's, kept by a retry. */
+  /** A Button property: its steps on each row given, in one operation (buttons.md §6). */
+  | { type: "run-row-button"; databaseId: string; propertyId: string; rowIds: string[]; stepsKey: string; at: string; today: LocalDate }
   | { type: "run-button"; pageId: string; blockId: string; stepsKey: string; expectedContent: string; at: string; today: LocalDate }
   /** A new thread on the page, or with `threadId` a reply on one. */
-  | { type: "add-comment"; pageId: string; threadId: string; commentId: string; body: string; at: string }
+  | { type: "add-comment"; pageId: string; threadId: string; commentId: string; body: string; at: string; anchor?: import("./comments.ts").CommentAnchor }
   | { type: "edit-comment"; threadId: string; commentId: string; body: string; version: number; at: string }
   | { type: "delete-comment"; threadId: string; commentId: string; version: number }
   | { type: "resolve-thread"; threadId: string; resolved: boolean; version: number; at: string }

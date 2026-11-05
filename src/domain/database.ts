@@ -6,7 +6,7 @@ import { rowTemplateTarget } from "./day-template.ts";
 import { formulaProblem, rollupProblem, worldOf } from "./formula.ts";
 import type { LocalDate, Page, WeekStart, Workspace } from "./types.ts";
 
-export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url", "email", "phone", "createdTime", "editedTime", "id", "relation", "rollup", "formula", "files"] as const;
+export const propertyTypes = ["text", "number", "select", "multiSelect", "status", "date", "checkbox", "url", "email", "phone", "createdTime", "editedTime", "id", "relation", "rollup", "formula", "files", "button"] as const;
 export type PropertyType = (typeof propertyTypes)[number];
 export type NumberFormat = "plain" | "comma" | "percent" | "currency";
 export type StatusGroup = "todo" | "active" | "done";
@@ -45,6 +45,8 @@ export interface Property {
   rollup?: Rollup;
   /** formula: its text, with properties by id. Stays when read: a column reads as the type it works out to, and this says it's a formula (formula.ts). */
   formula?: string;
+  /** button: what it's called and its steps, as a block keeps them (buttons.md). It holds no value in a row. */
+  button?: { label: string; steps: string };
   /** formula, as read, never stored: why the whole column reads Error. */
   formulaError?: string;
   /** relation, as read (relations.ts), never stored: its target's name, and whether that's in Trash. */
@@ -174,6 +176,8 @@ export interface Repeat {
   last?: LocalDate;
   lastRan?: string;
 }
+export type { Automation } from './automations.ts'
+import type { Automation } from './automations.ts'
 export interface Database {
   /** The `database` block that is its place in its parent page; null: shown as a full page. */
   homeBlockId: string | null;
@@ -189,6 +193,8 @@ export interface Database {
   dependencies?: Dependencies;
   /** Row templates that repeat, by template id. */
   repeats?: Record<string, Repeat>;
+  /** What happens by itself when a row changes, in the order they run (automations.md). */
+  automations?: Automation[];
   /** The next row number, once an ID property has been made. It only goes up, past a delete or an undone add (R3-9). */
   nextRowNumber?: number;
 }
@@ -212,7 +218,7 @@ export const todosSourceId = "source:tasks";
 /** Where a row keeps its number, among its values: under no property, so changing a property's type never touches it. */
 export const rowNumberKey = "@id";
 /** The types the app fills in: they can't be typed, pasted, or set by a filter's `+ New` (R3-9). */
-export const isReadOnlyType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime" || type === "id";
+export const isReadOnlyType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime" || type === "id" || type === "button";
 /** Nothing can be typed here: the app's own columns, a rollup, To-dos' Page. */
 export const isReadOnly = (property: Property): boolean => isReadOnlyType(property.type) || Boolean(property.readOnly);
 export const isTimeType = (type: PropertyType): boolean => type === "createdTime" || type === "editedTime";
@@ -231,7 +237,7 @@ export const databaseBlockType = "database";
 // To-dos have their own limit, below rows': each one's plan rewrites its page and re-reads the workspace, as a single edit does. On a 128 MB heap Planned took 500 and ran out at 1,000 (Roadbuster).
 /** Filter groups nest to this many layers, counting the top one (filter-groups.md §2, as Notion). */
 export const filterLayers = 3;
-export const limits = { formula: 10_000, properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 10_000, todosAtOnce: 500, repeatsAtOnce: 200, hiddenGroups: 200, prefix: 20 } as const;
+export const limits = { automations: 100, buttonSteps: 200_000, formula: 10_000, properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 10_000, todosAtOnce: 500, repeatsAtOnce: 200, hiddenGroups: 200, prefix: 20 } as const;
 
 export const isDatabase = (p: Page | undefined | null): p is Page & { database: Database } => Boolean(p?.database);
 /** A row: a page whose parent is a database. */
@@ -333,6 +339,7 @@ export function readValue(property: Property, raw: unknown): CellValue {
     case "id":
     case "rollup":
     case "formula":
+    case "button":
       return null;
     case "files": {
       const files = Array.isArray(raw) ? raw.filter(isFileValue) : [];
@@ -399,6 +406,7 @@ export function storedValue(property: Property, input: unknown): Json | undefine
     case "id":
     case "rollup":
     case "formula":
+    case "button":
       return refuse();
     case "files": {
       if (!Array.isArray(input) || input.length > fileLimits.perCell || !input.every(isFileValue)) refuse();
@@ -476,6 +484,8 @@ export function cellValue(db: Database, row: Page, columnId: string): CellValue 
   if (!property) return null;
   if (property.type === "id") { const n = row.values?.[rowNumberKey]; return typeof n === "number" ? n : null; }
   if (isTimeType(property.type)) return rowTime(property, row);
+  // Its label, so a cell draws it. Nothing's stored under it.
+  if (property.type === "button") return property.button?.label || property.name;
   return readValue(property, rawOf(row, columnId));
 }
 
@@ -534,6 +544,24 @@ const fold = (s: string): string => s.toLocaleLowerCase();
  * Whether one condition holds for a value of this property. A condition the property's type doesn't offer (after a type
  * change) or one missing its value holds, so a broken rule never hides rows; null says "ignored".
  */
+/** The conditions a property of this type can hold. */
+export function opsFor(type: PropertyType): FilterOp[] {
+  switch (type) {
+    case "text": case "url": case "email": case "phone": return ["contains", "is", "isEmpty", "isNotEmpty"]
+    case "number": return ["eq", "ne", "gt", "lt", "isEmpty"]
+    case "id": return ["eq", "ne", "gt", "lt"]
+    case "createdTime": case "editedTime": return ["is", "before", "after", "within"]
+    case "select": case "status": return ["isAnyOf", "isNoneOf", "isEmpty"]
+    case "relation": case "multiSelect": return ["contains", "doesNotContain", "isEmpty"]
+    case "files": return ["contains", "doesNotContain", "isEmpty", "isNotEmpty"]
+    // Read as the type it works out to (relations.ts), so it never gets here.
+    case "button":
+    case "rollup":
+    case "formula": return []
+    case "date": return ["is", "before", "after", "within", "isEmpty"]
+    case "checkbox": return ["is"]
+  }
+}
 export function conditionHolds(property: Property, condition: Condition, value: CellValue, context: ViewContext): boolean | null {
   const { op } = condition, want = condition.value;
   if (op === "isEmpty") return isEmptyValue(value);
@@ -542,6 +570,7 @@ export function conditionHolds(property: Property, condition: Condition, value: 
     // Read as the type it works out to (relations.ts), so a condition never meets it here.
     case "rollup":
     case "formula":
+    case "button":
       return null;
     case "files": {
       if (typeof want !== "string") return null;
@@ -638,6 +667,7 @@ function compareValues(property: Property, a: CellValue, b: CellValue): number {
   switch (property.type) {
     case "rollup":
     case "formula":
+    case "button":
       return 0;
     case "files":
       return collator.compare((a as FileValue[])[0]?.name ?? "", (b as FileValue[])[0]?.name ?? "");
@@ -789,7 +819,7 @@ export function newRowValues(db: Database, view: View, context: ViewContext, gro
 
 /** The group of rows with no value. */
 export const noGroupKey = "none";
-const canGroup = (type: PropertyType): boolean => type !== "text" && type !== "id" && type !== "rollup" && type !== "formula";
+const canGroup = (type: PropertyType): boolean => type !== "text" && type !== "id" && type !== "rollup" && type !== "formula" && type !== "button";
 const canMakeColumns = (type: PropertyType): boolean => type === "select" || type === "status" || type === "checkbox" || type === "relation";
 /** A rollup groups by what it works out to, whatever that is, though a card can't be dragged there, so it makes no board. */
 const groupsBy = (p: Property, layout: ViewLayout): boolean => (layout === "chart" ? !p.rollup && (p.formula !== undefined || (canGroup(p.type) && p.type !== "files")) : layout === "board" ? !p.rollup && p.formula === undefined && canMakeColumns(p.type) : Boolean(p.rollup) || p.formula !== undefined || canGroup(p.type));
@@ -976,11 +1006,11 @@ export function groupValue(property: Property, key: string, raw: unknown, fromKe
 // ---------------------------------------------------------------- commands' inputs
 
 /** A property as `addProperty` sends it: options without ids get them; a Status with none gets the three groups. */
-export interface PropertyInput { id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
+export interface PropertyInput { button?: { label: string; steps: string }; id: string; name: string; type: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
 /** One schema or view change: one write, the database page. */
 export type DatabaseChange =
   | { kind: "addProperty"; property: PropertyInput; /** the view it was added from: it shows there; other views list it too */ viewId?: string; /** in that view, placed before this column (R4-18's Insert); last otherwise */ beforeId?: string }
-  | { kind: "updateProperty"; propertyId: string; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
+  | { kind: "updateProperty"; propertyId: string; button?: { label: string; steps: string }; name?: string; type?: PropertyType; options?: Option[]; format?: NumberFormat; withTime?: boolean; prefix?: string; target?: string; limit?: 1 | null; rollup?: Rollup; formula?: string }
   /** "Show on Books": a relation's other side, made as a property of the target, or gone with null. */
   | { kind: "setDependencies"; on: { blockedBy: string; blocking: string; date: string; end?: string; mode: DependencyMode; avoidWeekends?: boolean; using?: boolean } | null }
   | { kind: "setSubItems"; on: { parent: string; sub: string; using?: boolean } | null }
@@ -994,7 +1024,13 @@ export type DatabaseChange =
   | { kind: "setRepeat"; templateId: string; repeat: Omit<Repeat, "last" | "lastRan"> | null }
   | { kind: "setDefaultTemplate"; templateId: string | null }
   | { kind: "removeView"; viewId: string }
-  | { kind: "moveView"; viewId: string; beforeId: string | null };
+  | { kind: "moveView"; viewId: string; beforeId: string | null }
+  | { kind: "addAutomation"; automation: Automation }
+  /** What the editor saves. A rule that had stopped comes back on, as its fix is what's being saved; one switched off by hand stays off. */
+  | { kind: "updateAutomation"; automation: Automation }
+  | { kind: "setAutomationActive"; automationId: string; active: boolean }
+  | { kind: "removeAutomation"; automationId: string }
+  | { kind: "moveAutomation"; automationId: string; beforeId: string | null };
 /** One row's edit: values by column id (`title` for the title), null clears; `expected`: those columns as the edit saw them. */
 export interface RowEdit { pageId: string; values: Record<string, Json>; expected: Record<string, Json>; /** The database the sender thinks it's in: a tab that missed a move is refused rather than writing a property across (move-row §7). */ databaseId?: string }
 
@@ -1007,6 +1043,7 @@ const everyCalc: CalcKind[] = ["countAll", "countValues", "countUnique", "countE
 /** What a column of this type can add up to, in the menu's order. */
 export function calcChoices(type: PropertyType): CalcKind[] {
   switch (type) {
+    case "button": return [];
     case "number": return [...everyCalc, "sum", "average", "median", "min", "max", "range"];
     case "date":
     case "createdTime":
@@ -1098,7 +1135,7 @@ function cleanCalculations(db: Database, input: unknown): Record<string, CalcKin
   return out;
 }
 
-export const typeLabels: Record<PropertyType, string> = { text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", relation: "Relation", files: "Files", rollup: "Rollup", formula: "Formula", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
+export const typeLabels: Record<PropertyType, string> = { button: "Button", text: "Text", number: "Number", select: "Select", multiSelect: "Multi-select", status: "Status", date: "Date", checkbox: "Checkbox", url: "URL", email: "Email", phone: "Phone", relation: "Relation", files: "Files", rollup: "Rollup", formula: "Formula", createdTime: "Created time", editedTime: "Edited time", id: "ID" };
 const hasOptions = (type: PropertyType): boolean => type === "select" || type === "multiSelect" || type === "status";
 
 function cleanName(value: unknown, what: string): string {
@@ -1151,6 +1188,7 @@ function checkLinks(ws: Workspace, databaseId: string, db: Database, property: P
   const source = target.database.properties.find((p) => p.id === read);
   if (!source) throw new DatabaseError("Property not found");
   if (source.type === "rollup") throw new DatabaseError("A rollup can't read another rollup");
+  if (source.type === "button") throw new DatabaseError("A rollup can't read a button");
   if (source.type === "formula") { const problem = rollupProblem(worldOf(ws), databaseId, property); if (problem) throw new DatabaseError(problem); }
 }
 /**
@@ -1202,6 +1240,10 @@ function cleanProperty(input: PropertyInput, db: Database, except?: string): Pro
     if (input.limit === 1) property.limit = 1;
   }
   if (input.type === "rollup") property.rollup = cleanRollup(input.rollup);
+  if (input.type === "button") {
+    const button = input.button as { label?: unknown; steps?: unknown } | undefined;
+    property.button = { label: typeof button?.label === "string" ? button.label.slice(0, limits.name) : "", steps: typeof button?.steps === "string" && button.steps.length <= limits.buttonSteps ? button.steps : "" };
+  }
   if (input.type === "formula") {
     if (input.formula !== undefined && (typeof input.formula !== "string" || input.formula.length > limits.formula)) throw new DatabaseError("That formula is too long");
     property.formula = input.formula ?? "";
@@ -1362,10 +1404,17 @@ function mirrorOf(ws: Workspace, property: Property): { db: Database; property: 
   const other = isDatabase(target) ? target.database.properties.find((p) => p.id === property.mirror) : undefined;
   return other ? { db: target!.database!, property: other, title: target!.title.trim() || "Untitled" } : null;
 }
+function cleanAutomation(input: Automation): Automation {
+  if (!input || typeof input !== "object") throw new DatabaseError("Invalid automation");
+  const triggers = (Array.isArray(input.triggers) ? input.triggers : []).map((t) => t.kind === "row-added" ? { kind: t.kind } : { kind: t.kind, propertyId: checkId(t.propertyId), name: String(t.name ?? "").slice(0, limits.name), ...(t.condition ? { condition: t.condition } : {}) }) as Automation["triggers"];
+  if (typeof input.steps !== "string" || input.steps.length > limits.buttonSteps) throw new DatabaseError("Invalid automation");
+  return { id: checkId(input.id), name: cleanName(input.name, "An automation"), active: input.active !== false, triggers, ...(input.any ? { any: true as const } : {}), ...(input.viewId ? { viewId: checkId(input.viewId) } : {}), steps: input.steps };
+}
 export function changeDatabase(ws: Workspace, page: Page & { database: Database }, change: DatabaseChange): string {
   const db = page.database;
   const property = (id: string): Property => { const p = db.properties.find((x) => x.id === id); if (!p) throw new DatabaseError("Property not found"); return p; };
   const view = (id: string): View => { const v = db.views.find((x) => x.id === id); if (!v) throw new DatabaseError("View not found"); return v; };
+  const automationOf = (id: string): Automation => { const r = db.automations?.find((x) => x.id === id); if (!r) throw new DatabaseError("Automation not found"); return r; };
   switch (change?.kind) {
     case "addProperty": {
       if (db.properties.length >= limits.properties) throw new DatabaseError("Too many properties");
@@ -1387,7 +1436,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       const old = property(change.propertyId);
       const type = change.type ?? old.type;
       if (old.mirror && type !== "relation") throw new DatabaseError("Turn off its other side first");
-      const next = cleanProperty({ id: old.id, name: change.name ?? old.name, type, options: change.options ?? (makesOptions(old, type) ? optionsFromText(ws, page.id, old, type) : old.options), format: change.format ?? old.format, withTime: change.withTime ?? old.withTime, prefix: change.prefix ?? old.prefix, target: change.target ?? old.target, limit: change.limit === null ? undefined : change.limit ?? old.limit, rollup: change.rollup ?? old.rollup, formula: change.formula ?? old.formula }, db, old.id);
+      const next = cleanProperty({ ...(change.button ?? old.button ? { button: change.button ?? old.button } : {}), id: old.id, name: change.name ?? old.name, type, options: change.options ?? (makesOptions(old, type) ? optionsFromText(ws, page.id, old, type) : old.options), format: change.format ?? old.format, withTime: change.withTime ?? old.withTime, prefix: change.prefix ?? old.prefix, target: change.target ?? old.target, limit: change.limit === null ? undefined : change.limit ?? old.limit, rollup: change.rollup ?? old.rollup, formula: change.formula ?? old.formula }, db, old.id);
       if (old.mirror) { if (next.target !== old.target) throw new DatabaseError("Turn off its other side first"); next.mirror = old.mirror; }
       checkLinks(ws, page.id, db, next);
       const notes: string[] = [];
@@ -1594,6 +1643,36 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
     case "moveView":
       db.views = move(db.views, change.viewId, change.beforeId);
       return "View moved";
+    case "addAutomation": {
+      const rule = cleanAutomation(change.automation);
+      if (db.automations?.some((r) => r.id === rule.id)) throw new DatabaseError("Automation id already in use");
+      if ((db.automations?.length ?? 0) >= limits.automations) throw new DatabaseError(`${limits.automations} automations at most`);
+      db.automations = [...(db.automations ?? []), rule];
+      return `${rule.name} added`;
+    }
+    case "updateAutomation": {
+      const old = automationOf(change.automation.id), rule = cleanAutomation(change.automation);
+      db.automations = db.automations!.map((r) => (r === old ? { ...rule, active: old.paused ? true : old.active, ...(old.lastRanAt ? { lastRanAt: old.lastRanAt } : {}) } : r));
+      return `${rule.name} changed`;
+    }
+    case "setAutomationActive": {
+      const old = automationOf(change.automationId);
+      db.automations = db.automations!.map((r) => { if (r !== old) return r; const { paused: _paused, ...rest } = r; return { ...rest, active: change.active }; });
+      return `${old.name} ${change.active ? "on" : "off"}`;
+    }
+    case "removeAutomation": {
+      const old = automationOf(change.automationId);
+      db.automations = db.automations!.filter((r) => r !== old);
+      if (!db.automations.length) delete db.automations;
+      return `${old.name} deleted`;
+    }
+    case "moveAutomation": {
+      automationOf(change.automationId);
+      const list = db.automations!, from = list.findIndex((r) => r.id === change.automationId), [rule] = [list[from]!], rest = list.filter((_, i) => i !== from), to = change.beforeId === null ? rest.length : rest.findIndex((r) => r.id === change.beforeId);
+      if (to < 0) throw new DatabaseError("Automation not found");
+      db.automations = [...rest.slice(0, to), rule, ...rest.slice(to)];
+      return "Automation moved";
+    }
     default:
       throw new DatabaseError("Unknown change");
   }
