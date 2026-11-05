@@ -1825,6 +1825,35 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     selectionFocus.current?.focus()
     window.getSelection()?.removeAllRanges()
   }
+  /**
+   * B88, B89: a key never takes out a block holding more than its own line: a table, a card, a synced block. Its handle is how
+   * it's chosen. A divider holds nothing and comes back with Undo, so it's as before. Selected whole by arriving at it, the block
+   * stays. So does a line beside it, at that end. An empty one goes, leaving no caret to run on into the block, and not on a held
+   * key, which clearing a line would carry straight on to here. True when this has dealt with the key.
+   */
+  function keptBlock(key: 'Backspace' | 'Delete', held: boolean) {
+    const { selection } = editor.prosemirrorState
+    if (selection instanceof NodeSelection) {
+      const inner = selection.node.type.name === 'blockContainer' ? selection.node.firstChild! : selection.node
+      return inner.isBlock && !inner.inlineContent && inner.type.name !== 'divider' && inner.type.name !== 'table'
+    }
+    const { $from } = selection, length = $from.parent.content.size
+    if (!selection.empty || (key === 'Backspace' ? $from.parentOffset > 0 : $from.parentOffset < length)) return false
+    const { block, prevBlock, parentBlock } = editor.getTextCursorPosition()
+    // Backspace at the start of a bullet, a heading or a to-do makes it a plain line first.
+    if (key === 'Backspace' && block.type !== 'paragraph') return false
+    const holds = (b?: { type: string; content?: unknown }) => Boolean(b) && !Array.isArray(b!.content) && b!.type !== 'divider' && b!.type !== 'table'
+    const flat = deepNodes(nodes()), at = flat.findIndex(n => n.id === block.id)
+    const before = holds(prevBlock) ? prevBlock : flat[at - 1], after = flat[at + 1]
+    const [beside, other] = key === 'Backspace' ? [before, after] : [after, before]
+    if (length > 0 || block.type !== 'paragraph') return holds(beside)
+    if (!holds(beside) && (beside || !holds(other))) return false
+    if (held || holds(parentBlock)) return true
+    editor.removeBlocks([block.id])
+    if (other && Array.isArray(other.content)) { editor.setTextCursorPosition(other.id, other === after ? 'start' : 'end'); editor.focus() }
+    else editor.domElement?.blur()
+    return true
+  }
   /** B33: the save's own decision, on the document as it is after the delete: a task with no row left anywhere goes. */
   const goesWithLine = (taskId: unknown, after: readonly EditorNode[]) => {
     if (typeof taskId !== 'string') return false
@@ -2018,8 +2047,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if (!block || !isDatabase(source)) return
       editor.insertBlocks([{ type: 'database', props: { pageId: source.id, view: linkedViewJson(linkedViewOf(source.database, (block.props as { view?: string }).view)) } } as never], blockId, 'after')
     },
-    // Esc from the table: the block selected whole again, in the page editor (design §10).
-    select: blockId => { if (editor.getBlock(blockId)) { editor.setTextCursorPosition(blockId); editor.focus() } },
+    // Esc from the table: the block selected whole again, in the page editor (design §10). Chosen, as by its handle.
+    select: blockId => { if (editor.getBlock(blockId)) select(blockId) },
   }), [editor, page.id])
   const syncedActions = useMemo<SyncedActions>(() => ({
     hostPageId: page.id,
@@ -2027,6 +2056,12 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
     unsync: (blockId, all) => { void endPlaceRef.current({ type: 'unsync-block', pageId: page.id, blockId, ...(all ? { all: true as const } : {}) }) },
     remove: blockId => { void endPlaceRef.current({ type: 'delete-synced-place', pageId: page.id, blockId }) },
   }), [page.id])
+  // With no caret a Backspace lands on the page itself, and a browser can take that as going back a page (Playwright's WebKit does), where the next key edits what it went back to.
+  useEffect(() => {
+    const stay = (e: KeyboardEvent) => { if (e.key === 'Backspace' && e.target === document.body) e.preventDefault() }
+    document.addEventListener('keydown', stay)
+    return () => document.removeEventListener('keydown', stay)
+  }, [])
   const [dock, setDock] = useState<HTMLElement | null>(null)
   const [picker, setPicker] = useState<{ top: number; left: number } | null>(null)
   useEffect(() => setDock(document.getElementById('editor-dock')), [])
@@ -2668,6 +2703,8 @@ export function PageEditor({ page, workspace }: { page: Page; workspace: Workspa
       if ((e.key === 'Delete' || e.key === 'Backspace') && selected.current.length) {
         e.preventDefault(); e.stopPropagation()
         deleteSelected()
+      } else if ((e.key === 'Delete' || e.key === 'Backspace') && !e.nativeEvent.isComposing && e.target === editor.domElement && keptBlock(e.key, e.repeat)) {
+        e.preventDefault(); e.stopPropagation()
       } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && caretAtDocumentStart() && plainFirstLine()) {
         e.preventDefault(); e.stopPropagation()
       } else if (e.key === 'Backspace' && !e.nativeEvent.isComposing && page.type === 'document' && caretAtDocumentStart()) {
