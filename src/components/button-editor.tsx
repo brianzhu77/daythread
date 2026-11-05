@@ -5,7 +5,7 @@ import { en } from '@blocknote/core/locales'
 import { filterSuggestionItems, SuggestionMenu } from '@blocknote/core/extensions'
 import { getDefaultReactSlashMenuItems, SuggestionMenuController, useCreateBlockNote } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/shadcn'
-import { isTodosTarget, readSteps, safeUrl, stepKinds, stepProblem, stepTitle, tapValueName, tapValues, writeSteps, type ButtonSet, type ButtonStep, type ButtonValue, type StepKind } from '../domain/buttons'
+import { isTodosTarget, pageKinds, propertyKinds, readSteps, safeUrl, stepKinds, stepProblem, stepTitle, tapValueName, tapValues, writeSteps, type ButtonSet, type ButtonStep, type ButtonValue, type StepKind } from '../domain/buttons'
 import { isDatabase, isReadOnly, propertyOf, titleId, todosSourceId, type Condition, type Database, type Json, type Property } from '../domain/database'
 import { readDate } from '../domain/date-reading'
 import type { EditorNode } from '../domain/editor-document'
@@ -20,7 +20,8 @@ import { useWide } from './property-editors'
 import { useWorkspace } from './use-day'
 
 export interface ButtonDraft { label: string; steps: string }
-type Open = { pageId: string; initial: ButtonDraft; anchor: Element | null; onDone: (draft: ButtonDraft) => void }
+/** `pageId` null: a Button property's, drawn by the app's own host, with the database whose row it acts on. */
+type Open = { pageId: string | null; initial: ButtonDraft; anchor: Element | null; onDone: (draft: ButtonDraft) => void; rowsOf?: Database }
 let open: Open | null = null
 const listeners = new Set<() => void>()
 const notify = () => listeners.forEach(l => l())
@@ -28,32 +29,33 @@ const subscribe = (l: () => void) => { listeners.add(l); return () => { listener
 export function openButtonEditor(next: Open) { open = next; notify() }
 const closeEditor = () => { open = null; notify() }
 
-const newStep = (kind: StepKind): ButtonStep => {
+export const newStep = (kind: StepKind): ButtonStep => {
   const id = crypto.randomUUID()
   switch (kind) {
     case 'insert': return { id, kind, place: 'below', blocks: [] }
     case 'add-row': return { id, kind, databaseId: '', databaseName: '', title: '', set: [] }
     case 'edit-rows': return { id, kind, databaseId: '', databaseName: '', filter: [], set: [] }
+    case 'edit-property': return { id, kind, set: [] }
     case 'open': return { id, kind, target: { kind: 'page', pageId: '', name: '' } }
     case 'confirm': return { id, kind, text: '' }
   }
 }
-const problemOf = (steps: readonly ButtonStep[], i: number) => stepProblem(steps[i]!, steps.slice(0, i))
+export const problemOf = (steps: readonly ButtonStep[], i: number) => stepProblem(steps[i]!, steps.slice(0, i))
 
 /** The open editor and any confirmation. One per page editor, drawing only what's for its page. */
-export function ButtonEditorHost({ pageId, schema }: { pageId: string; schema: never }) {
+export function ButtonEditorHost({ pageId, schema }: { pageId: string | null; schema: never }) {
   const current = useSyncExternalStore(subscribe, () => open, () => null)
   const question = useSyncExternalStore(subscribeRunning, currentQuestion, () => null)
   return <>
     {current?.pageId === pageId && <Editor key={current.initial.steps + current.initial.label} open={current} schema={schema} />}
-    {question && createPortal(<div className="button-ask-scrim"><div className="button-ask" role="alertdialog" aria-label="Confirm">
+    {pageId === null && question && createPortal(<div className="button-ask-scrim"><div className="button-ask" role="alertdialog" aria-label="Confirm">
       <p>{question.text}</p>
       <div className="button-ask-actions"><button type="button" onClick={() => question.answer(false)}>Cancel</button><button type="button" className="is-primary" autoFocus onClick={() => question.answer(true)}>Continue</button></div>
     </div></div>, document.body)}
   </>
 }
 
-function Editor({ open: { initial, anchor, onDone }, schema }: { open: Open; schema: never }) {
+function Editor({ open: { initial, anchor, onDone, rowsOf }, schema }: { open: Open; schema: never }) {
   const { workspace } = useWorkspace()
   const wide = useWide(), keyboardTop = useKeyboardTop()
   const [label, setLabel] = useState(initial.label)
@@ -109,8 +111,8 @@ function Editor({ open: { initial, anchor, onDone }, schema }: { open: Open; sch
         })}
         <button type="button" role="menuitem" onClick={() => setAt('kinds')}>+ Add step</button>
       </>}
-      {at === 'kinds' && stepKinds.map(({ kind, name }) => <button key={kind} type="button" role="menuitem" onClick={() => { setSteps(list => [...list, newStep(kind)]); setAt(steps.length) }}>{name}</button>)}
-      {typeof at === 'number' && steps[at] && <StepPage key={steps[at]!.id} step={steps[at]!} problem={problemOf(steps, at)} canOpenMade={steps.slice(0, at).some(s => s.kind === 'add-row')} workspace={workspace} schema={schema} onChange={next => put(at, next)} />}
+      {at === 'kinds' && stepKinds.filter(k => (rowsOf ? propertyKinds : pageKinds).includes(k.kind)).map(({ kind, name }) => <button key={kind} type="button" role="menuitem" onClick={() => { setSteps(list => [...list, newStep(kind)]); setAt(steps.length) }}>{name}</button>)}
+      {typeof at === 'number' && steps[at] && <StepPage key={steps[at]!.id} step={steps[at]!} problem={problemOf(steps, at)} canOpenMade={steps.slice(0, at).some(s => s.kind === 'add-row')} workspace={workspace} schema={schema} {...(rowsOf ? { rowsOf } : {})} onChange={next => put(at, next)} />}
     </div>
   </>, document.body)
 }
@@ -122,9 +124,10 @@ const fromDatabase = (workspace: Workspace, id: string): { title: string; databa
 }
 const settable = (database: Database): Property[] => database.fixed ? database.properties.filter(p => todoBarColumns.has(p.id)) : database.properties.filter(p => !isReadOnly(p) && p.id !== titleId)
 
-function StepPage({ step, problem, canOpenMade, workspace, schema, onChange }: { step: ButtonStep; problem: string | null; canOpenMade: boolean; workspace: Workspace; schema: never; onChange(next: ButtonStep): void }) {
+export function StepPage({ step, problem, canOpenMade, workspace, schema, rowsOf, onChange }: { step: ButtonStep; problem: string | null; canOpenMade: boolean; workspace: Workspace; schema: never; rowsOf?: Database; onChange(next: ButtonStep): void }) {
   const said = problem && <p className="button-step-problem" role="status">{problem}</p>
   switch (step.kind) {
+    case 'edit-property': return <>{said}{rowsOf && <SetList database={rowsOf} set={step.set} onChange={set => onChange({ ...step, set })} />}</>
     case 'confirm': return <>{said}<textarea className="button-editor-field" aria-label="Confirmation words" rows={3} autoFocus value={step.text} onChange={e => onChange({ ...step, text: e.target.value })} /></>
     case 'insert': return <>{said}
       <label className="database-menu-row">Where
@@ -203,11 +206,12 @@ function SetList({ database, set, onChange }: { database: Database; set: ButtonS
             {property.type !== 'relation' && <option value="fixed">A value</option>}
           </select>}
           {s.value.kind === 'fixed' && <FixedValue property={property} raw={s.value.raw} onChange={raw => put({ kind: 'fixed', raw })} />}
+          {(property.type === 'multiSelect' || property.type === 'relation') && <select aria-label={`${s.name} how`} value={s.mode ?? 'set'} onChange={e => onChange(set.map((x, j) => { if (j !== i) return x; const { mode: _mode, ...rest } = x; return e.target.value === 'set' ? rest : { ...rest, mode: e.target.value as 'add' | 'remove' } }))}><option value="set">Replace</option><option value="add">Add</option><option value="remove">Remove</option></select>}
         </> : <span className="database-rule-deleted">(deleted)</span>}
         <button type="button" className="database-rule-remove" aria-label={`Stop setting ${s.name}`} onClick={() => onChange(set.filter((_, j) => j !== i))}>×</button>
       </div>
     })}
-    {free.length > 0 && <select aria-label="Set a property" value="" onChange={e => { const p = free.find(x => x.id === e.target.value); if (p) onChange([...set, { id: p.id, name: p.name, value: firstValue(p) }]) }}><option value="">+ Set a property…</option>{free.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
+    {free.length > 0 && <select aria-label="Set a property" value="" onChange={e => { const p = free.find(x => x.id === e.target.value); if (p) onChange([...set, { id: p.id, name: p.name, type: p.type, value: firstValue(p) }]) }}><option value="">+ Set a property…</option>{free.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>}
   </>
 }
 

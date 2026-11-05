@@ -28,7 +28,7 @@ Notion's five: **Vertical bar, Horizontal bar, Line, Donut, Number.** Number is 
 | **Style** | Height, grid lines, labels on or off, legend | Value in the centre | n/a |
 
 - **The first time,** like Board's "Columns come from": it asks for What to show, listing the properties it can use, and defaults Measure to Count.
-- **What can be charted,** following Notion: not Button, ID, Files, Rollup or a list-output Formula. A date axis groups by day, week (from his Week starts setting, R3-20), month or year, and shows empty periods as zero so a line doesn't lie about gaps.
+- **What can be charted,** following Notion: not Button, ID, Files, Rollup or a list-output Formula. A date axis groups by day, week (from his Week starts setting, R3-20), month or year, and shows every period between the first and the last. **A period with no numbers depends on the Measure (corrected 2026-11-05, Jazz 60daebcf, as #162 is built):** Count draws zero, as nothing was counted. Sum and the rest have no value, so a line breaks and a bar is absent, because a blank isn't a zero (§6). Cumulative carries its running total flat. A line never joins across a gap.
 - **Same numbers as everywhere:** the view's filter applies, and Sum and the rest match column calculations (R3-8) on the same rows.
 
 ## 4. Colour (Jazz's call, fb7d3274, reading only, not prototyped)
@@ -43,8 +43,8 @@ I ran the dataviz skill's palette validator on four greys, `#111111, #555555, #8
 **The rule:**
 
 - **Up to 4 greys, from the app's tokens** (`--ink`, `--ink-2`, `--ink-3` and a lighter grey, not hex), so a chart follows the theme.
-- **A grey follows a value's order, not its size:** a Select or Status uses its option order, and other values their sorted order. A filter never repaints a value. A new value that sorts earlier can, among values with no options, and that's accepted.
-- **Beyond 4 values:** the rest fold into "Other", which a tap opens, with the whole list in the table below. It's drawn as an outline with no fill, not a fifth grey, so it can't be mistaken for a value. Nothing's missing, though Notion would draw up to 50.
+- **Which values get a grey follows size, and which grey follows order (changed 2026-11-05, Lead 836135d4, from Jazz 60daebcf):** the four largest are named, ranked by value on a donut and by a series' total under Group by. Among those four, a grey follows the axis's order: a Select or Status's option order, and other values their sorted order. So a filter repaints a value only when the top four change, which is the accepted cost: folding by order could leave the biggest value unnamed, inside an Other covering most of the ring.
+- **Beyond 4 values:** the smaller ones fold into "Other", which a tap opens, with the whole list in the table below. It's drawn as an outline with no fill, not a fifth grey, so it can't be mistaken for a value. Nothing's missing, though Notion would draw up to 50.
 - **Tap to focus:** tapping a series or legend entry dims the rest, since greys are hardest to follow on a line chart.
 - **Always:** a legend for 2 or more series, direct labels where they fit, and a 2 px gap between fills. A donut's lightest slice needs its label outside.
 - **No two y-axes,** ever.

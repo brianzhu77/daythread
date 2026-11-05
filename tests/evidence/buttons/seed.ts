@@ -13,6 +13,17 @@ await run({ type: 'create-database', pageId: 'runs', homeBlockId: null, title: '
 await run({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'when', name: 'When', type: 'date' } } } as never)
 await run({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'n', name: 'N', type: 'number' } } } as never)
 await run({ type: 'add-row', databaseId: 'runs', pageId: 'r1', title: 'One', values: { n: 1 }, at } as never)
+await run({ type: 'add-row', databaseId: 'runs', pageId: 'r2', title: 'Two', values: { n: 2 }, at } as never)
+if (process.argv[3] === 'property') {
+  const bump: ButtonStep[] = [{ id: 'e', kind: 'edit-property', set: [{ id: 'n', name: 'N', value: { kind: 'fixed', raw: 5 } }] }]
+  await run({ type: 'change-database', pageId: 'runs', change: { kind: 'addProperty', property: { id: 'go', name: 'Go', type: 'button', button: { label: process.argv[4] === 'long' ? 'A very long label that goes on and on and on, far past what any row can hold at either width of this app' : 'Bump', steps: writeSteps(bump) } } } } as never)
+  const shown = ws.pages.find(p => p.id === 'runs')!.database!.views[0]!
+  await run({ type: 'change-database', pageId: 'runs', change: { kind: 'updateView', viewId: shown.id, columns: [{ id: 'n' }, { id: 'go' }] } } as never)
+  await run({ type: 'change-database', pageId: 'runs', change: { kind: 'addView', view: { ...ws.pages.find(p => p.id === 'runs')!.database!.views[0]!, id: 'v-timeline', name: 'timeline', layout: 'timeline', dateBy: 'when', timelineTable: true } as never } } as never)
+  if (process.argv[4] === 'timeline') for (const id of ['r1', 'r2']) await run({ type: 'set-values', pageId: id, values: { when: { start: new Date().toLocaleDateString('en-CA') } }, expected: {}, at } as never)
+  if (process.argv[4] === 'timeline') await run({ type: 'change-database', pageId: 'runs', change: { kind: 'updateView', viewId: shown.id, layout: 'timeline', dateBy: 'when', timelineTable: true } } as never)
+  for (const layout of ['list', 'board', 'gallery'] as const) await run({ type: 'change-database', pageId: 'runs', change: { kind: 'addView', view: { ...ws.pages.find(p => p.id === 'runs')!.database!.views[0]!, id: `v-${layout}`, name: layout, layout } as never } } as never)
+}
 await run({ type: 'create-document', title: 'Notes', body: '', pageId: 'notes' })
 await run({ type: 'create-document', title: 'Other', body: '', pageId: 'other' })
 const line = (id: string, text: string, type = 'paragraph') => ({ id, type, props: {}, content: [{ type: 'text', text, styles: {} }], children: [] })
@@ -29,9 +40,16 @@ const nodes = [
   button('b-url', 'To a link', [add, { id: 's-u', kind: 'open', target: { kind: 'url', url: 'https://buttons.test/x' } }]),
   button('b-gone', 'Gone prop', [{ ...add, set: [{ id: 'nope', name: 'Status', value: { kind: 'fixed', raw: 1 } }] }]),
   button('b-todo', 'New to-do', [{ id: 's-t', kind: 'add-row', databaseId: 'source:tasks', databaseName: 'To-dos', title: 'From a button', set: [] }]),
+  button('b-plan', 'Plan to-dos', [add, { id: 's-p', kind: 'edit-rows', databaseId: 'source:tasks', databaseName: 'To-dos', filter: [], set: [{ id: 'planned', name: 'Planned', value: { kind: 'fixed', raw: { start: '2031-03-04' } } }] }]),
+  button('b-bad', 'Bad plan', [add, { id: 's-b', kind: 'edit-rows', databaseId: 'source:tasks', databaseName: 'To-dos', filter: [], set: [{ id: 'status', name: 'Status', value: { kind: 'fixed', raw: 'open' } }, { id: 'planned', name: 'Planned', value: { kind: 'fixed', raw: { start: 'not a date' } } }] }]),
   button('', 'x', []),
 ].filter(n => n.id)
 nodes.push({ id: 'b-long', type: 'button', props: { label: 'A very long label that goes on and on and on, far past what any line can hold at either width of this app', steps: writeSteps([add]) }, children: [] } as never)
 nodes.push(line('l2', 'Last line') as never)
 await run({ type: 'save-editor', pageId: 'notes', expectedContent: pageContentKey(ws.pages.find(p => p.id === 'notes')!), document: JSON.stringify(nodes) } as never)
+for (const [title, done] of [['Open to-do', false], ['Cancelled to-do', true]] as const) {
+  await run({ type: 'ensure-day', date: '2031-03-01' })
+  await run({ type: 'add-task', pageId: 'day:2031-03-01', title, plannedOn: '2031-03-01' })
+  if (done) await run({ type: 'task-status', taskId: ws.tasks.find(t => t.title === title)!.id, status: 'cancelled', today: '2031-03-01' })
+}
 console.log('seeded', process.argv[2])

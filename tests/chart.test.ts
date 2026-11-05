@@ -1,7 +1,7 @@
 // Chart (docs/design/chart.md): its numbers are the view's own rows and groups, so they match a table and a column calculation.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { axisLabels, axisStep, chartData, chartMeasure, chartTicks, chartValue, shortNumber, type ChartPoint } from '../src/domain/chart.ts'
+import { axisLabels, axisStep, chartData, chartMeasure, chartTicks, chartValue, donutSlices, otherKey, shortNumber, type ChartPoint } from '../src/domain/chart.ts'
 import { columnCalc, groupableProperties, viewRows, type Database, type View } from '../src/domain/database.ts'
 import { commandSchema } from '../src/domain/command-schema.ts'
 import type { Action } from '../src/domain/types.ts'
@@ -121,6 +121,28 @@ test('a calculation keeps a large number exact, and still cleans a float', () =>
   assert.equal((columnCalc(h.db(), [h.page('big')], 'pages', 'sum') as { value: number }).value, 123456789.125)
   h.run({ type: 'add-row', databaseId: 'list', pageId: 'p1', title: 'p1', values: { pages: 0.1 } as never, at }); h.run({ type: 'add-row', databaseId: 'list', pageId: 'p2', title: 'p2', values: { pages: 0.2 } as never, at })
   assert.equal((columnCalc(h.db(), [h.page('p1'), h.page('p2')], 'pages', 'sum') as { value: number }).value, 0.3)
+})
+test('a donut: the four largest are named, with greys in axis order among them, a blank or a zero is no slice, a loss is said, and the rest fold into Other', () => {
+  const p = (key: string, value: number | null, order: number) => ({ key, name: key, rows: [{ id: `r-${key}` }] as never[], value, order, result: { type: 'count' as const, value: value ?? 0 } })
+  const { slices, total } = donutSlices([p('a', 3, 0), p('b', 0, 1), p('c', null, 2), p('d', 1, 3)])
+  assert.equal(total, 4); assert.deepEqual(slices.map(s => [s.key, s.share, s.grey]), [['a', 0.75, 0], ['d', 0.25, 1]])
+  // The biggest has a name, wherever it comes along the axis.
+  const eight = donutSlices([1, 1, 1, 1, 1, 1, 1, 12].map((v, i) => p(`v${i}`, v, i)))
+  assert.ok(eight.slices.some(s => s.key === 'v7' && s.grey === 3)); assert.equal(eight.slices.at(-1)!.key, otherKey); assert.equal(eight.slices.at(-1)!.value, 4); assert.equal(eight.slices.at(-1)!.name, 'Other (4)')
+  assert.equal(eight.slices.at(-1)!.from!.get('r-v4'), 'v4')
+  // Sorted by value, the greys don't move.
+  assert.deepEqual(donutSlices([p('z', 9, 2), p('y', 1, 0), p('x', 2, 1)]).slices.map(s => [s.key, s.grey]), [['z', 2], ['y', 0], ['x', 1]])
+  // A loss can't be a slice: it's listed, for the legend to say.
+  const loss = donutSlices([p('gain', 100, 0), p('loss', -40, 1)]); assert.deepEqual(loss.undrawn.map(u => u.key), ['loss']); assert.equal(loss.slices.length, 1)
+  assert.deepEqual(donutSlices([p('a', 0, 0)]).slices, [])
+  // Cumulative means nothing on a donut, so it's left out of its values.
+  const h = shelf(), v = view({ chart: { form: 'donut', cumulative: true } })
+  assert.deepEqual(pairs(of(h, v)).map(x => x[1]), [2, 1, 0, 1])
+})
+test('a line has its points in order, with a blank left as a blank', () => {
+  const h = shelf()
+  assert.deepEqual(pairs(of(h, view({ chart: { form: 'line', measure: { by: 'pages', kind: 'sum' } } }))).map(x => x[1]), [700, 100, null, null])
+  assert.deepEqual(pairs(of(h, view({ chart: { form: 'line', cumulative: true } }))).map(x => x[1]), [2, 3, 3, 1])
 })
 test('a short number for tight places', () => {
   assert.equal(shortNumber(1000000000), '1B'); assert.equal(shortNumber(1234567), '1.2M'); assert.equal(shortNumber(9999), '9,999'); assert.equal(shortNumber(0.5), '0.5'); assert.equal(shortNumber(-25000), '-25K')

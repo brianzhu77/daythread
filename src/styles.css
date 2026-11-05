@@ -67,6 +67,8 @@
   --ink: var(--gray-12);
   --ink-2: var(--gray-11);
   --ink-3: var(--gray-9);
+  /* A chart's fourth grey: the same step differs between the themes (chart.md §4). */
+  --chart-grey-4: var(--gray-8);
   --line: var(--gray-5);
   --check: var(--gray-7);
   --blue: var(--blue-9);
@@ -154,6 +156,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
+    --chart-grey-4: var(--gray-7);
     --gray-1: #111111; --gray-2: #191919; --gray-3: #222222; --gray-4: #2a2a2a; --gray-5: #313131; --gray-6: #3a3a3a;
     --gray-7: #484848; --gray-8: #606060; --gray-9: #6e6e6e; --gray-10: #7b7b7b; --gray-11: #b4b4b4; --gray-12: #eeeeee;
     --blue-1: #0d1520; --blue-2: #111927; --blue-3: #0d2847; --blue-4: #003362; --blue-5: #004074; --blue-6: #104d87;
@@ -2113,9 +2116,33 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 .database-chart-vertical.is-dense .database-chart-bar i { width: 100%; border-radius: 0; }
 .database-chart-labels { position: relative; display: flex; min-height: 16px; margin-left: 44px; }
 .database-chart-labels span { flex: 1 1 0; min-width: 0; padding: 0 2px; overflow: hidden; color: var(--ink-2); font-size: var(--text-caption); line-height: 16px; text-align: center; white-space: nowrap; text-overflow: ellipsis; }
-.database-chart-labels span.is-spanning { text-align: left; }
+.database-chart-labels span.is-spanning { overflow: visible; text-align: left; }
+/* Centred under its own bar, not at the start of the room it has. */
+.database-chart-labels span.is-spanning em { display: inline-block; font-style: normal; white-space: nowrap; }
 /* However few bars are left for it, the last label reads in full, up against the edge. */
 .database-chart-labels span.is-last { position: absolute; right: 0; text-align: right; }
+.database-chart-line-path { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.database-chart-line-path path { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.database-chart-bar u { position: absolute; left: 50%; width: 7px; height: 7px; margin: 0 0 -3.5px -3.5px; border-radius: 50%; background: var(--ink); }
+.database-chart-bar.is-dim u { background: var(--ink-3); }
+.database-chart-bar.is-open u { box-shadow: 0 0 0 3px var(--fill); }
+.database-chart-donut { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; }
+.database-chart-donut-ring { flex: 0 0 auto; width: 180px; height: 180px; }
+.database-chart-donut-ring circle { fill: none; stroke-width: 14; cursor: pointer; }
+.database-chart-donut-ring .is-grey-0 { stroke: var(--ink); } .database-chart-donut-ring .is-grey-1 { stroke: var(--ink-2); } .database-chart-donut-ring .is-grey-2 { stroke: var(--ink-3); } .database-chart-donut-ring .is-grey-3 { stroke: var(--chart-grey-4); }
+.database-chart-donut-ring .is-other { stroke: var(--ink-3); }
+.database-chart-donut-ring .is-other-inside { stroke: var(--page-fill, var(--gray-1)); stroke-width: 11.5; }
+.database-chart-donut-ring .is-dim { opacity: 0.35; }
+.database-chart-donut-total { fill: var(--ink); font-size: 14px; font-weight: var(--weight-semibold); font-variant-numeric: tabular-nums; }
+.database-chart-legend { display: flex; flex: 1 1 200px; flex-direction: column; min-width: 0; max-width: 320px; }
+.database-chart-legend-item { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 28px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-ui); text-align: left; cursor: pointer; }
+.database-chart-legend-item span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.database-chart-legend-item b { color: var(--ink-2); font-size: var(--text-caption); font-weight: var(--weight-regular); font-variant-numeric: tabular-nums; }
+.database-chart-legend-item i { width: 10px; height: 10px; border-radius: 2px; }
+.database-chart-legend-item .is-grey-0 { background: var(--ink); } .database-chart-legend-item .is-grey-1 { background: var(--ink-2); } .database-chart-legend-item .is-grey-2 { background: var(--ink-3); } .database-chart-legend-item .is-grey-3 { background: var(--chart-grey-4); }
+.database-chart-legend-item .is-other { box-sizing: border-box; border: 1px solid var(--ink-3); background: none; }
+.database-chart-legend-item .is-none { background: none; }
+.database-chart-from { color: var(--ink-2); }
 .database-chart-horizontal { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .database-chart-line { display: grid; grid-template-columns: minmax(0, 30%) minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 28px; padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: var(--text-ui); text-align: left; cursor: pointer; touch-action: manipulation; }
 .database-chart-line-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -2135,6 +2162,7 @@ textarea.property-field { overflow: hidden; max-height: calc(8 * 24px + 18px); o
 @media (max-width: 899px) {
   .database-chart-plot { height: 180px; }
   .database-chart-line { min-height: 36px; }
+  .database-chart-legend-item { min-height: 36px; }
   .database-chart-toggle { min-height: 36px; }
   .database-chart .database-chart-row { min-height: 36px; }
 }
@@ -2891,3 +2919,25 @@ button.comment-quote { cursor: pointer; }
   body:has(.comments-pane.is-sheet) .editor-phone-toolbar { display: none; }
 }
 
+
+/* In a cell, 28 drawn, with the row as its tap area (Jazz). */
+.editor-button-pill.is-cell { position: relative; z-index: 1; flex: 0 1 auto; min-width: 0; height: 28px; padding: 0 10px; overflow: visible; font-size: var(--text-meta); max-width: 100%; }
+/* The tap area reaches past what's drawn, as far as its own row's height allows, so a near miss doesn't open the row (Jazz). */
+.editor-button-pill.is-cell::after { content: ''; position: absolute; inset: -4px -4px; }
+.database-list-value:has(> .is-cell), .database-card-value:has(> .is-cell) { overflow: visible; }
+.database-list-values:has(.is-cell) { overflow-x: clip; overflow-y: visible; }
+.row-property-value:has(> .is-cell) { min-width: 0; }
+.database-pane-cell:has(> .is-cell) { display: inline-flex; align-items: center; }
+@media (max-width: 899px) { .database-list-row .editor-button-pill.is-cell::after, td .editor-button-pill.is-cell::after { inset: -8px -4px; } }
+
+/* A database's rules (automations.md §2). */
+.automation-row { display: flex; align-items: center; gap: 2px; min-height: 44px; margin-bottom: 6px; padding: 0 4px; }
+.database-menu .automation-row button { min-height: 28px; padding: 0 6px; border: 0; background: none; color: var(--ink-2); font: inherit; cursor: pointer; }
+.database-menu .automation-row button:disabled { opacity: 0.4; cursor: default; }
+.database-menu .automation-row .automation-open { display: grid; flex: 1; min-width: 0; color: var(--ink); text-align: left; }
+.automation-open > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.database-menu .automation-row .automation-open { gap: 0; line-height: 1.25; }
+.automation-open > small { color: var(--ink-3); font-size: var(--text-meta); overflow-wrap: anywhere; }
+.automation-open > small.is-broken { color: var(--formula-red); }
+@media (max-width: 899px) { .automation-switch { position: relative; } .automation-switch::after { content: ''; position: absolute; inset: -11px -4px; } }
+.automation-trigger { flex-wrap: wrap; }

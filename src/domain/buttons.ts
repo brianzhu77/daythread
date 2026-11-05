@@ -5,20 +5,21 @@ import { flatNodes, pageContentKey, type EditorNode } from './editor-document.ts
 import type { LocalDate, Page } from './types.ts'
 
 /** What a step sets: fixed, or read at the tap (§2). */
-export type ButtonValue = { kind: 'fixed'; raw: Json } | { kind: 'today' } | { kind: 'day' } | { kind: 'page' }
+export type ButtonValue = { kind: 'fixed'; raw: Json } | { kind: 'today' } | { kind: 'day' } | { kind: 'page' } | { kind: 'row'; id: string }
 /** A property a step sets. Its name is kept for when the property's gone: "Status was deleted" (§4.4). */
-export interface ButtonSet { id: string; name: string; value: ButtonValue }
+export interface ButtonSet { id: string; name: string; /** Its type when written, so a change of type shows on a rule at once. */ type?: Property['type']; value: ButtonValue; /** Multi-select and Relation: add to what's there or take away, rather than replace. */ mode?: 'add' | 'remove' }
 export type InsertPlace = 'above' | 'below' | 'top' | 'bottom'
 export type ButtonStep = { id: string } & (
   | { kind: 'insert'; place: InsertPlace; blocks: EditorNode[] }
   | { kind: 'add-row'; databaseId: string; databaseName: string; title: string; set: ButtonSet[] }
+  | { kind: 'edit-property'; set: ButtonSet[] }
   | { kind: 'edit-rows'; databaseId: string; databaseName: string; filter: Condition[]; any?: boolean; set: ButtonSet[] }
   | { kind: 'open'; target: { kind: 'page'; pageId: string; name: string } | { kind: 'url'; url: string } | { kind: 'made' } }
   | { kind: 'confirm'; text: string }
 )
 export type StepKind = ButtonStep['kind']
 export const stepKinds: readonly { kind: StepKind; name: string }[] = [
-  { kind: 'insert', name: 'Insert blocks' }, { kind: 'add-row', name: 'Add row to' }, { kind: 'edit-rows', name: 'Edit rows in' }, { kind: 'open', name: 'Open page or URL' }, { kind: 'confirm', name: 'Show confirmation' },
+  { kind: 'insert', name: 'Insert blocks' }, { kind: 'edit-property', name: 'Edit property' }, { kind: 'add-row', name: 'Add row to' }, { kind: 'edit-rows', name: 'Edit rows in' }, { kind: 'open', name: 'Open page or URL' }, { kind: 'confirm', name: 'Show confirmation' },
 ]
 const version = 1
 /** The text a block keeps. The version is inside it, as this string is all the floor can keep (Lead 962245dd). */
@@ -33,7 +34,10 @@ export function readSteps(stored: unknown): ButtonStep[] {
 }
 /** Who this tap thinks it's pressing: refused if the button's been edited since (§4.8). */
 export const stepsKey = (stored: string): string => pageContentKey({ document: stored })
-export const changesStored = (step: ButtonStep): boolean => step.kind === 'insert' || step.kind === 'add-row' || step.kind === 'edit-rows'
+export const changesStored = (step: ButtonStep): boolean => step.kind === 'insert' || step.kind === 'add-row' || step.kind === 'edit-rows' || step.kind === 'edit-property'
+/** What a step can be on a property: it acts on its row, so blocks have no place to go (§2). */
+export const propertyKinds: readonly StepKind[] = ['edit-property', 'add-row', 'edit-rows', 'open', 'confirm']
+export const pageKinds: readonly StepKind[] = ['insert', 'add-row', 'edit-rows', 'open', 'confirm']
 /** Anything in the page's words changes under an open editor, so a stale one is refused. */
 export const changesWords = (steps: readonly ButtonStep[]): boolean => steps.some(s => s.kind === 'insert')
 export const isTodosTarget = (databaseId: string): boolean => databaseId === todosSourceId
@@ -44,6 +48,7 @@ export function stepTitle(step: ButtonStep): string {
     case 'insert': return `Insert ${step.blocks.length === 1 ? '1 block' : `${step.blocks.length} blocks`}`
     case 'add-row': return step.databaseId ? `Add row to ${step.databaseName}` : 'Add row to…'
     case 'edit-rows': return step.databaseId ? `Edit rows in ${step.databaseName}` : 'Edit rows in…'
+    case 'edit-property': return step.set.length ? `Set ${step.set.map(s => s.name).join(', ')}` : 'Edit property'
     case 'open': return step.target.kind === 'page' ? (step.target.pageId ? `Open ${step.target.name}` : 'Open…') : step.target.kind === 'made' ? 'Open the row just made' : step.target.url ? `Open ${step.target.url}` : 'Open…'
     case 'confirm': return step.text ? `Confirm: ${step.text}` : 'Show confirmation'
   }
@@ -55,6 +60,7 @@ export function stepProblem(step: ButtonStep, earlier: readonly ButtonStep[] = [
     case 'insert': return words(step.blocks) ? null : 'Needs something to insert'
     case 'add-row': return step.databaseId ? null : 'Needs a database'
     case 'edit-rows': return !step.databaseId ? 'Needs a database' : step.set.length ? null : 'Needs a property to set'
+    case 'edit-property': return step.set.length ? null : 'Needs a property to set'
     case 'open': return step.target.kind === 'page' ? (step.target.pageId ? null : 'Needs a page') : step.target.kind === 'url' ? (safeUrl(step.target.url) ? null : 'Needs a link') : earlier.some(s => s.kind === 'add-row') ? null : 'Needs an Add row step before it'
     case 'confirm': return step.text.trim() ? null : 'Needs its words'
   }
@@ -70,8 +76,9 @@ export function safeUrl(url: string): string | null {
 }
 
 /** A step's value, as the property's own stored form, read at the tap: `today` is the tap's date, even on a retry past midnight (§4.9). */
-export function valueAtTap(value: ButtonValue, property: Pick<Property, 'type'>, on: Pick<Page, 'id' | 'date' | 'title'>, today: LocalDate): Json {
+export function valueAtTap(value: ButtonValue, property: Pick<Property, 'type'>, on: Pick<Page, 'id' | 'date' | 'title' | 'values'>, today: LocalDate): Json {
   if (value.kind === 'fixed') return value.raw
+  if (value.kind === 'row') return (on.values?.[value.id] ?? null) as Json
   if (value.kind === 'page') return property.type === 'relation' ? [on.id] : on.title
   const day = value.kind === 'day' ? on.date ?? today : today
   return property.type === 'date' ? { start: day } : day
@@ -83,4 +90,4 @@ export function tapValues(property: Pick<Property, 'type'>): readonly ButtonValu
   if (property.type === 'text') return ['today', 'day', 'page']
   return []
 }
-export const tapValueName: Record<Exclude<ButtonValue['kind'], 'fixed'>, string> = { today: '@today', day: "@this page's day", page: '@this page' }
+export const tapValueName: Record<Exclude<ButtonValue['kind'], 'fixed' | 'row'>, string> = { today: '@today', day: "@this page's day", page: '@this page' }

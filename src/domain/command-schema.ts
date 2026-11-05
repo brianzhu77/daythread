@@ -11,7 +11,7 @@ const at = z.string().max(40);
 const values = z.record(z.string().min(1).max(200), json);
 const rowEdit = z.object({ pageId: id, values, expected: values, databaseId: id.optional() });
 const option = z.object({ id, name: z.string().max(200), group: z.enum(["todo", "active", "done"]).optional(), from: z.string().max(200).optional() });
-const propertyFields = { name: z.string().max(200), type: z.enum(propertyTypes), options: z.array(option).max(200).optional(), format: z.enum(["plain", "comma", "percent", "currency"]).optional(), withTime: z.boolean().optional(), prefix: z.string().max(limits.prefix + 100).optional(), target: id.optional(), limit: z.literal(1).nullable().optional(), rollup: z.object({ relation: id, property: id, fn: z.enum(rollupFunctions) }).optional(), formula: z.string().max(limits.formula).optional() };
+const propertyFields = { button: z.object({ label: z.string().max(200), steps: z.string().max(200_000) }).optional(), name: z.string().max(200), type: z.enum(propertyTypes), options: z.array(option).max(200).optional(), format: z.enum(["plain", "comma", "percent", "currency"]).optional(), withTime: z.boolean().optional(), prefix: z.string().max(limits.prefix + 100).optional(), target: id.optional(), limit: z.literal(1).nullable().optional(), rollup: z.object({ relation: id, property: id, fn: z.enum(rollupFunctions) }).optional(), formula: z.string().max(limits.formula).optional() };
 const columns = z.array(z.object({ id, width: z.number().int().optional(), wrap: z.literal(true).optional() })).max(100);
 const sort = z.array(z.object({ by: id, direction: z.enum(["asc", "desc"]) })).max(10);
 const filter = z.array(z.object({ by: id, op: z.enum(filterOpList), value: json.optional() })).max(20);
@@ -25,6 +25,7 @@ const calculations = z.record(id, z.enum(calcKinds));
 const boardCalculation = z.object({ by: id, kind: z.enum(calcKinds) });
 const colourRules = z.array(z.object({ id, rule: z.object({ by: id, op: z.enum(filterOpList), value: json.optional() }), tint: z.enum(["gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red"]), scope: z.literal("property").optional() })).max(50);
 const timelineUnit = z.enum(["hours", "day", "week", "month", "quarter", "year"]);
+const automation = z.object({ id, name: z.string().max(200), active: z.boolean(), any: z.literal(true).optional(), viewId: id.optional(), steps: z.string().max(200_000), triggers: z.array(z.union([z.object({ kind: z.literal("row-added") }), z.object({ kind: z.literal("property-edited"), propertyId: id, name: z.string().max(200), condition: filter.element.optional() })])).max(20), lastRanAt: z.string().max(40).optional(), paused: z.object({ reason: z.string().max(500), limit: z.literal(true).optional() }).optional() });
 const view = z.object({ id, subItemsDisplay: z.enum(["nested", "flat"]).optional(), subItemsShow: z.enum(["both", "parents", "subs"]).optional(), name: z.string().max(200), layout: z.enum(viewLayouts), columns, sort, filter, filterGroups: filterGroups.optional(), chart: chart.optional(), groupBy: id.optional(), groupDateBy: groupDateBy.optional(), hideEmptyGroups: z.boolean().optional(), hiddenGroups: hiddenGroups.optional(), subGroupBy: id.optional(), subGroupDateBy: groupDateBy.optional(), hiddenSubGroups: hiddenGroups.optional(), dateBy: id.optional(), calendarSpan: z.literal("week").optional(), timelineEnd: id.optional(), timelineUnit: timelineUnit.optional(), timelineTable: z.literal(true).optional(), openIn: z.enum(["center", "side"]).optional(), colourRules: colourRules.optional(), frozenThrough: id.optional(), nameWidth: z.number().int().optional(), filterAny: z.literal(true).optional(), wrapName: z.literal(true).optional(), calculations: calculations.optional(), boardCalculation: boardCalculation.optional(), defaultTemplate: id.optional() });
 const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("addProperty"), property: z.object({ id, ...propertyFields }), viewId: id.optional(), beforeId: id.optional() }),
@@ -41,6 +42,11 @@ const change = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("setDefaultTemplate"), templateId: id.nullable() }),
   z.object({ kind: z.literal("removeView"), viewId: id }),
   z.object({ kind: z.literal("moveView"), viewId: id, beforeId: id.nullable() }),
+  z.object({ kind: z.literal("addAutomation"), automation }),
+  z.object({ kind: z.literal("updateAutomation"), automation }),
+  z.object({ kind: z.literal("setAutomationActive"), automationId: id, active: z.boolean() }),
+  z.object({ kind: z.literal("removeAutomation"), automationId: id }),
+  z.object({ kind: z.literal("moveAutomation"), automationId: id, beforeId: id.nullable() }),
 ]);
 const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("save-editor"), pageId: id, expectedContent: z.string().max(200), document: z.string().max(2_000_000), singleDeleteIds: z.array(id).max(100).optional(), cutTaskIds: z.array(id).max(200).optional(),
@@ -63,6 +69,7 @@ const action = z.discriminatedUnion("type", [
   z.object({ type: z.literal("make-link-pages"), parentPageId: id, items: z.array(z.object({ url: z.string().min(1).max(10_000), pageId: id, title: title.optional() })).min(1).max(50), at: at.optional() }),
   z.object({ type: z.literal("apply-link-preview"), pageId: id, url: z.string().min(1).max(10_000), title: z.string().max(2000).nullable(), description: z.string().max(5000).nullable() }),
   z.object({ type: z.literal("rename-page"), pageId: id, title }),
+  z.object({ type: z.literal("run-row-button"), databaseId: id, propertyId: id, rowIds: z.array(id).min(1).max(limits.rowsAtOnce), stepsKey: z.string().max(200), at: z.string().max(40), today: z.string().max(10) }),
   z.object({ type: z.literal("run-button"), pageId: id, blockId: id, stepsKey: z.string().max(200), expectedContent: z.string().max(200), at: z.string().max(40), today: z.string().max(10) }),
   z.object({ type: z.literal("add-comment"), pageId: id, threadId: id, commentId: id, body: z.string().max(20_000), at: z.string().max(40), anchor: z.object({ blockId: id, quote: z.string().max(2000), taskId: id.optional(), at: z.number().int().nonnegative().optional() }).optional() }),
   z.object({ type: z.literal("edit-comment"), threadId: id, commentId: id, body: z.string().max(20_000), version: z.number().int().nonnegative(), at: z.string().max(40) }),
