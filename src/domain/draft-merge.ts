@@ -78,9 +78,13 @@ export function mergeDraft(base: EditorNode[], draft: EditorNode[], latest: Edit
     }
     if (wording(before) === wording(node)) return // he didn't change it
     if (now && wording(now) === wording(node)) return // the other side made the same edit
-    if (isFileBlock(node)) {
-      // A picture's caption, width or file, with no words to come back as a line: in place, or as a second block when the other side changed it too.
-      if (now && wording(now) === wording(before)) { now.props = structuredClone(node.props); inserted.push(now.id); anchorFor.set(node.id, now.id) }
+    if (isFileBlock(node) || isFileBlock(before)) {
+      // A picture's caption, width or file, or a line that became one, with no words to come back as a line: in place, the block's kind too, or as a second block when the other side changed it as well.
+      if (now && wording(now) === wording(before)) {
+        now.type = node.type; now.props = structuredClone(node.props)
+        if (node.content === undefined) delete now.content; else now.content = structuredClone(node.content)
+        inserted.push(now.id); anchorFor.set(node.id, now.id)
+      }
       else { const line = { ...withoutChildren(node), id: newId() }; insertAfter(now ? node.id : null, line); inserted.push(line.id); anchorFor.set(node.id, line.id) }
       return
     }
