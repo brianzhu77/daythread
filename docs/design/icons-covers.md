@@ -1,6 +1,6 @@
 # Page icons and covers: design
 
-- Author: Bumblebee (Product) · 2026-11-03, §7 and §8 by Jazz (Design) · 2026-11-05 · status: **for Lead and Ratchet to review**. Not approved and not built.
+- Author: Bumblebee (Product) · 2026-11-03, §7 and §8 by Jazz (Design) · 2026-11-05 · status: **approved to build with §7.7 (Lead c2262558); Roadbuster builds, and Jazz checks it against §7**. Not built.
 - Asked by the Lead (3f046122, b9af4ec7). Nothing is cut for lack of evidence, and his use only sets the order (Brian 57deaed7).
 - **Evidence:** Notion's guide on [page icons and covers](https://www.notion.com/ja/help/guides/page-icons-and-covers), read through search results rather than in full. It gives: an emoji, a native icon or an uploaded image; a cover by upload, image link or Notion's gallery, with Unsplash; icons showing in the sidebar and wherever the page is mentioned. I found nothing on a row's icon in a table, so that's my proposal.
 - **Read directly 2026-11-05 ([English guide](https://www.notion.com/help/guides/page-icons-and-covers), through a fetch and summary):** an icon is added by clicking the default image beside the title, from emoji or an icon set, with a **Random** button, or by uploading. A cover is added inside the page by "Add cover", then "Change cover": Gallery, upload, an image link, Unsplash, or Notion AI from a prompt. It doesn't give sizes, Reposition, or where icons show beyond the title. **New here:** Random is small, and I'd take it with the emoji picker. A cover from a prompt would mean paying a model to make pictures, so it's Not planned (Lead 3f167c20). R3-11's Files is live, so uploads are no longer waiting on it.
@@ -82,7 +82,7 @@ From the top: **cover, then the line with the breadcrumb and `⋯`, then the ico
 
 The cover goes above the head and the icon above "Today" and the date, at the title's left edge, with the arrows where they are. **A day has its `⋯` only once it holds something** (`dayMenuGroups`), so an empty day needs one for these. Added to the Day template, every new day has them (P1-6). At 390 with a cover, the day's first section starts about 120 px lower. That's his choice, and worth stating in the budget.
 
-**Proposed (Bumblebee, for the Lead): an empty day doesn't get a `⋯` for this.** A `⋯` on an empty day would change that screen for everyone, against P1-1's "exactly as today", to offer something nobody has asked for there. A day made from the template holds something, so it has its `⋯` already, and the template itself takes them. The cost: a day with nothing written can't take a cover until it has a line.
+**Decided (Lead c2262558, with Bumblebee, Jazz and Roadbuster): an empty day doesn't get a `⋯` for this.** A `⋯` on an empty day would change that screen for everyone, against P1-1's "exactly as today", to offer something nobody has asked for there. A day made from the template holds something, so it has its `⋯` already, and the template itself takes them. The cost: a day with nothing written can't take a cover until it has a line.
 
 ### 7.3 Where an icon shows
 
@@ -118,7 +118,7 @@ To-dos have no icon: a to-do isn't a page. **A day in the sidebar's Days** shows
 
 - **Adding:** `⋯` → Add cover opens a small panel. In the first release it's one field, "Paste an image link". The picture shows in the panel once it loads, and Add is only there then. **A link that doesn't load says "Can't load that image" and isn't saved,** so a dead link can't be added by mistake.
 - **Changing:** hovering at 1280 shows Change and Reposition at its lower right, on a plain backing. At 390 `⋯` has Change cover, Reposition and Remove cover. Change opens the same panel, with Remove.
-- **Reposition:** the picture moves up and down under the pointer or finger, with "Drag to move · Done · Cancel" on it. Esc cancels. Done is one change with one Undo. It's saved as a share of the picture's height, so it holds at both widths. A picture with nothing to spare in height doesn't offer it.
+- **Reposition:** the picture moves up and down under the pointer or finger, with "Drag to move · Done · Cancel" on it. Esc cancels. Done is one change with one Undo. It's saved as a position within the crop's travel (§7.7), so it holds at both widths. A picture with nothing to spare in height doesn't offer it.
 - **While loading:** the band at its full height in `--fill`, so nothing moves.
 
 ### 7.6 A cover that won't load
