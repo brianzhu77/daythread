@@ -112,15 +112,17 @@ export function axisLabels(points: readonly Pick<ChartPoint, 'key' | 'name'>[], 
     return { key: p.key, label: changed ? `${head}${isDay ? ',' : ''} ${y}` : head, full: p.name }
   })
 }
-const labelWidth = (label: string): number => label.length * 7 + 8
+/** Without a way to measure: a full-width character takes about a whole em at the axis's 12 px, others about 7. */
+const estimateWidth = (label: string): number => [...label].reduce((n, c) => n + (/[\u1100-\u11ff\u2e80-\ua4cf\uac00-\ud7af\uf900-\ufaff\ufe30-\ufe6f\uff00-\uff60\uffe0-\uffe6]/.test(c) || c.codePointAt(0)! > 0xffff ? 13 : 7), 0)
 /**
  * How thinly the axis must label so each has room: a label has the bars up to the next, and the last sits against the edge with what the one before leaves.
- * About 7 px a character in the axis's size.
+ * `widthOf` measures the words in the axis's font, as an estimate can't know a Chinese name from a Latin one well enough to be safe.
  */
-export function axisStep(points: readonly Pick<ChartPoint, 'key' | 'name'>[], band: number, dateAxis: boolean): number {
+export function axisStep(points: readonly Pick<ChartPoint, 'key' | 'name'>[], band: number, dateAxis: boolean, widthOf: (label: string) => number = estimateWidth): number {
   if (!band) return 1
+  const room = (label: string) => widthOf(label) + 8
   for (let step = 1; step < points.length; step++) {
-    const widths = axisLabels(points, step, dateAxis).map(l => labelWidth(l.label)), last = widths.at(-1)!, before = widths.at(-2) ?? 0
+    const widths = axisLabels(points, step, dateAxis).map(l => room(l.label)), last = widths.at(-1)!, before = widths.at(-2) ?? 0
     const barsLeft = points.length - (widths.length - 1) * step
     if (widths.slice(0, -1).every(w => w <= band * step) && last <= band * barsLeft + (band * step - before)) return step
   }

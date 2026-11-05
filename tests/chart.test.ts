@@ -102,6 +102,10 @@ test('an axis gives a year on the first label and where it changes, and thins so
   assert.equal(axisLabels(days, axisStep(days, 30, true), true).length > 1, true)
   assert.ok(axisStep(months, 20, true) > 1)
   assert.equal(axisStep(months, 0, true), 1)
+  // Jazz: a Chinese name takes about twice a Latin one's room, so it thins or goes across where the same length wouldn't.
+  const named = (name: string) => Array.from({ length: 12 }, (_, i) => ({ key: `o${i}`, name: `${name}${i}` }))
+  assert.equal(axisStep(named('abcde'), 60, false), 1)
+  assert.ok(axisStep(named('中文选项名'), 60, false) > 1)
 })
 test('a calculation keeps a large number exact, and still cleans a float', () => {
   const h = shelf()

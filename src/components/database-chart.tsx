@@ -14,6 +14,15 @@ const openedLimit = 100
 /** The room left of the plot, for the axis's numbers. */
 const plotLeft = 44
 
+let measuring: CanvasRenderingContext2D | null = null
+/** An axis label's width in its own font, read from the axis's own element. */
+function labelWidth(el: Element | null, label: string): number {
+  measuring ??= document.createElement('canvas').getContext('2d')
+  if (!measuring || !el) return label.length * 13
+  const style = getComputedStyle(el)
+  measuring.font = `${style.fontWeight} ${style.getPropertyValue('--text-caption') || '12px'} ${style.fontFamily}`
+  return measuring.measureText(label).width
+}
 function useWidth() {
   const ref = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
@@ -75,7 +84,7 @@ function VerticalBars({ points, dateAxis, opened, onOpen, textOf }: { points: Ch
   const ticks = chartTicks(values), low = ticks[0]!, high = ticks.at(-1)!, span = high - low || 1
   const at = (n: number) => ((n - low) / span) * 100
   const band = width ? (width - plotLeft) / Math.max(points.length, 1) : 0
-  const step = axisStep(points, band, dateAxis)
+  const step = axisStep(points, band, dateAxis, label => labelWidth(ref.current, label))
   // A date can be counted along from the labels either side, but an option can't, so bars that can't all be named go across, for this width only.
   if (!dateAxis && step > 1) return <div ref={ref}><HorizontalBars points={points} opened={opened} onOpen={onOpen} textOf={textOf} /></div>
   const shown = axisLabels(points, step, dateAxis)

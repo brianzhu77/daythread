@@ -110,6 +110,16 @@ await menu.getByLabel('Property').last().selectOption({ label: 'Kind' }); await 
   await openLayout(); await menu.getByLabel('Chart').selectOption('bar'); await wait(800); await menu.getByLabel('Measure').selectOption({ label: 'Count' }); await wait(800); await menu.getByLabel('What to show').selectOption({ label: 'Many' }); await wait(900); await closeMenu()
   const named = await block.locator('.database-chart-labels span').count(), across = await block.locator('.database-chart-line').count()
   if (wide) check(across === 13 || named === 13, 'every option is named, one way or the other', [named, across]); else check(across >= 12, 'long options at 390 go across, so each is named', across); await drawn('many long options'); await shot('many-options')
+  // Chinese names: every bar is named, by a label in full or by going across, at this width and a tablet's.
+  run({ type: 'change-database', pageId: 'list', change: { kind: 'addProperty', property: { id: 'cn', name: '分类', type: 'select', options: Array.from({ length: 12 }, (_, i) => ({ id: `c${i}`, name: `中文选项${i}号` })) } } })
+  for (let i = 0; i < 12; i++) run({ type: 'set-values', pageId: `m${i}`, values: { cn: `c${i}` }, expected: {}, at: new Date().toISOString() })
+  await page.reload(); await wait(2500); await openLayout(); await menu.getByLabel('What to show').selectOption({ label: '分类' }); await wait(900); await closeMenu()
+  for (const w of wide ? [Number(width), 1000, 768, 600] : [Number(width), 430]) {
+    await page.setViewportSize({ width: w, height: wide ? 900 : 844 }); await wait(500)
+    const cut = await block.locator('.database-chart-labels span').evaluateAll(x => x.filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.innerText)), named = await block.locator('.database-chart-labels span').count(), across = await block.locator('.database-chart-line').count()
+    check(cut.length === 0, `Chinese names at ${w}: none cut`, cut.slice(0, 3)); check(named >= 12 || across >= 12, `at ${w}: each is named`, [named, across]); if (w === 768) await shot('chinese-768')
+  }
+  await page.setViewportSize({ width: Number(width), height: wide ? 900 : 844 }); await wait(400)
   await openLayout(); await menu.getByLabel('What to show').selectOption({ label: 'Due' }); await wait(900); await menu.getByLabel('By', { exact: true }).selectOption('month'); await wait(900); await closeMenu()
   { const l = await block.locator('.database-chart-labels span').allInnerTexts(), cut = await block.locator('.database-chart-labels span').evaluateAll(x => x.filter(e => e.scrollWidth > e.clientWidth + 1).map(e => e.innerText)); check(cut.length === 0, 'months across years read in full', cut); check(l.filter(t => /\d{4}/.test(t)).length >= 2 && /\d{4}/.test(l[0]), 'with a year on the first and where it changes', l.slice(0, 8)) } await drawn('months'); await shot('months')
   await openLayout(); await menu.getByLabel('By', { exact: true }).selectOption('week'); await wait(900); await closeMenu(); await drawn('weeks across years'); await shot('weeks')
