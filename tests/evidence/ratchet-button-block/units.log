@@ -1,0 +1,12 @@
+✔ a button is not an empty line, so a trailing one is never tidied away or filled (0.625416ms)
+✔ Load latest keeps a button whole, and once (2.822ms)
+✔ export writes its label, so a page never loses a line on the way out (2.00125ms)
+✔ a day template copies a button, with its own id and its steps (5.319166ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 214.708042

@@ -1,0 +1,9 @@
+PASS a page holding one opens 
+PASS its label draws, or a plain word with none ["Log a run","Button"]
+PASS a tap changes nothing 
+PASS typing beside it saves 
+PASS and both are kept whole ["[{\"kind\":\"addRow\",\"later\":true}]","[{\"kind\":\"addRow\",\"later\":true}]"]
+PASS a reload draws them 
+PASS 390: drawn, no sideways scroll 
+PASS no page errors []
+[button-block webkit] fail 0
