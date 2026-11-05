@@ -42,7 +42,7 @@ export interface TreeEntry {
  * The rows as a tree. `shown` is what the view's filter and sort left, in that order, so siblings keep it. `everyChild`: Parents only,
  * where the filter is about the parents and a toggle opens onto all their sub-items.
  */
-export function treeEntries(db: Database, shown: readonly Page[], all: readonly Page[], isOpen: (rowId: string) => boolean, everyChild = false): TreeEntry[] {
+export function treeEntries(db: Database, shown: readonly Page[], all: readonly Page[], isOpen: (rowId: string, context: boolean) => boolean, everyChild = false): TreeEntry[] {
   const links = db.subItems
   if (!links) return shown.map(row => ({ row, depth: 0, hasChildren: false, open: false, context: false }))
   const matched = new Set(shown.map(r => r.id)), byId = new Map(all.map(r => [r.id, r]))
@@ -64,9 +64,8 @@ export function treeEntries(db: Database, shown: readonly Page[], all: readonly 
   const walk = (row: Page, depth: number) => {
     if (seen.has(row.id)) return
     seen.add(row.id)
-    const children = under.get(row.id) ?? [], open = children.length > 0 && isOpen(row.id)
-    // With a filter, a match below a closed parent still has to be reachable: the parent's toggle says so, and opens it.
-    out.push({ row, depth, hasChildren: children.length > 0, open, context: !everyChild && !matched.has(row.id) })
+    const context = !everyChild && !matched.has(row.id), children = under.get(row.id) ?? [], open = children.length > 0 && isOpen(row.id, context)
+    out.push({ row, depth, hasChildren: children.length > 0, open, context })
     if (open) for (const child of children) walk(child, depth + 1)
   }
   for (const row of roots) walk(row, 0)

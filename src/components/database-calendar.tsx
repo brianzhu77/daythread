@@ -90,7 +90,7 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
     const start = { x: e.clientX, y: e.clientY }
     let lifted = false
     const dayAt = (x: number, y: number) => document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-day]')?.dataset.day ?? null
-    const finish = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); document.removeEventListener('keydown', esc, true) }
+    const finish = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); window.removeEventListener('keydown', esc, true) }
     const move = (ev: PointerEvent) => {
       if (!lifted && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) <= 4) return
       lifted = true
@@ -106,7 +106,7 @@ export function DatabaseCalendar({ workspace, db, view, changeView, blockId, pag
     }
     const cancel = () => { finish(); setDrag(null); if (lifted) { justDragged.current = true; setTimeout(() => { justDragged.current = false }) } }
     const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel() } }
-    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); document.addEventListener('keydown', esc, true)
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); window.addEventListener('keydown', esc, true)
   }
   // Scrolled or redrawn away, nothing stays lifted.
   useEffect(() => () => setDrag(null), [])
