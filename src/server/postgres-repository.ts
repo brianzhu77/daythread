@@ -27,7 +27,7 @@ export const pruneEvery = 25
 interface Scope extends WorkspaceInfo { userId: string | null }
 
 const upsertBatch = 500
-const threadColumns = ['id', 'page_id', 'version', 'created_at', 'resolved_at', 'comments'] as const
+const threadColumns = ['id', 'page_id', 'version', 'created_at', 'resolved_at', 'comments', 'anchor'] as const
 const pageColumns = ['id', 'position', 'type', 'date', 'title', 'url', 'parent_id', 'trashed_at', 'trash_id', 'document', 'handoff_done', 'review_saved', 'database_json', 'row_values', 'created_at', 'edited_at', 'icon', 'cover', 'cover_position'] as const
 /** Columns added to `pages` after its first release (databases): added on start when missing, before any build writes them. */
 const addedPageColumns = ['database_json', 'row_values', 'created_at', 'edited_at', 'icon', 'cover', 'cover_position'] as const
@@ -62,7 +62,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
       const have = await tables(sql)
       if (!['workspaces', 'pages', 'tasks', 'deleted_tasks', 'operations', 'comment_threads'].every(t => have.includes(t)) || have.includes('workspace')) return false
       const columns = await columnsOf(sql, 'pages')
-      return addedPageColumns.every(c => columns.includes(c)) && (await columnsOf(sql, 'workspaces')).includes('week_start')
+      return addedPageColumns.every(c => columns.includes(c)) && (await columnsOf(sql, 'workspaces')).includes('week_start') && (await columnsOf(sql, 'comment_threads')).includes('anchor')
     }
     this.ready ??= complete(this.sql).then(async ok => {
       if (ok) return
@@ -107,6 +107,7 @@ export class PostgresWorkspaceRepository implements ServerRepository {
             primary key (workspace_id, id)
           );
           alter table ${s}.comment_threads enable row level security;
+          alter table ${s}.comment_threads add column if not exists anchor text;
           create table if not exists ${s}.operations (
             workspace_id uuid not null references ${s}.workspaces (id) on delete cascade,
             operation_id text not null, revision integer not null, type text not null, receipt json not null, inverse json,
@@ -256,7 +257,11 @@ export class PostgresWorkspaceRepository implements ServerRepository {
     await upsert('pages', pageColumns, diff.pages.upsert); await remove('pages', diff.pages.remove)
     await upsert('tasks', taskColumns, diff.tasks.upsert); await remove('tasks', diff.tasks.remove)
     await upsert('deleted_tasks', deletedColumns, diff.deleted.upsert); await remove('deleted_tasks', diff.deleted.remove)
-    if (diff.threads) { await upsert('comment_threads', threadColumns, diff.threads.upsert); await remove('comment_threads', diff.threads.remove) }
+    if (diff.threads) {
+      // An inverse written by a build with no anchors has no such key: the thread keeps the one it has.
+      const knows = diff.threads.upsert.filter(t => t.anchor !== undefined), older = diff.threads.upsert.filter(t => t.anchor === undefined)
+      await upsert('comment_threads', threadColumns, knows); await upsert('comment_threads', threadColumns.filter(c => c !== 'anchor'), older); await remove('comment_threads', diff.threads.remove)
+    }
   }
   /** Operations older than `operationKeepMs` go, except the newest of the workspace (the Undo marker). */
   async pruneOperations(tx: SqlClient, workspaceId: string, now: Date): Promise<void> {

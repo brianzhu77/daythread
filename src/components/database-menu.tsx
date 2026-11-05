@@ -610,7 +610,7 @@ function ChartAxisChoices({ db, onPick }: { db: DatabasePage; onPick: (propertyI
     {groupableProperties(db.database, 'chart').map(p => <button key={p.id} type="button" role="menuitem" onClick={() => onPick(p.id)}>{p.name}</button>)}
   </>
 }
-const chartFormLabels: Record<ChartForm, string> = { bar: 'Vertical bars', barHorizontal: 'Horizontal bars', number: 'Number' }
+const chartFormLabels: Record<ChartForm, string> = { bar: 'Vertical bars', barHorizontal: 'Horizontal bars', line: 'Line', donut: 'Donut', number: 'Number' }
 const chartKindLabels: Record<ChartKind, string> = { sum: 'Sum', average: 'Average', median: 'Median', min: 'Min', max: 'Max', range: 'Range' }
 function ChartSettingsRows({ db, view }: { db: DatabasePage; view: View }) {
   const changeView = useViewChange(db.id, view.id)
@@ -656,7 +656,7 @@ function ChartSettingsRows({ db, view }: { db: DatabasePage; view: View }) {
         <option value="axis">Its own order</option><option value="value">Value</option>
       </select>
     </label>}
-    {settings.form !== 'number' && !settings.sortByValue && counts && <label className="database-menu-row">Cumulative
+    {settings.form !== 'number' && settings.form !== 'donut' && !settings.sortByValue && counts && <label className="database-menu-row">Cumulative
       <input type="checkbox" checked={Boolean(settings.cumulative)} onChange={e => { const on = e.target.checked; set(c => (on ? { ...c, cumulative: true } : without(c, 'cumulative'))) }} />
     </label>}
   </>

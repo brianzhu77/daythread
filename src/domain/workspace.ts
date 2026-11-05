@@ -6,7 +6,7 @@ import { draftOf, draftPageId, draftSettled, eligibleTask, isDraft, normalizeDra
 import { builtInDayNodes, dayPagesTarget, daySubpagesTarget, dayTemplateTitle, defaultTemplate, isTemplate, isUntouchedCopy, newPageTemplate, pageFromTemplate, reservedTargets, templateRows, topLevelTarget, rowTemplateDatabaseId, rowTemplateTarget } from "./day-template.ts";
 import { automationProblem, dueRules, firedRules, type FiredRule } from "./automations.ts";
 import { changesWords, isTodosTarget, readSteps, safeUrl, stepsKey, stepTitle, valueAtTap, type ButtonStep } from "./buttons.ts";
-import { commentLimit, leavesUndoAlone, type CommentThread } from "./comments.ts";
+import { commentLimit, leavesUndoAlone, type CommentThread, quoteLimit } from "./comments.ts";
 import { isPageIcon } from "./page-icon.ts";
 import { coverPlace, isCoverLink } from "./page-look.ts";
 import { hasContent, isTrashed, moveBefore, moveRefusal, subtreeIds } from "./page-tree.ts";
@@ -1097,7 +1097,7 @@ function execute(state: Workspace, action: Action, operationId: string): { messa
       }
       const on = page(state, action.pageId);
       if (isTrashed(on)) throw new DomainError("That page is in Trash");
-      (state.threads ??= []).push({ id: action.threadId, pageId: on.id, version: 1, createdAt: at, comments: [{ id: action.commentId, body, at }] });
+      (state.threads ??= []).push({ id: action.threadId, pageId: on.id, ...(action.anchor ? { anchor: { blockId: action.anchor.blockId, quote: action.anchor.quote.slice(0, quoteLimit), ...(action.anchor.taskId ? { taskId: action.anchor.taskId } : {}) } } : {}), version: 1, createdAt: at, comments: [{ id: action.commentId, body, at }] });
       return { message: "Comment added", entityId: action.threadId };
     }
     case "edit-comment": {
@@ -1628,6 +1628,24 @@ export function applyCommand(input: Workspace, command: Command): CommandResult 
   state.revision = input.revision + 1;
   const receipt = { operationId: command.operationId, ...result, fingerprint };
   state.receipts = compactReceipts({ ...state.receipts, [command.operationId]: receipt });
+  // A line cut and pasted to another page keeps its id, so its thread goes with it: only when its own page no longer has it, or a copy could take it (comments.md §4).
+  if (command.action.type === "save-editor" && state.threads?.some((t) => t.anchor)) {
+    const savedTo = command.action.pageId, here = state.pages.find((p) => p.id === savedTo), ids = here ? new Set(flatNodes(pageNodes(here)).map((n) => n.id)) : null;
+    for (const thread of state.threads) {
+      if (!ids || !thread.anchor || thread.pageId === savedTo || !ids.has(thread.anchor.blockId)) continue;
+      const home = state.pages.find((p) => p.id === thread.pageId);
+      if (!home || !flatNodes(pageNodes(home)).some((n) => n.id === thread.anchor!.blockId)) thread.pageId = savedTo;
+    }
+  }
+  // A to-do planned to another day is a new line there, so a thread on it goes to that line. Its plan row if it has one, as that's where the to-do is now (Roadbuster, #158).
+  for (const thread of state.threads ?? []) {
+    const anchor = thread.anchor;
+    if (!anchor?.taskId) continue;
+    const home = state.pages.find((p) => p.id === thread.pageId);
+    if (home && flatNodes(pageNodes(home)).some((n) => n.id === anchor.blockId)) continue;
+    const rows = taskRows(state, anchor.taskId), row = rows.find((r) => r.role === "plan") ?? rows[0];
+    if (row) { thread.pageId = row.page.id; anchor.blockId = row.node.id; }
+  }
   // A page gone for good takes its threads with it. In Trash they wait for it.
   if (state.threads?.length) { const held = new Set(state.pages.map((p) => p.id)); state.threads = state.threads.filter((t) => held.has(t.pageId)); }
   if (state.threads && !state.threads.length) delete state.threads;
