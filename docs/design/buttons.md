@@ -56,7 +56,7 @@ Example: a "Log a run" button in his Day template adds a row to Runs with today'
 | Rows edited | "3 rows changed · Undo" |
 | Blocks inserted | "Inserted · Undo" |
 | Several steps | The last step's words |
-| To-dos that can't take the change, proposed (Bumblebee, for the Lead) | Those that can change, as R4-17's bar does: "3 changed · 1 couldn't · Undo". Refusing the whole tap isn't what a person gets from the same edit on the bar |
+| To-dos that can't take the change (decided, Lead 371ebb4b) | Those that can change, as R4-17's bar does: "3 changed · 1 couldn't · Undo". Refusing the whole tap isn't what a person gets from the same edit on the bar |
 | Filter matched nothing | That step does nothing and later steps carry on. "No rows matched" only if nothing at all changed (Bumblebee, on Ratchet 6c8ed9c9): a button that adds a row and then edits matching ones shouldn't lose the row because nothing matched |
 
 There's no explanatory line anywhere (Daythread's rule, Brian 1ac6784b).
