@@ -1,0 +1,3 @@
+PASS start both tasks, one Undo exact tasks
+PASS deadline both tasks, one Undo exact tasks
+PASS Trash source status does not throw and Undo restores task state 2
