@@ -5,7 +5,7 @@
 import { toast } from '@heroui/react'
 import { useNavigate } from '@tanstack/react-router'
 import { createPortal } from 'react-dom'
-import { type CSSProperties, createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent } from 'react'
+import { type CSSProperties, createContext, Fragment, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type SyntheticEvent, type UIEvent, useCallback } from 'react'
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
 import { parentIdOf, treeEntries, type TreeEntry } from '../domain/sub-items'
@@ -1280,20 +1280,26 @@ const keepEditorFocus = (e: ReactMouseEvent) => e.preventDefault()
 const todosAtOnce = databaseLimits.todosAtOnce
 
 export function PickedBar({ picks: { picked, setPicked, picking, stopPicking, deletePicked, pickable, editing, setEditing }, db, floating }: { picks: RowPicking; db: Page & { database: Database }; floating?: boolean }) {
+  // A big change takes seconds on the Worker (Planned on 500: about 6 s, Lead's deployed read). It says so, past a moment a small one never reaches, and the notice says when it's done.
+  const [changing, setChanging] = useState<string | null>(null)
+  const track = useCallback((words: string, work: Promise<unknown>) => {
+    const timer = setTimeout(() => setChanging(words), 400)
+    void work.finally(() => { clearTimeout(timer); setChanging(null) })
+  }, [])
   if (!picked.length && !picking) return null
   // To-dos (R4-17): no Delete, as it would take lines off day pages not in view; a to-do can still be deleted from its line.
   if (db.database.fixed) {
     const over = picked.length > todosAtOnce
     return <div className={`database-picked-bar${picking ? ' is-picking' : floating ? ' is-floating' : ''}`} role="toolbar" aria-label="Selected to-dos" onMouseDown={keepEditorFocus}>
-      <span>{picked.length === 1 ? '1 to-do' : `${picked.length} to-dos`}{picked.length >= todosAtOnce && ` · ${todosAtOnce} at most`}</span>
-      {picked.length > 0 && !over && <EditPickedButton db={db} rowIds={picked} editing={editing} setEditing={setEditing} />}
+      <span role="status">{changing ?? <>{picked.length === 1 ? '1 to-do' : `${picked.length} to-dos`}{picked.length >= todosAtOnce && ` · ${todosAtOnce} at most`}</>}</span>
+      {picked.length > 0 && !over && <EditPickedButton db={db} rowIds={picked} editing={editing} setEditing={setEditing} track={track} />}
       {picking && (() => { const all = pickable(); return picked.length < Math.min(all.length, todosAtOnce) && <button type="button" className="app-link" onClick={() => setPicked(all.slice(0, todosAtOnce))}>All</button> })()}
       <button type="button" className="app-link" onClick={stopPicking}>Done</button>
     </div>
   }
   return <div className={`database-picked-bar${picking ? ' is-picking' : floating ? ' is-floating' : ''}`} role="toolbar" aria-label="Selected rows" onMouseDown={keepEditorFocus}>
-    <span>{picked.length === 1 ? '1 row' : `${picked.length} rows`}</span>
-    {picked.length > 0 && <EditPickedButton db={db} rowIds={picked} editing={editing} setEditing={setEditing} />}
+    <span role="status">{changing ?? (picked.length === 1 ? '1 row' : `${picked.length} rows`)}</span>
+    {picked.length > 0 && <EditPickedButton db={db} rowIds={picked} editing={editing} setEditing={setEditing} track={track} />}
     {picked.length > 0 && <button type="button" className="app-link is-danger" onClick={deletePicked}>Delete</button>}
     {picking && (() => { const all = pickable(); return picked.length < all.length && <button type="button" className="app-link" onClick={() => setPicked(all)}>All</button> })()}
     <button type="button" className="app-link" onClick={stopPicking}>Done</button>
@@ -1345,7 +1351,7 @@ export function useCardPicking(picks: RowPicking, db: Page & { database: Databas
   return { props: { onClickCapture, onPointerDown, onMouseDown }, boxDrawn }
 }
 
-function EditPickedButton({ db, rowIds, editing, setEditing }: { db: Page & { database: Database }; rowIds: string[]; editing: string | null; setEditing(id: string | null): void }) {
+function EditPickedButton({ db, rowIds, editing, setEditing, track }: { db: Page & { database: Database }; rowIds: string[]; editing: string | null; setEditing(id: string | null): void; track(words: string, work: Promise<unknown>): void }) {
   const { workspace, run } = useWorkspace()
   const [open, setOpen] = useState(false)
   const property = editing ? db.database.properties.find(p => p.id === editing) ?? null : null
@@ -1358,11 +1364,11 @@ function EditPickedButton({ db, rowIds, editing, setEditing }: { db: Page & { da
     setEditing(null)
     if (todos) {
       const items = rowIds.flatMap(id => { const taskId = taskIdOfRow(id); return taskId ? [{ taskId, changes: [{ columnId: p.id, value: (raw ?? null) as Json }] }] : [] })
-      if (items.length) void run({ type: 'edit-todos', items, today: todayIso() }, r => ({ text: r.message, undoOperationId: r.operationId }))
+      if (items.length) track(`Changing ${items.length === 1 ? '1 to-do' : `${items.length} to-dos`}…`, run({ type: 'edit-todos', items, today: todayIso() }, r => ({ text: r.message, undoOperationId: r.operationId })))
       return
     }
     const items = rows.map(r => ({ pageId: r.id, values: { [p.id]: raw ?? null } as Record<string, Json>, expected: { [p.id]: (rawOf(r, p.id) ?? null) as Json } }))
-    if (items.length) void run({ type: 'set-values-many', items, at: new Date().toISOString() }, r => ({ text: `${p.name} set on ${items.length === 1 ? '1 row' : `${items.length} rows`}`, undoOperationId: r.operationId }))
+    if (items.length) track(`Changing ${items.length === 1 ? '1 row' : `${items.length} rows`}…`, run({ type: 'set-values-many', items, at: new Date().toISOString() }, r => ({ text: `${p.name} set on ${items.length === 1 ? '1 row' : `${items.length} rows`}`, undoOperationId: r.operationId })))
   }
   const editable = db.database.properties.filter(p => (todos ? todoBarColumns.has(p.id) : !isReadOnly(p)))
   return <>
