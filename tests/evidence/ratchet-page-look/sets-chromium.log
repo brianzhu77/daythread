@@ -1,0 +1,7 @@
+PASS Icons tab: search in English and Chinese, a pick draws in the page's grey in the head and the sidebar, and there's a notice with Undo {"all":100,"random":0,"zh":1,"icon":"icon:leaf","head":1,"sidebar":1,"color":true,"size":[16,16],"undone":null,"ok":true,"errors":[]}
+PASS Upload an icon: scaled down before it goes, held only once its bytes are in, drawn in the head and the sidebar, and read back after a reload {"icon":true,"sizes":[1021],"head":1,"sidebar":1,"natural":[256,171],"ok":true,"errors":[]}
+PASS A failed upload holds nothing and says so, with Retry; a refused one says why, with none; SVG isn't taken {"failed":"Not uploaded · Retry","held":null,"retried":true,"full":"Storage full · 5 GB at most","retryOnFull":0,"svg":"That needs to be a picture","ok":true,"errors":[]}
+PASS The small set of covers: one tap, and it draws; uploading a cover scales it to what a band can use; the sweep holds both kinds {"set":8,"cover":"/covers/ruled.svg","loaded":true,"uploaded":true,"natural":2400,"report":0,"ok":true,"errors":[]}
+PASS While a picture is on its way: the panel names it, a click elsewhere keeps it going, Cancel stops it and sends nothing {"words":"Uploading photo.png · Cancel","open":1,"landed":true,"closedAfter":0,"cancelled":true,"idle":0,"stillOpen":1,"ok":true,"errors":[]}
+PASS Upload has no search; our icon sits in the box an emoji has, so a row's words stay put {"x":55,"after":55,"search":0,"ok":true,"errors":[]}
+ALL PASS

@@ -1,0 +1,15 @@
+PASS With no icon nothing is drawn, and the picker's data isn't fetched until it opens {"line":0,"emoji":0,"before":0,"after":1,"ok":true,"errors":[]}
+PASS Pick, with its notice and one Undo; the title stays words; a tap on the icon opens the picker again, with Remove {"icon":"🐨","title":"Notes","notice":" | Icon added","head":"🐨","undone":null,"line":0,"removed":null,"notice2":" | Icon removed | Undone","ok":true,"errors":[]}
+PASS Search in English and Chinese, nothing found says so, and a typed emoji is the one result {"en":5,"zh":12,"none":"No emoji for zzzqq","typed":"🦖","ok":true,"errors":[]}
+PASS While Pinyin composes nothing's searched; once chosen, results follow {"during":true,"after":12,"sections":0,"ok":true,"errors":[]}
+PASS Random changes at once on each press and stays open; a run of presses is one change, and Undo goes back to before it (P1-9) {"shown":6,"open":1,"sentDuring":0,"sent":1,"same":true,"back":"🐨","ok":true,"errors":[]}
+PASS A failed save goes back to what's saved and says so, and Try again sends it again (P1-9) {"shown":"🐨","saved":"🐨","notice":" | Couldn't change the icon | Icon added","after":"🌲","shownAfter":"🌲","ok":true,"errors":[]}
+PASS An icon changed while words are saving, with the save held: both stay, the newest choice shows, and a late Undo takes only what it says (P1-9) {"during":"🐨","newest":true,"words":true,"icon":true,"shownStill":true,"undoGone":true,"wordsAfter":true,"ok":true,"errors":[]}
+PASS An icon shows wherever the page's name does: sidebar, Pages, a [[ link, a card, search, the crumb and Move to {"sidebar":1,"ref":1,"card":1,"pages":1,"crumb":1,"moveTo":1,"search":2,"ok":true,"errors":[]}
+PASS A database's own icon, and a row's before its Name in a table; a tap on the row still opens the row {"own":"📚","sidebar":1,"row":"🐨","name":"🐨","opened":1,"picker":0,"ok":true,"errors":[]}
+PASS A row's icon in every other layout, on a Timeline's table and bar, and in Trash {"list":1,"board":1,"gallery":1,"calendar":1,"timeline":2,"lane":36,"trash":1,"ok":true,"errors":[]}
+PASS Keys at 1280: search has the caret, arrows move, Enter picks, Esc closes and picks nothing {"caret":"icon-picker-search","closed":0,"none":null,"picked":true,"ok":true,"errors":[]}
+PASS The data can't load: it says so with Try again, and a typed emoji still works {"says":"Can't load emoji · Try again","icon":"🦖","ok":true,"errors":[]}
+PASS A written day takes one; an empty day has no ⋯ {"more":1,"head":"🐨","sidebar":1,"emptyMore":0,"ok":true,"errors":[]}
+PASS 390: a sheet with no toolbar and no keyboard until search is tapped; it fits, and an icon sits on the title's edge {"box":[0,390,468],"focused":"","toolbar":0,"cell":44,"size":16,"edge":-2,"overflow":0,"ok":true,"errors":[]}
+ALL PASS

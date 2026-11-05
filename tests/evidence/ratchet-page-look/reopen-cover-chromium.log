@@ -1,0 +1,22 @@
+{"before":"/covers/stone.svg","during":"/covers/paper.svg","after":"/covers/stone.svg"}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: old cover panel must not clear the new pending choice
++ actual - expected
+
++ '/covers/paper.svg'
+- '/covers/stone.svg'
+           ^
+
+    at file:///Users/dogrod/Developer/daythread-ratchet-page-look/tests/evidence/ratchet-page-look/reopen-cover.mjs:1:1235 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: '/covers/paper.svg',
+  expected: '/covers/stone.svg',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.14.1
