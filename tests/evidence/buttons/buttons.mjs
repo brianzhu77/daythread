@@ -129,7 +129,7 @@ await scenario('Notices: rows edited, nothing matched, Undo brings it back', asy
   await pill(page, 'Set all').click(); await wait(800)
   const set = await notices(page), value = pageOf('r1').values.n
   await page.getByRole('button', { name: 'Undo' }).first().click(); await wait(800)
-  return { ok: /No rows matched/.test(none) && /1 row changed/.test(set) && value === 7 && pageOf('r1').values.n === 1, none, set, value, back: pageOf('r1').values.n }
+  return { ok: /No rows matched/.test(none) && /2 rows changed/.test(set) && value === 7 && pageOf('r1').values.n === 1, none, set, value, back: pageOf('r1').values.n }
 })
 await scenario('Broken targets: Trash with Restore, a deleted property with Edit, and the pill stays', async page => {
   await pill(page, 'Gone prop').click(); await wait(700)
