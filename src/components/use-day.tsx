@@ -108,6 +108,9 @@ interface WorkspaceContextValue {
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null)
 
+function scheduledFailure(rules: NonNullable<Receipt['automations']>): Notice {
+  return { text: rules.paused.length === 1 ? `${rules.paused[0]!.name} paused` : `${rules.paused.length} paused`, extra: { label: 'Edit', run: () => openAutomations(rules.databaseId) } }
+}
 function withRules(spec: Notice, rules: NonNullable<Receipt['automations']>, operationId: string): Notice {
   const short = (name: string) => (name.length > 28 ? `${name.slice(0, 27)}…` : name)
   const paused = rules.paused.length === 1 ? `${short(rules.paused[0]!.name)} paused` : rules.paused.length ? `${rules.paused.length} paused` : ''
@@ -242,7 +245,8 @@ export function WorkspaceProvider({ children, transport = serverTransport }: { c
           const spec = typeof notice === 'function' ? notice(result.receipt) : notice
           const rules = result.receipt.automations
           // What rules did goes on the notice his change already has, with its one Undo: "Moved to Done · Log finish · Undo" (automations.md §5).
-          if (rules && (rules.ran.length || rules.paused.length)) push(withRules(spec ?? { text: result.receipt.message }, rules, result.receipt.operationId))
+          if (rules?.scheduled) { if (rules.paused.length) push(scheduledFailure(rules)); else if (spec) push(spec) }
+          else if (rules && (rules.ran.length || rules.paused.length)) push(withRules(spec ?? { text: result.receipt.message }, rules, result.receipt.operationId))
           else if (spec) push(spec)
           return result.receipt
         } catch (e) {

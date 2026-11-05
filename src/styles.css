@@ -2946,3 +2946,12 @@ button.comment-quote { cursor: pointer; }
 .automation-open > small.is-broken { color: var(--formula-red); }
 @media (max-width: 899px) { .automation-switch { position: relative; } .automation-switch::after { content: ''; position: absolute; inset: -11px -4px; } }
 .automation-trigger { flex-wrap: wrap; }
+
+.automation-every { display: flex; flex-basis: 100%; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: var(--text-meta); color: var(--ink-2); }
+.automation-every label { display: inline-flex; align-items: center; gap: 4px; }
+.automation-every input[inputmode] { width: 44px; }
+.automation-until { display: inline-flex; align-items: center; gap: 2px; }
+.automation-weekdays { display: flex; flex-basis: 100%; gap: 2px; }
+.database-menu .automation-weekdays button { min-height: 28px; min-width: 34px; padding: 0 2px; border: 1px solid var(--line); border-radius: var(--radius-tight); background: none; color: var(--ink-2); font: inherit; }
+.database-menu .automation-weekdays button.is-on { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+@media (max-width: 899px) { .automation-every input, .automation-every select { font-size: 16px; } .database-menu .automation-weekdays button { min-height: 44px; flex: 1; min-width: 0; } }

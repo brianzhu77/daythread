@@ -177,7 +177,7 @@ export interface Repeat {
   lastRan?: string;
 }
 export type { Automation } from './automations.ts'
-import type { Automation } from './automations.ts'
+import { everyOf, sameSchedule, type Automation } from './automations.ts'
 export interface Database {
   /** The `database` block that is its place in its parent page; null: shown as a full page. */
   homeBlockId: string | null;
@@ -1028,7 +1028,7 @@ export type DatabaseChange =
   | { kind: "addAutomation"; automation: Automation }
   /** What the editor saves. A rule that had stopped comes back on, as its fix is what's being saved; one switched off by hand stays off. */
   | { kind: "updateAutomation"; automation: Automation }
-  | { kind: "setAutomationActive"; automationId: string; active: boolean }
+  | { kind: "setAutomationActive"; automationId: string; active: boolean; /** Turned on, a schedule counts from now: no periods from while it was off (§6). */ notBefore?: string }
   | { kind: "removeAutomation"; automationId: string }
   | { kind: "moveAutomation"; automationId: string; beforeId: string | null };
 /** One row's edit: values by column id (`title` for the title), null clears; `expected`: those columns as the edit saw them. */
@@ -1406,7 +1406,7 @@ function mirrorOf(ws: Workspace, property: Property): { db: Database; property: 
 }
 function cleanAutomation(input: Automation): Automation {
   if (!input || typeof input !== "object") throw new DatabaseError("Invalid automation");
-  const triggers = (Array.isArray(input.triggers) ? input.triggers : []).map((t) => t.kind === "row-added" ? { kind: t.kind } : { kind: t.kind, propertyId: checkId(t.propertyId), name: String(t.name ?? "").slice(0, limits.name), ...(t.condition ? { condition: t.condition } : {}) }) as Automation["triggers"];
+  const triggers = (Array.isArray(input.triggers) ? input.triggers : []).map((t) => t.kind === "every" ? { kind: t.kind, repeat: t.repeat, ...(t.until ? { until: t.until } : {}) } : t.kind === "row-added" ? { kind: t.kind } : { kind: t.kind, propertyId: checkId(t.propertyId), name: String(t.name ?? "").slice(0, limits.name), ...(t.condition ? { condition: t.condition } : {}) }) as Automation["triggers"];
   if (typeof input.steps !== "string" || input.steps.length > limits.buttonSteps) throw new DatabaseError("Invalid automation");
   return { id: checkId(input.id), name: cleanName(input.name, "An automation"), active: input.active !== false, triggers, ...(input.any ? { any: true as const } : {}), ...(input.viewId ? { viewId: checkId(input.viewId) } : {}), steps: input.steps };
 }
@@ -1651,13 +1651,15 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       return `${rule.name} added`;
     }
     case "updateAutomation": {
-      const old = automationOf(change.automation.id), rule = cleanAutomation(change.automation);
-      db.automations = db.automations!.map((r) => (r === old ? { ...rule, active: old.paused ? true : old.active, ...(old.lastRanAt ? { lastRanAt: old.lastRanAt } : {}) } : r));
+      const old = automationOf(change.automation.id), rule = cleanAutomation(change.automation), was = everyOf(old);
+      // What it's done so far stays with it, so a date still runs once. An edit to the schedule counts from that moment: no catching up on a time just set in the past (§6).
+      const triggers = rule.triggers.map((t) => (t.kind !== "every" || !was ? t : { ...t, repeat: { ...t.repeat, ...(was.repeat.last ? { last: was.repeat.last } : {}), ...(was.repeat.lastRan ? { lastRan: was.repeat.lastRan } : {}), ...(sameSchedule(t, was) && was.repeat.notBefore ? { notBefore: was.repeat.notBefore } : {}) } }));
+      db.automations = db.automations!.map((r) => (r === old ? { ...rule, triggers, active: old.paused ? true : old.active, ...(old.lastRanAt ? { lastRanAt: old.lastRanAt } : {}) } : r));
       return `${rule.name} changed`;
     }
     case "setAutomationActive": {
       const old = automationOf(change.automationId);
-      db.automations = db.automations!.map((r) => { if (r !== old) return r; const { paused: _paused, ...rest } = r; return { ...rest, active: change.active }; });
+      db.automations = db.automations!.map((r) => { if (r !== old) return r; const { paused: _paused, ...rest } = r; return { ...rest, active: change.active, ...(change.active && !r.active && change.notBefore ? { triggers: rest.triggers.map((t) => (t.kind === "every" ? { ...t, repeat: { ...t.repeat, notBefore: change.notBefore! } } : t)) } : {}) }; });
       return `${old.name} ${change.active ? "on" : "off"}`;
     }
     case "removeAutomation": {

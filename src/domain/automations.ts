@@ -1,10 +1,16 @@
 // Rules on a database (docs/design/automations.md): when something happens to a row, do these steps, inside the command that made the change. Nothing here writes:
 // `applyCommand` stages each rule on its own copy, so a rule's failure can't touch his edit. A database with no rules costs one look at its field.
 import { readSteps, writeSteps, type ButtonStep } from './buttons.ts'
+import { dueDates, nextDate } from './repeats.ts'
+import type { Repeat } from './database.ts'
 import { conditionHolds, cellValue, databaseRows, inView, isDatabase, opsFor, propertyOf, titleId, type Condition, type Database, type ViewContext } from './database.ts'
-import type { Action, Page, Workspace } from './types.ts'
+import type { Action, Page, WeekStart, Workspace } from './types.ts'
 
-export type AutomationTrigger = { kind: 'row-added' } | { kind: 'property-edited'; propertyId: string; name: string; condition?: Condition }
+export type AutomationTrigger =
+  | { kind: 'row-added' }
+  | { kind: 'property-edited'; propertyId: string; name: string; condition?: Condition }
+  /** Every… (§3). On its own, as no row started it. Its `last` is the date it last ran for, committed with what it did, so a date runs once, whatever the schedule's been changed to (§6). */
+  | { kind: 'every'; repeat: Repeat; until?: string }
 export interface Automation {
   id: string
   name: string
@@ -29,6 +35,7 @@ export const firesRules = (action: Pick<Action, 'type'>): boolean => !quietActio
 /** What's wrong with a rule now, in its own words, without its having to run: a delete or a type change shows at once (§5.4). */
 export function automationProblem(ws: Pick<Workspace, 'pages'>, db: Database, rule: Automation): string | null {
   if (rule.viewId && !db.views.some(v => v.id === rule.viewId)) return 'Its view was deleted'
+  if (everyOf(rule) && readSteps(rule.steps).some(s => everyProblem(s))) return 'Every… has no row to edit'
   for (const t of rule.triggers) {
     if (t.kind !== 'property-edited' || t.propertyId === titleId) continue
     const property = propertyOf(db, t.propertyId)
@@ -73,6 +80,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stri
 /** Does this change to this row set the rule off? From his action's before and after alone, ahead of any rule's writes (§5.6). */
 function fires(db: Database, rule: Automation, was: Page | undefined, now: Page, context: ViewContext): boolean {
   const results = rule.triggers.map(t => {
+    if (t.kind === 'every') return { changed: false, holds: false }
     if (t.kind === 'row-added') return { changed: !was, holds: !was }
     const changed = Boolean(was) && !same(rawOf(was!, t.propertyId), rawOf(now, t.propertyId))
     if (!t.condition) return { changed, holds: changed }
@@ -85,6 +93,39 @@ function fires(db: Database, rule: Automation, was: Page | undefined, now: Page,
   if (!set) return false
   const view = rule.viewId ? db.views.find(v => v.id === rule.viewId) : undefined
   return !view || inView(db, now, view, context)
+}
+
+/** What decides when it runs, without what it's done so far. */
+const scheduleOf = (t: Extract<AutomationTrigger, { kind: 'every' }>) => { const { last: _l, lastRan: _r, notBefore: _n, ...when } = t.repeat as Repeat & { lastRan?: string }; return JSON.stringify([when, t.until ?? null]) }
+export const sameSchedule = (a: Extract<AutomationTrigger, { kind: 'every' }>, b: Extract<AutomationTrigger, { kind: 'every' }>): boolean => scheduleOf(a) === scheduleOf(b)
+export const everyOf = (rule: Pick<Automation, 'triggers'>) => rule.triggers.find((t): t is Extract<AutomationTrigger, { kind: 'every' }> => t.kind === 'every')
+/** Why a step can't be in a scheduled rule: no row started it, so there's none to edit (§3). */
+export const everyProblem = (step: Pick<ButtonStep, 'kind'>): string | null => (step.kind === 'edit-property' ? 'Every… has no row to edit: use Edit rows in' : null)
+/** When it runs next, for the editor to say: nothing's explained, it's just the date (§6). Null past its end, or off. */
+export function nextRun(every: Extract<AutomationTrigger, { kind: 'every' }>, today: string, time: string, weekStart: WeekStart = 0): string | null {
+  const next = nextDate(every.repeat, today, time, weekStart)
+  return next && (!every.until || next <= every.until) ? next : null
+}
+/** A rule that failed and is being fixed: saved with its schedule as it was, this period runs once, as they still wanted it and it shows the fix held. A real schedule change counts from the save (§6). */
+export function runsOnFix(rule: Automation, every: Extract<AutomationTrigger, { kind: 'every' }>, today: string, time: string, weekStart: WeekStart = 0): string | null {
+  const was = everyOf(rule)
+  if (!rule.paused || !was || !sameSchedule(every, was)) return null
+  return dueDates(was.repeat, today, time, weekStart).filter(d => !was.until || d <= was.until).at(-1) ?? null
+}
+export interface DueRule { database: Page & { database: Database }; rule: Automation; date: string; skipped: number }
+/** What's due by the wall clock it's asked at: the latest missed period only, as five rows at once on his return is clutter (§6). */
+export function dueRules(ws: Workspace, today: string, time: string): DueRule[] {
+  const out: DueRule[] = []
+  for (const database of ws.pages) {
+    if (!isDatabase(database) || database.trashedAt || !database.database.automations) continue
+    for (const rule of database.database.automations) {
+      const every = everyOf(rule)
+      if (!every || !rule.active || rule.paused) continue
+      const dates = dueDates(every.repeat, today, time, ws.weekStart ?? 0).filter(d => !every.until || d <= every.until)
+      if (dates.length) out.push({ database, rule, date: dates.at(-1)!, skipped: dates.length - 1 })
+    }
+  }
+  return out
 }
 
 export interface FiredRule { databaseId: string; ruleId: string; rowIds: string[] }
