@@ -66,13 +66,18 @@ export const isEmptyLine = (n: EditorNode): boolean => n.type !== 'pageLink' && 
 // The parsed document of a page, kept per document string: readers parse each page once per save.
 const parsed = new Map<string, EditorNode[]>()
 const parsedLimit = 2000
+// By size too. A command that rewrites a long page many times (several to-dos planned at once) left hundreds of big copies here, past a Worker's 128 MB.
+// A workspace near its 10 MB limit parses a little more often for it, which is slower and can't fail.
+const parsedCharsLimit = 8_000_000
+let parsedChars = 0
 /** The page's document as nodes. A page that fails to parse reads as empty, never as an error, so one bad page can't hide the rest. */
 export function pageNodes(page: Pick<Page, 'document'>): EditorNode[] {
   const cached = parsed.get(page.document)
   if (cached) return cached
   let nodes: EditorNode[]
   try { const value = JSON.parse(page.document); nodes = Array.isArray(value) ? value : [] } catch { nodes = [] }
-  if (parsed.size >= parsedLimit) parsed.delete(parsed.keys().next().value!)
+  parsedChars += page.document.length
+  while (parsed.size >= parsedLimit || parsedChars > parsedCharsLimit) { const oldest = parsed.keys().next().value; if (oldest === undefined) break; parsedChars -= oldest.length; parsed.delete(oldest) }
   parsed.set(page.document, nodes)
   return nodes
 }

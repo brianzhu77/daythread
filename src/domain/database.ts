@@ -10,7 +10,14 @@ export type PropertyType = (typeof propertyTypes)[number];
 export type NumberFormat = "plain" | "comma" | "percent" | "currency";
 export type StatusGroup = "todo" | "active" | "done";
 
-export interface Option { id: string; name: string; /** status only */ group?: StatusGroup }
+export interface Option {
+  id: string;
+  name: string;
+  /** status only */
+  group?: StatusGroup;
+  /** Made from Text (R3-16): the words it stands for, folded. The rows keep their words, so changing back restores them, and a rename doesn't lose its rows. */
+  from?: string;
+}
 export interface Property {
   /** Stable: renaming never rewrites values. Never `title`, which is the row page's title column. */
   id: string;
@@ -210,7 +217,8 @@ function localWall(iso: string): string {
   return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}T${two(d.getHours())}:${two(d.getMinutes())}`;
 }
 export const databaseBlockType = "database";
-export const limits = { formula: 10_000, properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 10_000, repeatsAtOnce: 200, hiddenGroups: 200, prefix: 20 } as const;
+// To-dos have their own limit, below rows': each one's plan rewrites its page and re-reads the workspace, as a single edit does. On a 128 MB heap Planned took 500 and ran out at 1,000 (Roadbuster).
+export const limits = { formula: 10_000, properties: 100, options: 200, views: 50, conditions: 20, sorts: 10, text: 10_000, name: 200, multi: 100, rowsAtOnce: 10_000, todosAtOnce: 500, repeatsAtOnce: 200, hiddenGroups: 200, prefix: 20 } as const;
 
 export const isDatabase = (p: Page | undefined | null): p is Page & { database: Database } => Boolean(p?.database);
 /** A row: a page whose parent is a database. */
@@ -271,6 +279,33 @@ function parseNumber(value: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+const makesOptions = (old: Property, type: PropertyType) => isTextType(old.type) && (type === "select" || type === "multiSelect");
+const textParts = (raw: string): string[] => raw.split(",").map((part) => part.trim()).filter(Boolean);
+const optionFromText = (property: Property, raw: string): string | null => {
+  const words = fold(raw.trim());
+  return (words && property.options?.find((o) => o.from === words)?.id) || null;
+};
+/** Text to Select or Multi-select (R3-16): an option for each thing the rows say, in the order they say it, and for what's already an option by name. What won't fit stays in its row, reads as empty and is counted. */
+function optionsFromText(ws: Workspace, databaseId: string, old: Property, type: PropertyType): Option[] {
+  const options = [...(old.options ?? [])];
+  for (const row of databaseRows(ws, databaseId)) {
+    const raw = row.values?.[old.id];
+    if (typeof raw !== "string") continue;
+    // Already an option whole, from Select earlier: it reads as that, and needs no parts.
+    if (options.some((o) => o.from === fold(raw.trim()))) continue;
+    for (const text of type === "multiSelect" ? textParts(raw) : [raw.trim()]) {
+      const words = fold(text);
+      if (!words || text.length > limits.name || options.some((o) => o.from === words)) continue;
+      const named = options.findIndex((o) => fold(o.name) === words);
+      if (named >= 0) { options[named] = { ...options[named]!, from: words }; continue; }
+      if (options.length >= limits.options) continue;
+      let n = options.length;
+      while (options.some((o) => o.id === `${old.id}-o${n}`)) n++;
+      options.push({ id: `${old.id}-o${n}`, name: text, from: words });
+    }
+  }
+  return options;
+}
 /**
  * The value a cell shows, read from what the row stores. Where a type change makes the reading obvious (number and
  * text, select, status and multi-select by option id, text and url) it converts; anything else reads as empty, so
@@ -296,6 +331,9 @@ export function readValue(property: Property, raw: unknown): CellValue {
     case "phone": {
       if (typeof raw === "string") return raw === "" ? null : (property.options?.find((o) => o.id === raw)?.name ?? raw);
       if (typeof raw === "number" && Number.isFinite(raw)) return String(raw);
+      // A date or a tick keeps its words as Text (R3-16). The other text types are addresses, which those aren't.
+      if (property.type === "text" && raw === true) return "Yes";
+      if (property.type === "text" && raw && typeof raw === "object" && !Array.isArray(raw) && validDateText((raw as DateValue).start)) { const { start, end } = raw as DateValue; return (validDateText(end) ? `${start} → ${end}` : start).replace(/T/g, " "); }
       if (Array.isArray(raw)) { const names = raw.map((id) => property.options?.find((o) => o.id === id)?.name).filter((x): x is string => Boolean(x)); return names.length ? names.join(", ") : null; }
       return null;
     }
@@ -304,7 +342,8 @@ export function readValue(property: Property, raw: unknown): CellValue {
       return typeof raw === "string" ? parseNumber(raw) : null;
     case "select":
     case "status": {
-      const picked = typeof raw === "string" && ids.has(raw) ? raw : Array.isArray(raw) ? raw.find((x) => typeof x === "string" && ids.has(x)) ?? null : null;
+      // A list's first item, as an array of options reads here: Text to Multi-select to Select.
+      const picked = typeof raw === "string" ? (ids.has(raw) ? raw : optionFromText(property, raw) ?? (textParts(raw)[0] ? optionFromText(property, textParts(raw)[0]!) : null)) : Array.isArray(raw) ? raw.find((x) => typeof x === "string" && ids.has(x)) ?? null : null;
       // The design (§6.1): a status always has a value, the first To-do option.
       if (picked === null && property.type === "status") return property.options?.find((o) => o.group === "todo")?.id ?? property.options?.[0]?.id ?? null;
       return picked;
@@ -312,7 +351,9 @@ export function readValue(property: Property, raw: unknown): CellValue {
     // A relation's options are its target's rows (`withLinks`), so a link to a row that's gone reads without it, and comes back with it.
     case "relation":
     case "multiSelect": {
-      const list = typeof raw === "string" ? [raw] : Array.isArray(raw) ? raw : [];
+      // The whole words first: Text to Select to Multi-select keeps an option whose name has a comma in it.
+      const whole = typeof raw === "string" && property.type === "multiSelect" ? optionFromText(property, raw) : null;
+      const list = whole ? [whole] : typeof raw === "string" ? (ids.has(raw) || property.type === "relation" ? [raw] : textParts(raw).flatMap((part) => optionFromText(property, part) ?? [])) : Array.isArray(raw) ? raw : [];
       const picked = [...new Set(list.filter((x): x is string => typeof x === "string" && ids.has(x)))];
       return picked.length ? picked : null;
     }
@@ -427,10 +468,13 @@ export function cellValue(db: Database, row: Page, columnId: string): CellValue 
 
 /** The rows whose stored value for this property reads differently as `type`: the "N values show as empty" count. */
 export function lostOnTypeChange(ws: Workspace, databaseId: string, property: Property, type: PropertyType): number {
-  const next = { ...property, type };
+  // A relation's options are its target's rows, so an old option's id isn't a link, whatever it matches.
+  const options = type === "relation" && property.type !== "relation" ? [] : makesOptions(property, type) ? optionsFromText(ws, databaseId, property, type) : property.options;
+  const next = { ...property, type, options };
   return databaseRows(ws, databaseId).filter((r) => {
     const raw = r.values?.[property.id];
-    return raw !== undefined && !isEmptyValue(readValue(property, raw)) && isEmptyValue(readValue(next, raw));
+    // Nothing but spaces isn't a value lost.
+    return raw !== undefined && !(typeof raw === "string" && !raw.trim()) && !isEmptyValue(readValue(property, raw)) && isEmptyValue(readValue(next, raw));
   }).length;
 }
 /** Rows holding this option: the "removed from N rows" count. */
@@ -1035,8 +1079,9 @@ function cleanOptions(input: unknown, type: PropertyType): Option[] {
     if (ids.has(id)) throw new DatabaseError("Invalid options");
     if (names.has(fold(name))) throw new DatabaseError(`There's already an option "${name}"`);
     ids.add(id); names.add(fold(name));
-    if (type !== "status") return o.group && statusGroups.has(o.group) ? { id, name, group: o.group } : { id, name };
-    return { id, name, group: o.group && statusGroups.has(o.group) ? o.group : "todo" };
+    const from = typeof o.from === "string" && o.from.length <= limits.name ? { from: o.from } : {};
+    if (type !== "status") return o.group && statusGroups.has(o.group) ? { id, name, group: o.group, ...from } : { id, name, ...from };
+    return { id, name, group: o.group && statusGroups.has(o.group) ? o.group : "todo", ...from };
   });
 }
 function uniqueName(db: Database, name: string, except?: string): void {
@@ -1282,7 +1327,7 @@ export function changeDatabase(ws: Workspace, page: Page & { database: Database 
       const old = property(change.propertyId);
       const type = change.type ?? old.type;
       if (old.mirror && type !== "relation") throw new DatabaseError("Turn off its other side first");
-      const next = cleanProperty({ id: old.id, name: change.name ?? old.name, type, options: change.options ?? old.options, format: change.format ?? old.format, withTime: change.withTime ?? old.withTime, prefix: change.prefix ?? old.prefix, target: change.target ?? old.target, limit: change.limit === null ? undefined : change.limit ?? old.limit, rollup: change.rollup ?? old.rollup, formula: change.formula ?? old.formula }, db, old.id);
+      const next = cleanProperty({ id: old.id, name: change.name ?? old.name, type, options: change.options ?? (makesOptions(old, type) ? optionsFromText(ws, page.id, old, type) : old.options), format: change.format ?? old.format, withTime: change.withTime ?? old.withTime, prefix: change.prefix ?? old.prefix, target: change.target ?? old.target, limit: change.limit === null ? undefined : change.limit ?? old.limit, rollup: change.rollup ?? old.rollup, formula: change.formula ?? old.formula }, db, old.id);
       if (old.mirror) { if (next.target !== old.target) throw new DatabaseError("Turn off its other side first"); next.mirror = old.mirror; }
       checkLinks(ws, page.id, db, next);
       const notes: string[] = [];

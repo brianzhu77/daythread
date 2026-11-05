@@ -109,3 +109,25 @@ test('real Postgres: moving a parent takes its tree in one operation, and one Un
   }
 })
 
+test('real Postgres: several to-dos in one command, and one Undo brings back every task and page', { skip }, async () => {
+  const schema = `daythread_test_todos_${process.pid}`
+  const a = connect()
+  try {
+    const r = new PostgresWorkspaceRepository(postgresClient(a), schema)
+    let ws = await r.load()
+    const run = async (operationId: string, action: never) => { await r.execute({ operationId, expectedRevision: ws.revision, action }); ws = await r.load() }
+    await run('d1', { type: 'ensure-day', date: '2026-11-04' } as never)
+    await run('t1', { type: 'add-task', pageId: 'day:2026-11-04', title: 'One', plannedOn: '2026-11-04' } as never)
+    await run('t2', { type: 'add-task', pageId: 'day:2026-11-04', title: 'Two', plannedOn: '2026-11-04' } as never)
+    const ids = ws.tasks.filter(t => t.title).map(t => t.id)
+    await run('some', { type: 'edit-todos', today: '2026-11-04', items: ids.map(taskId => ({ taskId, changes: [{ columnId: 'planned', value: { start: '2026-11-05' } }] })) } as never)
+    const onDay = (date: string) => ws.pages.find(p => p.date === date)?.document ?? ''
+    for (const id of ids) assert.ok(onDay('2026-11-05').includes(id))
+    await run('back', { type: 'undo', targetOperationId: 'some' } as never)
+    for (const id of ids) { assert.ok(onDay('2026-11-04').includes(id)); assert.equal(onDay('2026-11-05').includes(id), false) }
+  } finally {
+    await a.unsafe(`drop schema if exists ${schema} cascade`)
+    await a.end()
+  }
+})
+
