@@ -9,7 +9,7 @@ import { type CSSProperties, createContext, Fragment, useContext, useEffect, use
 import { maxPastedCells, parseDelimited, pastedValue, planPaste, type PastePlan } from '../domain/csv'
 import { formulaErrorOf } from '../domain/formula'
 import { descendantsOf, parentIdOf, treeEntries, type TreeEntry } from '../domain/sub-items'
-import { limits as databaseLimits, rowColour, showsSubItemsOnCards, databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
+import { filterTree, hasFilter, limits as databaseLimits, rowColour, showsSubItemsOnCards, databaseOfRow, sectionKey, splitSection, viewSection, viewSections, viewSubGroupBy, viewSubGroups, canWrap, cellValue, columnCalc, databaseRows, groupValue, isDatabase, inView, isEmptyValue, isReadOnly, newRowProbe, noGroupKey, readValue, type Condition, newRowValues, templateValues, propertyOf, rawOf, sameRaw, titleId, valueText, viewColumns, viewGroups, viewCalculations, viewRows, type ViewContext, type ViewGroup, type ViewGroups, type CellValue, type Database, type DatabaseChange, type Json, type Property, type View } from '../domain/database.ts'
 import { loopRefusal } from '../domain/dependencies.ts'
 import type { Page, WeekStart, Workspace } from '../domain/types'
 import { todayIso } from './dates'
@@ -760,7 +760,7 @@ export function ViewNotes({ db, view, changeView, empty }: { db: Page; view: Vie
   usePendingCells()
   const failedHere = [...pendingCells.values()].filter(p => p.failed && !p.part && p.databaseId === db.id)
   return <>
-    {empty && view.filter.length > 0 && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => changeView(() => ({ filter: [] }))}>Clear filter</button></p>}
+    {empty && hasFilter(view) && <p className="database-empty">No rows match this view · <button type="button" className="app-link" onClick={() => changeView(() => ({ filter: [], filterGroups: [] }))}>Clear filter</button></p>}
     {failedHere.length > 0 && <p className="database-unsaved" role="status">{failedHere.length === 1 ? '1 change' : `${failedHere.length} changes`} not saved · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.retry())}>Retry</button> · <button type="button" className="app-link" onClick={() => failedHere.forEach(f => f.discard())}>Undo</button></p>}
   </>
 }
@@ -797,7 +797,7 @@ export function subItemTree(workspace: Workspace, db: Page & { database: Databas
 const shutUnderFilter = new Map<string, { filter: string; ids: ReadonlySet<string> }>()
 const noneShut: ReadonlySet<string> = new Set()
 export function useSubOpen(blockId: string, view: View, toggle: (key: string) => void) {
-  const key = `${blockId}|${view.id}`, filter = JSON.stringify([view.filter, view.filterAny])
+  const key = `${blockId}|${view.id}`, filter = JSON.stringify(filterTree(view))
   const [, redraw] = useState(0)
   const held = shutUnderFilter.get(key)
   // Until the filter changes, so coming back to it starts open again.
@@ -896,7 +896,7 @@ export function DatabaseHeader({ db, view, changeView, blockId, showTitle, linke
       <DatabaseMenuButton blockId={blockId} databaseId={db.id} />
     </div>}
     {linked?.source}
-    {(view.filter.length > 0 || view.sort.length > 0) && <RulesLine db={db.database} view={view} blockId={blockId} databaseId={db.id} onChange={changeView} />}
+    {(hasFilter(view) || view.sort.length > 0) && <RulesLine db={db.database} view={view} blockId={blockId} databaseId={db.id} onChange={changeView} />}
   </>
 }
 
