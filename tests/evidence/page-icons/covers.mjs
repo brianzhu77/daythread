@@ -169,7 +169,8 @@ await scenario('Two choices through two panels, each save held: the first reply 
   await menu(page, /(Add|Change) cover/); await field(page).fill(PORTRAIT); await addButton(page).waitFor(); await addButton(page).click(); await wait(500)
   const first = await page.locator('.page-cover-image').getAttribute('src')
   await page.keyboard.press('Escape'); await wait(200)
-  await menu(page, 'Change cover'); await field(page).fill(WIDE); await addButton(page).waitFor(); await addButton(page).click(); await wait(500)
+  // Saved only once its reply is in, so the menu may still offer Add.
+  await menu(page, /(Add|Change) cover/); await field(page).fill(WIDE); await addButton(page).waitFor(); await addButton(page).click(); await wait(500)
   const second = await page.locator('.page-cover-image').getAttribute('src')
   const r = { first, second, sends: holds.length }
   holds[0](); await wait(900)
