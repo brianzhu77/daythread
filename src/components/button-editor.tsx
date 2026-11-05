@@ -1,6 +1,7 @@
 // A button's editor (docs/design/buttons.md §3): a popover at 1280, a sheet at 390, with its steps as a list and each on its own page. It writes nothing until Done.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
+import { en } from '@blocknote/core/locales'
 import { filterSuggestionItems, SuggestionMenu } from '@blocknote/core/extensions'
 import { getDefaultReactSlashMenuItems, SuggestionMenuController, useCreateBlockNote } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/shadcn'
@@ -226,10 +227,12 @@ function FixedValue({ property, raw, onChange }: { property: Property; raw: Json
 // Over the sheet, which clips what's inside it. Fixed takes it out of the sheet's scrolling box.
 const overSheet = { useFloatingOptions: { strategy: 'fixed' as const } }
 let closeBlocksMenu: (() => boolean) | null = null
+// No explanatory line (Brian's rule): the step says what's wanted.
+const noPlaceholders = { ...en, placeholders: { ...en.placeholders, default: '', emptyDocument: '' } }
 const slashKinds = new Set(['paragraph', 'heading', 'heading_2', 'heading_3', 'bullet_list', 'numbered_list', 'check_list', 'quote'])
 /** What Insert blocks puts in, written as on a page: to-dos and `@date` chips come out new each tap (§2). It saves nowhere but the step. */
 function BlocksField({ schema, blocks, onChange }: { schema: never; blocks: EditorNode[]; onChange(blocks: EditorNode[]): void }) {
-  const editor = useCreateBlockNote({ schema, ...(blocks.length ? { initialContent: blocks as never } : {}) })
+  const editor = useCreateBlockNote({ schema, dictionary: noPlaceholders, ...(blocks.length ? { initialContent: blocks as never } : {}) })
   useEffect(() => {
     closeBlocksMenu = () => { const menu = editor.getExtension(SuggestionMenu); if (!menu?.shown()) return false; menu.closeMenu(); return true }
     return () => { closeBlocksMenu = null }
