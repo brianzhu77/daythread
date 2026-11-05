@@ -785,9 +785,27 @@ export function useViewClipboard(wrap: { current: HTMLElement | null }) {
 /** Which groups are folded in a table or list: on this device only, per view of a block, never a save or an Undo, like the view shown. */
 function foldKey(blockId: string, viewId: string) { return `daythread.database-fold.${blockId}.${viewId}` }
 /** A table's or list's rows as a tree, when this view nests them: never with groups, where a sub-item sits in its own group (sub-items design §2). */
-export function subItemTree(workspace: Workspace, db: Page & { database: Database }, view: View, rows: readonly Page[], grouped: boolean, opened: ReadonlySet<string>): TreeEntry[] | null {
+export function subItemTree(workspace: Workspace, db: Page & { database: Database }, view: View, rows: readonly Page[], grouped: boolean, opened: ReadonlySet<string>, shut: ReadonlySet<string>): TreeEntry[] | null {
   if (grouped || !db.database.subItems || view.subItemsDisplay === 'flat' || view.subItemsShow === 'subs') return null
-  return treeEntries(db.database, rows, databaseRows(workspace, db.id), id => opened.has(subFoldKey(id)), view.subItemsShow === 'parents')
+  return treeEntries(db.database, rows, databaseRows(workspace, db.id), (id, context) => (context ? !shut.has(id) : opened.has(subFoldKey(id))), view.subItemsShow === 'parents')
+}
+// A parent only there for a match below it, under a filter, starts open, as closed it would read as the filter finding nothing. Closed by hand it stays closed
+// until the filter changes, and none of this is kept: clearing the filter leaves the view as it was. By view here, as a block can be drawn anew.
+const shutUnderFilter = new Map<string, { filter: string; ids: ReadonlySet<string> }>()
+const noneShut: ReadonlySet<string> = new Set()
+export function useSubOpen(blockId: string, view: View, toggle: (key: string) => void) {
+  const key = `${blockId}|${view.id}`, filter = JSON.stringify([view.filter, view.filterAny])
+  const [, redraw] = useState(0)
+  const held = shutUnderFilter.get(key)
+  const shut = held?.filter === filter ? held.ids : noneShut
+  const toggleSub = (entry: TreeEntry) => {
+    if (!entry.context) { toggle(subFoldKey(entry.row.id)); return }
+    const ids = new Set(shut)
+    if (!ids.delete(entry.row.id)) ids.add(entry.row.id)
+    shutUnderFilter.set(key, { filter, ids })
+    redraw(n => n + 1)
+  }
+  return { shut, toggleSub }
 }
 export const subFoldKey = (rowId: string) => `sub:${rowId}`
 /** A sub-item in a group sits apart from its parent, so it says whose it is (sub-items design §2). */
@@ -984,7 +1002,8 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
   // Each group, with its sub-groups if the view has them; rows are drawn per section, under the section's key.
   const layers = groups?.shown.map(group => ({ group, subs: viewSubGroups(db.database, view, group.rows, shownRaw, weekStart) }))
   const drawn = (key: string, all: readonly Page[]) => (folded.has(key) ? [] : all.slice(0, limitOf(key)))
-  const tree = subItemTree(workspace, db, view, rows, Boolean(groups), folded)
+  const { shut, toggleSub } = useSubOpen(blockId, view, toggle)
+  const tree = subItemTree(workspace, db, view, rows, Boolean(groups), folded, shut)
   const treeOf = new Map(tree?.map(e => [e.row.id, e]))
   const entries: { row: Page; group?: string }[] = tree ? treeUpTo(tree, limit) : layers ? layers.flatMap(({ group, subs }) => folded.has(group.key) ? [] : subs && group.rows.length
     ? subs.shown.flatMap(sub => { const key = sectionKey(group.key, sub.key); return drawn(key, sub.rows).map(row => ({ row, group: key })) })
@@ -1126,7 +1145,7 @@ export function DatabaseTable({ workspace, db, view, changeView, blockId, pageDa
               {/* A row opens as a page, from Name, at both widths (design §5). */}
               {picking && <input type="checkbox" className="database-row-tick" tabIndex={-1} aria-label={`Select ${displayPageTitle(row)}`} checked={picked.includes(row.id)} readOnly />}
               <TodoTick row={row} />
-              {treeOf.has(row.id) && <SubItemLead entry={treeOf.get(row.id)!} label={displayPageTitle(row)} onToggle={() => toggle(subFoldKey(row.id))} />}
+              {treeOf.has(row.id) && <SubItemLead entry={treeOf.get(row.id)!} label={displayPageTitle(row)} onToggle={() => toggleSub(treeOf.get(row.id)!)} />}
               <button type="button" className="database-title-cell" data-cell={key(row.id, titleId, group)} data-nav={`${index}:0`} onPointerDown={e => startHold(e, row.id)} onPointerMove={moveHold} onPointerUp={endHold} onPointerCancel={endHold} onContextMenu={e => { if (!wide) e.preventDefault() }} onClick={() => openRow(row.id)}>
                 <span className={row.title ? '' : 'is-placeholder'}>{row.title || 'Untitled'}</span>
                 {group !== undefined && <SubItemParent workspace={workspace} db={db} row={row} />}

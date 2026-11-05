@@ -8,7 +8,7 @@ import { columnCalc, databaseRows, inView, isEmptyValue, isReadOnly, propertyOf,
 import { dayWidth, daysBetween, draggedBar, endAt, linkPath, snapMinutes, startAt, timelineBars, timelineUnits, timelineWeeks, viewDateEnd, type BarPart, type BarWrite, type TimelineBar, type TimelineUnit } from '../domain/timeline.ts'
 import { taskIdOfRow } from '../domain/todos-source'
 import type { LocalDate, Page, WeekStart, Workspace } from '../domain/types'
-import { rowTint, SubItemLead, SubItemParent, subFoldKey, subItemTree, treeUpTo, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, setOpenCell, shownRaw, shownValue, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
+import { rowTint, SubItemLead, SubItemParent, subItemTree, useSubOpen, treeUpTo, blockActions, cellKey, DatabaseHeader, GroupName, HiddenGroups, pendingCells, setOpenCell, shownRaw, shownValue, useAddRow, useCommitCell, useFolds, useGroupLimits, useMoveRow, useOpenRow, usePendingCells, useReturnedRow, useUndoKey, useViewClipboard, ViewNotes, withPendingMoves, type ChangeView, type DatabaseViewProps } from './database-block'
 import { openDatabaseMenu } from './database-menu'
 import { addDays, fromIso, todayIso } from './dates'
 import { ChevronRightIcon } from './icons'
@@ -180,10 +180,13 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
   const { folded, toggle } = useFolds(blockId, view.id)
   const moveRow = useMoveRow(db, view, context, groups)
   // Nested, the rows draw as a tree. The scale still runs over every bar, so opening a toggle doesn't move it. A row with no date stays on the No date line, unless it's in the tree: a sub-item under its parent, or a parent its sub-items need (sub-items design §2).
-  const tree = subItemTree(workspace, db, view, rows, Boolean(groups), folded)
+  const { shut, toggleSub } = useSubOpen(blockId, view, toggle)
+  const tree = subItemTree(workspace, db, view, rows, Boolean(groups), folded, shut)
   const treeOf = new Map(tree?.map(e => [e.row.id, e]))
   const undatedElsewhere = tree ? undated.filter(r => { const e = treeOf.get(r.id); return e && !e.depth && !e.hasChildren }) : undated
-  const toggleLead = (row: Page) => { const entry = treeOf.get(row.id); return entry ? <SubItemLead entry={entry} label={row.title || 'Untitled'} onToggle={() => toggle(subFoldKey(row.id))} /> : null }
+  /** How far from the left of the scroll a bar's name stops, as it follows a bar going off that way: clear of the table, or of a closed table's handle and toggle. */
+  const titleInset = (rowId: string) => (paneOn ? pane + 6 : treeOf.get(rowId)?.hasChildren ? 42 : !view.sort.length && !db.database.fixed && !treeOf.get(rowId)?.depth ? 22 : 6)
+  const toggleLead = (row: Page) => { const entry = treeOf.get(row.id); return entry ? <SubItemLead entry={entry} label={row.title || 'Untitled'} onToggle={() => toggleSub(entry)} /> : null }
   // The scale runs over the rows and today, as far as a page can.
   const days = bars.flatMap(b => [day(b.start), day(b.end)])
   const span = Math.floor(widest / width / 2)
@@ -355,16 +358,18 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
     if (e.button !== 0) return
     e.preventDefault(); e.stopPropagation()
     const target = (y: number) => {
-      const lanes = [...(scroller.current?.querySelectorAll<HTMLElement>('.database-bar-lane[data-row], .database-group-end') ?? [])]
+      // Not onto a sub-item's line: a row can't land between a parent and what's under it, so the line shows where it will.
+      const lanes = [...(scroller.current?.querySelectorAll<HTMLElement>('.database-bar-lane[data-row]:not([data-sub]), .database-group-end') ?? [])]
       const at = lanes.find(l => { const r = l.getBoundingClientRect(); return y < r.top + r.height / 2 })
       if (!at) { const last = lanes.at(-1); return { before: null, over: last?.dataset.group ?? null } }
       return { before: at.dataset.row ?? null, over: at.dataset.group ?? null }
     }
     const move = (ev: PointerEvent) => setReorder({ rowId, ...target(ev.clientY) })
-    const finish = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel) }
+    const finish = () => { document.removeEventListener('pointermove', move); document.removeEventListener('pointerup', up); document.removeEventListener('pointercancel', cancel); document.removeEventListener('keydown', esc, true) }
     const up = (ev: PointerEvent) => { finish(); setReorder(null); const t = target(ev.clientY); moveRow(rowId, from, groups ? t.over : null, t.before, rows) }
     const cancel = () => { finish(); setReorder(null) }
-    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel)
+    const esc = (ev: globalThis.KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); cancel() } }
+    document.addEventListener('pointermove', move); document.addEventListener('pointerup', up); document.addEventListener('pointercancel', cancel); document.addEventListener('keydown', esc, true)
   }
 
   // Where a bar is, as it's being dragged too, so an arrow goes with it.
@@ -456,14 +461,14 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
     const drawnHere = left + barWidth > seen.left - pad && left < seen.left + seen.width + pad
     const title = bar.row.title || 'Untitled'
     const tint = rowTint(db.database, view, bar.row, context)
-    return <div key={`${group ?? ''}:${bar.row.id}`} className={`database-bar-lane${treeOf.get(bar.row.id)?.context ? ' is-context' : ''}${returned === bar.row.id ? ' is-returned' : ''}${reorder?.before === bar.row.id ? ' is-drop-before' : ''}${reorder?.rowId === bar.row.id ? ' is-dragging' : ''}`} data-row={bar.row.id} {...(group !== undefined ? { 'data-group': group } : {})} style={{ height: rowHeight }}>
+    return <div key={`${group ?? ''}:${bar.row.id}`} className={`database-bar-lane${treeOf.get(bar.row.id)?.context ? ' is-context' : ''}${returned === bar.row.id ? ' is-returned' : ''}${reorder?.before === bar.row.id ? ' is-drop-before' : ''}${reorder?.rowId === bar.row.id ? ' is-dragging' : ''}`} data-row={bar.row.id} {...(treeOf.get(bar.row.id)?.depth ? { 'data-sub': '' } : {})} {...(group !== undefined ? { 'data-group': group } : {})} style={{ height: rowHeight }}>
       {paneOn ? paneRow(bar.row, group) : treeOf.get(bar.row.id)?.hasChildren && <span className="database-lane-lead">{toggleLead(bar.row)}</span>}
       {!treeOf.get(bar.row.id)?.depth && closedHandle(bar.row, group)}
       {drawnHere && <button type="button" className={`database-bar is-${at.shape}${tint?.className ?? ''}${bar.readOnly ? ' is-read-only' : ''}${live ? ' is-dragging' : ''}${linking?.over === bar.row.id ? ' is-link-target' : ''}`} style={{ ...tint?.style, left: left + pane, width: barWidth }}
         {...(deps ? { onPointerEnter: () => showLinks(bar.row.id, true), onPointerLeave: () => showLinks(bar.row.id, false) } : {})}
         data-nav={index === 0 ? '0:0' : undefined} data-cell={cellKey({ blockId, databaseId, rowId: bar.row.id, columnId: titleId })} aria-label={`${title}, ${datesOf(at)}`}
         onPointerDown={e => startDrag(e, bar, 'move')} onMouseDown={e => e.preventDefault()} onClick={() => { if (!justDragged.current) openRow(bar.row.id) }}>
-        <span className={`database-bar-title${bar.row.title ? '' : ' is-placeholder'}`}>{title}{groups && !paneOn && <SubItemParent workspace={workspace} db={db} row={bar.row} />}{unsaved && <span className="database-card-unsaved"> · Not saved</span>}</span>
+        <span className={`database-bar-title${bar.row.title ? '' : ' is-placeholder'}`} style={{ left: titleInset(bar.row.id) }}>{title}{groups && !paneOn && <SubItemParent workspace={workspace} db={db} row={bar.row} />}{unsaved && <span className="database-card-unsaved"> · Not saved</span>}</span>
         {!bar.readOnly && <>
           <span className="database-bar-edge is-start" onPointerDown={e => { e.stopPropagation(); startDrag(e, bar, 'start') }} />
           <span className="database-bar-edge is-end" onPointerDown={e => { e.stopPropagation(); startDrag(e, bar, 'end') }} />
@@ -486,7 +491,7 @@ function TimelineScale({ workspace, db, rows, context, addRow, weekStart, cap, b
       if (endProperty && first !== last) write(row, [{ id: startProperty.id, value: { start: first } as unknown as Json }, { id: endProperty.id, value: { start: last } as unknown as Json }], `Set to ${short(first)} – ${short(last)}`)
       else write(row, [{ id: startProperty.id, value: (first === last ? { start: first } : { start: first, end: last }) as unknown as Json }], first === last ? `Set to ${short(first)}` : `Set to ${short(first)} – ${short(last)}`)
     }
-    return <div key={row.id} className={`database-bar-lane is-undated${treeOf.get(row.id)?.context ? ' is-context' : ''}`} data-row={row.id} style={{ height: rowHeight }}
+    return <div key={row.id} className={`database-bar-lane is-undated${treeOf.get(row.id)?.context ? ' is-context' : ''}${reorder?.before === row.id ? ' is-drop-before' : ''}${reorder?.rowId === row.id ? ' is-dragging' : ''}`} data-row={row.id} {...(treeOf.get(row.id)?.depth ? { 'data-sub': '' } : {})} style={{ height: rowHeight }}
       onPointerMove={e => { if (canSet && e.pointerType === 'mouse') setHover(dayAtX(e.clientX)) }} onPointerLeave={() => setHover(null)}
       onPointerDown={e => { if (canSet && e.button === 0 && !(e.target as Element).closest('.database-bar-off, .database-pane')) pressed.current = dayAtX(e.clientX) }}
       onPointerUp={e => { if (pressed.current) { const from = pressed.current; pressed.current = null; set(from, dayAtX(e.clientX)) } }}>
